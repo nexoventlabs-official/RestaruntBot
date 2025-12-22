@@ -58,8 +58,8 @@ const refundScheduler = {
           `Thank you for your patience! 🙏`;
         
         await whatsapp.sendButtons(order.customer.phone, msg, [
-          { id: 'place_order', text: '🛒 New Order' },
-          { id: 'home', text: '🏠 Main Menu' }
+          { id: 'place_order', text: 'New Order' },
+          { id: 'home', text: 'Main Menu' }
         ]);
         console.log(`📱 Refund success message sent to ${order.customer.phone}`);
       } catch (whatsappError) {

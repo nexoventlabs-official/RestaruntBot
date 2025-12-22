@@ -70,8 +70,8 @@ const orderScheduler = {
         `If you still want to order, please start a new order by sending "hi".`;
       
       await whatsapp.sendButtons(order.customer.phone, message, [
-        { id: 'place_order', text: '🛒 New Order' },
-        { id: 'help', text: '❓ Help' }
+        { id: 'place_order', text: 'New Order' },
+        { id: 'help', text: 'Help' }
       ]);
       
       console.log(`✅ Order ${order.orderId} cancelled and customer notified`);

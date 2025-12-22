@@ -244,7 +244,8 @@ export default function Orders() {
     let sseConnected = false;
     
     const connect = () => {
-      eventSource = new EventSource('/api/events');
+      const baseUrl = api.defaults.baseURL?.replace('/api', '') || '';
+      eventSource = new EventSource(`${baseUrl}/api/events`);
       
       eventSource.onopen = () => {
         sseConnected = true;

@@ -55,9 +55,9 @@ router.get('/callback', async (req, res) => {
 
         // Send WhatsApp confirmation with buttons
         await whatsapp.sendButtons(order.customer.phone, confirmMsg, [
-          { id: 'track_order', text: '📍 Track Order' },
-          { id: `cancel_${order.orderId}`, text: '❌ Cancel Order' },
-          { id: 'help', text: '❓ Help' }
+          { id: 'track_order', text: 'Track Order' },
+          { id: `cancel_${order.orderId}`, text: 'Cancel Order' },
+          { id: 'help', text: 'Help' }
         ]);
 
         // Send email if available
@@ -134,8 +134,8 @@ router.post('/refund/:orderId', authMiddleware, async (req, res) => {
     await whatsapp.sendButtons(order.customer.phone,
       `💰 *Refund Processed*\n\nOrder: ${order.orderId}\nAmount: ₹${order.totalAmount}\n\nWill be credited in 10-20 minutes.`,
       [
-        { id: 'place_order', text: '🛒 New Order' },
-        { id: 'help', text: '❓ Help' }
+        { id: 'place_order', text: 'New Order' },
+        { id: 'help', text: 'Help' }
       ]
     );
 

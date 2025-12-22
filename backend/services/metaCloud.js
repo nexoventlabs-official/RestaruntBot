@@ -306,9 +306,9 @@ const metaCloud = {
       console.error('❌ Meta Cloud location request error:', error.response?.data || error.message);
       // Fallback to buttons if location_request_message not supported
       return this.sendButtons(phone, message, [
-        { id: 'share_location', text: '📍 Share Location' },
-        { id: 'skip_location', text: '⏭️ Skip' },
-        { id: 'clear_cart', text: '❌ Cancel' }
+        { id: 'share_location', text: 'Share Location' },
+        { id: 'skip_location', text: 'Skip' },
+        { id: 'clear_cart', text: 'Cancel' }
       ], 'Tap to share your delivery location');
     }
   },

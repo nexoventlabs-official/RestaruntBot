@@ -727,9 +727,9 @@ const chatbot = {
 
     // Send navigation buttons
     const buttons = [];
-    if (page > 0) buttons.push({ id: `menucat_page_${page - 1}`, text: '⬅️ Previous' });
-    if (page < totalPages - 1) buttons.push({ id: `menucat_page_${page + 1}`, text: 'Next ➡️' });
-    buttons.push({ id: 'home', text: '🏠 Menu' });
+    if (page > 0) buttons.push({ id: `menucat_page_${page - 1}`, text: 'Previous' });
+    if (page < totalPages - 1) buttons.push({ id: `menucat_page_${page + 1}`, text: 'Next' });
+    buttons.push({ id: 'home', text: 'Menu' });
 
     await whatsapp.sendButtons(phone, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
   },
@@ -779,9 +779,9 @@ const chatbot = {
     if (totalPages > 1) {
       const safeCat = category.replace(/[^a-zA-Z0-9]/g, '_');
       const buttons = [];
-      if (page > 0) buttons.push({ id: `catpage_${safeCat}_${page - 1}`, text: '⬅️ Previous' });
-      if (page < totalPages - 1) buttons.push({ id: `catpage_${safeCat}_${page + 1}`, text: 'Next ➡️' });
-      buttons.push({ id: 'view_menu', text: '🏠 Menu' });
+      if (page > 0) buttons.push({ id: `catpage_${safeCat}_${page - 1}`, text: 'Previous' });
+      if (page < totalPages - 1) buttons.push({ id: `catpage_${safeCat}_${page + 1}`, text: 'Next' });
+      buttons.push({ id: 'view_menu', text: 'Menu' });
       await whatsapp.sendButtons(phone, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
     }
   },
@@ -823,9 +823,9 @@ const chatbot = {
     // Send navigation buttons if multiple pages
     if (totalPages > 1) {
       const buttons = [];
-      if (page > 0) buttons.push({ id: `allitems_page_${page - 1}`, text: '⬅️ Previous' });
-      if (page < totalPages - 1) buttons.push({ id: `allitems_page_${page + 1}`, text: 'Next ➡️' });
-      buttons.push({ id: 'view_menu', text: '🏠 Menu' });
+      if (page > 0) buttons.push({ id: `allitems_page_${page - 1}`, text: 'Previous' });
+      if (page < totalPages - 1) buttons.push({ id: `allitems_page_${page + 1}`, text: 'Next' });
+      buttons.push({ id: 'view_menu', text: 'Menu' });
       await whatsapp.sendButtons(phone, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
     }
   },
@@ -842,19 +842,19 @@ const chatbot = {
       
       if (item.image && !item.image.startsWith('data:')) {
         await whatsapp.sendImageWithButtons(phone, item.image, msg, [
-          { id: `add_${item._id}`, text: '➕ Add to Cart' }
+          { id: `add_${item._id}`, text: 'Add to Cart' }
         ]);
       } else {
         await whatsapp.sendButtons(phone, msg, [
-          { id: `add_${item._id}`, text: '➕ Add to Cart' }
+          { id: `add_${item._id}`, text: 'Add to Cart' }
         ]);
       }
     }
     
     await whatsapp.sendButtons(phone, 'Want to see more items?', [
-      { id: 'food_both', text: '📋 Full Menu' },
-      { id: 'view_cart', text: '🛒 View Cart' },
-      { id: 'home', text: '🏠 Home' }
+      { id: 'food_both', text: 'Full Menu' },
+      { id: 'view_cart', text: 'View Cart' },
+      { id: 'home', text: 'Home' }
     ]);
   },
 
@@ -984,9 +984,9 @@ const chatbot = {
 
     // Send navigation buttons
     const buttons = [];
-    if (page > 0) buttons.push({ id: `ordercat_page_${page - 1}`, text: '⬅️ Previous' });
-    if (page < totalPages - 1) buttons.push({ id: `ordercat_page_${page + 1}`, text: 'Next ➡️' });
-    buttons.push({ id: 'home', text: '🏠 Menu' });
+    if (page > 0) buttons.push({ id: `ordercat_page_${page - 1}`, text: 'Previous' });
+    if (page < totalPages - 1) buttons.push({ id: `ordercat_page_${page + 1}`, text: 'Next' });
+    buttons.push({ id: 'home', text: 'Menu' });
 
     await whatsapp.sendButtons(phone, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
   },
@@ -1035,9 +1035,9 @@ const chatbot = {
     if (totalPages > 1) {
       const safeCat = category.replace(/[^a-zA-Z0-9]/g, '_');
       const buttons = [];
-      if (page > 0) buttons.push({ id: `ordercatpage_${safeCat}_${page - 1}`, text: '⬅️ Previous' });
-      if (page < totalPages - 1) buttons.push({ id: `ordercatpage_${safeCat}_${page + 1}`, text: 'Next ➡️' });
-      buttons.push({ id: 'home', text: '🏠 Menu' });
+      if (page > 0) buttons.push({ id: `ordercatpage_${safeCat}_${page - 1}`, text: 'Previous' });
+      if (page < totalPages - 1) buttons.push({ id: `ordercatpage_${safeCat}_${page + 1}`, text: 'Next' });
+      buttons.push({ id: 'home', text: 'Menu' });
       await whatsapp.sendButtons(phone, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
     }
   },
@@ -1079,9 +1079,9 @@ const chatbot = {
     // Send navigation buttons if multiple pages
     if (totalPages > 1) {
       const buttons = [];
-      if (page > 0) buttons.push({ id: `orderitems_page_${page - 1}`, text: '⬅️ Previous' });
-      if (page < totalPages - 1) buttons.push({ id: `orderitems_page_${page + 1}`, text: 'Next ➡️' });
-      buttons.push({ id: 'home', text: '🏠 Menu' });
+      if (page > 0) buttons.push({ id: `orderitems_page_${page - 1}`, text: 'Previous' });
+      if (page < totalPages - 1) buttons.push({ id: `orderitems_page_${page + 1}`, text: 'Next' });
+      buttons.push({ id: 'home', text: 'Menu' });
       await whatsapp.sendButtons(phone, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
     }
   },
