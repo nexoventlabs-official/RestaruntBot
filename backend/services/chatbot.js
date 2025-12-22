@@ -1244,6 +1244,11 @@ const chatbot = {
     });
     await order.save();
 
+    // Mark customer as having ordered (for accurate customer count)
+    if (!customer.hasOrdered) {
+      customer.hasOrdered = true;
+    }
+
     // Track today's orders count
     try {
       const DashboardStats = require('../models/DashboardStats');
@@ -1413,6 +1418,11 @@ const chatbot = {
       trackingUpdates: [{ status: 'pending', message: 'Order created, awaiting payment' }]
     });
     await order.save();
+
+    // Mark customer as having ordered (for accurate customer count)
+    if (!customer.hasOrdered) {
+      customer.hasOrdered = true;
+    }
 
     // Track today's orders count
     try {

@@ -4,6 +4,7 @@ const customerSchema = new mongoose.Schema({
   phone: { type: String, required: true, unique: true },
   name: { type: String },
   email: { type: String },
+  hasOrdered: { type: Boolean, default: false }, // Track if customer has placed at least one order
   addresses: [{
     label: String,
     address: String,

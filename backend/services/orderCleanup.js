@@ -44,24 +44,26 @@ const orderCleanup = {
     }
   },
 
-  // Delete customer if they have no other orders
+  // Delete customer if they have no other orders and haven't placed any orders
   async deleteCustomerIfNoOrders(phone) {
     try {
       // Check if customer has any remaining orders
       const remainingOrders = await Order.countDocuments({ 'customer.phone': phone });
       
       if (remainingOrders === 0) {
-        const result = await Customer.deleteOne({ phone });
-        if (result.deletedCount > 0) {
-          console.log(`👤 Deleted customer: ${phone} (no remaining orders)`);
-          
-          // Update customer stats
-          const stats = await this.getStats();
-          stats.totalCustomers += 1;
-          await stats.save();
-          
-          return true;
+        // Only delete customers who never placed an order (just chatted)
+        // Customers with hasOrdered: true should be kept for accurate count
+        const customer = await Customer.findOne({ phone });
+        
+        if (customer && !customer.hasOrdered) {
+          // Customer never placed an order, safe to delete
+          const result = await Customer.deleteOne({ phone });
+          if (result.deletedCount > 0) {
+            console.log(`👤 Deleted customer: ${phone} (never placed an order)`);
+            return true;
+          }
         }
+        // If customer has hasOrdered: true, keep them for count persistence
       }
       return false;
     } catch (error) {

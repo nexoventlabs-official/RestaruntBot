@@ -84,7 +84,7 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
       }, { 
         $group: { _id: null, total: { $sum: '$totalAmount' } } 
       }]),
-      Customer.countDocuments(),
+      Customer.countDocuments({ hasOrdered: true }), // Only count customers who have placed orders
       MenuItem.countDocuments(),
       Order.countDocuments({ status: 'pending' }),
       Order.countDocuments({ status: 'preparing' }),
@@ -99,7 +99,7 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
     // Combine cumulative + current stats
     const totalOrders = stats.totalOrders + currentOrders;
     const totalRevenue = stats.totalRevenue + (currentRevenue[0]?.total || 0);
-    const totalCustomers = stats.totalCustomers + currentCustomers;
+    const totalCustomers = currentCustomers; // Just count customers with hasOrdered: true (they persist)
     
     // Today's revenue calculation:
     // Persisted value (includes revenue from deleted orders)
