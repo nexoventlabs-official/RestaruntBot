@@ -18,7 +18,7 @@ router.get('/test-sheets', async (req, res) => {
       status: 'pending',
       deliveryAddress: { address: 'Test Address', latitude: 0, longitude: 0 }
     };
-    
+
     const result = await googleSheets.addOrder(testOrder);
     res.json({ success: result, message: result ? 'Test order added to Google Sheet!' : 'Failed to add order' });
   } catch (error) {
@@ -93,39 +93,46 @@ router.get('/meta', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
-  
+
   // Verify token should match what you set in Meta dashboard
   const verifyToken = process.env.META_VERIFY_TOKEN || 'restaurant_bot_verify';
-  
+
+  console.log('🔐 Webhook verification attempt:', { mode, token, expectedToken: verifyToken, challenge: challenge ? 'present' : 'missing' });
+
   if (mode === 'subscribe' && token === verifyToken) {
     console.log('✅ Meta webhook verified');
     res.status(200).send(challenge);
+  } else if (!mode && !token) {
+    // Simple health check (no verification params)
+    res.json({ status: 'Webhook endpoint active', timestamp: new Date().toISOString() });
   } else {
-    console.log('❌ Meta webhook verification failed');
+    console.log('❌ Meta webhook verification failed - token mismatch');
     res.sendStatus(403);
   }
 });
 
 // Meta WhatsApp Cloud API webhook endpoint
 router.post('/meta', async (req, res) => {
+  console.log('📥 Webhook POST received');
+  console.log('📥 Body:', JSON.stringify(req.body, null, 2));
+  
+  // 1. Respond to Meta IMMEDIATELY to avoid timeouts (prevents 'single tick' issue)
+  res.sendStatus(200);
+
   try {
-    console.log('📩 Meta webhook received:', JSON.stringify(req.body, null, 2));
-    
     const body = req.body;
-    
+
     if (body.object === 'whatsapp_business_account') {
       for (const entry of body.entry || []) {
         for (const change of entry.changes || []) {
           if (change.field === 'messages') {
             const value = change.value;
-            console.log('📨 Messages value:', JSON.stringify(value, null, 2));
-            
+
             // Skip status updates (delivery receipts, read receipts)
             if (value.statuses) {
-              console.log('📊 Status update received, skipping');
               continue;
             }
-            
+
             // Extract contact name from Meta API contacts array
             const contacts = value.contacts || [];
             const contactsMap = {};
@@ -134,16 +141,14 @@ router.post('/meta', async (req, res) => {
                 contactsMap[contact.wa_id] = contact.profile.name;
               }
             }
-            
+
             for (const message of value.messages || []) {
               const phone = message.from;
               const senderName = contactsMap[phone] || null;
               let text = '';
               let messageType = 'text';
               let selectedId = null;
-              
-              console.log('📱 Message type:', message.type, 'from:', phone, 'name:', senderName);
-              
+
               if (message.type === 'text') {
                 text = message.text?.body || '';
               } else if (message.type === 'interactive') {
@@ -157,7 +162,6 @@ router.post('/meta', async (req, res) => {
                   messageType = 'list';
                 }
               } else if (message.type === 'location') {
-                // Handle location messages
                 messageType = 'location';
                 text = {
                   latitude: message.location?.latitude,
@@ -166,31 +170,20 @@ router.post('/meta', async (req, res) => {
                   address: message.location?.address || ''
                 };
               }
-              
-              console.log('📱 Processing Meta message:', { phone, text, messageType, selectedId, senderName });
-              
-              // Check if we have valid data to process
+
               const hasContent = text || selectedId || messageType === 'location';
-              
               if (phone && hasContent) {
-                await chatbot.handleMessage(phone, text, messageType, selectedId, senderName);
-                console.log('✅ Message handled successfully');
-              } else {
-                console.log('⚠️ Skipping message - no phone or content');
+                // Process message in the background
+                chatbot.handleMessage(phone, text, messageType, selectedId, senderName)
+                  .catch(err => console.error('❌ Async Chatbot Error:', err));
               }
             }
           }
         }
       }
-    } else {
-      console.log('⚠️ Unknown webhook object:', body.object);
     }
-    
-    res.sendStatus(200);
   } catch (error) {
-    console.error('❌ Meta webhook error:', error);
-    console.error('❌ Error stack:', error.stack);
-    res.sendStatus(200); // Always return 200 to Meta
+    console.error('❌ Meta webhook async processing error:', error);
   }
 });
 

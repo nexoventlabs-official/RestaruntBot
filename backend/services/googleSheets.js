@@ -90,6 +90,119 @@ const googleSheets = {
     }
   },
 
+  // Check if date header exists for today
+  async checkAndAddDateHeader(sheets, date) {
+    try {
+      const actualSheetName = await this.getFirstSheetName(sheets);
+      
+      // Format date for comparison (DD/MM/YYYY format used in India)
+      const dateStr = date.toLocaleDateString('en-IN');
+      
+      // Get day name
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const dayName = days[date.getDay()];
+      
+      // Get full year
+      const year = date.getFullYear();
+      
+      // Create date header text
+      const dateHeaderText = `📅 ${dayName}, ${dateStr} (${year})`;
+      
+      // Get all values from column A to check for existing date header
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${actualSheetName}!A:A`
+      });
+      
+      const rows = response.data.values || [];
+      
+      // Check if date header already exists for today
+      const dateHeaderExists = rows.some(row => row[0] && row[0].includes(dateStr));
+      
+      if (!dateHeaderExists) {
+        console.log('📅 Adding date header for:', dateHeaderText);
+        
+        // Add date header row (merged across all columns visually by putting text in first cell)
+        const headerRow = [dateHeaderText, '', '', '', '', '', '', '', '', '', '', '', '', ''];
+        
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${actualSheetName}!A:N`,
+          valueInputOption: 'RAW',
+          insertDataOption: 'INSERT_ROWS',
+          resource: { values: [headerRow] }
+        });
+        
+        // Get the row number that was just added and style it
+        const getResponse = await sheets.spreadsheets.values.get({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${actualSheetName}!A:A`
+        });
+        
+        const updatedRows = getResponse.data.values || [];
+        const headerRowIndex = updatedRows.findIndex(row => row[0] === dateHeaderText);
+        
+        if (headerRowIndex !== -1) {
+          const sheetId = await this.getSheetId(sheets);
+          
+          // Style the date header row with a distinct color and bold text
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: SPREADSHEET_ID,
+            resource: {
+              requests: [
+                {
+                  repeatCell: {
+                    range: {
+                      sheetId: sheetId,
+                      startRowIndex: headerRowIndex,
+                      endRowIndex: headerRowIndex + 1,
+                      startColumnIndex: 0,
+                      endColumnIndex: 14
+                    },
+                    cell: {
+                      userEnteredFormat: {
+                        backgroundColor: { red: 0.2, green: 0.4, blue: 0.6 }, // Dark blue background
+                        textFormat: {
+                          bold: true,
+                          fontSize: 12,
+                          foregroundColor: { red: 1, green: 1, blue: 1 } // White text
+                        },
+                        horizontalAlignment: 'CENTER'
+                      }
+                    },
+                    fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'
+                  }
+                },
+                {
+                  mergeCells: {
+                    range: {
+                      sheetId: sheetId,
+                      startRowIndex: headerRowIndex,
+                      endRowIndex: headerRowIndex + 1,
+                      startColumnIndex: 0,
+                      endColumnIndex: 14
+                    },
+                    mergeType: 'MERGE_ALL'
+                  }
+                }
+              ]
+            }
+          });
+          
+          console.log('✅ Date header styled and merged');
+        }
+        
+        return true;
+      }
+      
+      console.log('📅 Date header already exists for:', dateStr);
+      return false;
+    } catch (error) {
+      console.error('❌ Error adding date header:', error.message);
+      return false;
+    }
+  },
+
   // Add new order to sheet
   async addOrder(order) {
     try {
@@ -104,6 +217,10 @@ const googleSheets = {
       console.log('📊 Adding order to Google Sheet:', order.orderId);
       
       const date = new Date(order.createdAt || Date.now());
+      
+      // Check and add date header if this is the first order of the day
+      await this.checkAndAddDateHeader(sheets, date);
+      
       const dateStr = date.toLocaleDateString('en-IN');
       const timeStr = date.toLocaleTimeString('en-IN');
       
@@ -193,10 +310,13 @@ const googleSheets = {
               },
               cell: {
                 userEnteredFormat: {
-                  backgroundColor: color
+                  backgroundColor: color,
+                  textFormat: {
+                    foregroundColor: { red: 0, green: 0, blue: 0 } // Black text
+                  }
                 }
               },
-              fields: 'userEnteredFormat.backgroundColor'
+              fields: 'userEnteredFormat(backgroundColor,textFormat.foregroundColor)'
             }
           }]
         }

@@ -8,6 +8,33 @@ const razorpayService = require('../services/razorpay');
 const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
+// Lightweight endpoint to check for updates (returns hash only)
+router.get('/check-updates', authMiddleware, async (req, res) => {
+  try {
+    const { status, lastHash } = req.query;
+    const query = status ? { status } : {};
+    
+    // Get count and latest update timestamp - very lightweight query
+    const [count, latestOrder] = await Promise.all([
+      Order.countDocuments(query),
+      Order.findOne(query).sort({ updatedAt: -1 }).select('updatedAt').lean()
+    ]);
+    
+    // Create a simple hash from count + latest update time
+    const latestTime = latestOrder?.updatedAt?.getTime() || 0;
+    const currentHash = `${count}-${latestTime}`;
+    
+    // If hash matches, no changes
+    if (lastHash === currentHash) {
+      return res.json({ hasChanges: false, hash: currentHash });
+    }
+    
+    res.json({ hasChanges: true, hash: currentHash });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
@@ -17,7 +44,12 @@ router.get('/', authMiddleware, async (req, res) => {
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
     const total = await Order.countDocuments(query);
-    res.json({ orders, total, pages: Math.ceil(total / limit) });
+    
+    // Include hash for client-side change detection
+    const latestOrder = orders[0];
+    const hash = `${total}-${latestOrder?.updatedAt?.getTime() || 0}`;
+    
+    res.json({ orders, total, pages: Math.ceil(total / limit), hash });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -48,12 +80,49 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     order.status = status;
     order.trackingUpdates.push({ status, message: message || `Status updated to ${statusLabels[status] || status}` });
     
+    // Track when status changed to delivered/cancelled for auto-cleanup
+    if (status === 'delivered' || status === 'cancelled') {
+      order.statusUpdatedAt = new Date();
+    }
+    
     if (status === 'delivered') {
       order.deliveredAt = new Date();
       // Auto-mark COD orders as paid when delivered
       if (order.paymentMethod === 'cod') {
         order.paymentStatus = 'paid';
         order.trackingUpdates.push({ status: 'paid', message: 'COD payment collected on delivery' });
+      }
+      
+      // Track today's revenue for delivered + paid orders
+      if (order.paymentStatus === 'paid') {
+        try {
+          const DashboardStats = require('../models/DashboardStats');
+          const getTodayString = () => {
+            const now = new Date();
+            return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+          };
+          
+          let stats = await DashboardStats.findOne();
+          if (!stats) {
+            stats = new DashboardStats({ todayDate: getTodayString() });
+          }
+          
+          const today = getTodayString();
+          if (stats.todayDate !== today) {
+            stats.todayRevenue = 0;
+            stats.todayOrders = 0;
+            stats.todayDate = today;
+          }
+          
+          stats.todayRevenue += order.totalAmount || 0;
+          stats.todayOrders += 1;
+          stats.lastUpdated = new Date();
+          await stats.save();
+          
+          console.log(`📊 Today's revenue updated: +₹${order.totalAmount} (Total: ₹${stats.todayRevenue})`);
+        } catch (statsErr) {
+          console.error('Error updating today revenue:', statsErr.message);
+        }
       }
     }
     
@@ -139,16 +208,30 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           msg += `💳 Payment: ${order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'UPI'} (${order.paymentStatus === 'paid' ? '✅ Paid' : '⏳ Pending'})\n`;
           msg += `━━━━━━━━━━━━━━━\n`;
           msg += `\n🙏 Thank you for ordering!\nWe hope you enjoy your meal! 🍽️`;
+          
+          // Send combined message with review CTA button if Google Review URL is configured
+          const googleReviewUrl = process.env.GOOGLE_REVIEW_URL;
+          if (googleReviewUrl && googleReviewUrl !== 'https://g.page/r/YOUR_GOOGLE_REVIEW_LINK') {
+            await whatsapp.sendCtaUrl(
+              order.customer.phone,
+              msg,
+              'Leave a Review ⭐',
+              googleReviewUrl,
+              'Your feedback helps us improve!'
+            );
+          } else {
+            await whatsapp.sendMessage(order.customer.phone, msg);
+          }
+        } else {
+          // Add refund info if order was cancelled with pending refund
+          if (status === 'cancelled' && order.refundStatus === 'pending' && order.refundId) {
+            msg += `\n\n💰 *Refund Processing*\nYour refund of ₹${order.totalAmount} is being processed.\n\n⏱️ Your money will be refunded in 5-10 minutes.`;
+          } else if (status === 'cancelled' && order.refundStatus === 'failed') {
+            msg += `\n\n⚠️ *Refund Issue*\nWe couldn't process your refund automatically.\nAmount: ₹${order.totalAmount}\n\nOur team will contact you within 24 hours to resolve this.`;
+          }
+          
+          await whatsapp.sendMessage(order.customer.phone, msg);
         }
-        
-        // Add refund info if order was cancelled with pending refund
-        if (status === 'cancelled' && order.refundStatus === 'pending' && order.refundId) {
-          msg += `\n\n💰 *Refund Processing*\nYour refund of ₹${order.totalAmount} is being processed.\n\n⏱️ Your money will be refunded in 5-10 minutes.`;
-        } else if (status === 'cancelled' && order.refundStatus === 'failed') {
-          msg += `\n\n⚠️ *Refund Issue*\nWe couldn't process your refund automatically.\nAmount: ₹${order.totalAmount}\n\nOur team will contact you within 24 hours to resolve this.`;
-        }
-        
-        await whatsapp.sendMessage(order.customer.phone, msg);
       } catch (whatsappError) {
         console.error('WhatsApp notification failed:', whatsappError.message);
       }
@@ -162,6 +245,11 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
         console.error('Email notification failed:', emailError.message);
       }
     }
+
+    // Emit event for real-time updates
+    const dataEvents = require('../services/eventEmitter');
+    dataEvents.emit('orders');
+    dataEvents.emit('dashboard');
 
     res.json(order);
   } catch (error) {
@@ -256,6 +344,11 @@ router.put('/:id/refund/approve', authMiddleware, async (req, res) => {
     
     await order.save();
     
+    // Emit event for real-time updates
+    const dataEvents = require('../services/eventEmitter');
+    dataEvents.emit('orders');
+    dataEvents.emit('dashboard');
+    
     // Sync to Google Sheets
     googleSheets.updateOrderStatus(order.orderId, order.status, order.paymentStatus).catch(err => 
       console.error('Google Sheets sync error:', err)
@@ -281,6 +374,11 @@ router.put('/:id/refund/reject', authMiddleware, async (req, res) => {
     order.refundStatus = 'rejected';
     order.trackingUpdates.push({ status: 'refund_rejected', message: reason || 'Refund request rejected by admin' });
     await order.save();
+    
+    // Emit event for real-time updates
+    const dataEvents = require('../services/eventEmitter');
+    dataEvents.emit('orders');
+    dataEvents.emit('dashboard');
     
     // Notify customer
     try {

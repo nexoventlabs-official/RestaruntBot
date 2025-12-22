@@ -24,6 +24,7 @@ router.get('/categories', async (req, res) => {
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const { name, description, price, category, unit, quantity, foodType, available, preparationTime, tags, image } = req.body;
+    const parseTags = (t) => Array.isArray(t) ? t : (typeof t === 'string' ? t.split(',').map(s => s.trim()).filter(Boolean) : []);
     const item = new MenuItem({
       name, description, price: parseFloat(price), category,
       unit: unit || 'piece',
@@ -31,7 +32,7 @@ router.post('/', authMiddleware, async (req, res) => {
       foodType: foodType || 'none',
       available: available !== false && available !== 'false',
       preparationTime: parseInt(preparationTime) || 15,
-      tags: typeof tags === 'string' ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+      tags: parseTags(tags),
       image: image || null
     });
     await item.save();
@@ -44,6 +45,7 @@ router.post('/', authMiddleware, async (req, res) => {
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const { name, description, price, category, unit, quantity, foodType, available, preparationTime, tags, image } = req.body;
+    const parseTags = (t) => Array.isArray(t) ? t : (typeof t === 'string' ? t.split(',').map(s => s.trim()).filter(Boolean) : []);
     const update = {
       name, description, price: parseFloat(price), category,
       unit: unit || 'piece',
@@ -51,7 +53,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
       foodType: foodType || 'none',
       available: available !== false && available !== 'false',
       preparationTime: parseInt(preparationTime) || 15,
-      tags: typeof tags === 'string' ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+      tags: parseTags(tags),
       image: image || null
     };
     

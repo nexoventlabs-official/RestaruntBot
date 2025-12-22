@@ -42,6 +42,7 @@ const orderSchema = new mongoose.Schema({
   refundInitiatedAt: { type: Date },
   returnReason: { type: String },
   cancellationReason: { type: String },
+  statusUpdatedAt: { type: Date }, // Track when status changed to delivered/cancelled for auto-cleanup
   trackingUpdates: [{
     status: String,
     timestamp: { type: Date, default: Date.now },
@@ -57,5 +58,15 @@ orderSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
   next();
 });
+
+// Add indexes for frequently queried fields
+orderSchema.index({ status: 1 });
+orderSchema.index({ paymentStatus: 1 });
+orderSchema.index({ createdAt: -1 });
+orderSchema.index({ updatedAt: -1 }); // For efficient change detection
+orderSchema.index({ 'customer.phone': 1 });
+orderSchema.index({ status: 1, paymentStatus: 1, refundStatus: 1 }); // Compound index for dashboard queries
+orderSchema.index({ status: 1, updatedAt: -1 }); // For filtered change detection
+orderSchema.index({ status: 1, statusUpdatedAt: 1 }); // For auto-cleanup of delivered/cancelled orders
 
 module.exports = mongoose.model('Order', orderSchema);

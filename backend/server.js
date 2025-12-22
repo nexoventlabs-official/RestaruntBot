@@ -3,6 +3,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
+const dataEvents = require('./services/eventEmitter');
 
 const authRoutes = require('./routes/auth');
 const menuRoutes = require('./routes/menu');
@@ -15,6 +16,7 @@ const aiRoutes = require('./routes/ai');
 const categoryRoutes = require('./routes/category');
 const orderScheduler = require('./services/orderScheduler');
 const dailyCleanup = require('./services/dailyCleanup');
+const orderCleanup = require('./services/orderCleanup');
 
 const app = express();
 
@@ -34,6 +36,7 @@ mongoose.connect(process.env.MONGODB_URI)
     // Start schedulers after DB connection
     orderScheduler.start();
     dailyCleanup.start();
+    orderCleanup.start();
   })
   .catch(err => console.error('MongoDB connection error:', err));
 
@@ -48,6 +51,32 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/categories', categoryRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
+// SSE endpoint for real-time updates
+const sseClients = new Set();
+
+app.get('/api/events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  sseClients.add(res);
+  const keepAlive = setInterval(() => res.write(': ping\n\n'), 30000);
+
+  req.on('close', () => {
+    clearInterval(keepAlive);
+    sseClients.delete(res);
+  });
+});
+
+// Broadcast to all SSE clients
+const broadcast = (type) => sseClients.forEach(c => c.write(`data: ${JSON.stringify({ type })}\n\n`));
+
+dataEvents.on('orders', () => broadcast('orders'));
+dataEvents.on('dashboard', () => broadcast('dashboard'));
+dataEvents.on('customers', () => broadcast('customers'));
+dataEvents.on('menu', () => broadcast('menu'));
 
 // Test endpoint for Google Sheets sync
 app.get('/api/test-sheets/:orderId/:status', async (req, res) => {

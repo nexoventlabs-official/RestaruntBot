@@ -23,6 +23,11 @@ router.get('/callback', async (req, res) => {
         order.trackingUpdates.push({ status: 'confirmed', message: 'Payment received, order confirmed' });
         await order.save();
 
+        // Emit event for real-time updates
+        const dataEvents = require('../services/eventEmitter');
+        dataEvents.emit('orders');
+        dataEvents.emit('dashboard');
+
         // Update Google Sheets
         googleSheets.updateOrderStatus(order.orderId, 'confirmed', 'paid').catch(err =>
           console.error('Google Sheets sync error:', err)
@@ -115,6 +120,11 @@ router.post('/refund/:orderId', authMiddleware, async (req, res) => {
     order.refundAmount = order.totalAmount;
     order.trackingUpdates.push({ status: 'refunded', message: 'Refund processed by admin' });
     await order.save();
+
+    // Emit event for real-time updates
+    const dataEvents = require('../services/eventEmitter');
+    dataEvents.emit('orders');
+    dataEvents.emit('dashboard');
 
     // Update Google Sheets
     googleSheets.updateOrderStatus(order.orderId, 'refunded', 'refunded').catch(err =>

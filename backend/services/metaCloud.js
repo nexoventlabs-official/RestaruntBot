@@ -4,14 +4,14 @@ const getConfig = () => ({
   phoneNumberId: process.env.META_PHONE_NUMBER_ID,
   accessToken: process.env.META_ACCESS_TOKEN,
   businessId: process.env.META_BUSINESS_ID,
-  apiVersion: 'v21.0',
-  baseUrl: `https://graph.facebook.com/v21.0/${process.env.META_PHONE_NUMBER_ID}`
+  apiVersion: 'v24.0',
+  baseUrl: `https://graph.facebook.com/v24.0/${process.env.META_PHONE_NUMBER_ID}`
 });
 
 const metaCloud = {
   async sendMessage(phone, message) {
     try {
-      const { baseUrl, accessToken } = getConfig();
+      const { baseUrl, accessToken, phoneNumberId } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
       
       console.log('📤 Meta sendMessage to:', to, 'message length:', message.length);
@@ -24,10 +24,16 @@ const metaCloud = {
       }, {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
       });
-      console.log('✅ Meta sendMessage response:', JSON.stringify(response.data));
+      console.log('✅ Meta sendMessage success:', response.data?.messages?.[0]?.id || 'sent');
       return response.data;
     } catch (error) {
-      console.error('❌ Meta Cloud send error:', error.response?.data || error.message);
+      const errorData = error.response?.data?.error;
+      console.error('❌ Meta Cloud send error:', {
+        code: errorData?.code,
+        message: errorData?.message,
+        type: errorData?.type,
+        status: error.response?.status
+      });
       throw error;
     }
   },
@@ -37,7 +43,7 @@ const metaCloud = {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
       
-      console.log('📤 Meta sendButtons to:', to, 'buttons:', buttons.map(b => b.text || b));
+      console.log('📤 Meta sendButtons to:', to);
       
       const payload = {
         messaging_product: 'whatsapp',
@@ -62,10 +68,11 @@ const metaCloud = {
       const response = await axios.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
       });
-      console.log('✅ Meta sendButtons response:', JSON.stringify(response.data));
+      console.log('✅ Meta sendButtons success');
       return response.data;
     } catch (error) {
-      console.error('❌ Meta Cloud buttons error:', error.response?.data || error.message);
+      const errorData = error.response?.data?.error;
+      console.error('❌ Meta buttons error:', errorData?.message || error.message);
       return this.sendMessage(phone, message + '\n\n' + buttons.map((b, i) => `${i + 1}. ${b.text || b}`).join('\n'));
     }
   },
@@ -98,15 +105,15 @@ const metaCloud = {
           }
         }
       };
-      console.log('📤 Meta list payload:', JSON.stringify(payload, null, 2));
       
       const response = await axios.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
       });
-      console.log('✅ Meta list response:', JSON.stringify(response.data));
+      console.log('✅ Meta list success');
       return response.data;
     } catch (error) {
-      console.error('Meta Cloud list error:', error.response?.data || error.message);
+      const errorData = error.response?.data?.error;
+      console.error('❌ Meta list error:', errorData?.message || error.message);
       let fallback = `*${title}*\n\n${description}\n`;
       sections.forEach(s => {
         fallback += `\n*${s.title}*\n`;
@@ -303,6 +310,46 @@ const metaCloud = {
         { id: 'skip_location', text: '⏭️ Skip' },
         { id: 'clear_cart', text: '❌ Cancel' }
       ], 'Tap to share your delivery location');
+    }
+  },
+
+  // Send CTA URL button - for external links like Google Review
+  async sendCtaUrl(phone, message, buttonText, url, footer = '') {
+    try {
+      const { baseUrl, accessToken } = getConfig();
+      const to = phone.replace('@c.us', '').replace(/\D/g, '');
+      
+      console.log('📤 Meta sendCtaUrl to:', to);
+      
+      const payload = {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'cta_url',
+          body: {
+            text: message
+          },
+          footer: footer ? { text: footer } : undefined,
+          action: {
+            name: 'cta_url',
+            parameters: {
+              display_text: buttonText,
+              url: url
+            }
+          }
+        }
+      };
+      
+      const response = await axios.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      });
+      console.log('✅ Meta sendCtaUrl success');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Meta Cloud CTA URL error:', error.response?.data || error.message);
+      // Fallback to text message with link
+      return this.sendMessage(phone, `${message}\n\n🔗 ${buttonText}: ${url}`);
     }
   }
 };

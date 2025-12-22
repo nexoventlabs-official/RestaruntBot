@@ -32,6 +32,10 @@ const whatsapp = {
 
   async sendLocationRequest(phone, message) {
     return metaCloud.sendLocationRequest(phone, message);
+  },
+
+  async sendCtaUrl(phone, message, buttonText, url, footer = '') {
+    return metaCloud.sendCtaUrl(phone, message, buttonText, url, footer);
   }
 };
 

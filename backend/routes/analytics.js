@@ -6,54 +6,146 @@ const DashboardStats = require('../models/DashboardStats');
 const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
+// Helper to get today's date string
+const getTodayString = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+};
+
+// Helper to get or create stats
+const getStats = async () => {
+  let stats = await DashboardStats.findOne();
+  if (!stats) {
+    stats = new DashboardStats({ todayDate: getTodayString() });
+    await stats.save();
+  }
+  return stats;
+};
+
+// Track today's revenue (call this when order is paid)
+const trackTodayRevenue = async (amount) => {
+  try {
+    const stats = await getStats();
+    const today = getTodayString();
+    
+    // Reset if new day
+    if (stats.todayDate !== today) {
+      stats.todayRevenue = 0;
+      stats.todayOrders = 0;
+      stats.todayDate = today;
+    }
+    
+    stats.todayRevenue += amount;
+    stats.todayOrders += 1;
+    stats.lastUpdated = new Date();
+    await stats.save();
+    
+    return stats;
+  } catch (error) {
+    console.error('Error tracking today revenue:', error.message);
+  }
+};
+
+// Export for use in other routes
+router.trackTodayRevenue = trackTodayRevenue;
+
 router.get('/dashboard', authMiddleware, async (req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const todayStr = getTodayString();
     
-    // Get cumulative stats (persisted across weekly cleanups)
-    let cumulativeStats = await DashboardStats.findOne();
-    if (!cumulativeStats) {
-      cumulativeStats = { totalOrders: 0, totalRevenue: 0, totalCustomers: 0 };
-    }
-    
-    // Get current week's data (exclude cancelled/refunded orders from revenue)
-    const [currentOrders, todayOrders, currentRevenue, todayRevenue, currentCustomers, menuItems] = await Promise.all([
+    // Run ALL queries in parallel for better performance
+    const [
+      cumulativeStats,
+      currentOrders,
+      todayOrdersFromDb,
+      currentRevenue,
+      todayDeliveredRevenue,
+      currentCustomers,
+      menuItemsCount,
+      pendingOrders,
+      preparingOrders,
+      outForDeliveryOrders,
+      recentOrders,
+      ordersByStatus
+    ] = await Promise.all([
+      DashboardStats.findOne().lean(),
       Order.countDocuments({ status: { $in: ['confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'] } }),
       Order.countDocuments({ createdAt: { $gte: today } }),
       Order.aggregate([{ $match: { paymentStatus: 'paid', status: { $nin: ['cancelled', 'refunded'] }, refundStatus: { $nin: ['completed', 'pending'] } } }, { $group: { _id: null, total: { $sum: '$totalAmount' } } }]),
-      Order.aggregate([{ $match: { paymentStatus: 'paid', status: { $nin: ['cancelled', 'refunded'] }, refundStatus: { $nin: ['completed', 'pending'] }, createdAt: { $gte: today } } }, { $group: { _id: null, total: { $sum: '$totalAmount' } } }]),
+      // Today's delivered + paid orders (still in DB)
+      Order.aggregate([{ 
+        $match: { 
+          status: 'delivered',
+          paymentStatus: 'paid', 
+          deliveredAt: { $gte: today }
+        } 
+      }, { 
+        $group: { _id: null, total: { $sum: '$totalAmount' } } 
+      }]),
       Customer.countDocuments(),
-      MenuItem.countDocuments()
+      MenuItem.countDocuments(),
+      Order.countDocuments({ status: 'pending' }),
+      Order.countDocuments({ status: 'preparing' }),
+      Order.countDocuments({ status: 'out_for_delivery' }),
+      Order.find().sort({ createdAt: -1 }).limit(5).lean(),
+      Order.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }])
     ]);
 
-    // Combine cumulative + current week stats
-    const totalOrders = cumulativeStats.totalOrders + currentOrders;
-    const totalRevenue = cumulativeStats.totalRevenue + (currentRevenue[0]?.total || 0);
-    const totalCustomers = cumulativeStats.totalCustomers + currentCustomers;
+    // Use defaults if no cumulative stats
+    const stats = cumulativeStats || { totalOrders: 0, totalRevenue: 0, totalCustomers: 0, todayRevenue: 0, todayOrders: 0, todayDate: '', weeklyHistory: [] };
 
-    const pendingOrders = await Order.countDocuments({ status: 'pending' });
-    const preparingOrders = await Order.countDocuments({ status: 'preparing' });
-
-    const recentOrders = await Order.find().sort({ createdAt: -1 }).limit(5);
-
-    const ordersByStatus = await Order.aggregate([
-      { $group: { _id: '$status', count: { $sum: 1 } } }
-    ]);
+    // Combine cumulative + current stats
+    const totalOrders = stats.totalOrders + currentOrders;
+    const totalRevenue = stats.totalRevenue + (currentRevenue[0]?.total || 0);
+    const totalCustomers = stats.totalCustomers + currentCustomers;
+    
+    // Today's revenue calculation:
+    // Persisted value (includes revenue from deleted orders)
+    let todayRevenue = 0;
+    let todayOrders = 0;
+    
+    // Current delivered orders still in DB
+    const currentDeliveredRevenue = todayDeliveredRevenue[0]?.total || 0;
+    
+    if (stats.todayDate === todayStr) {
+      // Same day - use persisted values (includes deleted orders)
+      todayRevenue = stats.todayRevenue || 0;
+      todayOrders = stats.todayOrders || 0;
+    } else {
+      // New day or stats not initialized - just use current DB value
+      todayRevenue = currentDeliveredRevenue;
+      todayOrders = todayOrdersFromDb;
+      
+      // Initialize today's stats if needed
+      if (currentDeliveredRevenue > 0 || todayOrdersFromDb > 0) {
+        DashboardStats.findOneAndUpdate(
+          {},
+          { 
+            todayDate: todayStr, 
+            todayRevenue: currentDeliveredRevenue,
+            todayOrders: todayOrdersFromDb,
+            lastUpdated: new Date()
+          },
+          { upsert: true }
+        ).catch(err => console.error('Stats init error:', err));
+      }
+    }
 
     res.json({
       totalOrders,
       todayOrders,
       totalRevenue,
-      todayRevenue: todayRevenue[0]?.total || 0,
+      todayRevenue,
       totalCustomers,
-      menuItems,
+      menuItems: menuItemsCount,
       pendingOrders,
       preparingOrders,
+      outForDeliveryOrders,
       recentOrders,
       ordersByStatus,
-      // Include weekly history for charts
-      weeklyHistory: cumulativeStats.weeklyHistory || []
+      weeklyHistory: stats.weeklyHistory || []
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -92,9 +184,6 @@ router.get('/top-items', authMiddleware, async (req, res) => {
   }
 });
 
-module.exports = router;
-
-
 // Manual cleanup endpoint (admin only)
 router.post('/cleanup', authMiddleware, async (req, res) => {
   try {
@@ -109,3 +198,56 @@ router.post('/cleanup', authMiddleware, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Sync today's revenue from existing delivered orders (admin only)
+router.post('/sync-today-revenue', authMiddleware, async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = getTodayString();
+    
+    // Calculate today's revenue from delivered + paid orders
+    const result = await Order.aggregate([
+      { 
+        $match: { 
+          status: 'delivered',
+          paymentStatus: 'paid',
+          deliveredAt: { $gte: today }
+        } 
+      },
+      { 
+        $group: { 
+          _id: null, 
+          total: { $sum: '$totalAmount' },
+          count: { $sum: 1 }
+        } 
+      }
+    ]);
+    
+    const todayRevenue = result[0]?.total || 0;
+    const todayOrders = result[0]?.count || 0;
+    
+    // Update stats
+    await DashboardStats.findOneAndUpdate(
+      {},
+      { 
+        todayDate: todayStr, 
+        todayRevenue,
+        todayOrders,
+        lastUpdated: new Date()
+      },
+      { upsert: true }
+    );
+    
+    res.json({ 
+      success: true, 
+      message: `Today's revenue synced: ₹${todayRevenue} from ${todayOrders} orders`,
+      todayRevenue,
+      todayOrders
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+module.exports = router;

@@ -7,7 +7,26 @@ const router = express.Router();
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
-    const customers = await Customer.find()
+    
+    // Get phone numbers of customers who have actual orders (processing or confirmed status)
+    const ordersWithCustomers = await Order.aggregate([
+      {
+        $match: {
+          status: { $in: ['processing', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'] }
+        }
+      },
+      {
+        $group: {
+          _id: '$customer.phone'
+        }
+      }
+    ]);
+    
+    const phonesWithOrders = ordersWithCustomers.map(o => o._id).filter(Boolean);
+    
+    // Only fetch customers who have placed orders
+    const total = await Customer.countDocuments({ phone: { $in: phonesWithOrders } });
+    const customers = await Customer.find({ phone: { $in: phonesWithOrders } })
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
@@ -36,7 +55,6 @@ router.get('/', authMiddleware, async (req, res) => {
       return customerObj;
     }));
     
-    const total = await Customer.countDocuments();
     res.json({ customers: customersWithStats, total, pages: Math.ceil(total / limit) });
   } catch (error) {
     res.status(500).json({ error: error.message });

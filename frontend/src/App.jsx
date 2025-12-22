@@ -24,7 +24,23 @@ function App() {
     }
   }, []);
 
-  if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-[#f8f9fb]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center shadow-lg animate-pulse">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+          </div>
+          <div className="text-center">
+            <h2 className="text-xl font-bold text-dark-900">FoodAdmin</h2>
+            <p className="text-dark-400 text-sm mt-1">Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <BrowserRouter>

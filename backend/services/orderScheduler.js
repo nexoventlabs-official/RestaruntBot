@@ -38,6 +38,7 @@ const orderScheduler = {
       // Update order status
       order.status = 'cancelled';
       order.cancellationReason = 'Auto-cancelled: Payment not received within 15 minutes';
+      order.statusUpdatedAt = new Date(); // Track for auto-cleanup after 1 hour
       order.trackingUpdates.push({
         status: 'cancelled',
         message: 'Order auto-cancelled due to payment timeout',

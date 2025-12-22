@@ -1,17 +1,24 @@
 const Order = require('../models/Order');
 const Customer = require('../models/Customer');
 const DashboardStats = require('../models/DashboardStats');
+const dataEvents = require('./eventEmitter');
 
 const RETENTION_DAYS = 10; // Keep data for 10 days
 
 const dailyCleanup = {
-  // Check if it's 11:59 PM
-  isCleanupTime() {
+  // Check if it's midnight (12:00 AM)
+  isMidnight() {
     const now = new Date();
     const hours = now.getHours();
     const minutes = now.getMinutes();
     
-    return hours === 23 && minutes === 59;
+    return hours === 0 && minutes === 0;
+  },
+
+  // Get today's date string
+  getTodayString() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   },
 
   // Get or create dashboard stats document
@@ -24,12 +31,38 @@ const dailyCleanup = {
     return stats;
   },
 
+  // Reset today's revenue at midnight
+  async resetTodayStats() {
+    try {
+      const stats = await this.getStats();
+      const today = this.getTodayString();
+      
+      // Only reset if it's a new day
+      if (stats.todayDate !== today) {
+        console.log(`🌙 Midnight reset - Previous day revenue: ₹${stats.todayRevenue}, orders: ${stats.todayOrders}`);
+        
+        // Reset today's stats
+        stats.todayRevenue = 0;
+        stats.todayOrders = 0;
+        stats.todayDate = today;
+        stats.lastUpdated = new Date();
+        
+        await stats.save();
+        
+        console.log(`✅ Today's stats reset for ${today}`);
+        dataEvents.emit('dashboard');
+      }
+    } catch (error) {
+      console.error('❌ Error resetting today stats:', error.message);
+    }
+  },
+
   // Save stats before deleting orders
   async saveOrderStats(orders) {
     try {
       const stats = await this.getStats();
       
-      const paidOrders = orders.filter(o => o.paymentStatus === 'paid');
+      const paidOrders = orders.filter(o => o.paymentStatus === 'paid' && o.status !== 'cancelled');
       const revenue = paidOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
       
       // Add to cumulative totals
@@ -160,22 +193,55 @@ const dailyCleanup = {
     return await this.runCleanup();
   },
 
-  // Start the scheduler (runs every day at 11:59 PM)
+  // Start the scheduler
   start() {
-    console.log(`📅 Daily cleanup scheduler started - runs every day at 11:59 PM`);
-    console.log(`   Data retention: ${RETENTION_DAYS} days`);
+    console.log(`📅 Daily cleanup scheduler started`);
+    console.log(`   - Today's revenue resets at 12:00 AM`);
+    console.log(`   - Data retention: ${RETENTION_DAYS} days`);
     
-    // Check every minute if it's time to run cleanup
+    // Check every minute
     setInterval(async () => {
-      if (this.isCleanupTime()) {
-        console.log('⏰ 11:59 PM - Running daily cleanup...');
+      // Reset today's stats at midnight
+      if (this.isMidnight()) {
+        console.log('⏰ 12:00 AM - Resetting today\'s stats...');
+        await this.resetTodayStats();
+      }
+    }, 60 * 1000); // Check every minute
+    
+    // Run data cleanup once a day at 2 AM
+    setInterval(async () => {
+      const now = new Date();
+      if (now.getHours() === 2 && now.getMinutes() === 0) {
+        console.log('⏰ 2:00 AM - Running data cleanup...');
         try {
           await this.runCleanup();
         } catch (error) {
           console.error('Daily cleanup failed:', error);
         }
       }
-    }, 60 * 1000); // Check every minute
+    }, 60 * 1000);
+    
+    // Initialize today's date on startup
+    this.initTodayStats();
+  },
+
+  // Initialize today's stats on server startup
+  async initTodayStats() {
+    try {
+      const stats = await this.getStats();
+      const today = this.getTodayString();
+      
+      if (stats.todayDate !== today) {
+        // New day, reset stats
+        stats.todayRevenue = 0;
+        stats.todayOrders = 0;
+        stats.todayDate = today;
+        await stats.save();
+        console.log(`📊 Initialized today's stats for ${today}`);
+      }
+    } catch (error) {
+      console.error('❌ Error initializing today stats:', error.message);
+    }
   }
 };
 

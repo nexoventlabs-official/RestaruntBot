@@ -41,6 +41,11 @@ const refundScheduler = {
       });
       await order.save();
       
+      // Emit event for real-time updates
+      const dataEvents = require('./eventEmitter');
+      dataEvents.emit('orders');
+      dataEvents.emit('dashboard');
+      
       console.log(`✅ Refund completed for order ${orderId}`);
       
       // Send WhatsApp success message

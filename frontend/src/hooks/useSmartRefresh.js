@@ -1,121 +1,146 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../api';
 
-// Deep comparison to detect actual changes
-const hasDataChanged = (oldData, newData) => {
-  return JSON.stringify(oldData) !== JSON.stringify(newData);
+// Global SSE connection
+let eventSource = null;
+let reconnectTimeout = null;
+const listeners = {};
+
+const connectSSE = () => {
+  if (eventSource && eventSource.readyState !== EventSource.CLOSED) return;
+  
+  // Clear any pending reconnect
+  if (reconnectTimeout) {
+    clearTimeout(reconnectTimeout);
+    reconnectTimeout = null;
+  }
+  
+  const baseUrl = api.defaults.baseURL || '/api';
+  eventSource = new EventSource(`${baseUrl}/events`);
+  
+  eventSource.onmessage = (event) => {
+    try {
+      const { type } = JSON.parse(event.data);
+      if (listeners[type]) {
+        listeners[type].forEach(cb => cb());
+      }
+    } catch (e) {}
+  };
+  
+  eventSource.onerror = () => {
+    eventSource?.close();
+    eventSource = null;
+    // Reconnect after 5 seconds, but only if there are listeners
+    if (Object.values(listeners).some(arr => arr.length > 0)) {
+      reconnectTimeout = setTimeout(connectSSE, 5000);
+    }
+  };
+};
+
+const subscribe = (type, callback) => {
+  if (!listeners[type]) listeners[type] = [];
+  listeners[type].push(callback);
+  connectSSE();
+  return () => {
+    listeners[type] = listeners[type].filter(cb => cb !== callback);
+  };
 };
 
 /**
- * Smart refresh hook - only updates state when data actually changes
- * @param {string} endpoint - API endpoint to poll
- * @param {object} options - Configuration options
- * @param {number} options.interval - Polling interval in ms (default: 10000)
- * @param {function} options.transform - Transform response data
- * @param {boolean} options.enabled - Enable/disable polling (default: true)
+ * Fetch hook - fetches on mount and when server emits events
  */
 export function useSmartRefresh(endpoint, options = {}) {
   const { 
-    interval = 10000, 
-    transform = (res) => res.data,
-    enabled = true 
+    transform,
+    refreshOn = null
   } = options;
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
-  
   const dataRef = useRef(null);
-  const intervalRef = useRef(null);
+  const isFetchingRef = useRef(false);
 
-  const fetchData = useCallback(async (isBackground = false) => {
+  const fetchData = useCallback(async (showLoading = true) => {
+    // Prevent concurrent fetches
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    
     try {
-      if (!isBackground) setLoading(true);
-      
+      if (showLoading && !dataRef.current) setLoading(true);
       const res = await api.get(endpoint);
-      const newData = transform(res);
-      
-      // Only update if data has actually changed
-      if (hasDataChanged(dataRef.current, newData)) {
-        dataRef.current = newData;
-        setData(newData);
-        setLastUpdated(new Date());
-      }
-      
+      const newData = transform ? transform(res) : res.data;
+      dataRef.current = newData;
+      setData(newData);
+      setLastUpdated(new Date());
       setError(null);
     } catch (err) {
-      // Only set error if no data exists (don't break UI on background refresh failures)
-      if (!dataRef.current) {
-        setError(err);
-      }
-      console.error(`Error fetching ${endpoint}:`, err);
+      if (!dataRef.current) setError(err);
     } finally {
-      // Always stop loading regardless of success/failure
       setLoading(false);
+      isFetchingRef.current = false;
     }
   }, [endpoint, transform]);
 
-  // Initial fetch
+  // Initial fetch - only once
   useEffect(() => {
-    fetchData(false);
-  }, [fetchData]);
+    fetchData(true);
+  }, [endpoint]); // Only depend on endpoint, not fetchData
 
-  // Background polling
+  // Subscribe to SSE events
   useEffect(() => {
-    if (!enabled) return;
+    if (!refreshOn) return;
+    return subscribe(refreshOn, () => fetchData(false));
+  }, [refreshOn, fetchData]);
 
-    intervalRef.current = setInterval(() => {
-      fetchData(true);
-    }, interval);
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [fetchData, interval, enabled]);
-
-  // Manual refresh function
-  const refresh = useCallback(() => {
-    return fetchData(false);
-  }, [fetchData]);
+  const refresh = useCallback(() => fetchData(true), [fetchData]);
 
   return { data, loading, error, lastUpdated, refresh };
 }
 
+// Transform functions (stable references)
+const transformOrders = (res) => res.data.orders;
+const transformCustomers = (res) => res.data.customers;
+const transformDefault = (res) => res.data;
+
 /**
- * Smart refresh for orders with filter support
+ * Orders hook - refreshes on 'orders' event from server
  */
-export function useOrdersRefresh(filter = '', interval = 5000) {
+export function useOrdersRefresh(filter = '') {
   const endpoint = `/orders${filter ? `?status=${filter}` : ''}`;
-  
   return useSmartRefresh(endpoint, {
-    interval,
-    transform: (res) => res.data.orders
+    transform: transformOrders,
+    refreshOn: 'orders'
   });
 }
 
 /**
- * Smart refresh for dashboard stats
+ * Dashboard hook - refreshes on 'dashboard' event from server
  */
-export function useDashboardRefresh(interval = 10000) {
-  return useSmartRefresh('/analytics/dashboard', { interval });
+export function useDashboardRefresh() {
+  return useSmartRefresh('/analytics/dashboard', { 
+    transform: transformDefault,
+    refreshOn: 'dashboard' 
+  });
 }
 
 /**
- * Smart refresh for customers
+ * Customers hook - refreshes on 'customers' event from server
  */
-export function useCustomersRefresh(interval = 15000) {
+export function useCustomersRefresh() {
   return useSmartRefresh('/customers', {
-    interval,
-    transform: (res) => res.data.customers
+    transform: transformCustomers,
+    refreshOn: 'customers'
   });
 }
 
 /**
- * Smart refresh for menu items
+ * Menu hook - refreshes on 'menu' event from server
  */
-export function useMenuRefresh(interval = 30000) {
-  return useSmartRefresh('/menu', { interval });
+export function useMenuRefresh() {
+  return useSmartRefresh('/menu', { 
+    transform: transformDefault,
+    refreshOn: 'menu' 
+  });
 }
