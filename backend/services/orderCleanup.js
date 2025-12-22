@@ -70,14 +70,14 @@ const orderCleanup = {
     }
   },
 
-  // Remove delivered and cancelled orders older than 1 hour from status update
+  // Remove delivered, cancelled, and refunded orders older than 1 hour from status update
   async cleanupCompletedOrders() {
     try {
       const cutoffTime = new Date(Date.now() - CLEANUP_DELAY_HOURS * 60 * 60 * 1000);
       
-      // Find delivered/cancelled orders where statusUpdatedAt is older than 1 hour
+      // Find delivered/cancelled/refunded orders where statusUpdatedAt is older than 1 hour
       const ordersToRemove = await Order.find({
-        status: { $in: ['delivered', 'cancelled'] },
+        status: { $in: ['delivered', 'cancelled', 'refunded'] },
         statusUpdatedAt: { $lt: cutoffTime, $exists: true }
       });
       
@@ -97,7 +97,7 @@ const orderCleanup = {
       const orderIds = ordersToRemove.map(o => o._id);
       const result = await Order.deleteMany({ _id: { $in: orderIds } });
       
-      console.log(`✅ Removed ${result.deletedCount} delivered/cancelled orders`);
+      console.log(`✅ Removed ${result.deletedCount} delivered/cancelled/refunded orders`);
       
       // Delete customers who have no remaining orders
       let customersDeleted = 0;
@@ -124,7 +124,7 @@ const orderCleanup = {
 
   // Start the scheduler (runs every 5 minutes)
   start() {
-    console.log(`🧹 Order cleanup scheduler started - removes delivered/cancelled orders after ${CLEANUP_DELAY_HOURS} hour(s)`);
+    console.log(`🧹 Order cleanup scheduler started - removes delivered/cancelled/refunded orders after ${CLEANUP_DELAY_HOURS} hour(s)`);
     
     // Run immediately on start
     this.cleanupCompletedOrders();
