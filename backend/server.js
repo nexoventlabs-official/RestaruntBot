@@ -55,6 +55,13 @@ app.use('/api/categories', categoryRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
+// Root route - API status
+app.get('/', (req, res) => res.json({ 
+  status: 'ok', 
+  message: 'FoodAdmin API is running',
+  version: '1.0.0'
+}));
+
 // SSE endpoint for real-time updates
 const sseClients = new Set();
 
