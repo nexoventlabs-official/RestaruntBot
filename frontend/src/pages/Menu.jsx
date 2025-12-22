@@ -325,20 +325,18 @@ export default function Menu() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div className="relative flex-1 max-w-md">
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
           <input type="text" placeholder="Search menu items..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10 pr-4 py-2.5 bg-white border border-dark-200 rounded-xl w-full focus:border-primary-500 transition-colors" />
         </div>
-        <div className="flex gap-3">
-          <button onClick={() => setShowCategoryModal(true)} className="flex items-center gap-2 bg-dark-800 text-white px-4 py-2.5 rounded-xl font-medium hover:bg-dark-900 transition-colors">
-            <FolderPlus className="w-5 h-5" /> <span className="hidden sm:inline">Categories</span>
-          </button>
-          <button onClick={() => openModal()} className="flex items-center gap-2 gradient-primary text-white px-4 py-2.5 rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-primary-500/30">
-            <Plus className="w-5 h-5" /> <span className="hidden sm:inline">Add Item</span>
-          </button>
-        </div>
+        <button onClick={() => setShowCategoryModal(true)} className="flex items-center justify-center bg-dark-800 text-white p-2.5 rounded-xl hover:bg-dark-900 transition-colors">
+          <FolderPlus className="w-5 h-5" />
+        </button>
+        <button onClick={() => openModal()} className="flex items-center justify-center gradient-primary text-white p-2.5 rounded-xl hover:opacity-90 transition-opacity shadow-lg shadow-primary-500/30">
+          <Plus className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Filters */}

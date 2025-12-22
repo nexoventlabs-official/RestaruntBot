@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Orders from './pages/Orders';
 import Menu from './pages/Menu';
 import Customers from './pages/Customers';
+import NotFound from './pages/NotFound';
 import Layout from './components/Layout';
 import api from './api';
 
@@ -52,6 +53,7 @@ function App() {
           <Route path="menu" element={<Menu />} />
           <Route path="customers" element={<Customers />} />
         </Route>
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
   );

@@ -1,5 +1,4 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
 import { 
   LayoutDashboard, 
   ShoppingBag, 
@@ -19,7 +18,6 @@ const navItems = [
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const logout = () => {
     localStorage.removeItem('token');
@@ -31,24 +29,17 @@ export default function Layout() {
   return (
     <div className="flex min-h-screen h-full bg-[#f8f9fb]">
       {/* Sidebar - Desktop Only */}
-      <aside className={`
-        hidden lg:flex fixed lg:static inset-y-0 left-0 z-50
-        ${sidebarOpen ? 'w-72' : 'w-20'} 
-        bg-dark-900 text-white transition-all duration-300 ease-in-out
-        flex-col shadow-sidebar
-      `}>
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-50 w-72 bg-dark-900 text-white flex-col shadow-sidebar">
         {/* Logo Section */}
         <div className="p-6 border-b border-dark-700">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-xl gradient-primary flex items-center justify-center shadow-lg">
               <ChefHat className="w-6 h-6 text-white" />
             </div>
-            {sidebarOpen && (
-              <div className="animate-slide-in">
-                <h1 className="text-lg font-bold text-white">FoodAdmin</h1>
-                <p className="text-xs text-dark-400">Restaurant Panel</p>
-              </div>
-            )}
+            <div>
+              <h1 className="text-lg font-bold text-white">FoodAdmin</h1>
+              <p className="text-xs text-dark-400">Restaurant Panel</p>
+            </div>
           </div>
         </div>
 
@@ -69,14 +60,12 @@ export default function Layout() {
                 `}
               >
                 <item.icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-white' : ''}`} />
-                {sidebarOpen && (
-                  <div className="animate-slide-in">
-                    <span className="font-medium">{item.label}</span>
-                    {!isActive && (
-                      <p className="text-xs text-dark-500 mt-0.5">{item.description}</p>
-                    )}
-                  </div>
-                )}
+                <div>
+                  <span className="font-medium">{item.label}</span>
+                  {!isActive && (
+                    <p className="text-xs text-dark-500 mt-0.5">{item.description}</p>
+                  )}
+                </div>
               </Link>
             );
           })}
@@ -84,37 +73,29 @@ export default function Layout() {
 
         {/* Sidebar Footer */}
         <div className="p-4 border-t border-dark-700">
-          {sidebarOpen && (
-            <div className="mb-4 p-4 bg-dark-800 rounded-xl">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-bold">
-                  A
-                </div>
-                <div>
-                  <p className="font-medium text-white text-sm">Admin</p>
-                  <p className="text-xs text-dark-400">Restaurant Owner</p>
-                </div>
+          <div className="p-4 bg-dark-800 rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-bold">
+                A
               </div>
+              <div className="flex-1">
+                <p className="font-medium text-white text-sm">Admin</p>
+                <p className="text-xs text-dark-400">Restaurant Owner</p>
+              </div>
+              <button 
+                onClick={logout} 
+                className="p-2 rounded-lg text-dark-400 hover:bg-red-500/10 hover:text-red-400 transition-all duration-200"
+                title="Logout"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
             </div>
-          )}
-          
-          <button 
-            onClick={logout} 
-            className={`
-              flex items-center gap-3 w-full px-4 py-3 rounded-xl
-              text-dark-400 hover:bg-red-500/10 hover:text-red-400 transition-all duration-200
-              ${!sidebarOpen ? 'justify-center' : ''}
-            `}
-          >
-            <LogOut className="w-5 h-5" />
-            {sidebarOpen && <span className="font-medium">Logout</span>}
-          </button>
+          </div>
         </div>
-
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 pb-20 lg:pb-0">
+      <div className="flex-1 flex flex-col min-w-0 lg:ml-72 pb-20 lg:pb-0">
         {/* Top Header */}
         <header className="bg-white border-b border-dark-100 px-4 lg:px-6 py-4 flex items-center justify-between sticky top-0 z-30">
           <div className="flex items-center gap-3">
@@ -144,7 +125,7 @@ export default function Layout() {
       </div>
 
       {/* Bottom Navigation - Mobile & Tablet */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-dark-100 z-50 safe-area-bottom">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-dark-100 z-50">
         <div className="flex items-center justify-around px-2 py-2">
           {navItems.map(item => {
             const isActive = location.pathname === item.path;
@@ -154,16 +135,10 @@ export default function Layout() {
                 to={item.path}
                 className={`
                   flex flex-col items-center justify-center py-2 px-3 rounded-xl min-w-[60px] transition-all duration-200
-                  ${isActive 
-                    ? 'text-primary-600' 
-                    : 'text-dark-400'
-                  }
+                  ${isActive ? 'text-primary-600' : 'text-dark-400'}
                 `}
               >
-                <div className={`
-                  p-2 rounded-xl transition-all duration-200
-                  ${isActive ? 'bg-primary-50' : ''}
-                `}>
+                <div className={`p-2 rounded-xl transition-all duration-200 ${isActive ? 'bg-primary-50' : ''}`}>
                   <item.icon className="w-5 h-5" />
                 </div>
                 <span className={`text-xs mt-1 font-medium ${isActive ? 'text-primary-600' : 'text-dark-500'}`}>
