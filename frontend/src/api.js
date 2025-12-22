@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({ 
-  baseURL: '/api',
+  baseURL: 'https://restaruntbot.onrender.com/api',
   timeout: 15000 // 15 second timeout to prevent infinite loading
 });
 
