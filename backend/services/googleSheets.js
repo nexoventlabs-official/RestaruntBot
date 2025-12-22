@@ -95,15 +95,17 @@ const googleSheets = {
     try {
       const actualSheetName = await this.getFirstSheetName(sheets);
       
+      // Convert to IST (Indian Standard Time - UTC+5:30)
+      const istOptions = { timeZone: 'Asia/Kolkata' };
+      
       // Format date for comparison (DD/MM/YYYY format used in India)
-      const dateStr = date.toLocaleDateString('en-IN');
+      const dateStr = date.toLocaleDateString('en-IN', istOptions);
       
-      // Get day name
-      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const dayName = days[date.getDay()];
+      // Get day name in IST
+      const dayName = date.toLocaleDateString('en-IN', { ...istOptions, weekday: 'long' });
       
-      // Get full year
-      const year = date.getFullYear();
+      // Get full year in IST
+      const year = date.toLocaleDateString('en-IN', { ...istOptions, year: 'numeric' });
       
       // Create date header text
       const dateHeaderText = `📅 ${dayName}, ${dateStr} (${year})`;
@@ -221,8 +223,10 @@ const googleSheets = {
       // Check and add date header if this is the first order of the day
       await this.checkAndAddDateHeader(sheets, date);
       
-      const dateStr = date.toLocaleDateString('en-IN');
-      const timeStr = date.toLocaleTimeString('en-IN');
+      // Convert to IST (Indian Standard Time - UTC+5:30)
+      const istOptions = { timeZone: 'Asia/Kolkata' };
+      const dateStr = date.toLocaleDateString('en-IN', istOptions);
+      const timeStr = date.toLocaleTimeString('en-IN', istOptions);
       
       // Format items as string
       const itemsStr = order.items.map(item => 
