@@ -71,7 +71,7 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
       ordersByStatus
     ] = await Promise.all([
       DashboardStats.findOne().lean(),
-      Order.countDocuments({ status: { $in: ['confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'] } }),
+      Order.countDocuments(), // Count ALL orders in database
       Order.countDocuments({ createdAt: { $gte: today } }),
       Order.aggregate([{ $match: { paymentStatus: 'paid', status: { $nin: ['cancelled', 'refunded'] }, refundStatus: { $nin: ['completed', 'pending'] } } }, { $group: { _id: null, total: { $sum: '$totalAmount' } } }]),
       // Today's delivered + paid orders (still in DB)
