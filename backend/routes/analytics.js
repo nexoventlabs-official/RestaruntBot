@@ -256,7 +256,8 @@ router.get('/report', authMiddleware, async (req, res) => {
       itemStats,
       categoryStats,
       paymentStats,
-      historicalReports
+      historicalReports,
+      allMenuItems
     ] = await Promise.all([
       // Get all orders in range (still in DB)
       Order.find(dateFilter).lean(),
@@ -357,7 +358,10 @@ router.get('/report', authMiddleware, async (req, res) => {
       ]),
       
       // Historical report data (from deleted orders)
-      ReportHistory.find({ date: { $gte: startDateStr, $lte: endDateStr } }).lean()
+      ReportHistory.find({ date: { $gte: startDateStr, $lte: endDateStr } }).lean(),
+      
+      // Get ALL menu items (including unavailable ones)
+      MenuItem.find({}, { name: 1, image: 1, category: 1, price: 1, available: 1 }).lean()
     ]);
 
     // Combine current stats with historical data
@@ -419,18 +423,21 @@ router.get('/report', authMiddleware, async (req, res) => {
       }
     }
     
-    // Fetch images for items that don't have them (historical items)
-    const itemsWithoutImages = Object.values(combinedItemsMap).filter(item => !item.image);
-    if (itemsWithoutImages.length > 0) {
-      const itemNames = itemsWithoutImages.map(item => item.name);
-      const menuItems = await MenuItem.find({ name: { $in: itemNames } }, { name: 1, image: 1 }).lean();
-      const imageMap = {};
-      for (const mi of menuItems) {
-        imageMap[mi.name] = mi.image;
-      }
-      for (const item of itemsWithoutImages) {
-        if (imageMap[item.name]) {
-          combinedItemsMap[item.name].image = imageMap[item.name];
+    // Add ALL menu items to allItemsSold (including those with 0 sales)
+    // This ensures every menu item appears in the report
+    for (const menuItem of allMenuItems) {
+      if (!combinedItemsMap[menuItem.name]) {
+        combinedItemsMap[menuItem.name] = {
+          name: menuItem.name,
+          image: menuItem.image,
+          category: Array.isArray(menuItem.category) ? menuItem.category[0] : menuItem.category,
+          quantity: 0,
+          revenue: 0
+        };
+      } else {
+        // Update image if not set
+        if (!combinedItemsMap[menuItem.name].image && menuItem.image) {
+          combinedItemsMap[menuItem.name].image = menuItem.image;
         }
       }
     }
