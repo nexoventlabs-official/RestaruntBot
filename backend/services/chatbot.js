@@ -36,6 +36,45 @@ const chatbot = {
     return refundPatterns.some(pattern => pattern.test(lowerText));
   },
 
+  // Helper to detect cart intent from text/voice
+  isCartIntent(text) {
+    if (!text) return false;
+    const lowerText = ' ' + text.toLowerCase() + ' ';
+    const cartPatterns = [
+      /\bmy cart\b/, /\bview cart\b/, /\bshow cart\b/, /\bsee cart\b/,
+      /\bcart\b/, /\bbasket\b/, /\bmy items\b/, /\bmy order items\b/,
+      /\bwhat'?s in my cart\b/, /\bwhats in cart\b/, /\bcart me kya hai\b/,
+      /\bcart dikhao\b/, /\bcart dekho\b/, /\bमेरा कार्ट\b/, /\bकार्ट\b/
+    ];
+    return cartPatterns.some(pattern => pattern.test(lowerText));
+  },
+
+  // Helper to detect track order intent from text/voice
+  isTrackIntent(text) {
+    if (!text) return false;
+    const lowerText = ' ' + text.toLowerCase() + ' ';
+    const trackPatterns = [
+      /\btrack\b/, /\btrack order\b/, /\btrack my order\b/, /\btracking\b/,
+      /\bwhere is my order\b/, /\bwhere'?s my order\b/, /\border location\b/,
+      /\bdelivery status\b/, /\bdelivery location\b/, /\bwhen will.+arrive\b/,
+      /\bkahan hai\b/, /\bkab aayega\b/, /\border kahan\b/, /\bट्रैक\b/, /\bकहां है\b/
+    ];
+    return trackPatterns.some(pattern => pattern.test(lowerText));
+  },
+
+  // Helper to detect order status intent from text/voice
+  isOrderStatusIntent(text) {
+    if (!text) return false;
+    const lowerText = ' ' + text.toLowerCase() + ' ';
+    const statusPatterns = [
+      /\border status\b/, /\bmy order\b/, /\bmy orders\b/, /\bcheck order\b/,
+      /\bstatus\b/, /\border history\b/, /\bprevious order\b/, /\bpast order\b/,
+      /\bshow order\b/, /\bview order\b/, /\border details\b/,
+      /\border kya hua\b/, /\border status kya hai\b/, /\bऑर्डर स्टेटस\b/, /\bमेरा ऑर्डर\b/
+    ];
+    return statusPatterns.some(pattern => pattern.test(lowerText));
+  },
+
   // Helper to find category by name
   findCategory(text, menuItems) {
     // Flatten category arrays and dedupe (category is an array field)
@@ -372,7 +411,7 @@ const chatbot = {
           state.currentStep = 'select_category';
         }
       }
-      else if (selection === 'view_cart' || msg === 'cart') {
+      else if (selection === 'view_cart' || msg === 'cart' || this.isCartIntent(msg)) {
         await this.sendCart(phone, customer);
         state.currentStep = 'viewing_cart';
       }
@@ -380,11 +419,11 @@ const chatbot = {
         await this.sendServiceType(phone);
         state.currentStep = 'select_service';
       }
-      else if (selection === 'order_status' || msg === 'status') {
+      else if (selection === 'order_status' || msg === 'status' || this.isOrderStatusIntent(msg)) {
         await this.sendOrderStatus(phone);
         state.currentStep = 'main_menu';
       }
-      else if (selection === 'track_order' || msg === 'track') {
+      else if (selection === 'track_order' || msg === 'track' || this.isTrackIntent(msg)) {
         await this.sendTrackingOptions(phone);
         state.currentStep = 'select_track';
       }
