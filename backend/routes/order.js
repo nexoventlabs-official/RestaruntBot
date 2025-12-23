@@ -55,6 +55,38 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
+// Get refunds with filter - MUST be before /:id route
+router.get('/refunds', authMiddleware, async (req, res) => {
+  try {
+    const { status } = req.query;
+    let query = { refundStatus: { $ne: 'none' } };
+    
+    if (status === 'pending') {
+      query.refundStatus = { $in: ['pending', 'scheduled'] };
+    } else if (status === 'completed') {
+      query.refundStatus = 'completed';
+    } else if (status === 'rejected') {
+      query.refundStatus = { $in: ['rejected', 'failed'] };
+    }
+    // 'all' returns all non-none refund statuses
+    
+    const orders = await Order.find(query).sort({ createdAt: -1 });
+    res.json({ orders });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get pending refund requests - MUST be before /:id route
+router.get('/refunds/pending', authMiddleware, async (req, res) => {
+  try {
+    const orders = await Order.find({ refundStatus: 'pending' }).sort({ createdAt: -1 });
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -262,38 +294,6 @@ router.put('/:id/delivery-time', authMiddleware, async (req, res) => {
     }
     
     res.json(order);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get pending refund requests
-router.get('/refunds/pending', authMiddleware, async (req, res) => {
-  try {
-    const orders = await Order.find({ refundStatus: 'pending' }).sort({ createdAt: -1 });
-    res.json(orders);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get refunds with filter
-router.get('/refunds', authMiddleware, async (req, res) => {
-  try {
-    const { status } = req.query;
-    let query = { refundStatus: { $ne: 'none' } };
-    
-    if (status === 'pending') {
-      query.refundStatus = { $in: ['pending', 'scheduled'] };
-    } else if (status === 'completed') {
-      query.refundStatus = 'completed';
-    } else if (status === 'rejected') {
-      query.refundStatus = { $in: ['rejected', 'failed'] };
-    }
-    // 'all' returns all non-none refund statuses
-    
-    const orders = await Order.find(query).sort({ createdAt: -1 });
-    res.json({ orders });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
