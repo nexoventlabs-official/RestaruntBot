@@ -271,7 +271,12 @@ router.get('/report', authMiddleware, async (req, res) => {
             totalRevenue: { 
               $sum: { 
                 $cond: [
-                  { $and: [{ $eq: ['$paymentStatus', 'paid'] }, { $nin: ['$status', ['cancelled', 'refunded']] }] },
+                  { 
+                    $and: [
+                      { $eq: ['$paymentStatus', 'paid'] }, 
+                      { $not: { $in: ['$status', ['cancelled', 'refunded']] } }
+                    ] 
+                  },
                   '$totalAmount',
                   0
                 ]
