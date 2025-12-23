@@ -1836,6 +1836,13 @@ const chatbot = {
       return;
     }
 
+    // If only 1 order, directly show tracking details
+    if (orders.length === 1) {
+      await this.sendTrackingDetails(phone, orders[0].orderId);
+      return;
+    }
+
+    // Multiple orders - show list to choose
     const statusLabel = {
       pending: 'Pending', confirmed: 'Confirmed', preparing: 'Preparing', ready: 'Ready',
       out_for_delivery: 'On the Way', delivered: 'Delivered', cancelled: 'Cancelled', refunded: 'Refunded'
@@ -1848,7 +1855,7 @@ const chatbot = {
 
     await whatsapp.sendList(phone,
       'Track Order',
-      'Select an order to track',
+      `You have ${orders.length} active orders. Select which one to track.`,
       'Select Order',
       [{ title: 'Active Orders', rows }]
     );
@@ -1907,6 +1914,13 @@ const chatbot = {
       return;
     }
 
+    // If only 1 order, directly cancel it
+    if (orders.length === 1) {
+      await this.processCancellation(phone, orders[0].orderId);
+      return;
+    }
+
+    // Multiple orders - show list to choose
     const rows = orders.map(o => ({
       rowId: `cancel_${o.orderId}`,
       title: o.orderId,
@@ -1915,7 +1929,7 @@ const chatbot = {
 
     await whatsapp.sendList(phone,
       'Cancel Order',
-      'Select an order to cancel. If paid, refund will be requested.',
+      `You have ${orders.length} active orders. Select which one to cancel.`,
       'Select Order',
       [{ title: 'Your Orders', rows }],
       'This cannot be undone'
@@ -2027,6 +2041,13 @@ const chatbot = {
       return;
     }
 
+    // If only 1 order, directly process refund
+    if (orders.length === 1) {
+      await this.processRefund(phone, orders[0].orderId);
+      return;
+    }
+
+    // Multiple orders - show list to choose
     const rows = orders.map(o => ({
       rowId: `refund_${o.orderId}`,
       title: o.orderId,
@@ -2035,7 +2056,7 @@ const chatbot = {
 
     await whatsapp.sendList(phone,
       'Request Refund',
-      'Select an order for refund. Admin approval required.',
+      `You have ${orders.length} paid orders. Select which one to refund.`,
       'Select Order',
       [{ title: 'Paid Orders', rows }]
     );
