@@ -148,29 +148,11 @@ const razorpayService = {
         throw new Error('No amount available for refund');
       }
       
-      // Process refund - Use refunds.create() which is more reliable
+      // Process refund using payments.refund (correct Razorpay SDK syntax)
       console.log('💰 Calling Razorpay refund API:', { paymentId, amountInPaise: finalRefundAmount });
       
-      const refundOptions = {
-        amount: finalRefundAmount,
-        speed: 'normal',
-        notes: {
-          reason: 'Customer requested refund'
-        }
-      };
-      
-      // Try refunds.create first (more reliable), fallback to payments.refund
-      let refund;
-      try {
-        refund = await getRazorpay().refunds.create({
-          payment_id: paymentId,
-          ...refundOptions
-        });
-      } catch (createErr) {
-        console.log('💰 refunds.create failed, trying payments.refund:', createErr.error?.description || createErr.message);
-        // Fallback to payments.refund method
-        refund = await getRazorpay().payments.refund(paymentId, refundOptions);
-      }
+      // Razorpay SDK: payments.refund(paymentId, amount) - amount in paise
+      const refund = await getRazorpay().payments.refund(paymentId, finalRefundAmount);
       
       console.log('✅ Refund successful:', refund.id, 'Amount:', finalRefundAmount / 100);
       return refund;
