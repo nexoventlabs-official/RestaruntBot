@@ -10,6 +10,32 @@ const axios = require('axios');
 const generateOrderId = () => 'ORD' + Date.now().toString(36).toUpperCase();
 
 const chatbot = {
+  // Helper to detect cancel order intent from text/voice
+  isCancelIntent(text) {
+    if (!text) return false;
+    const lowerText = ' ' + text.toLowerCase() + ' ';
+    const cancelPatterns = [
+      /\bcancel\b/, /\bcancel order\b/, /\bcancel my order\b/,
+      /\bcancel item\b/, /\bremove order\b/, /\bstop order\b/,
+      /\bdon'?t want\b/, /\bdont want\b/, /\bno need\b/,
+      /\border cancel\b/, /\bcancel karo\b/, /\bcancel kar do\b/,
+      /\bcancel करो\b/, /\bऑर्डर कैंसल\b/, /\bकैंसल\b/
+    ];
+    return cancelPatterns.some(pattern => pattern.test(lowerText));
+  },
+
+  // Helper to detect refund intent from text/voice
+  isRefundIntent(text) {
+    if (!text) return false;
+    const lowerText = ' ' + text.toLowerCase() + ' ';
+    const refundPatterns = [
+      /\brefund\b/, /\brefund please\b/, /\bget refund\b/,
+      /\bmoney back\b/, /\breturn money\b/, /\bwant refund\b/,
+      /\brefund karo\b/, /\bpaisa wapas\b/, /\bपैसा वापस\b/, /\bरिफंड\b/
+    ];
+    return refundPatterns.some(pattern => pattern.test(lowerText));
+  },
+
   // Helper to find category by name
   findCategory(text, menuItems) {
     // Flatten category arrays and dedupe (category is an array field)
@@ -362,11 +388,11 @@ const chatbot = {
         await this.sendTrackingOptions(phone);
         state.currentStep = 'select_track';
       }
-      else if (selection === 'cancel_order') {
+      else if (selection === 'cancel_order' || this.isCancelIntent(msg)) {
         await this.sendCancelOptions(phone);
         state.currentStep = 'select_cancel';
       }
-      else if (selection === 'request_refund') {
+      else if (selection === 'request_refund' || this.isRefundIntent(msg)) {
         await this.sendRefundOptions(phone);
         state.currentStep = 'select_refund';
       }
