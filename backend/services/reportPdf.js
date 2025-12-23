@@ -94,15 +94,38 @@ const generateReportPdf = async (reportData, reportType) => {
       doc.fontSize(12).font('Helvetica')
         .text('Restaurant Management System', 50, 75);
       
-      // For custom range, show date range as title instead of "Custom Range Report"
-      let reportTitle = REPORT_TYPE_LABELS[reportType] || 'Report';
-      if (reportType === 'custom' && reportData.dateRange) {
-        const formatDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      // Generate report title with date range
+      const formatDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      let reportTitle = 'Report';
+      
+      if (reportData.dateRange) {
         const fromDate = formatDate(reportData.dateRange.start);
         const toDate = formatDate(reportData.dateRange.end);
-        reportTitle = `${fromDate} - ${toDate}`;
+        
+        switch (reportType) {
+          case 'today':
+            reportTitle = `Today's Report (${fromDate})`;
+            break;
+          case 'weekly':
+            reportTitle = `Weekly Report (${fromDate} - ${toDate})`;
+            break;
+          case 'monthly':
+            reportTitle = `Monthly Report (${fromDate} - ${toDate})`;
+            break;
+          case 'yearly':
+            reportTitle = `Annual Report (${fromDate} - ${toDate})`;
+            break;
+          case 'custom':
+            reportTitle = `${fromDate} - ${toDate}`;
+            break;
+          default:
+            reportTitle = REPORT_TYPE_LABELS[reportType] || 'Report';
+        }
+      } else {
+        reportTitle = REPORT_TYPE_LABELS[reportType] || 'Report';
       }
-      doc.fontSize(16).font('Helvetica-Bold')
+      
+      doc.fontSize(14).font('Helvetica-Bold')
         .text(reportTitle, 50, 95);
 
       // Date info
