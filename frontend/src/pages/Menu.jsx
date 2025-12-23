@@ -185,38 +185,45 @@ export default function Menu() {
   const [imageError, setImageError] = useState('');
   const [categoryImageError, setCategoryImageError] = useState('');
 
-  // Validate image URL for WhatsApp compatibility
+  // Validate image URL for WhatsApp compatibility - STRICT validation
   const validateImageUrl = (url) => {
     if (!url) return { valid: true, error: '' };
-    const supportedFormats = ['.jpg', '.jpeg', '.png'];
-    const unsupportedFormats = ['.webp', '.gif', '.bmp', '.svg', '.tiff', '.ico'];
+    
     const urlLower = url.toLowerCase();
     
-    // Check for unsupported formats
+    // Remove query parameters for extension check
+    const urlWithoutQuery = urlLower.split('?')[0];
+    
+    // Check for unsupported formats anywhere in URL
+    const unsupportedFormats = ['.webp', '.gif', '.bmp', '.svg', '.tiff', '.ico', '.avif', '.heic', '.heif'];
     for (const fmt of unsupportedFormats) {
       if (urlLower.includes(fmt)) {
-        return { valid: false, error: `${fmt.toUpperCase()} format not supported. Use JPG or PNG only.` };
+        return { valid: false, error: `${fmt.toUpperCase()} format not supported by WhatsApp. Use JPG or PNG only.` };
       }
     }
     
-    // Check if it has a supported format
-    const hasSupported = supportedFormats.some(fmt => urlLower.includes(fmt));
-    if (!hasSupported && url.length > 10) {
-      // URL doesn't clearly indicate format - warn but allow
-      return { valid: true, error: '' };
+    // STRICT: URL must end with .jpg, .jpeg, or .png (before query params)
+    const supportedFormats = ['.jpg', '.jpeg', '.png'];
+    const hasValidExtension = supportedFormats.some(fmt => urlWithoutQuery.endsWith(fmt));
+    
+    if (!hasValidExtension) {
+      return { 
+        valid: false, 
+        error: 'Image URL must end with .jpg, .jpeg, or .png for WhatsApp compatibility.' 
+      };
     }
     
     return { valid: true, error: '' };
   };
 
   const handleImageChange = (url) => {
-    const { valid, error } = validateImageUrl(url);
+    const { error } = validateImageUrl(url);
     setImageError(error);
     setForm({ ...form, image: url });
   };
 
   const handleCategoryImageChange = (url) => {
-    const { valid, error } = validateImageUrl(url);
+    const { error } = validateImageUrl(url);
     setCategoryImageError(error);
     setCategoryForm({ ...categoryForm, image: url });
   };
