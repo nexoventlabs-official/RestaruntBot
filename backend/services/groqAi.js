@@ -17,10 +17,11 @@ const groqAi = {
       // Create a File-like object from buffer
       const file = new File([audioBuffer], 'audio.ogg', { type: mimeType });
       
+      // Don't specify language - let Whisper auto-detect
+      // This supports Hindi, Tamil, English, and many other languages
       const transcription = await client.audio.transcriptions.create({
         file: file,
         model: 'whisper-large-v3',
-        language: 'en', // Can be changed or auto-detected
         response_format: 'text'
       });
       
