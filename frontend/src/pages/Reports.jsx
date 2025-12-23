@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   Calendar, TrendingUp, TrendingDown, Package, DollarSign, Users, 
   ShoppingBag, BarChart3, PieChart, ArrowUp, ArrowDown, Download,
-  ChevronDown, Filter, RefreshCw
+  ChevronDown, Filter, RefreshCw, Mail, FileDown
 } from 'lucide-react';
 import api from '../api';
 
@@ -156,6 +156,39 @@ export default function Reports() {
     }
   };
 
+  const handleDownloadPdf = async () => {
+    if (!reportData) return;
+    try {
+      const response = await api.post('/analytics/report/download-pdf', 
+        { reportData, reportType },
+        { responseType: 'blob' }
+      );
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `FoodAdmin_${reportType}_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('PDF download error:', err);
+      alert('Failed to download PDF');
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (!reportData) return;
+    if (!confirm('Send report to configured email address?')) return;
+    try {
+      const res = await api.post('/analytics/report/send-email', { reportData, reportType });
+      alert(res.data.message || 'Report sent successfully!');
+    } catch (err) {
+      console.error('Email send error:', err);
+      alert(err.response?.data?.error || 'Failed to send email');
+    }
+  };
+
   const formatCurrency = (val) => `₹${(val || 0).toLocaleString()}`;
 
   return (
@@ -166,13 +199,33 @@ export default function Reports() {
           <h1 className="text-xl font-bold text-dark-900">Reports & Analytics</h1>
           <p className="text-sm text-dark-400">Detailed insights about your business</p>
         </div>
-        <button 
-          onClick={() => fetchReport(reportType, customRange.start, customRange.end)}
-          className="flex items-center gap-2 px-4 py-2 bg-dark-100 rounded-xl text-dark-700 hover:bg-dark-200 transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={handleDownloadPdf}
+            disabled={!reportData || loading}
+            className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Download PDF Report"
+          >
+            <FileDown className="w-4 h-4" />
+            <span className="hidden sm:inline">PDF</span>
+          </button>
+          <button 
+            onClick={handleSendEmail}
+            disabled={!reportData || loading}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Send Report via Email"
+          >
+            <Mail className="w-4 h-4" />
+            <span className="hidden sm:inline">Email</span>
+          </button>
+          <button 
+            onClick={() => fetchReport(reportType, customRange.start, customRange.end)}
+            className="flex items-center gap-2 px-4 py-2 bg-dark-100 rounded-xl text-dark-700 hover:bg-dark-200 transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+        </div>
       </div>
 
       {/* Report Type Tabs */}

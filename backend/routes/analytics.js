@@ -525,4 +525,63 @@ router.post('/sync-today-revenue', authMiddleware, async (req, res) => {
   }
 });
 
+// Download Report as PDF
+router.post('/report/download-pdf', authMiddleware, async (req, res) => {
+  try {
+    const { reportData, reportType } = req.body;
+    const { generateReportPdf } = require('../services/reportPdf');
+    
+    const pdfBuffer = await generateReportPdf(reportData, reportType);
+    
+    const filename = `FoodAdmin_${reportType}_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('PDF generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Send Report via Email
+router.post('/report/send-email', authMiddleware, async (req, res) => {
+  try {
+    const { reportData, reportType } = req.body;
+    const { generateReportPdf } = require('../services/reportPdf');
+    const brevoMail = require('../services/brevoMail');
+    
+    const reportEmail = process.env.REPORT_EMAIL;
+    if (!reportEmail) {
+      return res.status(400).json({ error: 'Report email not configured' });
+    }
+    
+    const pdfBuffer = await generateReportPdf(reportData, reportType);
+    
+    const REPORT_TYPE_LABELS = {
+      today: "Today's Report",
+      weekly: 'Weekly Report',
+      monthly: 'Monthly Report',
+      yearly: 'Annual Report',
+      custom: 'Custom Range Report'
+    };
+    
+    const reportLabel = REPORT_TYPE_LABELS[reportType] || 'Report';
+    const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+    
+    await brevoMail.sendReportEmail(
+      reportEmail,
+      `FoodAdmin ${reportLabel} - ${dateStr}`,
+      reportData,
+      reportType,
+      pdfBuffer
+    );
+    
+    res.json({ success: true, message: `Report sent to ${reportEmail}` });
+  } catch (error) {
+    console.error('Email send error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
