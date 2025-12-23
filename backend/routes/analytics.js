@@ -289,14 +289,38 @@ router.get('/report', authMiddleware, async (req, res) => {
         }
       ]),
       
-      // Item statistics from current orders
+      // Item statistics from current orders (with image lookup)
       Order.aggregate([
         { $match: { ...dateFilter, status: { $nin: ['cancelled', 'refunded'] } } },
         { $unwind: '$items' },
         {
+          $lookup: {
+            from: 'menuitems',
+            localField: 'items.menuItem',
+            foreignField: '_id',
+            as: 'menuItemData'
+          }
+        },
+        {
+          $lookup: {
+            from: 'menuitems',
+            localField: 'items.name',
+            foreignField: 'name',
+            as: 'menuItemByName'
+          }
+        },
+        {
           $group: {
             _id: '$items.name',
             name: { $first: '$items.name' },
+            image: { 
+              $first: { 
+                $ifNull: [
+                  { $arrayElemAt: ['$menuItemData.image', 0] },
+                  { $arrayElemAt: ['$menuItemByName.image', 0] }
+                ]
+              }
+            },
             category: { $first: { $arrayElemAt: ['$items.category', 0] } },
             quantity: { $sum: '$items.quantity' },
             revenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } }
@@ -389,10 +413,28 @@ router.get('/report', authMiddleware, async (req, res) => {
       if (combinedItemsMap[item.name]) {
         combinedItemsMap[item.name].quantity += item.quantity;
         combinedItemsMap[item.name].revenue += item.revenue;
+        if (item.image) combinedItemsMap[item.name].image = item.image;
       } else {
-        combinedItemsMap[item.name] = { name: item.name, category: item.category, quantity: item.quantity, revenue: item.revenue };
+        combinedItemsMap[item.name] = { name: item.name, image: item.image, category: item.category, quantity: item.quantity, revenue: item.revenue };
       }
     }
+    
+    // Fetch images for items that don't have them (historical items)
+    const itemsWithoutImages = Object.values(combinedItemsMap).filter(item => !item.image);
+    if (itemsWithoutImages.length > 0) {
+      const itemNames = itemsWithoutImages.map(item => item.name);
+      const menuItems = await MenuItem.find({ name: { $in: itemNames } }, { name: 1, image: 1 }).lean();
+      const imageMap = {};
+      for (const mi of menuItems) {
+        imageMap[mi.name] = mi.image;
+      }
+      for (const item of itemsWithoutImages) {
+        if (imageMap[item.name]) {
+          combinedItemsMap[item.name].image = imageMap[item.name];
+        }
+      }
+    }
+    
     const allItemsSold = Object.values(combinedItemsMap).sort((a, b) => b.quantity - a.quantity);
     
     // Combine categories

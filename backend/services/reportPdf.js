@@ -1,4 +1,6 @@
 const PDFDocument = require('pdfkit');
+const https = require('https');
+const http = require('http');
 
 const REPORT_TYPE_LABELS = {
   today: "Today's Report",
@@ -8,7 +10,68 @@ const REPORT_TYPE_LABELS = {
   custom: 'Custom Range Report'
 };
 
-const generateReportPdf = (reportData, reportType) => {
+// Format currency for PDF (using Rs. since Helvetica doesn't support ₹)
+const formatCurrency = (val) => `Rs.${(val || 0).toLocaleString('en-IN')}`;
+
+// Fetch image from URL and return as buffer
+const fetchImageBuffer = (url) => {
+  return new Promise((resolve) => {
+    if (!url) {
+      resolve(null);
+      return;
+    }
+    
+    const protocol = url.startsWith('https') ? https : http;
+    const timeout = setTimeout(() => resolve(null), 5000); // 5s timeout
+    
+    protocol.get(url, (res) => {
+      if (res.statusCode !== 200) {
+        clearTimeout(timeout);
+        resolve(null);
+        return;
+      }
+      
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => {
+        clearTimeout(timeout);
+        resolve(Buffer.concat(chunks));
+      });
+      res.on('error', () => {
+        clearTimeout(timeout);
+        resolve(null);
+      });
+    }).on('error', () => {
+      clearTimeout(timeout);
+      resolve(null);
+    });
+  });
+};
+
+// Pre-fetch all images for items
+const prefetchImages = async (items) => {
+  const imageMap = {};
+  const promises = items.map(async (item) => {
+    if (item.image) {
+      const buffer = await fetchImageBuffer(item.image);
+      if (buffer) {
+        imageMap[item.name] = buffer;
+      }
+    }
+  });
+  await Promise.all(promises);
+  return imageMap;
+};
+
+const generateReportPdf = async (reportData, reportType) => {
+  // Pre-fetch images for all items
+  const allItems = [
+    ...(reportData.topSellingItems || []),
+    ...(reportData.leastSellingItems || []),
+    ...(reportData.allItemsSold || [])
+  ];
+  const imageMap = await prefetchImages(allItems);
+
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ margin: 50, size: 'A4' });
@@ -21,6 +84,8 @@ const generateReportPdf = (reportData, reportType) => {
       const primaryColor = '#e63946';
       const darkColor = '#1c1d21';
       const grayColor = '#61636b';
+      const rowHeight = 35; // Increased row height for images
+      const imgSize = 25; // Image size
 
       // Header
       doc.rect(0, 0, doc.page.width, 120).fill(primaryColor);
@@ -47,10 +112,10 @@ const generateReportPdf = (reportData, reportType) => {
 
       // Summary boxes
       const summaryData = [
-        { label: 'Total Revenue', value: `₹${(reportData.totalRevenue || 0).toLocaleString()}` },
+        { label: 'Total Revenue', value: formatCurrency(reportData.totalRevenue) },
         { label: 'Total Orders', value: String(reportData.totalOrders || 0) },
         { label: 'Items Sold', value: String(reportData.totalItemsSold || 0) },
-        { label: 'Avg Order Value', value: `₹${(reportData.avgOrderValue || 0).toLocaleString()}` }
+        { label: 'Avg Order Value', value: formatCurrency(reportData.avgOrderValue) }
       ];
 
       const boxWidth = 120;
@@ -86,59 +151,88 @@ const generateReportPdf = (reportData, reportType) => {
       });
       y += 55;
 
-      // Top Selling Items
-      if (reportData.topSellingItems && reportData.topSellingItems.length > 0) {
+      // Helper function to draw item table with images
+      const drawItemTable = (title, items, startY) => {
+        let currentY = startY;
+        
+        // Check if we need a new page
+        if (currentY > 650) {
+          doc.addPage();
+          currentY = 50;
+        }
+        
         doc.fillColor(darkColor).fontSize(14).font('Helvetica-Bold')
-          .text('Top Selling Items', 50, y);
-        y += 20;
+          .text(title, 50, currentY);
+        currentY += 20;
 
         // Table header
         doc.fillColor(grayColor).fontSize(9).font('Helvetica-Bold');
-        doc.text('S.No', 50, y, { width: 40 });
-        doc.text('Item Name', 90, y, { width: 200 });
-        doc.text('Qty', 300, y, { width: 50 });
-        doc.text('Revenue', 360, y, { width: 80 });
-        y += 15;
-        doc.moveTo(50, y).lineTo(450, y).stroke('#e2e3e5');
-        y += 5;
+        doc.text('S.No', 50, currentY, { width: 30 });
+        doc.text('Image', 80, currentY, { width: 40 });
+        doc.text('Item Name', 125, currentY, { width: 180 });
+        doc.text('Qty', 310, currentY, { width: 50 });
+        doc.text('Revenue', 370, currentY, { width: 80 });
+        currentY += 15;
+        doc.moveTo(50, currentY).lineTo(450, currentY).stroke('#e2e3e5');
+        currentY += 5;
 
         doc.font('Helvetica').fontSize(9);
-        reportData.topSellingItems.slice(0, 10).forEach((item, idx) => {
-          doc.fillColor(darkColor).text(String(idx + 1), 50, y, { width: 40 });
-          doc.text(item.name || '-', 90, y, { width: 200 });
-          doc.text(String(item.quantity || 0), 300, y, { width: 50 });
-          doc.text(`₹${(item.revenue || 0).toLocaleString()}`, 360, y, { width: 80 });
-          y += 15;
+        items.slice(0, 10).forEach((item, idx) => {
+          // Check if we need a new page
+          if (currentY > 720) {
+            doc.addPage();
+            currentY = 50;
+          }
+          
+          const rowY = currentY;
+          
+          // Draw image if available
+          const imgBuffer = imageMap[item.name];
+          if (imgBuffer) {
+            try {
+              doc.image(imgBuffer, 80, rowY, { width: imgSize, height: imgSize, fit: [imgSize, imgSize] });
+            } catch (e) {
+              // Draw placeholder if image fails
+              doc.rect(80, rowY, imgSize, imgSize).fillAndStroke('#f0f0f0', '#e0e0e0');
+            }
+          } else {
+            // Draw placeholder box
+            doc.rect(80, rowY, imgSize, imgSize).fillAndStroke('#f0f0f0', '#e0e0e0');
+          }
+          
+          // Draw text (vertically centered with image)
+          const textY = rowY + (imgSize - 9) / 2;
+          doc.fillColor(darkColor).text(String(idx + 1), 50, textY, { width: 30 });
+          doc.text(item.name || '-', 125, textY, { width: 180 });
+          doc.text(String(item.quantity || 0), 310, textY, { width: 50 });
+          doc.text(formatCurrency(item.revenue), 370, textY, { width: 80 });
+          
+          currentY += rowHeight;
         });
-        y += 10;
+        
+        return currentY + 10;
+      };
+
+      // Top Selling Items
+      if (reportData.topSellingItems && reportData.topSellingItems.length > 0) {
+        y = drawItemTable('Top Selling Items', reportData.topSellingItems, y);
       }
 
       // Least Selling Items
-      if (reportData.leastSellingItems && reportData.leastSellingItems.length > 0 && y < 650) {
-        doc.fillColor(darkColor).fontSize(14).font('Helvetica-Bold')
-          .text('Least Selling Items', 50, y);
-        y += 20;
-
-        doc.fillColor(grayColor).fontSize(9).font('Helvetica-Bold');
-        doc.text('S.No', 50, y, { width: 40 });
-        doc.text('Item Name', 90, y, { width: 200 });
-        doc.text('Qty', 300, y, { width: 50 });
-        doc.text('Revenue', 360, y, { width: 80 });
-        y += 15;
-        doc.moveTo(50, y).lineTo(450, y).stroke('#e2e3e5');
-        y += 5;
-
-        doc.font('Helvetica').fontSize(9);
-        reportData.leastSellingItems.slice(0, 10).forEach((item, idx) => {
-          doc.fillColor(darkColor).text(String(idx + 1), 50, y, { width: 40 });
-          doc.text(item.name || '-', 90, y, { width: 200 });
-          doc.text(String(item.quantity || 0), 300, y, { width: 50 });
-          doc.text(`₹${(item.revenue || 0).toLocaleString()}`, 360, y, { width: 80 });
-          y += 15;
-        });
+      if (reportData.leastSellingItems && reportData.leastSellingItems.length > 0) {
+        y = drawItemTable('Least Selling Items', reportData.leastSellingItems, y);
       }
 
-      // Footer
+      // All Items Sold (on new page if needed)
+      if (reportData.allItemsSold && reportData.allItemsSold.length > 0) {
+        if (y > 500) {
+          doc.addPage();
+          y = 50;
+        }
+        y = drawItemTable('All Items Sold', reportData.allItemsSold, y);
+      }
+
+      // Footer on last page
       doc.fillColor(grayColor).fontSize(8).font('Helvetica')
         .text('This is a computer-generated report. No signature required.', 50, doc.page.height - 50, { align: 'center', width: doc.page.width - 100 });
 

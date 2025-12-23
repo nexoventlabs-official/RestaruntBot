@@ -442,6 +442,8 @@ export default function Reports() {
               <table className="w-full">
                 <thead className="bg-dark-50">
                   <tr>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-dark-600 w-12">S.No</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-dark-600 w-16">Image</th>
                     <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">Item Name</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Qty Sold</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Revenue</th>
@@ -450,6 +452,16 @@ export default function Reports() {
                 <tbody className="divide-y divide-dark-100">
                   {(reportData.allItemsSold || []).map((item, idx) => (
                     <tr key={idx} className="hover:bg-dark-50">
+                      <td className="px-4 py-3 text-sm text-dark-500">{idx + 1}</td>
+                      <td className="px-4 py-2">
+                        {item.image ? (
+                          <img src={item.image} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-dark-100 flex items-center justify-center">
+                            <Package className="w-5 h-5 text-dark-300" />
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-sm text-dark-900">{item.name}</td>
                       <td className="px-4 py-3 text-sm text-dark-900 text-right">{item.quantity}</td>
                       <td className="px-4 py-3 text-sm text-dark-900 text-right">{formatCurrency(item.revenue)}</td>
@@ -457,7 +469,7 @@ export default function Reports() {
                   ))}
                   {(!reportData.allItemsSold || reportData.allItemsSold.length === 0) && (
                     <tr>
-                      <td colSpan={3} className="px-4 py-8 text-center text-dark-400">No items sold in this period</td>
+                      <td colSpan={5} className="px-4 py-8 text-center text-dark-400">No items sold in this period</td>
                     </tr>
                   )}
                 </tbody>
