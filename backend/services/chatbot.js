@@ -173,8 +173,6 @@ const chatbot = {
       /\border status shu\b/, /\border shu thyu\b/, /\bઓર્ડર સ્ટેટસ\b/, /\bસ્ટેટસ\b/
     ];
     return statusPatterns.some(pattern => pattern.test(lowerText));
-    ];
-    return statusPatterns.some(pattern => pattern.test(lowerText));
   },
 
   // Helper to find category by name
