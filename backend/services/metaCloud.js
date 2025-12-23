@@ -215,6 +215,16 @@ const metaCloud = {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
       
+      // Check if image format is supported by WhatsApp (only jpeg, png supported)
+      const supportedFormats = ['.jpg', '.jpeg', '.png'];
+      const imageUrlLower = imageUrl.toLowerCase();
+      const isSupported = supportedFormats.some(fmt => imageUrlLower.includes(fmt));
+      
+      if (!isSupported) {
+        console.log('⚠️ Image format not supported by WhatsApp, sending caption only');
+        return this.sendMessage(phone, caption);
+      }
+      
       const response = await axios.post(`${baseUrl}/messages`, {
         messaging_product: 'whatsapp',
         to,
@@ -226,7 +236,8 @@ const metaCloud = {
       return response.data;
     } catch (error) {
       console.error('Meta Cloud image error:', error.response?.data || error.message);
-      throw error;
+      // Fallback to text message
+      return this.sendMessage(phone, caption);
     }
   },
 
@@ -236,6 +247,16 @@ const metaCloud = {
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
       
       console.log('📤 Meta sendImageWithButtons to:', to);
+      
+      // Check if image format is supported by WhatsApp (only jpeg, png supported)
+      const supportedFormats = ['.jpg', '.jpeg', '.png'];
+      const imageUrlLower = imageUrl.toLowerCase();
+      const isSupported = supportedFormats.some(fmt => imageUrlLower.includes(fmt));
+      
+      if (!isSupported) {
+        console.log('⚠️ Image format not supported by WhatsApp, sending without image');
+        return this.sendButtons(phone, message, buttons, footer);
+      }
       
       const payload = {
         messaging_product: 'whatsapp',

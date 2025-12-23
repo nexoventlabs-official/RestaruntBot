@@ -1,4 +1,4 @@
-// Script to reset all MongoDB data (categories, menu items, orders, dashboard stats, customers)
+// Script to reset all MongoDB data (categories, menu items, orders, dashboard stats, customers, report history)
 require('dotenv').config();
 const mongoose = require('mongoose');
 
@@ -7,6 +7,7 @@ const MenuItem = require('./models/MenuItem');
 const Order = require('./models/Order');
 const DashboardStats = require('./models/DashboardStats');
 const Customer = require('./models/Customer');
+const ReportHistory = require('./models/ReportHistory');
 
 async function resetAllData() {
   try {
@@ -35,6 +36,10 @@ async function resetAllData() {
     // Clear Customers
     const custResult = await Customer.deleteMany({});
     console.log(`👥 Customers deleted: ${custResult.deletedCount}`);
+
+    // Clear Report History
+    const reportResult = await ReportHistory.deleteMany({});
+    console.log(`📈 Report History deleted: ${reportResult.deletedCount}`);
 
     console.log('\n✅ All data has been reset successfully!');
     console.log('💡 Your database is now empty. Add new categories and menu items from the admin panel.');
