@@ -57,13 +57,45 @@ const razorpayService = {
 
   async refund(paymentId, amount) {
     try {
+      console.log('💰 Attempting refund:', { paymentId, amount });
+      
+      // First fetch payment details to verify it's refundable
+      const payment = await getRazorpay().payments.fetch(paymentId);
+      console.log('💰 Payment details:', { 
+        status: payment.status, 
+        amount: payment.amount / 100,
+        captured: payment.captured,
+        refund_status: payment.refund_status
+      });
+      
+      // Check if payment is captured and not already refunded
+      if (payment.status !== 'captured') {
+        throw new Error(`Payment not captured. Status: ${payment.status}`);
+      }
+      
+      if (payment.refund_status === 'full') {
+        throw new Error('Payment already fully refunded');
+      }
+      
+      // Process refund
       const refund = await getRazorpay().payments.refund(paymentId, {
         amount: amount * 100,
-        speed: 'normal'
+        speed: 'normal',
+        notes: {
+          reason: 'Customer requested cancellation'
+        }
       });
+      
+      console.log('✅ Refund successful:', refund.id);
       return refund;
     } catch (error) {
-      console.error('Razorpay refund error:', error.message);
+      console.error('❌ Razorpay refund error:', {
+        message: error.message,
+        code: error.error?.code,
+        description: error.error?.description,
+        paymentId,
+        amount
+      });
       throw error;
     }
   },

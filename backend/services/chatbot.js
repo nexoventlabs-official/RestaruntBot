@@ -2137,16 +2137,61 @@ const chatbot = {
         const refundScheduler = require('./refundScheduler');
         refundScheduler.scheduleRefundCompletion(order.orderId, 5 * 60 * 1000); // 5 minutes
       } catch (refundError) {
-        console.error('❌ Refund initiation failed:', refundError.message);
-        order.refundStatus = 'failed';
-        order.refundAmount = order.totalAmount;
-        order.trackingUpdates.push({ 
-          status: 'refund_failed', 
-          message: `Refund failed: ${refundError.message}`, 
-          timestamp: new Date() 
-        });
+        console.error('❌ Refund initiation failed:', refundError.message, refundError.error || '');
         
-        msg += `\n\n⚠️ *Refund Issue*\nWe couldn't process your refund automatically.\nAmount: ₹${order.totalAmount}\n\nOur team will contact you within 24 hours to resolve this. Sorry for the inconvenience!`;
+        // Check if it's a timing issue (payment not captured yet)
+        const errorMsg = refundError.message || '';
+        const isTimingIssue = errorMsg.includes('not captured') || errorMsg.includes('BAD_REQUEST');
+        
+        if (isTimingIssue) {
+          // Payment might not be captured yet, schedule retry
+          order.refundStatus = 'pending';
+          order.refundAmount = order.totalAmount;
+          order.trackingUpdates.push({ 
+            status: 'refund_pending', 
+            message: `Refund of ₹${order.totalAmount} scheduled`, 
+            timestamp: new Date() 
+          });
+          
+          msg += `\n\n💰 *Refund Scheduled*\nYour refund of ₹${order.totalAmount} will be processed shortly.\n\n⏱️ Please allow 10-15 minutes for the refund to reflect.`;
+          
+          // Schedule retry after 2 minutes
+          setTimeout(async () => {
+            try {
+              const retryOrder = await Order.findOne({ orderId });
+              if (retryOrder && retryOrder.refundStatus === 'pending' && retryOrder.razorpayPaymentId) {
+                const refund = await razorpayService.refund(retryOrder.razorpayPaymentId, retryOrder.totalAmount);
+                retryOrder.refundStatus = 'completed';
+                retryOrder.refundId = refund.id;
+                retryOrder.refundProcessedAt = new Date();
+                retryOrder.trackingUpdates.push({ 
+                  status: 'refund_completed', 
+                  message: `Refund of ₹${retryOrder.totalAmount} completed`, 
+                  timestamp: new Date() 
+                });
+                await retryOrder.save();
+                
+                await whatsapp.sendButtons(phone, 
+                  `💰 *Refund Successful!*\n\nOrder: ${orderId}\nAmount: ₹${retryOrder.totalAmount}\n\nThe refund has been processed and will reflect in your account shortly.`,
+                  [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
+                );
+                console.log('✅ Retry refund successful for order:', orderId);
+              }
+            } catch (retryErr) {
+              console.error('❌ Retry refund failed:', orderId, retryErr.message);
+            }
+          }, 2 * 60 * 1000); // Retry after 2 minutes
+        } else {
+          order.refundStatus = 'failed';
+          order.refundAmount = order.totalAmount;
+          order.trackingUpdates.push({ 
+            status: 'refund_failed', 
+            message: `Refund failed: ${refundError.message}`, 
+            timestamp: new Date() 
+          });
+          
+          msg += `\n\n⚠️ *Refund Issue*\nWe couldn't process your refund automatically.\nAmount: ₹${order.totalAmount}\n\nOur team will contact you within 24 hours to resolve this. Sorry for the inconvenience!`;
+        }
       }
     } else if (order.paymentStatus === 'paid' && !order.razorpayPaymentId) {
       // Paid but no payment ID (edge case)
