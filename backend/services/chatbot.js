@@ -688,20 +688,8 @@ const chatbot = {
       }
 
       // ========== NATURAL LANGUAGE FALLBACKS ==========
-      else if (this.findCategory(msg, menuItems)) {
-        const category = this.findCategory(msg, menuItems);
-        const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
-        if (state.currentStep === 'browsing_menu' || state.currentStep === 'selecting_item') {
-          await this.sendItemsForOrder(phone, filteredItems, category);
-          state.selectedCategory = category;
-          state.currentStep = 'selecting_item';
-        } else {
-          await this.sendCategoryItems(phone, filteredItems, category);
-          state.selectedCategory = category;
-          state.currentStep = 'viewing_items';
-        }
-      }
-      // Smart search - detects food type (veg/nonveg) and searches by name/tag
+      // Smart search FIRST - detects food type (veg/nonveg) and searches by name/tag
+      // This takes priority when user specifies food type like "veg cake"
       else if (this.smartSearch(msg, menuItems)) {
         const searchResult = this.smartSearch(msg, menuItems);
         const matchingItems = searchResult.items;
@@ -721,6 +709,20 @@ const chatbot = {
           state.tagSearchResults = matchingItems.map(i => i._id.toString());
           await this.sendItemsByTag(phone, matchingItems, displayLabel);
           state.currentStep = 'viewing_tag_results';
+        }
+      }
+      // Category search - only if no food type specified and matches a category
+      else if (this.findCategory(msg, menuItems)) {
+        const category = this.findCategory(msg, menuItems);
+        const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
+        if (state.currentStep === 'browsing_menu' || state.currentStep === 'selecting_item') {
+          await this.sendItemsForOrder(phone, filteredItems, category);
+          state.selectedCategory = category;
+          state.currentStep = 'selecting_item';
+        } else {
+          await this.sendCategoryItems(phone, filteredItems, category);
+          state.selectedCategory = category;
+          state.currentStep = 'viewing_items';
         }
       }
 
