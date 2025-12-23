@@ -148,11 +148,17 @@ const razorpayService = {
         throw new Error('No amount available for refund');
       }
       
-      // Process refund using payments.refund (correct Razorpay SDK syntax)
+      // Process refund using payments.refund (correct Razorpay SDK v2 syntax)
       console.log('💰 Calling Razorpay refund API:', { paymentId, amountInPaise: finalRefundAmount });
       
-      // Razorpay SDK: payments.refund(paymentId, amount) - amount in paise
-      const refund = await getRazorpay().payments.refund(paymentId, finalRefundAmount);
+      // Razorpay SDK v2: payments.refund(paymentId, { amount, speed, notes })
+      const refund = await getRazorpay().payments.refund(paymentId, {
+        amount: finalRefundAmount,
+        speed: 'normal',
+        notes: {
+          reason: 'Order cancelled - customer refund'
+        }
+      });
       
       console.log('✅ Refund successful:', refund.id, 'Amount:', finalRefundAmount / 100);
       return refund;
