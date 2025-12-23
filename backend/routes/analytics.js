@@ -199,6 +199,183 @@ router.post('/cleanup', authMiddleware, async (req, res) => {
   }
 });
 
+// Comprehensive Report Endpoint
+router.get('/report', authMiddleware, async (req, res) => {
+  try {
+    const { type, startDate, endDate } = req.query;
+    
+    // Calculate date range based on report type
+    let start = new Date();
+    let end = new Date();
+    
+    switch (type) {
+      case 'today':
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'weekly':
+        start.setDate(start.getDate() - start.getDay()); // Start of week (Sunday)
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'monthly':
+        start.setDate(1); // Start of month
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'yearly':
+        start.setMonth(0, 1); // Start of year
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'custom':
+        if (startDate && endDate) {
+          start = new Date(startDate);
+          start.setHours(0, 0, 0, 0);
+          end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+        }
+        break;
+      default:
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+    }
+
+    const dateFilter = { createdAt: { $gte: start, $lte: end } };
+
+    // Run all queries in parallel
+    const [
+      orders,
+      orderStats,
+      itemStats,
+      categoryStats,
+      paymentStats
+    ] = await Promise.all([
+      // Get all orders in range
+      Order.find(dateFilter).lean(),
+      
+      // Order statistics
+      Order.aggregate([
+        { $match: dateFilter },
+        {
+          $group: {
+            _id: null,
+            totalOrders: { $sum: 1 },
+            totalRevenue: { 
+              $sum: { 
+                $cond: [
+                  { $and: [{ $eq: ['$paymentStatus', 'paid'] }, { $nin: ['$status', ['cancelled', 'refunded']] }] },
+                  '$totalAmount',
+                  0
+                ]
+              }
+            },
+            deliveredOrders: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
+            cancelledOrders: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } },
+            refundedOrders: { $sum: { $cond: [{ $eq: ['$status', 'refunded'] }, 1, 0] } }
+          }
+        }
+      ]),
+      
+      // Item statistics
+      Order.aggregate([
+        { $match: { ...dateFilter, status: { $nin: ['cancelled', 'refunded'] } } },
+        { $unwind: '$items' },
+        {
+          $group: {
+            _id: '$items.name',
+            name: { $first: '$items.name' },
+            category: { $first: { $arrayElemAt: ['$items.category', 0] } },
+            quantity: { $sum: '$items.quantity' },
+            revenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } }
+          }
+        },
+        { $sort: { quantity: -1 } }
+      ]),
+      
+      // Category statistics
+      Order.aggregate([
+        { $match: { ...dateFilter, status: { $nin: ['cancelled', 'refunded'] } } },
+        { $unwind: '$items' },
+        { $unwind: { path: '$items.category', preserveNullAndEmptyArrays: true } },
+        {
+          $group: {
+            _id: '$items.category',
+            category: { $first: '$items.category' },
+            quantity: { $sum: '$items.quantity' },
+            revenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } }
+          }
+        },
+        { $sort: { revenue: -1 } }
+      ]),
+      
+      // Payment method statistics
+      Order.aggregate([
+        { $match: dateFilter },
+        {
+          $group: {
+            _id: '$paymentMethod',
+            count: { $sum: 1 }
+          }
+        }
+      ])
+    ]);
+
+    // Process results
+    const stats = orderStats[0] || { totalOrders: 0, totalRevenue: 0, deliveredOrders: 0, cancelledOrders: 0, refundedOrders: 0 };
+    const totalItemsSold = itemStats.reduce((sum, item) => sum + item.quantity, 0);
+    const avgOrderValue = stats.totalOrders > 0 ? Math.round(stats.totalRevenue / stats.deliveredOrders) || 0 : 0;
+    
+    // Payment method counts
+    const codOrders = paymentStats.find(p => p._id === 'cod')?.count || 0;
+    const upiOrders = paymentStats.find(p => p._id === 'upi')?.count || 0;
+
+    // Top and least selling items
+    const topSellingItems = itemStats.slice(0, 10);
+    const leastSellingItems = [...itemStats].sort((a, b) => a.quantity - b.quantity).slice(0, 10);
+
+    // Revenue trend (group by date)
+    const revenueTrend = [];
+    const ordersByDate = {};
+    
+    orders.forEach(order => {
+      if (order.status !== 'cancelled' && order.status !== 'refunded' && order.paymentStatus === 'paid') {
+        const dateKey = new Date(order.createdAt).toLocaleDateString('en-IN');
+        if (!ordersByDate[dateKey]) {
+          ordersByDate[dateKey] = { label: dateKey, revenue: 0, orders: 0 };
+        }
+        ordersByDate[dateKey].revenue += order.totalAmount || 0;
+        ordersByDate[dateKey].orders += 1;
+      }
+    });
+    
+    Object.values(ordersByDate).forEach(d => revenueTrend.push(d));
+    revenueTrend.sort((a, b) => new Date(a.label.split('/').reverse().join('-')) - new Date(b.label.split('/').reverse().join('-')));
+
+    res.json({
+      reportType: type,
+      dateRange: { start, end },
+      totalRevenue: stats.totalRevenue,
+      totalOrders: stats.totalOrders,
+      totalItemsSold,
+      avgOrderValue,
+      deliveredOrders: stats.deliveredOrders,
+      cancelledOrders: stats.cancelledOrders,
+      refundedOrders: stats.refundedOrders,
+      codOrders,
+      upiOrders,
+      topSellingItems,
+      leastSellingItems,
+      allItemsSold: itemStats,
+      revenueByCategory: categoryStats.map(c => ({ category: c.category || 'Uncategorized', revenue: c.revenue, quantity: c.quantity })),
+      revenueTrend
+    });
+  } catch (error) {
+    console.error('Report error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Sync today's revenue from existing delivered orders (admin only)
 router.post('/sync-today-revenue', authMiddleware, async (req, res) => {
   try {
