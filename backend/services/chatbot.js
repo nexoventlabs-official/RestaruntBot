@@ -66,11 +66,18 @@ const chatbot = {
   isOrderStatusIntent(text) {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
+    
+    // First check if it's actually a cancel/refund/track intent - those take priority
+    if (this.isCancelIntent(text) || this.isRefundIntent(text) || this.isTrackIntent(text)) {
+      return false;
+    }
+    
     const statusPatterns = [
-      /\border status\b/, /\bmy order\b/, /\bmy orders\b/, /\bcheck order\b/,
-      /\bstatus\b/, /\border history\b/, /\bprevious order\b/, /\bpast order\b/,
-      /\bshow order\b/, /\bview order\b/, /\border details\b/,
-      /\border kya hua\b/, /\border status kya hai\b/, /\bऑर्डर स्टेटस\b/, /\bमेरा ऑर्डर\b/
+      /\border status\b/, /\bcheck order\b/, /\border history\b/,
+      /\bprevious order\b/, /\bpast order\b/, /\bshow order\b/,
+      /\bview order\b/, /\border details\b/, /\bmy orders\b/,
+      /\border kya hua\b/, /\border status kya hai\b/, /\bऑर्डर स्टेटस\b/,
+      /\bstatus\b/
     ];
     return statusPatterns.some(pattern => pattern.test(lowerText));
   },
@@ -419,14 +426,7 @@ const chatbot = {
         await this.sendServiceType(phone);
         state.currentStep = 'select_service';
       }
-      else if (selection === 'order_status' || msg === 'status' || this.isOrderStatusIntent(msg)) {
-        await this.sendOrderStatus(phone);
-        state.currentStep = 'main_menu';
-      }
-      else if (selection === 'track_order' || msg === 'track' || this.isTrackIntent(msg)) {
-        await this.sendTrackingOptions(phone);
-        state.currentStep = 'select_track';
-      }
+      // Check cancel/refund/track BEFORE order status (they're more specific)
       else if (selection === 'cancel_order' || this.isCancelIntent(msg)) {
         await this.sendCancelOptions(phone);
         state.currentStep = 'select_cancel';
@@ -434,6 +434,14 @@ const chatbot = {
       else if (selection === 'request_refund' || this.isRefundIntent(msg)) {
         await this.sendRefundOptions(phone);
         state.currentStep = 'select_refund';
+      }
+      else if (selection === 'track_order' || msg === 'track' || this.isTrackIntent(msg)) {
+        await this.sendTrackingOptions(phone);
+        state.currentStep = 'select_track';
+      }
+      else if (selection === 'order_status' || msg === 'status' || this.isOrderStatusIntent(msg)) {
+        await this.sendOrderStatus(phone);
+        state.currentStep = 'main_menu';
       }
       else if (selection === 'help' || msg === 'help') {
         await this.sendHelp(phone);
