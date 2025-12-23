@@ -6,12 +6,14 @@ import {
   Users, 
   LogOut, 
   ChefHat,
-  BarChart3
+  BarChart3,
+  RefreshCw
 } from 'lucide-react';
 
 const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard', description: 'Overview & stats' },
   { path: '/orders', icon: ShoppingBag, label: 'Orders', description: 'Manage orders' },
+  { path: '/refunds', icon: RefreshCw, label: 'Refunds', description: 'Refund requests' },
   { path: '/menu', icon: UtensilsCrossed, label: 'Menu', description: 'Food items' },
   { path: '/customers', icon: Users, label: 'Customers', description: 'Customer data' },
   { path: '/reports', icon: BarChart3, label: 'Reports', description: 'Analytics & reports' },

@@ -131,22 +131,18 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
       order.paymentStatus = 'cancelled';
     }
     
-    // Schedule refund for paid UPI orders when cancelled (process after 5 minutes)
+    // Mark refund as pending for admin approval (paid UPI orders)
     if (status === 'cancelled' && order.paymentStatus === 'paid' && order.razorpayPaymentId) {
-      console.log('💰 Scheduling refund for order:', order.orderId);
-      order.refundStatus = 'scheduled';
+      console.log('💰 Marking refund as pending for order:', order.orderId);
+      order.refundStatus = 'pending';
       order.refundAmount = order.totalAmount;
-      order.refundScheduledAt = new Date();
+      order.refundRequestedAt = new Date();
       order.trackingUpdates.push({ 
-        status: 'refund_scheduled', 
-        message: `Refund of ₹${order.totalAmount} scheduled`, 
+        status: 'refund_pending', 
+        message: `Refund of ₹${order.totalAmount} pending admin approval`, 
         timestamp: new Date() 
       });
-      
-      // Schedule refund to process after 5 minutes
-      const refundScheduler = require('../services/refundScheduler');
-      refundScheduler.scheduleRefund(order.orderId, 5 * 60 * 1000); // 5 minutes
-      console.log('⏰ Refund scheduled for order:', order.orderId);
+      console.log('⏳ Refund pending approval for order:', order.orderId);
     }
     
     try {
@@ -281,40 +277,67 @@ router.get('/refunds/pending', authMiddleware, async (req, res) => {
   }
 });
 
-// Approve refund
-router.put('/:id/refund/approve', authMiddleware, async (req, res) => {
+// Get refunds with filter
+router.get('/refunds', authMiddleware, async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
+    const { status } = req.query;
+    let query = { refundStatus: { $ne: 'none' } };
+    
+    if (status === 'pending') {
+      query.refundStatus = { $in: ['pending', 'scheduled'] };
+    } else if (status === 'completed') {
+      query.refundStatus = 'completed';
+    } else if (status === 'rejected') {
+      query.refundStatus = { $in: ['rejected', 'failed'] };
+    }
+    // 'all' returns all non-none refund statuses
+    
+    const orders = await Order.find(query).sort({ createdAt: -1 });
+    res.json({ orders });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Approve refund by orderId
+router.post('/:orderId/refund/approve', authMiddleware, async (req, res) => {
+  try {
+    const order = await Order.findOne({ orderId: req.params.orderId });
     if (!order) return res.status(404).json({ error: 'Order not found' });
     
-    if (order.refundStatus !== 'pending') {
+    if (!['pending', 'scheduled', 'failed'].includes(order.refundStatus)) {
       return res.status(400).json({ error: 'No pending refund request for this order' });
     }
 
     const razorpayService = require('../services/razorpay');
+    const paymentId = order.razorpayPaymentId || order.paymentId;
     
-    // Process refund via Razorpay if UPI payment
-    if (order.paymentMethod === 'upi' && order.paymentId) {
+    // Process refund via Razorpay if UPI payment with payment ID
+    if (order.paymentMethod === 'upi' && paymentId) {
       try {
-        const refund = await razorpayService.refund(order.paymentId, order.refundAmount || order.totalAmount);
+        const refund = await razorpayService.refund(paymentId, order.refundAmount || order.totalAmount);
         order.refundId = refund.id;
         order.refundStatus = 'completed';
         order.paymentStatus = 'refunded';
         order.status = 'refunded';
-        order.statusUpdatedAt = new Date(); // For auto-cleanup
+        order.statusUpdatedAt = new Date();
         order.refundProcessedAt = new Date();
         order.trackingUpdates.push({ status: 'refunded', message: `Refund of ₹${order.refundAmount || order.totalAmount} processed. Refund ID: ${refund.id}` });
         
         // Notify customer
         try {
-          await whatsapp.sendMessage(order.customer.phone,
-            `✅ *Refund Processed!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.refundAmount || order.totalAmount}\nRefund ID: ${refund.id}\n\n💳 Amount will be credited to your account in 10-20 minutes.`
+          await whatsapp.sendButtons(order.customer.phone,
+            `✅ *Refund Successful!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.refundAmount || order.totalAmount}\nRefund ID: ${refund.id}\n\n💳 Amount will be credited to your account shortly.`,
+            [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
           );
         } catch (e) {
           console.error('WhatsApp notification failed:', e.message);
         }
       } catch (refundError) {
         console.error('Razorpay refund error:', refundError);
+        order.refundStatus = 'failed';
+        order.trackingUpdates.push({ status: 'refund_failed', message: refundError.message });
+        await order.save();
         return res.status(500).json({ error: 'Refund processing failed: ' + refundError.message });
       }
     } else {
@@ -322,14 +345,15 @@ router.put('/:id/refund/approve', authMiddleware, async (req, res) => {
       order.refundStatus = 'completed';
       order.paymentStatus = 'refunded';
       order.status = 'refunded';
-      order.statusUpdatedAt = new Date(); // For auto-cleanup
+      order.statusUpdatedAt = new Date();
       order.refundProcessedAt = new Date();
       order.trackingUpdates.push({ status: 'refunded', message: `COD refund of ₹${order.refundAmount || order.totalAmount} approved` });
       
       // Notify customer
       try {
-        await whatsapp.sendMessage(order.customer.phone,
-          `✅ *Refund Approved!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.refundAmount || order.totalAmount}\n\n💵 Your COD refund has been approved. Our team will contact you for the refund process.`
+        await whatsapp.sendButtons(order.customer.phone,
+          `✅ *Refund Approved!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.refundAmount || order.totalAmount}\n\n💵 Our team will contact you for the refund process.`,
+          [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
         );
       } catch (e) {
         console.error('WhatsApp notification failed:', e.message);
@@ -354,14 +378,14 @@ router.put('/:id/refund/approve', authMiddleware, async (req, res) => {
   }
 });
 
-// Reject refund
-router.put('/:id/refund/reject', authMiddleware, async (req, res) => {
+// Reject refund by orderId
+router.post('/:orderId/refund/reject', authMiddleware, async (req, res) => {
   try {
     const { reason } = req.body;
-    const order = await Order.findById(req.params.id);
+    const order = await Order.findOne({ orderId: req.params.orderId });
     if (!order) return res.status(404).json({ error: 'Order not found' });
     
-    if (order.refundStatus !== 'pending') {
+    if (!['pending', 'scheduled'].includes(order.refundStatus)) {
       return res.status(400).json({ error: 'No pending refund request for this order' });
     }
 
@@ -376,8 +400,9 @@ router.put('/:id/refund/reject', authMiddleware, async (req, res) => {
     
     // Notify customer
     try {
-      await whatsapp.sendMessage(order.customer.phone,
-        `❌ *Refund Request Rejected*\n\nOrder: ${order.orderId}\n\nReason: ${reason || 'Your refund request has been reviewed and rejected.'}\n\nPlease contact support for more information.`
+      await whatsapp.sendButtons(order.customer.phone,
+        `❌ *Refund Request Rejected*\n\nOrder: ${order.orderId}\n\nReason: ${reason || 'Your refund request has been reviewed and rejected.'}\n\nPlease contact support for more information.`,
+        [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
       );
     } catch (e) {
       console.error('WhatsApp notification failed:', e.message);

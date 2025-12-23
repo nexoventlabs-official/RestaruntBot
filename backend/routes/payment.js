@@ -115,18 +115,14 @@ router.post('/refund/:orderId', authMiddleware, async (req, res) => {
 
     const paymentId = order.razorpayPaymentId || order.paymentId;
     
-    // Schedule refund to process after 5 minutes
+    // Mark refund as pending for admin approval
     order.status = 'cancelled';
-    order.refundStatus = 'scheduled';
+    order.refundStatus = 'pending';
     order.refundAmount = order.totalAmount;
-    order.refundScheduledAt = new Date();
+    order.refundRequestedAt = new Date();
     order.statusUpdatedAt = new Date();
-    order.trackingUpdates.push({ status: 'refund_scheduled', message: 'Refund scheduled by admin', timestamp: new Date() });
+    order.trackingUpdates.push({ status: 'refund_pending', message: 'Refund requested by admin, pending approval', timestamp: new Date() });
     await order.save();
-
-    // Schedule refund to process after 5 minutes
-    const refundScheduler = require('../services/refundScheduler');
-    refundScheduler.scheduleRefund(order.orderId, 5 * 60 * 1000); // 5 minutes
 
     // Emit event for real-time updates
     const dataEvents = require('../services/eventEmitter');
@@ -139,14 +135,14 @@ router.post('/refund/:orderId', authMiddleware, async (req, res) => {
     );
 
     await whatsapp.sendButtons(order.customer.phone,
-      `💰 *Refund Scheduled*\n\nOrder: ${order.orderId}\nAmount: ₹${order.totalAmount}\n\n⏱️ Your refund will be processed in 5 minutes.\nYou'll receive a confirmation once complete.`,
+      `💰 *Refund Requested*\n\nOrder: ${order.orderId}\nAmount: ₹${order.totalAmount}\n\n⏱️ Your refund is pending approval.\nYou'll receive a confirmation once processed.`,
       [
         { id: 'place_order', text: 'New Order' },
         { id: 'help', text: 'Help' }
       ]
     );
 
-    res.json({ success: true, message: 'Refund scheduled', orderId: order.orderId });
+    res.json({ success: true, message: 'Refund requested', orderId: order.orderId });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
