@@ -152,7 +152,7 @@ const generateReportPdf = async (reportData, reportType) => {
       y += 55;
 
       // Helper function to draw item table with images
-      const drawItemTable = (title, items, startY) => {
+      const drawItemTable = (title, items, startY, showAll = false) => {
         let currentY = startY;
         
         // Check if we need a new page
@@ -176,8 +176,9 @@ const generateReportPdf = async (reportData, reportType) => {
         doc.moveTo(50, currentY).lineTo(450, currentY).stroke('#e2e3e5');
         currentY += 5;
 
+        const itemsToShow = showAll ? items : items.slice(0, 10);
         doc.font('Helvetica').fontSize(9);
-        items.slice(0, 10).forEach((item, idx) => {
+        itemsToShow.forEach((item, idx) => {
           // Check if we need a new page
           if (currentY > 720) {
             doc.addPage();
@@ -223,13 +224,11 @@ const generateReportPdf = async (reportData, reportType) => {
         y = drawItemTable('Least Selling Items', reportData.leastSellingItems, y);
       }
 
-      // All Items Sold (on new page if needed)
+      // All Items Sold - show ALL items
       if (reportData.allItemsSold && reportData.allItemsSold.length > 0) {
-        if (y > 500) {
-          doc.addPage();
-          y = 50;
-        }
-        y = drawItemTable('All Items Sold', reportData.allItemsSold, y);
+        doc.addPage();
+        y = 50;
+        y = drawItemTable('All Items Sold', reportData.allItemsSold, y, true);
       }
 
       // Footer on last page

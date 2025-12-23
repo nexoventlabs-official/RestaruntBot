@@ -126,6 +126,7 @@ export default function Reports() {
   const [showCustomPicker, setShowCustomPicker] = useState(false);
   const [dialog, setDialog] = useState({ isOpen: false, title: '', message: '', type: 'info', onConfirm: null, showCancel: false });
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const fetchReport = async (type, startDate = null, endDate = null) => {
     setLoading(true);
@@ -172,7 +173,8 @@ export default function Reports() {
   };
 
   const handleDownloadPdf = async () => {
-    if (!reportData) return;
+    if (!reportData || generatingPdf) return;
+    setGeneratingPdf(true);
     try {
       const response = await api.post('/analytics/report/download-pdf', 
         { reportData, reportType },
@@ -189,6 +191,8 @@ export default function Reports() {
     } catch (err) {
       console.error('PDF download error:', err);
       setDialog({ isOpen: true, title: 'Download Failed', message: 'Failed to download PDF report', type: 'error', showCancel: false });
+    } finally {
+      setGeneratingPdf(false);
     }
   };
 
@@ -230,12 +234,16 @@ export default function Reports() {
         <div className="flex items-center gap-2">
           <button 
             onClick={handleDownloadPdf}
-            disabled={!reportData || loading}
+            disabled={!reportData || loading || generatingPdf}
             className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             title="Download PDF Report"
           >
-            <FileDown className="w-4 h-4" />
-            <span className="hidden sm:inline">PDF</span>
+            {generatingPdf ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <FileDown className="w-4 h-4" />
+            )}
+            <span className="hidden sm:inline">{generatingPdf ? 'Generating...' : 'PDF'}</span>
           </button>
           <button 
             onClick={handleSendEmail}
@@ -369,7 +377,8 @@ export default function Reports() {
               <table className="w-full">
                 <thead className="bg-dark-50">
                   <tr>
-                    <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">S.No</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-dark-600 w-12">S.No</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-dark-600 w-16">Image</th>
                     <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">Item Name</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Qty Sold</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Revenue</th>
@@ -379,6 +388,15 @@ export default function Reports() {
                   {(reportData.topSellingItems || []).slice(0, 10).map((item, idx) => (
                     <tr key={idx} className="hover:bg-dark-50">
                       <td className="px-4 py-3 text-sm text-dark-500">{idx + 1}</td>
+                      <td className="px-4 py-2">
+                        {item.image ? (
+                          <img src={item.image} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-dark-100 flex items-center justify-center">
+                            <Package className="w-5 h-5 text-dark-300" />
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-sm text-dark-900">{item.name}</td>
                       <td className="px-4 py-3 text-sm text-dark-900 text-right">{item.quantity}</td>
                       <td className="px-4 py-3 text-sm text-dark-900 text-right">{formatCurrency(item.revenue)}</td>
@@ -386,7 +404,7 @@ export default function Reports() {
                   ))}
                   {(!reportData.topSellingItems || reportData.topSellingItems.length === 0) && (
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-dark-400">No data available</td>
+                      <td colSpan={5} className="px-4 py-8 text-center text-dark-400">No data available</td>
                     </tr>
                   )}
                 </tbody>
@@ -403,7 +421,8 @@ export default function Reports() {
               <table className="w-full">
                 <thead className="bg-dark-50">
                   <tr>
-                    <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">S.No</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-dark-600 w-12">S.No</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-dark-600 w-16">Image</th>
                     <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">Item Name</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Qty Sold</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Revenue</th>
@@ -413,6 +432,15 @@ export default function Reports() {
                   {(reportData.leastSellingItems || []).slice(0, 10).map((item, idx) => (
                     <tr key={idx} className="hover:bg-dark-50">
                       <td className="px-4 py-3 text-sm text-dark-500">{idx + 1}</td>
+                      <td className="px-4 py-2">
+                        {item.image ? (
+                          <img src={item.image} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-dark-100 flex items-center justify-center">
+                            <Package className="w-5 h-5 text-dark-300" />
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-sm text-dark-900">{item.name}</td>
                       <td className="px-4 py-3 text-sm text-dark-900 text-right">{item.quantity}</td>
                       <td className="px-4 py-3 text-sm text-dark-900 text-right">{formatCurrency(item.revenue)}</td>
@@ -420,7 +448,7 @@ export default function Reports() {
                   ))}
                   {(!reportData.leastSellingItems || reportData.leastSellingItems.length === 0) && (
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-dark-400">No data available</td>
+                      <td colSpan={5} className="px-4 py-8 text-center text-dark-400">No data available</td>
                     </tr>
                   )}
                 </tbody>
