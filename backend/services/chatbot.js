@@ -64,25 +64,29 @@ const chatbot = {
 
   // Helper to detect food type preference from message text
   detectFoodTypeFromMessage(text) {
-    const lowerText = text.toLowerCase();
-    const vegKeywords = ['veg ', ' veg', 'vegetarian', 'veggie'];
-    const nonvegKeywords = ['nonveg', 'non-veg', 'non veg', 'chicken', 'mutton', 'fish', 'prawn', 'egg', 'meat'];
+    const lowerText = ' ' + text.toLowerCase() + ' '; // Add spaces for word boundary matching
     
-    const hasVeg = vegKeywords.some(kw => lowerText.includes(kw));
-    const hasNonveg = nonvegKeywords.some(kw => lowerText.includes(kw));
+    // Veg keywords - must be standalone word "veg" not part of "nonveg"
+    const vegPatterns = [/\bveg\b/, /\bvegetarian\b/, /\bveggie\b/, /\bpure veg\b/];
+    const nonvegPatterns = [/\bnonveg\b/, /\bnon-veg\b/, /\bnon veg\b/, /\bchicken\b/, /\bmutton\b/, /\bfish\b/, /\bprawn\b/, /\begg\b/, /\bmeat\b/, /\bkeema\b/, /\bbeef\b/, /\bpork\b/];
     
-    // If both or neither, return null (no specific preference detected)
+    const hasVeg = vegPatterns.some(pattern => pattern.test(lowerText));
+    const hasNonveg = nonvegPatterns.some(pattern => pattern.test(lowerText));
+    
+    // If user says "veg" without any nonveg keywords, it's veg
     if (hasVeg && !hasNonveg) return 'veg';
+    // If user mentions nonveg items
     if (hasNonveg && !hasVeg) return 'nonveg';
     return null;
   },
 
   // Helper to remove food type keywords from search text
   removeFoodTypeKeywords(text) {
-    const keywords = ['veg ', ' veg', 'vegetarian', 'veggie', 'nonveg', 'non-veg', 'non veg'];
     let cleanText = text.toLowerCase();
-    keywords.forEach(kw => {
-      cleanText = cleanText.replace(new RegExp(kw, 'gi'), ' ');
+    // Remove food type keywords using word boundaries
+    const patterns = [/\bveg\b/gi, /\bvegetarian\b/gi, /\bveggie\b/gi, /\bpure veg\b/gi, /\bnonveg\b/gi, /\bnon-veg\b/gi, /\bnon veg\b/gi];
+    patterns.forEach(pattern => {
+      cleanText = cleanText.replace(pattern, ' ');
     });
     return cleanText.trim().replace(/\s+/g, ' ');
   },
