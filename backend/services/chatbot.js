@@ -90,16 +90,17 @@ const chatbot = {
       return { type: 'egg' };
     }
     
-    // Check for nonveg general keywords
-    const nonvegPatterns = [/\bnonveg\b/, /\bnon-veg\b/, /\bnon veg\b/, /\bmeat\b/];
+    // Check for nonveg general keywords (with space variations)
+    const nonvegPatterns = [/\bnonveg\b/, /\bnon-veg\b/, /\bnon\s+veg\b/, /\bmeat\b/];
     const hasNonveg = nonvegPatterns.some(pattern => pattern.test(lowerText));
     
-    // Check for veg keywords
+    // Check for veg keywords - but make sure "non veg" doesn't match as "veg"
+    const hasNonVegPhrase = /\bnon[\s-]?veg/.test(lowerText);
     const vegPatterns = [/\bveg\b/, /\bvegetarian\b/, /\bveggie\b/, /\bpure veg\b/, /\beggless\b/];
-    const hasVeg = vegPatterns.some(pattern => pattern.test(lowerText));
+    const hasVeg = !hasNonVegPhrase && vegPatterns.some(pattern => pattern.test(lowerText));
     
     if (hasVeg && !hasNonveg) return { type: 'veg' };
-    if (hasNonveg && !hasVeg) return { type: 'nonveg' }; // nonveg includes egg
+    if (hasNonveg) return { type: 'nonveg' }; // nonveg includes egg
     
     return null;
   },
@@ -107,10 +108,11 @@ const chatbot = {
   // Helper to remove food type keywords from search text
   removeFoodTypeKeywords(text) {
     let cleanText = text.toLowerCase();
-    // Remove all food type keywords
+    // Remove all food type keywords - order matters! Remove longer phrases first
     const patterns = [
-      /\bveg\b/gi, /\bvegetarian\b/gi, /\bveggie\b/gi, /\bpure veg\b/gi,
-      /\bnonveg\b/gi, /\bnon-veg\b/gi, /\bnon veg\b/gi,
+      /\bpure veg\b/gi, /\bnon[\s-]?veg\b/gi,  // Multi-word first
+      /\bvegetarian\b/gi, /\bveggie\b/gi, /\bveg\b/gi,
+      /\bnonveg\b/gi,
       /\bchicken\b/gi, /\bmutton\b/gi, /\bfish\b/gi, /\bprawn\b/gi,
       /\begg\b/gi, /\bmeat\b/gi, /\bkeema\b/gi, /\bbeef\b/gi, /\bpork\b/gi, /\bseafood\b/gi
     ];
