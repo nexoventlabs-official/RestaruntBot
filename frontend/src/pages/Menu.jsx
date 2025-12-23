@@ -182,6 +182,44 @@ export default function Menu() {
   const [aiLoading, setAiLoading] = useState(false);
   const initialLoadDone = useRef(false);
   const lastTapRef = useRef({});
+  const [imageError, setImageError] = useState('');
+  const [categoryImageError, setCategoryImageError] = useState('');
+
+  // Validate image URL for WhatsApp compatibility
+  const validateImageUrl = (url) => {
+    if (!url) return { valid: true, error: '' };
+    const supportedFormats = ['.jpg', '.jpeg', '.png'];
+    const unsupportedFormats = ['.webp', '.gif', '.bmp', '.svg', '.tiff', '.ico'];
+    const urlLower = url.toLowerCase();
+    
+    // Check for unsupported formats
+    for (const fmt of unsupportedFormats) {
+      if (urlLower.includes(fmt)) {
+        return { valid: false, error: `${fmt.toUpperCase()} format not supported. Use JPG or PNG only.` };
+      }
+    }
+    
+    // Check if it has a supported format
+    const hasSupported = supportedFormats.some(fmt => urlLower.includes(fmt));
+    if (!hasSupported && url.length > 10) {
+      // URL doesn't clearly indicate format - warn but allow
+      return { valid: true, error: '' };
+    }
+    
+    return { valid: true, error: '' };
+  };
+
+  const handleImageChange = (url) => {
+    const { valid, error } = validateImageUrl(url);
+    setImageError(error);
+    setForm({ ...form, image: url });
+  };
+
+  const handleCategoryImageChange = (url) => {
+    const { valid, error } = validateImageUrl(url);
+    setCategoryImageError(error);
+    setCategoryForm({ ...categoryForm, image: url });
+  };
 
   // Double tap handler for pause/resume category
   const handleCategoryDoubleTap = async (cat) => {
@@ -264,6 +302,10 @@ export default function Menu() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (imageError) {
+      alert('Please fix the image URL error before saving');
+      return;
+    }
     try {
       if (editing) {
         await api.put(`/menu/${editing._id}`, form);
@@ -271,6 +313,7 @@ export default function Menu() {
         await api.post('/menu', form);
       }
       setShowModal(false);
+      setImageError('');
       fetchItems();
     } catch (err) {
       alert('Failed to save item');
@@ -635,9 +678,13 @@ export default function Menu() {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-dark-700 mb-2">Image URL</label>
-                <input type="url" value={form.image} onChange={(e) => setForm({ ...form, image: e.target.value })}
-                  className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" placeholder="https://example.com/image.jpg" />
-                {form.image && (
+                <input type="url" value={form.image} onChange={(e) => handleImageChange(e.target.value)}
+                  className={`w-full px-4 py-3 bg-dark-50 border rounded-xl focus:bg-white transition-all ${imageError ? 'border-red-500 focus:border-red-500' : 'border-dark-200 focus:border-primary-500'}`} placeholder="https://example.com/image.jpg" />
+                {imageError && (
+                  <p className="text-red-500 text-sm mt-1">⚠️ {imageError}</p>
+                )}
+                <p className="text-dark-400 text-xs mt-1">Only JPG and PNG formats supported for WhatsApp</p>
+                {form.image && !imageError && (
                   <div className="mt-3 rounded-xl overflow-hidden border border-dark-200 h-40 bg-dark-100">
                     <img src={form.image} alt="Preview" className="w-full h-full object-cover" onError={(e) => e.target.style.display = 'none'} />
                   </div>
@@ -714,9 +761,12 @@ export default function Menu() {
               }} className="space-y-3 mb-5">
                 <input type="text" value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
                   placeholder="Category name" className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" required />
-                <input type="url" value={categoryForm.image} onChange={(e) => setCategoryForm({ ...categoryForm, image: e.target.value })}
-                  placeholder="Image URL (optional)" className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" />
-                {categoryForm.image && (
+                <input type="url" value={categoryForm.image} onChange={(e) => handleCategoryImageChange(e.target.value)}
+                  placeholder="Image URL (optional - JPG/PNG only)" className={`w-full px-4 py-3 bg-dark-50 border rounded-xl focus:bg-white transition-all ${categoryImageError ? 'border-red-500 focus:border-red-500' : 'border-dark-200 focus:border-primary-500'}`} />
+                {categoryImageError && (
+                  <p className="text-red-500 text-sm">⚠️ {categoryImageError}</p>
+                )}
+                {categoryForm.image && !categoryImageError && (
                   <div className="w-20 h-20 rounded-xl overflow-hidden border border-dark-200 bg-dark-100 mx-auto">
                     <img src={categoryForm.image} alt="Preview" className="w-full h-full object-cover" onError={(e) => e.target.style.display = 'none'} />
                   </div>
