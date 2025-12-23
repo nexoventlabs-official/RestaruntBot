@@ -123,15 +123,30 @@ export default function Reports() {
       setReportData(res.data);
     } catch (err) {
       console.error('Failed to fetch report:', err);
+      // Set empty report data on error so UI shows zeros instead of "No Report Data"
+      setReportData({
+        totalRevenue: 0,
+        totalOrders: 0,
+        totalItemsSold: 0,
+        avgOrderValue: 0,
+        deliveredOrders: 0,
+        cancelledOrders: 0,
+        refundedOrders: 0,
+        codOrders: 0,
+        upiOrders: 0,
+        topSellingItems: [],
+        leastSellingItems: [],
+        allItemsSold: [],
+        revenueByCategory: [],
+        revenueTrend: []
+      });
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (reportType !== 'custom') {
-      fetchReport(reportType);
-    }
+    fetchReport(reportType);
   }, [reportType]);
 
   const handleCustomRange = () => {
