@@ -1,6 +1,7 @@
 const Order = require('../models/Order');
 const Customer = require('../models/Customer');
 const DashboardStats = require('../models/DashboardStats');
+const ReportHistory = require('../models/ReportHistory');
 const dataEvents = require('./eventEmitter');
 
 const CLEANUP_DELAY_HOURS = 1; // Remove delivered/cancelled orders after 1 hour
@@ -16,10 +17,99 @@ const orderCleanup = {
     return stats;
   },
 
+  // Get date string in YYYY-MM-DD format
+  getDateString(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  },
+
   // Get today's date string
   getTodayString() {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return this.getDateString(new Date());
+  },
+
+  // Save report history for orders being deleted
+  async saveReportHistory(orders) {
+    try {
+      // Group orders by date
+      const ordersByDate = {};
+      
+      for (const order of orders) {
+        const dateStr = this.getDateString(new Date(order.createdAt));
+        if (!ordersByDate[dateStr]) {
+          ordersByDate[dateStr] = [];
+        }
+        ordersByDate[dateStr].push(order);
+      }
+
+      // Save/update report history for each date
+      for (const [dateStr, dateOrders] of Object.entries(ordersByDate)) {
+        let report = await ReportHistory.findOne({ date: dateStr });
+        
+        if (!report) {
+          report = new ReportHistory({ date: dateStr });
+        }
+
+        for (const order of dateOrders) {
+          const isPaid = order.paymentStatus === 'paid';
+          const isDelivered = order.status === 'delivered';
+          const isCancelled = order.status === 'cancelled';
+          const isRefunded = order.status === 'refunded';
+
+          report.orders += 1;
+          if (isDelivered) report.deliveredOrders += 1;
+          if (isCancelled) report.cancelledOrders += 1;
+          if (isRefunded) report.refundedOrders += 1;
+          if (order.paymentMethod === 'cod') report.codOrders += 1;
+          if (order.paymentMethod === 'upi') report.upiOrders += 1;
+
+          // Only count revenue for delivered + paid orders
+          if (isDelivered && isPaid) {
+            report.revenue += order.totalAmount || 0;
+          }
+
+          // Track items sold (only for non-cancelled/refunded orders)
+          if (!isCancelled && !isRefunded && order.items) {
+            for (const item of order.items) {
+              report.itemsSold += item.quantity || 0;
+
+              // Update item breakdown
+              const existingItem = report.items.find(i => i.name === item.name);
+              if (existingItem) {
+                existingItem.quantity += item.quantity || 0;
+                existingItem.revenue += (item.price || 0) * (item.quantity || 0);
+              } else {
+                report.items.push({
+                  name: item.name,
+                  category: Array.isArray(item.category) ? item.category[0] : item.category,
+                  quantity: item.quantity || 0,
+                  revenue: (item.price || 0) * (item.quantity || 0)
+                });
+              }
+
+              // Update category breakdown
+              const categoryName = Array.isArray(item.category) ? item.category[0] : (item.category || 'Uncategorized');
+              const existingCat = report.categories.find(c => c.category === categoryName);
+              if (existingCat) {
+                existingCat.quantity += item.quantity || 0;
+                existingCat.revenue += (item.price || 0) * (item.quantity || 0);
+              } else {
+                report.categories.push({
+                  category: categoryName,
+                  quantity: item.quantity || 0,
+                  revenue: (item.price || 0) * (item.quantity || 0)
+                });
+              }
+            }
+          }
+        }
+
+        report.updatedAt = new Date();
+        await report.save();
+        console.log(`📊 Report history saved for ${dateStr}: ${dateOrders.length} orders`);
+      }
+    } catch (error) {
+      console.error('❌ Error saving report history:', error.message);
+    }
   },
 
   // Save stats before deleting orders
@@ -36,6 +126,9 @@ const orderCleanup = {
       stats.lastUpdated = new Date();
       
       await stats.save();
+      
+      // Also save to report history
+      await this.saveReportHistory(orders);
       
       console.log(`📊 Cleanup stats saved: ${orders.length} orders, ₹${revenue} revenue`);
       return stats;

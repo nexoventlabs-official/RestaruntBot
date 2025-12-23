@@ -202,6 +202,7 @@ router.post('/cleanup', authMiddleware, async (req, res) => {
 // Comprehensive Report Endpoint
 router.get('/report', authMiddleware, async (req, res) => {
   try {
+    const ReportHistory = require('../models/ReportHistory');
     const { type, startDate, endDate } = req.query;
     
     // Calculate date range based on report type
@@ -242,19 +243,25 @@ router.get('/report', authMiddleware, async (req, res) => {
     }
 
     const dateFilter = { createdAt: { $gte: start, $lte: end } };
+    
+    // Generate date strings for historical data lookup
+    const getDateString = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const startDateStr = getDateString(start);
+    const endDateStr = getDateString(end);
 
-    // Run all queries in parallel
+    // Run all queries in parallel (current orders + historical data)
     const [
       orders,
       orderStats,
       itemStats,
       categoryStats,
-      paymentStats
+      paymentStats,
+      historicalReports
     ] = await Promise.all([
-      // Get all orders in range
+      // Get all orders in range (still in DB)
       Order.find(dateFilter).lean(),
       
-      // Order statistics
+      // Order statistics from current orders
       Order.aggregate([
         { $match: dateFilter },
         {
@@ -277,7 +284,7 @@ router.get('/report', authMiddleware, async (req, res) => {
         }
       ]),
       
-      // Item statistics
+      // Item statistics from current orders
       Order.aggregate([
         { $match: { ...dateFilter, status: { $nin: ['cancelled', 'refunded'] } } },
         { $unwind: '$items' },
@@ -293,7 +300,7 @@ router.get('/report', authMiddleware, async (req, res) => {
         { $sort: { quantity: -1 } }
       ]),
       
-      // Category statistics
+      // Category statistics from current orders
       Order.aggregate([
         { $match: { ...dateFilter, status: { $nin: ['cancelled', 'refunded'] } } },
         { $unwind: '$items' },
@@ -309,7 +316,7 @@ router.get('/report', authMiddleware, async (req, res) => {
         { $sort: { revenue: -1 } }
       ]),
       
-      // Payment method statistics
+      // Payment method statistics from current orders
       Order.aggregate([
         { $match: dateFilter },
         {
@@ -318,26 +325,109 @@ router.get('/report', authMiddleware, async (req, res) => {
             count: { $sum: 1 }
           }
         }
-      ])
+      ]),
+      
+      // Historical report data (from deleted orders)
+      ReportHistory.find({ date: { $gte: startDateStr, $lte: endDateStr } }).lean()
     ]);
 
-    // Process results
-    const stats = orderStats[0] || { totalOrders: 0, totalRevenue: 0, deliveredOrders: 0, cancelledOrders: 0, refundedOrders: 0 };
-    const totalItemsSold = itemStats.reduce((sum, item) => sum + item.quantity, 0);
-    const avgOrderValue = stats.totalOrders > 0 ? Math.round(stats.totalRevenue / stats.deliveredOrders) || 0 : 0;
+    // Combine current stats with historical data
+    const currentStats = orderStats[0] || { totalOrders: 0, totalRevenue: 0, deliveredOrders: 0, cancelledOrders: 0, refundedOrders: 0 };
     
-    // Payment method counts
-    const codOrders = paymentStats.find(p => p._id === 'cod')?.count || 0;
-    const upiOrders = paymentStats.find(p => p._id === 'upi')?.count || 0;
+    // Aggregate historical stats
+    let histRevenue = 0, histOrders = 0, histDelivered = 0, histCancelled = 0, histRefunded = 0;
+    let histCod = 0, histUpi = 0, histItemsSold = 0;
+    const histItemsMap = {};
+    const histCategoriesMap = {};
+    
+    for (const report of historicalReports) {
+      histRevenue += report.revenue || 0;
+      histOrders += report.orders || 0;
+      histDelivered += report.deliveredOrders || 0;
+      histCancelled += report.cancelledOrders || 0;
+      histRefunded += report.refundedOrders || 0;
+      histCod += report.codOrders || 0;
+      histUpi += report.upiOrders || 0;
+      histItemsSold += report.itemsSold || 0;
+      
+      // Merge items
+      for (const item of (report.items || [])) {
+        if (histItemsMap[item.name]) {
+          histItemsMap[item.name].quantity += item.quantity;
+          histItemsMap[item.name].revenue += item.revenue;
+        } else {
+          histItemsMap[item.name] = { ...item };
+        }
+      }
+      
+      // Merge categories
+      for (const cat of (report.categories || [])) {
+        if (histCategoriesMap[cat.category]) {
+          histCategoriesMap[cat.category].quantity += cat.quantity;
+          histCategoriesMap[cat.category].revenue += cat.revenue;
+        } else {
+          histCategoriesMap[cat.category] = { ...cat };
+        }
+      }
+    }
+
+    // Combine current + historical
+    const totalRevenue = currentStats.totalRevenue + histRevenue;
+    const totalOrders = currentStats.totalOrders + histOrders;
+    const deliveredOrders = currentStats.deliveredOrders + histDelivered;
+    const cancelledOrders = currentStats.cancelledOrders + histCancelled;
+    const refundedOrders = currentStats.refundedOrders + histRefunded;
+    
+    // Combine items
+    const combinedItemsMap = { ...histItemsMap };
+    for (const item of itemStats) {
+      if (combinedItemsMap[item.name]) {
+        combinedItemsMap[item.name].quantity += item.quantity;
+        combinedItemsMap[item.name].revenue += item.revenue;
+      } else {
+        combinedItemsMap[item.name] = { name: item.name, category: item.category, quantity: item.quantity, revenue: item.revenue };
+      }
+    }
+    const allItemsSold = Object.values(combinedItemsMap).sort((a, b) => b.quantity - a.quantity);
+    
+    // Combine categories
+    const combinedCategoriesMap = { ...histCategoriesMap };
+    for (const cat of categoryStats) {
+      const catName = cat.category || 'Uncategorized';
+      if (combinedCategoriesMap[catName]) {
+        combinedCategoriesMap[catName].quantity += cat.quantity;
+        combinedCategoriesMap[catName].revenue += cat.revenue;
+      } else {
+        combinedCategoriesMap[catName] = { category: catName, quantity: cat.quantity, revenue: cat.revenue };
+      }
+    }
+    const revenueByCategory = Object.values(combinedCategoriesMap).sort((a, b) => b.revenue - a.revenue);
+
+    const totalItemsSold = allItemsSold.reduce((sum, item) => sum + item.quantity, 0);
+    const avgOrderValue = deliveredOrders > 0 ? Math.round(totalRevenue / deliveredOrders) : 0;
+    
+    // Payment method counts (current + historical)
+    const codOrders = (paymentStats.find(p => p._id === 'cod')?.count || 0) + histCod;
+    const upiOrders = (paymentStats.find(p => p._id === 'upi')?.count || 0) + histUpi;
 
     // Top and least selling items
-    const topSellingItems = itemStats.slice(0, 10);
-    const leastSellingItems = [...itemStats].sort((a, b) => a.quantity - b.quantity).slice(0, 10);
+    const topSellingItems = allItemsSold.slice(0, 10);
+    const leastSellingItems = [...allItemsSold].sort((a, b) => a.quantity - b.quantity).slice(0, 10);
 
-    // Revenue trend (group by date)
-    const revenueTrend = [];
+    // Revenue trend (group by date) - combine current orders + historical
     const ordersByDate = {};
     
+    // Add historical data to trend
+    for (const report of historicalReports) {
+      const dateKey = new Date(report.date).toLocaleDateString('en-IN');
+      ordersByDate[dateKey] = { 
+        label: dateKey, 
+        revenue: report.revenue || 0, 
+        orders: report.deliveredOrders || 0 
+      };
+    }
+    
+    // Add current orders to trend
     orders.forEach(order => {
       if (order.status !== 'cancelled' && order.status !== 'refunded' && order.paymentStatus === 'paid') {
         const dateKey = new Date(order.createdAt).toLocaleDateString('en-IN');
@@ -349,25 +439,28 @@ router.get('/report', authMiddleware, async (req, res) => {
       }
     });
     
-    Object.values(ordersByDate).forEach(d => revenueTrend.push(d));
-    revenueTrend.sort((a, b) => new Date(a.label.split('/').reverse().join('-')) - new Date(b.label.split('/').reverse().join('-')));
+    const revenueTrend = Object.values(ordersByDate).sort((a, b) => {
+      const dateA = a.label.split('/').reverse().join('-');
+      const dateB = b.label.split('/').reverse().join('-');
+      return new Date(dateA) - new Date(dateB);
+    });
 
     res.json({
       reportType: type,
       dateRange: { start, end },
-      totalRevenue: stats.totalRevenue,
-      totalOrders: stats.totalOrders,
+      totalRevenue,
+      totalOrders,
       totalItemsSold,
       avgOrderValue,
-      deliveredOrders: stats.deliveredOrders,
-      cancelledOrders: stats.cancelledOrders,
-      refundedOrders: stats.refundedOrders,
+      deliveredOrders,
+      cancelledOrders,
+      refundedOrders,
       codOrders,
       upiOrders,
       topSellingItems,
       leastSellingItems,
-      allItemsSold: itemStats,
-      revenueByCategory: categoryStats.map(c => ({ category: c.category || 'Uncategorized', revenue: c.revenue, quantity: c.quantity })),
+      allItemsSold,
+      revenueByCategory,
       revenueTrend
     });
   } catch (error) {
