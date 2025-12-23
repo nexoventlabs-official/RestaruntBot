@@ -27,6 +27,19 @@ const chatbot = {
     );
   },
 
+  // Helper to find items by tag keyword
+  findItemsByTag(text, menuItems) {
+    const lowerText = text.toLowerCase().trim();
+    // Find all items that have a tag matching the keyword
+    const matchingItems = menuItems.filter(item => 
+      item.tags?.some(tag => 
+        tag.toLowerCase().includes(lowerText) || 
+        lowerText.includes(tag.toLowerCase())
+      )
+    );
+    return matchingItems.length > 0 ? matchingItems : null;
+  },
+
   // Helper to filter items by food type preference
   filterByFoodType(menuItems, preference) {
     if (preference === 'both') return menuItems;
@@ -397,6 +410,19 @@ const chatbot = {
         await this.sendItemsForOrder(phone, filteredItems, category, page);
         state.currentStep = 'selecting_item';
       }
+      // Tag search pagination
+      else if (selection.startsWith('tagpage_')) {
+        const parts = selection.replace('tagpage_', '').split('_');
+        const page = parseInt(parts.pop());
+        const safeTag = parts.join('_');
+        const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
+        // Restore original tag from state or use safe version
+        const tagKeyword = state.searchTag || safeTag.replace(/_/g, ' ');
+        const tagItems = this.findItemsByTag(tagKeyword, filteredItems) || [];
+        state.currentPage = page;
+        await this.sendItemsByTag(phone, tagItems, tagKeyword, page);
+        state.currentStep = 'viewing_tag_results';
+      }
 
       // ========== ITEM SELECTION ==========
       else if (selection.startsWith('view_')) {
@@ -583,12 +609,23 @@ const chatbot = {
           state.currentStep = 'viewing_items';
         }
       }
+      // Tag-based search - show all items matching the tag keyword
+      else if (this.findItemsByTag(msg, this.filterByFoodType(menuItems, state.foodTypePreference || 'both'))) {
+        const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
+        const tagItems = this.findItemsByTag(msg, filteredItems);
+        state.searchTag = msg.trim();
+        state.tagSearchResults = tagItems.map(i => i._id.toString());
+        await this.sendItemsByTag(phone, tagItems, msg.trim());
+        state.currentStep = 'viewing_tag_results';
+      }
+      // Item name search - show item details first (don't go directly to cart)
       else if (this.findItem(msg, this.filterByFoodType(menuItems, state.foodTypePreference || 'both'))) {
         const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
         const item = this.findItem(msg, filteredItems);
         state.selectedItem = item._id.toString();
-        await this.sendQuantitySelection(phone, item);
-        state.currentStep = 'select_quantity';
+        // Show item details so user can confirm before adding to cart
+        await this.sendItemDetails(phone, menuItems, item._id.toString());
+        state.currentStep = 'viewing_item_details';
       }
 
       // ========== WELCOME FOR NEW/UNKNOWN STATE ==========
@@ -825,6 +862,51 @@ const chatbot = {
       const buttons = [];
       if (page > 0) buttons.push({ id: `allitems_page_${page - 1}`, text: 'Previous' });
       if (page < totalPages - 1) buttons.push({ id: `allitems_page_${page + 1}`, text: 'Next' });
+      buttons.push({ id: 'view_menu', text: 'Menu' });
+      await whatsapp.sendButtons(phone, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
+    }
+  },
+
+  // Send items matching a tag keyword (for tag-based search)
+  async sendItemsByTag(phone, items, tagKeyword, page = 0) {
+    if (!items.length) {
+      await whatsapp.sendButtons(phone, `🔍 No items found for "${tagKeyword}".`, [
+        { id: 'view_menu', text: 'Browse Menu' },
+        { id: 'home', text: 'Main Menu' }
+      ]);
+      return;
+    }
+
+    const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
+    const ITEMS_PER_PAGE = 10;
+    const totalPages = Math.ceil(items.length / ITEMS_PER_PAGE);
+    const startIdx = page * ITEMS_PER_PAGE;
+    const pageItems = items.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+
+    // Build rows for the list - use view_ prefix so user can see details first
+    const rows = pageItems.map(item => ({
+      rowId: `view_${item._id}`,
+      title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
+      description: `₹${item.price} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
+    }));
+
+    const sections = [{ title: `"${tagKeyword}" Items (${items.length})`, rows }];
+
+    await whatsapp.sendList(
+      phone,
+      `🏷️ ${tagKeyword}`,
+      `Found ${items.length} items matching "${tagKeyword}"\nTap an item to view details & add to cart`,
+      'View Items',
+      sections,
+      'Select an item'
+    );
+
+    // Send navigation buttons if multiple pages
+    if (totalPages > 1) {
+      const safeTag = tagKeyword.replace(/[^a-zA-Z0-9]/g, '_');
+      const buttons = [];
+      if (page > 0) buttons.push({ id: `tagpage_${safeTag}_${page - 1}`, text: 'Previous' });
+      if (page < totalPages - 1) buttons.push({ id: `tagpage_${safeTag}_${page + 1}`, text: 'Next' });
       buttons.push({ id: 'view_menu', text: 'Menu' });
       await whatsapp.sendButtons(phone, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
     }
