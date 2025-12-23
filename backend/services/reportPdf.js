@@ -102,6 +102,15 @@ const generateReportPdf = async (reportData, reportType) => {
       });
       doc.fontSize(10).font('Helvetica').fillColor('white')
         .text(`Generated: ${dateStr}`, doc.page.width - 200, 50, { width: 150, align: 'right' });
+      
+      // Show custom date range if available
+      if (reportType === 'custom' && reportData.dateRange) {
+        const formatDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+        const fromDate = formatDate(reportData.dateRange.start);
+        const toDate = formatDate(reportData.dateRange.end);
+        doc.fontSize(10).font('Helvetica').fillColor('white')
+          .text(`From: ${fromDate}  To: ${toDate}`, doc.page.width - 200, 65, { width: 150, align: 'right' });
+      }
 
       let y = 150;
 
