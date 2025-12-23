@@ -89,15 +89,19 @@ const razorpayService = {
 
   async refund(paymentId, amount) {
     try {
-      console.log('💰 Attempting refund:', { paymentId, amount });
+      console.log('💰 Attempting refund:', { paymentId, amountInRupees: amount });
       
       // First fetch payment details to verify it's refundable
       const payment = await getRazorpay().payments.fetch(paymentId);
+      const paymentAmountInRupees = payment.amount / 100;
+      
       console.log('💰 Payment details:', { 
         status: payment.status, 
-        amount: payment.amount / 100,
+        amountInPaise: payment.amount,
+        amountInRupees: paymentAmountInRupees,
         captured: payment.captured,
-        refund_status: payment.refund_status
+        refund_status: payment.refund_status,
+        amount_refunded: payment.amount_refunded
       });
       
       // Check if payment is captured and not already refunded
@@ -109,16 +113,47 @@ const razorpayService = {
         throw new Error('Payment already fully refunded');
       }
       
-      // Process refund
+      // Calculate refund amount in paise
+      const refundAmountInPaise = Math.round(amount * 100);
+      const availableForRefund = payment.amount - (payment.amount_refunded || 0);
+      
+      console.log('💰 Refund calculation:', {
+        requestedRefundInPaise: refundAmountInPaise,
+        availableForRefundInPaise: availableForRefund
+      });
+      
+      // Validate refund amount doesn't exceed available amount
+      if (refundAmountInPaise > availableForRefund) {
+        console.log('⚠️ Requested refund exceeds available amount, adjusting to available amount');
+        // Refund the available amount instead
+        const adjustedRefundAmount = availableForRefund;
+        
+        if (adjustedRefundAmount <= 0) {
+          throw new Error('No amount available for refund');
+        }
+        
+        const refund = await getRazorpay().payments.refund(paymentId, {
+          amount: adjustedRefundAmount,
+          speed: 'normal',
+          notes: {
+            reason: 'Customer requested cancellation'
+          }
+        });
+        
+        console.log('✅ Refund successful (adjusted amount):', refund.id, 'Amount:', adjustedRefundAmount / 100);
+        return refund;
+      }
+      
+      // Process refund with requested amount
       const refund = await getRazorpay().payments.refund(paymentId, {
-        amount: amount * 100,
+        amount: refundAmountInPaise,
         speed: 'normal',
         notes: {
           reason: 'Customer requested cancellation'
         }
       });
       
-      console.log('✅ Refund successful:', refund.id);
+      console.log('✅ Refund successful:', refund.id, 'Amount:', refundAmountInPaise / 100);
       return refund;
     } catch (error) {
       console.error('❌ Razorpay refund error:', {

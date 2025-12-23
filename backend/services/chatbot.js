@@ -2104,6 +2104,7 @@ const chatbot = {
     }
 
     order.status = 'cancelled';
+    order.statusUpdatedAt = new Date(); // For auto-cleanup
     order.cancellationReason = 'Customer requested';
     order.trackingUpdates.push({ status: 'cancelled', message: 'Order cancelled by customer', timestamp: new Date() });
     
@@ -2293,6 +2294,7 @@ const chatbot = {
     order.refundStatus = 'pending';
     order.refundAmount = order.totalAmount;
     order.status = 'cancelled';
+    order.statusUpdatedAt = new Date(); // For auto-cleanup
     order.trackingUpdates.push({ status: 'refund_requested', message: 'Refund requested by customer', timestamp: new Date() });
     await order.save();
     

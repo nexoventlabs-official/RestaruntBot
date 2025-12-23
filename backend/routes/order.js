@@ -80,8 +80,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     order.status = status;
     order.trackingUpdates.push({ status, message: message || `Status updated to ${statusLabels[status] || status}` });
     
-    // Track when status changed to delivered/cancelled for auto-cleanup
-    if (status === 'delivered' || status === 'cancelled') {
+    // Track when status changed to delivered/cancelled/refunded for auto-cleanup
+    if (status === 'delivered' || status === 'cancelled' || status === 'refunded') {
       order.statusUpdatedAt = new Date();
     }
     
@@ -309,6 +309,7 @@ router.put('/:id/refund/approve', authMiddleware, async (req, res) => {
         order.refundStatus = 'completed';
         order.paymentStatus = 'refunded';
         order.status = 'refunded';
+        order.statusUpdatedAt = new Date(); // For auto-cleanup
         order.refundProcessedAt = new Date();
         order.trackingUpdates.push({ status: 'refunded', message: `Refund of ₹${order.refundAmount || order.totalAmount} processed. Refund ID: ${refund.id}` });
         
@@ -329,6 +330,7 @@ router.put('/:id/refund/approve', authMiddleware, async (req, res) => {
       order.refundStatus = 'completed';
       order.paymentStatus = 'refunded';
       order.status = 'refunded';
+      order.statusUpdatedAt = new Date(); // For auto-cleanup
       order.refundProcessedAt = new Date();
       order.trackingUpdates.push({ status: 'refunded', message: `COD refund of ₹${order.refundAmount || order.totalAmount} approved` });
       

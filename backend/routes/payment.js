@@ -116,6 +116,7 @@ router.post('/refund/:orderId', authMiddleware, async (req, res) => {
     const refund = await razorpayService.refund(order.paymentId, order.totalAmount);
     order.status = 'refunded';
     order.paymentStatus = 'refunded';
+    order.statusUpdatedAt = new Date(); // For auto-cleanup
     order.refundId = refund.id;
     order.refundAmount = order.totalAmount;
     order.trackingUpdates.push({ status: 'refunded', message: 'Refund processed by admin' });
