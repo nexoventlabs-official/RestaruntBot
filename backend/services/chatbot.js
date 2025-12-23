@@ -40,6 +40,28 @@ const chatbot = {
     return matchingItems.length > 0 ? matchingItems : null;
   },
 
+  // Helper to find items by name OR tag keyword (returns all matching items)
+  findItemsByNameOrTag(text, menuItems) {
+    const lowerText = text.toLowerCase().trim();
+    if (lowerText.length < 2) return null; // Skip very short searches
+    
+    const matchingItems = menuItems.filter(item => {
+      // Check if name matches
+      const nameMatch = item.name.toLowerCase().includes(lowerText) || 
+        lowerText.includes(item.name.toLowerCase());
+      
+      // Check if any tag matches
+      const tagMatch = item.tags?.some(tag => 
+        tag.toLowerCase().includes(lowerText) || 
+        lowerText.includes(tag.toLowerCase())
+      );
+      
+      return nameMatch || tagMatch;
+    });
+    
+    return matchingItems.length > 0 ? matchingItems : null;
+  },
+
   // Helper to filter items by food type preference
   filterByFoodType(menuItems, preference) {
     if (preference === 'both') return menuItems;
@@ -418,9 +440,9 @@ const chatbot = {
         const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
         // Restore original tag from state or use safe version
         const tagKeyword = state.searchTag || safeTag.replace(/_/g, ' ');
-        const tagItems = this.findItemsByTag(tagKeyword, filteredItems) || [];
+        const matchingItems = this.findItemsByNameOrTag(tagKeyword, filteredItems) || [];
         state.currentPage = page;
-        await this.sendItemsByTag(phone, tagItems, tagKeyword, page);
+        await this.sendItemsByTag(phone, matchingItems, tagKeyword, page);
         state.currentStep = 'viewing_tag_results';
       }
 
@@ -609,23 +631,14 @@ const chatbot = {
           state.currentStep = 'viewing_items';
         }
       }
-      // Tag-based search - show all items matching the tag keyword
-      else if (this.findItemsByTag(msg, this.filterByFoodType(menuItems, state.foodTypePreference || 'both'))) {
+      // Combined name + tag search - show all items matching keyword in name OR tags
+      else if (this.findItemsByNameOrTag(msg, this.filterByFoodType(menuItems, state.foodTypePreference || 'both'))) {
         const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
-        const tagItems = this.findItemsByTag(msg, filteredItems);
+        const matchingItems = this.findItemsByNameOrTag(msg, filteredItems);
         state.searchTag = msg.trim();
-        state.tagSearchResults = tagItems.map(i => i._id.toString());
-        await this.sendItemsByTag(phone, tagItems, msg.trim());
+        state.tagSearchResults = matchingItems.map(i => i._id.toString());
+        await this.sendItemsByTag(phone, matchingItems, msg.trim());
         state.currentStep = 'viewing_tag_results';
-      }
-      // Item name search - show item details first (don't go directly to cart)
-      else if (this.findItem(msg, this.filterByFoodType(menuItems, state.foodTypePreference || 'both'))) {
-        const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
-        const item = this.findItem(msg, filteredItems);
-        state.selectedItem = item._id.toString();
-        // Show item details so user can confirm before adding to cart
-        await this.sendItemDetails(phone, menuItems, item._id.toString());
-        state.currentStep = 'viewing_item_details';
       }
 
       // ========== WELCOME FOR NEW/UNKNOWN STATE ==========
