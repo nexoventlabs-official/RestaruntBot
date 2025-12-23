@@ -31,8 +31,10 @@ const refundScheduler = {
         return;
       }
       
-      // Update refund status to completed
+      // Update refund status to completed and order status to refunded
       order.refundStatus = 'completed';
+      order.status = 'refunded';
+      order.statusUpdatedAt = new Date(); // For cleanup scheduler
       order.refundedAt = new Date();
       order.trackingUpdates.push({
         status: 'refunded',
@@ -68,7 +70,7 @@ const refundScheduler = {
       
       // Sync to Google Sheets
       try {
-        await googleSheets.updateOrderStatus(order.orderId, 'cancelled', 'refunded');
+        await googleSheets.updateOrderStatus(order.orderId, 'refunded', 'refunded');
       } catch (err) {
         console.error('Google Sheets sync error:', err.message);
       }
