@@ -9,6 +9,33 @@ const getConfig = () => ({
 });
 
 const metaCloud = {
+  // Download media file from WhatsApp (for voice messages, images, etc.)
+  async downloadMedia(mediaId) {
+    try {
+      const { accessToken } = getConfig();
+      
+      // Step 1: Get media URL
+      const mediaResponse = await axios.get(`https://graph.facebook.com/v24.0/${mediaId}`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      
+      const mediaUrl = mediaResponse.data.url;
+      console.log('📥 Media URL retrieved:', mediaUrl);
+      
+      // Step 2: Download the actual file
+      const fileResponse = await axios.get(mediaUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        responseType: 'arraybuffer'
+      });
+      
+      console.log('✅ Media downloaded, size:', fileResponse.data.length, 'bytes');
+      return Buffer.from(fileResponse.data);
+    } catch (error) {
+      console.error('❌ Media download error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
   async sendMessage(phone, message) {
     try {
       const { baseUrl, accessToken, phoneNumberId } = getConfig();

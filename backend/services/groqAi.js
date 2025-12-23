@@ -9,6 +9,29 @@ const getGroq = () => {
 };
 
 const groqAi = {
+  // Transcribe audio using Groq's Whisper model
+  async transcribeAudio(audioBuffer, mimeType = 'audio/ogg') {
+    try {
+      const client = getGroq();
+      
+      // Create a File-like object from buffer
+      const file = new File([audioBuffer], 'audio.ogg', { type: mimeType });
+      
+      const transcription = await client.audio.transcriptions.create({
+        file: file,
+        model: 'whisper-large-v3',
+        language: 'en', // Can be changed or auto-detected
+        response_format: 'text'
+      });
+      
+      console.log('🎤 Transcription result:', transcription);
+      return transcription || '';
+    } catch (error) {
+      console.error('❌ Groq transcription error:', error.message);
+      return null;
+    }
+  },
+
   async generateDescription(itemName, category) {
     try {
       const client = getGroq();

@@ -2,6 +2,8 @@ const express = require('express');
 const chatbot = require('../services/chatbot');
 const whatsapp = require('../services/whatsapp');
 const googleSheets = require('../services/googleSheets');
+const metaCloud = require('../services/metaCloud');
+const groqAi = require('../services/groqAi');
 const router = express.Router();
 
 // Test Google Sheets connection
@@ -169,6 +171,45 @@ router.post('/meta', async (req, res) => {
                   name: message.location?.name || '',
                   address: message.location?.address || ''
                 };
+              } else if (message.type === 'audio') {
+                // Handle voice message
+                messageType = 'voice';
+                const audioId = message.audio?.id;
+                console.log('🎤 Voice message received, audio ID:', audioId);
+                
+                if (audioId) {
+                  try {
+                    // Download and transcribe the audio
+                    const audioBuffer = await metaCloud.downloadMedia(audioId);
+                    const transcription = await groqAi.transcribeAudio(audioBuffer, message.audio?.mime_type || 'audio/ogg');
+                    
+                    if (transcription && transcription.trim()) {
+                      text = transcription.trim();
+                      messageType = 'text'; // Treat as text after transcription
+                      console.log('🎤 Voice transcribed:', text);
+                    } else {
+                      // Transcription failed, send error message
+                      await whatsapp.sendButtons(phone, 
+                        "🎤 Sorry, I couldn't understand your voice message. Please try again or type your message.",
+                        [
+                          { id: 'home', text: 'Main Menu' },
+                          { id: 'help', text: 'Help' }
+                        ]
+                      );
+                      continue;
+                    }
+                  } catch (err) {
+                    console.error('❌ Voice processing error:', err.message);
+                    await whatsapp.sendButtons(phone,
+                      "🎤 Sorry, I couldn't process your voice message. Please type your message instead.",
+                      [
+                        { id: 'home', text: 'Main Menu' },
+                        { id: 'help', text: 'Help' }
+                      ]
+                    );
+                    continue;
+                  }
+                }
               }
 
               const hasContent = text || selectedId || messageType === 'location';
