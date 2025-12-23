@@ -1,13 +1,17 @@
 const Razorpay = require('razorpay');
 
 let razorpay = null;
+let lastKeyId = null;
 
 const getRazorpay = () => {
-  if (!razorpay) {
+  // Reset instance if credentials changed
+  if (!razorpay || lastKeyId !== process.env.RAZORPAY_KEY_ID) {
     razorpay = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID,
       key_secret: process.env.RAZORPAY_KEY_SECRET
     });
+    lastKeyId = process.env.RAZORPAY_KEY_ID;
+    console.log('🔑 Razorpay instance created/refreshed');
   }
   return razorpay;
 };
@@ -87,9 +91,12 @@ const razorpayService = {
     }
   },
 
-  async refund(paymentId, amount) {
+  async refund(paymentId, amount, retryCount = 0) {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 5000; // 5 seconds between retries
+    
     try {
-      console.log('💰 Attempting refund:', { paymentId, amountInRupees: amount });
+      console.log('💰 Attempting refund:', { paymentId, amountInRupees: amount, attempt: retryCount + 1 });
       
       // First fetch payment details to verify it's refundable
       const payment = await getRazorpay().payments.fetch(paymentId);
@@ -101,7 +108,8 @@ const razorpayService = {
         amountInRupees: paymentAmountInRupees,
         captured: payment.captured,
         refund_status: payment.refund_status,
-        amount_refunded: payment.amount_refunded
+        amount_refunded: payment.amount_refunded,
+        created_at: new Date(payment.created_at * 1000).toISOString()
       });
       
       // Check if payment is captured and not already refunded
@@ -111,6 +119,13 @@ const razorpayService = {
       
       if (payment.refund_status === 'full') {
         throw new Error('Payment already fully refunded');
+      }
+      
+      // Check if payment is too recent (less than 2 minutes old)
+      const paymentAge = Date.now() - (payment.created_at * 1000);
+      if (paymentAge < 2 * 60 * 1000) {
+        console.log('⏳ Payment is very recent, waiting before refund...');
+        await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
       }
       
       // Calculate refund amount in paise
@@ -123,46 +138,39 @@ const razorpayService = {
       });
       
       // Validate refund amount doesn't exceed available amount
-      if (refundAmountInPaise > availableForRefund) {
-        console.log('⚠️ Requested refund exceeds available amount, adjusting to available amount');
-        // Refund the available amount instead
-        const adjustedRefundAmount = availableForRefund;
-        
-        if (adjustedRefundAmount <= 0) {
-          throw new Error('No amount available for refund');
-        }
-        
-        const refund = await getRazorpay().payments.refund(paymentId, {
-          amount: adjustedRefundAmount,
-          speed: 'normal',
-          notes: {
-            reason: 'Customer requested cancellation'
-          }
-        });
-        
-        console.log('✅ Refund successful (adjusted amount):', refund.id, 'Amount:', adjustedRefundAmount / 100);
-        return refund;
+      const finalRefundAmount = refundAmountInPaise > availableForRefund ? availableForRefund : refundAmountInPaise;
+      
+      if (finalRefundAmount <= 0) {
+        throw new Error('No amount available for refund');
       }
       
-      // Process refund with requested amount
+      // Process refund - use simple format for better compatibility
       const refund = await getRazorpay().payments.refund(paymentId, {
-        amount: refundAmountInPaise,
-        speed: 'normal',
-        notes: {
-          reason: 'Customer requested cancellation'
-        }
+        amount: finalRefundAmount
       });
       
-      console.log('✅ Refund successful:', refund.id, 'Amount:', refundAmountInPaise / 100);
+      console.log('✅ Refund successful:', refund.id, 'Amount:', finalRefundAmount / 100);
       return refund;
     } catch (error) {
+      const errorCode = error.error?.code || error.code;
+      const errorDesc = error.error?.description || error.message;
+      
       console.error('❌ Razorpay refund error:', {
         message: error.message,
-        code: error.error?.code,
-        description: error.error?.description,
+        code: errorCode,
+        description: errorDesc,
         paymentId,
-        amount
+        amount,
+        attempt: retryCount + 1
       });
+      
+      // Retry on SERVER_ERROR or temporary issues
+      if ((errorCode === 'SERVER_ERROR' || errorCode === 'GATEWAY_ERROR') && retryCount < MAX_RETRIES) {
+        console.log(`🔄 Retrying refund in ${RETRY_DELAY_MS / 1000} seconds... (attempt ${retryCount + 2}/${MAX_RETRIES + 1})`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+        return this.refund(paymentId, amount, retryCount + 1);
+      }
+      
       throw error;
     }
   },
