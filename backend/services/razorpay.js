@@ -31,26 +31,58 @@ const razorpayService = {
 
   async createPaymentLink(amount, orderId, customerPhone, customerName) {
     try {
-      console.log('Creating Razorpay payment link:', { amount, orderId, customerPhone });
-      const paymentLink = await getRazorpay().paymentLink.create({
+      // Clean phone number - remove all non-digits and ensure proper format
+      let cleanPhone = customerPhone.replace(/\D/g, '');
+      // Remove leading 91 if present, then add it back properly
+      if (cleanPhone.startsWith('91') && cleanPhone.length > 10) {
+        cleanPhone = cleanPhone.substring(2);
+      }
+      // Ensure it's 10 digits
+      if (cleanPhone.length !== 10) {
+        console.error('Invalid phone number length:', cleanPhone.length, 'Phone:', customerPhone);
+      }
+      const formattedPhone = '+91' + cleanPhone;
+      
+      console.log('Creating Razorpay payment link:', { 
+        amount, 
+        orderId, 
+        originalPhone: customerPhone,
+        formattedPhone,
+        customerName 
+      });
+      
+      const paymentLinkOptions = {
         amount: amount * 100,
         currency: 'INR',
         accept_partial: false,
         description: `Order ${orderId}`,
         customer: {
           name: customerName || 'Customer',
-          contact: '+91' + customerPhone.replace(/^\+?91/, '')
+          contact: formattedPhone
         },
         notify: { sms: true, email: false },
         reminder_enable: true,
         notes: { orderId },
         callback_url: `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/payment/callback`,
         callback_method: 'get'
-      });
-      console.log('Payment link created:', paymentLink.short_url);
+      };
+      
+      console.log('Payment link options:', JSON.stringify(paymentLinkOptions, null, 2));
+      
+      const paymentLink = await getRazorpay().paymentLink.create(paymentLinkOptions);
+      console.log('✅ Payment link created:', paymentLink.short_url, 'ID:', paymentLink.id);
       return paymentLink;
     } catch (error) {
-      console.error('Razorpay payment link error:', error);
+      console.error('❌ Razorpay payment link error:', {
+        message: error.message,
+        code: error.error?.code,
+        description: error.error?.description,
+        field: error.error?.field,
+        source: error.error?.source,
+        step: error.error?.step,
+        reason: error.error?.reason,
+        metadata: error.error?.metadata
+      });
       throw error;
     }
   },
