@@ -635,10 +635,20 @@ const chatbot = {
       else if (this.findItemsByNameOrTag(msg, this.filterByFoodType(menuItems, state.foodTypePreference || 'both'))) {
         const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
         const matchingItems = this.findItemsByNameOrTag(msg, filteredItems);
-        state.searchTag = msg.trim();
-        state.tagSearchResults = matchingItems.map(i => i._id.toString());
-        await this.sendItemsByTag(phone, matchingItems, msg.trim());
-        state.currentStep = 'viewing_tag_results';
+        
+        // If only 1 item matches, show item details directly
+        if (matchingItems.length === 1) {
+          const item = matchingItems[0];
+          state.selectedItem = item._id.toString();
+          await this.sendItemDetails(phone, menuItems, item._id.toString());
+          state.currentStep = 'viewing_item_details';
+        } else {
+          // Multiple items - show list
+          state.searchTag = msg.trim();
+          state.tagSearchResults = matchingItems.map(i => i._id.toString());
+          await this.sendItemsByTag(phone, matchingItems, msg.trim());
+          state.currentStep = 'viewing_tag_results';
+        }
       }
 
       // ========== WELCOME FOR NEW/UNKNOWN STATE ==========
