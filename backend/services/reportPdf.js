@@ -94,42 +94,46 @@ const generateReportPdf = (reportData, reportType) => {
 
         // Table header
         doc.fillColor(grayColor).fontSize(9).font('Helvetica-Bold');
-        doc.text('Item Name', 50, y, { width: 200 });
-        doc.text('Qty', 260, y, { width: 50 });
-        doc.text('Revenue', 320, y, { width: 80 });
+        doc.text('S.No', 50, y, { width: 40 });
+        doc.text('Item Name', 90, y, { width: 200 });
+        doc.text('Qty', 300, y, { width: 50 });
+        doc.text('Revenue', 360, y, { width: 80 });
         y += 15;
-        doc.moveTo(50, y).lineTo(400, y).stroke('#e2e3e5');
+        doc.moveTo(50, y).lineTo(450, y).stroke('#e2e3e5');
         y += 5;
 
         doc.font('Helvetica').fontSize(9);
-        reportData.topSellingItems.slice(0, 10).forEach(item => {
-          doc.fillColor(darkColor).text(item.name || '-', 50, y, { width: 200 });
-          doc.text(String(item.quantity || 0), 260, y, { width: 50 });
-          doc.text(`₹${(item.revenue || 0).toLocaleString()}`, 320, y, { width: 80 });
+        reportData.topSellingItems.slice(0, 10).forEach((item, idx) => {
+          doc.fillColor(darkColor).text(String(idx + 1), 50, y, { width: 40 });
+          doc.text(item.name || '-', 90, y, { width: 200 });
+          doc.text(String(item.quantity || 0), 300, y, { width: 50 });
+          doc.text(`₹${(item.revenue || 0).toLocaleString()}`, 360, y, { width: 80 });
           y += 15;
         });
         y += 10;
       }
 
-      // Revenue by Category
-      if (reportData.revenueByCategory && reportData.revenueByCategory.length > 0 && y < 650) {
+      // Least Selling Items
+      if (reportData.leastSellingItems && reportData.leastSellingItems.length > 0 && y < 650) {
         doc.fillColor(darkColor).fontSize(14).font('Helvetica-Bold')
-          .text('Revenue by Category', 50, y);
+          .text('Least Selling Items', 50, y);
         y += 20;
 
         doc.fillColor(grayColor).fontSize(9).font('Helvetica-Bold');
-        doc.text('Category', 50, y, { width: 200 });
-        doc.text('Qty', 260, y, { width: 50 });
-        doc.text('Revenue', 320, y, { width: 80 });
+        doc.text('S.No', 50, y, { width: 40 });
+        doc.text('Item Name', 90, y, { width: 200 });
+        doc.text('Qty', 300, y, { width: 50 });
+        doc.text('Revenue', 360, y, { width: 80 });
         y += 15;
-        doc.moveTo(50, y).lineTo(400, y).stroke('#e2e3e5');
+        doc.moveTo(50, y).lineTo(450, y).stroke('#e2e3e5');
         y += 5;
 
         doc.font('Helvetica').fontSize(9);
-        reportData.revenueByCategory.slice(0, 8).forEach(cat => {
-          doc.fillColor(darkColor).text(cat.category || 'Uncategorized', 50, y, { width: 200 });
-          doc.text(String(cat.quantity || 0), 260, y, { width: 50 });
-          doc.text(`₹${(cat.revenue || 0).toLocaleString()}`, 320, y, { width: 80 });
+        reportData.leastSellingItems.slice(0, 10).forEach((item, idx) => {
+          doc.fillColor(darkColor).text(String(idx + 1), 50, y, { width: 40 });
+          doc.text(item.name || '-', 90, y, { width: 200 });
+          doc.text(String(item.quantity || 0), 300, y, { width: 50 });
+          doc.text(`₹${(item.revenue || 0).toLocaleString()}`, 360, y, { width: 80 });
           y += 15;
         });
       }

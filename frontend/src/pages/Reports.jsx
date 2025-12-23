@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
-  Calendar, TrendingUp, TrendingDown, Package, DollarSign, Users, 
-  ShoppingBag, BarChart3, PieChart, ArrowUp, ArrowDown, Download,
-  ChevronDown, Filter, RefreshCw, Mail, FileDown
+  Calendar, TrendingUp, Package, DollarSign, 
+  ShoppingBag, BarChart3, RefreshCw, Mail, FileDown, X, CheckCircle, AlertCircle
 } from 'lucide-react';
 import api from '../api';
 
@@ -11,38 +10,52 @@ const REPORT_TYPES = [
   { id: 'weekly', label: 'This Week', icon: Calendar },
   { id: 'monthly', label: 'This Month', icon: Calendar },
   { id: 'yearly', label: 'This Year', icon: Calendar },
-  { id: 'custom', label: 'Custom Range', icon: Filter }
+  { id: 'custom', label: 'Custom Range', icon: Calendar }
 ];
 
-// Simple Bar Chart Component
-const BarChart = ({ data, title, valueKey = 'value', labelKey = 'label', color = 'primary' }) => {
-  const maxValue = Math.max(...data.map(d => d[valueKey] || 0), 1);
-  const colors = {
-    primary: 'bg-primary-500',
-    green: 'bg-green-500',
-    orange: 'bg-orange-500',
-    blue: 'bg-blue-500'
+// Dialog Component
+const Dialog = ({ isOpen, onClose, title, message, type = 'info', onConfirm, confirmText = 'OK', showCancel = false }) => {
+  if (!isOpen) return null;
+  
+  const icons = {
+    success: <CheckCircle className="w-12 h-12 text-green-500" />,
+    error: <AlertCircle className="w-12 h-12 text-red-500" />,
+    confirm: <Mail className="w-12 h-12 text-blue-500" />,
+    info: <AlertCircle className="w-12 h-12 text-blue-500" />
   };
 
   return (
-    <div className="bg-white rounded-xl p-4 shadow-card">
-      <h3 className="font-semibold text-dark-900 mb-4">{title}</h3>
-      <div className="space-y-3">
-        {data.slice(0, 10).map((item, idx) => (
-          <div key={idx} className="flex items-center gap-3">
-            <span className="text-sm text-dark-600 w-24 truncate">{item[labelKey]}</span>
-            <div className="flex-1 h-6 bg-dark-100 rounded-full overflow-hidden">
-              <div 
-                className={`h-full ${colors[color]} rounded-full transition-all duration-500`}
-                style={{ width: `${(item[valueKey] / maxValue) * 100}%` }}
-              />
-            </div>
-            <span className="text-sm font-medium text-dark-900 w-16 text-right">{item[valueKey]}</span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 animate-in fade-in zoom-in duration-200">
+        <button onClick={onClose} className="absolute top-4 right-4 text-dark-400 hover:text-dark-600">
+          <X className="w-5 h-5" />
+        </button>
+        <div className="text-center">
+          <div className="flex justify-center mb-4">{icons[type]}</div>
+          <h3 className="text-lg font-semibold text-dark-900 mb-2">{title}</h3>
+          <p className="text-dark-500 mb-6">{message}</p>
+          <div className="flex gap-3 justify-center">
+            {showCancel && (
+              <button
+                onClick={onClose}
+                className="px-6 py-2 bg-dark-100 text-dark-700 rounded-xl font-medium hover:bg-dark-200 transition-colors"
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              onClick={onConfirm || onClose}
+              className={`px-6 py-2 rounded-xl font-medium transition-colors ${
+                type === 'error' ? 'bg-red-500 hover:bg-red-600 text-white' :
+                type === 'success' ? 'bg-green-500 hover:bg-green-600 text-white' :
+                'bg-primary-500 hover:bg-primary-600 text-white'
+              }`}
+            >
+              {confirmText}
+            </button>
           </div>
-        ))}
-        {data.length === 0 && (
-          <p className="text-dark-400 text-center py-4">No data available</p>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -111,6 +124,8 @@ export default function Reports() {
   const [reportData, setReportData] = useState(null);
   const [customRange, setCustomRange] = useState({ start: '', end: '' });
   const [showCustomPicker, setShowCustomPicker] = useState(false);
+  const [dialog, setDialog] = useState({ isOpen: false, title: '', message: '', type: 'info', onConfirm: null, showCancel: false });
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   const fetchReport = async (type, startDate = null, endDate = null) => {
     setLoading(true);
@@ -173,23 +188,36 @@ export default function Reports() {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('PDF download error:', err);
-      alert('Failed to download PDF');
+      setDialog({ isOpen: true, title: 'Download Failed', message: 'Failed to download PDF report', type: 'error', showCancel: false });
     }
   };
 
-  const handleSendEmail = async () => {
+  const handleSendEmail = () => {
     if (!reportData) return;
-    if (!confirm('Send report to configured email address?')) return;
-    try {
-      const res = await api.post('/analytics/report/send-email', { reportData, reportType });
-      alert(res.data.message || 'Report sent successfully!');
-    } catch (err) {
-      console.error('Email send error:', err);
-      alert(err.response?.data?.error || 'Failed to send email');
-    }
+    setDialog({
+      isOpen: true,
+      title: 'Send Report',
+      message: 'Send this report to the configured email address?',
+      type: 'confirm',
+      showCancel: true,
+      confirmText: 'Send',
+      onConfirm: async () => {
+        setDialog({ isOpen: false });
+        setSendingEmail(true);
+        try {
+          const res = await api.post('/analytics/report/send-email', { reportData, reportType });
+          setDialog({ isOpen: true, title: 'Success', message: res.data.message || 'Report sent successfully!', type: 'success', showCancel: false });
+        } catch (err) {
+          console.error('Email send error:', err);
+          setDialog({ isOpen: true, title: 'Failed', message: err.response?.data?.error || 'Failed to send email', type: 'error', showCancel: false });
+        } finally {
+          setSendingEmail(false);
+        }
+      }
+    });
   };
 
-  const formatCurrency = (val) => `₹${(val || 0).toLocaleString()}`;
+  const formatCurrency = (val) => `₹${(val || 0).toLocaleString('en-IN')}`;
 
   return (
     <div className="space-y-6">
@@ -211,12 +239,16 @@ export default function Reports() {
           </button>
           <button 
             onClick={handleSendEmail}
-            disabled={!reportData || loading}
+            disabled={!reportData || loading || sendingEmail}
             className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             title="Send Report via Email"
           >
-            <Mail className="w-4 h-4" />
-            <span className="hidden sm:inline">Email</span>
+            {sendingEmail ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <Mail className="w-4 h-4" />
+            )}
+            <span className="hidden sm:inline">{sendingEmail ? 'Sending...' : 'Email'}</span>
           </button>
           <button 
             onClick={() => fetchReport(reportType, customRange.start, customRange.end)}
@@ -328,32 +360,73 @@ export default function Reports() {
             <StatCard title="UPI Orders" value={reportData.upiOrders || 0} icon={DollarSign} color="primary" />
           </div>
 
-          {/* Charts Row */}
-          <div className="grid md:grid-cols-2 gap-4">
-            <BarChart 
-              data={reportData.topSellingItems || []} 
-              title="🔥 Top Selling Items" 
-              valueKey="quantity" 
-              labelKey="name"
-              color="green"
-            />
-            <BarChart 
-              data={reportData.leastSellingItems || []} 
-              title="📉 Least Selling Items" 
-              valueKey="quantity" 
-              labelKey="name"
-              color="orange"
-            />
+          {/* Top Selling Items Table */}
+          <div className="bg-white rounded-xl shadow-card overflow-hidden">
+            <div className="p-4 border-b border-dark-100">
+              <h3 className="font-semibold text-dark-900">🔥 Top Selling Items</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-dark-50">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">S.No</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">Item Name</th>
+                    <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Qty Sold</th>
+                    <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Revenue</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-dark-100">
+                  {(reportData.topSellingItems || []).slice(0, 10).map((item, idx) => (
+                    <tr key={idx} className="hover:bg-dark-50">
+                      <td className="px-4 py-3 text-sm text-dark-500">{idx + 1}</td>
+                      <td className="px-4 py-3 text-sm text-dark-900">{item.name}</td>
+                      <td className="px-4 py-3 text-sm text-dark-900 text-right">{item.quantity}</td>
+                      <td className="px-4 py-3 text-sm text-dark-900 text-right">{formatCurrency(item.revenue)}</td>
+                    </tr>
+                  ))}
+                  {(!reportData.topSellingItems || reportData.topSellingItems.length === 0) && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-dark-400">No data available</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          {/* Revenue by Category */}
-          <BarChart 
-            data={reportData.revenueByCategory || []} 
-            title="💰 Revenue by Category" 
-            valueKey="revenue" 
-            labelKey="category"
-            color="blue"
-          />
+          {/* Least Selling Items Table */}
+          <div className="bg-white rounded-xl shadow-card overflow-hidden">
+            <div className="p-4 border-b border-dark-100">
+              <h3 className="font-semibold text-dark-900">📉 Least Selling Items</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-dark-50">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">S.No</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">Item Name</th>
+                    <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Qty Sold</th>
+                    <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Revenue</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-dark-100">
+                  {(reportData.leastSellingItems || []).slice(0, 10).map((item, idx) => (
+                    <tr key={idx} className="hover:bg-dark-50">
+                      <td className="px-4 py-3 text-sm text-dark-500">{idx + 1}</td>
+                      <td className="px-4 py-3 text-sm text-dark-900">{item.name}</td>
+                      <td className="px-4 py-3 text-sm text-dark-900 text-right">{item.quantity}</td>
+                      <td className="px-4 py-3 text-sm text-dark-900 text-right">{formatCurrency(item.revenue)}</td>
+                    </tr>
+                  ))}
+                  {(!reportData.leastSellingItems || reportData.leastSellingItems.length === 0) && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-dark-400">No data available</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           {/* Revenue Trend */}
           {reportData.revenueTrend && reportData.revenueTrend.length > 0 && (
@@ -370,7 +443,6 @@ export default function Reports() {
                 <thead className="bg-dark-50">
                   <tr>
                     <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">Item Name</th>
-                    <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">Category</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Qty Sold</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Revenue</th>
                   </tr>
@@ -379,14 +451,13 @@ export default function Reports() {
                   {(reportData.allItemsSold || []).map((item, idx) => (
                     <tr key={idx} className="hover:bg-dark-50">
                       <td className="px-4 py-3 text-sm text-dark-900">{item.name}</td>
-                      <td className="px-4 py-3 text-sm text-dark-500">{item.category || '-'}</td>
                       <td className="px-4 py-3 text-sm text-dark-900 text-right">{item.quantity}</td>
                       <td className="px-4 py-3 text-sm text-dark-900 text-right">{formatCurrency(item.revenue)}</td>
                     </tr>
                   ))}
                   {(!reportData.allItemsSold || reportData.allItemsSold.length === 0) && (
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-dark-400">No items sold in this period</td>
+                      <td colSpan={3} className="px-4 py-8 text-center text-dark-400">No items sold in this period</td>
                     </tr>
                   )}
                 </tbody>
@@ -401,6 +472,18 @@ export default function Reports() {
           <p className="text-dark-400 mt-1">Select a report type to view analytics</p>
         </div>
       )}
+
+      {/* Dialog */}
+      <Dialog
+        isOpen={dialog.isOpen}
+        onClose={() => setDialog({ ...dialog, isOpen: false })}
+        title={dialog.title}
+        message={dialog.message}
+        type={dialog.type}
+        onConfirm={dialog.onConfirm}
+        confirmText={dialog.confirmText || 'OK'}
+        showCancel={dialog.showCancel}
+      />
     </div>
   );
 }
