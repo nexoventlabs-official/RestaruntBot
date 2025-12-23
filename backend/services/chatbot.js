@@ -11,15 +11,34 @@ const generateOrderId = () => 'ORD' + Date.now().toString(36).toUpperCase();
 
 const chatbot = {
   // Helper to detect cancel order intent from text/voice
+  // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
   isCancelIntent(text) {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     const cancelPatterns = [
-      /\bcancel\b/, /\bcancel order\b/, /\bcancel my order\b/,
-      /\bcancel item\b/, /\bremove order\b/, /\bstop order\b/,
-      /\bdon'?t want\b/, /\bdont want\b/, /\bno need\b/,
-      /\border cancel\b/, /\bcancel karo\b/, /\bcancel kar do\b/,
-      /\bcancel करो\b/, /\bऑर्डर कैंसल\b/, /\bकैंसल\b/
+      // English
+      /\bcancel\b/, /\bcancel order\b/, /\bcancel my order\b/, /\bcancel item\b/,
+      /\bremove order\b/, /\bstop order\b/, /\bdon'?t want\b/, /\bdont want\b/, /\bno need\b/,
+      // Hindi
+      /\bcancel karo\b/, /\bcancel kar do\b/, /\border cancel\b/, /\bcancel करो\b/,
+      /\bऑर्डर कैंसल\b/, /\bकैंसल\b/, /\bरद्द करो\b/, /\bरद्द कर दो\b/,
+      // Telugu
+      /\bcancel cheyyi\b/, /\bcancel cheyyandi\b/, /\border cancel cheyyi\b/,
+      /\bక్యాన్సల్\b/, /\bఆర్డర్ క్యాన్సల్\b/, /\bరద్దు చేయండి\b/, /\bరద్దు\b/,
+      // Tamil
+      /\bcancel pannunga\b/, /\bcancel pannu\b/, /\border cancel\b/,
+      /\bகேன்சல்\b/, /\bஆர்டர் கேன்சல்\b/, /\bரத்து செய்\b/, /\bரத்து\b/,
+      // Kannada
+      /\bcancel maadi\b/, /\border cancel maadi\b/,
+      /\bಕ್ಯಾನ್ಸಲ್\b/, /\bಆರ್ಡರ್ ಕ್ಯಾನ್ಸಲ್\b/, /\bರದ್ದು\b/,
+      // Malayalam
+      /\bcancel cheyyuka\b/, /\bക്യാൻസൽ\b/, /\bഓർഡർ ക്യാൻസൽ\b/, /\bറദ്ദാക്കുക\b/,
+      // Bengali
+      /\bcancel koro\b/, /\bক্যান্সেল\b/, /\bঅর্ডার ক্যান্সেল\b/, /\bবাতিল করো\b/,
+      // Marathi
+      /\bcancel kara\b/, /\bकॅन्सल करा\b/, /\bऑर्डर कॅन्सल\b/, /\bरद्द करा\b/,
+      // Gujarati
+      /\bcancel karo\b/, /\bકેન્સલ\b/, /\bઓર્ડર કેન્સલ\b/, /\bરદ કરો\b/
     ];
     return cancelPatterns.some(pattern => pattern.test(lowerText));
   },
@@ -29,9 +48,27 @@ const chatbot = {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     const refundPatterns = [
-      /\brefund\b/, /\brefund please\b/, /\bget refund\b/,
-      /\bmoney back\b/, /\breturn money\b/, /\bwant refund\b/,
-      /\brefund karo\b/, /\bpaisa wapas\b/, /\bपैसा वापस\b/, /\bरिफंड\b/
+      // English
+      /\brefund\b/, /\brefund please\b/, /\bget refund\b/, /\bmoney back\b/,
+      /\breturn money\b/, /\bwant refund\b/, /\bgive refund\b/,
+      // Hindi
+      /\brefund karo\b/, /\bpaisa wapas\b/, /\bpaise wapas\b/, /\brefund chahiye\b/,
+      /\bपैसा वापस\b/, /\bरिफंड\b/, /\bपैसे वापस करो\b/, /\bरिफंड चाहिए\b/,
+      // Telugu
+      /\brefund kavali\b/, /\bpaisa wapas\b/, /\bరీఫండ్\b/, /\bడబ్బు వాపస్\b/,
+      /\bరీఫండ్ కావాలి\b/, /\bడబ్బు తిరిగి ఇవ్వండి\b/,
+      // Tamil
+      /\brefund venum\b/, /\bpanam thirumba\b/, /\bரீஃபண்ட்\b/, /\bபணம் திரும்ப\b/,
+      // Kannada
+      /\brefund beku\b/, /\bರೀಫಂಡ್\b/, /\bಹಣ ವಾಪಸ್\b/,
+      // Malayalam
+      /\brefund venam\b/, /\bറീഫണ്ട്\b/, /\bപണം തിരികെ\b/,
+      // Bengali
+      /\brefund chai\b/, /\bটাকা ফেরত\b/, /\bরিফান্ড\b/,
+      // Marathi
+      /\brefund pahije\b/, /\bरिफंड पाहिजे\b/, /\bपैसे परत\b/,
+      // Gujarati
+      /\brefund joiye\b/, /\bરીફંડ\b/, /\bપૈસા પાછા\b/
     ];
     return refundPatterns.some(pattern => pattern.test(lowerText));
   },
@@ -41,10 +78,26 @@ const chatbot = {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     const cartPatterns = [
-      /\bmy cart\b/, /\bview cart\b/, /\bshow cart\b/, /\bsee cart\b/,
-      /\bcart\b/, /\bbasket\b/, /\bmy items\b/, /\bmy order items\b/,
-      /\bwhat'?s in my cart\b/, /\bwhats in cart\b/, /\bcart me kya hai\b/,
-      /\bcart dikhao\b/, /\bcart dekho\b/, /\bमेरा कार्ट\b/, /\bकार्ट\b/
+      // English
+      /\bmy cart\b/, /\bview cart\b/, /\bshow cart\b/, /\bsee cart\b/, /\bcart\b/,
+      /\bbasket\b/, /\bmy items\b/, /\bwhat'?s in my cart\b/, /\bwhats in cart\b/,
+      // Hindi
+      /\bcart me kya hai\b/, /\bcart dikhao\b/, /\bcart dekho\b/, /\bmera cart\b/,
+      /\bमेरा कार्ट\b/, /\bकार्ट\b/, /\bकार्ट दिखाओ\b/, /\bकार्ट में क्या है\b/,
+      // Telugu
+      /\bcart chupinchu\b/, /\bnaa cart\b/, /\bకార్ట్\b/, /\bనా కార్ట్\b/, /\bకార్ట్ చూపించు\b/,
+      // Tamil
+      /\bcart kaattu\b/, /\ben cart\b/, /\bகார்ட்\b/, /\bஎன் கார்ட்\b/,
+      // Kannada
+      /\bcart toorisu\b/, /\bnanna cart\b/, /\bಕಾರ್ಟ್\b/, /\bನನ್ನ ಕಾರ್ಟ್\b/,
+      // Malayalam
+      /\bcart kaanikkuka\b/, /\bente cart\b/, /\bകാർട്ട്\b/, /\bഎന്റെ കാർട്ട്\b/,
+      // Bengali
+      /\bcart dekho\b/, /\bamar cart\b/, /\bকার্ট\b/, /\bআমার কার্ট\b/,
+      // Marathi
+      /\bcart dakhva\b/, /\bmaza cart\b/, /\bकार्ट\b/, /\bमाझा कार्ट\b/,
+      // Gujarati
+      /\bcart batavo\b/, /\bmaru cart\b/, /\bકાર્ટ\b/, /\bમારું કાર્ટ\b/
     ];
     return cartPatterns.some(pattern => pattern.test(lowerText));
   },
@@ -54,10 +107,34 @@ const chatbot = {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     const trackPatterns = [
+      // English
       /\btrack\b/, /\btrack order\b/, /\btrack my order\b/, /\btracking\b/,
       /\bwhere is my order\b/, /\bwhere'?s my order\b/, /\border location\b/,
-      /\bdelivery status\b/, /\bdelivery location\b/, /\bwhen will.+arrive\b/,
-      /\bkahan hai\b/, /\bkab aayega\b/, /\border kahan\b/, /\bट्रैक\b/, /\bकहां है\b/
+      /\bdelivery status\b/, /\bwhen will.+arrive\b/, /\bwhere is.+order\b/,
+      // Hindi
+      /\bkahan hai\b/, /\bkab aayega\b/, /\border kahan\b/, /\btrack karo\b/,
+      /\bट्रैक\b/, /\bकहां है\b/, /\bऑर्डर कहां है\b/, /\bकब आएगा\b/, /\bमेरा ऑर्डर कहां\b/,
+      // Telugu
+      /\bekkada undi\b/, /\border ekkada\b/, /\beppudu vastundi\b/, /\btrack cheyyi\b/,
+      /\bట్రాక్\b/, /\bఎక్కడ ఉంది\b/, /\bనా ఆర్డర్ ఎక్కడ\b/, /\bఎప్పుడు వస్తుంది\b/,
+      // Tamil
+      /\benga irukku\b/, /\border enga\b/, /\bepppo varum\b/, /\btrack pannu\b/,
+      /\bட்ராக்\b/, /\bஎங்கே இருக்கு\b/, /\bஆர்டர் எங்கே\b/, /\bஎப்போ வரும்\b/,
+      // Kannada
+      /\belli ide\b/, /\border elli\b/, /\byavaga baratte\b/, /\btrack maadi\b/,
+      /\bಟ್ರ್ಯಾಕ್\b/, /\bಎಲ್ಲಿ ಇದೆ\b/, /\bಆರ್ಡರ್ ಎಲ್ಲಿ\b/,
+      // Malayalam
+      /\bevide und\b/, /\border evide\b/, /\beppol varum\b/, /\btrack cheyyuka\b/,
+      /\bട്രാക്ക്\b/, /\bഎവിടെ ഉണ്ട്\b/, /\bഓർഡർ എവിടെ\b/,
+      // Bengali
+      /\bkothay ache\b/, /\border kothay\b/, /\bkokhon ashbe\b/, /\btrack koro\b/,
+      /\bট্র্যাক\b/, /\bকোথায় আছে\b/, /\bঅর্ডার কোথায়\b/,
+      // Marathi
+      /\bkuthe aahe\b/, /\border kuthe\b/, /\bkevha yeil\b/, /\btrack kara\b/,
+      /\bट्रॅक\b/, /\bकुठे आहे\b/, /\bऑर्डर कुठे\b/,
+      // Gujarati
+      /\bkya che\b/, /\border kya\b/, /\bkyare avshe\b/, /\btrack karo\b/,
+      /\bટ્રેક\b/, /\bક્યાં છે\b/, /\bઓર્ડર ક્યાં\b/
     ];
     return trackPatterns.some(pattern => pattern.test(lowerText));
   },
@@ -73,11 +150,29 @@ const chatbot = {
     }
     
     const statusPatterns = [
-      /\border status\b/, /\bcheck order\b/, /\border history\b/,
-      /\bprevious order\b/, /\bpast order\b/, /\bshow order\b/,
-      /\bview order\b/, /\border details\b/, /\bmy orders\b/,
-      /\border kya hua\b/, /\border status kya hai\b/, /\bऑर्डर स्टेटस\b/,
-      /\bstatus\b/
+      // English
+      /\border status\b/, /\bcheck order\b/, /\border history\b/, /\bprevious order\b/,
+      /\bpast order\b/, /\bshow order\b/, /\bview order\b/, /\border details\b/,
+      /\bmy orders\b/, /\bstatus\b/,
+      // Hindi
+      /\border kya hua\b/, /\border status kya hai\b/, /\border ka status\b/,
+      /\bऑर्डर स्टेटस\b/, /\bऑर्डर क्या हुआ\b/, /\bस्टेटस\b/,
+      // Telugu
+      /\border status enti\b/, /\border em aindi\b/, /\bఆర్డర్ స్టేటస్\b/, /\bస్టేటస్\b/,
+      // Tamil
+      /\border status enna\b/, /\border enna achu\b/, /\bஆர்டர் ஸ்டேட்டஸ்\b/, /\bஸ்டேட்டஸ்\b/,
+      // Kannada
+      /\border status enu\b/, /\border enu aaytu\b/, /\bಆರ್ಡರ್ ಸ್ಟೇಟಸ್\b/, /\bಸ್ಟೇಟಸ್\b/,
+      // Malayalam
+      /\border status enthaanu\b/, /\border entha\b/, /\bഓർഡർ സ്റ്റാറ്റസ്\b/, /\bസ്റ്റാറ്റസ്\b/,
+      // Bengali
+      /\border status ki\b/, /\border ki holo\b/, /\bঅর্ডার স্ট্যাটাস\b/, /\bস্ট্যাটাস\b/,
+      // Marathi
+      /\border status kay\b/, /\border kay jhala\b/, /\bऑर्डर स्टेटस\b/, /\bस्टेटस\b/,
+      // Gujarati
+      /\border status shu\b/, /\border shu thyu\b/, /\bઓર્ડર સ્ટેટસ\b/, /\bસ્ટેટસ\b/
+    ];
+    return statusPatterns.some(pattern => pattern.test(lowerText));
     ];
     return statusPatterns.some(pattern => pattern.test(lowerText));
   },
