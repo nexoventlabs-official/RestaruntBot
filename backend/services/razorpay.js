@@ -121,11 +121,15 @@ const razorpayService = {
         throw new Error('Payment already fully refunded');
       }
       
-      // Check if payment is too recent (less than 2 minutes old)
+      // Check if payment is too recent (less than 5 minutes old)
+      // Razorpay sometimes needs time to fully process payments before allowing refunds
       const paymentAge = Date.now() - (payment.created_at * 1000);
-      if (paymentAge < 2 * 60 * 1000) {
-        console.log('⏳ Payment is very recent, waiting before refund...');
-        await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
+      const MIN_PAYMENT_AGE_MS = 5 * 60 * 1000; // 5 minutes
+      
+      if (paymentAge < MIN_PAYMENT_AGE_MS) {
+        const waitTime = Math.min(MIN_PAYMENT_AGE_MS - paymentAge, 30000); // Wait up to 30 seconds
+        console.log(`⏳ Payment is ${Math.round(paymentAge / 1000)}s old, waiting ${Math.round(waitTime / 1000)}s before refund...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
       }
       
       // Calculate refund amount in paise
@@ -144,7 +148,8 @@ const razorpayService = {
         throw new Error('No amount available for refund');
       }
       
-      // Process refund - use simple format for better compatibility
+      // Process refund - Razorpay SDK v2.x format
+      console.log('💰 Calling Razorpay refund API:', { paymentId, amountInPaise: finalRefundAmount });
       const refund = await getRazorpay().payments.refund(paymentId, {
         amount: finalRefundAmount
       });
@@ -164,10 +169,12 @@ const razorpayService = {
         attempt: retryCount + 1
       });
       
-      // Retry on SERVER_ERROR or temporary issues
-      if ((errorCode === 'SERVER_ERROR' || errorCode === 'GATEWAY_ERROR') && retryCount < MAX_RETRIES) {
-        console.log(`🔄 Retrying refund in ${RETRY_DELAY_MS / 1000} seconds... (attempt ${retryCount + 2}/${MAX_RETRIES + 1})`);
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+      // Retry on SERVER_ERROR, GATEWAY_ERROR, or BAD_REQUEST_ERROR (timing issues)
+      if ((errorCode === 'SERVER_ERROR' || errorCode === 'GATEWAY_ERROR' || 
+           (errorCode === 'BAD_REQUEST_ERROR' && errorDesc === 'invalid request sent')) && retryCount < MAX_RETRIES) {
+        const retryDelay = errorCode === 'BAD_REQUEST_ERROR' ? 30000 : RETRY_DELAY_MS; // 30s for timing issues
+        console.log(`🔄 Retrying refund in ${retryDelay / 1000} seconds... (attempt ${retryCount + 2}/${MAX_RETRIES + 1})`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
         return this.refund(paymentId, amount, retryCount + 1);
       }
       

@@ -131,30 +131,22 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
       order.paymentStatus = 'cancelled';
     }
     
-    // Start refund process for paid UPI orders when cancelled (don't complete immediately)
+    // Schedule refund for paid UPI orders when cancelled (process after 5 minutes)
     if (status === 'cancelled' && order.paymentStatus === 'paid' && order.razorpayPaymentId) {
-      try {
-        console.log('💰 Initiating refund for order:', order.orderId);
-        const refund = await razorpayService.refund(order.razorpayPaymentId, order.totalAmount);
-        order.refundStatus = 'pending'; // Set to pending first, will be completed after delay
-        order.refundAmount = order.totalAmount;
-        order.refundId = refund.id;
-        order.refundInitiatedAt = new Date();
-        order.trackingUpdates.push({ 
-          status: 'refund_initiated', 
-          message: `Refund of ₹${order.totalAmount} initiated`, 
-          timestamp: new Date() 
-        });
-        console.log('✅ Refund initiated:', refund.id);
-        
-        // Schedule refund completion message after 5 minutes
-        const refundScheduler = require('../services/refundScheduler');
-        refundScheduler.scheduleRefundCompletion(order.orderId, 5 * 60 * 1000); // 5 minutes
-      } catch (refundError) {
-        console.error('❌ Refund initiation failed:', refundError.message);
-        order.refundStatus = 'failed';
-        order.refundAmount = order.totalAmount;
-      }
+      console.log('💰 Scheduling refund for order:', order.orderId);
+      order.refundStatus = 'scheduled';
+      order.refundAmount = order.totalAmount;
+      order.refundScheduledAt = new Date();
+      order.trackingUpdates.push({ 
+        status: 'refund_scheduled', 
+        message: `Refund of ₹${order.totalAmount} scheduled`, 
+        timestamp: new Date() 
+      });
+      
+      // Schedule refund to process after 5 minutes
+      const refundScheduler = require('../services/refundScheduler');
+      refundScheduler.scheduleRefund(order.orderId, 5 * 60 * 1000); // 5 minutes
+      console.log('⏰ Refund scheduled for order:', order.orderId);
     }
     
     try {

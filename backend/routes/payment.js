@@ -111,16 +111,22 @@ router.post('/refund/:orderId', authMiddleware, async (req, res) => {
   try {
     const order = await Order.findOne({ orderId: req.params.orderId });
     if (!order) return res.status(404).json({ error: 'Order not found' });
-    if (!order.paymentId) return res.status(400).json({ error: 'No payment found' });
+    if (!order.razorpayPaymentId && !order.paymentId) return res.status(400).json({ error: 'No payment found' });
 
-    const refund = await razorpayService.refund(order.paymentId, order.totalAmount);
-    order.status = 'refunded';
-    order.paymentStatus = 'refunded';
-    order.statusUpdatedAt = new Date(); // For auto-cleanup
-    order.refundId = refund.id;
+    const paymentId = order.razorpayPaymentId || order.paymentId;
+    
+    // Schedule refund to process after 5 minutes
+    order.status = 'cancelled';
+    order.refundStatus = 'scheduled';
     order.refundAmount = order.totalAmount;
-    order.trackingUpdates.push({ status: 'refunded', message: 'Refund processed by admin' });
+    order.refundScheduledAt = new Date();
+    order.statusUpdatedAt = new Date();
+    order.trackingUpdates.push({ status: 'refund_scheduled', message: 'Refund scheduled by admin', timestamp: new Date() });
     await order.save();
+
+    // Schedule refund to process after 5 minutes
+    const refundScheduler = require('../services/refundScheduler');
+    refundScheduler.scheduleRefund(order.orderId, 5 * 60 * 1000); // 5 minutes
 
     // Emit event for real-time updates
     const dataEvents = require('../services/eventEmitter');
@@ -128,19 +134,19 @@ router.post('/refund/:orderId', authMiddleware, async (req, res) => {
     dataEvents.emit('dashboard');
 
     // Update Google Sheets
-    googleSheets.updateOrderStatus(order.orderId, 'refunded', 'refunded').catch(err =>
+    googleSheets.updateOrderStatus(order.orderId, 'cancelled', order.paymentStatus).catch(err =>
       console.error('Google Sheets sync error:', err)
     );
 
     await whatsapp.sendButtons(order.customer.phone,
-      `💰 *Refund Processed*\n\nOrder: ${order.orderId}\nAmount: ₹${order.totalAmount}\n\nWill be credited in 10-20 minutes.`,
+      `💰 *Refund Scheduled*\n\nOrder: ${order.orderId}\nAmount: ₹${order.totalAmount}\n\n⏱️ Your refund will be processed in 5 minutes.\nYou'll receive a confirmation once complete.`,
       [
         { id: 'place_order', text: 'New Order' },
         { id: 'help', text: 'Help' }
       ]
     );
 
-    res.json({ success: true, refund });
+    res.json({ success: true, message: 'Refund scheduled', orderId: order.orderId });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
