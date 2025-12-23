@@ -63,28 +63,57 @@ const chatbot = {
   },
 
   // Helper to detect food type preference from message text
+  // Returns: 'veg', 'nonveg', 'egg', or specific ingredient like 'chicken', 'mutton', etc.
   detectFoodTypeFromMessage(text) {
-    const lowerText = ' ' + text.toLowerCase() + ' '; // Add spaces for word boundary matching
+    const lowerText = ' ' + text.toLowerCase() + ' ';
     
-    // Veg keywords - must be standalone word "veg" not part of "nonveg"
-    const vegPatterns = [/\bveg\b/, /\bvegetarian\b/, /\bveggie\b/, /\bpure veg\b/];
-    const nonvegPatterns = [/\bnonveg\b/, /\bnon-veg\b/, /\bnon veg\b/, /\bchicken\b/, /\bmutton\b/, /\bfish\b/, /\bprawn\b/, /\begg\b/, /\bmeat\b/, /\bkeema\b/, /\bbeef\b/, /\bpork\b/];
+    // Check for specific non-veg ingredients first (most specific)
+    const specificNonveg = [
+      { pattern: /\bchicken\b/, type: 'chicken' },
+      { pattern: /\bmutton\b/, type: 'mutton' },
+      { pattern: /\bfish\b/, type: 'fish' },
+      { pattern: /\bprawn\b/, type: 'prawn' },
+      { pattern: /\bkeema\b/, type: 'keema' },
+      { pattern: /\bbeef\b/, type: 'beef' },
+      { pattern: /\bpork\b/, type: 'pork' },
+      { pattern: /\bseafood\b/, type: 'seafood' },
+    ];
     
-    const hasVeg = vegPatterns.some(pattern => pattern.test(lowerText));
+    for (const item of specificNonveg) {
+      if (item.pattern.test(lowerText)) {
+        return { type: 'specific', ingredient: item.type };
+      }
+    }
+    
+    // Check for egg specifically
+    if (/\begg\b/.test(lowerText) && !/\beggless\b/.test(lowerText)) {
+      return { type: 'egg' };
+    }
+    
+    // Check for nonveg general keywords
+    const nonvegPatterns = [/\bnonveg\b/, /\bnon-veg\b/, /\bnon veg\b/, /\bmeat\b/];
     const hasNonveg = nonvegPatterns.some(pattern => pattern.test(lowerText));
     
-    // If user says "veg" without any nonveg keywords, it's veg
-    if (hasVeg && !hasNonveg) return 'veg';
-    // If user mentions nonveg items
-    if (hasNonveg && !hasVeg) return 'nonveg';
+    // Check for veg keywords
+    const vegPatterns = [/\bveg\b/, /\bvegetarian\b/, /\bveggie\b/, /\bpure veg\b/, /\beggless\b/];
+    const hasVeg = vegPatterns.some(pattern => pattern.test(lowerText));
+    
+    if (hasVeg && !hasNonveg) return { type: 'veg' };
+    if (hasNonveg && !hasVeg) return { type: 'nonveg' }; // nonveg includes egg
+    
     return null;
   },
 
   // Helper to remove food type keywords from search text
   removeFoodTypeKeywords(text) {
     let cleanText = text.toLowerCase();
-    // Remove food type keywords using word boundaries
-    const patterns = [/\bveg\b/gi, /\bvegetarian\b/gi, /\bveggie\b/gi, /\bpure veg\b/gi, /\bnonveg\b/gi, /\bnon-veg\b/gi, /\bnon veg\b/gi];
+    // Remove all food type keywords
+    const patterns = [
+      /\bveg\b/gi, /\bvegetarian\b/gi, /\bveggie\b/gi, /\bpure veg\b/gi,
+      /\bnonveg\b/gi, /\bnon-veg\b/gi, /\bnon veg\b/gi,
+      /\bchicken\b/gi, /\bmutton\b/gi, /\bfish\b/gi, /\bprawn\b/gi,
+      /\begg\b/gi, /\bmeat\b/gi, /\bkeema\b/gi, /\bbeef\b/gi, /\bpork\b/gi, /\bseafood\b/gi
+    ];
     patterns.forEach(pattern => {
       cleanText = cleanText.replace(pattern, ' ');
     });
@@ -97,36 +126,71 @@ const chatbot = {
     if (lowerText.length < 2) return null;
     
     // Detect food type preference from message
-    const detectedFoodType = this.detectFoodTypeFromMessage(lowerText);
+    const detected = this.detectFoodTypeFromMessage(lowerText);
     
     // Remove food type keywords to get clean search term
     const searchTerm = this.removeFoodTypeKeywords(lowerText);
     
-    // If search term is too short after removing keywords, return null
-    if (searchTerm.length < 2) return null;
+    // If search term is too short after removing keywords, search by ingredient/type only
+    const hasSearchTerm = searchTerm.length >= 2;
     
-    // Filter by detected food type first
+    // Filter by detected food type
     let filteredItems = menuItems;
-    if (detectedFoodType === 'veg') {
-      filteredItems = menuItems.filter(item => item.foodType === 'veg');
-    } else if (detectedFoodType === 'nonveg') {
-      filteredItems = menuItems.filter(item => item.foodType === 'nonveg' || item.foodType === 'egg');
+    let foodTypeLabel = null;
+    
+    if (detected) {
+      if (detected.type === 'veg') {
+        filteredItems = menuItems.filter(item => item.foodType === 'veg');
+        foodTypeLabel = '🟢 Veg';
+      } else if (detected.type === 'egg') {
+        // Egg only - not nonveg meat items
+        filteredItems = menuItems.filter(item => item.foodType === 'egg');
+        foodTypeLabel = '🟡 Egg';
+      } else if (detected.type === 'nonveg') {
+        // Nonveg includes both egg and nonveg
+        filteredItems = menuItems.filter(item => item.foodType === 'nonveg' || item.foodType === 'egg');
+        foodTypeLabel = '🔴 Non-Veg';
+      } else if (detected.type === 'specific') {
+        // Specific ingredient like chicken, mutton - search in name/tags
+        const ingredient = detected.ingredient;
+        filteredItems = menuItems.filter(item => {
+          const inName = item.name.toLowerCase().includes(ingredient);
+          const inTags = item.tags?.some(tag => tag.toLowerCase().includes(ingredient));
+          return inName || inTags;
+        });
+        foodTypeLabel = `🍗 ${ingredient.charAt(0).toUpperCase() + ingredient.slice(1)}`;
+        
+        // If specific ingredient, we might not need additional search term
+        if (!hasSearchTerm) {
+          return filteredItems.length > 0 
+            ? { items: filteredItems, foodType: detected, searchTerm: ingredient, label: foodTypeLabel }
+            : null;
+        }
+      }
     }
     
-    // Search by name or tag in filtered items
-    const matchingItems = filteredItems.filter(item => {
-      const nameMatch = item.name.toLowerCase().includes(searchTerm) || 
-        searchTerm.includes(item.name.toLowerCase());
-      
-      const tagMatch = item.tags?.some(tag => 
-        tag.toLowerCase().includes(searchTerm) || 
-        searchTerm.includes(tag.toLowerCase())
-      );
-      
-      return nameMatch || tagMatch;
-    });
+    // If no search term and no specific ingredient, return null
+    if (!hasSearchTerm && detected?.type !== 'specific') return null;
     
-    return matchingItems.length > 0 ? { items: matchingItems, foodType: detectedFoodType, searchTerm } : null;
+    // Search by name or tag in filtered items
+    let matchingItems = filteredItems;
+    if (hasSearchTerm) {
+      matchingItems = filteredItems.filter(item => {
+        const nameMatch = item.name.toLowerCase().includes(searchTerm) || 
+          searchTerm.includes(item.name.toLowerCase());
+        
+        const tagMatch = item.tags?.some(tag => 
+          tag.toLowerCase().includes(searchTerm) || 
+          searchTerm.includes(tag.toLowerCase())
+        );
+        
+        return nameMatch || tagMatch;
+      });
+    }
+    
+    return matchingItems.length > 0 
+      ? { items: matchingItems, foodType: detected, searchTerm: hasSearchTerm ? searchTerm : '', label: foodTypeLabel }
+      : null;
   },
 
   // Helper to filter items by food type preference
@@ -509,9 +573,9 @@ const chatbot = {
         const searchResult = this.smartSearch(searchTerm, menuItems);
         const matchingItems = searchResult?.items || [];
         state.currentPage = page;
-        const displayLabel = searchResult?.foodType 
-          ? `${searchResult.foodType === 'veg' ? '🟢 Veg' : '🔴 Non-Veg'} "${searchResult.searchTerm}"`
-          : `"${searchResult?.searchTerm || searchTerm}"`;
+        const displayLabel = searchResult?.label 
+          ? (searchResult.searchTerm ? `${searchResult.label} "${searchResult.searchTerm}"` : searchResult.label)
+          : (searchResult?.searchTerm ? `"${searchResult.searchTerm}"` : `"${searchTerm}"`);
         await this.sendItemsByTag(phone, matchingItems, displayLabel, page);
         state.currentStep = 'viewing_tag_results';
       }
@@ -688,14 +752,15 @@ const chatbot = {
       }
 
       // ========== NATURAL LANGUAGE FALLBACKS ==========
-      // Smart search FIRST - detects food type (veg/nonveg) and searches by name/tag
-      // This takes priority when user specifies food type like "veg cake"
+      // Smart search FIRST - detects food type (veg/nonveg/egg/specific) and searches by name/tag
+      // This takes priority when user specifies food type like "veg cake" or "chicken biryani"
       else if (this.smartSearch(msg, menuItems)) {
         const searchResult = this.smartSearch(msg, menuItems);
         const matchingItems = searchResult.items;
-        const displayLabel = searchResult.foodType 
-          ? `${searchResult.foodType === 'veg' ? '🟢 Veg' : '🔴 Non-Veg'} "${searchResult.searchTerm}"`
-          : `"${searchResult.searchTerm}"`;
+        // Use pre-built label or construct one
+        const displayLabel = searchResult.label 
+          ? (searchResult.searchTerm ? `${searchResult.label} "${searchResult.searchTerm}"` : searchResult.label)
+          : (searchResult.searchTerm ? `"${searchResult.searchTerm}"` : 'Search Results');
         
         // If only 1 item matches, show item details directly
         if (matchingItems.length === 1) {
