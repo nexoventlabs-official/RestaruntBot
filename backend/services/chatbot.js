@@ -62,6 +62,69 @@ const chatbot = {
     return matchingItems.length > 0 ? matchingItems : null;
   },
 
+  // Helper to detect food type preference from message text
+  detectFoodTypeFromMessage(text) {
+    const lowerText = text.toLowerCase();
+    const vegKeywords = ['veg ', ' veg', 'vegetarian', 'veggie'];
+    const nonvegKeywords = ['nonveg', 'non-veg', 'non veg', 'chicken', 'mutton', 'fish', 'prawn', 'egg', 'meat'];
+    
+    const hasVeg = vegKeywords.some(kw => lowerText.includes(kw));
+    const hasNonveg = nonvegKeywords.some(kw => lowerText.includes(kw));
+    
+    // If both or neither, return null (no specific preference detected)
+    if (hasVeg && !hasNonveg) return 'veg';
+    if (hasNonveg && !hasVeg) return 'nonveg';
+    return null;
+  },
+
+  // Helper to remove food type keywords from search text
+  removeFoodTypeKeywords(text) {
+    const keywords = ['veg ', ' veg', 'vegetarian', 'veggie', 'nonveg', 'non-veg', 'non veg'];
+    let cleanText = text.toLowerCase();
+    keywords.forEach(kw => {
+      cleanText = cleanText.replace(new RegExp(kw, 'gi'), ' ');
+    });
+    return cleanText.trim().replace(/\s+/g, ' ');
+  },
+
+  // Smart search - detects food type and searches by name/tag
+  smartSearch(text, menuItems) {
+    const lowerText = text.toLowerCase().trim();
+    if (lowerText.length < 2) return null;
+    
+    // Detect food type preference from message
+    const detectedFoodType = this.detectFoodTypeFromMessage(lowerText);
+    
+    // Remove food type keywords to get clean search term
+    const searchTerm = this.removeFoodTypeKeywords(lowerText);
+    
+    // If search term is too short after removing keywords, return null
+    if (searchTerm.length < 2) return null;
+    
+    // Filter by detected food type first
+    let filteredItems = menuItems;
+    if (detectedFoodType === 'veg') {
+      filteredItems = menuItems.filter(item => item.foodType === 'veg');
+    } else if (detectedFoodType === 'nonveg') {
+      filteredItems = menuItems.filter(item => item.foodType === 'nonveg' || item.foodType === 'egg');
+    }
+    
+    // Search by name or tag in filtered items
+    const matchingItems = filteredItems.filter(item => {
+      const nameMatch = item.name.toLowerCase().includes(searchTerm) || 
+        searchTerm.includes(item.name.toLowerCase());
+      
+      const tagMatch = item.tags?.some(tag => 
+        tag.toLowerCase().includes(searchTerm) || 
+        searchTerm.includes(tag.toLowerCase())
+      );
+      
+      return nameMatch || tagMatch;
+    });
+    
+    return matchingItems.length > 0 ? { items: matchingItems, foodType: detectedFoodType, searchTerm } : null;
+  },
+
   // Helper to filter items by food type preference
   filterByFoodType(menuItems, preference) {
     if (preference === 'both') return menuItems;
@@ -437,12 +500,15 @@ const chatbot = {
         const parts = selection.replace('tagpage_', '').split('_');
         const page = parseInt(parts.pop());
         const safeTag = parts.join('_');
-        const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
-        // Restore original tag from state or use safe version
-        const tagKeyword = state.searchTag || safeTag.replace(/_/g, ' ');
-        const matchingItems = this.findItemsByNameOrTag(tagKeyword, filteredItems) || [];
+        // Restore original search term from state or use safe version
+        const searchTerm = state.searchTag || safeTag.replace(/_/g, ' ');
+        const searchResult = this.smartSearch(searchTerm, menuItems);
+        const matchingItems = searchResult?.items || [];
         state.currentPage = page;
-        await this.sendItemsByTag(phone, matchingItems, tagKeyword, page);
+        const displayLabel = searchResult?.foodType 
+          ? `${searchResult.foodType === 'veg' ? '🟢 Veg' : '🔴 Non-Veg'} "${searchResult.searchTerm}"`
+          : `"${searchResult?.searchTerm || searchTerm}"`;
+        await this.sendItemsByTag(phone, matchingItems, displayLabel, page);
         state.currentStep = 'viewing_tag_results';
       }
 
@@ -631,10 +697,13 @@ const chatbot = {
           state.currentStep = 'viewing_items';
         }
       }
-      // Combined name + tag search - show all items matching keyword in name OR tags
-      else if (this.findItemsByNameOrTag(msg, this.filterByFoodType(menuItems, state.foodTypePreference || 'both'))) {
-        const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
-        const matchingItems = this.findItemsByNameOrTag(msg, filteredItems);
+      // Smart search - detects food type (veg/nonveg) and searches by name/tag
+      else if (this.smartSearch(msg, menuItems)) {
+        const searchResult = this.smartSearch(msg, menuItems);
+        const matchingItems = searchResult.items;
+        const displayLabel = searchResult.foodType 
+          ? `${searchResult.foodType === 'veg' ? '🟢 Veg' : '🔴 Non-Veg'} "${searchResult.searchTerm}"`
+          : `"${searchResult.searchTerm}"`;
         
         // If only 1 item matches, show item details directly
         if (matchingItems.length === 1) {
@@ -646,7 +715,7 @@ const chatbot = {
           // Multiple items - show list
           state.searchTag = msg.trim();
           state.tagSearchResults = matchingItems.map(i => i._id.toString());
-          await this.sendItemsByTag(phone, matchingItems, msg.trim());
+          await this.sendItemsByTag(phone, matchingItems, displayLabel);
           state.currentStep = 'viewing_tag_results';
         }
       }
