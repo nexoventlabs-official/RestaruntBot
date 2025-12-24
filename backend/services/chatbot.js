@@ -756,13 +756,19 @@ const chatbot = {
     // If search term is too short after removing keywords, search by ingredient/type only
     const hasSearchTerm = primarySearchTerm.length >= 2;
     
+    // Helper to normalize text for comparison (removes spaces for flexible matching)
+    const normalizeForMatch = (text) => text.toLowerCase().replace(/\s+/g, '');
+    
     // ========== CHECK FOR EXACT NAME MATCH FIRST ==========
-    // If search term exactly matches an item name, return ONLY that item
+    // If search term exactly matches an item name (with or without spaces), return ONLY that item
     if (hasSearchTerm) {
       for (const searchTerm of uniqueSearchTerms) {
-        const exactMatch = menuItems.find(item => 
-          item.name.toLowerCase() === searchTerm.toLowerCase()
-        );
+        const searchNorm = normalizeForMatch(searchTerm);
+        const exactMatch = menuItems.find(item => {
+          const nameNorm = normalizeForMatch(item.name);
+          // Match exact (with spaces) OR normalized (without spaces)
+          return item.name.toLowerCase() === searchTerm.toLowerCase() || nameNorm === searchNorm;
+        });
         if (exactMatch) {
           console.log(`✅ Exact match found: "${searchTerm}" → "${exactMatch.name}"`);
           return { 
