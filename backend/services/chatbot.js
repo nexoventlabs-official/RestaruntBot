@@ -238,16 +238,16 @@ const chatbot = {
       /\bnon[\s-]?veg\s+items\s+batavo\b/, /\bમાંસાહારી\b/, /\bનોન\s*વેજ\s+આઇટમ્સ\b/
     ];
     
-    // Check for veg-specific intent first
-    const isVegIntent = vegPatterns.some(pattern => pattern.test(lowerText));
-    if (isVegIntent) {
-      return { showMenu: true, foodType: 'veg', searchTerm: null };
-    }
-    
-    // Check for non-veg-specific intent
+    // Check for non-veg-specific intent FIRST (before veg, since "non veg" contains "veg")
     const isNonvegIntent = nonvegPatterns.some(pattern => pattern.test(lowerText));
     if (isNonvegIntent) {
       return { showMenu: true, foodType: 'nonveg', searchTerm: null };
+    }
+    
+    // Check for veg-specific intent (only if not non-veg)
+    const isVegIntent = vegPatterns.some(pattern => pattern.test(lowerText));
+    if (isVegIntent) {
+      return { showMenu: true, foodType: 'veg', searchTerm: null };
     }
     
     // Check for general menu intent
