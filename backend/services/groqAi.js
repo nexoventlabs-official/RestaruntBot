@@ -10,6 +10,7 @@ const getGroq = () => {
 
 const groqAi = {
   // Transcribe audio using Groq's Whisper model
+  // Optimized for food ordering context with prompt guidance
   async transcribeAudio(audioBuffer, mimeType = 'audio/ogg') {
     try {
       const client = getGroq();
@@ -17,12 +18,14 @@ const groqAi = {
       // Create a File-like object from buffer
       const file = new File([audioBuffer], 'audio.ogg', { type: mimeType });
       
-      // Don't specify language - let Whisper auto-detect
-      // This supports Hindi, Tamil, English, and many other languages
+      // Use prompt to guide transcription for food ordering context
+      // This helps Whisper understand domain-specific terms better
       const transcription = await client.audio.transcriptions.create({
         file: file,
         model: 'whisper-large-v3',
-        response_format: 'text'
+        response_format: 'text',
+        // Prompt helps with food-related vocabulary and common commands
+        prompt: 'Food ordering: biryani, paneer, chicken, mutton, naan, roti, dal, rice, veg, non-veg, menu, cart, order, cancel, refund, track, checkout, delivery, payment, UPI, COD'
       });
       
       console.log('🎤 Transcription result:', transcription);
