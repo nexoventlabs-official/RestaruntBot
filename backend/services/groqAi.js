@@ -46,25 +46,35 @@ const groqAi = {
       const completion = await client.chat.completions.create({
         messages: [{
           role: 'system',
-          content: `You are a food translator. Translate Indian food names from any regional language (Telugu, Hindi, Tamil, Kannada, Bengali, Malayalam, etc.) to English. 
-          
-Common Indian food translations:
-- పులిహోర/पुलिहोरा = pulihora/tamarind rice
-- దద్దోజనం/दही चावल = curd rice
-- సాంబార్/सांभर = sambar
-- రసం/रसम = rasam
-- ఇడ్లీ/इडली = idli
-- దోశ/दोसा = dosa
-- వడ/वड़ा = vada
-- ఉప్మా/उपमा = upma
-- పొంగల్/पोंगल = pongal
-- బిర్యానీ/बिरयानी = biryani
-- పరాఠా/पराठा = paratha
+          content: `You are an expert Indian food translator. Your job is to translate food names from ANY Indian language to English.
 
-Only return the English translation, nothing else.`
+SUPPORTED LANGUAGES: Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati, Punjabi, Odia, Assamese, Urdu, and all other Indian languages.
+
+RULES:
+1. Translate the food name to English or romanized form
+2. For compound names like "X chicken" or "Y curry", translate each word
+3. Keep regional dish names in romanized form (e.g., గొంగూర → gongura, புளியோதரை → puliyodharai)
+4. Return ONLY the translation, no explanations
+
+EXAMPLES:
+- చికెన్ బిర్యానీ → chicken biryani
+- மட்டன் கறி → mutton curry  
+- পনীর বাটার মসলা → paneer butter masala
+- ಚಿಕನ್ 65 → chicken 65
+- గొంగూర చికెన్ → gongura chicken
+- கொங்கூரா சிக்கன் → gongura chicken
+- मटन कोरमा → mutton korma
+- ചിക്കൻ ഫ്രൈ → chicken fry
+- ಮಸಾಲಾ ದೋಸೆ → masala dosa
+- পুলাও → pulao
+- தந்தூரி சிக்கன் → tandoori chicken
+- పులిహోర → pulihora
+- சாம்பார் → sambar
+- ডিম ভুর্জি → egg bhurji
+- આલુ પરોઠા → aloo paratha`
         }, {
           role: 'user',
-          content: `Translate this food item to English: "${text}"`
+          content: `Translate to English: "${text}"`
         }],
         model: 'llama-3.1-8b-instant',
         max_tokens: 100,
@@ -77,8 +87,29 @@ Only return the English translation, nothing else.`
       translated = translated.replace(/^["']|["']$/g, '').trim();
       translated = translated.replace(/^(the |a |an )/i, '').trim();
       
+      // Remove common prefixes AI might add
+      translated = translated.replace(/^(translation|english|answer|result)[\s:=]+/i, '').trim();
+      
+      // If response is too long or contains explanation, try to extract just the food name
+      if (translated.length > 50 || translated.includes('\n') || translated.includes(':')) {
+        const firstLine = translated.split('\n')[0].trim();
+        const cleanedLine = firstLine.replace(/^.*?[:=→]\s*/, '').trim();
+        if (cleanedLine.length > 0 && cleanedLine.length < 50) {
+          translated = cleanedLine;
+        }
+      }
+      
+      // Remove any remaining non-English characters (translation failed partially)
+      if (/[^\x00-\x7F]/.test(translated)) {
+        // Extract only English parts
+        const englishParts = translated.match(/[a-zA-Z\s]+/g);
+        if (englishParts && englishParts.length > 0) {
+          translated = englishParts.join(' ').trim();
+        }
+      }
+      
       console.log(`🌐 Translated "${text}" to "${translated}"`);
-      return translated;
+      return translated || text;
     } catch (error) {
       console.error('Groq translation error:', error.message);
       return text; // Return original if translation fails
@@ -92,27 +123,43 @@ Only return the English translation, nothing else.`
       const completion = await client.chat.completions.create({
         messages: [{
           role: 'system',
-          content: `You are a food search assistant. Convert romanized Indian food names to their common English or standard names that would be used in a restaurant menu.
+          content: `You are a food search assistant for an Indian restaurant. Convert romanized Indian food names to their standard searchable English names.
 
-Examples:
-- "gongura" → "gongura" (keep as is, it's a specific dish)
-- "avakaya" → "avakaya pickle" or "mango pickle"
+RULES:
+1. If it's a specific regional dish name, keep it (gongura, pulihora, pesarattu)
+2. Convert regional words to common English equivalents for searching
+3. Return ONLY the converted name, no explanations
+
+EXAMPLES:
+- "gongura chicken" → "gongura chicken"
+- "kodi biryani" → "chicken biryani"
+- "mamsam curry" → "mutton curry"
+- "chepala pulusu" → "fish curry"
+- "bendakaya fry" → "okra fry"
 - "gutti vankaya" → "stuffed brinjal"
-- "bendakaya" → "okra" or "bhindi"
-- "aratikaya" → "raw banana"
-- "mamidikaya" → "raw mango"
 - "pappu" → "dal"
 - "koora" → "curry"
-- "pulusu" → "tamarind curry"
-- "pachadi" → "chutney"
-- "talimpu" → "tempering"
-- "karam" → "spicy"
+- "pulusu" → "curry"
+- "vepudu" → "fry"
+- "iguru" → "dry curry"
+- "perugu" → "curd"
+- "annam" → "rice"
+- "roti" → "roti"
+- "parotta" → "parotta"
+- "dosai" → "dosa"
+- "idly" → "idli"
+- "vadai" → "vada"
+- "kozhi" → "chicken"
+- "aattu" → "mutton"
+- "meen" → "fish"
+- "murgh" → "chicken"
+- "gosht" → "mutton"
+- "machli" → "fish"
 
-If it's already a standard food name or you're not sure, return it as is.
-Only return the translated/standardized name, nothing else.`
+If already standard or you're unsure, return as is.`
         }, {
           role: 'user',
-          content: `Convert this food search term: "${text}"`
+          content: `Convert: "${text}"`
         }],
         model: 'llama-3.1-8b-instant',
         max_tokens: 50,
@@ -124,6 +171,7 @@ Only return the translated/standardized name, nothing else.`
       // Clean up the response
       translated = translated.replace(/^["']|["']$/g, '').trim();
       translated = translated.replace(/^(the |a |an )/i, '').trim();
+      translated = translated.replace(/^(translation|english|answer|result|convert)[\s:=→]+/i, '').trim();
       
       // If response is too long or contains explanation, return original
       if (translated.length > 50 || translated.includes('\n')) {

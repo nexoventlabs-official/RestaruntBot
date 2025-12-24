@@ -518,6 +518,20 @@ const chatbot = {
       'పెసరట్టు': 'pesarattu', 'మసాలా దోశ': 'masala dosa', 'రవ్వ దోశ': 'rava dosa',
       'మైసూర్ బజ్జి': 'mysore bajji', 'మిర్చి బజ్జి': 'mirchi bajji', 'ఆలూ బజ్జి': 'aloo bajji',
       'గారెలు': 'garelu', 'బొబ్బట్లు': 'bobbatlu', 'పాయసం': 'payasam', 'కేసరి': 'kesari',
+      // Telugu - Gongura and other Andhra dishes
+      'గొంగూర': 'gongura', 'గొంగూర చికెన్': 'gongura chicken', 'గొంగూర మటన్': 'gongura mutton',
+      'గొంగూర పచ్చడి': 'gongura chutney', 'గొంగూర పప్పు': 'gongura dal',
+      'గుత్తి వంకాయ': 'gutti vankaya', 'వంకాయ': 'brinjal', 'బెండకాయ': 'okra',
+      'ఆలూ': 'potato', 'టమాటో': 'tomato', 'ఉల్లి': 'onion', 'వెల్లుల్లి': 'garlic',
+      'అల్లం': 'ginger', 'మిరపకాయ': 'chilli', 'కరివేపాకు': 'curry leaves',
+      'చికెన్ కర్రీ': 'chicken curry', 'మటన్ కర్రీ': 'mutton curry', 'చేప కర్రీ': 'fish curry',
+      'చికెన్ ఫ్రై': 'chicken fry', 'మటన్ ఫ్రై': 'mutton fry', 'చేప ఫ్రై': 'fish fry',
+      'చికెన్ 65': 'chicken 65', 'చికెన్ లాలీపాప్': 'chicken lollipop',
+      'పరోటా': 'parotta', 'కొత్తు పరోటా': 'kothu parotta', 'చిల్లీ పరోటా': 'chilli parotta',
+      'చపాతీ': 'chapati', 'నాన్': 'naan', 'రొట్టె': 'roti',
+      'తందూరి': 'tandoori', 'తందూరి చికెన్': 'tandoori chicken', 'కబాబ్': 'kabab',
+      'పులుసు': 'pulusu', 'చేపల పులుసు': 'fish pulusu', 'రొయ్యల పులుసు': 'prawn pulusu',
+      'ఆవకాయ': 'avakaya', 'మామిడికాయ': 'raw mango',
       // Tamil to English
       'பிரெட்': 'bread', 'சோறு': 'rice', 'சிக்கன்': 'chicken', 'மட்டன்': 'mutton',
       'பிரியாணி': 'biryani', 'கேக்': 'cake', 'பீட்சா': 'pizza', 'பர்கர்': 'burger',
@@ -527,6 +541,23 @@ const chatbot = {
       'புளியோதரை': 'puliyodharai', 'எலுமிச்சை சாதம்': 'lemon rice', 'தக்காளி சாதம்': 'tomato rice',
       'தேங்காய் சாதம்': 'coconut rice', 'பொங்கல்': 'pongal', 'மசாலா தோசை': 'masala dosa',
       'இறால்': 'prawns', 'ஆட்டு இறைச்சி': 'mutton',
+      // Tamil - Gongura and other South Indian dishes
+      'கொங்கூரா': 'gongura', 'கொங்கூரா சிக்கன்': 'gongura chicken', 'கொங்கூரா மட்டன்': 'gongura mutton',
+      'கொங்கூரா கோழி': 'gongura chicken', 'கொங்கூரா ஆட்டு': 'gongura mutton',
+      'கத்திரிக்காய்': 'brinjal', 'வெண்டைக்காய்': 'okra', 'உருளைக்கிழங்கு': 'potato',
+      'தக்காளி': 'tomato', 'வெங்காயம்': 'onion', 'பூண்டு': 'garlic', 'இஞ்சி': 'ginger',
+      'கறி': 'curry', 'குழம்பு': 'curry', 'கூட்டு': 'kootu', 'பொரியல்': 'poriyal',
+      'அவியல்': 'avial', 'கூட்டு': 'kootu', 'வறுவல்': 'fry', 'பொடிமாஸ்': 'podimas',
+      'சிக்கன் கறி': 'chicken curry', 'மட்டன் கறி': 'mutton curry', 'மீன் கறி': 'fish curry',
+      'சிக்கன் வறுவல்': 'chicken fry', 'மட்டன் வறுவல்': 'mutton fry', 'மீன் வறுவல்': 'fish fry',
+      'சிக்கன் 65': 'chicken 65', 'சிக்கன் லாலிபாப்': 'chicken lollipop',
+      'பரோட்டா': 'parotta', 'கொத்து பரோட்டா': 'kothu parotta', 'சில்லி பரோட்டா': 'chilli parotta',
+      'நூடுல்ஸ்': 'noodles', 'ஃப்ரைட் ரைஸ்': 'fried rice', 'மஞ்சூரியன்': 'manchurian',
+      'பனீர்': 'paneer', 'பனீர் பட்டர் மசாலா': 'paneer butter masala',
+      'சப்பாத்தி': 'chapati', 'நான்': 'naan', 'ரொட்டி': 'roti',
+      'பிரியாணி சிக்கன்': 'chicken biryani', 'பிரியாணி மட்டன்': 'mutton biryani',
+      'தந்தூரி': 'tandoori', 'தந்தூரி சிக்கன்': 'tandoori chicken', 'கபாப்': 'kabab',
+      'சாதம்': 'rice', 'அன்னம்': 'rice', 'சாதம் சாம்பார்': 'sambar rice',
       // Kannada to English
       'ಬ್ರೆಡ್': 'bread', 'ಅನ್ನ': 'rice', 'ಚಿಕನ್': 'chicken', 'ಮಟನ್': 'mutton',
       'ಬಿರಿಯಾನಿ': 'biryani', 'ಕೇಕ್': 'cake', 'ಪಿಜ್ಜಾ': 'pizza',
@@ -566,6 +597,13 @@ const chatbot = {
       'tomato rice': 'tomato rice', 'tomato bath': 'tomato rice',
       'coconut rice': 'coconut rice', 'kobbari annam': 'coconut rice',
       'lemon rice': 'lemon rice', 'nimma kaya annam': 'lemon rice',
+      // Gongura and Andhra romanized
+      'gongura': 'gongura', 'gongura chicken': 'gongura chicken', 'gongura mutton': 'gongura mutton',
+      'gongura pachadi': 'gongura chutney', 'gongura pappu': 'gongura dal',
+      'gutti vankaya': 'stuffed brinjal', 'vankaya': 'brinjal', 'bendakaya': 'okra',
+      'pulusu': 'pulusu', 'chepala pulusu': 'fish pulusu', 'royyala pulusu': 'prawn pulusu',
+      'avakaya': 'avakaya pickle', 'mamidikaya': 'raw mango',
+      'koora': 'curry', 'kura': 'curry', 'fry': 'fry', 'iguru': 'dry curry',
       // Tamil romanized
       'puliyodharai': 'tamarind rice', 'puliyodarai': 'tamarind rice',
       'thayir sadam': 'curd rice', 'thayir sadham': 'curd rice', 'curd rice': 'curd rice',
@@ -609,22 +647,58 @@ const chatbot = {
   // Translate text using Groq AI (for languages not in basic map)
   // Also handles romanized Indian food names
   async translateWithAI(text) {
-    // First try basic transliteration
-    const basicTranslated = this.transliterate(text);
-    
     // Check if text contains non-English characters
     const hasNonEnglish = /[^\x00-\x7F]/.test(text);
     
-    // If has non-English and still has non-English after basic translation, use Groq AI
-    if (hasNonEnglish && /[^\x00-\x7F]/.test(basicTranslated)) {
+    if (hasNonEnglish) {
+      // For non-English text, ALWAYS try Groq AI first (it handles all Indian languages)
       try {
         const aiTranslated = await groqAi.translateToEnglish(text);
-        return aiTranslated;
+        
+        // If AI translation worked and returned valid English
+        if (aiTranslated && aiTranslated.length > 0 && !/[^\x00-\x7F]/.test(aiTranslated)) {
+          return aiTranslated;
+        }
+        
+        // If AI translation still has non-English, try word-by-word
+        const words = text.split(/\s+/).filter(w => w.length > 0);
+        if (words.length > 1) {
+          const translatedWords = [];
+          for (const word of words) {
+            if (/[^\x00-\x7F]/.test(word)) {
+              // Try AI for each word
+              const aiWord = await groqAi.translateToEnglish(word);
+              if (aiWord && !/[^\x00-\x7F]/.test(aiWord)) {
+                translatedWords.push(aiWord);
+              } else {
+                // Fallback to basic map
+                const basicWord = this.transliterate(word);
+                translatedWords.push(basicWord);
+              }
+            } else {
+              translatedWords.push(word);
+            }
+          }
+          const combinedTranslation = translatedWords.join(' ');
+          // Only return if we got valid English
+          if (!/[^\x00-\x7F]/.test(combinedTranslation)) {
+            console.log(`🔤 Word-by-word translation: "${text}" → "${combinedTranslation}"`);
+            return combinedTranslation;
+          }
+        }
+        
+        // Last resort: try basic transliteration
+        const basicTranslated = this.transliterate(text);
+        return basicTranslated;
       } catch (error) {
         console.error('AI translation failed:', error.message);
-        return basicTranslated;
+        // Fallback to basic transliteration
+        return this.transliterate(text);
       }
     }
+    
+    // For English/romanized text, first try basic transliteration
+    const basicTranslated = this.transliterate(text);
     
     // If basic translation changed the text, return it
     if (basicTranslated.toLowerCase() !== text.toLowerCase()) {
@@ -632,8 +706,8 @@ const chatbot = {
     }
     
     // For romanized text that wasn't in basic map, try Groq AI
-    // This helps with food names like "gongura", "avakaya", etc.
-    if (!hasNonEnglish && text.length >= 3) {
+    // This helps with food names like "gongura", "avakaya", "kozhi", etc.
+    if (text.length >= 3) {
       try {
         const aiTranslated = await groqAi.translateRomanizedFood(text);
         if (aiTranslated && aiTranslated.toLowerCase() !== text.toLowerCase()) {
