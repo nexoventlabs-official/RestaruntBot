@@ -263,23 +263,44 @@ const chatbot = {
       /\bnon[\s-]?veg\s+items\s+batavo\b/, /\bમાંસાહારી\b/, /\bનોન\s*વેજ\s+આઇટમ્સ\b/, /\bનોન\s*વેજ\b/
     ];
     
-    // Check for egg-specific intent FIRST
-    const isEggIntent = eggPatterns.some(pattern => pattern.test(lowerText));
-    if (isEggIntent) {
+    // Helper to check if text is ONLY the food type keyword (standalone)
+    // This prevents "egg curry" from matching as egg menu intent
+    const trimmedText = text.toLowerCase().trim();
+    const words = trimmedText.split(/\s+/).filter(w => w.length > 0);
+    const menuWords = ['menu', 'items', 'item', 'food', 'dishes', 'dish', 'dikhao', 'show', 'batavo', 'dakhva', 'dekho', 'me', 'the', 'all', 'only'];
+    
+    const isStandaloneKeyword = (keywords) => {
+      // Check if all words are either the keyword or menu-related words
+      const nonMenuWords = words.filter(w => !keywords.includes(w) && !menuWords.includes(w));
+      return nonMenuWords.length === 0 && words.some(w => keywords.includes(w));
+    };
+    
+    // Standalone keywords for each food type
+    const standaloneEggKeywords = ['egg', 'eggs', 'anda', 'अंडा', 'अंडे', 'గుడ్డు', 'కోడిగుడ్డు', 'முட்டை', 'ಮೊಟ್ಟೆ', 'മുട്ട', 'ডিম', 'ઈંડા'];
+    const standaloneVegKeywords = ['veg', 'vegetarian', 'veggie', 'वेज', 'శాకాహారం', 'వెజ్', 'சைவம்', 'வெஜ்', 'ಸಸ್ಯಾಹಾರ', 'ವೆಜ್', 'സസ്യാഹാരം', 'വെജ്', 'নিরামিষ', 'ভেজ', 'शाकाहारी', 'શાકાહારી'];
+    const standaloneNonvegKeywords = ['nonveg', 'non-veg', 'मांसाहारी', 'नॉनवेज', 'మాంసాహారం', 'నాన్వెజ్', 'அசைவம்', 'நான்வெஜ்', 'ಮಾಂಸಾಹಾರ', 'നാന്വെജ്', 'മാംസാഹാരം', 'আমিষ', 'নন ভেজ', 'માંસાહારી'];
+    
+    // Check for egg-specific intent - only if standalone or with menu words
+    // Compound patterns like "egg items" or "show egg" are fine
+    const isEggCompound = eggPatterns.some(pattern => pattern.test(lowerText) && pattern.source.includes('\\s+'));
+    const isEggStandalone = isStandaloneKeyword(standaloneEggKeywords);
+    if (isEggCompound || isEggStandalone) {
       return { showMenu: true, foodType: 'egg', searchTerm: null };
     }
     
     // Check for non-veg-specific intent (before veg, since "non veg" contains "veg")
     // But first verify the text actually contains "non" to avoid false matches
     const hasNonPrefix = /\bnon[\s-]?veg/i.test(lowerText) || /\bnonveg/i.test(lowerText);
-    const isNonvegIntent = hasNonPrefix && nonvegPatterns.some(pattern => pattern.test(lowerText));
-    if (isNonvegIntent) {
+    const isNonvegCompound = hasNonPrefix && nonvegPatterns.some(pattern => pattern.test(lowerText));
+    const isNonvegStandalone = isStandaloneKeyword(standaloneNonvegKeywords) || (hasNonPrefix && words.filter(w => !menuWords.includes(w) && w !== 'non' && w !== 'veg' && w !== 'nonveg' && w !== 'non-veg').length === 0);
+    if (isNonvegCompound || isNonvegStandalone) {
       return { showMenu: true, foodType: 'nonveg', searchTerm: null };
     }
     
-    // Check for veg-specific intent (only if not non-veg)
-    const isVegIntent = vegPatterns.some(pattern => pattern.test(lowerText));
-    if (isVegIntent) {
+    // Check for veg-specific intent (only if not non-veg) - only standalone or compound
+    const isVegCompound = vegPatterns.some(pattern => pattern.test(lowerText) && pattern.source.includes('\\s+'));
+    const isVegStandalone = !hasNonPrefix && isStandaloneKeyword(standaloneVegKeywords);
+    if (isVegCompound || isVegStandalone) {
       return { showMenu: true, foodType: 'veg', searchTerm: null };
     }
     
@@ -578,20 +599,31 @@ const chatbot = {
     // If no search term and no specific ingredient, return null
     if (!hasSearchTerm && detected?.type !== 'specific') return null;
     
-    // Search by name or tag in filtered items
-    let matchingItems = filteredItems;
+    // Search by tag FIRST, then by name in filtered items
+    // Priority: tag matches > name matches
+    let matchingItems = [];
     if (hasSearchTerm) {
-      matchingItems = filteredItems.filter(item => {
-        const nameMatch = item.name.toLowerCase().includes(searchTerm) || 
-          searchTerm.includes(item.name.toLowerCase());
-        
-        const tagMatch = item.tags?.some(tag => 
+      // First, find items matching by tag
+      const tagMatches = filteredItems.filter(item => 
+        item.tags?.some(tag => 
           tag.toLowerCase().includes(searchTerm) || 
           searchTerm.includes(tag.toLowerCase())
-        );
-        
-        return nameMatch || tagMatch;
+        )
+      );
+      
+      // Then, find items matching by name (excluding already matched by tag)
+      const tagMatchIds = new Set(tagMatches.map(i => i._id.toString()));
+      const nameMatches = filteredItems.filter(item => {
+        if (tagMatchIds.has(item._id.toString())) return false; // Already in tag matches
+        const nameMatch = item.name.toLowerCase().includes(searchTerm) || 
+          searchTerm.includes(item.name.toLowerCase());
+        return nameMatch;
       });
+      
+      // Combine: tag matches first, then name matches
+      matchingItems = [...tagMatches, ...nameMatches];
+    } else {
+      matchingItems = filteredItems;
     }
     
     return matchingItems.length > 0 
@@ -1251,6 +1283,7 @@ const chatbot = {
       // ========== NATURAL LANGUAGE FALLBACKS ==========
       // Smart search FIRST - detects food type (veg/nonveg/egg/specific) and searches by name/tag
       // This takes priority when user specifies food type like "veg cake" or "chicken biryani"
+      // Priority: search tags first, then name. If nothing matches, show menu.
       else if (this.smartSearch(msg, menuItems)) {
         const searchResult = this.smartSearch(msg, menuItems);
         const matchingItems = searchResult.items;
@@ -1271,6 +1304,43 @@ const chatbot = {
           state.tagSearchResults = matchingItems.map(i => i._id.toString());
           await this.sendItemsByTag(phone, matchingItems, displayLabel);
           state.currentStep = 'viewing_tag_results';
+        }
+      }
+      // If user typed something with food type keyword but no search results, show that food type menu
+      // e.g., "veg xyz" where xyz doesn't match anything -> show veg menu
+      else if (this.detectFoodTypeFromMessage(msg)) {
+        const detected = this.detectFoodTypeFromMessage(msg);
+        let foodType = 'both';
+        let label = '🍽️ All Menu';
+        
+        if (detected.type === 'veg') {
+          foodType = 'veg';
+          label = '🥦 Veg Menu';
+        } else if (detected.type === 'egg') {
+          foodType = 'egg';
+          label = '🥚 Egg Menu';
+        } else if (detected.type === 'nonveg' || detected.type === 'specific') {
+          foodType = 'nonveg';
+          label = '🍗 Non-Veg Menu';
+        }
+        
+        state.foodTypePreference = foodType;
+        const filteredItems = this.filterByFoodType(menuItems, foodType);
+        
+        if (filteredItems.length > 0) {
+          // Show message that search didn't find exact match, showing menu instead
+          const searchTerm = this.removeFoodTypeKeywords(msg.toLowerCase().trim());
+          if (searchTerm.length >= 2) {
+            await whatsapp.sendText(phone, `🔍 No items found for "${searchTerm}". Here's our ${label.replace(/[🥦🥚🍗🍽️]\s*/, '')}:`);
+          }
+          await this.sendMenuCategoriesWithLabel(phone, filteredItems, label);
+          state.currentStep = 'select_category';
+        } else {
+          await whatsapp.sendButtons(phone, `${label.split(' ')[0]} No ${label.replace(/[🥦🥚🍗🍽️]\s*/, '').toLowerCase()} items available right now.`, [
+            { id: 'view_menu', text: 'View All Menu' },
+            { id: 'home', text: 'Main Menu' }
+          ]);
+          state.currentStep = 'main_menu';
         }
       }
       // Category search - only if no food type specified and matches a category
