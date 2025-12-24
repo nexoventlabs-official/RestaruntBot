@@ -190,52 +190,54 @@ const chatbot = {
     
     // Patterns specifically for veg items
     const vegPatterns = [
-      // English
+      // English - simple and compound
+      /^veg$/,  // Just "veg" alone
       /\bveg\s+(?:items?|menu|food|dishes?)\b/, /\bvegetarian\s+(?:items?|menu|food|dishes?)\b/,
       /\bshow\s+(?:me\s+)?veg\b/, /\bonly\s+veg\b/, /\bpure\s+veg\b/,
-      /\bveggie\s+(?:items?|menu|food)\b/,
+      /\bveggie\s+(?:items?|menu|food)\b/, /\bvegetarian\b/, /\bveggie\b/,
       // Hindi
       /\bveg\s+(?:items?|khana)\s+dikhao\b/, /\bशाकाहारी\b/, /\bवेज\s+आइटम\b/,
-      /\bवेज\s+खाना\b/, /\bसिर्फ\s+वेज\b/,
+      /\bवेज\s+खाना\b/, /\bसिर्फ\s+वेज\b/, /\bवेज\b/,
       // Telugu
-      /\bveg\s+items\s+chupinchu\b/, /\bశాకాహారం\b/, /\bవెజ్\s+ఐటమ్స్\b/,
+      /\bveg\s+items\s+chupinchu\b/, /\bశాకాహారం\b/, /\bవెజ్\s+ఐటమ్స్\b/, /\bవెజ్\b/,
       // Tamil
-      /\bveg\s+items\s+kaattu\b/, /\bசைவம்\b/, /\bவெஜ்\s+ஐட்டம்ஸ்\b/,
+      /\bveg\s+items\s+kaattu\b/, /\bசைவம்\b/, /\bவெஜ்\s+ஐட்டம்ஸ்\b/, /\bவெஜ்\b/,
       // Kannada
-      /\bveg\s+items\s+toorisu\b/, /\bಸಸ್ಯಾಹಾರ\b/, /\bವೆಜ್\s+ಐಟಮ್ಸ್\b/,
+      /\bveg\s+items\s+toorisu\b/, /\bಸಸ್ಯಾಹಾರ\b/, /\bವೆಜ್\s+ಐಟಮ್ಸ್\b/, /\bವೆಜ್\b/,
       // Malayalam
-      /\bveg\s+items\s+kaanikkuka\b/, /\bസസ്യാഹാരം\b/, /\bവെജ്\s+ഐറ്റംസ്\b/,
+      /\bveg\s+items\s+kaanikkuka\b/, /\bസസ്യാഹാരം\b/, /\bവെജ്\s+ഐറ്റംസ്\b/, /\bവെജ്\b/,
       // Bengali
-      /\bveg\s+items\s+dekho\b/, /\bনিরামিষ\b/, /\bভেজ\s+আইটেম\b/,
+      /\bveg\s+items\s+dekho\b/, /\bনিরামিষ\b/, /\bভেজ\s+আইটেম\b/, /\bভেজ\b/,
       // Marathi
       /\bveg\s+items\s+dakhva\b/, /\bशाकाहारी\b/, /\bवेज\s+आइटम\b/,
       // Gujarati
-      /\bveg\s+items\s+batavo\b/, /\bશાકાહારી\b/, /\bવેજ\s+આઇટમ્સ\b/
+      /\bveg\s+items\s+batavo\b/, /\bશાકાહારી\b/, /\bવેજ\s+આઇટમ્સ\b/, /\bવેજ\b/
     ];
     
     // Patterns specifically for non-veg items
     const nonvegPatterns = [
-      // English
+      // English - simple and compound
+      /^non[\s-]?veg$/, /^nonveg$/,  // Just "non veg" or "nonveg" alone
       /\bnon[\s-]?veg\s+(?:items?|menu|food|dishes?)\b/, /\bnonveg\s+(?:items?|menu|food|dishes?)\b/,
       /\bshow\s+(?:me\s+)?non[\s-]?veg\b/, /\bonly\s+non[\s-]?veg\b/,
-      /\bmeat\s+(?:items?|menu|dishes?)\b/,
+      /\bmeat\s+(?:items?|menu|dishes?)\b/, /\bnon[\s-]?veg\b/, /\bnonveg\b/,
       // Hindi
       /\bnon[\s-]?veg\s+(?:items?|khana)\s+dikhao\b/, /\bमांसाहारी\b/, /\bनॉन\s*वेज\s+आइटम\b/,
-      /\bनॉन\s*वेज\s+खाना\b/, /\bसिर्फ\s+नॉन\s*वेज\b/,
+      /\bनॉन\s*वेज\s+खाना\b/, /\bसिर्फ\s+नॉन\s*वेज\b/, /\bनॉन\s*वेज\b/,
       // Telugu
-      /\bnon[\s-]?veg\s+items\s+chupinchu\b/, /\bమాంసాహారం\b/, /\bనాన్\s*వెజ్\s+ఐటమ్స్\b/,
+      /\bnon[\s-]?veg\s+items\s+chupinchu\b/, /\bమాంసాహారం\b/, /\bనాన్\s*వెజ్\s+ఐటమ్స్\b/, /\bనాన్\s*వెజ్\b/,
       // Tamil
-      /\bnon[\s-]?veg\s+items\s+kaattu\b/, /\bஅசைவம்\b/, /\bநான்\s*வெஜ்\s+ஐட்டம்ஸ்\b/,
+      /\bnon[\s-]?veg\s+items\s+kaattu\b/, /\bஅசைவம்\b/, /\bநான்\s*வெஜ்\s+ஐட்டம்ஸ்\b/, /\bநான்\s*வெஜ்\b/,
       // Kannada
-      /\bnon[\s-]?veg\s+items\s+toorisu\b/, /\bಮಾಂಸಾಹಾರ\b/, /\bನಾನ್\s*ವೆಜ್\s+ಐಟಮ್ಸ್\b/,
+      /\bnon[\s-]?veg\s+items\s+toorisu\b/, /\bಮಾಂಸಾಹಾರ\b/, /\bನಾನ್\s*ವೆಜ್\s+ಐಟಮ್ಸ್\b/, /\bನಾನ್\s*ವೆಜ್\b/,
       // Malayalam
-      /\bnon[\s-]?veg\s+items\s+kaanikkuka\b/, /\bമാംസാഹാരം\b/, /\bനോൺ\s*വെജ്\s+ഐറ്റംസ്\b/,
+      /\bnon[\s-]?veg\s+items\s+kaanikkuka\b/, /\bമാംസാഹാരം\b/, /\bനോൺ\s*വെജ്\s+ഐറ്റംസ്\b/, /\bനോൺ\s*വെജ്\b/,
       // Bengali
-      /\bnon[\s-]?veg\s+items\s+dekho\b/, /\bআমিষ\b/, /\bনন\s*ভেজ\s+আইটেম\b/,
+      /\bnon[\s-]?veg\s+items\s+dekho\b/, /\bআমিষ\b/, /\bনন\s*ভেজ\s+আইটেম\b/, /\bনন\s*ভেজ\b/,
       // Marathi
       /\bnon[\s-]?veg\s+items\s+dakhva\b/, /\bमांसाहारी\b/, /\bनॉन\s*वेज\s+आइटम\b/,
       // Gujarati
-      /\bnon[\s-]?veg\s+items\s+batavo\b/, /\bમાંસાહારી\b/, /\bનોન\s*વેજ\s+આઇટમ્સ\b/
+      /\bnon[\s-]?veg\s+items\s+batavo\b/, /\bમાંસાહારી\b/, /\bનોન\s*વેજ\s+આઇટમ્સ\b/, /\bનોન\s*વેજ\b/
     ];
     
     // Check for non-veg-specific intent FIRST (before veg, since "non veg" contains "veg")
