@@ -8,6 +8,28 @@ const getConfig = () => ({
   baseUrl: `https://graph.facebook.com/v24.0/${process.env.META_PHONE_NUMBER_ID}`
 });
 
+// Transform image URL to square format using wsrv.nl (free image proxy)
+// This ensures all images appear as consistent squares in WhatsApp
+const getSquareImageUrl = (imageUrl) => {
+  if (!imageUrl) return imageUrl;
+  
+  // Skip if already using wsrv.nl
+  if (imageUrl.includes('wsrv.nl')) return imageUrl;
+  
+  // Skip data URLs
+  if (imageUrl.startsWith('data:')) return imageUrl;
+  
+  try {
+    // Use wsrv.nl to resize and crop to square (300x300 is good for WhatsApp)
+    // w=300, h=300, fit=cover ensures square crop from center
+    const encodedUrl = encodeURIComponent(imageUrl);
+    return `https://wsrv.nl/?url=${encodedUrl}&w=300&h=300&fit=cover&output=jpg&q=85`;
+  } catch (error) {
+    console.log('⚠️ Could not transform image URL:', error.message);
+    return imageUrl;
+  }
+};
+
 const metaCloud = {
   // Download media file from WhatsApp (for voice messages, images, etc.)
   async downloadMedia(mediaId) {
@@ -242,21 +264,14 @@ const metaCloud = {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
       
-      // Check if image format is supported by WhatsApp (only jpeg, png supported)
-      const supportedFormats = ['.jpg', '.jpeg', '.png'];
-      const imageUrlLower = imageUrl.toLowerCase();
-      const isSupported = supportedFormats.some(fmt => imageUrlLower.includes(fmt));
-      
-      if (!isSupported) {
-        console.log('⚠️ Image format not supported by WhatsApp, sending caption only');
-        return this.sendMessage(phone, caption);
-      }
+      // Transform to square image for consistent display
+      const squareImageUrl = getSquareImageUrl(imageUrl);
       
       const response = await axios.post(`${baseUrl}/messages`, {
         messaging_product: 'whatsapp',
         to,
         type: 'image',
-        image: { link: imageUrl, caption }
+        image: { link: squareImageUrl, caption }
       }, {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
       });
@@ -275,15 +290,8 @@ const metaCloud = {
       
       console.log('📤 Meta sendImageWithButtons to:', to);
       
-      // Check if image format is supported by WhatsApp (only jpeg, png supported)
-      const supportedFormats = ['.jpg', '.jpeg', '.png'];
-      const imageUrlLower = imageUrl.toLowerCase();
-      const isSupported = supportedFormats.some(fmt => imageUrlLower.includes(fmt));
-      
-      if (!isSupported) {
-        console.log('⚠️ Image format not supported by WhatsApp, sending without image');
-        return this.sendButtons(phone, message, buttons, footer);
-      }
+      // Transform to square image for consistent display
+      const squareImageUrl = getSquareImageUrl(imageUrl);
       
       const payload = {
         messaging_product: 'whatsapp',
@@ -293,7 +301,7 @@ const metaCloud = {
           type: 'button',
           header: {
             type: 'image',
-            image: { link: imageUrl }
+            image: { link: squareImageUrl }
           },
           body: { text: message },
           footer: footer ? { text: footer } : undefined,
