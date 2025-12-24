@@ -547,15 +547,15 @@ const chatbot = {
     if (detected) {
       if (detected.type === 'veg') {
         filteredItems = menuItems.filter(item => item.foodType === 'veg');
-        foodTypeLabel = '🟢 Veg';
+        foodTypeLabel = '🥦 Veg';
       } else if (detected.type === 'egg') {
         // Egg only - not nonveg meat items
         filteredItems = menuItems.filter(item => item.foodType === 'egg');
-        foodTypeLabel = '🟡 Egg';
+        foodTypeLabel = '🥚 Egg';
       } else if (detected.type === 'nonveg') {
         // Nonveg includes both egg and nonveg
         filteredItems = menuItems.filter(item => item.foodType === 'nonveg' || item.foodType === 'egg');
-        foodTypeLabel = '🔴 Non-Veg';
+        foodTypeLabel = '🍗 Non-Veg';
       } else if (detected.type === 'specific') {
         // Specific ingredient like chicken, mutton - search in name/tags
         const ingredient = detected.ingredient;
@@ -740,10 +740,10 @@ const chatbot = {
           state.foodTypePreference = 'veg';
           const filteredItems = this.filterByFoodType(menuItems, 'veg');
           if (filteredItems.length > 0) {
-            await this.sendMenuCategoriesWithLabel(phone, filteredItems, '🟢 Veg Menu');
+            await this.sendMenuCategoriesWithLabel(phone, filteredItems, '🥦 Veg Menu');
             state.currentStep = 'select_category';
           } else {
-            await whatsapp.sendButtons(phone, '🟢 No veg items available right now.', [
+            await whatsapp.sendButtons(phone, '🥦 No veg items available right now.', [
               { id: 'view_menu', text: 'View All Menu' },
               { id: 'home', text: 'Main Menu' }
             ]);
@@ -753,10 +753,10 @@ const chatbot = {
           state.foodTypePreference = 'egg';
           const filteredItems = this.filterByFoodType(menuItems, 'egg');
           if (filteredItems.length > 0) {
-            await this.sendMenuCategoriesWithLabel(phone, filteredItems, '� Egg- Menu');
+            await this.sendMenuCategoriesWithLabel(phone, filteredItems, '🥚 Egg Menu');
             state.currentStep = 'select_category';
           } else {
-            await whatsapp.sendButtons(phone, '� NNo egg items available right now.', [
+            await whatsapp.sendButtons(phone, '🥚 No egg items available right now.', [
               { id: 'view_menu', text: 'View All Menu' },
               { id: 'home', text: 'Main Menu' }
             ]);
@@ -766,10 +766,10 @@ const chatbot = {
           state.foodTypePreference = 'nonveg';
           const filteredItems = this.filterByFoodType(menuItems, 'nonveg');
           if (filteredItems.length > 0) {
-            await this.sendMenuCategoriesWithLabel(phone, filteredItems, '🔴 Non-Veg Menu');
+            await this.sendMenuCategoriesWithLabel(phone, filteredItems, '🍗 Non-Veg Menu');
             state.currentStep = 'select_category';
           } else {
-            await whatsapp.sendButtons(phone, '🔴 No non-veg items available right now.', [
+            await whatsapp.sendButtons(phone, '🍗 No non-veg items available right now.', [
               { id: 'view_menu', text: 'View All Menu' },
               { id: 'home', text: 'Main Menu' }
             ]);
@@ -788,8 +788,8 @@ const chatbot = {
         const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference);
         
         const foodTypeLabels = {
-          veg: '🟢 Veg Menu',
-          nonveg: '🔴 Non-Veg Menu',
+          veg: '🥦 Veg Menu',
+          nonveg: '🍗 Non-Veg Menu',
           both: '🍽️ All Menu'
         };
         
@@ -1617,7 +1617,7 @@ const chatbot = {
       return;
     }
 
-    const foodTypeLabel = item.foodType === 'veg' ? '🟢 Veg' : item.foodType === 'nonveg' ? '🔴 Non-Veg' : '';
+    const foodTypeLabel = item.foodType === 'veg' ? '🥦 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
     
     let msg = `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n\n`;
     msg += `💰 *Price:* ₹${item.price} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
@@ -1642,7 +1642,7 @@ const chatbot = {
 
   // Send item details for order flow (with Add to Cart focus)
   async sendItemDetailsForOrder(phone, item) {
-    const foodTypeLabel = item.foodType === 'veg' ? '🟢 Veg' : item.foodType === 'nonveg' ? '🔴 Non-Veg' : '';
+    const foodTypeLabel = item.foodType === 'veg' ? '🥦 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
     
     let msg = `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n\n`;
     msg += `💰 *Price:* ₹${item.price} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
