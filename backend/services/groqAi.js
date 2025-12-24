@@ -33,6 +33,39 @@ const groqAi = {
     }
   },
 
+  // Translate local language text to English for search
+  async translateToEnglish(text) {
+    try {
+      // Check if text contains non-English characters (Indian languages)
+      const hasNonEnglish = /[^\x00-\x7F]/.test(text);
+      if (!hasNonEnglish) {
+        return text; // Already English, no translation needed
+      }
+
+      const client = getGroq();
+      const completion = await client.chat.completions.create({
+        messages: [{
+          role: 'user',
+          content: `Translate the following text to English. This is a food search query. Only return the English translation, nothing else. If it's already English or a mix, just return the English version of the food items mentioned.
+
+Text: "${text}"
+
+English translation:`
+        }],
+        model: 'llama-3.1-8b-instant',
+        max_tokens: 100,
+        temperature: 0.1
+      });
+      
+      const translated = completion.choices[0]?.message?.content?.trim() || text;
+      console.log(`🌐 Translated "${text}" to "${translated}"`);
+      return translated;
+    } catch (error) {
+      console.error('Groq translation error:', error.message);
+      return text; // Return original if translation fails
+    }
+  },
+
   async generateDescription(itemName, category) {
     try {
       const client = getGroq();

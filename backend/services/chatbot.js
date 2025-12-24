@@ -5,6 +5,7 @@ const Order = require('../models/Order');
 const whatsapp = require('./whatsapp');
 const razorpayService = require('./razorpay');
 const googleSheets = require('./googleSheets');
+const groqAi = require('./groqAi');
 const axios = require('axios');
 
 const generateOrderId = () => 'ORD' + Date.now().toString(36).toUpperCase();
@@ -480,7 +481,7 @@ const chatbot = {
     return cleanText.trim().replace(/\s+/g, ' ');
   },
 
-  // Helper to transliterate regional language words to English equivalents
+  // Helper to transliterate regional language words to English equivalents (basic mapping)
   transliterate(text) {
     const transliterationMap = {
       // Hindi to English - Common food items
@@ -496,26 +497,37 @@ const chatbot = {
       'अंडा': 'egg', 'आमलेट': 'omelette', 'मछली': 'fish', 'झींगा': 'prawn',
       'तंदूरी': 'tandoori', 'कबाब': 'kabab', 'टिक्का': 'tikka', 'कोरमा': 'korma',
       'करी': 'curry', 'मसाला': 'masala', 'फ्राइड': 'fried', 'ग्रिल्ड': 'grilled',
+      'दही': 'curd', 'पेरुगु': 'curd', 'छाछ': 'buttermilk', 'खीर': 'kheer',
       // Telugu to English
       'బ్రెడ్': 'bread', 'అన్నం': 'rice', 'చికెన్': 'chicken', 'మటన్': 'mutton',
       'బిర్యానీ': 'biryani', 'కేక్': 'cake', 'పిజ్జా': 'pizza', 'బర్గర్': 'burger',
       'నూడుల్స్': 'noodles', 'ఐస్ క్రీమ్': 'ice cream', 'టీ': 'tea', 'కాఫీ': 'coffee',
+      'పెరుగు': 'curd', 'పెరుగు అన్నం': 'curd rice', 'సాంబార్': 'sambar', 'రసం': 'rasam',
+      'పప్పు': 'dal', 'కూర': 'curry', 'పచ్చడి': 'chutney', 'అప్పడం': 'papad',
+      'పూరీ': 'poori', 'ఇడ్లీ': 'idli', 'దోశ': 'dosa', 'ఉప్మా': 'upma', 'వడ': 'vada',
       // Tamil to English
       'பிரெட்': 'bread', 'சோறு': 'rice', 'சிக்கன்': 'chicken', 'மட்டன்': 'mutton',
       'பிரியாணி': 'biryani', 'கேக்': 'cake', 'பீட்சா': 'pizza', 'பர்கர்': 'burger',
+      'தயிர்': 'curd', 'தயிர் சாதம்': 'curd rice', 'சாம்பார்': 'sambar', 'ரசம்': 'rasam',
+      'இட்லி': 'idli', 'தோசை': 'dosa', 'உப்புமா': 'upma', 'வடை': 'vada', 'பூரி': 'poori',
       // Kannada to English
       'ಬ್ರೆಡ್': 'bread', 'ಅನ್ನ': 'rice', 'ಚಿಕನ್': 'chicken', 'ಮಟನ್': 'mutton',
       'ಬಿರಿಯಾನಿ': 'biryani', 'ಕೇಕ್': 'cake', 'ಪಿಜ್ಜಾ': 'pizza',
+      'ಮೊಸರು': 'curd', 'ಮೊಸರನ್ನ': 'curd rice', 'ಸಾಂಬಾರ್': 'sambar', 'ರಸಂ': 'rasam',
+      'ಇಡ್ಲಿ': 'idli', 'ದೋಸೆ': 'dosa', 'ಉಪ್ಪಿಟ್ಟು': 'upma', 'ವಡೆ': 'vada',
       // Bengali to English
       'রুটি': 'bread', 'ভাত': 'rice', 'মুরগি': 'chicken', 'মাংস': 'mutton',
       'বিরিয়ানি': 'biryani', 'কেক': 'cake', 'পিৎজা': 'pizza',
+      'দই': 'curd', 'দই ভাত': 'curd rice',
       // Malayalam to English
       'ബ്രെഡ്': 'bread', 'ചോറ്': 'rice', 'ചിക്കൻ': 'chicken', 'മട്ടൻ': 'mutton',
       'ബിരിയാണി': 'biryani', 'കേക്ക്': 'cake', 'പിസ്സ': 'pizza',
+      'തൈര്': 'curd', 'തൈര് സാദം': 'curd rice', 'സാമ്പാർ': 'sambar', 'രസം': 'rasam',
       // Common transliterations (romanized regional)
       'chawal': 'rice', 'roti': 'roti', 'daal': 'dal', 'sabzi': 'sabji',
       'chai': 'tea', 'doodh': 'milk', 'pani': 'water', 'anda': 'egg',
-      'gosht': 'mutton', 'murgh': 'chicken', 'machli': 'fish'
+      'gosht': 'mutton', 'murgh': 'chicken', 'machli': 'fish',
+      'dahi': 'curd', 'perugu': 'curd', 'thayir': 'curd', 'mosaru': 'curd'
     };
     
     let result = text;
@@ -527,11 +539,36 @@ const chatbot = {
     return result;
   },
 
-  // Smart search - detects food type and searches by name/tag
-  smartSearch(text, menuItems) {
-    // First transliterate regional language to English
-    const transliteratedText = this.transliterate(text);
-    const lowerText = transliteratedText.toLowerCase().trim();
+  // Translate text using Groq AI (for languages not in basic map)
+  async translateWithAI(text) {
+    // Check if text contains non-English characters
+    const hasNonEnglish = /[^\x00-\x7F]/.test(text);
+    if (!hasNonEnglish) {
+      return text; // Already English
+    }
+    
+    // First try basic transliteration
+    const basicTranslated = this.transliterate(text);
+    
+    // If still has non-English after basic translation, use Groq AI
+    if (/[^\x00-\x7F]/.test(basicTranslated)) {
+      try {
+        const aiTranslated = await groqAi.translateToEnglish(text);
+        return aiTranslated;
+      } catch (error) {
+        console.error('AI translation failed:', error.message);
+        return basicTranslated;
+      }
+    }
+    
+    return basicTranslated;
+  },
+
+  // Smart search - detects food type and searches by name/tag (async for AI translation)
+  async smartSearch(text, menuItems) {
+    // First translate regional language to English using AI
+    const translatedText = await this.translateWithAI(text);
+    const lowerText = translatedText.toLowerCase().trim();
     if (lowerText.length < 2) return null;
     
     // Detect food type preference from message
@@ -1053,7 +1090,7 @@ const chatbot = {
         const safeTag = parts.join('_');
         // Restore original search term from state or use safe version
         const searchTerm = state.searchTag || safeTag.replace(/_/g, ' ');
-        const searchResult = this.smartSearch(searchTerm, menuItems);
+        const searchResult = await this.smartSearch(searchTerm, menuItems);
         const matchingItems = searchResult?.items || [];
         state.currentPage = page;
         const displayLabel = searchResult?.label 
@@ -1266,122 +1303,107 @@ const chatbot = {
       // Smart search FIRST - detects food type (veg/nonveg/egg/specific) and searches by name/tag
       // This takes priority when user specifies food type like "veg cake" or "chicken biryani"
       // Priority: search tags first, then name. If nothing matches, show menu.
-      else if (this.smartSearch(msg, menuItems)) {
-        const searchResult = this.smartSearch(msg, menuItems);
-        const matchingItems = searchResult.items;
-        // Use pre-built label or construct one
-        const displayLabel = searchResult.label 
-          ? (searchResult.searchTerm ? `${searchResult.label} "${searchResult.searchTerm}"` : searchResult.label)
-          : (searchResult.searchTerm ? `"${searchResult.searchTerm}"` : 'Search Results');
+      // Also translates local language searches to English using AI
+      else {
+        const searchResult = await this.smartSearch(msg, menuItems);
         
-        // If only 1 item matches, show item details directly
-        if (matchingItems.length === 1) {
-          const item = matchingItems[0];
-          state.selectedItem = item._id.toString();
-          await this.sendItemDetails(phone, menuItems, item._id.toString());
-          state.currentStep = 'viewing_item_details';
-        } else {
-          // Multiple items - show list
-          state.searchTag = msg.trim();
-          state.tagSearchResults = matchingItems.map(i => i._id.toString());
-          await this.sendItemsByTag(phone, matchingItems, displayLabel);
-          state.currentStep = 'viewing_tag_results';
-        }
-      }
-      // If user typed something with food type keyword but no search results, show that food type menu
-      // e.g., "veg xyz" where xyz doesn't match anything -> show veg menu
-      else if (this.detectFoodTypeFromMessage(msg)) {
-        const detected = this.detectFoodTypeFromMessage(msg);
-        let foodType = 'both';
-        let label = '🍽️ All Menu';
-        
-        if (detected.type === 'veg') {
-          foodType = 'veg';
-          label = '🥦 Veg Menu';
-        } else if (detected.type === 'egg') {
-          foodType = 'egg';
-          label = '🥚 Egg Menu';
-        } else if (detected.type === 'nonveg' || detected.type === 'specific') {
-          foodType = 'nonveg';
-          label = '🍗 Non-Veg Menu';
-        }
-        
-        state.foodTypePreference = foodType;
-        const filteredItems = this.filterByFoodType(menuItems, foodType);
-        
-        if (filteredItems.length > 0) {
-          // Show message that search didn't find exact match, showing menu instead
-          const searchTerm = this.removeFoodTypeKeywords(msg.toLowerCase().trim());
-          if (searchTerm.length >= 2) {
-            await whatsapp.sendMessage(phone, `🔍 No items found for "${searchTerm}". Here's our ${label.replace(/[🥦🥚🍗🍽️]\s*/, '')}:`);
-          }
-          await this.sendMenuCategoriesWithLabel(phone, filteredItems, label);
-          state.currentStep = 'select_category';
-        } else {
-          // No items in this food type, show all menu instead
-          await whatsapp.sendMessage(phone, `🔍 No items found. Here's our full menu:`);
-          await this.sendMenuCategoriesWithLabel(phone, menuItems, '🍽️ All Menu');
-          state.currentStep = 'select_category';
-        }
-      }
-      // Category search - only if no food type specified and matches a category
-      else if (this.findCategory(msg, menuItems)) {
-        const category = this.findCategory(msg, menuItems);
-        const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
-        if (state.currentStep === 'browsing_menu' || state.currentStep === 'selecting_item') {
-          await this.sendItemsForOrder(phone, filteredItems, category);
-          state.selectedCategory = category;
-          state.currentStep = 'selecting_item';
-        } else {
-          await this.sendCategoryItems(phone, filteredItems, category);
-          state.selectedCategory = category;
-          state.currentStep = 'viewing_items';
-        }
-      }
-
-      // ========== WELCOME FOR NEW/UNKNOWN STATE ==========
-      else if (state.currentStep === 'welcome' || !state.currentStep) {
-        await this.sendWelcome(phone);
-        state.currentStep = 'main_menu';
-      }
-
-      // ========== GENERAL SEARCH FALLBACK ==========
-      // If user typed something that looks like a search (2+ chars), try to find items
-      // If nothing found, show the full menu instead of "I didn't understand"
-      else if (msg.length >= 2 && /^[a-zA-Z\u0900-\u097F\u0C00-\u0C7F\u0B80-\u0BFF\u0C80-\u0CFF\u0D00-\u0D7F\u0980-\u09FF\u0A80-\u0AFF\s]+$/.test(msg)) {
-        // Looks like a search term (letters only, including Indian languages)
-        const searchResults = this.findItemsByNameOrTag(msg, menuItems);
-        if (searchResults && searchResults.length > 0) {
-          // Found items - show them
-          if (searchResults.length === 1) {
-            const item = searchResults[0];
+        if (searchResult && searchResult.items && searchResult.items.length > 0) {
+          const matchingItems = searchResult.items;
+          // Use pre-built label or construct one
+          const displayLabel = searchResult.label 
+            ? (searchResult.searchTerm ? `${searchResult.label} "${searchResult.searchTerm}"` : searchResult.label)
+            : (searchResult.searchTerm ? `"${searchResult.searchTerm}"` : 'Search Results');
+          
+          // If only 1 item matches, show item details directly
+          if (matchingItems.length === 1) {
+            const item = matchingItems[0];
             state.selectedItem = item._id.toString();
             await this.sendItemDetails(phone, menuItems, item._id.toString());
             state.currentStep = 'viewing_item_details';
           } else {
+            // Multiple items - show list
             state.searchTag = msg.trim();
-            state.tagSearchResults = searchResults.map(i => i._id.toString());
-            await this.sendItemsByTag(phone, searchResults, `"${msg}"`);
+            state.tagSearchResults = matchingItems.map(i => i._id.toString());
+            await this.sendItemsByTag(phone, matchingItems, displayLabel);
             state.currentStep = 'viewing_tag_results';
           }
-        } else {
-          // No items found - show menu
+        }
+        // If user typed something with food type keyword but no search results, show that food type menu
+        // e.g., "veg xyz" where xyz doesn't match anything -> show veg menu
+        else if (this.detectFoodTypeFromMessage(msg)) {
+          const detected = this.detectFoodTypeFromMessage(msg);
+          let foodType = 'both';
+          let label = '🍽️ All Menu';
+          
+          if (detected.type === 'veg') {
+            foodType = 'veg';
+            label = '🥦 Veg Menu';
+          } else if (detected.type === 'egg') {
+            foodType = 'egg';
+            label = '🥚 Egg Menu';
+          } else if (detected.type === 'nonveg' || detected.type === 'specific') {
+            foodType = 'nonveg';
+            label = '🍗 Non-Veg Menu';
+          }
+          
+          state.foodTypePreference = foodType;
+          const filteredItems = this.filterByFoodType(menuItems, foodType);
+          
+          if (filteredItems.length > 0) {
+            // Show message that search didn't find exact match, showing menu instead
+            const searchTerm = this.removeFoodTypeKeywords(msg.toLowerCase().trim());
+            if (searchTerm.length >= 2) {
+              await whatsapp.sendMessage(phone, `🔍 No items found for "${searchTerm}". Here's our ${label.replace(/[🥦🥚🍗🍽️]\s*/, '')}:`);
+            }
+            await this.sendMenuCategoriesWithLabel(phone, filteredItems, label);
+            state.currentStep = 'select_category';
+          } else {
+            // No items in this food type, show all menu instead
+            await whatsapp.sendMessage(phone, `🔍 No items found. Here's our full menu:`);
+            await this.sendMenuCategoriesWithLabel(phone, menuItems, '🍽️ All Menu');
+            state.currentStep = 'select_category';
+          }
+        }
+        // Category search - only if no food type specified and matches a category
+        else if (this.findCategory(msg, menuItems)) {
+          const category = this.findCategory(msg, menuItems);
+          const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
+          if (state.currentStep === 'browsing_menu' || state.currentStep === 'selecting_item') {
+            await this.sendItemsForOrder(phone, filteredItems, category);
+            state.selectedCategory = category;
+            state.currentStep = 'selecting_item';
+          } else {
+            await this.sendCategoryItems(phone, filteredItems, category);
+            state.selectedCategory = category;
+            state.currentStep = 'viewing_items';
+          }
+        }
+        // ========== WELCOME FOR NEW/UNKNOWN STATE ==========
+        else if (state.currentStep === 'welcome' || !state.currentStep) {
+          await this.sendWelcome(phone);
+          state.currentStep = 'main_menu';
+        }
+        // ========== GENERAL SEARCH FALLBACK ==========
+        // If user typed something that looks like a search (2+ chars), try to find items
+        // If nothing found, show the full menu instead of "I didn't understand"
+        else if (msg.length >= 2 && /^[a-zA-Z\u0900-\u097F\u0C00-\u0C7F\u0B80-\u0BFF\u0C80-\u0CFF\u0D00-\u0D7F\u0980-\u09FF\u0A80-\u0AFF\s]+$/.test(msg)) {
+          // Looks like a search term (letters only, including Indian languages)
+          // Already tried smartSearch above, so just show menu
           await whatsapp.sendMessage(phone, `🔍 No items found for "${msg}". Here's our menu:`);
           await this.sendMenuCategoriesWithLabel(phone, menuItems, '🍽️ All Menu');
           state.currentStep = 'select_category';
         }
-      }
-
-      // ========== FALLBACK ==========
-      else {
-        await whatsapp.sendButtons(phone,
-          `🤔 I didn't understand that.\n\nPlease select an option:`,
-          [
-            { id: 'home', text: 'Main Menu' },
-            { id: 'view_cart', text: 'View Cart' },
-            { id: 'help', text: 'Help' }
-          ]
-        );
+        // ========== FALLBACK ==========
+        else {
+          await whatsapp.sendButtons(phone,
+            `🤔 I didn't understand that.\n\nPlease select an option:`,
+            [
+              { id: 'home', text: 'Main Menu' },
+              { id: 'view_cart', text: 'View Cart' },
+              { id: 'help', text: 'Help' }
+            ]
+          );
+        }
       }
     } catch (error) {
       console.error('Chatbot error:', error);
