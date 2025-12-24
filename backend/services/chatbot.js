@@ -1331,16 +1331,15 @@ const chatbot = {
           // Show message that search didn't find exact match, showing menu instead
           const searchTerm = this.removeFoodTypeKeywords(msg.toLowerCase().trim());
           if (searchTerm.length >= 2) {
-            await whatsapp.sendText(phone, `🔍 No items found for "${searchTerm}". Here's our ${label.replace(/[🥦🥚🍗🍽️]\s*/, '')}:`);
+            await whatsapp.sendMessage(phone, `🔍 No items found for "${searchTerm}". Here's our ${label.replace(/[🥦🥚🍗🍽️]\s*/, '')}:`);
           }
           await this.sendMenuCategoriesWithLabel(phone, filteredItems, label);
           state.currentStep = 'select_category';
         } else {
-          await whatsapp.sendButtons(phone, `${label.split(' ')[0]} No ${label.replace(/[🥦🥚🍗🍽️]\s*/, '').toLowerCase()} items available right now.`, [
-            { id: 'view_menu', text: 'View All Menu' },
-            { id: 'home', text: 'Main Menu' }
-          ]);
-          state.currentStep = 'main_menu';
+          // No items in this food type, show all menu instead
+          await whatsapp.sendMessage(phone, `🔍 No items found. Here's our full menu:`);
+          await this.sendMenuCategoriesWithLabel(phone, menuItems, '🍽️ All Menu');
+          state.currentStep = 'select_category';
         }
       }
       // Category search - only if no food type specified and matches a category
@@ -1362,6 +1361,33 @@ const chatbot = {
       else if (state.currentStep === 'welcome' || !state.currentStep) {
         await this.sendWelcome(phone);
         state.currentStep = 'main_menu';
+      }
+
+      // ========== GENERAL SEARCH FALLBACK ==========
+      // If user typed something that looks like a search (2+ chars), try to find items
+      // If nothing found, show the full menu instead of "I didn't understand"
+      else if (msg.length >= 2 && /^[a-zA-Z\u0900-\u097F\u0C00-\u0C7F\u0B80-\u0BFF\u0C80-\u0CFF\u0D00-\u0D7F\u0980-\u09FF\u0A80-\u0AFF\s]+$/.test(msg)) {
+        // Looks like a search term (letters only, including Indian languages)
+        const searchResults = this.findItemsByNameOrTag(msg, menuItems);
+        if (searchResults && searchResults.length > 0) {
+          // Found items - show them
+          if (searchResults.length === 1) {
+            const item = searchResults[0];
+            state.selectedItem = item._id.toString();
+            await this.sendItemDetails(phone, menuItems, item._id.toString());
+            state.currentStep = 'viewing_item_details';
+          } else {
+            state.searchTag = msg.trim();
+            state.tagSearchResults = searchResults.map(i => i._id.toString());
+            await this.sendItemsByTag(phone, searchResults, `"${msg}"`);
+            state.currentStep = 'viewing_tag_results';
+          }
+        } else {
+          // No items found - show menu
+          await whatsapp.sendMessage(phone, `🔍 No items found for "${msg}". Here's our menu:`);
+          await this.sendMenuCategoriesWithLabel(phone, menuItems, '🍽️ All Menu');
+          state.currentStep = 'select_category';
+        }
       }
 
       // ========== FALLBACK ==========
