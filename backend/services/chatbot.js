@@ -760,8 +760,9 @@ const chatbot = {
         state.currentStep = 'viewing_cart';
       }
       else if (selection === 'place_order' || selection === 'order_now' || (!selectedId && msg === 'order')) {
-        await this.sendServiceType(phone);
-        state.currentStep = 'select_service';
+        // Skip service type selection and go directly to food type selection
+        await this.sendFoodTypeSelection(phone);
+        state.currentStep = 'select_food_type_order';
       }
       // Check cancel/refund/track BEFORE order status (they're more specific)
       // Only check text-based intents when there's no selectedId (button click)
