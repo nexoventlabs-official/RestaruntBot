@@ -45,19 +45,38 @@ const groqAi = {
       const client = getGroq();
       const completion = await client.chat.completions.create({
         messages: [{
+          role: 'system',
+          content: `You are a food translator. Translate Indian food names from any regional language (Telugu, Hindi, Tamil, Kannada, Bengali, Malayalam, etc.) to English. 
+          
+Common Indian food translations:
+- పులిహోర/पुलिहोरा = pulihora/tamarind rice
+- దద్దోజనం/दही चावल = curd rice
+- సాంబార్/सांभर = sambar
+- రసం/रसम = rasam
+- ఇడ్లీ/इडली = idli
+- దోశ/दोसा = dosa
+- వడ/वड़ा = vada
+- ఉప్మా/उपमा = upma
+- పొంగల్/पोंगल = pongal
+- బిర్యానీ/बिरयानी = biryani
+- పరాఠా/पराठा = paratha
+
+Only return the English translation, nothing else.`
+        }, {
           role: 'user',
-          content: `Translate the following text to English. This is a food search query. Only return the English translation, nothing else. If it's already English or a mix, just return the English version of the food items mentioned.
-
-Text: "${text}"
-
-English translation:`
+          content: `Translate this food item to English: "${text}"`
         }],
         model: 'llama-3.1-8b-instant',
         max_tokens: 100,
         temperature: 0.1
       });
       
-      const translated = completion.choices[0]?.message?.content?.trim() || text;
+      let translated = completion.choices[0]?.message?.content?.trim() || text;
+      
+      // Clean up the response - remove quotes, extra text
+      translated = translated.replace(/^["']|["']$/g, '').trim();
+      translated = translated.replace(/^(the |a |an )/i, '').trim();
+      
       console.log(`🌐 Translated "${text}" to "${translated}"`);
       return translated;
     } catch (error) {
