@@ -545,17 +545,61 @@ const chatbot = {
       'ബിരിയാണി': 'biryani', 'കേക്ക്': 'cake', 'പിസ്സ': 'pizza',
       'തൈര്': 'curd', 'തൈര് സാദം': 'curd rice', 'സാമ്പാർ': 'sambar', 'രസം': 'rasam',
       'താലി': 'thali', 'ചിക്കൻ താലി': 'chicken thali',
-      // Common transliterations (romanized regional)
+      // Common transliterations (romanized regional food names)
       'chawal': 'rice', 'roti': 'roti', 'daal': 'dal', 'sabzi': 'sabji',
       'chai': 'tea', 'doodh': 'milk', 'pani': 'water', 'anda': 'egg',
       'gosht': 'mutton', 'murgh': 'chicken', 'machli': 'fish',
       'dahi': 'curd', 'perugu': 'curd', 'thayir': 'curd', 'mosaru': 'curd',
-      'tandoori': 'tandoori', 'tikka': 'tikka', 'thali': 'thali', 'korma': 'korma'
+      'tandoori': 'tandoori', 'tikka': 'tikka', 'thali': 'thali', 'korma': 'korma',
+      // Telugu romanized
+      'pulihora': 'tamarind rice', 'pulihoura': 'tamarind rice', 'pulihara': 'tamarind rice',
+      'perugu annam': 'curd rice', 'perugu anna': 'curd rice', 'perugannam': 'curd rice',
+      'daddojanam': 'curd rice', 'dadhojanam': 'curd rice',
+      'pesarattu': 'pesarattu', 'pesaratu': 'pesarattu',
+      'mirchi bajji': 'mirchi bajji', 'mirchi pakoda': 'mirchi bajji',
+      'aloo bajji': 'aloo bajji', 'punugulu': 'punugulu',
+      'garelu': 'vada', 'gaarelu': 'vada', 'medu vada': 'vada',
+      'bobbatlu': 'bobbatlu', 'bobatlu': 'bobbatlu', 'puran poli': 'bobbatlu',
+      'payasam': 'payasam', 'kheer': 'kheer', 'kesari': 'kesari',
+      'pongal': 'pongal', 'ven pongal': 'pongal',
+      'chitranna': 'lemon rice', 'chitrannam': 'lemon rice',
+      'tomato rice': 'tomato rice', 'tomato bath': 'tomato rice',
+      'coconut rice': 'coconut rice', 'kobbari annam': 'coconut rice',
+      'lemon rice': 'lemon rice', 'nimma kaya annam': 'lemon rice',
+      // Tamil romanized
+      'puliyodharai': 'tamarind rice', 'puliyodarai': 'tamarind rice',
+      'thayir sadam': 'curd rice', 'thayir sadham': 'curd rice', 'curd rice': 'curd rice',
+      'sambar rice': 'sambar rice', 'sambar sadam': 'sambar rice',
+      'rasam rice': 'rasam rice', 'rasam sadam': 'rasam rice',
+      // Common South Indian
+      'idli': 'idli', 'idly': 'idli', 'idle': 'idli',
+      'dosa': 'dosa', 'dosai': 'dosa', 'dhosha': 'dosa',
+      'masala dosa': 'masala dosa', 'masale dose': 'masala dosa',
+      'rava dosa': 'rava dosa', 'ravva dosa': 'rava dosa',
+      'uttapam': 'uttapam', 'uthappam': 'uttapam',
+      'upma': 'upma', 'uppuma': 'upma', 'uppit': 'upma',
+      'vada': 'vada', 'vadai': 'vada', 'wade': 'vada',
+      'poori': 'poori', 'puri': 'poori', 'luchi': 'poori',
+      'chapati': 'chapati', 'chapathi': 'chapati', 'roti': 'roti', 'phulka': 'roti',
+      'paratha': 'paratha', 'parotta': 'paratha', 'paratha': 'paratha',
+      'naan': 'naan', 'nan': 'naan',
+      'biryani': 'biryani', 'biriyani': 'biryani', 'briyani': 'biryani',
+      'pulao': 'pulao', 'pulav': 'pulao', 'pilaf': 'pulao',
+      'fried rice': 'fried rice', 'friedrice': 'fried rice',
+      'noodles': 'noodles', 'noodels': 'noodles',
+      'manchurian': 'manchurian', 'manchuria': 'manchurian',
+      'gobi': 'gobi', 'gobhi': 'gobi', 'cauliflower': 'gobi',
+      'paneer': 'paneer', 'panner': 'paneer',
+      'chicken': 'chicken', 'chiken': 'chicken', 'chikken': 'chicken',
+      'mutton': 'mutton', 'muttom': 'mutton',
+      'fish': 'fish', 'fis': 'fish',
+      'prawns': 'prawns', 'prawn': 'prawns', 'shrimp': 'prawns',
+      'egg': 'egg', 'eggs': 'egg', 'anda': 'egg'
     };
     
     let result = text;
     for (const [regional, english] of Object.entries(transliterationMap)) {
-      if (text.includes(regional)) {
+      if (text.toLowerCase().includes(regional.toLowerCase())) {
         result = result.replace(new RegExp(regional, 'gi'), english);
       }
     }
