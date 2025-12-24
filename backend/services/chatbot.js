@@ -809,21 +809,26 @@ const chatbot = {
     
     if (!hasSearchTerm && detected?.type !== 'specific') return null;
     
-    // Helper to check for exact tag match
-    const findExactTagMatch = (items, term) => {
-      return items.find(item => 
+    // Helper to find ALL items with exact tag match
+    const findAllExactTagMatches = (items, term) => {
+      return items.filter(item => 
         item.tags?.some(tag => tag.toLowerCase() === term.toLowerCase())
       );
     };
     
-    // ========== CHECK FOR EXACT TAG MATCH ==========
+    // ========== CHECK FOR EXACT TAG MATCH - RETURN ALL MATCHING ITEMS ==========
     if (hasSearchTerm) {
       for (const searchTerm of uniqueSearchTerms) {
-        const exactTagMatch = findExactTagMatch(filteredItems, searchTerm) || findExactTagMatch(menuItems, searchTerm);
-        if (exactTagMatch) {
-          console.log(`✅ Exact tag match found: "${searchTerm}" → "${exactTagMatch.name}"`);
+        // First check in filtered items, then in all menu items
+        let exactTagMatches = findAllExactTagMatches(filteredItems, searchTerm);
+        if (exactTagMatches.length === 0) {
+          exactTagMatches = findAllExactTagMatches(menuItems, searchTerm);
+        }
+        
+        if (exactTagMatches.length > 0) {
+          console.log(`✅ Exact tag match found: "${searchTerm}" → ${exactTagMatches.length} items`);
           return { 
-            items: [exactTagMatch], 
+            items: exactTagMatches, 
             foodType: detected, 
             searchTerm: searchTerm, 
             label: null,
