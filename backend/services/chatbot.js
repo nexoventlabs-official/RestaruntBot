@@ -796,7 +796,7 @@ const chatbot = {
         
         if (!customer.cart?.length) {
           await whatsapp.sendButtons(phone, 'Your cart is empty! Please add items first.', [
-            { id: 'place_order', text: 'Start Order' },
+            { id: 'view_menu', text: 'View Menu' },
             { id: 'home', text: 'Main Menu' }
           ]);
           state.currentStep = 'main_menu';
@@ -830,7 +830,7 @@ const chatbot = {
       else if (selection === 'pay_upi') {
         if (!customer.cart?.length) {
           await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
-            { id: 'place_order', text: 'Start Order' }
+            { id: 'view_menu', text: 'View Menu' }
           ]);
           state.currentStep = 'main_menu';
         } else {
@@ -842,7 +842,7 @@ const chatbot = {
       else if (selection === 'pay_cod') {
         if (!customer.cart?.length) {
           await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
-            { id: 'place_order', text: 'Start Order' }
+            { id: 'view_menu', text: 'View Menu' }
           ]);
           state.currentStep = 'main_menu';
         } else {
@@ -854,7 +854,7 @@ const chatbot = {
       else if (selection === 'confirm_order' || selection === 'pay_now') {
         if (!customer.cart?.length) {
           await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
-            { id: 'place_order', text: 'Start Order' }
+            { id: 'view_menu', text: 'View Menu' }
           ]);
           state.currentStep = 'main_menu';
         } else {
@@ -1800,27 +1800,43 @@ const chatbot = {
 
   // ============ CART & CHECKOUT ============
   async sendCheckoutOptions(phone, customer) {
-    await customer.populate('cart.menuItem');
+    // Refresh customer from database to ensure we have latest cart data
+    const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
-    if (!customer.cart?.length) {
+    if (!freshCustomer?.cart?.length) {
       await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
-        { id: 'place_order', text: 'Start Order' }
+        { id: 'view_menu', text: 'View Menu' },
+        { id: 'home', text: 'Main Menu' }
       ]);
       return;
     }
 
     let total = 0;
     let cartMsg = '🛒 *Your Cart*\n\n';
+    let validItems = 0;
     
-    customer.cart.forEach((item, i) => {
+    freshCustomer.cart.forEach((item, i) => {
       if (item.menuItem) {
         const subtotal = item.menuItem.price * item.quantity;
         total += subtotal;
+        validItems++;
         const unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
-        cartMsg += `${i + 1}. *${item.menuItem.name}* (${unitInfo})\n`;
+        cartMsg += `${validItems}. *${item.menuItem.name}* (${unitInfo})\n`;
         cartMsg += `   Qty: ${item.quantity} × ₹${item.menuItem.price} = ₹${subtotal}\n\n`;
       }
     });
+    
+    if (validItems === 0) {
+      // Clean up invalid cart items
+      freshCustomer.cart = [];
+      await freshCustomer.save();
+      
+      await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+        { id: 'view_menu', text: 'View Menu' },
+        { id: 'home', text: 'Main Menu' }
+      ]);
+      return;
+    }
     
     cartMsg += `━━━━━━━━━━━━━━━\n`;
     cartMsg += `*Total: ₹${total}*`;
@@ -1841,34 +1857,50 @@ const chatbot = {
   },
 
   async sendPaymentMethodOptions(phone, customer) {
-    await customer.populate('cart.menuItem');
+    // Refresh customer from database to ensure we have latest cart data
+    const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
-    if (!customer.cart?.length) {
+    if (!freshCustomer?.cart?.length) {
       await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
-        { id: 'place_order', text: 'Start Order' }
+        { id: 'view_menu', text: 'View Menu' },
+        { id: 'home', text: 'Main Menu' }
       ]);
       return;
     }
 
     let total = 0;
     let cartMsg = '🛒 *Order Summary*\n\n';
+    let validItems = 0;
     
-    customer.cart.forEach((item, i) => {
+    freshCustomer.cart.forEach((item, i) => {
       if (item.menuItem) {
         const subtotal = item.menuItem.price * item.quantity;
         total += subtotal;
+        validItems++;
         const unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
-        cartMsg += `${i + 1}. *${item.menuItem.name}* (${unitInfo})\n`;
+        cartMsg += `${validItems}. *${item.menuItem.name}* (${unitInfo})\n`;
         cartMsg += `   Qty: ${item.quantity} × ₹${item.menuItem.price} = ₹${subtotal}\n\n`;
       }
     });
+    
+    if (validItems === 0) {
+      // Clean up invalid cart items
+      freshCustomer.cart = [];
+      await freshCustomer.save();
+      
+      await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+        { id: 'view_menu', text: 'View Menu' },
+        { id: 'home', text: 'Main Menu' }
+      ]);
+      return;
+    }
     
     cartMsg += `━━━━━━━━━━━━━━━\n`;
     cartMsg += `*Total: ₹${total}*\n\n`;
     
     // Show delivery address if available
-    if (customer.deliveryAddress?.address) {
-      cartMsg += `📍 *Delivery Address:*\n${customer.deliveryAddress.address}\n\n`;
+    if (freshCustomer.deliveryAddress?.address) {
+      cartMsg += `📍 *Delivery Address:*\n${freshCustomer.deliveryAddress.address}\n\n`;
     }
     
     cartMsg += `💳 Select payment method:`;
@@ -1881,18 +1913,20 @@ const chatbot = {
   },
 
   async processCODOrder(phone, customer, state) {
-    await customer.populate('cart.menuItem');
+    // Refresh customer from database to ensure we have latest cart data
+    const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
-    if (!customer.cart?.length) {
+    if (!freshCustomer?.cart?.length) {
       await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
-        { id: 'place_order', text: 'Start Order' }
+        { id: 'view_menu', text: 'View Menu' },
+        { id: 'home', text: 'Main Menu' }
       ]);
       return { success: false };
     }
 
     const orderId = generateOrderId();
     let total = 0;
-    const items = customer.cart.filter(item => item.menuItem).map(item => {
+    const items = freshCustomer.cart.filter(item => item.menuItem).map(item => {
       const subtotal = item.menuItem.price * item.quantity;
       total += subtotal;
       return {
@@ -1908,21 +1942,22 @@ const chatbot = {
 
     if (!items.length) {
       await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
-        { id: 'place_order', text: 'Start Order' }
+        { id: 'view_menu', text: 'View Menu' },
+        { id: 'home', text: 'Main Menu' }
       ]);
       return { success: false };
     }
 
     const order = new Order({
       orderId,
-      customer: { phone: customer.phone, name: customer.name || 'Customer', email: customer.email },
+      customer: { phone: freshCustomer.phone, name: freshCustomer.name || 'Customer', email: freshCustomer.email },
       items,
       totalAmount: total,
       serviceType: state.selectedService || 'delivery',
-      deliveryAddress: customer.deliveryAddress ? {
-        address: customer.deliveryAddress.address,
-        latitude: customer.deliveryAddress.latitude,
-        longitude: customer.deliveryAddress.longitude
+      deliveryAddress: freshCustomer.deliveryAddress ? {
+        address: freshCustomer.deliveryAddress.address,
+        latitude: freshCustomer.deliveryAddress.latitude,
+        longitude: freshCustomer.deliveryAddress.longitude
       } : null,
       paymentMethod: 'cod',
       status: 'confirmed',
@@ -1931,8 +1966,8 @@ const chatbot = {
     await order.save();
 
     // Mark customer as having ordered (for accurate customer count)
-    if (!customer.hasOrdered) {
-      customer.hasOrdered = true;
+    if (!freshCustomer.hasOrdered) {
+      freshCustomer.hasOrdered = true;
     }
 
     // Track today's orders count
@@ -1961,15 +1996,22 @@ const chatbot = {
     // Sync to Google Sheets
     googleSheets.addOrder(order).catch(err => console.error('Google Sheets sync error:', err));
 
+    // Clear cart on the fresh customer and save
+    freshCustomer.cart = [];
+    freshCustomer.orderHistory = freshCustomer.orderHistory || [];
+    freshCustomer.orderHistory.push(order._id);
+    await freshCustomer.save();
+    
+    // Also update the original customer object for state consistency
     customer.cart = [];
-    customer.orderHistory = customer.orderHistory || [];
-    customer.orderHistory.push(order._id);
+    customer.orderHistory = freshCustomer.orderHistory;
+    
     state.pendingOrderId = orderId;
 
     let confirmMsg = `✅ *Order Confirmed!*\n\n`;
     confirmMsg += `📦 Order ID: *${orderId}*\n`;
     confirmMsg += `💵 Payment: *Cash on Delivery*\n`;
-    confirmMsg += `💰 Total: *₹${total}*\n\n`;
+    confirmMsg += `� Totnal: *₹${total}*\n\n`;
     confirmMsg += `━━━━━━━━━━━━━━━\n`;
     confirmMsg += `*Items:*\n`;
     items.forEach((item, i) => {
@@ -1987,27 +2029,43 @@ const chatbot = {
   },
 
   async sendOrderReview(phone, customer) {
-    await customer.populate('cart.menuItem');
+    // Refresh customer from database to ensure we have latest cart data
+    const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
-    if (!customer.cart?.length) {
+    if (!freshCustomer?.cart?.length) {
       await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
-        { id: 'place_order', text: 'Start Order' }
+        { id: 'view_menu', text: 'View Menu' },
+        { id: 'home', text: 'Main Menu' }
       ]);
       return;
     }
 
     let total = 0;
     let reviewMsg = '📋 *Review Your Order*\n\n';
+    let validItems = 0;
     
-    customer.cart.forEach((item, i) => {
+    freshCustomer.cart.forEach((item, i) => {
       if (item.menuItem) {
         const subtotal = item.menuItem.price * item.quantity;
         total += subtotal;
+        validItems++;
         const unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
-        reviewMsg += `${i + 1}. *${item.menuItem.name}* (${unitInfo})\n`;
+        reviewMsg += `${validItems}. *${item.menuItem.name}* (${unitInfo})\n`;
         reviewMsg += `   Qty: ${item.quantity} × ₹${item.menuItem.price} = ₹${subtotal}\n\n`;
       }
     });
+    
+    if (validItems === 0) {
+      // Clean up invalid cart items
+      freshCustomer.cart = [];
+      await freshCustomer.save();
+      
+      await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+        { id: 'view_menu', text: 'View Menu' },
+        { id: 'home', text: 'Main Menu' }
+      ]);
+      return;
+    }
     
     reviewMsg += `━━━━━━━━━━━━━━━\n`;
     reviewMsg += `*Total: ₹${total}*\n\n`;
@@ -2021,14 +2079,15 @@ const chatbot = {
   },
 
   async sendCart(phone, customer) {
-    await customer.populate('cart.menuItem');
+    // Refresh customer from database to ensure we have latest cart data
+    const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
-    if (!customer.cart?.length) {
+    if (!freshCustomer?.cart?.length) {
       await whatsapp.sendButtons(phone,
         '🛒 *Your Cart is Empty*\n\nStart adding delicious items!',
         [
-          { id: 'place_order', text: 'Start Order' },
-          { id: 'view_menu', text: 'View Menu' }
+          { id: 'view_menu', text: 'View Menu' },
+          { id: 'home', text: 'Main Menu' }
         ]
       );
       return;
@@ -2036,16 +2095,34 @@ const chatbot = {
 
     let total = 0;
     let cartMsg = '🛒 *Your Cart*\n\n';
+    let validItems = 0;
     
-    customer.cart.forEach((item, i) => {
+    freshCustomer.cart.forEach((item, i) => {
       if (item.menuItem) {
         const subtotal = item.menuItem.price * item.quantity;
         total += subtotal;
+        validItems++;
         const unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
-        cartMsg += `${i + 1}. *${item.menuItem.name}* (${unitInfo})\n`;
+        cartMsg += `${validItems}. *${item.menuItem.name}* (${unitInfo})\n`;
         cartMsg += `   ${item.quantity} × ₹${item.menuItem.price} = ₹${subtotal}\n\n`;
       }
     });
+    
+    // If no valid items (all menu items were deleted), clean up cart and show empty message
+    if (validItems === 0) {
+      // Clean up invalid cart items
+      freshCustomer.cart = [];
+      await freshCustomer.save();
+      
+      await whatsapp.sendButtons(phone,
+        '🛒 *Your Cart is Empty*\n\nStart adding delicious items!',
+        [
+          { id: 'view_menu', text: 'View Menu' },
+          { id: 'home', text: 'Main Menu' }
+        ]
+      );
+      return;
+    }
     
     cartMsg += `━━━━━━━━━━━━━━━\n`;
     cartMsg += `*Total: ₹${total}*`;
@@ -2058,18 +2135,20 @@ const chatbot = {
   },
 
   async processCheckout(phone, customer, state) {
-    await customer.populate('cart.menuItem');
+    // Refresh customer from database to ensure we have latest cart data
+    const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
-    if (!customer.cart?.length) {
+    if (!freshCustomer?.cart?.length) {
       await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
-        { id: 'place_order', text: 'Start Order' }
+        { id: 'view_menu', text: 'View Menu' },
+        { id: 'home', text: 'Main Menu' }
       ]);
       return { success: false };
     }
 
     const orderId = generateOrderId();
     let total = 0;
-    const items = customer.cart.filter(item => item.menuItem).map(item => {
+    const items = freshCustomer.cart.filter(item => item.menuItem).map(item => {
       const subtotal = item.menuItem.price * item.quantity;
       total += subtotal;
       return {
@@ -2085,29 +2164,30 @@ const chatbot = {
 
     if (!items.length) {
       await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
-        { id: 'place_order', text: 'Start Order' }
+        { id: 'view_menu', text: 'View Menu' },
+        { id: 'home', text: 'Main Menu' }
       ]);
       return { success: false };
     }
 
     const order = new Order({
       orderId,
-      customer: { phone: customer.phone, name: customer.name || 'Customer', email: customer.email },
+      customer: { phone: freshCustomer.phone, name: freshCustomer.name || 'Customer', email: freshCustomer.email },
       items,
       totalAmount: total,
       serviceType: state.selectedService || 'delivery',
-      deliveryAddress: customer.deliveryAddress ? {
-        address: customer.deliveryAddress.address,
-        latitude: customer.deliveryAddress.latitude,
-        longitude: customer.deliveryAddress.longitude
+      deliveryAddress: freshCustomer.deliveryAddress ? {
+        address: freshCustomer.deliveryAddress.address,
+        latitude: freshCustomer.deliveryAddress.latitude,
+        longitude: freshCustomer.deliveryAddress.longitude
       } : null,
       trackingUpdates: [{ status: 'pending', message: 'Order created, awaiting payment' }]
     });
     await order.save();
 
     // Mark customer as having ordered (for accurate customer count)
-    if (!customer.hasOrdered) {
-      customer.hasOrdered = true;
+    if (!freshCustomer.hasOrdered) {
+      freshCustomer.hasOrdered = true;
     }
 
     // Track today's orders count
@@ -2136,13 +2216,20 @@ const chatbot = {
     // Sync to Google Sheets
     googleSheets.addOrder(order).catch(err => console.error('Google Sheets sync error:', err));
 
+    // Clear cart on the fresh customer and save
+    freshCustomer.cart = [];
+    freshCustomer.orderHistory = freshCustomer.orderHistory || [];
+    freshCustomer.orderHistory.push(order._id);
+    await freshCustomer.save();
+    
+    // Also update the original customer object for state consistency
     customer.cart = [];
-    customer.orderHistory = customer.orderHistory || [];
-    customer.orderHistory.push(order._id);
+    customer.orderHistory = freshCustomer.orderHistory;
+    
     state.pendingOrderId = orderId;
 
     try {
-      const paymentLink = await razorpayService.createPaymentLink(total, orderId, customer.phone, customer.name);
+      const paymentLink = await razorpayService.createPaymentLink(total, orderId, freshCustomer.phone, freshCustomer.name);
       order.razorpayOrderId = paymentLink.id;
       await order.save();
 
