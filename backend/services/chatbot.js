@@ -732,7 +732,7 @@ const chatbot = {
   },
 
   // Smart search - detects food type and searches by name/tag (async for AI translation)
-  // Improved: uses multiple translation variations for better matching
+  // Improved: EXACT match returns single item, otherwise searches with variations
   async smartSearch(text, menuItems) {
     // First translate regional language to English using AI (returns variations)
     const translationResult = await this.translateWithAI(text);
@@ -755,6 +755,26 @@ const chatbot = {
     
     // If search term is too short after removing keywords, search by ingredient/type only
     const hasSearchTerm = primarySearchTerm.length >= 2;
+    
+    // ========== CHECK FOR EXACT NAME MATCH FIRST ==========
+    // If search term exactly matches an item name, return ONLY that item
+    if (hasSearchTerm) {
+      for (const searchTerm of uniqueSearchTerms) {
+        const exactMatch = menuItems.find(item => 
+          item.name.toLowerCase() === searchTerm.toLowerCase()
+        );
+        if (exactMatch) {
+          console.log(`✅ Exact match found: "${searchTerm}" → "${exactMatch.name}"`);
+          return { 
+            items: [exactMatch], 
+            foodType: detected, 
+            searchTerm: searchTerm, 
+            label: null,
+            exactMatch: true 
+          };
+        }
+      }
+    }
     
     // Filter by detected food type
     let filteredItems = menuItems;
@@ -789,6 +809,30 @@ const chatbot = {
     
     if (!hasSearchTerm && detected?.type !== 'specific') return null;
     
+    // Helper to check for exact tag match
+    const findExactTagMatch = (items, term) => {
+      return items.find(item => 
+        item.tags?.some(tag => tag.toLowerCase() === term.toLowerCase())
+      );
+    };
+    
+    // ========== CHECK FOR EXACT TAG MATCH ==========
+    if (hasSearchTerm) {
+      for (const searchTerm of uniqueSearchTerms) {
+        const exactTagMatch = findExactTagMatch(filteredItems, searchTerm) || findExactTagMatch(menuItems, searchTerm);
+        if (exactTagMatch) {
+          console.log(`✅ Exact tag match found: "${searchTerm}" → "${exactTagMatch.name}"`);
+          return { 
+            items: [exactTagMatch], 
+            foodType: detected, 
+            searchTerm: searchTerm, 
+            label: null,
+            exactMatch: true 
+          };
+        }
+      }
+    }
+    
     // Helper function to search items by a term (checks tags first, then name)
     const searchByTerm = (items, term) => {
       if (!term || term.length < 2) return [];
@@ -817,15 +861,38 @@ const chatbot = {
       
       for (const term of terms) {
         if (term.length < 2) continue;
+        const termLower = term.toLowerCase();
         
-        // Search full term
+        // Check for exact name match first (highest priority)
+        for (const item of items) {
+          if (item.name.toLowerCase() === termLower) {
+            const id = item._id.toString();
+            if (!itemMatches.has(id)) {
+              itemMatches.set(id, { item, score: 0 });
+            }
+            itemMatches.get(id).score += 100; // Exact name match = 100 points
+          }
+        }
+        
+        // Check for exact tag match (high priority)
+        for (const item of items) {
+          if (item.tags?.some(tag => tag.toLowerCase() === termLower)) {
+            const id = item._id.toString();
+            if (!itemMatches.has(id)) {
+              itemMatches.set(id, { item, score: 0 });
+            }
+            itemMatches.get(id).score += 50; // Exact tag match = 50 points
+          }
+        }
+        
+        // Search partial term matches
         const matches = searchByTerm(items, term);
         for (const item of matches) {
           const id = item._id.toString();
           if (!itemMatches.has(id)) {
             itemMatches.set(id, { item, score: 0 });
           }
-          itemMatches.get(id).score += 10; // Full term match = 10 points
+          itemMatches.get(id).score += 10; // Partial term match = 10 points
         }
         
         // Also search individual keywords from this term
