@@ -214,6 +214,29 @@ const chatbot = {
       /\bveg\s+items\s+batavo\b/, /\bશાકાહારી\b/, /\bવેજ\s+આઇટમ્સ\b/, /\bવેજ\b/
     ];
     
+    // Patterns specifically for egg items
+    const eggPatterns = [
+      // English
+      /\begg\b/, /\begg\s+(?:items?|menu|food|dishes?)\b/,
+      /\bshow\s+(?:me\s+)?egg\b/, /\bonly\s+egg\b/, /\beggs\b/,
+      // Hindi
+      /\banda\b/, /\bअंडा\b/, /\bअंडे\b/,
+      // Telugu
+      /\bగుడ్డు\b/, /\bకోడిగుడ్డు\b/,
+      // Tamil
+      /\bமுட்டை\b/,
+      // Kannada
+      /\bಮೊಟ್ಟೆ\b/,
+      // Malayalam
+      /\bമുട്ട\b/,
+      // Bengali
+      /\bডিম\b/,
+      // Marathi
+      /\bअंडे\b/,
+      // Gujarati
+      /\bઈંડા\b/
+    ];
+    
     // Patterns specifically for non-veg items
     const nonvegPatterns = [
       // English - simple and compound (must have "non" before "veg")
@@ -240,7 +263,13 @@ const chatbot = {
       /\bnon[\s-]?veg\s+items\s+batavo\b/, /\bમાંસાહારી\b/, /\bનોન\s*વેજ\s+આઇટમ્સ\b/, /\bનોન\s*વેજ\b/
     ];
     
-    // Check for non-veg-specific intent FIRST (before veg, since "non veg" contains "veg")
+    // Check for egg-specific intent FIRST
+    const isEggIntent = eggPatterns.some(pattern => pattern.test(lowerText));
+    if (isEggIntent) {
+      return { showMenu: true, foodType: 'egg', searchTerm: null };
+    }
+    
+    // Check for non-veg-specific intent (before veg, since "non veg" contains "veg")
     // But first verify the text actually contains "non" to avoid false matches
     const hasNonPrefix = /\bnon[\s-]?veg/i.test(lowerText) || /\bnonveg/i.test(lowerText);
     const isNonvegIntent = hasNonPrefix && nonvegPatterns.some(pattern => pattern.test(lowerText));
@@ -574,6 +603,7 @@ const chatbot = {
   filterByFoodType(menuItems, preference) {
     if (preference === 'both') return menuItems;
     if (preference === 'veg') return menuItems.filter(item => item.foodType === 'veg');
+    if (preference === 'egg') return menuItems.filter(item => item.foodType === 'egg');
     if (preference === 'nonveg') return menuItems.filter(item => item.foodType === 'nonveg' || item.foodType === 'egg');
     return menuItems;
   },
@@ -714,6 +744,19 @@ const chatbot = {
             state.currentStep = 'select_category';
           } else {
             await whatsapp.sendButtons(phone, '🟢 No veg items available right now.', [
+              { id: 'view_menu', text: 'View All Menu' },
+              { id: 'home', text: 'Main Menu' }
+            ]);
+            state.currentStep = 'main_menu';
+          }
+        } else if (menuIntent.foodType === 'egg') {
+          state.foodTypePreference = 'egg';
+          const filteredItems = this.filterByFoodType(menuItems, 'egg');
+          if (filteredItems.length > 0) {
+            await this.sendMenuCategoriesWithLabel(phone, filteredItems, '� Egg- Menu');
+            state.currentStep = 'select_category';
+          } else {
+            await whatsapp.sendButtons(phone, '� NNo egg items available right now.', [
               { id: 'view_menu', text: 'View All Menu' },
               { id: 'home', text: 'Main Menu' }
             ]);
