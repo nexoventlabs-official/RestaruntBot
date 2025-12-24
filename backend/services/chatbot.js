@@ -809,10 +809,26 @@ const chatbot = {
     
     if (!hasSearchTerm && detected?.type !== 'specific') return null;
     
-    // Helper to find ALL items with exact tag match
+    // Helper to normalize text for comparison (removes spaces for flexible matching)
+    // "ground nuts" → "groundnuts", "veg biryani" → "vegbiryani"
+    const normalizeText = (text) => text.toLowerCase().replace(/\s+/g, '');
+    
+    // Helper to check if two strings match (with or without spaces)
+    // Matches: "groundnuts" with "ground nuts", "vegbiryani" with "veg biryani"
+    const flexibleMatch = (str1, str2) => {
+      const norm1 = normalizeText(str1);
+      const norm2 = normalizeText(str2);
+      return norm1 === norm2 || norm1.includes(norm2) || norm2.includes(norm1);
+    };
+    
+    // Helper to find ALL items with exact tag match (flexible - handles spaces)
     const findAllExactTagMatches = (items, term) => {
+      const termNorm = normalizeText(term);
       return items.filter(item => 
-        item.tags?.some(tag => tag.toLowerCase() === term.toLowerCase())
+        item.tags?.some(tag => {
+          const tagNorm = normalizeText(tag);
+          return tagNorm === termNorm || tagNorm === term.toLowerCase();
+        })
       );
     };
     
@@ -839,14 +855,19 @@ const chatbot = {
     }
     
     // Helper function to search items by a term (checks tags first, then name)
+    // Now handles flexible matching (with/without spaces)
     const searchByTerm = (items, term) => {
       if (!term || term.length < 2) return [];
       const termLower = term.toLowerCase();
+      const termNorm = normalizeText(term);
       
       const tagMatches = items.filter(item => 
         item.tags?.some(tag => {
           const tagLower = tag.toLowerCase();
-          return tagLower.includes(termLower) || termLower.includes(tagLower);
+          const tagNorm = normalizeText(tag);
+          // Match with spaces or without spaces
+          return tagLower.includes(termLower) || termLower.includes(tagLower) ||
+                 tagNorm.includes(termNorm) || termNorm.includes(tagNorm);
         })
       );
       
@@ -854,7 +875,10 @@ const chatbot = {
       const nameMatches = items.filter(item => {
         if (tagMatchIds.has(item._id.toString())) return false;
         const nameLower = item.name.toLowerCase();
-        return nameLower.includes(termLower) || termLower.includes(nameLower);
+        const nameNorm = normalizeText(item.name);
+        // Match with spaces or without spaces
+        return nameLower.includes(termLower) || termLower.includes(nameLower) ||
+               nameNorm.includes(termNorm) || termNorm.includes(nameNorm);
       });
       
       return [...tagMatches, ...nameMatches];
@@ -867,10 +891,13 @@ const chatbot = {
       for (const term of terms) {
         if (term.length < 2) continue;
         const termLower = term.toLowerCase();
+        const termNorm = normalizeText(term);
         
-        // Check for exact name match first (highest priority)
+        // Check for exact name match first (highest priority) - flexible matching
         for (const item of items) {
-          if (item.name.toLowerCase() === termLower) {
+          const nameLower = item.name.toLowerCase();
+          const nameNorm = normalizeText(item.name);
+          if (nameLower === termLower || nameNorm === termNorm) {
             const id = item._id.toString();
             if (!itemMatches.has(id)) {
               itemMatches.set(id, { item, score: 0 });
@@ -879,9 +906,13 @@ const chatbot = {
           }
         }
         
-        // Check for exact tag match (high priority)
+        // Check for exact tag match (high priority) - flexible matching
         for (const item of items) {
-          if (item.tags?.some(tag => tag.toLowerCase() === termLower)) {
+          if (item.tags?.some(tag => {
+            const tagLower = tag.toLowerCase();
+            const tagNorm = normalizeText(tag);
+            return tagLower === termLower || tagNorm === termNorm;
+          })) {
             const id = item._id.toString();
             if (!itemMatches.has(id)) {
               itemMatches.set(id, { item, score: 0 });
