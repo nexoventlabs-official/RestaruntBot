@@ -102,6 +102,163 @@ const chatbot = {
     return cartPatterns.some(pattern => pattern.test(lowerText));
   },
 
+  // Helper to detect clear/empty cart intent from text/voice
+  // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
+  isClearCartIntent(text) {
+    if (!text) return false;
+    const lowerText = ' ' + text.toLowerCase() + ' ';
+    const clearCartPatterns = [
+      // English
+      /\bclear cart\b/, /\bclear my cart\b/, /\bempty cart\b/, /\bempty my cart\b/,
+      /\bremove cart\b/, /\bremove all\b/, /\bremove items\b/, /\bremove all items\b/,
+      /\bdelete cart\b/, /\bdelete all\b/, /\bdelete items\b/,
+      /\bclean cart\b/, /\breset cart\b/, /\bclear basket\b/, /\bempty basket\b/,
+      /\bremove everything\b/, /\bdelete everything\b/, /\bclear all\b/,
+      /\bstart fresh\b/, /\bstart over\b/, /\bremove from cart\b/,
+      // Hindi
+      /\bcart khali karo\b/, /\bcart saaf karo\b/, /\bcart clear karo\b/,
+      /\bsab hatao\b/, /\bsab remove karo\b/, /\bsab delete karo\b/,
+      /\bकार्ट खाली करो\b/, /\bकार्ट साफ करो\b/, /\bसब हटाओ\b/,
+      /\bकार्ट क्लियर\b/, /\bसब कुछ हटाओ\b/, /\bआइटम हटाओ\b/,
+      // Telugu
+      /\bcart clear cheyyi\b/, /\bcart khali cheyyi\b/, /\banni teeseyyi\b/,
+      /\bకార్ట్ క్లియర్\b/, /\bకార్ట్ ఖాళీ చేయి\b/, /\bఅన్నీ తీసేయి\b/,
+      /\bఐటమ్స్ తీసేయి\b/, /\bకార్ట్ తీసేయి\b/,
+      // Tamil
+      /\bcart clear pannu\b/, /\bcart kaali pannu\b/, /\bellam eduthudu\b/,
+      /\bகார்ட் கிளியர்\b/, /\bகார்ட் காலி\b/, /\bஎல்லாம் எடுத்துடு\b/,
+      /\bஐட்டம்ஸ் நீக்கு\b/,
+      // Kannada
+      /\bcart clear maadi\b/, /\bcart khali maadi\b/, /\bella tegedu\b/,
+      /\bಕಾರ್ಟ್ ಕ್ಲಿಯರ್\b/, /\bಕಾರ್ಟ್ ಖಾಲಿ\b/, /\bಎಲ್ಲಾ ತೆಗೆದು\b/,
+      // Malayalam
+      /\bcart clear cheyyuka\b/, /\bcart kaali aakkuka\b/, /\bellam maarruka\b/,
+      /\bകാർട്ട് ക്ലിയർ\b/, /\bകാർട്ട് കാലി\b/, /\bഎല്ലാം മാറ്റുക\b/,
+      // Bengali
+      /\bcart clear koro\b/, /\bcart khali koro\b/, /\bsob soriyo\b/,
+      /\bকার্ট ক্লিয়ার\b/, /\bকার্ট খালি করো\b/, /\bসব সরিয়ে দাও\b/,
+      // Marathi
+      /\bcart clear kara\b/, /\bcart khali kara\b/, /\bsagla kadhun taka\b/,
+      /\bकार्ट क्लियर करा\b/, /\bकार्ट खाली करा\b/, /\bसगळं काढून टाका\b/,
+      // Gujarati
+      /\bcart clear karo\b/, /\bcart khali karo\b/, /\bbadhu kaadhi nakho\b/,
+      /\bકાર્ટ ક્લિયર\b/, /\bકાર્ટ ખાલી કરો\b/, /\bબધું કાઢી નાખો\b/
+    ];
+    return clearCartPatterns.some(pattern => pattern.test(lowerText));
+  },
+
+  // Helper to detect show menu/items intent from text/voice
+  // Returns: { showMenu: true, foodType: 'veg'|'nonveg'|'both'|null, searchTerm: string|null }
+  // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
+  isShowMenuIntent(text) {
+    if (!text) return null;
+    const lowerText = ' ' + text.toLowerCase() + ' ';
+    
+    // Patterns for showing menu/items
+    const menuPatterns = [
+      // English
+      /\bshow\s+(?:me\s+)?(?:the\s+)?menu\b/, /\bshow\s+(?:me\s+)?(?:all\s+)?items\b/,
+      /\bshow\s+(?:me\s+)?(?:the\s+)?food\b/, /\bwhat\s+(?:do\s+you\s+have|items|food)\b/,
+      /\blist\s+(?:all\s+)?(?:items|menu|food)\b/, /\bdisplay\s+(?:menu|items)\b/,
+      /\bsee\s+(?:the\s+)?(?:menu|items|food)\b/, /\bview\s+(?:all\s+)?(?:items|food)\b/,
+      /\ball\s+items\b/, /\bfull\s+menu\b/, /\bentire\s+menu\b/,
+      // Hindi
+      /\bmenu\s+dikhao\b/, /\bsab\s+items\s+dikhao\b/, /\bkhana\s+dikhao\b/,
+      /\bमेन्यू\s+दिखाओ\b/, /\bसब\s+आइटम\b/, /\bखाना\s+दिखाओ\b/, /\bक्या\s+है\b/,
+      // Telugu
+      /\bmenu\s+chupinchu\b/, /\banni\s+items\s+chupinchu\b/, /\bమెనూ\s+చూపించు\b/,
+      /\bఅన్ని\s+ఐటమ్స్\b/, /\bఏమి\s+ఉంది\b/,
+      // Tamil
+      /\bmenu\s+kaattu\b/, /\bella\s+items\s+kaattu\b/, /\bமெனு\s+காட்டு\b/,
+      /\bஎல்லா\s+ஐட்டம்ஸ்\b/, /\bஎன்ன\s+இருக்கு\b/,
+      // Kannada
+      /\bmenu\s+toorisu\b/, /\bella\s+items\s+toorisu\b/, /\bಮೆನು\s+ತೋರಿಸು\b/,
+      /\bಎಲ್ಲಾ\s+ಐಟಮ್ಸ್\b/, /\bಏನು\s+ಇದೆ\b/,
+      // Malayalam
+      /\bmenu\s+kaanikkuka\b/, /\bellam\s+kaanikkuka\b/, /\bമെനു\s+കാണിക്കുക\b/,
+      /\bഎല്ലാം\s+കാണിക്കുക\b/, /\bഎന്താണ്\s+ഉള്ളത്\b/,
+      // Bengali
+      /\bmenu\s+dekho\b/, /\bsob\s+items\s+dekho\b/, /\bমেনু\s+দেখো\b/,
+      /\bসব\s+আইটেম\b/, /\bকি\s+আছে\b/,
+      // Marathi
+      /\bmenu\s+dakhva\b/, /\bsagla\s+dakhva\b/, /\bमेन्यू\s+दाखवा\b/,
+      /\bसगळे\s+आइटम\b/, /\bकाय\s+आहे\b/,
+      // Gujarati
+      /\bmenu\s+batavo\b/, /\bbadha\s+items\s+batavo\b/, /\bમેનુ\s+બતાવો\b/,
+      /\bબધા\s+આઇટમ્સ\b/, /\bશું\s+છે\b/
+    ];
+    
+    // Patterns specifically for veg items
+    const vegPatterns = [
+      // English
+      /\bveg\s+(?:items?|menu|food|dishes?)\b/, /\bvegetarian\s+(?:items?|menu|food|dishes?)\b/,
+      /\bshow\s+(?:me\s+)?veg\b/, /\bonly\s+veg\b/, /\bpure\s+veg\b/,
+      /\bveggie\s+(?:items?|menu|food)\b/,
+      // Hindi
+      /\bveg\s+(?:items?|khana)\s+dikhao\b/, /\bशाकाहारी\b/, /\bवेज\s+आइटम\b/,
+      /\bवेज\s+खाना\b/, /\bसिर्फ\s+वेज\b/,
+      // Telugu
+      /\bveg\s+items\s+chupinchu\b/, /\bశాకాహారం\b/, /\bవెజ్\s+ఐటమ్స్\b/,
+      // Tamil
+      /\bveg\s+items\s+kaattu\b/, /\bசைவம்\b/, /\bவெஜ்\s+ஐட்டம்ஸ்\b/,
+      // Kannada
+      /\bveg\s+items\s+toorisu\b/, /\bಸಸ್ಯಾಹಾರ\b/, /\bವೆಜ್\s+ಐಟಮ್ಸ್\b/,
+      // Malayalam
+      /\bveg\s+items\s+kaanikkuka\b/, /\bസസ്യാഹാരം\b/, /\bവെജ്\s+ഐറ്റംസ്\b/,
+      // Bengali
+      /\bveg\s+items\s+dekho\b/, /\bনিরামিষ\b/, /\bভেজ\s+আইটেম\b/,
+      // Marathi
+      /\bveg\s+items\s+dakhva\b/, /\bशाकाहारी\b/, /\bवेज\s+आइटम\b/,
+      // Gujarati
+      /\bveg\s+items\s+batavo\b/, /\bશાકાહારી\b/, /\bવેજ\s+આઇટમ્સ\b/
+    ];
+    
+    // Patterns specifically for non-veg items
+    const nonvegPatterns = [
+      // English
+      /\bnon[\s-]?veg\s+(?:items?|menu|food|dishes?)\b/, /\bnonveg\s+(?:items?|menu|food|dishes?)\b/,
+      /\bshow\s+(?:me\s+)?non[\s-]?veg\b/, /\bonly\s+non[\s-]?veg\b/,
+      /\bmeat\s+(?:items?|menu|dishes?)\b/,
+      // Hindi
+      /\bnon[\s-]?veg\s+(?:items?|khana)\s+dikhao\b/, /\bमांसाहारी\b/, /\bनॉन\s*वेज\s+आइटम\b/,
+      /\bनॉन\s*वेज\s+खाना\b/, /\bसिर्फ\s+नॉन\s*वेज\b/,
+      // Telugu
+      /\bnon[\s-]?veg\s+items\s+chupinchu\b/, /\bమాంసాహారం\b/, /\bనాన్\s*వెజ్\s+ఐటమ్స్\b/,
+      // Tamil
+      /\bnon[\s-]?veg\s+items\s+kaattu\b/, /\bஅசைவம்\b/, /\bநான்\s*வெஜ்\s+ஐட்டம்ஸ்\b/,
+      // Kannada
+      /\bnon[\s-]?veg\s+items\s+toorisu\b/, /\bಮಾಂಸಾಹಾರ\b/, /\bನಾನ್\s*ವೆಜ್\s+ಐಟಮ್ಸ್\b/,
+      // Malayalam
+      /\bnon[\s-]?veg\s+items\s+kaanikkuka\b/, /\bമാംസാഹാരം\b/, /\bനോൺ\s*വെജ്\s+ഐറ്റംസ്\b/,
+      // Bengali
+      /\bnon[\s-]?veg\s+items\s+dekho\b/, /\bআমিষ\b/, /\bনন\s*ভেজ\s+আইটেম\b/,
+      // Marathi
+      /\bnon[\s-]?veg\s+items\s+dakhva\b/, /\bमांसाहारी\b/, /\bनॉन\s*वेज\s+आइटम\b/,
+      // Gujarati
+      /\bnon[\s-]?veg\s+items\s+batavo\b/, /\bમાંસાહારી\b/, /\bનોન\s*વેજ\s+આઇટમ્સ\b/
+    ];
+    
+    // Check for veg-specific intent first
+    const isVegIntent = vegPatterns.some(pattern => pattern.test(lowerText));
+    if (isVegIntent) {
+      return { showMenu: true, foodType: 'veg', searchTerm: null };
+    }
+    
+    // Check for non-veg-specific intent
+    const isNonvegIntent = nonvegPatterns.some(pattern => pattern.test(lowerText));
+    if (isNonvegIntent) {
+      return { showMenu: true, foodType: 'nonveg', searchTerm: null };
+    }
+    
+    // Check for general menu intent
+    const isMenuIntent = menuPatterns.some(pattern => pattern.test(lowerText));
+    if (isMenuIntent) {
+      return { showMenu: true, foodType: 'both', searchTerm: null };
+    }
+    
+    return null;
+  },
+
   // Helper to detect track order intent from text/voice
   isTrackIntent(text) {
     if (!text) return false;
@@ -540,6 +697,44 @@ const chatbot = {
         await this.sendFoodTypeSelection(phone);
         state.currentStep = 'select_food_type';
       }
+      // Handle text/voice menu intent with food type detection
+      else if (this.isShowMenuIntent(msg)) {
+        const menuIntent = this.isShowMenuIntent(msg);
+        console.log('🍽️ Menu intent detected:', menuIntent);
+        
+        if (menuIntent.foodType === 'veg') {
+          state.foodTypePreference = 'veg';
+          const filteredItems = this.filterByFoodType(menuItems, 'veg');
+          if (filteredItems.length > 0) {
+            await this.sendMenuCategoriesWithLabel(phone, filteredItems, '🟢 Veg Menu');
+            state.currentStep = 'select_category';
+          } else {
+            await whatsapp.sendButtons(phone, '🟢 No veg items available right now.', [
+              { id: 'view_menu', text: 'View All Menu' },
+              { id: 'home', text: 'Main Menu' }
+            ]);
+            state.currentStep = 'main_menu';
+          }
+        } else if (menuIntent.foodType === 'nonveg') {
+          state.foodTypePreference = 'nonveg';
+          const filteredItems = this.filterByFoodType(menuItems, 'nonveg');
+          if (filteredItems.length > 0) {
+            await this.sendMenuCategoriesWithLabel(phone, filteredItems, '🔴 Non-Veg Menu');
+            state.currentStep = 'select_category';
+          } else {
+            await whatsapp.sendButtons(phone, '🔴 No non-veg items available right now.', [
+              { id: 'view_menu', text: 'View All Menu' },
+              { id: 'home', text: 'Main Menu' }
+            ]);
+            state.currentStep = 'main_menu';
+          }
+        } else {
+          // Show all items
+          state.foodTypePreference = 'both';
+          await this.sendMenuCategoriesWithLabel(phone, menuItems, '🍽️ All Menu');
+          state.currentStep = 'select_category';
+        }
+      }
       else if (selection === 'food_veg' || selection === 'food_nonveg' || selection === 'food_both') {
         state.foodTypePreference = selection.replace('food_', '');
         console.log('🍽️ Food type selected:', state.foodTypePreference);
@@ -667,8 +862,9 @@ const chatbot = {
           if (result.success) state.currentStep = 'awaiting_payment';
         }
       }
-      else if (selection === 'clear_cart') {
+      else if (selection === 'clear_cart' || this.isClearCartIntent(msg)) {
         customer.cart = [];
+        await customer.save(); // Save immediately to persist cart clear
         await whatsapp.sendButtons(phone, '🗑️ Cart cleared!', [
           { id: 'place_order', text: 'New Order' },
           { id: 'home', text: 'Main Menu' }
@@ -809,9 +1005,22 @@ const chatbot = {
         const item = menuItems.find(m => m._id.toString() === itemId);
         if (item) {
           state.selectedItem = itemId;
+          // Save state immediately to ensure selectedItem persists
+          customer.conversationState = state;
+          await customer.save();
           // Go directly to quantity selection
           await this.sendQuantitySelection(phone, item);
           state.currentStep = 'select_quantity';
+        } else {
+          console.log('❌ Item not found for add_:', itemId);
+          await whatsapp.sendButtons(phone,
+            '⚠️ This item is no longer available. Please select another item.',
+            [
+              { id: 'place_order', text: 'View Menu' },
+              { id: 'home', text: 'Main Menu' }
+            ]
+          );
+          state.currentStep = 'main_menu';
         }
       }
       else if (selection.startsWith('confirm_add_')) {
@@ -819,8 +1028,21 @@ const chatbot = {
         const item = menuItems.find(m => m._id.toString() === itemId);
         if (item) {
           state.selectedItem = itemId;
+          // Save state immediately to ensure selectedItem persists
+          customer.conversationState = state;
+          await customer.save();
           await this.sendQuantitySelection(phone, item);
           state.currentStep = 'select_quantity';
+        } else {
+          console.log('❌ Item not found for confirm_add_:', itemId);
+          await whatsapp.sendButtons(phone,
+            '⚠️ This item is no longer available. Please select another item.',
+            [
+              { id: 'place_order', text: 'View Menu' },
+              { id: 'home', text: 'Main Menu' }
+            ]
+          );
+          state.currentStep = 'main_menu';
         }
       }
 
@@ -840,12 +1062,14 @@ const chatbot = {
           } else {
             customer.cart.push({ menuItem: item._id, quantity: qty });
           }
-          console.log('🛒 Cart updated:', customer.cart.length, 'items');
+          // Save cart immediately to persist the change
+          await customer.save();
+          console.log('🛒 Cart updated and saved:', customer.cart.length, 'items');
           await this.sendAddedToCart(phone, item, qty, customer.cart);
           state.currentStep = 'item_added';
         } else {
           // Item not found - maybe state was lost, show menu again
-          console.log('❌ Item not found for qty selection, showing menu');
+          console.log('❌ Item not found for qty selection, selectedItem:', state.selectedItem);
           await whatsapp.sendButtons(phone,
             '⚠️ Something went wrong. Please select an item again.',
             [

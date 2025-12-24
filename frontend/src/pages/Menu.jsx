@@ -180,6 +180,9 @@ export default function Menu() {
   const [confirmDialog, setConfirmDialog] = useState({ show: false, title: '', message: '', onConfirm: null });
   const units = ['piece', 'kg', 'gram', 'liter', 'ml', 'plate', 'bowl', 'cup', 'slice', 'inch', 'full', 'half', 'small'];
   const [aiLoading, setAiLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const initialLoadDone = useRef(false);
   const lastTapRef = useRef({});
   const [imageError, setImageError] = useState('');
@@ -313,6 +316,8 @@ export default function Menu() {
       alert('Please fix the image URL error before saving');
       return;
     }
+    if (saving) return; // Prevent double submission
+    setSaving(true);
     try {
       if (editing) {
         await api.put(`/menu/${editing._id}`, form);
@@ -324,6 +329,8 @@ export default function Menu() {
       fetchItems();
     } catch (err) {
       alert('Failed to save item');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -333,13 +340,16 @@ export default function Menu() {
       title: 'Delete Item',
       message: `Are you sure you want to delete "${itemName}"?`,
       onConfirm: async () => {
+        setDeleting(true);
         try {
           await api.delete(`/menu/${id}`);
           fetchItems();
         } catch (err) {
           alert('Failed to delete');
+        } finally {
+          setDeleting(false);
+          setConfirmDialog({ show: false, title: '', message: '', onConfirm: null });
         }
-        setConfirmDialog({ show: false, title: '', message: '', onConfirm: null });
       }
     });
   };
@@ -731,8 +741,22 @@ export default function Menu() {
                   </label>
                 </div>
               </div>
-              <button type="submit" className="w-full gradient-primary text-white py-3.5 rounded-xl font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-primary-500/30">
-                {editing ? 'Update Item' : 'Add Item'}
+              <button 
+                type="submit" 
+                disabled={saving}
+                className={`w-full gradient-primary text-white py-3.5 rounded-xl font-semibold transition-opacity shadow-lg shadow-primary-500/30 flex items-center justify-center gap-2 ${saving ? 'opacity-70 cursor-not-allowed' : 'hover:opacity-90'}`}
+              >
+                {saving ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    {editing ? 'Updating...' : 'Adding...'}
+                  </>
+                ) : (
+                  editing ? 'Update Item' : 'Add Item'
+                )}
               </button>
             </form>
           </div>
@@ -753,6 +777,8 @@ export default function Menu() {
               <form onSubmit={async (e) => {
                 e.preventDefault();
                 if (!categoryForm.name.trim()) return;
+                if (savingCategory) return; // Prevent double submission
+                setSavingCategory(true);
                 try {
                   if (editingCategory) {
                     await api.put(`/categories/${editingCategory._id}`, categoryForm);
@@ -764,6 +790,8 @@ export default function Menu() {
                   fetchCategories();
                 } catch (err) {
                   alert(err.response?.data?.error || 'Failed to save category');
+                } finally {
+                  setSavingCategory(false);
                 }
               }} className="space-y-3 mb-5">
                 <input type="text" value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
@@ -783,8 +811,22 @@ export default function Menu() {
                     <button type="button" onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', description: '', image: '' }); }}
                       className="flex-1 bg-dark-100 text-dark-700 px-5 py-3 rounded-xl font-medium hover:bg-dark-200 transition-colors">Cancel</button>
                   )}
-                  <button type="submit" className="flex-1 gradient-primary text-white px-5 py-3 rounded-xl font-medium hover:opacity-90 transition-opacity">
-                    {editingCategory ? 'Update Category' : 'Add Category'}
+                  <button 
+                    type="submit" 
+                    disabled={savingCategory}
+                    className={`flex-1 gradient-primary text-white px-5 py-3 rounded-xl font-medium transition-opacity flex items-center justify-center gap-2 ${savingCategory ? 'opacity-70 cursor-not-allowed' : 'hover:opacity-90'}`}
+                  >
+                    {savingCategory ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        {editingCategory ? 'Updating...' : 'Adding...'}
+                      </>
+                    ) : (
+                      editingCategory ? 'Update Category' : 'Add Category'
+                    )}
                   </button>
                 </div>
               </form>
@@ -857,14 +899,17 @@ export default function Menu() {
                           itemsToDelete: itemsToDelete.length,
                           itemsToUpdate: itemsToUpdate.length,
                           onConfirm: async () => {
+                            setDeleting(true);
                             try {
                               await api.delete(`/categories/${cat._id}`);
                               fetchCategories();
                               fetchItems();
                             } catch (err) {
                               alert('Failed to delete category');
+                            } finally {
+                              setDeleting(false);
+                              setConfirmDialog({ show: false, title: '', message: '', onConfirm: null });
                             }
-                            setConfirmDialog({ show: false, title: '', message: '', onConfirm: null });
                           }
                         });
                       }} className="absolute -top-1 -right-1 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
@@ -881,7 +926,7 @@ export default function Menu() {
 
       {/* Confirm Dialog */}
       {confirmDialog.show && (
-        <div className="modal-backdrop !mt-0" onClick={() => setConfirmDialog({ show: false, title: '', message: '', onConfirm: null })}>
+        <div className="modal-backdrop !mt-0" onClick={() => !deleting && setConfirmDialog({ show: false, title: '', message: '', onConfirm: null })}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="p-6 text-center">
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -900,15 +945,27 @@ export default function Menu() {
             <div className="flex border-t border-dark-100">
               <button
                 onClick={() => setConfirmDialog({ show: false, title: '', message: '', onConfirm: null })}
-                className="flex-1 px-6 py-4 text-dark-600 font-medium hover:bg-dark-50 transition-colors"
+                disabled={deleting}
+                className={`flex-1 px-6 py-4 text-dark-600 font-medium transition-colors ${deleting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-dark-50'}`}
               >
                 Cancel
               </button>
               <button
                 onClick={confirmDialog.onConfirm}
-                className="flex-1 px-6 py-4 bg-red-500 text-white font-medium hover:bg-red-600 transition-colors"
+                disabled={deleting}
+                className={`flex-1 px-6 py-4 bg-red-500 text-white font-medium transition-colors flex items-center justify-center gap-2 ${deleting ? 'opacity-70 cursor-not-allowed' : 'hover:bg-red-600'}`}
               >
-                Delete
+                {deleting ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
               </button>
             </div>
           </div>
