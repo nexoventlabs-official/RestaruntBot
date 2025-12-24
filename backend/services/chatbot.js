@@ -697,8 +697,8 @@ const chatbot = {
         await this.sendFoodTypeSelection(phone);
         state.currentStep = 'select_food_type';
       }
-      // Handle text/voice menu intent with food type detection
-      else if (this.isShowMenuIntent(msg)) {
+      // Handle text/voice menu intent with food type detection (only for text messages, not button clicks)
+      else if (!selectedId && this.isShowMenuIntent(msg)) {
         const menuIntent = this.isShowMenuIntent(msg);
         console.log('🍽️ Menu intent detected:', menuIntent);
         
@@ -755,32 +755,33 @@ const chatbot = {
           state.currentStep = 'select_category';
         }
       }
-      else if (selection === 'view_cart' || msg === 'cart' || this.isCartIntent(msg)) {
+      else if (selection === 'view_cart' || (!selectedId && (msg === 'cart' || this.isCartIntent(msg)))) {
         await this.sendCart(phone, customer);
         state.currentStep = 'viewing_cart';
       }
-      else if (selection === 'place_order' || selection === 'order_now' || msg === 'order') {
+      else if (selection === 'place_order' || selection === 'order_now' || (!selectedId && msg === 'order')) {
         await this.sendServiceType(phone);
         state.currentStep = 'select_service';
       }
       // Check cancel/refund/track BEFORE order status (they're more specific)
-      else if (selection === 'cancel_order' || this.isCancelIntent(msg)) {
+      // Only check text-based intents when there's no selectedId (button click)
+      else if (selection === 'cancel_order' || (!selectedId && this.isCancelIntent(msg))) {
         await this.sendCancelOptions(phone);
         state.currentStep = 'select_cancel';
       }
-      else if (selection === 'request_refund' || this.isRefundIntent(msg)) {
+      else if (selection === 'request_refund' || (!selectedId && this.isRefundIntent(msg))) {
         await this.sendRefundOptions(phone);
         state.currentStep = 'select_refund';
       }
-      else if (selection === 'track_order' || msg === 'track' || this.isTrackIntent(msg)) {
+      else if (selection === 'track_order' || (!selectedId && (msg === 'track' || this.isTrackIntent(msg)))) {
         await this.sendTrackingOptions(phone);
         state.currentStep = 'select_track';
       }
-      else if (selection === 'order_status' || msg === 'status' || this.isOrderStatusIntent(msg)) {
+      else if (selection === 'order_status' || (!selectedId && (msg === 'status' || this.isOrderStatusIntent(msg)))) {
         await this.sendOrderStatus(phone);
         state.currentStep = 'main_menu';
       }
-      else if (selection === 'help' || msg === 'help') {
+      else if (selection === 'help' || (!selectedId && msg === 'help')) {
         await this.sendHelp(phone);
         state.currentStep = 'main_menu';
       }
@@ -862,7 +863,7 @@ const chatbot = {
           if (result.success) state.currentStep = 'awaiting_payment';
         }
       }
-      else if (selection === 'clear_cart' || this.isClearCartIntent(msg)) {
+      else if (selection === 'clear_cart' || (!selectedId && this.isClearCartIntent(msg))) {
         customer.cart = [];
         await customer.save(); // Save immediately to persist cart clear
         await whatsapp.sendButtons(phone, '🗑️ Cart cleared!', [
