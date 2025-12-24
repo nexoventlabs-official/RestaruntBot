@@ -9,72 +9,6 @@ const axios = require('axios');
 
 const generateOrderId = () => 'ORD' + Date.now().toString(36).toUpperCase();
 
-// Fuzzy string matching using Levenshtein distance
-const levenshteinDistance = (str1, str2) => {
-  const m = str1.length, n = str2.length;
-  const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
-  for (let i = 0; i <= m; i++) dp[i][0] = i;
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      dp[i][j] = str1[i-1] === str2[j-1] 
-        ? dp[i-1][j-1] 
-        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
-    }
-  }
-  return dp[m][n];
-};
-
-// Calculate similarity score (0-1, higher is better)
-const similarityScore = (str1, str2) => {
-  const s1 = str1.toLowerCase().trim();
-  const s2 = str2.toLowerCase().trim();
-  if (s1 === s2) return 1;
-  const maxLen = Math.max(s1.length, s2.length);
-  if (maxLen === 0) return 1;
-  return 1 - levenshteinDistance(s1, s2) / maxLen;
-};
-
-// Common voice transcription corrections for food ordering
-const voiceCorrections = {
-  // Common mishearings
-  'biryani': ['biriyani', 'briyani', 'birani', 'biriani', 'biriany', 'biryany'],
-  'paneer': ['panner', 'panir', 'paner', 'panear'],
-  'chicken': ['chiken', 'chickan', 'chikan', 'cheeken'],
-  'mutton': ['mutan', 'muton', 'mattan'],
-  'naan': ['nan', 'naan', 'naaan'],
-  'roti': ['rotee', 'rotti', 'rothi'],
-  'dal': ['daal', 'dhal', 'dhaal'],
-  'rice': ['rais', 'ryce', 'ries'],
-  'menu': ['manu', 'menyu', 'meenu'],
-  'cancel': ['cansel', 'cancle', 'kancel', 'cancell'],
-  'order': ['ordar', 'ordor', 'oder', 'ordeer'],
-  'cart': ['kart', 'cort', 'caart'],
-  'refund': ['refand', 'refound', 'reefund'],
-  'track': ['trak', 'traak', 'treck'],
-  'status': ['statas', 'statuss', 'stetus'],
-  'veg': ['vej', 'vedge', 'vege'],
-  'nonveg': ['non vej', 'nonvej', 'non vedge'],
-  'add': ['ad', 'aad', 'edd'],
-  'remove': ['remov', 'remuv', 'rimove'],
-  'checkout': ['chekout', 'check out', 'chek out'],
-  'payment': ['payement', 'paymant', 'pament'],
-  'delivery': ['delivary', 'deliveri', 'dilvery'],
-  'address': ['adress', 'addres', 'adres'],
-};
-
-// Apply voice corrections to text
-const applyVoiceCorrections = (text) => {
-  let corrected = text.toLowerCase();
-  for (const [correct, variants] of Object.entries(voiceCorrections)) {
-    for (const variant of variants) {
-      const regex = new RegExp(`\\b${variant}\\b`, 'gi');
-      corrected = corrected.replace(regex, correct);
-    }
-  }
-  return corrected;
-};
-
 const chatbot = {
   // Helper to detect cancel order intent from text/voice
   // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
@@ -591,10 +525,9 @@ const chatbot = {
   },
 
   // Smart search - detects food type and searches by name/tag
-  smartSearch(text, menuItems, useFuzzy = false) {
-    // First apply voice corrections, then transliterate regional language to English
-    const correctedText = applyVoiceCorrections(text);
-    const transliteratedText = this.transliterate(correctedText);
+  smartSearch(text, menuItems) {
+    // First transliterate regional language to English
+    const transliteratedText = this.transliterate(text);
     const lowerText = transliteratedText.toLowerCase().trim();
     if (lowerText.length < 2) return null;
     
@@ -629,9 +562,7 @@ const chatbot = {
         filteredItems = menuItems.filter(item => {
           const inName = item.name.toLowerCase().includes(ingredient);
           const inTags = item.tags?.some(tag => tag.toLowerCase().includes(ingredient));
-          // Also try fuzzy match for ingredient
-          const fuzzyNameMatch = useFuzzy && similarityScore(item.name.toLowerCase(), ingredient) > 0.7;
-          return inName || inTags || fuzzyNameMatch;
+          return inName || inTags;
         });
         foodTypeLabel = `🍗 ${ingredient.charAt(0).toUpperCase() + ingredient.slice(1)}`;
         
@@ -647,7 +578,7 @@ const chatbot = {
     // If no search term and no specific ingredient, return null
     if (!hasSearchTerm && detected?.type !== 'specific') return null;
     
-    // Search by name or tag in filtered items (with optional fuzzy matching)
+    // Search by name or tag in filtered items
     let matchingItems = filteredItems;
     if (hasSearchTerm) {
       matchingItems = filteredItems.filter(item => {
@@ -659,25 +590,8 @@ const chatbot = {
           searchTerm.includes(tag.toLowerCase())
         );
         
-        // Fuzzy matching for voice messages - check if name is similar
-        let fuzzyMatch = false;
-        if (useFuzzy && !nameMatch && !tagMatch) {
-          const nameSimilarity = similarityScore(item.name.toLowerCase(), searchTerm);
-          const tagSimilarity = item.tags?.some(tag => similarityScore(tag.toLowerCase(), searchTerm) > 0.65) || false;
-          fuzzyMatch = nameSimilarity > 0.65 || tagSimilarity;
-        }
-        
-        return nameMatch || tagMatch || fuzzyMatch;
+        return nameMatch || tagMatch;
       });
-      
-      // If fuzzy matching found results, sort by similarity
-      if (useFuzzy && matchingItems.length > 0) {
-        matchingItems.sort((a, b) => {
-          const scoreA = similarityScore(a.name.toLowerCase(), searchTerm);
-          const scoreB = similarityScore(b.name.toLowerCase(), searchTerm);
-          return scoreB - scoreA;
-        });
-      }
     }
     
     return matchingItems.length > 0 
@@ -759,97 +673,14 @@ const chatbot = {
       });
     
     const state = customer.conversationState || { currentStep: 'welcome' };
-    const isVoiceMessage = messageType === 'voice';
     
     // Handle message - could be string or object (for location)
-    // Apply voice corrections if it's a voice message
-    let msg = typeof message === 'string' ? message.toLowerCase().trim() : '';
-    if (isVoiceMessage && msg) {
-      const originalMsg = msg;
-      msg = applyVoiceCorrections(msg);
-      if (originalMsg !== msg) {
-        console.log('🎤 Voice correction applied:', originalMsg, '->', msg);
-      }
-    }
+    const msg = typeof message === 'string' ? message.toLowerCase().trim() : '';
     const selection = selectedId || msg;
 
-    console.log('🤖 Chatbot:', { phone, msg, selection, messageType, isVoiceMessage, currentStep: state.currentStep });
+    console.log('🤖 Chatbot:', { phone, msg, selection, messageType, currentStep: state.currentStep });
 
     try {
-      // ========== HANDLE VOICE MESSAGE CONFIRMATION FOR CRITICAL ACTIONS ==========
-      if (isVoiceMessage && msg) {
-        // Check if this is a critical action that needs confirmation
-        const isCriticalAction = this.isCancelIntent(msg) || this.isRefundIntent(msg) || this.isClearCartIntent(msg);
-        
-        if (isCriticalAction && state.currentStep !== 'voice_confirm_action') {
-          // Store the pending action and ask for confirmation
-          state.pendingVoiceAction = msg;
-          state.pendingVoiceActionType = this.isCancelIntent(msg) ? 'cancel' : 
-                                          this.isRefundIntent(msg) ? 'refund' : 'clear_cart';
-          state.currentStep = 'voice_confirm_action';
-          
-          const actionLabels = {
-            cancel: '❌ Cancel Order',
-            refund: '💰 Request Refund', 
-            clear_cart: '🗑️ Clear Cart'
-          };
-          
-          await whatsapp.sendButtons(phone,
-            `🎤 I heard: "${message}"\n\nDid you mean: ${actionLabels[state.pendingVoiceActionType]}?`,
-            [
-              { id: 'voice_confirm_yes', text: '✅ Yes, proceed' },
-              { id: 'voice_confirm_no', text: '❌ No, cancel' }
-            ]
-          );
-          customer.conversationState = state;
-          await customer.save();
-          return;
-        }
-      }
-      
-      // Handle voice confirmation responses
-      if (state.currentStep === 'voice_confirm_action') {
-        if (selection === 'voice_confirm_yes') {
-          // Execute the confirmed action
-          const actionType = state.pendingVoiceActionType;
-          state.currentStep = 'main_menu';
-          delete state.pendingVoiceAction;
-          delete state.pendingVoiceActionType;
-          
-          if (actionType === 'cancel') {
-            await this.sendCancelOptions(phone);
-            state.currentStep = 'select_cancel';
-          } else if (actionType === 'refund') {
-            await this.sendRefundOptions(phone);
-            state.currentStep = 'select_refund';
-          } else if (actionType === 'clear_cart') {
-            customer.cart = [];
-            await customer.save();
-            await whatsapp.sendButtons(phone, '🗑️ Your cart has been cleared!', [
-              { id: 'view_menu', text: 'View Menu' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
-            state.currentStep = 'main_menu';
-          }
-          customer.conversationState = state;
-          await customer.save();
-          return;
-        } else if (selection === 'voice_confirm_no' || msg === 'no' || msg === 'cancel') {
-          // Cancel the action
-          delete state.pendingVoiceAction;
-          delete state.pendingVoiceActionType;
-          state.currentStep = 'main_menu';
-          await whatsapp.sendButtons(phone, '👍 Action cancelled. How can I help you?', [
-            { id: 'view_menu', text: 'View Menu' },
-            { id: 'view_cart', text: 'View Cart' },
-            { id: 'home', text: 'Main Menu' }
-          ]);
-          customer.conversationState = state;
-          await customer.save();
-          return;
-        }
-      }
-
       // ========== HANDLE LOCATION MESSAGE ==========
       if (messageType === 'location') {
         // message contains location data: { latitude, longitude, name, address }
@@ -1420,43 +1251,25 @@ const chatbot = {
       // ========== NATURAL LANGUAGE FALLBACKS ==========
       // Smart search FIRST - detects food type (veg/nonveg/egg/specific) and searches by name/tag
       // This takes priority when user specifies food type like "veg cake" or "chicken biryani"
-      // Use fuzzy matching for voice messages to handle transcription errors
-      else if (this.smartSearch(msg, menuItems, isVoiceMessage)) {
-        const searchResult = this.smartSearch(msg, menuItems, isVoiceMessage);
+      else if (this.smartSearch(msg, menuItems)) {
+        const searchResult = this.smartSearch(msg, menuItems);
         const matchingItems = searchResult.items;
         // Use pre-built label or construct one
         const displayLabel = searchResult.label 
           ? (searchResult.searchTerm ? `${searchResult.label} "${searchResult.searchTerm}"` : searchResult.label)
           : (searchResult.searchTerm ? `"${searchResult.searchTerm}"` : 'Search Results');
         
-        // For voice messages, show what we understood
-        const voicePrefix = isVoiceMessage ? `🎤 I heard: "${message}"\n\n` : '';
-        
         // If only 1 item matches, show item details directly
         if (matchingItems.length === 1) {
           const item = matchingItems[0];
           state.selectedItem = item._id.toString();
-          
-          // For voice, confirm the match before showing details
-          if (isVoiceMessage) {
-            await whatsapp.sendButtons(phone,
-              `${voicePrefix}Found: *${item.name}* - ₹${item.price}\n\nIs this what you're looking for?`,
-              [
-                { id: `item_${item._id}`, text: '✅ Yes, show details' },
-                { id: 'view_menu', text: '🔍 Search again' },
-                { id: 'home', text: 'Main Menu' }
-              ]
-            );
-            state.currentStep = 'voice_confirm_item';
-          } else {
-            await this.sendItemDetails(phone, menuItems, item._id.toString());
-            state.currentStep = 'viewing_item_details';
-          }
+          await this.sendItemDetails(phone, menuItems, item._id.toString());
+          state.currentStep = 'viewing_item_details';
         } else {
           // Multiple items - show list
           state.searchTag = msg.trim();
           state.tagSearchResults = matchingItems.map(i => i._id.toString());
-          await this.sendItemsByTag(phone, matchingItems, displayLabel, isVoiceMessage ? voicePrefix : '');
+          await this.sendItemsByTag(phone, matchingItems, displayLabel);
           state.currentStep = 'viewing_tag_results';
         }
       }
@@ -1483,26 +1296,14 @@ const chatbot = {
 
       // ========== FALLBACK ==========
       else {
-        // For voice messages that weren't understood, give helpful feedback
-        if (isVoiceMessage) {
-          await whatsapp.sendButtons(phone,
-            `🎤 I heard: "${message}"\n\n🤔 I couldn't find what you're looking for.\n\nTry saying:\n• "Show menu"\n• "Chicken biryani"\n• "Veg items"\n• "My cart"`,
-            [
-              { id: 'view_menu', text: 'View Menu' },
-              { id: 'view_cart', text: 'View Cart' },
-              { id: 'home', text: 'Main Menu' }
-            ]
-          );
-        } else {
-          await whatsapp.sendButtons(phone,
-            `🤔 I didn't understand that.\n\nPlease select an option:`,
-            [
-              { id: 'home', text: 'Main Menu' },
-              { id: 'view_cart', text: 'View Cart' },
-              { id: 'help', text: 'Help' }
-            ]
-          );
-        }
+        await whatsapp.sendButtons(phone,
+          `🤔 I didn't understand that.\n\nPlease select an option:`,
+          [
+            { id: 'home', text: 'Main Menu' },
+            { id: 'view_cart', text: 'View Cart' },
+            { id: 'help', text: 'Help' }
+          ]
+        );
       }
     } catch (error) {
       console.error('Chatbot error:', error);
@@ -1735,15 +1536,9 @@ const chatbot = {
   },
 
   // Send items matching a tag keyword (for tag-based search)
-  // Can accept either page number (for pagination) or voicePrefix string
-  async sendItemsByTag(phone, items, tagKeyword, pageOrPrefix = 0) {
-    // Determine if fourth param is page number or voice prefix
-    const isPage = typeof pageOrPrefix === 'number';
-    const page = isPage ? pageOrPrefix : 0;
-    const voicePrefix = isPage ? '' : (pageOrPrefix || '');
-    
+  async sendItemsByTag(phone, items, tagKeyword, page = 0) {
     if (!items.length) {
-      await whatsapp.sendButtons(phone, `${voicePrefix}🔍 No items found for "${tagKeyword}".`, [
+      await whatsapp.sendButtons(phone, `🔍 No items found for "${tagKeyword}".`, [
         { id: 'view_menu', text: 'Browse Menu' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -1765,15 +1560,10 @@ const chatbot = {
 
     const sections = [{ title: `"${tagKeyword}" Items (${items.length})`, rows }];
 
-    // Include voice prefix in the body if present
-    const bodyText = voicePrefix 
-      ? `${voicePrefix}Found ${items.length} items matching "${tagKeyword}"\nTap an item to view details & add to cart`
-      : `Found ${items.length} items matching "${tagKeyword}"\nTap an item to view details & add to cart`;
-
     await whatsapp.sendList(
       phone,
       `🏷️ ${tagKeyword}`,
-      bodyText,
+      `Found ${items.length} items matching "${tagKeyword}"\nTap an item to view details & add to cart`,
       'View Items',
       sections,
       'Select an item'

@@ -185,12 +185,12 @@ router.post('/meta', async (req, res) => {
                     
                     if (transcription && transcription.trim()) {
                       text = transcription.trim();
-                      messageType = 'voice'; // Keep as voice so chatbot knows it's from speech
+                      messageType = 'text'; // Treat as text after transcription
                       console.log('🎤 Voice transcribed:', text);
                     } else {
                       // Transcription failed, send error message
                       await whatsapp.sendButtons(phone, 
-                        "🎤 Sorry, I couldn't understand your voice message. Please try again clearly or type your message.",
+                        "🎤 Sorry, I couldn't understand your voice message. Please try again or type your message.",
                         [
                           { id: 'home', text: 'Main Menu' },
                           { id: 'help', text: 'Help' }
