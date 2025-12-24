@@ -607,24 +607,40 @@ const chatbot = {
   },
 
   // Translate text using Groq AI (for languages not in basic map)
+  // Also handles romanized Indian food names
   async translateWithAI(text) {
-    // Check if text contains non-English characters
-    const hasNonEnglish = /[^\x00-\x7F]/.test(text);
-    if (!hasNonEnglish) {
-      return text; // Already English
-    }
-    
     // First try basic transliteration
     const basicTranslated = this.transliterate(text);
     
-    // If still has non-English after basic translation, use Groq AI
-    if (/[^\x00-\x7F]/.test(basicTranslated)) {
+    // Check if text contains non-English characters
+    const hasNonEnglish = /[^\x00-\x7F]/.test(text);
+    
+    // If has non-English and still has non-English after basic translation, use Groq AI
+    if (hasNonEnglish && /[^\x00-\x7F]/.test(basicTranslated)) {
       try {
         const aiTranslated = await groqAi.translateToEnglish(text);
         return aiTranslated;
       } catch (error) {
         console.error('AI translation failed:', error.message);
         return basicTranslated;
+      }
+    }
+    
+    // If basic translation changed the text, return it
+    if (basicTranslated.toLowerCase() !== text.toLowerCase()) {
+      return basicTranslated;
+    }
+    
+    // For romanized text that wasn't in basic map, try Groq AI
+    // This helps with food names like "gongura", "avakaya", etc.
+    if (!hasNonEnglish && text.length >= 3) {
+      try {
+        const aiTranslated = await groqAi.translateRomanizedFood(text);
+        if (aiTranslated && aiTranslated.toLowerCase() !== text.toLowerCase()) {
+          return aiTranslated;
+        }
+      } catch (error) {
+        console.error('AI romanized translation failed:', error.message);
       }
     }
     

@@ -85,6 +85,59 @@ Only return the English translation, nothing else.`
     }
   },
 
+  // Translate romanized Indian food names to standard English/searchable terms
+  async translateRomanizedFood(text) {
+    try {
+      const client = getGroq();
+      const completion = await client.chat.completions.create({
+        messages: [{
+          role: 'system',
+          content: `You are a food search assistant. Convert romanized Indian food names to their common English or standard names that would be used in a restaurant menu.
+
+Examples:
+- "gongura" → "gongura" (keep as is, it's a specific dish)
+- "avakaya" → "avakaya pickle" or "mango pickle"
+- "gutti vankaya" → "stuffed brinjal"
+- "bendakaya" → "okra" or "bhindi"
+- "aratikaya" → "raw banana"
+- "mamidikaya" → "raw mango"
+- "pappu" → "dal"
+- "koora" → "curry"
+- "pulusu" → "tamarind curry"
+- "pachadi" → "chutney"
+- "talimpu" → "tempering"
+- "karam" → "spicy"
+
+If it's already a standard food name or you're not sure, return it as is.
+Only return the translated/standardized name, nothing else.`
+        }, {
+          role: 'user',
+          content: `Convert this food search term: "${text}"`
+        }],
+        model: 'llama-3.1-8b-instant',
+        max_tokens: 50,
+        temperature: 0.1
+      });
+      
+      let translated = completion.choices[0]?.message?.content?.trim() || text;
+      
+      // Clean up the response
+      translated = translated.replace(/^["']|["']$/g, '').trim();
+      translated = translated.replace(/^(the |a |an )/i, '').trim();
+      
+      // If response is too long or contains explanation, return original
+      if (translated.length > 50 || translated.includes('\n')) {
+        return text;
+      }
+      
+      console.log(`🔤 Romanized "${text}" → "${translated}"`);
+      return translated;
+    } catch (error) {
+      console.error('Groq romanized translation error:', error.message);
+      return text;
+    }
+  },
+
   async generateDescription(itemName, category) {
     try {
       const client = getGroq();
