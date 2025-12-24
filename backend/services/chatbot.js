@@ -191,7 +191,7 @@ const chatbot = {
     // Patterns specifically for veg items
     const vegPatterns = [
       // English - simple and compound
-      /^veg$/,  // Just "veg" alone
+      /\bveg\b/,  // Just "veg" as a word
       /\bveg\s+(?:items?|menu|food|dishes?)\b/, /\bvegetarian\s+(?:items?|menu|food|dishes?)\b/,
       /\bshow\s+(?:me\s+)?veg\b/, /\bonly\s+veg\b/, /\bpure\s+veg\b/,
       /\bveggie\s+(?:items?|menu|food)\b/, /\bvegetarian\b/, /\bveggie\b/,
@@ -216,11 +216,11 @@ const chatbot = {
     
     // Patterns specifically for non-veg items
     const nonvegPatterns = [
-      // English - simple and compound
-      /^non[\s-]?veg$/, /^nonveg$/,  // Just "non veg" or "nonveg" alone
+      // English - simple and compound (must have "non" before "veg")
+      /\bnon[\s-]?veg\b/, /\bnonveg\b/,
       /\bnon[\s-]?veg\s+(?:items?|menu|food|dishes?)\b/, /\bnonveg\s+(?:items?|menu|food|dishes?)\b/,
       /\bshow\s+(?:me\s+)?non[\s-]?veg\b/, /\bonly\s+non[\s-]?veg\b/,
-      /\bmeat\s+(?:items?|menu|dishes?)\b/, /\bnon[\s-]?veg\b/, /\bnonveg\b/,
+      /\bmeat\s+(?:items?|menu|dishes?)\b/,
       // Hindi
       /\bnon[\s-]?veg\s+(?:items?|khana)\s+dikhao\b/, /\bमांसाहारी\b/, /\bनॉन\s*वेज\s+आइटम\b/,
       /\bनॉन\s*वेज\s+खाना\b/, /\bसिर्फ\s+नॉन\s*वेज\b/, /\bनॉन\s*वेज\b/,
@@ -241,7 +241,9 @@ const chatbot = {
     ];
     
     // Check for non-veg-specific intent FIRST (before veg, since "non veg" contains "veg")
-    const isNonvegIntent = nonvegPatterns.some(pattern => pattern.test(lowerText));
+    // But first verify the text actually contains "non" to avoid false matches
+    const hasNonPrefix = /\bnon[\s-]?veg/i.test(lowerText) || /\bnonveg/i.test(lowerText);
+    const isNonvegIntent = hasNonPrefix && nonvegPatterns.some(pattern => pattern.test(lowerText));
     if (isNonvegIntent) {
       return { showMenu: true, foodType: 'nonveg', searchTerm: null };
     }
