@@ -505,19 +505,26 @@ const chatbot = {
       'పెరుగు': 'curd', 'పెరుగు అన్నం': 'curd rice', 'సాంబార్': 'sambar', 'రసం': 'rasam',
       'పప్పు': 'dal', 'కూర': 'curry', 'పచ్చడి': 'chutney', 'అప్పడం': 'papad',
       'పూరీ': 'poori', 'ఇడ్లీ': 'idli', 'దోశ': 'dosa', 'ఉప్మా': 'upma', 'వడ': 'vada',
+      'కోడి': 'chicken', 'కోడి బిర్యానీ': 'chicken biryani', 'గుడ్డు': 'egg', 'చేప': 'fish',
+      'రొయ్యలు': 'prawns', 'మటన్ బిర్యానీ': 'mutton biryani', 'పులావ్': 'pulao',
+      'ఫ్రైడ్ రైస్': 'fried rice', 'నూడిల్స్': 'noodles', 'మంచూరియన్': 'manchurian',
       // Tamil to English
       'பிரெட்': 'bread', 'சோறு': 'rice', 'சிக்கன்': 'chicken', 'மட்டன்': 'mutton',
       'பிரியாணி': 'biryani', 'கேக்': 'cake', 'பீட்சா': 'pizza', 'பர்கர்': 'burger',
       'தயிர்': 'curd', 'தயிர் சாதம்': 'curd rice', 'சாம்பார்': 'sambar', 'ரசம்': 'rasam',
       'இட்லி': 'idli', 'தோசை': 'dosa', 'உப்புமா': 'upma', 'வடை': 'vada', 'பூரி': 'poori',
+      'கோழி': 'chicken', 'கோழி பிரியாணி': 'chicken biryani', 'முட்டை': 'egg', 'மீன்': 'fish',
+      'இறால்': 'prawns', 'ஆட்டு இறைச்சி': 'mutton',
       // Kannada to English
       'ಬ್ರೆಡ್': 'bread', 'ಅನ್ನ': 'rice', 'ಚಿಕನ್': 'chicken', 'ಮಟನ್': 'mutton',
       'ಬಿರಿಯಾನಿ': 'biryani', 'ಕೇಕ್': 'cake', 'ಪಿಜ್ಜಾ': 'pizza',
       'ಮೊಸರು': 'curd', 'ಮೊಸರನ್ನ': 'curd rice', 'ಸಾಂಬಾರ್': 'sambar', 'ರಸಂ': 'rasam',
       'ಇಡ್ಲಿ': 'idli', 'ದೋಸೆ': 'dosa', 'ಉಪ್ಪಿಟ್ಟು': 'upma', 'ವಡೆ': 'vada',
+      'ಕೋಳಿ': 'chicken', 'ಮೊಟ್ಟೆ': 'egg', 'ಮೀನು': 'fish',
       // Bengali to English
       'রুটি': 'bread', 'ভাত': 'rice', 'মুরগি': 'chicken', 'মাংস': 'mutton',
       'বিরিয়ানি': 'biryani', 'কেক': 'cake', 'পিৎজা': 'pizza',
+      'ডিম': 'egg', 'মাছ': 'fish', 'চিংড়ি': 'prawns',
       'দই': 'curd', 'দই ভাত': 'curd rice',
       // Malayalam to English
       'ബ്രെഡ്': 'bread', 'ചോറ്': 'rice', 'ചിക്കൻ': 'chicken', 'മട്ടൻ': 'mutton',
@@ -565,6 +572,7 @@ const chatbot = {
   },
 
   // Smart search - detects food type and searches by name/tag (async for AI translation)
+  // Improved: searches full term first, then individual keywords
   async smartSearch(text, menuItems) {
     // First translate regional language to English using AI
     const translatedText = await this.translateWithAI(text);
@@ -618,29 +626,89 @@ const chatbot = {
     // If no search term and no specific ingredient, return null
     if (!hasSearchTerm && detected?.type !== 'specific') return null;
     
-    // Search by tag FIRST, then by name in filtered items
-    // Priority: tag matches > name matches
-    let matchingItems = [];
-    if (hasSearchTerm) {
-      // First, find items matching by tag
-      const tagMatches = filteredItems.filter(item => 
+    // Helper function to search items by a term
+    const searchByTerm = (items, term) => {
+      const tagMatches = items.filter(item => 
         item.tags?.some(tag => 
-          tag.toLowerCase().includes(searchTerm) || 
-          searchTerm.includes(tag.toLowerCase())
+          tag.toLowerCase().includes(term) || 
+          term.includes(tag.toLowerCase())
         )
       );
       
-      // Then, find items matching by name (excluding already matched by tag)
       const tagMatchIds = new Set(tagMatches.map(i => i._id.toString()));
-      const nameMatches = filteredItems.filter(item => {
-        if (tagMatchIds.has(item._id.toString())) return false; // Already in tag matches
-        const nameMatch = item.name.toLowerCase().includes(searchTerm) || 
-          searchTerm.includes(item.name.toLowerCase());
+      const nameMatches = items.filter(item => {
+        if (tagMatchIds.has(item._id.toString())) return false;
+        const nameMatch = item.name.toLowerCase().includes(term) || 
+          term.includes(item.name.toLowerCase());
         return nameMatch;
       });
       
-      // Combine: tag matches first, then name matches
-      matchingItems = [...tagMatches, ...nameMatches];
+      return [...tagMatches, ...nameMatches];
+    };
+    
+    let matchingItems = [];
+    
+    if (hasSearchTerm) {
+      // Step 1: Try full search term first
+      matchingItems = searchByTerm(filteredItems, searchTerm);
+      
+      // Step 2: If no results, try individual keywords (for multi-word searches)
+      if (matchingItems.length === 0) {
+        const keywords = searchTerm.split(/\s+/).filter(k => k.length >= 2);
+        
+        if (keywords.length > 1) {
+          // Search for items matching ANY keyword
+          const keywordMatches = new Map(); // Use map to track match count per item
+          
+          for (const keyword of keywords) {
+            const matches = searchByTerm(filteredItems, keyword);
+            for (const item of matches) {
+              const id = item._id.toString();
+              if (!keywordMatches.has(id)) {
+                keywordMatches.set(id, { item, count: 0 });
+              }
+              keywordMatches.get(id).count++;
+            }
+          }
+          
+          // Sort by match count (items matching more keywords first)
+          matchingItems = Array.from(keywordMatches.values())
+            .sort((a, b) => b.count - a.count)
+            .map(m => m.item);
+        }
+      }
+      
+      // Step 3: If still no results and we have food type filter, try without filter
+      if (matchingItems.length === 0 && detected && filteredItems.length < menuItems.length) {
+        // Try searching all items
+        matchingItems = searchByTerm(menuItems, searchTerm);
+        
+        // If still nothing, try keywords on all items
+        if (matchingItems.length === 0) {
+          const keywords = searchTerm.split(/\s+/).filter(k => k.length >= 2);
+          if (keywords.length > 1) {
+            const keywordMatches = new Map();
+            for (const keyword of keywords) {
+              const matches = searchByTerm(menuItems, keyword);
+              for (const item of matches) {
+                const id = item._id.toString();
+                if (!keywordMatches.has(id)) {
+                  keywordMatches.set(id, { item, count: 0 });
+                }
+                keywordMatches.get(id).count++;
+              }
+            }
+            matchingItems = Array.from(keywordMatches.values())
+              .sort((a, b) => b.count - a.count)
+              .map(m => m.item);
+          }
+        }
+        
+        // Clear food type label since we searched all items
+        if (matchingItems.length > 0) {
+          foodTypeLabel = null;
+        }
+      }
     } else {
       matchingItems = filteredItems;
     }
