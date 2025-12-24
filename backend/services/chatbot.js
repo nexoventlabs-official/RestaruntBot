@@ -1266,9 +1266,17 @@ const chatbot = {
       ]);
     }
 
-    customer.conversationState = state;
-    customer.conversationState.lastInteraction = new Date();
-    await customer.save();
+    // Refresh customer from DB to avoid version conflicts, then update state
+    try {
+      const latestCustomer = await Customer.findOne({ phone });
+      if (latestCustomer) {
+        latestCustomer.conversationState = state;
+        latestCustomer.conversationState.lastInteraction = new Date();
+        await latestCustomer.save();
+      }
+    } catch (saveErr) {
+      console.error('Error saving conversation state:', saveErr.message);
+    }
   },
 
   // ============ WELCOME & MAIN MENU ============
