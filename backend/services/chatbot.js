@@ -877,9 +877,9 @@ const chatbot = {
         await whatsapp.sendButtons(phone, 
           '🍽️ *Add More Items*\n\nWhat would you like to browse?',
           [
-            { id: 'food_veg', text: '🟢 Veg' },
-            { id: 'food_nonveg', text: '🔴 Non-Veg' },
-            { id: 'food_both', text: '📋 All Items' }
+            { id: 'food_veg', text: 'Veg' },
+            { id: 'food_nonveg', text: 'Non-Veg' },
+            { id: 'food_both', text: 'All Items' }
           ]
         );
         state.currentStep = 'select_food_type_order';
