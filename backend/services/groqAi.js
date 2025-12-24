@@ -34,85 +34,83 @@ const groqAi = {
   },
 
   // Translate local language text to English for search
+  // Returns multiple possible translations for better search matching
   async translateToEnglish(text) {
     try {
       // Check if text contains non-English characters (Indian languages)
       const hasNonEnglish = /[^\x00-\x7F]/.test(text);
       if (!hasNonEnglish) {
-        return text; // Already English, no translation needed
+        return { primary: text, variations: [text] };
       }
 
       const client = getGroq();
       const completion = await client.chat.completions.create({
         messages: [{
           role: 'system',
-          content: `You are an expert Indian food translator. Your job is to translate food names from ANY Indian language to English.
+          content: `You are an expert Indian food translator. Translate food names from ANY Indian language to English.
 
-SUPPORTED LANGUAGES: Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati, Punjabi, Odia, Assamese, Urdu, and all other Indian languages.
+IMPORTANT: Return multiple possible translations/variations separated by commas.
 
 RULES:
-1. Translate the food name to English or romanized form
-2. For compound names like "X chicken" or "Y curry", translate each word
-3. Keep regional dish names in romanized form (e.g., గొంగూర → gongura, புளியோதரை → puliyodharai)
-4. Return ONLY the translation, no explanations
+1. Give the most common English name first
+2. Include romanized regional name
+3. Include alternative spellings
+4. Include related terms that might be on a menu
+5. Return ONLY translations separated by commas, no explanations
 
 EXAMPLES:
-- చికెన్ బిర్యానీ → chicken biryani
-- மட்டன் கறி → mutton curry  
-- পনীর বাটার মসলা → paneer butter masala
-- ಚಿಕನ್ 65 → chicken 65
-- గొంగూర చికెన్ → gongura chicken
-- கொங்கூரா சிக்கன் → gongura chicken
-- मटन कोरमा → mutton korma
-- ചിക്കൻ ഫ്രൈ → chicken fry
-- ಮಸಾಲಾ ದೋಸೆ → masala dosa
-- পুলাও → pulao
-- தந்தூரி சிக்கன் → tandoori chicken
-- పులిహోర → pulihora
-- சாம்பார் → sambar
-- ডিম ভুর্জি → egg bhurji
-- આલુ પરોઠા → aloo paratha`
+- చిత్రాన్నం → lemon rice, chitranna, chitrannam, nimbu rice
+- పులిహోర → tamarind rice, pulihora, pulihoura, puliyogare
+- கொங்கூரா சிக்கன் → gongura chicken, sorrel chicken, gongura kozhi
+- బిర్యానీ → biryani, biriyani, briyani
+- தயிர் சாதம் → curd rice, thayir sadam, dahi chawal, mosaru anna
+- పెసరట్టు → pesarattu, pesaratu, moong dal dosa, green gram dosa
+- சாம்பார் → sambar, sambhar, sambaar
+- ரசம் → rasam, rasamu, pepper water
+- இட்லி → idli, idly, idle
+- దోశ → dosa, dosai, dhosha
+- ఉప్మా → upma, uppuma, uppit, rava upma
+- పొంగల్ → pongal, ven pongal, khara pongal
+- వడ → vada, vadai, vade, medu vada
+- గొంగూర → gongura, gongura, sorrel leaves, pulicha keerai
+- మసాలా దోశ → masala dosa, masale dose, stuffed dosa
+- పనీర్ బట్టర్ మసాలా → paneer butter masala, paneer makhani, butter paneer
+- చికెన్ 65 → chicken 65, chicken sixtyfive
+- మటన్ బిర్యానీ → mutton biryani, goat biryani, lamb biryani`
         }, {
           role: 'user',
-          content: `Translate to English: "${text}"`
+          content: `Translate with variations: "${text}"`
         }],
         model: 'llama-3.1-8b-instant',
-        max_tokens: 100,
-        temperature: 0.1
+        max_tokens: 150,
+        temperature: 0.2
       });
       
-      let translated = completion.choices[0]?.message?.content?.trim() || text;
+      let response = completion.choices[0]?.message?.content?.trim() || text;
       
-      // Clean up the response - remove quotes, extra text
-      translated = translated.replace(/^["']|["']$/g, '').trim();
-      translated = translated.replace(/^(the |a |an )/i, '').trim();
+      // Clean up the response
+      response = response.replace(/^["']|["']$/g, '').trim();
+      response = response.replace(/^(translation|english|answer|result|variations?)[\s:=→]+/i, '').trim();
       
-      // Remove common prefixes AI might add
-      translated = translated.replace(/^(translation|english|answer|result)[\s:=]+/i, '').trim();
+      // Parse variations (comma or slash separated)
+      let variations = response.split(/[,\/]/).map(v => v.trim().toLowerCase()).filter(v => v.length > 0);
       
-      // If response is too long or contains explanation, try to extract just the food name
-      if (translated.length > 50 || translated.includes('\n') || translated.includes(':')) {
-        const firstLine = translated.split('\n')[0].trim();
-        const cleanedLine = firstLine.replace(/^.*?[:=→]\s*/, '').trim();
-        if (cleanedLine.length > 0 && cleanedLine.length < 50) {
-          translated = cleanedLine;
-        }
+      // Remove any non-English variations
+      variations = variations.filter(v => !/[^\x00-\x7F]/.test(v));
+      
+      // If no valid variations, return original
+      if (variations.length === 0) {
+        return { primary: text, variations: [text] };
       }
       
-      // Remove any remaining non-English characters (translation failed partially)
-      if (/[^\x00-\x7F]/.test(translated)) {
-        // Extract only English parts
-        const englishParts = translated.match(/[a-zA-Z\s]+/g);
-        if (englishParts && englishParts.length > 0) {
-          translated = englishParts.join(' ').trim();
-        }
-      }
+      // Remove duplicates
+      variations = [...new Set(variations)];
       
-      console.log(`🌐 Translated "${text}" to "${translated}"`);
-      return translated || text;
+      console.log(`🌐 Translated "${text}" to variations: [${variations.join(', ')}]`);
+      return { primary: variations[0], variations };
     } catch (error) {
       console.error('Groq translation error:', error.message);
-      return text; // Return original if translation fails
+      return { primary: text, variations: [text] };
     }
   },
 

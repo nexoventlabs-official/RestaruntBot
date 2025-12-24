@@ -645,98 +645,116 @@ const chatbot = {
   },
 
   // Translate text using Groq AI (for languages not in basic map)
-  // Also handles romanized Indian food names
+  // Returns object with primary translation and all variations for better search
   async translateWithAI(text) {
     // Check if text contains non-English characters
     const hasNonEnglish = /[^\x00-\x7F]/.test(text);
     
     if (hasNonEnglish) {
-      // For non-English text, ALWAYS try Groq AI first (it handles all Indian languages)
+      // For non-English text, use Groq AI to get multiple translation variations
       try {
-        const aiTranslated = await groqAi.translateToEnglish(text);
+        const result = await groqAi.translateToEnglish(text);
         
-        // If AI translation worked and returned valid English
-        if (aiTranslated && aiTranslated.length > 0 && !/[^\x00-\x7F]/.test(aiTranslated)) {
-          return aiTranslated;
+        // If we got valid variations, return them
+        if (result.variations && result.variations.length > 0 && !/[^\x00-\x7F]/.test(result.primary)) {
+          return result;
         }
         
-        // If AI translation still has non-English, try word-by-word
+        // If AI translation failed, try word-by-word
         const words = text.split(/\s+/).filter(w => w.length > 0);
         if (words.length > 1) {
+          const allVariations = [];
           const translatedWords = [];
+          
           for (const word of words) {
             if (/[^\x00-\x7F]/.test(word)) {
-              // Try AI for each word
-              const aiWord = await groqAi.translateToEnglish(word);
-              if (aiWord && !/[^\x00-\x7F]/.test(aiWord)) {
-                translatedWords.push(aiWord);
+              const wordResult = await groqAi.translateToEnglish(word);
+              if (wordResult.variations && wordResult.variations.length > 0) {
+                translatedWords.push(wordResult.primary);
+                allVariations.push(...wordResult.variations);
               } else {
                 // Fallback to basic map
                 const basicWord = this.transliterate(word);
                 translatedWords.push(basicWord);
+                allVariations.push(basicWord);
               }
             } else {
               translatedWords.push(word);
+              allVariations.push(word);
             }
           }
+          
           const combinedTranslation = translatedWords.join(' ');
-          // Only return if we got valid English
-          if (!/[^\x00-\x7F]/.test(combinedTranslation)) {
-            console.log(`🔤 Word-by-word translation: "${text}" → "${combinedTranslation}"`);
-            return combinedTranslation;
-          }
+          allVariations.push(combinedTranslation);
+          
+          // Remove duplicates and non-English
+          const cleanVariations = [...new Set(allVariations)].filter(v => !/[^\x00-\x7F]/.test(v));
+          
+          console.log(`🔤 Word-by-word translation: "${text}" → [${cleanVariations.join(', ')}]`);
+          return { primary: combinedTranslation, variations: cleanVariations };
         }
         
         // Last resort: try basic transliteration
         const basicTranslated = this.transliterate(text);
-        return basicTranslated;
+        return { primary: basicTranslated, variations: [basicTranslated] };
       } catch (error) {
         console.error('AI translation failed:', error.message);
-        // Fallback to basic transliteration
-        return this.transliterate(text);
+        const basicTranslated = this.transliterate(text);
+        return { primary: basicTranslated, variations: [basicTranslated] };
       }
     }
     
     // For English/romanized text, first try basic transliteration
     const basicTranslated = this.transliterate(text);
+    const variations = [text.toLowerCase()];
     
-    // If basic translation changed the text, return it
+    // If basic translation changed the text, add it
     if (basicTranslated.toLowerCase() !== text.toLowerCase()) {
-      return basicTranslated;
+      variations.push(basicTranslated.toLowerCase());
     }
     
-    // For romanized text that wasn't in basic map, try Groq AI
-    // This helps with food names like "gongura", "avakaya", "kozhi", etc.
+    // For romanized text, try Groq AI to get more variations
     if (text.length >= 3) {
       try {
-        const aiTranslated = await groqAi.translateRomanizedFood(text);
-        if (aiTranslated && aiTranslated.toLowerCase() !== text.toLowerCase()) {
-          return aiTranslated;
+        const aiResult = await groqAi.translateRomanizedFood(text);
+        if (aiResult && aiResult.toLowerCase() !== text.toLowerCase()) {
+          variations.push(aiResult.toLowerCase());
         }
       } catch (error) {
         console.error('AI romanized translation failed:', error.message);
       }
     }
     
-    return basicTranslated;
+    // Remove duplicates
+    const cleanVariations = [...new Set(variations)];
+    
+    return { primary: cleanVariations[0], variations: cleanVariations };
   },
 
   // Smart search - detects food type and searches by name/tag (async for AI translation)
-  // Improved: searches full term first, then individual keywords
+  // Improved: uses multiple translation variations for better matching
   async smartSearch(text, menuItems) {
-    // First translate regional language to English using AI
-    const translatedText = await this.translateWithAI(text);
-    const lowerText = translatedText.toLowerCase().trim();
-    if (lowerText.length < 2) return null;
+    // First translate regional language to English using AI (returns variations)
+    const translationResult = await this.translateWithAI(text);
+    const primaryText = translationResult.primary.toLowerCase().trim();
+    const allVariations = translationResult.variations || [primaryText];
     
-    // Detect food type preference from message
-    const detected = this.detectFoodTypeFromMessage(lowerText);
+    if (primaryText.length < 2) return null;
     
-    // Remove food type keywords to get clean search term
-    const searchTerm = this.removeFoodTypeKeywords(lowerText);
+    // Detect food type preference from primary translation
+    const detected = this.detectFoodTypeFromMessage(primaryText);
+    
+    // Remove food type keywords to get clean search terms
+    const primarySearchTerm = this.removeFoodTypeKeywords(primaryText);
+    
+    // Get all search variations (cleaned of food type keywords)
+    const searchVariations = allVariations.map(v => this.removeFoodTypeKeywords(v.toLowerCase())).filter(v => v.length >= 2);
+    
+    // Add unique variations
+    const uniqueSearchTerms = [...new Set(searchVariations)];
     
     // If search term is too short after removing keywords, search by ingredient/type only
-    const hasSearchTerm = searchTerm.length >= 2;
+    const hasSearchTerm = primarySearchTerm.length >= 2;
     
     // Filter by detected food type
     let filteredItems = menuItems;
@@ -747,15 +765,12 @@ const chatbot = {
         filteredItems = menuItems.filter(item => item.foodType === 'veg');
         foodTypeLabel = '🥦 Veg';
       } else if (detected.type === 'egg') {
-        // Egg only - not nonveg meat items
         filteredItems = menuItems.filter(item => item.foodType === 'egg');
         foodTypeLabel = '🥚 Egg';
       } else if (detected.type === 'nonveg') {
-        // Nonveg includes both egg and nonveg
         filteredItems = menuItems.filter(item => item.foodType === 'nonveg' || item.foodType === 'egg');
         foodTypeLabel = '🍗 Non-Veg';
       } else if (detected.type === 'specific') {
-        // Specific ingredient like chicken, mutton - search in name/tags
         const ingredient = detected.ingredient;
         filteredItems = menuItems.filter(item => {
           const inName = item.name.toLowerCase().includes(ingredient);
@@ -764,7 +779,6 @@ const chatbot = {
         });
         foodTypeLabel = `🍗 ${ingredient.charAt(0).toUpperCase() + ingredient.slice(1)}`;
         
-        // If specific ingredient, we might not need additional search term
         if (!hasSearchTerm) {
           return filteredItems.length > 0 
             ? { items: filteredItems, foodType: detected, searchTerm: ingredient, label: foodTypeLabel }
@@ -773,86 +787,87 @@ const chatbot = {
       }
     }
     
-    // If no search term and no specific ingredient, return null
     if (!hasSearchTerm && detected?.type !== 'specific') return null;
     
-    // Helper function to search items by a term
+    // Helper function to search items by a term (checks tags first, then name)
     const searchByTerm = (items, term) => {
       if (!term || term.length < 2) return [];
+      const termLower = term.toLowerCase();
+      
       const tagMatches = items.filter(item => 
-        item.tags?.some(tag => 
-          tag.toLowerCase().includes(term) || 
-          term.includes(tag.toLowerCase())
-        )
+        item.tags?.some(tag => {
+          const tagLower = tag.toLowerCase();
+          return tagLower.includes(termLower) || termLower.includes(tagLower);
+        })
       );
       
       const tagMatchIds = new Set(tagMatches.map(i => i._id.toString()));
       const nameMatches = items.filter(item => {
         if (tagMatchIds.has(item._id.toString())) return false;
-        const nameMatch = item.name.toLowerCase().includes(term) || 
-          term.includes(item.name.toLowerCase());
-        return nameMatch;
+        const nameLower = item.name.toLowerCase();
+        return nameLower.includes(termLower) || termLower.includes(nameLower);
       });
       
       return [...tagMatches, ...nameMatches];
     };
     
-    // Helper to search by multiple keywords and combine results
-    const searchByKeywords = (items, keywords) => {
-      const keywordMatches = new Map();
+    // Helper to search by multiple terms/keywords and combine results
+    const searchByMultipleTerms = (items, terms) => {
+      const itemMatches = new Map();
       
-      for (const keyword of keywords) {
-        if (keyword.length < 2) continue;
-        const matches = searchByTerm(items, keyword);
+      for (const term of terms) {
+        if (term.length < 2) continue;
+        
+        // Search full term
+        const matches = searchByTerm(items, term);
         for (const item of matches) {
           const id = item._id.toString();
-          if (!keywordMatches.has(id)) {
-            keywordMatches.set(id, { item, count: 0 });
+          if (!itemMatches.has(id)) {
+            itemMatches.set(id, { item, score: 0 });
           }
-          keywordMatches.get(id).count++;
+          itemMatches.get(id).score += 10; // Full term match = 10 points
+        }
+        
+        // Also search individual keywords from this term
+        const keywords = term.split(/\s+/).filter(k => k.length >= 2);
+        for (const keyword of keywords) {
+          const keywordMatches = searchByTerm(items, keyword);
+          for (const item of keywordMatches) {
+            const id = item._id.toString();
+            if (!itemMatches.has(id)) {
+              itemMatches.set(id, { item, score: 0 });
+            }
+            itemMatches.get(id).score += 3; // Keyword match = 3 points
+          }
         }
       }
       
-      // Sort by match count (items matching more keywords first)
-      return Array.from(keywordMatches.values())
-        .sort((a, b) => b.count - a.count)
+      // Sort by score (higher = better match)
+      return Array.from(itemMatches.values())
+        .sort((a, b) => b.score - a.score)
         .map(m => m.item);
     };
     
     let matchingItems = [];
-    const keywords = searchTerm.split(/\s+/).filter(k => k.length >= 2);
     
     if (hasSearchTerm) {
-      // Step 1: Try full search term first
-      matchingItems = searchByTerm(filteredItems, searchTerm);
+      // Search using ALL translation variations
+      console.log(`🔍 Searching with variations: [${uniqueSearchTerms.join(', ')}]`);
+      matchingItems = searchByMultipleTerms(filteredItems, uniqueSearchTerms);
       
-      // Step 2: If no results, try individual keywords
-      if (matchingItems.length === 0 && keywords.length >= 1) {
-        matchingItems = searchByKeywords(filteredItems, keywords);
-      }
-      
-      // Step 3: If still no results and we have food type filter, try without filter on ALL items
+      // If no results with food type filter, try ALL items
       if (matchingItems.length === 0 && filteredItems.length < menuItems.length) {
-        // Try full term on all items
-        matchingItems = searchByTerm(menuItems, searchTerm);
-        
-        // If still nothing, try keywords on all items
-        if (matchingItems.length === 0 && keywords.length >= 1) {
-          matchingItems = searchByKeywords(menuItems, keywords);
-        }
-        
-        // Clear food type label since we searched all items
+        matchingItems = searchByMultipleTerms(menuItems, uniqueSearchTerms);
         if (matchingItems.length > 0) {
           foodTypeLabel = null;
         }
       }
     } else if (detected?.type === 'specific' && filteredItems.length > 0) {
-      // For specific ingredient search (like "chicken"), return filtered items
       matchingItems = filteredItems;
     }
     
     return matchingItems.length > 0 
-      ? { items: matchingItems, foodType: detected, searchTerm: hasSearchTerm ? searchTerm : '', label: foodTypeLabel }
+      ? { items: matchingItems, foodType: detected, searchTerm: primarySearchTerm, label: foodTypeLabel }
       : null;
   },
 
