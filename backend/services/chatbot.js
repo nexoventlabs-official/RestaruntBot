@@ -873,9 +873,16 @@ const chatbot = {
         state.currentStep = 'main_menu';
       }
       else if (selection === 'add_more') {
-        const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
-        await this.sendMenuForOrder(phone, filteredItems);
-        state.currentStep = 'browsing_menu';
+        // Ask user to select food type before showing menu
+        await whatsapp.sendButtons(phone, 
+          '🍽️ *Add More Items*\n\nWhat would you like to browse?',
+          [
+            { id: 'food_veg', text: '🟢 Veg' },
+            { id: 'food_nonveg', text: '🔴 Non-Veg' },
+            { id: 'food_both', text: '📋 All Items' }
+          ]
+        );
+        state.currentStep = 'select_food_type_order';
       }
 
       // ========== CATEGORY SELECTION ==========
