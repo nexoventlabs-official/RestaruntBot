@@ -1267,6 +1267,20 @@ const chatbot = {
         await this.sendWelcome(phone);
         state.currentStep = 'main_menu';
       }
+      // ========== CART COMMANDS (check early - works from any state) ==========
+      else if (selection === 'view_cart' || (!selectedId && this.isCartIntent(msg))) {
+        await this.sendCart(phone, customer);
+        state.currentStep = 'viewing_cart';
+      }
+      else if (selection === 'clear_cart' || (!selectedId && this.isClearCartIntent(msg))) {
+        customer.cart = [];
+        await customer.save();
+        await whatsapp.sendButtons(phone, '🗑️ Cart cleared!', [
+          { id: 'place_order', text: 'New Order' },
+          { id: 'home', text: 'Main Menu' }
+        ]);
+        state.currentStep = 'main_menu';
+      }
       else if (selection === 'view_menu' || msg === 'menu') {
         await this.sendFoodTypeSelection(phone);
         state.currentStep = 'select_food_type';
@@ -1341,10 +1355,6 @@ const chatbot = {
           await this.sendMenuCategoriesWithLabel(phone, filteredItems, foodTypeLabels[state.foodTypePreference]);
           state.currentStep = 'select_category';
         }
-      }
-      else if (selection === 'view_cart' || (!selectedId && (msg === 'cart' || this.isCartIntent(msg)))) {
-        await this.sendCart(phone, customer);
-        state.currentStep = 'viewing_cart';
       }
       else if (selection === 'place_order' || selection === 'order_now' || (!selectedId && msg === 'order')) {
         // Skip service type selection and go directly to food type selection
@@ -1460,15 +1470,6 @@ const chatbot = {
           const result = await this.processCheckout(phone, customer, state);
           if (result.success) state.currentStep = 'awaiting_payment';
         }
-      }
-      else if (selection === 'clear_cart' || (!selectedId && this.isClearCartIntent(msg))) {
-        customer.cart = [];
-        await customer.save(); // Save immediately to persist cart clear
-        await whatsapp.sendButtons(phone, '🗑️ Cart cleared!', [
-          { id: 'place_order', text: 'New Order' },
-          { id: 'home', text: 'Main Menu' }
-        ]);
-        state.currentStep = 'main_menu';
       }
       else if (selection === 'add_more') {
         // Ask user to select food type before showing menu
