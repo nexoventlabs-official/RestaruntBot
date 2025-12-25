@@ -914,25 +914,45 @@ const chatbot = {
       );
     };
     
-    // ========== CHECK FOR EXACT TAG MATCH - RETURN ALL MATCHING ITEMS ==========
+    // ========== CHECK FOR EXACT TAG MATCH - COLLECT ALL MATCHING ITEMS FROM ALL KEYWORDS ==========
     if (hasSearchTerm) {
+      const allTagMatches = new Map(); // Use Map to avoid duplicates
+      
+      // Split search into individual keywords and include synonyms
+      const allKeywords = [];
       for (const searchTerm of uniqueSearchTerms) {
-        // First check in filtered items, then in all menu items
-        let exactTagMatches = findAllExactTagMatches(filteredItems, searchTerm);
-        if (exactTagMatches.length === 0) {
-          exactTagMatches = findAllExactTagMatches(menuItems, searchTerm);
+        const words = searchTerm.split(/\s+/).filter(w => w.length >= 2);
+        allKeywords.push(...words);
+      }
+      const uniqueKeywords = [...new Set(allKeywords)];
+      
+      console.log(`🔍 Searching tags for keywords: [${uniqueKeywords.join(', ')}]`);
+      
+      // Search each keyword and collect all matching items
+      for (const keyword of uniqueKeywords) {
+        let matches = findAllExactTagMatches(filteredItems, keyword);
+        if (matches.length === 0) {
+          matches = findAllExactTagMatches(menuItems, keyword);
         }
         
-        if (exactTagMatches.length > 0) {
-          console.log(`✅ Exact tag match found: "${searchTerm}" → ${exactTagMatches.length} items`);
-          return { 
-            items: exactTagMatches, 
-            foodType: detected, 
-            searchTerm: searchTerm, 
-            label: null,
-            exactMatch: true 
-          };
+        for (const item of matches) {
+          const id = item._id.toString();
+          if (!allTagMatches.has(id)) {
+            allTagMatches.set(id, item);
+          }
         }
+      }
+      
+      if (allTagMatches.size > 0) {
+        const matchedItems = Array.from(allTagMatches.values());
+        console.log(`✅ Tag matches found: ${matchedItems.length} items for keywords [${uniqueKeywords.join(', ')}]`);
+        return { 
+          items: matchedItems, 
+          foodType: detected, 
+          searchTerm: primarySearchTerm, 
+          label: null,
+          exactMatch: true 
+        };
       }
     }
     
