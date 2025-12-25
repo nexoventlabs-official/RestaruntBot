@@ -482,6 +482,63 @@ const chatbot = {
     return cleanText.trim().replace(/\s+/g, ' ');
   },
 
+  // Food synonyms - regional/local names mapped to common English equivalents
+  // Used to expand search terms for better matching
+  foodSynonyms: {
+    // Telugu/South Indian curry terms
+    'pulusu': ['curry', 'gravy', 'pulusu'],
+    'kura': ['curry', 'sabji', 'vegetable'],
+    'koora': ['curry', 'sabji', 'vegetable'],
+    'iguru': ['fry', 'dry curry', 'roast'],
+    'vepudu': ['fry', 'stir fry'],
+    'perugu': ['curd', 'yogurt', 'dahi'],
+    'pappu': ['dal', 'lentils'],
+    'charu': ['rasam', 'soup'],
+    'pachadi': ['chutney', 'raita'],
+    'pulihora': ['tamarind rice', 'puliyogare'],
+    'annam': ['rice', 'chawal'],
+    // Tamil terms
+    'kuzhambu': ['curry', 'gravy', 'kulambu'],
+    'kozhi': ['chicken', 'kodi'],
+    'meen': ['fish', 'chepa'],
+    'kari': ['curry', 'meat curry'],
+    'varuval': ['fry', 'roast'],
+    'poriyal': ['stir fry', 'vegetable fry'],
+    'kootu': ['curry', 'mixed vegetable'],
+    'thokku': ['pickle', 'chutney'],
+    // Hindi terms
+    'sabzi': ['curry', 'vegetable', 'sabji'],
+    'rassa': ['curry', 'gravy'],
+    'bhaji': ['fry', 'vegetable fry'],
+    'tarkari': ['curry', 'vegetable'],
+    // Common variations
+    'curry': ['curry', 'gravy', 'kura', 'pulusu', 'kuzhambu'],
+    'gravy': ['curry', 'gravy', 'rassa'],
+    'fry': ['fry', 'vepudu', 'varuval', 'roast'],
+    'biryani': ['biryani', 'biriyani', 'briyani'],
+    'rice': ['rice', 'annam', 'chawal', 'bhat']
+  },
+
+  // Get synonyms for a search term
+  getSynonyms(term) {
+    const lowerTerm = term.toLowerCase();
+    const synonyms = [lowerTerm];
+    
+    // Check if term has synonyms
+    if (this.foodSynonyms[lowerTerm]) {
+      synonyms.push(...this.foodSynonyms[lowerTerm]);
+    }
+    
+    // Also check if term is a synonym of something else
+    for (const [key, values] of Object.entries(this.foodSynonyms)) {
+      if (values.includes(lowerTerm) && !synonyms.includes(key)) {
+        synonyms.push(key);
+      }
+    }
+    
+    return [...new Set(synonyms)];
+  },
+
   // Helper to transliterate regional language words to English equivalents (basic mapping)
   transliterate(text) {
     const transliterationMap = {
@@ -751,8 +808,21 @@ const chatbot = {
     // Get all search variations (cleaned of food type keywords)
     const searchVariations = allVariations.map(v => this.removeFoodTypeKeywords(v.toLowerCase())).filter(v => v.length >= 2);
     
-    // Add unique variations
-    const uniqueSearchTerms = [...new Set(searchVariations)];
+    // Expand search terms with synonyms (e.g., "pulusu" → ["pulusu", "curry", "gravy"])
+    const expandedTerms = [];
+    for (const term of searchVariations) {
+      expandedTerms.push(term);
+      // Get synonyms for each word in the term
+      const words = term.split(/\s+/).filter(w => w.length >= 2);
+      for (const word of words) {
+        const synonyms = this.getSynonyms(word);
+        expandedTerms.push(...synonyms);
+      }
+    }
+    
+    // Add unique variations (including synonyms)
+    const uniqueSearchTerms = [...new Set(expandedTerms)];
+    console.log(`🔍 Search terms with synonyms: [${uniqueSearchTerms.join(', ')}]`);
     
     // If search term is too short after removing keywords, search by ingredient/type only
     const hasSearchTerm = primarySearchTerm.length >= 2;
