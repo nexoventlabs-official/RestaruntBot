@@ -126,51 +126,70 @@ const chatbot = {
 
   // Helper to detect clear/empty cart intent from text/voice
   // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
-  // Handles voice recognition mistakes like "card", "cut", "kart", "cot" instead of "cart"
+  // Handles voice recognition mistakes like "card", "cut", "kart", "cot", "caught" instead of "cart"
   isClearCartIntent(text) {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     const clearCartPatterns = [
-      // English - including voice recognition mistakes (card, cut, kart, cot)
+      // English - including ALL voice recognition mistakes (card, cut, kart, cot, caught, cat, court)
+      // Clear variations
       /\bclear cart\b/, /\bclear my cart\b/, /\bempty cart\b/, /\bempty my cart\b/,
-      /\bclear card\b/, /\bclear my card\b/, /\bempty card\b/, /\bempty my card\b/, // voice mistake: card
-      /\bclear cut\b/, /\bclear my cut\b/, /\bempty cut\b/, /\bempty my cut\b/, // voice mistake: cut
-      /\bclear kart\b/, /\bclear my kart\b/, /\bempty kart\b/, /\bempty my kart\b/, // voice mistake: kart
-      /\bclear cot\b/, /\bclear my cot\b/, // voice mistake: cot
-      /\bremove cart\b/, /\bremove all\b/, /\bremove items\b/, /\bremove all items\b/,
-      /\bremove my items\b/, /\bremove my cart\b/, /\bremove my card\b/, /\bremove my cut\b/, /\bremove my kart\b/,
-      /\bdelete cart\b/, /\bdelete all\b/, /\bdelete items\b/, /\bdelete my items\b/,
-      /\bdelete card\b/, /\bdelete my cart\b/, /\bdelete my card\b/, /\bdelete cut\b/, /\bdelete kart\b/, // voice mistakes
-      /\bclean cart\b/, /\breset cart\b/, /\bclear basket\b/, /\bempty basket\b/,
-      /\bclean card\b/, /\breset card\b/, /\bclean cut\b/, /\bclean kart\b/, // voice mistakes
-      /\bremove everything\b/, /\bdelete everything\b/, /\bclear all\b/,
-      /\bclear items\b/, /\bclear my items\b/, /\bclear all items\b/,
-      /\bstart fresh\b/, /\bstart over\b/, /\bremove from cart\b/, /\bremove from card\b/, /\bremove from cut\b/,
-      /\bcancel cart\b/, /\bcancel card\b/, /\bcancel items\b/, /\bcancel my items\b/,
+      /\bclear card\b/, /\bclear my card\b/, /\bempty card\b/, /\bempty my card\b/,
+      /\bclear cut\b/, /\bclear my cut\b/, /\bempty cut\b/, /\bempty my cut\b/,
+      /\bclear kart\b/, /\bclear my kart\b/, /\bempty kart\b/, /\bempty my kart\b/,
+      /\bclear cot\b/, /\bclear my cot\b/, /\bclear caught\b/, /\bclear my caught\b/,
+      /\bclear cat\b/, /\bclear my cat\b/, /\bclear court\b/, /\bclear my court\b/,
+      // Remove variations - ALL voice mistakes
+      /\bremove cart\b/, /\bremove my cart\b/, /\bremove the cart\b/,
+      /\bremove card\b/, /\bremove my card\b/, /\bremove the card\b/,
+      /\bremove cut\b/, /\bremove my cut\b/, /\bremove the cut\b/,
+      /\bremove kart\b/, /\bremove my kart\b/, /\bremove the kart\b/,
+      /\bremove cot\b/, /\bremove my cot\b/, /\bremove caught\b/, /\bremove my caught\b/,
+      /\bremove cat\b/, /\bremove my cat\b/, /\bremove court\b/, /\bremove my court\b/,
+      /\bremove all\b/, /\bremove items\b/, /\bremove all items\b/, /\bremove my items\b/,
+      /\bremove everything\b/, /\bremove from cart\b/, /\bremove from card\b/,
+      // Delete variations - ALL voice mistakes
+      /\bdelete cart\b/, /\bdelete my cart\b/, /\bdelete the cart\b/,
+      /\bdelete card\b/, /\bdelete my card\b/, /\bdelete the card\b/,
+      /\bdelete cut\b/, /\bdelete my cut\b/, /\bdelete the cut\b/,
+      /\bdelete kart\b/, /\bdelete my kart\b/, /\bdelete the kart\b/,
+      /\bdelete cot\b/, /\bdelete my cot\b/, /\bdelete caught\b/, /\bdelete my caught\b/,
+      /\bdelete cat\b/, /\bdelete my cat\b/, /\bdelete court\b/, /\bdelete my court\b/,
+      /\bdelete all\b/, /\bdelete items\b/, /\bdelete my items\b/, /\bdelete everything\b/,
+      // Clean/Reset variations
+      /\bclean cart\b/, /\bclean card\b/, /\bclean cut\b/, /\bclean kart\b/,
+      /\breset cart\b/, /\breset card\b/, /\breset cut\b/, /\breset kart\b/,
+      // Cancel variations
+      /\bcancel cart\b/, /\bcancel my cart\b/, /\bcancel card\b/, /\bcancel my card\b/,
+      /\bcancel cut\b/, /\bcancel my cut\b/, /\bcancel kart\b/, /\bcancel my kart\b/,
+      /\bcancel items\b/, /\bcancel my items\b/, /\bcancel all\b/,
+      // Other English patterns
+      /\bclear basket\b/, /\bempty basket\b/, /\bclear all\b/, /\bclear items\b/, /\bclear my items\b/,
+      /\bstart fresh\b/, /\bstart over\b/,
       // Hindi
       /\bcart khali karo\b/, /\bcart saaf karo\b/, /\bcart clear karo\b/,
-      /\bcard khali karo\b/, /\bcard saaf karo\b/, /\bcard clear karo\b/, // voice mistake
+      /\bcard khali karo\b/, /\bcard saaf karo\b/, /\bcard clear karo\b/,
       /\bsab hatao\b/, /\bsab remove karo\b/, /\bsab delete karo\b/,
       /\bitems hatao\b/, /\bसब आइटम हटाओ\b/, /\bआइटम्स हटाओ\b/,
       /\bकार्ट खाली करो\b/, /\bकार्ट साफ करो\b/, /\bसब हटाओ\b/,
       /\bकार्ट क्लियर\b/, /\bसब कुछ हटाओ\b/, /\bआइटम हटाओ\b/,
       // Telugu
       /\bcart clear cheyyi\b/, /\bcart khali cheyyi\b/, /\banni teeseyyi\b/,
-      /\bcard clear cheyyi\b/, /\bcard khali cheyyi\b/, // voice mistake
+      /\bcard clear cheyyi\b/, /\bcard khali cheyyi\b/,
       /\bకార్ట్ క్లియర్\b/, /\bకార్ట్ ఖాళీ చేయి\b/, /\bఅన్నీ తీసేయి\b/,
       /\bఐటమ్స్ తీసేయి\b/, /\bకార్ట్ తీసేయి\b/, /\bఐటమ్స్ క్లియర్\b/,
       // Tamil
       /\bcart clear pannu\b/, /\bcart kaali pannu\b/, /\bellam eduthudu\b/,
-      /\bcard clear pannu\b/, /\bcard kaali pannu\b/, // voice mistake
+      /\bcard clear pannu\b/, /\bcard kaali pannu\b/,
       /\bகார்ட் கிளியர்\b/, /\bகார்ட் காலி\b/, /\bஎல்லாம் எடுத்துடு\b/,
       /\bஐட்டம்ஸ் நீக்கு\b/, /\bஐட்டம்ஸ் கிளியர்\b/,
       // Kannada
       /\bcart clear maadi\b/, /\bcart khali maadi\b/, /\bella tegedu\b/,
-      /\bcard clear maadi\b/, /\bcard khali maadi\b/, // voice mistake
+      /\bcard clear maadi\b/, /\bcard khali maadi\b/,
       /\bಕಾರ್ಟ್ ಕ್ಲಿಯರ್\b/, /\bಕಾರ್ಟ್ ಖಾಲಿ\b/, /\bಎಲ್ಲಾ ತೆಗೆದು\b/,
       // Malayalam
       /\bcart clear cheyyuka\b/, /\bcart kaali aakkuka\b/, /\bellam maarruka\b/,
-      /\bcard clear cheyyuka\b/, /\bcard kaali aakkuka\b/, // voice mistake
+      /\bcard clear cheyyuka\b/, /\bcard kaali aakkuka\b/,
       /\bകാർട്ട് ക്ലിയർ\b/, /\bകാർട്ട് കാലി\b/, /\bഎല്ലാം മാറ്റുക\b/,
       // Bengali
       /\bcart clear koro\b/, /\bcart khali koro\b/, /\bsob soriyo\b/,
