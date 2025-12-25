@@ -465,15 +465,16 @@ const chatbot = {
   },
 
   // Helper to remove food type keywords from search text
+  // Only removes general food type keywords (veg/nonveg), NOT specific ingredients like chicken/mutton
   removeFoodTypeKeywords(text) {
     let cleanText = text.toLowerCase();
-    // Remove all food type keywords - order matters! Remove longer phrases first
+    // Remove only general food type keywords, keep specific ingredients for search
     const patterns = [
       /\bpure veg\b/gi, /\bnon[\s-]?veg\b/gi,  // Multi-word first
       /\bvegetarian\b/gi, /\bveggie\b/gi, /\bveg\b/gi,
-      /\bnonveg\b/gi,
-      /\bchicken\b/gi, /\bmutton\b/gi, /\bfish\b/gi, /\bprawn\b/gi,
-      /\begg\b/gi, /\bmeat\b/gi, /\bkeema\b/gi, /\bbeef\b/gi, /\bpork\b/gi, /\bseafood\b/gi
+      /\bnonveg\b/gi
+      // Removed: chicken, mutton, fish, prawn, egg, meat, keema, beef, pork, seafood
+      // These are kept for searching items by ingredient
     ];
     patterns.forEach(pattern => {
       cleanText = cleanText.replace(pattern, ' ');
