@@ -1374,12 +1374,22 @@ const chatbot = {
         state.currentStep = 'main_menu';
       }
       else if (selection === 'checkout' || selection === 'review_pay') {
-        // If cart is empty but user has a selected item, add it automatically with qty 1
-        if (!customer.cart?.length && state.selectedItem) {
+        // If user has a selected item they're viewing, add it to cart with qty 1
+        if (state.selectedItem) {
           const item = menuItems.find(m => m._id.toString() === state.selectedItem);
           if (item) {
-            customer.cart = [{ menuItem: item._id, quantity: 1 }];
+            // Check if item already in cart
+            const existingIndex = customer.cart?.findIndex(c => c.menuItem.toString() === state.selectedItem);
+            if (existingIndex >= 0) {
+              // Item already in cart, increment quantity
+              customer.cart[existingIndex].quantity += 1;
+            } else {
+              // Add new item to cart
+              if (!customer.cart) customer.cart = [];
+              customer.cart.push({ menuItem: item._id, quantity: 1 });
+            }
             await customer.save();
+            console.log(`✅ Added ${item.name} to cart before checkout`);
           }
         }
         
