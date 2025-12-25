@@ -914,6 +914,26 @@ const chatbot = {
       );
     };
     
+    // Non-veg ingredient keywords - if search contains these, filter out veg items
+    const nonVegKeywords = ['mutton', 'chicken', 'fish', 'prawn', 'prawns', 'egg', 'meat', 'keema', 'beef', 'pork', 'seafood', 'crab', 'lobster', 'lamb', 'goat', 'kodi', 'mamsam', 'chepa', 'royyalu'];
+    
+    // Veg-only keywords - if search contains ONLY these (no non-veg), filter out non-veg items
+    const vegKeywords = ['paneer', 'dal', 'sabji', 'vegetable', 'aloo', 'gobi', 'palak', 'mushroom', 'tofu', 'soya', 'rajma', 'chole', 'chana'];
+    
+    // Check if search contains non-veg keywords
+    const searchLower = primarySearchTerm.toLowerCase();
+    const hasNonVegKeyword = nonVegKeywords.some(kw => searchLower.includes(kw));
+    const hasVegKeyword = vegKeywords.some(kw => searchLower.includes(kw));
+    
+    // Determine food type filter based on search keywords
+    let searchFoodTypeFilter = null;
+    if (hasNonVegKeyword && !hasVegKeyword) {
+      searchFoodTypeFilter = 'nonveg'; // Search has non-veg ingredient, show only non-veg/egg
+    } else if (hasVegKeyword && !hasNonVegKeyword) {
+      searchFoodTypeFilter = 'veg'; // Search has veg ingredient, show only veg
+    }
+    // If neither or both, show all (generic search like "curry", "biryani")
+    
     // ========== CHECK FOR EXACT TAG MATCH - COLLECT ALL MATCHING ITEMS FROM ALL KEYWORDS ==========
     if (hasSearchTerm) {
       const allTagMatches = new Map(); // Use Map to avoid duplicates
@@ -926,7 +946,7 @@ const chatbot = {
       }
       const uniqueKeywords = [...new Set(allKeywords)];
       
-      console.log(`🔍 Searching tags for keywords: [${uniqueKeywords.join(', ')}]`);
+      console.log(`🔍 Searching tags for keywords: [${uniqueKeywords.join(', ')}], foodTypeFilter: ${searchFoodTypeFilter || 'all'}`);
       
       // Search each keyword and collect all matching items
       for (const keyword of uniqueKeywords) {
@@ -938,7 +958,21 @@ const chatbot = {
         for (const item of matches) {
           const id = item._id.toString();
           if (!allTagMatches.has(id)) {
-            allTagMatches.set(id, item);
+            // Apply food type filter based on search keywords
+            if (searchFoodTypeFilter === 'nonveg') {
+              // Non-veg search: only include non-veg and egg items
+              if (item.foodType === 'nonveg' || item.foodType === 'egg') {
+                allTagMatches.set(id, item);
+              }
+            } else if (searchFoodTypeFilter === 'veg') {
+              // Veg search: only include veg items
+              if (item.foodType === 'veg') {
+                allTagMatches.set(id, item);
+              }
+            } else {
+              // Generic search: include all
+              allTagMatches.set(id, item);
+            }
           }
         }
       }
