@@ -760,19 +760,24 @@ const chatbot = {
     const normalizeForMatch = (text) => text.toLowerCase().replace(/\s+/g, '');
     
     // ========== CHECK FOR EXACT NAME MATCH FIRST ==========
-    // If search term exactly matches an item name (with or without spaces), return ONLY that item
+    // If search term exactly matches item name(s) (with or without spaces), return ALL exact matches
     if (hasSearchTerm) {
       for (const searchTerm of uniqueSearchTerms) {
+        const searchLower = searchTerm.toLowerCase();
         const searchNorm = normalizeForMatch(searchTerm);
-        const exactMatch = menuItems.find(item => {
+        
+        // Find ALL items with exact name match (not just first one)
+        const exactMatches = menuItems.filter(item => {
+          const nameLower = item.name.toLowerCase();
           const nameNorm = normalizeForMatch(item.name);
           // Match exact (with spaces) OR normalized (without spaces)
-          return item.name.toLowerCase() === searchTerm.toLowerCase() || nameNorm === searchNorm;
+          return nameLower === searchLower || nameNorm === searchNorm;
         });
-        if (exactMatch) {
-          console.log(`✅ Exact match found: "${searchTerm}" → "${exactMatch.name}"`);
+        
+        if (exactMatches.length > 0) {
+          console.log(`✅ Exact match found: "${searchTerm}" → ${exactMatches.length} item(s)`);
           return { 
-            items: [exactMatch], 
+            items: exactMatches, 
             foodType: detected, 
             searchTerm: searchTerm, 
             label: null,
