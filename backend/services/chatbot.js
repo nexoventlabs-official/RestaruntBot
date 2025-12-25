@@ -75,14 +75,17 @@ const chatbot = {
   },
 
   // Helper to detect cart intent from text/voice
-  // Handles voice recognition mistakes like "card" instead of "cart"
+  // Handles voice recognition mistakes like "card", "cut", "kart", "cot" instead of "cart"
   isCartIntent(text) {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     const cartPatterns = [
-      // English - including voice recognition mistakes
+      // English - including voice recognition mistakes (card, cut, kart, cot, cart)
       /\bmy cart\b/, /\bview cart\b/, /\bshow cart\b/, /\bsee cart\b/, /\bcart\b/,
-      /\bmy card\b/, /\bview card\b/, /\bshow card\b/, /\bsee card\b/, /\bcard\b/, // voice mistake: card
+      /\bmy card\b/, /\bview card\b/, /\bshow card\b/, /\bsee card\b/, // voice mistake: card
+      /\bmy cut\b/, /\bview cut\b/, /\bshow cut\b/, /\bsee cut\b/, // voice mistake: cut
+      /\bmy kart\b/, /\bview kart\b/, /\bshow kart\b/, /\bsee kart\b/, /\bkart\b/, // voice mistake: kart
+      /\bmy cot\b/, /\bview cot\b/, /\bshow cot\b/, // voice mistake: cot
       /\bbasket\b/, /\bmy items\b/, /\bshow items\b/, /\bview items\b/, /\bsee items\b/,
       /\bshow my items\b/, /\bview my items\b/, /\bmy order items\b/,
       /\bwhat'?s in my cart\b/, /\bwhats in cart\b/, /\bwhat'?s in cart\b/,
@@ -123,23 +126,26 @@ const chatbot = {
 
   // Helper to detect clear/empty cart intent from text/voice
   // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
-  // Handles voice recognition mistakes like "card" instead of "cart"
+  // Handles voice recognition mistakes like "card", "cut", "kart", "cot" instead of "cart"
   isClearCartIntent(text) {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     const clearCartPatterns = [
-      // English - including voice recognition mistakes
+      // English - including voice recognition mistakes (card, cut, kart, cot)
       /\bclear cart\b/, /\bclear my cart\b/, /\bempty cart\b/, /\bempty my cart\b/,
-      /\bclear card\b/, /\bclear my card\b/, /\bempty card\b/, /\bempty my card\b/, // voice mistake
+      /\bclear card\b/, /\bclear my card\b/, /\bempty card\b/, /\bempty my card\b/, // voice mistake: card
+      /\bclear cut\b/, /\bclear my cut\b/, /\bempty cut\b/, /\bempty my cut\b/, // voice mistake: cut
+      /\bclear kart\b/, /\bclear my kart\b/, /\bempty kart\b/, /\bempty my kart\b/, // voice mistake: kart
+      /\bclear cot\b/, /\bclear my cot\b/, // voice mistake: cot
       /\bremove cart\b/, /\bremove all\b/, /\bremove items\b/, /\bremove all items\b/,
-      /\bremove my items\b/, /\bremove my cart\b/, /\bremove my card\b/,
+      /\bremove my items\b/, /\bremove my cart\b/, /\bremove my card\b/, /\bremove my cut\b/, /\bremove my kart\b/,
       /\bdelete cart\b/, /\bdelete all\b/, /\bdelete items\b/, /\bdelete my items\b/,
-      /\bdelete card\b/, /\bdelete my cart\b/, /\bdelete my card\b/, // voice mistake
+      /\bdelete card\b/, /\bdelete my cart\b/, /\bdelete my card\b/, /\bdelete cut\b/, /\bdelete kart\b/, // voice mistakes
       /\bclean cart\b/, /\breset cart\b/, /\bclear basket\b/, /\bempty basket\b/,
-      /\bclean card\b/, /\breset card\b/, // voice mistake
+      /\bclean card\b/, /\breset card\b/, /\bclean cut\b/, /\bclean kart\b/, // voice mistakes
       /\bremove everything\b/, /\bdelete everything\b/, /\bclear all\b/,
       /\bclear items\b/, /\bclear my items\b/, /\bclear all items\b/,
-      /\bstart fresh\b/, /\bstart over\b/, /\bremove from cart\b/, /\bremove from card\b/,
+      /\bstart fresh\b/, /\bstart over\b/, /\bremove from cart\b/, /\bremove from card\b/, /\bremove from cut\b/,
       /\bcancel cart\b/, /\bcancel card\b/, /\bcancel items\b/, /\bcancel my items\b/,
       // Hindi
       /\bcart khali karo\b/, /\bcart saaf karo\b/, /\bcart clear karo\b/,
@@ -1301,11 +1307,8 @@ const chatbot = {
         await this.sendWelcome(phone);
         state.currentStep = 'main_menu';
       }
-      // ========== CART COMMANDS (check early - works from any state) ==========
-      else if (selection === 'view_cart' || (!selectedId && this.isCartIntent(msg))) {
-        await this.sendCart(phone, customer);
-        state.currentStep = 'viewing_cart';
-      }
+      // ========== CART COMMANDS (check CLEAR first, then VIEW - order matters!) ==========
+      // Clear cart must be checked BEFORE view cart because "clear my cart" contains "my cart"
       else if (selection === 'clear_cart' || (!selectedId && this.isClearCartIntent(msg))) {
         customer.cart = [];
         await customer.save();
@@ -1314,6 +1317,10 @@ const chatbot = {
           { id: 'home', text: 'Main Menu' }
         ]);
         state.currentStep = 'main_menu';
+      }
+      else if (selection === 'view_cart' || (!selectedId && this.isCartIntent(msg))) {
+        await this.sendCart(phone, customer);
+        state.currentStep = 'viewing_cart';
       }
       else if (selection === 'view_menu' || msg === 'menu') {
         await this.sendFoodTypeSelection(phone);
