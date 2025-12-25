@@ -158,7 +158,50 @@ const chatbot = {
       /\bcard batavo\b/, /\bmaru card\b/, /\bcard juo\b/,
       /\bકાર્ટ\b/, /\bમારું કાર્ટ\b/, /\bકાર્ટ બતાવો\b/, /\bકાર્ટ જુઓ\b/,
       /\bમારા આઇટમ્સ\b/, /\bઆઇટમ્સ બતાવો\b/, /\bસામાન બતાવો\b/,
-      /\bitems batavo\b/, /\bmara items\b/, /\bsaman batavo\b/
+      /\bitems batavo\b/, /\bmara items\b/, /\bsaman batavo\b/,
+      
+      // ========== MIXED LANGUAGE PATTERNS (Hinglish/Tanglish/etc.) ==========
+      // "dekhna hai" / "dekhna" style (want to see)
+      /\bcart dekhna hai\b/, /\bcart dekhna\b/, /\bcard dekhna hai\b/, /\bcard dekhna\b/,
+      /\bitems dekhna hai\b/, /\bitems dekhna\b/, /\bsaman dekhna hai\b/,
+      // "chahiye" / "chai" style (want/need)
+      /\bcart dekhna chahiye\b/, /\bcart chahiye\b/, /\bcard chahiye\b/,
+      /\bitems dekhna chahiye\b/, /\bitems chahiye\b/, /\bmy items chahiye\b/,
+      /\bcart show chai\b/, /\bitems show chai\b/, /\bcart dikhao chai\b/,
+      // "karo" / "kar do" / "do" style (please do)
+      /\bcart show karo\b/, /\bcart show kar do\b/, /\bcard show karo\b/,
+      /\bitems show karo\b/, /\bitems show kar do\b/, /\bitems dikhao na\b/,
+      /\bcart dikha do\b/, /\bcard dikha do\b/, /\bitems dikha do\b/,
+      // "mujhe" / "mera" / "mere" style (my/mine)
+      /\bmujhe cart dikhao\b/, /\bmujhe items dikhao\b/, /\bmujhe cart show karo\b/,
+      /\bmera cart dikhao\b/, /\bmera cart show\b/, /\bmera card dikhao\b/,
+      /\bmere items dikhao\b/, /\bmere items show\b/, /\bmere saman dikhao\b/,
+      // Telugu mixed (chupinchu/chudu at end)
+      /\bcart show chupinchu\b/, /\bitems show chupinchu\b/, /\bcart chudu\b/,
+      /\bitems chudu\b/, /\bnaa cart chudu\b/, /\bnaa items chudu\b/,
+      // Tamil mixed (kaattu/paaru at end)
+      /\bcart show kaattu\b/, /\bitems show kaattu\b/, /\bcart paaru\b/,
+      /\bitems paaru\b/, /\ben cart paaru\b/, /\ben items paaru\b/,
+      // Kannada mixed (toorisu/nodu at end)
+      /\bcart show toorisu\b/, /\bitems show toorisu\b/, /\bcart nodu\b/,
+      /\bitems nodu\b/, /\bnanna cart nodu\b/, /\bnanna items nodu\b/,
+      // Bengali mixed (dekho/dekhao at end)
+      /\bcart show dekho\b/, /\bitems show dekho\b/, /\bcart dekhao na\b/,
+      /\bitems dekhao na\b/, /\bamar cart dekho\b/, /\bamar items dekho\b/,
+      // Marathi mixed (dakhva/bagha at end)
+      /\bcart show dakhva\b/, /\bitems show dakhva\b/, /\bcart bagha na\b/,
+      /\bitems bagha na\b/, /\bmaza cart bagha\b/, /\bmaze items bagha\b/,
+      // Gujarati mixed (batavo/juo at end)
+      /\bcart show batavo\b/, /\bitems show batavo\b/, /\bcart juo na\b/,
+      /\bitems juo na\b/, /\bmaru cart juo\b/, /\bmara items juo\b/,
+      // "please" mixed patterns
+      /\bplease show cart\b/, /\bplease show items\b/, /\bplease show my cart\b/,
+      /\bcart show please\b/, /\bitems show please\b/, /\bmy cart please\b/,
+      // "want to" patterns
+      /\bwant to see cart\b/, /\bwant to see items\b/, /\bwant to view cart\b/,
+      /\bi want see cart\b/, /\bi want see items\b/, /\bi want my cart\b/,
+      // Short forms
+      /\bshw cart\b/, /\bshw items\b/, /\bvw cart\b/, /\bvw items\b/
     ];
     return cartPatterns.some(pattern => pattern.test(lowerText));
   },
@@ -340,7 +383,61 @@ const chatbot = {
       /\bકાર્ટ ક્લિયર\b/, /\bકાર્ટ ખાલી કરો\b/, /\bકાર્ટ કાઢી નાખો\b/, /\bકાર્ટ ડિલીટ\b/,
       /\bબધું કાઢી નાખો\b/, /\bબધું ક્લિયર કરો\b/, /\bબધું ડિલીટ કરો\b/,
       /\bઆઇટમ્સ કાઢી નાખો\b/, /\bઆઇટમ્સ ક્લિયર\b/, /\bઆઇટમ્સ ડિલીટ\b/, /\bબધા આઇટમ્સ કાઢી નાખો\b/,
-      /\bસામાન કાઢી નાખો\b/, /\bસામાન ક્લિયર\b/, /\bબધું સામાન કાઢી નાખો\b/
+      /\bસામાન કાઢી નાખો\b/, /\bસામાન ક્લિયર\b/, /\bબધું સામાન કાઢી નાખો\b/,
+      
+      // ========== MIXED LANGUAGE PATTERNS (Hinglish/Tanglish/etc.) ==========
+      // "items remove chai" style - action word at end (Hindi style in English)
+      /\bitems remove chai\b/, /\bitems delete chai\b/, /\bitems clear chai\b/, /\bitems hatao chai\b/,
+      /\bcart remove chai\b/, /\bcart delete chai\b/, /\bcart clear chai\b/, /\bcart hatao chai\b/,
+      /\bcard remove chai\b/, /\bcard delete chai\b/, /\bcard clear chai\b/,
+      /\bsab remove chai\b/, /\bsab delete chai\b/, /\bsab clear chai\b/,
+      // "chai" variations (chahiye/chaiye - want to)
+      /\bitems remove chahiye\b/, /\bitems delete chahiye\b/, /\bitems clear chahiye\b/,
+      /\bcart remove chahiye\b/, /\bcart delete chahiye\b/, /\bcart clear chahiye\b/,
+      /\bcart empty chahiye\b/, /\bcart khali chahiye\b/, /\bcard khali chahiye\b/,
+      // "karna hai" / "karna" style (want to do)
+      /\bitems remove karna\b/, /\bitems delete karna\b/, /\bitems clear karna\b/,
+      /\bcart remove karna\b/, /\bcart delete karna\b/, /\bcart clear karna\b/, /\bcart empty karna\b/,
+      /\bitems remove karna hai\b/, /\bitems delete karna hai\b/, /\bcart clear karna hai\b/,
+      /\bcart khali karna\b/, /\bcart khali karna hai\b/, /\bcard khali karna\b/,
+      // "do" / "kar do" / "de do" style (please do)
+      /\bitems remove kar do\b/, /\bitems delete kar do\b/, /\bitems clear kar do\b/,
+      /\bcart remove kar do\b/, /\bcart delete kar do\b/, /\bcart clear kar do\b/,
+      /\bcart khali kar do\b/, /\bcard khali kar do\b/, /\bcart empty kar do\b/,
+      /\bitems hata do\b/, /\bcart hata do\b/, /\bsab hata do\b/,
+      // "please" mixed patterns
+      /\bplease clear cart\b/, /\bplease remove cart\b/, /\bplease delete cart\b/,
+      /\bplease clear items\b/, /\bplease remove items\b/, /\bplease delete items\b/,
+      /\bcart clear please\b/, /\bitems clear please\b/, /\bcart remove please\b/,
+      // Telugu mixed (cheyyi/cheyyandi at end)
+      /\bitems remove cheyyi\b/, /\bitems delete cheyyi\b/, /\bcart remove cheyyi\b/,
+      /\bitems clear cheyyandi\b/, /\bcart clear cheyyandi\b/, /\bcart remove cheyyandi\b/,
+      // Tamil mixed (pannu/pannunga at end)
+      /\bitems remove pannu\b/, /\bitems delete pannu\b/, /\bcart remove pannu\b/,
+      /\bitems clear pannunga\b/, /\bcart clear pannunga\b/, /\bcart remove pannunga\b/,
+      // Kannada mixed (maadi at end)
+      /\bitems remove maadi\b/, /\bitems delete maadi\b/, /\bcart remove maadi\b/,
+      /\bitems clear maadi\b/, /\bcart clear maadiri\b/,
+      // Bengali mixed (koro at end)
+      /\bitems remove koro\b/, /\bitems delete koro\b/, /\bcart remove koro\b/,
+      // Marathi mixed (kara at end)
+      /\bitems remove kara\b/, /\bitems delete kara\b/, /\bcart remove kara\b/,
+      // Gujarati mixed (karo at end)
+      /\bitems remove karo\b/, /\bitems delete karo\b/, /\bcart remove karo\b/,
+      // "mujhe" / "mera" / "mere" style (my/mine)
+      /\bmujhe cart clear\b/, /\bmujhe items clear\b/, /\bmujhe cart remove\b/,
+      /\bmera cart clear\b/, /\bmera cart remove\b/, /\bmera cart delete\b/,
+      /\bmere items clear\b/, /\bmere items remove\b/, /\bmere items delete\b/,
+      // "nahi chahiye" / "nahi chaiye" (don't want)
+      /\bcart nahi chahiye\b/, /\bitems nahi chahiye\b/, /\bsab nahi chahiye\b/,
+      /\bcart nahi chaiye\b/, /\bitems nahi chaiye\b/,
+      // Short forms and typos
+      /\bclr cart\b/, /\bclr card\b/, /\bclr items\b/, /\brmv cart\b/, /\brmv items\b/,
+      /\bdel cart\b/, /\bdel card\b/, /\bdel items\b/,
+      // "want to" patterns
+      /\bwant to clear cart\b/, /\bwant to remove cart\b/, /\bwant to delete cart\b/,
+      /\bwant to clear items\b/, /\bwant to remove items\b/, /\bwant to delete items\b/,
+      /\bi want clear cart\b/, /\bi want remove items\b/, /\bi want delete cart\b/
     ];
     return clearCartPatterns.some(pattern => pattern.test(lowerText));
   },
