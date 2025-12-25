@@ -75,74 +75,108 @@ const chatbot = {
   },
 
   // Helper to detect cart intent from text/voice
+  // Handles voice recognition mistakes like "card" instead of "cart"
   isCartIntent(text) {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     const cartPatterns = [
-      // English
+      // English - including voice recognition mistakes
       /\bmy cart\b/, /\bview cart\b/, /\bshow cart\b/, /\bsee cart\b/, /\bcart\b/,
-      /\bbasket\b/, /\bmy items\b/, /\bwhat'?s in my cart\b/, /\bwhats in cart\b/,
+      /\bmy card\b/, /\bview card\b/, /\bshow card\b/, /\bsee card\b/, /\bcard\b/, // voice mistake: card
+      /\bbasket\b/, /\bmy items\b/, /\bshow items\b/, /\bview items\b/, /\bsee items\b/,
+      /\bshow my items\b/, /\bview my items\b/, /\bmy order items\b/,
+      /\bwhat'?s in my cart\b/, /\bwhats in cart\b/, /\bwhat'?s in cart\b/,
+      /\bwhat'?s in my card\b/, /\bwhats in card\b/, // voice mistake
+      /\bcheck cart\b/, /\bcheck card\b/, /\bopen cart\b/, /\bopen card\b/,
+      /\bsee my order\b/, /\bshow my order\b/, /\bmy order\b/,
       // Hindi
       /\bcart me kya hai\b/, /\bcart dikhao\b/, /\bcart dekho\b/, /\bmera cart\b/,
+      /\bcard me kya hai\b/, /\bcard dikhao\b/, /\bcard dekho\b/, /\bmera card\b/, // voice mistake
       /\bमेरा कार्ट\b/, /\bकार्ट\b/, /\bकार्ट दिखाओ\b/, /\bकार्ट में क्या है\b/,
+      /\bआइटम दिखाओ\b/, /\bमेरे आइटम\b/, /\bसामान दिखाओ\b/,
       // Telugu
       /\bcart chupinchu\b/, /\bnaa cart\b/, /\bకార్ట్\b/, /\bనా కార్ట్\b/, /\bకార్ట్ చూపించు\b/,
+      /\bcard chupinchu\b/, /\bnaa card\b/, // voice mistake
+      /\bనా ఐటమ్స్\b/, /\bఐటమ్స్ చూపించు\b/,
       // Tamil
       /\bcart kaattu\b/, /\ben cart\b/, /\bகார்ட்\b/, /\bஎன் கார்ட்\b/,
+      /\bcard kaattu\b/, /\ben card\b/, // voice mistake
+      /\bஎன் ஐட்டம்ஸ்\b/, /\bஐட்டம்ஸ் காட்டு\b/,
       // Kannada
       /\bcart toorisu\b/, /\bnanna cart\b/, /\bಕಾರ್ಟ್\b/, /\bನನ್ನ ಕಾರ್ಟ್\b/,
+      /\bcard toorisu\b/, /\bnanna card\b/, // voice mistake
       // Malayalam
       /\bcart kaanikkuka\b/, /\bente cart\b/, /\bകാർട്ട്\b/, /\bഎന്റെ കാർട്ട്\b/,
+      /\bcard kaanikkuka\b/, /\bente card\b/, // voice mistake
       // Bengali
       /\bcart dekho\b/, /\bamar cart\b/, /\bকার্ট\b/, /\bআমার কার্ট\b/,
+      /\bcard dekho\b/, /\bamar card\b/, // voice mistake
       // Marathi
       /\bcart dakhva\b/, /\bmaza cart\b/, /\bकार्ट\b/, /\bमाझा कार्ट\b/,
+      /\bcard dakhva\b/, /\bmaza card\b/, // voice mistake
       // Gujarati
-      /\bcart batavo\b/, /\bmaru cart\b/, /\bકાર્ટ\b/, /\bમારું કાર્ટ\b/
+      /\bcart batavo\b/, /\bmaru cart\b/, /\bકાર્ટ\b/, /\bમારું કાર્ટ\b/,
+      /\bcard batavo\b/, /\bmaru card\b/ // voice mistake
     ];
     return cartPatterns.some(pattern => pattern.test(lowerText));
   },
 
   // Helper to detect clear/empty cart intent from text/voice
   // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
+  // Handles voice recognition mistakes like "card" instead of "cart"
   isClearCartIntent(text) {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     const clearCartPatterns = [
-      // English
+      // English - including voice recognition mistakes
       /\bclear cart\b/, /\bclear my cart\b/, /\bempty cart\b/, /\bempty my cart\b/,
+      /\bclear card\b/, /\bclear my card\b/, /\bempty card\b/, /\bempty my card\b/, // voice mistake
       /\bremove cart\b/, /\bremove all\b/, /\bremove items\b/, /\bremove all items\b/,
-      /\bdelete cart\b/, /\bdelete all\b/, /\bdelete items\b/,
+      /\bremove my items\b/, /\bremove my cart\b/, /\bremove my card\b/,
+      /\bdelete cart\b/, /\bdelete all\b/, /\bdelete items\b/, /\bdelete my items\b/,
+      /\bdelete card\b/, /\bdelete my cart\b/, /\bdelete my card\b/, // voice mistake
       /\bclean cart\b/, /\breset cart\b/, /\bclear basket\b/, /\bempty basket\b/,
+      /\bclean card\b/, /\breset card\b/, // voice mistake
       /\bremove everything\b/, /\bdelete everything\b/, /\bclear all\b/,
-      /\bstart fresh\b/, /\bstart over\b/, /\bremove from cart\b/,
+      /\bclear items\b/, /\bclear my items\b/, /\bclear all items\b/,
+      /\bstart fresh\b/, /\bstart over\b/, /\bremove from cart\b/, /\bremove from card\b/,
+      /\bcancel cart\b/, /\bcancel card\b/, /\bcancel items\b/, /\bcancel my items\b/,
       // Hindi
       /\bcart khali karo\b/, /\bcart saaf karo\b/, /\bcart clear karo\b/,
+      /\bcard khali karo\b/, /\bcard saaf karo\b/, /\bcard clear karo\b/, // voice mistake
       /\bsab hatao\b/, /\bsab remove karo\b/, /\bsab delete karo\b/,
+      /\bitems hatao\b/, /\bसब आइटम हटाओ\b/, /\bआइटम्स हटाओ\b/,
       /\bकार्ट खाली करो\b/, /\bकार्ट साफ करो\b/, /\bसब हटाओ\b/,
       /\bकार्ट क्लियर\b/, /\bसब कुछ हटाओ\b/, /\bआइटम हटाओ\b/,
       // Telugu
       /\bcart clear cheyyi\b/, /\bcart khali cheyyi\b/, /\banni teeseyyi\b/,
+      /\bcard clear cheyyi\b/, /\bcard khali cheyyi\b/, // voice mistake
       /\bకార్ట్ క్లియర్\b/, /\bకార్ట్ ఖాళీ చేయి\b/, /\bఅన్నీ తీసేయి\b/,
-      /\bఐటమ్స్ తీసేయి\b/, /\bకార్ట్ తీసేయి\b/,
+      /\bఐటమ్స్ తీసేయి\b/, /\bకార్ట్ తీసేయి\b/, /\bఐటమ్స్ క్లియర్\b/,
       // Tamil
       /\bcart clear pannu\b/, /\bcart kaali pannu\b/, /\bellam eduthudu\b/,
+      /\bcard clear pannu\b/, /\bcard kaali pannu\b/, // voice mistake
       /\bகார்ட் கிளியர்\b/, /\bகார்ட் காலி\b/, /\bஎல்லாம் எடுத்துடு\b/,
-      /\bஐட்டம்ஸ் நீக்கு\b/,
+      /\bஐட்டம்ஸ் நீக்கு\b/, /\bஐட்டம்ஸ் கிளியர்\b/,
       // Kannada
       /\bcart clear maadi\b/, /\bcart khali maadi\b/, /\bella tegedu\b/,
+      /\bcard clear maadi\b/, /\bcard khali maadi\b/, // voice mistake
       /\bಕಾರ್ಟ್ ಕ್ಲಿಯರ್\b/, /\bಕಾರ್ಟ್ ಖಾಲಿ\b/, /\bಎಲ್ಲಾ ತೆಗೆದು\b/,
       // Malayalam
       /\bcart clear cheyyuka\b/, /\bcart kaali aakkuka\b/, /\bellam maarruka\b/,
+      /\bcard clear cheyyuka\b/, /\bcard kaali aakkuka\b/, // voice mistake
       /\bകാർട്ട് ക്ലിയർ\b/, /\bകാർട്ട് കാലി\b/, /\bഎല്ലാം മാറ്റുക\b/,
       // Bengali
       /\bcart clear koro\b/, /\bcart khali koro\b/, /\bsob soriyo\b/,
+      /\bcard clear koro\b/, /\bcard khali koro\b/, // voice mistake
       /\bকার্ট ক্লিয়ার\b/, /\bকার্ট খালি করো\b/, /\bসব সরিয়ে দাও\b/,
       // Marathi
       /\bcart clear kara\b/, /\bcart khali kara\b/, /\bsagla kadhun taka\b/,
+      /\bcard clear kara\b/, /\bcard khali kara\b/, // voice mistake
       /\bकार्ट क्लियर करा\b/, /\bकार्ट खाली करा\b/, /\bसगळं काढून टाका\b/,
       // Gujarati
       /\bcart clear karo\b/, /\bcart khali karo\b/, /\bbadhu kaadhi nakho\b/,
+      /\bcard clear karo\b/, /\bcard khali karo\b/, // voice mistake
       /\bકાર્ટ ક્લિયર\b/, /\bકાર્ટ ખાલી કરો\b/, /\bબધું કાઢી નાખો\b/
     ];
     return clearCartPatterns.some(pattern => pattern.test(lowerText));
