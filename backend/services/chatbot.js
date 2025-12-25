@@ -937,16 +937,19 @@ const chatbot = {
           itemMatches.get(id).score += 10; // Partial term match = 10 points
         }
         
-        // Also search individual keywords from this term
+        // Also search individual keywords from this term (e.g., "chicken curry" → search "chicken" and "curry" separately)
         const keywords = term.split(/\s+/).filter(k => k.length >= 2);
-        for (const keyword of keywords) {
-          const keywordMatches = searchByTerm(items, keyword);
-          for (const item of keywordMatches) {
-            const id = item._id.toString();
-            if (!itemMatches.has(id)) {
-              itemMatches.set(id, { item, score: 0 });
+        if (keywords.length > 1) {
+          // Multi-word search - search each keyword and give higher score
+          for (const keyword of keywords) {
+            const keywordMatches = searchByTerm(items, keyword);
+            for (const item of keywordMatches) {
+              const id = item._id.toString();
+              if (!itemMatches.has(id)) {
+                itemMatches.set(id, { item, score: 0 });
+              }
+              itemMatches.get(id).score += 15; // Keyword match = 15 points (higher for better results)
             }
-            itemMatches.get(id).score += 3; // Keyword match = 3 points
           }
         }
       }
@@ -969,6 +972,15 @@ const chatbot = {
         matchingItems = searchByMultipleTerms(menuItems, uniqueSearchTerms);
         if (matchingItems.length > 0) {
           foodTypeLabel = null;
+        }
+      }
+      
+      // If still no results, try searching each keyword individually across all items
+      if (matchingItems.length === 0) {
+        const allKeywords = uniqueSearchTerms.flatMap(term => term.split(/\s+/).filter(k => k.length >= 2));
+        if (allKeywords.length > 0) {
+          console.log(`🔍 Fallback keyword search: [${allKeywords.join(', ')}]`);
+          matchingItems = searchByMultipleTerms(menuItems, allKeywords);
         }
       }
     } else if (detected?.type === 'specific' && filteredItems.length > 0) {
