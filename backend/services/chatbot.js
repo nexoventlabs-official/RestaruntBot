@@ -75,134 +75,272 @@ const chatbot = {
   },
 
   // Helper to detect cart intent from text/voice
-  // Handles voice recognition mistakes like "card", "cut", "kart", "cot" instead of "cart"
+  // Handles voice recognition mistakes like "card", "cut", "kart", "cot", "caught", "cat", "court" instead of "cart"
+  // Also handles "items" variations in all languages
   isCartIntent(text) {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     const cartPatterns = [
-      // English - including voice recognition mistakes (card, cut, kart, cot, cart)
-      /\bmy cart\b/, /\bview cart\b/, /\bshow cart\b/, /\bsee cart\b/, /\bcart\b/,
-      /\bmy card\b/, /\bview card\b/, /\bshow card\b/, /\bsee card\b/, // voice mistake: card
-      /\bmy cut\b/, /\bview cut\b/, /\bshow cut\b/, /\bsee cut\b/, // voice mistake: cut
-      /\bmy kart\b/, /\bview kart\b/, /\bshow kart\b/, /\bsee kart\b/, /\bkart\b/, // voice mistake: kart
-      /\bmy cot\b/, /\bview cot\b/, /\bshow cot\b/, // voice mistake: cot
-      /\bbasket\b/, /\bmy items\b/, /\bshow items\b/, /\bview items\b/, /\bsee items\b/,
-      /\bshow my items\b/, /\bview my items\b/, /\bmy order items\b/,
+      // ========== ENGLISH - ALL VOICE MISTAKES ==========
+      // Cart variations (cart, card, cut, kart, cot, caught, cat, court)
+      /\bmy cart\b/, /\bview cart\b/, /\bshow cart\b/, /\bsee cart\b/, /\bcheck cart\b/, /\bopen cart\b/,
+      /\bmy card\b/, /\bview card\b/, /\bshow card\b/, /\bsee card\b/, /\bcheck card\b/, /\bopen card\b/,
+      /\bmy cut\b/, /\bview cut\b/, /\bshow cut\b/, /\bsee cut\b/, /\bcheck cut\b/,
+      /\bmy kart\b/, /\bview kart\b/, /\bshow kart\b/, /\bsee kart\b/, /\bcheck kart\b/,
+      /\bmy cot\b/, /\bview cot\b/, /\bshow cot\b/, /\bsee cot\b/,
+      /\bmy caught\b/, /\bview caught\b/, /\bshow caught\b/, /\bsee caught\b/,
+      /\bmy cat\b/, /\bview cat\b/, /\bshow cat\b/, /\bsee cat\b/,
+      /\bmy court\b/, /\bview court\b/, /\bshow court\b/, /\bsee court\b/,
+      // Items variations
+      /\bmy items\b/, /\bshow items\b/, /\bview items\b/, /\bsee items\b/, /\bcheck items\b/,
+      /\bshow my items\b/, /\bview my items\b/, /\bsee my items\b/, /\bcheck my items\b/,
+      /\bmy order items\b/, /\bshow order\b/, /\bview order\b/, /\bmy order\b/,
+      /\bshow my order\b/, /\bview my order\b/, /\bsee my order\b/,
+      // Basket variations
+      /\bmy basket\b/, /\bshow basket\b/, /\bview basket\b/, /\bsee basket\b/,
+      // What's in cart
       /\bwhat'?s in my cart\b/, /\bwhats in cart\b/, /\bwhat'?s in cart\b/,
-      /\bwhat'?s in my card\b/, /\bwhats in card\b/, // voice mistake
-      /\bcheck cart\b/, /\bcheck card\b/, /\bopen cart\b/, /\bopen card\b/,
-      /\bsee my order\b/, /\bshow my order\b/, /\bmy order\b/,
-      // Hindi
-      /\bcart me kya hai\b/, /\bcart dikhao\b/, /\bcart dekho\b/, /\bmera cart\b/,
-      /\bcard me kya hai\b/, /\bcard dikhao\b/, /\bcard dekho\b/, /\bmera card\b/, // voice mistake
-      /\bमेरा कार्ट\b/, /\bकार्ट\b/, /\bकार्ट दिखाओ\b/, /\bकार्ट में क्या है\b/,
-      /\bआइटम दिखाओ\b/, /\bमेरे आइटम\b/, /\bसामान दिखाओ\b/,
-      // Telugu
-      /\bcart chupinchu\b/, /\bnaa cart\b/, /\bకార్ట్\b/, /\bనా కార్ట్\b/, /\bకార్ట్ చూపించు\b/,
-      /\bcard chupinchu\b/, /\bnaa card\b/, // voice mistake
-      /\bనా ఐటమ్స్\b/, /\bఐటమ్స్ చూపించు\b/,
-      // Tamil
-      /\bcart kaattu\b/, /\ben cart\b/, /\bகார்ட்\b/, /\bஎன் கார்ட்\b/,
-      /\bcard kaattu\b/, /\ben card\b/, // voice mistake
-      /\bஎன் ஐட்டம்ஸ்\b/, /\bஐட்டம்ஸ் காட்டு\b/,
-      // Kannada
-      /\bcart toorisu\b/, /\bnanna cart\b/, /\bಕಾರ್ಟ್\b/, /\bನನ್ನ ಕಾರ್ಟ್\b/,
-      /\bcard toorisu\b/, /\bnanna card\b/, // voice mistake
-      // Malayalam
-      /\bcart kaanikkuka\b/, /\bente cart\b/, /\bകാർട്ട്\b/, /\bഎന്റെ കാർട്ട്\b/,
-      /\bcard kaanikkuka\b/, /\bente card\b/, // voice mistake
-      // Bengali
-      /\bcart dekho\b/, /\bamar cart\b/, /\bকার্ট\b/, /\bআমার কার্ট\b/,
-      /\bcard dekho\b/, /\bamar card\b/, // voice mistake
-      // Marathi
-      /\bcart dakhva\b/, /\bmaza cart\b/, /\bकार्ट\b/, /\bमाझा कार्ट\b/,
-      /\bcard dakhva\b/, /\bmaza card\b/, // voice mistake
-      // Gujarati
-      /\bcart batavo\b/, /\bmaru cart\b/, /\bકાર્ટ\b/, /\bમારું કાર્ટ\b/,
-      /\bcard batavo\b/, /\bmaru card\b/ // voice mistake
+      /\bwhat'?s in my card\b/, /\bwhats in card\b/, /\bwhat in cart\b/, /\bwhat in card\b/,
+      // Standalone words (only match if short message)
+      /^cart$/, /^card$/, /^kart$/, /^items$/, /^basket$/,
+      
+      // ========== HINDI ==========
+      /\bcart me kya hai\b/, /\bcart dikhao\b/, /\bcart dekho\b/, /\bmera cart\b/, /\bcart dekhao\b/,
+      /\bcard me kya hai\b/, /\bcard dikhao\b/, /\bcard dekho\b/, /\bmera card\b/, /\bcard dekhao\b/,
+      /\bमेरा कार्ट\b/, /\bकार्ट\b/, /\bकार्ट दिखाओ\b/, /\bकार्ट में क्या है\b/, /\bकार्ट देखो\b/,
+      /\bआइटम दिखाओ\b/, /\bमेरे आइटम\b/, /\bसामान दिखाओ\b/, /\bमेरा सामान\b/, /\bआइटम्स दिखाओ\b/,
+      /\bitems dikhao\b/, /\bmere items\b/, /\bsaman dikhao\b/, /\bmera saman\b/,
+      
+      // ========== TELUGU ==========
+      /\bcart chupinchu\b/, /\bnaa cart\b/, /\bcart chudu\b/, /\bcart choodu\b/,
+      /\bcard chupinchu\b/, /\bnaa card\b/, /\bcard chudu\b/,
+      /\bకార్ట్\b/, /\bనా కార్ట్\b/, /\bకార్ట్ చూపించు\b/, /\bకార్ట్ చూడు\b/,
+      /\bనా ఐటమ్స్\b/, /\bఐటమ్స్ చూపించు\b/, /\bఐటమ్స్ చూడు\b/, /\bసామాన్లు చూపించు\b/,
+      /\bitems chupinchu\b/, /\bnaa items\b/, /\bsamanlu chupinchu\b/,
+      
+      // ========== TAMIL ==========
+      /\bcart kaattu\b/, /\ben cart\b/, /\bcart paaru\b/, /\bcart kaatu\b/,
+      /\bcard kaattu\b/, /\ben card\b/, /\bcard paaru\b/,
+      /\bகார்ட்\b/, /\bஎன் கார்ட்\b/, /\bகார்ட் காட்டு\b/, /\bகார்ட் பாரு\b/,
+      /\bஎன் ஐட்டம்ஸ்\b/, /\bஐட்டம்ஸ் காட்டு\b/, /\bபொருட்கள் காட்டு\b/,
+      /\bitems kaattu\b/, /\ben items\b/, /\bporulgal kaattu\b/,
+      
+      // ========== KANNADA ==========
+      /\bcart toorisu\b/, /\bnanna cart\b/, /\bcart nodu\b/, /\bcart thoorisu\b/,
+      /\bcard toorisu\b/, /\bnanna card\b/, /\bcard nodu\b/,
+      /\bಕಾರ್ಟ್\b/, /\bನನ್ನ ಕಾರ್ಟ್\b/, /\bಕಾರ್ಟ್ ತೋರಿಸು\b/, /\bಕಾರ್ಟ್ ನೋಡು\b/,
+      /\bನನ್ನ ಐಟಮ್ಸ್\b/, /\bಐಟಮ್ಸ್ ತೋರಿಸು\b/, /\bಸಾಮಾನು ತೋರಿಸು\b/,
+      /\bitems toorisu\b/, /\bnanna items\b/, /\bsamanu toorisu\b/,
+      
+      // ========== MALAYALAM ==========
+      /\bcart kaanikkuka\b/, /\bente cart\b/, /\bcart kaanu\b/, /\bcart kanikkuka\b/,
+      /\bcard kaanikkuka\b/, /\bente card\b/, /\bcard kaanu\b/,
+      /\bകാർട്ട്\b/, /\bഎന്റെ കാർട്ട്\b/, /\bകാർട്ട് കാണിക്കുക\b/, /\bകാർട്ട് കാണു\b/,
+      /\bഎന്റെ ഐറ്റംസ്\b/, /\bഐറ്റംസ് കാണിക്കുക\b/, /\bസാധനങ്ങൾ കാണിക്കുക\b/,
+      /\bitems kaanikkuka\b/, /\bente items\b/, /\bsadhanangal kaanikkuka\b/,
+      
+      // ========== BENGALI ==========
+      /\bcart dekho\b/, /\bamar cart\b/, /\bcart dekhao\b/, /\bcart dao\b/,
+      /\bcard dekho\b/, /\bamar card\b/, /\bcard dekhao\b/,
+      /\bকার্ট\b/, /\bআমার কার্ট\b/, /\bকার্ট দেখো\b/, /\bকার্ট দেখাও\b/,
+      /\bআমার আইটেম\b/, /\bআইটেম দেখো\b/, /\bজিনিস দেখো\b/,
+      /\bitems dekho\b/, /\bamar items\b/, /\bjinis dekho\b/,
+      
+      // ========== MARATHI ==========
+      /\bcart dakhva\b/, /\bmaza cart\b/, /\bcart bagha\b/, /\bcart dakhava\b/,
+      /\bcard dakhva\b/, /\bmaza card\b/, /\bcard bagha\b/,
+      /\bकार्ट\b/, /\bमाझा कार्ट\b/, /\bकार्ट दाखवा\b/, /\bकार्ट बघा\b/,
+      /\bमाझे आइटम\b/, /\bआइटम दाखवा\b/, /\bसामान दाखवा\b/,
+      /\bitems dakhva\b/, /\bmaze items\b/, /\bsaman dakhva\b/,
+      
+      // ========== GUJARATI ==========
+      /\bcart batavo\b/, /\bmaru cart\b/, /\bcart juo\b/, /\bcart batao\b/,
+      /\bcard batavo\b/, /\bmaru card\b/, /\bcard juo\b/,
+      /\bકાર્ટ\b/, /\bમારું કાર્ટ\b/, /\bકાર્ટ બતાવો\b/, /\bકાર્ટ જુઓ\b/,
+      /\bમારા આઇટમ્સ\b/, /\bઆઇટમ્સ બતાવો\b/, /\bસામાન બતાવો\b/,
+      /\bitems batavo\b/, /\bmara items\b/, /\bsaman batavo\b/
     ];
     return cartPatterns.some(pattern => pattern.test(lowerText));
   },
 
   // Helper to detect clear/empty cart intent from text/voice
   // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
-  // Handles voice recognition mistakes like "card", "cut", "kart", "cot", "caught" instead of "cart"
+  // Handles voice recognition mistakes like "card", "cut", "kart", "cot", "caught", "cat", "court" instead of "cart"
+  // Also handles "items" variations in all languages
   isClearCartIntent(text) {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     const clearCartPatterns = [
-      // English - including ALL voice recognition mistakes (card, cut, kart, cot, caught, cat, court)
-      // Clear variations
-      /\bclear cart\b/, /\bclear my cart\b/, /\bempty cart\b/, /\bempty my cart\b/,
-      /\bclear card\b/, /\bclear my card\b/, /\bempty card\b/, /\bempty my card\b/,
-      /\bclear cut\b/, /\bclear my cut\b/, /\bempty cut\b/, /\bempty my cut\b/,
-      /\bclear kart\b/, /\bclear my kart\b/, /\bempty kart\b/, /\bempty my kart\b/,
-      /\bclear cot\b/, /\bclear my cot\b/, /\bclear caught\b/, /\bclear my caught\b/,
-      /\bclear cat\b/, /\bclear my cat\b/, /\bclear court\b/, /\bclear my court\b/,
-      // Remove variations - ALL voice mistakes
-      /\bremove cart\b/, /\bremove my cart\b/, /\bremove the cart\b/,
-      /\bremove card\b/, /\bremove my card\b/, /\bremove the card\b/,
+      // ========== ENGLISH - ALL VOICE MISTAKES ==========
+      // Clear variations - cart/card/cut/kart/cot/caught/cat/court
+      /\bclear cart\b/, /\bclear my cart\b/, /\bclear the cart\b/, /\bempty cart\b/, /\bempty my cart\b/,
+      /\bclear card\b/, /\bclear my card\b/, /\bclear the card\b/, /\bempty card\b/, /\bempty my card\b/,
+      /\bclear cut\b/, /\bclear my cut\b/, /\bclear the cut\b/, /\bempty cut\b/, /\bempty my cut\b/,
+      /\bclear kart\b/, /\bclear my kart\b/, /\bclear the kart\b/, /\bempty kart\b/, /\bempty my kart\b/,
+      /\bclear cot\b/, /\bclear my cot\b/, /\bclear the cot\b/, /\bempty cot\b/, /\bempty my cot\b/,
+      /\bclear caught\b/, /\bclear my caught\b/, /\bclear the caught\b/, /\bempty caught\b/,
+      /\bclear cat\b/, /\bclear my cat\b/, /\bclear the cat\b/, /\bempty cat\b/,
+      /\bclear court\b/, /\bclear my court\b/, /\bclear the court\b/, /\bempty court\b/,
+      // Remove variations - ALL voice mistakes for cart/card/cut/kart/cot/caught/cat/court
+      /\bremove cart\b/, /\bremove my cart\b/, /\bremove the cart\b/, /\bremove all from cart\b/,
+      /\bremove card\b/, /\bremove my card\b/, /\bremove the card\b/, /\bremove all from card\b/,
       /\bremove cut\b/, /\bremove my cut\b/, /\bremove the cut\b/,
       /\bremove kart\b/, /\bremove my kart\b/, /\bremove the kart\b/,
-      /\bremove cot\b/, /\bremove my cot\b/, /\bremove caught\b/, /\bremove my caught\b/,
-      /\bremove cat\b/, /\bremove my cat\b/, /\bremove court\b/, /\bremove my court\b/,
-      /\bremove all\b/, /\bremove items\b/, /\bremove all items\b/, /\bremove my items\b/,
+      /\bremove cot\b/, /\bremove my cot\b/, /\bremove the cot\b/,
+      /\bremove caught\b/, /\bremove my caught\b/, /\bremove the caught\b/,
+      /\bremove cat\b/, /\bremove my cat\b/, /\bremove the cat\b/,
+      /\bremove court\b/, /\bremove my court\b/, /\bremove the court\b/,
+      /\bremove all\b/, /\bremove items\b/, /\bremove all items\b/, /\bremove my items\b/, /\bremove the items\b/,
       /\bremove everything\b/, /\bremove from cart\b/, /\bremove from card\b/,
-      // Delete variations - ALL voice mistakes
+      // Delete variations - ALL voice mistakes for cart/card/cut/kart/cot/caught/cat/court
       /\bdelete cart\b/, /\bdelete my cart\b/, /\bdelete the cart\b/,
       /\bdelete card\b/, /\bdelete my card\b/, /\bdelete the card\b/,
       /\bdelete cut\b/, /\bdelete my cut\b/, /\bdelete the cut\b/,
       /\bdelete kart\b/, /\bdelete my kart\b/, /\bdelete the kart\b/,
-      /\bdelete cot\b/, /\bdelete my cot\b/, /\bdelete caught\b/, /\bdelete my caught\b/,
-      /\bdelete cat\b/, /\bdelete my cat\b/, /\bdelete court\b/, /\bdelete my court\b/,
-      /\bdelete all\b/, /\bdelete items\b/, /\bdelete my items\b/, /\bdelete everything\b/,
-      // Clean/Reset variations
-      /\bclean cart\b/, /\bclean card\b/, /\bclean cut\b/, /\bclean kart\b/,
-      /\breset cart\b/, /\breset card\b/, /\breset cut\b/, /\breset kart\b/,
-      // Cancel variations
-      /\bcancel cart\b/, /\bcancel my cart\b/, /\bcancel card\b/, /\bcancel my card\b/,
-      /\bcancel cut\b/, /\bcancel my cut\b/, /\bcancel kart\b/, /\bcancel my kart\b/,
-      /\bcancel items\b/, /\bcancel my items\b/, /\bcancel all\b/,
+      /\bdelete cot\b/, /\bdelete my cot\b/, /\bdelete the cot\b/,
+      /\bdelete caught\b/, /\bdelete my caught\b/, /\bdelete the caught\b/,
+      /\bdelete cat\b/, /\bdelete my cat\b/, /\bdelete the cat\b/,
+      /\bdelete court\b/, /\bdelete my court\b/, /\bdelete the court\b/,
+      /\bdelete all\b/, /\bdelete items\b/, /\bdelete my items\b/, /\bdelete the items\b/, /\bdelete all items\b/, /\bdelete everything\b/,
+      // Clean/Reset/Cancel variations - ALL voice mistakes
+      /\bclean cart\b/, /\bclean my cart\b/, /\bclean card\b/, /\bclean my card\b/,
+      /\bclean cut\b/, /\bclean my cut\b/, /\bclean kart\b/, /\bclean my kart\b/,
+      /\bclean items\b/, /\bclean my items\b/, /\bclean the items\b/,
+      /\breset cart\b/, /\breset my cart\b/, /\breset card\b/, /\breset my card\b/,
+      /\breset cut\b/, /\breset my cut\b/, /\breset kart\b/, /\breset my kart\b/,
+      /\breset items\b/, /\breset my items\b/, /\breset the items\b/,
+      // Cancel variations - ALL voice mistakes
+      /\bcancel cart\b/, /\bcancel my cart\b/, /\bcancel the cart\b/,
+      /\bcancel card\b/, /\bcancel my card\b/, /\bcancel the card\b/,
+      /\bcancel cut\b/, /\bcancel my cut\b/, /\bcancel the cut\b/,
+      /\bcancel kart\b/, /\bcancel my kart\b/, /\bcancel the kart\b/,
+      /\bcancel cot\b/, /\bcancel my cot\b/, /\bcancel caught\b/, /\bcancel my caught\b/,
+      /\bcancel cat\b/, /\bcancel my cat\b/, /\bcancel court\b/, /\bcancel my court\b/,
+      /\bcancel items\b/, /\bcancel my items\b/, /\bcancel the items\b/, /\bcancel all items\b/, /\bcancel all\b/,
       // Other English patterns
-      /\bclear basket\b/, /\bempty basket\b/, /\bclear all\b/, /\bclear items\b/, /\bclear my items\b/,
-      /\bstart fresh\b/, /\bstart over\b/,
-      // Hindi
-      /\bcart khali karo\b/, /\bcart saaf karo\b/, /\bcart clear karo\b/,
-      /\bcard khali karo\b/, /\bcard saaf karo\b/, /\bcard clear karo\b/,
-      /\bsab hatao\b/, /\bsab remove karo\b/, /\bsab delete karo\b/,
-      /\bitems hatao\b/, /\bसब आइटम हटाओ\b/, /\bआइटम्स हटाओ\b/,
-      /\bकार्ट खाली करो\b/, /\bकार्ट साफ करो\b/, /\bसब हटाओ\b/,
-      /\bकार्ट क्लियर\b/, /\bसब कुछ हटाओ\b/, /\bआइटम हटाओ\b/,
-      // Telugu
-      /\bcart clear cheyyi\b/, /\bcart khali cheyyi\b/, /\banni teeseyyi\b/,
-      /\bcard clear cheyyi\b/, /\bcard khali cheyyi\b/,
-      /\bకార్ట్ క్లియర్\b/, /\bకార్ట్ ఖాళీ చేయి\b/, /\bఅన్నీ తీసేయి\b/,
-      /\bఐటమ్స్ తీసేయి\b/, /\bకార్ట్ తీసేయి\b/, /\bఐటమ్స్ క్లియర్\b/,
-      // Tamil
-      /\bcart clear pannu\b/, /\bcart kaali pannu\b/, /\bellam eduthudu\b/,
-      /\bcard clear pannu\b/, /\bcard kaali pannu\b/,
-      /\bகார்ட் கிளியர்\b/, /\bகார்ட் காலி\b/, /\bஎல்லாம் எடுத்துடு\b/,
-      /\bஐட்டம்ஸ் நீக்கு\b/, /\bஐட்டம்ஸ் கிளியர்\b/,
-      // Kannada
-      /\bcart clear maadi\b/, /\bcart khali maadi\b/, /\bella tegedu\b/,
-      /\bcard clear maadi\b/, /\bcard khali maadi\b/,
-      /\bಕಾರ್ಟ್ ಕ್ಲಿಯರ್\b/, /\bಕಾರ್ಟ್ ಖಾಲಿ\b/, /\bಎಲ್ಲಾ ತೆಗೆದು\b/,
-      // Malayalam
-      /\bcart clear cheyyuka\b/, /\bcart kaali aakkuka\b/, /\bellam maarruka\b/,
-      /\bcard clear cheyyuka\b/, /\bcard kaali aakkuka\b/,
-      /\bകാർട്ട് ക്ലിയർ\b/, /\bകാർട്ട് കാലി\b/, /\bഎല്ലാം മാറ്റുക\b/,
-      // Bengali
-      /\bcart clear koro\b/, /\bcart khali koro\b/, /\bsob soriyo\b/,
-      /\bcard clear koro\b/, /\bcard khali koro\b/, // voice mistake
-      /\bকার্ট ক্লিয়ার\b/, /\bকার্ট খালি করো\b/, /\bসব সরিয়ে দাও\b/,
-      // Marathi
-      /\bcart clear kara\b/, /\bcart khali kara\b/, /\bsagla kadhun taka\b/,
-      /\bcard clear kara\b/, /\bcard khali kara\b/, // voice mistake
-      /\bकार्ट क्लियर करा\b/, /\bकार्ट खाली करा\b/, /\bसगळं काढून टाका\b/,
-      // Gujarati
-      /\bcart clear karo\b/, /\bcart khali karo\b/, /\bbadhu kaadhi nakho\b/,
-      /\bcard clear karo\b/, /\bcard khali karo\b/, // voice mistake
-      /\bકાર્ટ ક્લિયર\b/, /\bકાર્ટ ખાલી કરો\b/, /\bબધું કાઢી નાખો\b/
+      /\bclear basket\b/, /\bempty basket\b/, /\bremove basket\b/, /\bdelete basket\b/,
+      /\bclear all\b/, /\bclear items\b/, /\bclear my items\b/, /\bclear the items\b/, /\bclear all items\b/,
+      /\bstart fresh\b/, /\bstart over\b/, /\bfresh start\b/,
+      // ========== HINDI ==========
+      // Cart variations with voice mistakes
+      /\bcart khali karo\b/, /\bcart saaf karo\b/, /\bcart clear karo\b/, /\bcart hatao\b/,
+      /\bcard khali karo\b/, /\bcard saaf karo\b/, /\bcard clear karo\b/, /\bcard hatao\b/,
+      /\bcut khali karo\b/, /\bcut saaf karo\b/, /\bkart khali karo\b/, /\bkart saaf karo\b/,
+      // Items variations
+      /\bitems hatao\b/, /\bitems clear karo\b/, /\bitems delete karo\b/, /\bitems remove karo\b/,
+      /\bsab items hatao\b/, /\bsab items clear karo\b/, /\bsab items delete karo\b/,
+      /\bsab hatao\b/, /\bsab remove karo\b/, /\bsab delete karo\b/, /\bsab clear karo\b/,
+      /\bsaman hatao\b/, /\bsaman clear karo\b/, /\bsab saman hatao\b/,
+      // Hindi script
+      /\bकार्ट खाली करो\b/, /\bकार्ट साफ करो\b/, /\bकार्ट क्लियर\b/, /\bकार्ट हटाओ\b/,
+      /\bसब हटाओ\b/, /\bसब कुछ हटाओ\b/, /\bसब क्लियर करो\b/, /\bसब डिलीट करो\b/,
+      /\bआइटम हटाओ\b/, /\bआइटम्स हटाओ\b/, /\bसब आइटम हटाओ\b/, /\bआइटम्स क्लियर\b/,
+      /\bसामान हटाओ\b/, /\bसब सामान हटाओ\b/, /\bसामान क्लियर करो\b/,
+      // ========== TELUGU ==========
+      // Cart variations with voice mistakes
+      /\bcart clear cheyyi\b/, /\bcart khali cheyyi\b/, /\bcart teeseyyi\b/, /\bcart delete cheyyi\b/,
+      /\bcard clear cheyyi\b/, /\bcard khali cheyyi\b/, /\bcard teeseyyi\b/, /\bcard delete cheyyi\b/,
+      /\bcut clear cheyyi\b/, /\bkart clear cheyyi\b/, /\bkart khali cheyyi\b/,
+      // Items variations
+      /\bitems teeseyyi\b/, /\bitems clear cheyyi\b/, /\bitems delete cheyyi\b/, /\bitems remove cheyyi\b/,
+      /\banni items teeseyyi\b/, /\banni items clear cheyyi\b/,
+      /\banni teeseyyi\b/, /\banni clear cheyyi\b/, /\banni delete cheyyi\b/,
+      /\bsamanlu teeseyyi\b/, /\bsamanlu clear cheyyi\b/, /\banni samanlu teeseyyi\b/,
+      // Telugu script
+      /\bకార్ట్ క్లియర్\b/, /\bకార్ట్ ఖాళీ చేయి\b/, /\bకార్ట్ తీసేయి\b/, /\bకార్ట్ డిలీట్\b/,
+      /\bఅన్నీ తీసేయి\b/, /\bఅన్నీ క్లియర్\b/, /\bఅన్నీ డిలీట్\b/,
+      /\bఐటమ్స్ తీసేయి\b/, /\bఐటమ్స్ క్లియర్\b/, /\bఐటమ్స్ డిలీట్\b/, /\bఅన్ని ఐటమ్స్ తీసేయి\b/,
+      /\bసామాన్లు తీసేయి\b/, /\bసామాన్లు క్లియర్\b/, /\bఅన్ని సామాన్లు తీసేయి\b/,
+      // ========== TAMIL ==========
+      // Cart variations with voice mistakes
+      /\bcart clear pannu\b/, /\bcart kaali pannu\b/, /\bcart neekku\b/, /\bcart delete pannu\b/,
+      /\bcard clear pannu\b/, /\bcard kaali pannu\b/, /\bcard neekku\b/, /\bcard delete pannu\b/,
+      /\bcut clear pannu\b/, /\bkart clear pannu\b/, /\bkart kaali pannu\b/,
+      // Items variations
+      /\bitems neekku\b/, /\bitems clear pannu\b/, /\bitems delete pannu\b/, /\bitems remove pannu\b/,
+      /\bella items neekku\b/, /\bella items clear pannu\b/,
+      /\bellam eduthudu\b/, /\bellam neekku\b/, /\bellam clear pannu\b/, /\bellam delete pannu\b/,
+      /\bporulgal neekku\b/, /\bporulgal clear pannu\b/, /\bella porulgal neekku\b/,
+      // Tamil script
+      /\bகார்ட் கிளியர்\b/, /\bகார்ட் காலி\b/, /\bகார்ட் நீக்கு\b/, /\bகார்ட் டெலிட்\b/,
+      /\bஎல்லாம் எடுத்துடு\b/, /\bஎல்லாம் நீக்கு\b/, /\bஎல்லாம் கிளியர்\b/,
+      /\bஐட்டம்ஸ் நீக்கு\b/, /\bஐட்டம்ஸ் கிளியர்\b/, /\bஐட்டம்ஸ் டெலிட்\b/, /\bஎல்லா ஐட்டம்ஸ் நீக்கு\b/,
+      /\bபொருட்கள் நீக்கு\b/, /\bபொருட்கள் கிளியர்\b/, /\bஎல்லா பொருட்கள் நீக்கு\b/,
+      // ========== KANNADA ==========
+      // Cart variations with voice mistakes
+      /\bcart clear maadi\b/, /\bcart khali maadi\b/, /\bcart tegedu\b/, /\bcart delete maadi\b/,
+      /\bcard clear maadi\b/, /\bcard khali maadi\b/, /\bcard tegedu\b/, /\bcard delete maadi\b/,
+      /\bcut clear maadi\b/, /\bkart clear maadi\b/, /\bkart khali maadi\b/,
+      // Items variations
+      /\bitems tegedu\b/, /\bitems clear maadi\b/, /\bitems delete maadi\b/, /\bitems remove maadi\b/,
+      /\bella items tegedu\b/, /\bella items clear maadi\b/,
+      /\bella tegedu\b/, /\bella clear maadi\b/, /\bella delete maadi\b/,
+      /\bsamanu tegedu\b/, /\bsamanu clear maadi\b/, /\bella samanu tegedu\b/,
+      // Kannada script
+      /\bಕಾರ್ಟ್ ಕ್ಲಿಯರ್\b/, /\bಕಾರ್ಟ್ ಖಾಲಿ\b/, /\bಕಾರ್ಟ್ ತೆಗೆದು\b/, /\bಕಾರ್ಟ್ ಡಿಲೀಟ್\b/,
+      /\bಎಲ್ಲಾ ತೆಗೆದು\b/, /\bಎಲ್ಲಾ ಕ್ಲಿಯರ್\b/, /\bಎಲ್ಲಾ ಡಿಲೀಟ್\b/,
+      /\bಐಟಮ್ಸ್ ತೆಗೆದು\b/, /\bಐಟಮ್ಸ್ ಕ್ಲಿಯರ್\b/, /\bಐಟಮ್ಸ್ ಡಿಲೀಟ್\b/, /\bಎಲ್ಲಾ ಐಟಮ್ಸ್ ತೆಗೆದು\b/,
+      /\bಸಾಮಾನು ತೆಗೆದು\b/, /\bಸಾಮಾನು ಕ್ಲಿಯರ್\b/, /\bಎಲ್ಲಾ ಸಾಮಾನು ತೆಗೆದು\b/,
+      // ========== MALAYALAM ==========
+      // Cart variations with voice mistakes
+      /\bcart clear cheyyuka\b/, /\bcart kaali aakkuka\b/, /\bcart maarruka\b/, /\bcart delete cheyyuka\b/,
+      /\bcard clear cheyyuka\b/, /\bcard kaali aakkuka\b/, /\bcard maarruka\b/, /\bcard delete cheyyuka\b/,
+      /\bcut clear cheyyuka\b/, /\bkart clear cheyyuka\b/, /\bkart kaali aakkuka\b/,
+      // Items variations
+      /\bitems maarruka\b/, /\bitems clear cheyyuka\b/, /\bitems delete cheyyuka\b/, /\bitems remove cheyyuka\b/,
+      /\bellam items maarruka\b/, /\bellam items clear cheyyuka\b/,
+      /\bellam maarruka\b/, /\bellam clear cheyyuka\b/, /\bellam delete cheyyuka\b/,
+      /\bsadhanangal maarruka\b/, /\bsadhanangal clear cheyyuka\b/, /\bellam sadhanangal maarruka\b/,
+      // Malayalam script
+      /\bകാർട്ട് ക്ലിയർ\b/, /\bകാർട്ട് കാലി\b/, /\bകാർട്ട് മാറ്റുക\b/, /\bകാർട്ട് ഡിലീറ്റ്\b/,
+      /\bഎല്ലാം മാറ്റുക\b/, /\bഎല്ലാം ക്ലിയർ\b/, /\bഎല്ലാം ഡിലീറ്റ്\b/,
+      /\bഐറ്റംസ് മാറ്റുക\b/, /\bഐറ്റംസ് ക്ലിയർ\b/, /\bഐറ്റംസ് ഡിലീറ്റ്\b/, /\bഎല്ലാ ഐറ്റംസ് മാറ്റുക\b/,
+      /\bസാധനങ്ങൾ മാറ്റുക\b/, /\bസാധനങ്ങൾ ക്ലിയർ\b/, /\bഎല്ലാ സാധനങ്ങൾ മാറ്റുക\b/,
+      // ========== BENGALI ==========
+      // Cart variations with voice mistakes
+      /\bcart clear koro\b/, /\bcart khali koro\b/, /\bcart soriyo\b/, /\bcart delete koro\b/,
+      /\bcard clear koro\b/, /\bcard khali koro\b/, /\bcard soriyo\b/, /\bcard delete koro\b/,
+      /\bcut clear koro\b/, /\bkart clear koro\b/, /\bkart khali koro\b/,
+      // Items variations
+      /\bitems soriyo\b/, /\bitems clear koro\b/, /\bitems delete koro\b/, /\bitems remove koro\b/,
+      /\bsob items soriyo\b/, /\bsob items clear koro\b/,
+      /\bsob soriyo\b/, /\bsob clear koro\b/, /\bsob delete koro\b/,
+      /\bjinis soriyo\b/, /\bjinis clear koro\b/, /\bsob jinis soriyo\b/,
+      // Bengali script
+      /\bকার্ট ক্লিয়ার\b/, /\bকার্ট খালি করো\b/, /\bকার্ট সরিয়ে দাও\b/, /\bকার্ট ডিলিট\b/,
+      /\bসব সরিয়ে দাও\b/, /\bসব ক্লিয়ার করো\b/, /\bসব ডিলিট করো\b/,
+      /\bআইটেম সরিয়ে দাও\b/, /\bআইটেম ক্লিয়ার\b/, /\bআইটেম ডিলিট\b/, /\bসব আইটেম সরিয়ে দাও\b/,
+      /\bজিনিস সরিয়ে দাও\b/, /\bজিনিস ক্লিয়ার\b/, /\bসব জিনিস সরিয়ে দাও\b/,
+      // ========== MARATHI ==========
+      // Cart variations with voice mistakes
+      /\bcart clear kara\b/, /\bcart khali kara\b/, /\bcart kadhun taka\b/, /\bcart delete kara\b/,
+      /\bcard clear kara\b/, /\bcard khali kara\b/, /\bcard kadhun taka\b/, /\bcard delete kara\b/,
+      /\bcut clear kara\b/, /\bkart clear kara\b/, /\bkart khali kara\b/,
+      // Items variations
+      /\bitems kadhun taka\b/, /\bitems clear kara\b/, /\bitems delete kara\b/, /\bitems remove kara\b/,
+      /\bsagla items kadhun taka\b/, /\bsagla items clear kara\b/,
+      /\bsagla kadhun taka\b/, /\bsagla clear kara\b/, /\bsagla delete kara\b/,
+      /\bsaman kadhun taka\b/, /\bsaman clear kara\b/, /\bsagla saman kadhun taka\b/,
+      // Marathi script
+      /\bकार्ट क्लियर करा\b/, /\bकार्ट खाली करा\b/, /\bकार्ट काढून टाका\b/, /\bकार्ट डिलीट करा\b/,
+      /\bसगळं काढून टाका\b/, /\bसगळं क्लियर करा\b/, /\bसगळं डिलीट करा\b/,
+      /\bआइटम काढून टाका\b/, /\bआइटम क्लियर करा\b/, /\bआइटम डिलीट करा\b/, /\bसगळे आइटम काढून टाका\b/,
+      /\bसामान काढून टाका\b/, /\bसामान क्लियर करा\b/, /\bसगळं सामान काढून टाका\b/,
+      // ========== GUJARATI ==========
+      // Cart variations with voice mistakes
+      /\bcart clear karo\b/, /\bcart khali karo\b/, /\bcart kaadhi nakho\b/, /\bcart delete karo\b/,
+      /\bcard clear karo\b/, /\bcard khali karo\b/, /\bcard kaadhi nakho\b/, /\bcard delete karo\b/,
+      /\bcut clear karo\b/, /\bkart clear karo\b/, /\bkart khali karo\b/,
+      // Items variations
+      /\bitems kaadhi nakho\b/, /\bitems clear karo\b/, /\bitems delete karo\b/, /\bitems remove karo\b/,
+      /\bbadha items kaadhi nakho\b/, /\bbadha items clear karo\b/,
+      /\bbadhu kaadhi nakho\b/, /\bbadhu clear karo\b/, /\bbadhu delete karo\b/,
+      /\bsaman kaadhi nakho\b/, /\bsaman clear karo\b/, /\bbadhu saman kaadhi nakho\b/,
+      // Gujarati script
+      /\bકાર્ટ ક્લિયર\b/, /\bકાર્ટ ખાલી કરો\b/, /\bકાર્ટ કાઢી નાખો\b/, /\bકાર્ટ ડિલીટ\b/,
+      /\bબધું કાઢી નાખો\b/, /\bબધું ક્લિયર કરો\b/, /\bબધું ડિલીટ કરો\b/,
+      /\bઆઇટમ્સ કાઢી નાખો\b/, /\bઆઇટમ્સ ક્લિયર\b/, /\bઆઇટમ્સ ડિલીટ\b/, /\bબધા આઇટમ્સ કાઢી નાખો\b/,
+      /\bસામાન કાઢી નાખો\b/, /\bસામાન ક્લિયર\b/, /\bબધું સામાન કાઢી નાખો\b/
     ];
     return clearCartPatterns.some(pattern => pattern.test(lowerText));
   },
