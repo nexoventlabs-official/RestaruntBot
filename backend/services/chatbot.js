@@ -945,17 +945,16 @@ const chatbot = {
         // Also search individual keywords from this term (e.g., "mutton pulusu" → search "mutton" and "pulusu" separately)
         const keywords = term.split(/\s+/).filter(k => k.length >= 2);
         if (keywords.length > 1) {
-          // Multi-word search - find items that match ALL keywords (not just any)
-          for (const item of items) {
-            const itemNameLower = item.name.toLowerCase();
-            const itemNameNorm = normalizeText(item.name);
-            const itemTags = item.tags?.map(t => t.toLowerCase()) || [];
-            const itemTagsNorm = item.tags?.map(t => normalizeText(t)) || [];
+          // Multi-word search - search each keyword and add matching items
+          for (const keyword of keywords) {
+            const kwLower = keyword.toLowerCase();
+            const kwNorm = normalizeText(keyword);
             
-            // Check if ALL keywords match in name or tags
-            const allKeywordsMatch = keywords.every(keyword => {
-              const kwLower = keyword.toLowerCase();
-              const kwNorm = normalizeText(keyword);
+            for (const item of items) {
+              const itemNameLower = item.name.toLowerCase();
+              const itemNameNorm = normalizeText(item.name);
+              const itemTags = item.tags?.map(t => t.toLowerCase()) || [];
+              const itemTagsNorm = item.tags?.map(t => normalizeText(t)) || [];
               
               // Check in name
               const nameMatch = itemNameLower.includes(kwLower) || itemNameNorm.includes(kwNorm);
@@ -964,15 +963,13 @@ const chatbot = {
               const tagMatch = itemTags.some(tag => tag.includes(kwLower) || kwLower.includes(tag)) ||
                                itemTagsNorm.some(tagNorm => tagNorm.includes(kwNorm) || kwNorm.includes(tagNorm));
               
-              return nameMatch || tagMatch;
-            });
-            
-            if (allKeywordsMatch) {
-              const id = item._id.toString();
-              if (!itemMatches.has(id)) {
-                itemMatches.set(id, { item, score: 0 });
+              if (nameMatch || tagMatch) {
+                const id = item._id.toString();
+                if (!itemMatches.has(id)) {
+                  itemMatches.set(id, { item, score: 0 });
+                }
+                itemMatches.get(id).score += 20; // Keyword match = 20 points
               }
-              itemMatches.get(id).score += 40; // All keywords match = 40 points
             }
           }
         }
