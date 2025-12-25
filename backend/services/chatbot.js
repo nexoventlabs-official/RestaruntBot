@@ -942,18 +942,37 @@ const chatbot = {
           itemMatches.get(id).score += 10; // Partial term match = 10 points
         }
         
-        // Also search individual keywords from this term (e.g., "chicken curry" → search "chicken" and "curry" separately)
+        // Also search individual keywords from this term (e.g., "mutton pulusu" → search "mutton" and "pulusu" separately)
         const keywords = term.split(/\s+/).filter(k => k.length >= 2);
         if (keywords.length > 1) {
-          // Multi-word search - search each keyword and give higher score
-          for (const keyword of keywords) {
-            const keywordMatches = searchByTerm(items, keyword);
-            for (const item of keywordMatches) {
+          // Multi-word search - find items that match ALL keywords (not just any)
+          for (const item of items) {
+            const itemNameLower = item.name.toLowerCase();
+            const itemNameNorm = normalizeText(item.name);
+            const itemTags = item.tags?.map(t => t.toLowerCase()) || [];
+            const itemTagsNorm = item.tags?.map(t => normalizeText(t)) || [];
+            
+            // Check if ALL keywords match in name or tags
+            const allKeywordsMatch = keywords.every(keyword => {
+              const kwLower = keyword.toLowerCase();
+              const kwNorm = normalizeText(keyword);
+              
+              // Check in name
+              const nameMatch = itemNameLower.includes(kwLower) || itemNameNorm.includes(kwNorm);
+              
+              // Check in tags
+              const tagMatch = itemTags.some(tag => tag.includes(kwLower) || kwLower.includes(tag)) ||
+                               itemTagsNorm.some(tagNorm => tagNorm.includes(kwNorm) || kwNorm.includes(tagNorm));
+              
+              return nameMatch || tagMatch;
+            });
+            
+            if (allKeywordsMatch) {
               const id = item._id.toString();
               if (!itemMatches.has(id)) {
                 itemMatches.set(id, { item, score: 0 });
               }
-              itemMatches.get(id).score += 15; // Keyword match = 15 points (higher for better results)
+              itemMatches.get(id).score += 40; // All keywords match = 40 points
             }
           }
         }
@@ -963,6 +982,33 @@ const chatbot = {
       return Array.from(itemMatches.values())
         .sort((a, b) => b.score - a.score)
         .map(m => m.item);
+    };
+    
+    // Helper to find items matching ALL keywords in name or tags
+    const findItemsMatchingAllKeywords = (items, keywords) => {
+      if (!keywords || keywords.length === 0) return [];
+      
+      return items.filter(item => {
+        const itemNameLower = item.name.toLowerCase();
+        const itemNameNorm = normalizeText(item.name);
+        const itemTags = item.tags?.map(t => t.toLowerCase()) || [];
+        const itemTagsNorm = item.tags?.map(t => normalizeText(t)) || [];
+        
+        // Check if ALL keywords match in name or tags
+        return keywords.every(keyword => {
+          const kwLower = keyword.toLowerCase();
+          const kwNorm = normalizeText(keyword);
+          
+          // Check in name
+          const nameMatch = itemNameLower.includes(kwLower) || itemNameNorm.includes(kwNorm);
+          
+          // Check in tags
+          const tagMatch = itemTags.some(tag => tag.includes(kwLower) || kwLower.includes(tag)) ||
+                           itemTagsNorm.some(tagNorm => tagNorm.includes(kwNorm) || kwNorm.includes(tagNorm));
+          
+          return nameMatch || tagMatch;
+        });
+      });
     };
     
     let matchingItems = [];
@@ -980,12 +1026,12 @@ const chatbot = {
         }
       }
       
-      // If still no results, try searching each keyword individually across all items
+      // If still no results, try finding items that match ALL keywords
       if (matchingItems.length === 0) {
         const allKeywords = uniqueSearchTerms.flatMap(term => term.split(/\s+/).filter(k => k.length >= 2));
         if (allKeywords.length > 0) {
-          console.log(`🔍 Fallback keyword search: [${allKeywords.join(', ')}]`);
-          matchingItems = searchByMultipleTerms(menuItems, allKeywords);
+          console.log(`🔍 Fallback: finding items matching ALL keywords: [${allKeywords.join(', ')}]`);
+          matchingItems = findItemsMatchingAllKeywords(menuItems, allKeywords);
         }
       }
     } else if (detected?.type === 'specific' && filteredItems.length > 0) {
