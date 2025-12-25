@@ -984,33 +984,6 @@ const chatbot = {
         .map(m => m.item);
     };
     
-    // Helper to find items matching ALL keywords in name or tags
-    const findItemsMatchingAllKeywords = (items, keywords) => {
-      if (!keywords || keywords.length === 0) return [];
-      
-      return items.filter(item => {
-        const itemNameLower = item.name.toLowerCase();
-        const itemNameNorm = normalizeText(item.name);
-        const itemTags = item.tags?.map(t => t.toLowerCase()) || [];
-        const itemTagsNorm = item.tags?.map(t => normalizeText(t)) || [];
-        
-        // Check if ALL keywords match in name or tags
-        return keywords.every(keyword => {
-          const kwLower = keyword.toLowerCase();
-          const kwNorm = normalizeText(keyword);
-          
-          // Check in name
-          const nameMatch = itemNameLower.includes(kwLower) || itemNameNorm.includes(kwNorm);
-          
-          // Check in tags
-          const tagMatch = itemTags.some(tag => tag.includes(kwLower) || kwLower.includes(tag)) ||
-                           itemTagsNorm.some(tagNorm => tagNorm.includes(kwNorm) || kwNorm.includes(tagNorm));
-          
-          return nameMatch || tagMatch;
-        });
-      });
-    };
-    
     let matchingItems = [];
     
     if (hasSearchTerm) {
@@ -1026,12 +999,13 @@ const chatbot = {
         }
       }
       
-      // If still no results, try finding items that match ALL keywords
+      // If still no results, try finding items that match ANY keyword (show all related items)
       if (matchingItems.length === 0) {
         const allKeywords = uniqueSearchTerms.flatMap(term => term.split(/\s+/).filter(k => k.length >= 2));
         if (allKeywords.length > 0) {
-          console.log(`🔍 Fallback: finding items matching ALL keywords: [${allKeywords.join(', ')}]`);
-          matchingItems = findItemsMatchingAllKeywords(menuItems, allKeywords);
+          console.log(`🔍 Fallback: finding items matching ANY keyword: [${allKeywords.join(', ')}]`);
+          // Search each keyword and combine all results
+          matchingItems = searchByMultipleTerms(menuItems, allKeywords);
         }
       }
     } else if (detected?.type === 'specific' && filteredItems.length > 0) {
