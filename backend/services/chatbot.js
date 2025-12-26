@@ -442,6 +442,80 @@ const chatbot = {
     return clearCartPatterns.some(pattern => pattern.test(lowerText));
   },
 
+  // Helper to detect "add to cart" intent from text/voice
+  // Returns: { itemName: string } or null
+  // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
+  isAddToCartIntent(text) {
+    if (!text) return null;
+    const lowerText = text.toLowerCase().trim();
+    
+    // Patterns to extract item name from "add X to cart" style messages
+    const addPatterns = [
+      // English
+      /add\s+(.+?)\s+to\s+(?:cart|card|kart)/i,
+      /add\s+(.+?)\s+(?:to\s+)?(?:my\s+)?(?:cart|card|kart)/i,
+      /(?:i\s+)?want\s+(?:to\s+)?add\s+(.+?)\s+(?:to\s+)?(?:cart|card)/i,
+      /put\s+(.+?)\s+in\s+(?:cart|card|kart)/i,
+      /(.+?)\s+add\s+(?:to\s+)?(?:cart|card|kart)/i,
+      /(.+?)\s+(?:cart|card)\s+(?:me|mein|mai)\s+(?:add|daal|dal)/i,
+      // Hindi
+      /(.+?)\s+(?:cart|card)\s+(?:me|mein|mai)\s+(?:daalo|dalo|add\s+karo)/i,
+      /(.+?)\s+(?:add|daal|dal)\s+(?:karo|do|kar\s+do)/i,
+      /(.+?)\s+(?:कार्ट|कार्ड)\s+(?:में|मे)\s+(?:डालो|ऐड\s+करो)/i,
+      // Telugu
+      /(.+?)\s+(?:cart|card)\s+(?:lo|ki)\s+(?:add|pettandi|pettu)/i,
+      /(.+?)\s+(?:కార్ట్|కార్డ్)\s+(?:లో|కి)\s+(?:పెట్టు|యాడ్)/i,
+      // Tamil
+      /(.+?)\s+(?:cart|card)\s+(?:la|le)\s+(?:add|podungal|podu)/i,
+      /(.+?)\s+(?:கார்ட்|கார்ட்)\s+(?:ல|லே)\s+(?:போடு|ஆட்)/i,
+      // Simple patterns - just item name followed by "add"
+      /^(.+?)\s+add$/i,
+      /^add\s+(.+)$/i,
+    ];
+    
+    for (const pattern of addPatterns) {
+      const match = lowerText.match(pattern);
+      if (match && match[1]) {
+        const itemName = match[1].trim();
+        // Filter out common words that aren't item names
+        if (itemName.length > 1 && !['to', 'the', 'a', 'an', 'my', 'this', 'that'].includes(itemName)) {
+          return { itemName };
+        }
+      }
+    }
+    return null;
+  },
+
+  // Helper to detect website order format
+  // Detects: "Hi! I'd like to order: * ItemName * Price: ₹XXX"
+  // Returns: { itemName: string, price: number } or null
+  isWebsiteOrderIntent(text) {
+    if (!text || typeof text !== 'string') return null;
+    
+    // Pattern for website order format
+    // Matches: "Hi! I'd like to order:" followed by item name (with or without emoji markers)
+    const patterns = [
+      // Format: "Hi! I'd like to order: 🍽️ *ItemName* 💰 Price: ₹XXX"
+      /(?:hi!?\s*)?i'?d?\s*like\s*to\s*order[:\s]*(?:🍽️)?\s*\*?\s*([^*💰₹\n]+?)\s*\*?\s*(?:💰)?\s*(?:price)?[:\s]*₹?\s*(\d+)?/i,
+      // Format: "Order: ItemName - ₹XXX"
+      /order[:\s]+([^-₹\n]+?)(?:\s*[-–]\s*₹?\s*(\d+))?/i,
+      // Format: "I want to order ItemName"
+      /i\s*want\s*to\s*order\s+([^₹\n]+?)(?:\s*₹?\s*(\d+))?$/i,
+    ];
+    
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match && match[1]) {
+        const itemName = match[1].trim().replace(/^\*|\*$/g, '').trim();
+        const price = match[2] ? parseInt(match[2]) : null;
+        if (itemName.length > 1) {
+          return { itemName, price };
+        }
+      }
+    }
+    return null;
+  },
+
   // Helper to detect show menu/items intent from text/voice
   // Returns: { showMenu: true, foodType: 'veg'|'nonveg'|'both'|null, searchTerm: string|null }
   // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
@@ -1574,6 +1648,71 @@ const chatbot = {
           state.currentStep = 'main_menu';
         }
       }
+      // ========== WEBSITE ORDER DETECTION (exact match on item name) ==========
+      // Detect orders coming from website with format "Hi! I'd like to order: * ItemName *"
+      else if (!selectedId && message && this.isWebsiteOrderIntent(message)) {
+        const websiteOrder = this.isWebsiteOrderIntent(message);
+        console.log('🌐 Website order detected:', websiteOrder);
+        
+        // Try exact match first (case-insensitive)
+        const exactMatch = menuItems.find(item => 
+          item.name.toLowerCase() === websiteOrder.itemName.toLowerCase()
+        );
+        
+        if (exactMatch) {
+          // Found exact match - add to cart directly
+          customer.cart = customer.cart || [];
+          const existingIndex = customer.cart.findIndex(c => c.menuItem?.toString() === exactMatch._id.toString());
+          if (existingIndex >= 0) {
+            customer.cart[existingIndex].quantity += 1;
+          } else {
+            customer.cart.push({ menuItem: exactMatch._id, quantity: 1 });
+          }
+          await customer.save();
+          await this.sendAddedToCart(phone, exactMatch, 1, customer.cart);
+          state.currentStep = 'item_added';
+        } else {
+          // No exact match - try partial match
+          const partialMatches = menuItems.filter(item => 
+            item.name.toLowerCase().includes(websiteOrder.itemName.toLowerCase()) ||
+            websiteOrder.itemName.toLowerCase().includes(item.name.toLowerCase())
+          );
+          
+          if (partialMatches.length === 1) {
+            // Single partial match - add to cart
+            const item = partialMatches[0];
+            customer.cart = customer.cart || [];
+            const existingIndex = customer.cart.findIndex(c => c.menuItem?.toString() === item._id.toString());
+            if (existingIndex >= 0) {
+              customer.cart[existingIndex].quantity += 1;
+            } else {
+              customer.cart.push({ menuItem: item._id, quantity: 1 });
+            }
+            await customer.save();
+            await this.sendAddedToCart(phone, item, 1, customer.cart);
+            state.currentStep = 'item_added';
+          } else if (partialMatches.length > 1) {
+            // Multiple matches - show options
+            const sections = [{
+              title: `Items matching "${websiteOrder.itemName}"`,
+              rows: partialMatches.slice(0, 10).map(item => ({
+                id: `add_${item._id}`,
+                title: item.name.substring(0, 24),
+                description: `₹${item.price} • ${item.foodType === 'veg' ? '🟢 Veg' : item.foodType === 'nonveg' ? '🔴 Non-Veg' : '🟡 Egg'}`
+              }))
+            }];
+            await whatsapp.sendList(phone, '🔍 Select Item', `Found ${partialMatches.length} items. Please select one:`, 'Select Item', sections, 'Tap to add to cart');
+            state.currentStep = 'select_item';
+          } else {
+            // No match found
+            await whatsapp.sendButtons(phone, `❌ Sorry, "${websiteOrder.itemName}" is not available.\n\nPlease browse our menu!`, [
+              { id: 'view_menu', text: 'View Menu' },
+              { id: 'home', text: 'Main Menu' }
+            ]);
+            state.currentStep = 'main_menu';
+          }
+        }
+      }
       // ========== GLOBAL COMMANDS (work from any state) ==========
       else if (msg === 'hi' || msg === 'hello' || msg === 'start' || msg === 'hey') {
         await this.sendWelcome(phone);
@@ -1699,6 +1838,52 @@ const chatbot = {
       else if (selection === 'help' || (!selectedId && msg === 'help')) {
         await this.sendHelp(phone);
         state.currentStep = 'main_menu';
+      }
+      // ========== TEXT-BASED ADD TO CART (e.g., "add biryani to cart") ==========
+      else if (!selectedId && this.isAddToCartIntent(msg)) {
+        const addIntent = this.isAddToCartIntent(msg);
+        console.log('🛒 Add to cart intent detected:', addIntent);
+        
+        // Search for item by name
+        const searchTerm = addIntent.itemName.toLowerCase();
+        const matchingItems = menuItems.filter(item => 
+          item.name.toLowerCase().includes(searchTerm) ||
+          (item.tags && item.tags.some(tag => tag.toLowerCase().includes(searchTerm)))
+        );
+        
+        if (matchingItems.length === 1) {
+          // Exact match - add to cart with qty 1
+          const item = matchingItems[0];
+          customer.cart = customer.cart || [];
+          const existingIndex = customer.cart.findIndex(c => c.menuItem?.toString() === item._id.toString());
+          if (existingIndex >= 0) {
+            customer.cart[existingIndex].quantity += 1;
+          } else {
+            customer.cart.push({ menuItem: item._id, quantity: 1 });
+          }
+          await customer.save();
+          await this.sendAddedToCart(phone, item, 1, customer.cart);
+          state.currentStep = 'item_added';
+        } else if (matchingItems.length > 1) {
+          // Multiple matches - show options
+          const sections = [{
+            title: `Items matching "${addIntent.itemName}"`,
+            rows: matchingItems.slice(0, 10).map(item => ({
+              id: `add_${item._id}`,
+              title: item.name.substring(0, 24),
+              description: `₹${item.price} • ${item.foodType === 'veg' ? '🟢 Veg' : item.foodType === 'nonveg' ? '🔴 Non-Veg' : '🟡 Egg'}`
+            }))
+          }];
+          await whatsapp.sendList(phone, '🔍 Multiple Items Found', `Found ${matchingItems.length} items matching "${addIntent.itemName}"`, 'Select Item', sections, 'Tap to add to cart');
+          state.currentStep = 'select_item';
+        } else {
+          // No match found
+          await whatsapp.sendButtons(phone, `❌ No items found matching "${addIntent.itemName}"\n\nTry browsing our menu!`, [
+            { id: 'view_menu', text: 'View Menu' },
+            { id: 'home', text: 'Main Menu' }
+          ]);
+          state.currentStep = 'main_menu';
+        }
       }
       else if (selection === 'checkout' || selection === 'review_pay') {
         // If user has a selected item they're viewing, add it to cart with qty 1
