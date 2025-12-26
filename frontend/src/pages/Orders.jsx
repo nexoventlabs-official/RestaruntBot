@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   RefreshCw, X, Truck, ChefHat, CheckCircle, Package, Clock, 
-  Filter, Search, MapPin, Phone, CreditCard, ExternalLink
+  Filter, Search, MapPin, CreditCard, ExternalLink, ChevronDown, ChevronUp
 } from 'lucide-react';
 import api from '../api';
 
@@ -112,6 +112,69 @@ const StatusDropdown = ({ value, onChange, options }) => {
             </button>
           ))}
         </div>
+      )}
+    </div>
+  );
+};
+
+// Scrollable Items List Component
+const ScrollableItemsList = ({ items }) => {
+  const scrollRef = useRef(null);
+  const [showDownArrow, setShowDownArrow] = useState(false);
+  const [showUpArrow, setShowUpArrow] = useState(false);
+
+  const checkScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const isAtTop = el.scrollTop <= 5;
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 5;
+    const hasScroll = el.scrollHeight > el.clientHeight;
+    
+    setShowUpArrow(hasScroll && !isAtTop);
+    setShowDownArrow(hasScroll && !isAtBottom);
+  }, []);
+
+  useEffect(() => {
+    checkScroll();
+  }, [items, checkScroll]);
+
+  const scrollToEnd = (direction) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({
+      top: direction === 'down' ? el.scrollHeight : 0,
+      behavior: 'smooth'
+    });
+  };
+
+  return (
+    <div className="relative">
+      <div 
+        ref={scrollRef} 
+        className="space-y-2 max-h-36 overflow-y-auto" 
+        onScroll={checkScroll}
+      >
+        {items?.map((item, i) => (
+          <div key={i} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2">
+            <div className="w-6 h-6 bg-primary-50 rounded-md flex items-center justify-center flex-shrink-0">
+              <span className="text-xs font-bold text-primary-600">{item.quantity}</span>
+            </div>
+            <span className="text-sm text-dark-700 truncate flex-1">{item.name}</span>
+            {item.price && <span className="text-xs text-dark-400 flex-shrink-0">₹{item.price * item.quantity}</span>}
+          </div>
+        ))}
+      </div>
+      {(showDownArrow || showUpArrow) && (
+        <button
+          onClick={() => scrollToEnd(showDownArrow ? 'down' : 'up')}
+          className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-6 h-6 bg-white rounded-full shadow-md flex items-center justify-center hover:bg-dark-50 transition-colors border border-dark-100"
+        >
+          {showDownArrow ? (
+            <ChevronDown className="w-4 h-4 text-dark-500" />
+          ) : (
+            <ChevronUp className="w-4 h-4 text-dark-500" />
+          )}
+        </button>
       )}
     </div>
   );
@@ -425,20 +488,7 @@ export default function Orders() {
                       <span className="text-xs font-semibold text-dark-500 uppercase tracking-wide">Order Items</span>
                       <span className="text-xs text-dark-400">{totalItems} item{totalItems !== 1 ? 's' : ''}</span>
                     </div>
-                    <div className="space-y-2">
-                      {order.items?.slice(0, 3).map((item, i) => (
-                        <div key={i} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2">
-                          <div className="w-6 h-6 bg-primary-50 rounded-md flex items-center justify-center flex-shrink-0">
-                            <span className="text-xs font-bold text-primary-600">{item.quantity}</span>
-                          </div>
-                          <span className="text-sm text-dark-700 truncate flex-1">{item.name}</span>
-                          {item.price && <span className="text-xs text-dark-400 flex-shrink-0">₹{item.price * item.quantity}</span>}
-                        </div>
-                      ))}
-                      {order.items?.length > 3 && (
-                        <p className="text-xs text-dark-400 text-center py-1">+{order.items.length - 3} more item{order.items.length - 3 !== 1 ? 's' : ''}</p>
-                      )}
-                    </div>
+                    <ScrollableItemsList items={order.items} />
                   </div>
 
                   {/* Delivery Address */}
