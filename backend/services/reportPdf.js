@@ -274,7 +274,7 @@ const generateReportPdf = async (reportData, reportType) => {
           .text(String(idx + 1), x + 8, textY, { width: cols.sno });
         x += cols.sno;
         
-        // Image - matching admin panel 40x40 rounded style
+        // Image - matching admin panel 40x40 rounded style with object-cover (fill box, no gaps)
         const imgBuffer = imageMap[item.name];
         const imgX = x + 4;
         if (imgBuffer) {
@@ -282,7 +282,8 @@ const generateReportPdf = async (reportData, reportType) => {
             // Draw rounded rectangle clip for image
             doc.save();
             doc.roundedRect(imgX, imgY, imgSize, imgSize, 4).clip();
-            doc.image(imgBuffer, imgX, imgY, { width: imgSize, height: imgSize, fit: [imgSize, imgSize], align: 'center', valign: 'center' });
+            // Use cover option to fill the entire box (crops image to fit, no gaps)
+            doc.image(imgBuffer, imgX, imgY, { cover: [imgSize, imgSize], align: 'center', valign: 'center' });
             doc.restore();
             // Border around image
             doc.roundedRect(imgX, imgY, imgSize, imgSize, 4).stroke(borderColor);
