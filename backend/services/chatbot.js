@@ -487,27 +487,31 @@ const chatbot = {
   },
 
   // Helper to detect website order format
-  // Detects: "Hi! I'd like to order: * ItemName * Price: ₹XXX"
+  // Detects: "Hi! I'd like to order: ◆ ItemName ◆ Price: ₹XXX"
   // Returns: { itemName: string, price: number } or null
   isWebsiteOrderIntent(text) {
     if (!text || typeof text !== 'string') return null;
     
-    // Pattern for website order format
-    // Matches: "Hi! I'd like to order:" followed by item name (with or without emoji markers)
+    console.log('🔍 Checking website order intent:', text);
+    
+    // Pattern for website order format - handle various emoji/symbol markers
     const patterns = [
-      // Format: "Hi! I'd like to order: 🍽️ *ItemName* 💰 Price: ₹XXX"
-      /(?:hi!?\s*)?i'?d?\s*like\s*to\s*order[:\s]*(?:🍽️)?\s*\*?\s*([^*💰₹\n]+?)\s*\*?\s*(?:💰)?\s*(?:price)?[:\s]*₹?\s*(\d+)?/i,
-      // Format: "Order: ItemName - ₹XXX"
-      /order[:\s]+([^-₹\n]+?)(?:\s*[-–]\s*₹?\s*(\d+))?/i,
-      // Format: "I want to order ItemName"
-      /i\s*want\s*to\s*order\s+([^₹\n]+?)(?:\s*₹?\s*(\d+))?$/i,
+      // Format with ◆ diamond: "◆ Gongura Chicken ◆ Price: ₹267"
+      /[◆◇♦]\s*([^◆◇♦₹\n]+?)\s*[◆◇♦]\s*Price[:\s]*₹?\s*(\d+)/i,
+      // Format with 🍽️: "🍽️ *ItemName* 💰 Price: ₹XXX"
+      /🍽️\s*\*?\s*([^*💰₹\n]+?)\s*\*?\s*💰?\s*Price[:\s]*₹?\s*(\d+)/i,
+      // Format: "Hi! I'd like to order:" then newline then item
+      /i'?d?\s*like\s*to\s*order[:\s]*\n*[◆◇♦🍽️]*\s*\*?\s*([^*◆◇♦💰₹\n]+?)\s*\*?\s*\n*[◆◇♦💰]*\s*Price[:\s]*₹?\s*(\d+)/i,
+      // Simple format: "Order: ItemName"
+      /order[:\s]+([^-₹◆◇♦\n]+?)(?:\s*[-–]\s*₹?\s*(\d+))?$/i,
     ];
     
     for (const pattern of patterns) {
       const match = text.match(pattern);
       if (match && match[1]) {
-        const itemName = match[1].trim().replace(/^\*|\*$/g, '').trim();
+        const itemName = match[1].trim().replace(/^\*|\*$/g, '').replace(/^[◆◇♦🍽️\s]+|[◆◇♦💰\s]+$/g, '').trim();
         const price = match[2] ? parseInt(match[2]) : null;
+        console.log('✅ Website order extracted:', { itemName, price });
         if (itemName.length > 1) {
           return { itemName, price };
         }
@@ -1660,17 +1664,12 @@ const chatbot = {
         );
         
         if (exactMatch) {
-          // Found exact match - add to cart directly
-          customer.cart = customer.cart || [];
-          const existingIndex = customer.cart.findIndex(c => c.menuItem?.toString() === exactMatch._id.toString());
-          if (existingIndex >= 0) {
-            customer.cart[existingIndex].quantity += 1;
-          } else {
-            customer.cart.push({ menuItem: exactMatch._id, quantity: 1 });
-          }
+          // Found exact match - show item details with Add to Cart option
+          state.selectedItem = exactMatch._id.toString();
+          customer.conversationState = state;
           await customer.save();
-          await this.sendAddedToCart(phone, exactMatch, 1, customer.cart);
-          state.currentStep = 'item_added';
+          await this.sendItemDetailsForOrder(phone, exactMatch);
+          state.currentStep = 'viewing_item_details';
         } else {
           // No exact match - try partial match
           const partialMatches = menuItems.filter(item => 
@@ -1679,29 +1678,24 @@ const chatbot = {
           );
           
           if (partialMatches.length === 1) {
-            // Single partial match - add to cart
+            // Single partial match - show item details
             const item = partialMatches[0];
-            customer.cart = customer.cart || [];
-            const existingIndex = customer.cart.findIndex(c => c.menuItem?.toString() === item._id.toString());
-            if (existingIndex >= 0) {
-              customer.cart[existingIndex].quantity += 1;
-            } else {
-              customer.cart.push({ menuItem: item._id, quantity: 1 });
-            }
+            state.selectedItem = item._id.toString();
+            customer.conversationState = state;
             await customer.save();
-            await this.sendAddedToCart(phone, item, 1, customer.cart);
-            state.currentStep = 'item_added';
+            await this.sendItemDetailsForOrder(phone, item);
+            state.currentStep = 'viewing_item_details';
           } else if (partialMatches.length > 1) {
             // Multiple matches - show options
             const sections = [{
               title: `Items matching "${websiteOrder.itemName}"`,
               rows: partialMatches.slice(0, 10).map(item => ({
-                id: `add_${item._id}`,
+                id: `view_${item._id}`,
                 title: item.name.substring(0, 24),
                 description: `₹${item.price} • ${item.foodType === 'veg' ? '🟢 Veg' : item.foodType === 'nonveg' ? '🔴 Non-Veg' : '🟡 Egg'}`
               }))
             }];
-            await whatsapp.sendList(phone, '🔍 Select Item', `Found ${partialMatches.length} items. Please select one:`, 'Select Item', sections, 'Tap to add to cart');
+            await whatsapp.sendList(phone, '🔍 Select Item', `Found ${partialMatches.length} items. Please select one:`, 'View Items', sections, 'Tap to view details');
             state.currentStep = 'select_item';
           } else {
             // No match found
