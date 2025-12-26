@@ -58,10 +58,8 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
     // Run ALL queries in parallel for better performance
     const [
       cumulativeStats,
-      currentOrders,
       currentDeliveredOrders,
-      todayOrdersFromDb,
-      todayDeliveredOrdersCount,
+      todayAllOrdersCount,
       currentRevenue,
       todayDeliveredRevenue,
       currentCustomers,
@@ -73,10 +71,8 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
       ordersByStatus
     ] = await Promise.all([
       DashboardStats.findOne().lean(),
-      Order.countDocuments(), // Count ALL orders in database (for internal tracking)
-      Order.countDocuments({ status: 'delivered' }), // Count only delivered orders
-      Order.countDocuments({ createdAt: { $gte: today } }), // All orders today
-      Order.countDocuments({ createdAt: { $gte: today }, status: 'delivered' }), // Delivered orders today
+      Order.countDocuments({ status: 'delivered' }), // Count only delivered orders for total
+      Order.countDocuments({ createdAt: { $gte: today } }), // All orders created today (for Today Orders display)
       Order.aggregate([{ $match: { paymentStatus: 'paid', status: { $nin: ['cancelled', 'refunded'] }, refundStatus: { $nin: ['completed', 'pending'] } } }, { $group: { _id: null, total: { $sum: '$totalAmount' } } }]),
       // Today's delivered + paid orders (still in DB)
       Order.aggregate([{ 
@@ -106,37 +102,11 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
     const totalRevenue = stats.totalRevenue + (currentRevenue[0]?.total || 0);
     const totalCustomers = currentCustomers; // Just count customers with hasOrdered: true (they persist)
     
-    // Today's revenue calculation:
-    // Persisted value (includes revenue from deleted orders)
-    let todayRevenue = 0;
-    let todayOrders = 0;
+    // Today's orders = all orders created today (not just delivered)
+    const todayOrders = todayAllOrdersCount;
     
-    // Current delivered orders still in DB
-    const currentDeliveredRevenue = todayDeliveredRevenue[0]?.total || 0;
-    
-    if (stats.todayDate === todayStr) {
-      // Same day - use persisted values (includes deleted orders)
-      todayRevenue = stats.todayRevenue || 0;
-      todayOrders = stats.todayOrders || 0;
-    } else {
-      // New day or stats not initialized - just use current DB value (delivered orders only)
-      todayRevenue = currentDeliveredRevenue;
-      todayOrders = todayDeliveredOrdersCount;
-      
-      // Initialize today's stats if needed
-      if (currentDeliveredRevenue > 0 || todayDeliveredOrdersCount > 0) {
-        DashboardStats.findOneAndUpdate(
-          {},
-          { 
-            todayDate: todayStr, 
-            todayRevenue: currentDeliveredRevenue,
-            todayOrders: todayDeliveredOrdersCount,
-            lastUpdated: new Date()
-          },
-          { upsert: true }
-        ).catch(err => console.error('Stats init error:', err));
-      }
-    }
+    // Today's revenue = only from delivered orders
+    const todayRevenue = todayDeliveredRevenue[0]?.total || 0;
 
     res.json({
       totalOrders,
