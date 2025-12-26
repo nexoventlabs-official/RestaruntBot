@@ -13,6 +13,23 @@ const REPORT_TYPE_LABELS = {
 // Format currency for PDF (using Rs. since Helvetica doesn't support ₹)
 const formatCurrency = (val) => `Rs.${(val || 0).toLocaleString('en-IN')}`;
 
+// Validate if buffer is a valid image
+const isValidImage = (buffer) => {
+  if (!buffer || buffer.length < 8) return false;
+  
+  // Check for PNG signature
+  const pngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+  const isPng = pngSignature.every((byte, i) => buffer[i] === byte);
+  
+  // Check for JPEG signature
+  const isJpeg = buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
+  
+  // Check for GIF signature
+  const isGif = buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46;
+  
+  return isPng || isJpeg || isGif;
+};
+
 // Fetch image from URL and return as buffer
 const fetchImageBuffer = (url) => {
   return new Promise((resolve) => {
@@ -22,47 +39,85 @@ const fetchImageBuffer = (url) => {
     }
     
     const protocol = url.startsWith('https') ? https : http;
-    const timeout = setTimeout(() => resolve(null), 8000); // 8s timeout
+    const timeout = setTimeout(() => resolve(null), 10000); // 10s timeout
     
-    protocol.get(url, (res) => {
-      // Handle redirects
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        clearTimeout(timeout);
-        fetchImageBuffer(res.headers.location).then(resolve);
-        return;
-      }
-      
-      if (res.statusCode !== 200) {
+    const makeRequest = (requestUrl, redirectCount = 0) => {
+      if (redirectCount > 5) {
         clearTimeout(timeout);
         resolve(null);
         return;
       }
       
-      const chunks = [];
-      res.on('data', chunk => chunks.push(chunk));
-      res.on('end', () => {
-        clearTimeout(timeout);
-        resolve(Buffer.concat(chunks));
-      });
-      res.on('error', () => {
+      const reqProtocol = requestUrl.startsWith('https') ? https : http;
+      
+      reqProtocol.get(requestUrl, (res) => {
+        // Handle redirects
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          let redirectUrl = res.headers.location;
+          // Handle relative redirects
+          if (redirectUrl.startsWith('/')) {
+            const urlObj = new URL(requestUrl);
+            redirectUrl = `${urlObj.protocol}//${urlObj.host}${redirectUrl}`;
+          }
+          makeRequest(redirectUrl, redirectCount + 1);
+          return;
+        }
+        
+        if (res.statusCode !== 200) {
+          clearTimeout(timeout);
+          resolve(null);
+          return;
+        }
+        
+        const chunks = [];
+        res.on('data', chunk => chunks.push(chunk));
+        res.on('end', () => {
+          clearTimeout(timeout);
+          const buffer = Buffer.concat(chunks);
+          // Validate image before returning
+          if (isValidImage(buffer)) {
+            resolve(buffer);
+          } else {
+            resolve(null);
+          }
+        });
+        res.on('error', () => {
+          clearTimeout(timeout);
+          resolve(null);
+        });
+      }).on('error', () => {
         clearTimeout(timeout);
         resolve(null);
       });
-    }).on('error', () => {
-      clearTimeout(timeout);
-      resolve(null);
-    });
+    };
+    
+    makeRequest(url);
   });
 };
 
 // Pre-fetch all images for items
 const prefetchImages = async (items) => {
   const imageMap = {};
-  const promises = items.map(async (item) => {
+  const uniqueItems = [];
+  const seenNames = new Set();
+  
+  // Deduplicate items by name
+  for (const item of items) {
+    if (item.name && !seenNames.has(item.name)) {
+      seenNames.add(item.name);
+      uniqueItems.push(item);
+    }
+  }
+  
+  const promises = uniqueItems.map(async (item) => {
     if (item.image) {
-      const buffer = await fetchImageBuffer(item.image);
-      if (buffer) {
-        imageMap[item.name] = buffer;
+      try {
+        const buffer = await fetchImageBuffer(item.image);
+        if (buffer) {
+          imageMap[item.name] = buffer;
+        }
+      } catch (e) {
+        // Silently fail for individual images
       }
     }
   });
@@ -92,7 +147,6 @@ const generateReportPdf = async (reportData, reportType) => {
       const primaryColor = '#e63946';
       const darkColor = '#1c1d21';
       const grayColor = '#61636b';
-      const lightGray = '#f8f9fb';
       const borderColor = '#e5e7eb';
       
       // Table settings - matching admin panel (40x40 images)
@@ -218,9 +272,9 @@ const generateReportPdf = async (reportData, reportType) => {
       y += 70;
 
       // Helper function to calculate interest level
-      const getInterestLevel = (quantity, allItems) => {
-        if (!allItems || allItems.length === 0) return 'low';
-        const quantities = allItems.map(i => i.quantity || 0);
+      const getInterestLevel = (quantity, allItemsList) => {
+        if (!allItemsList || allItemsList.length === 0) return 'low';
+        const quantities = allItemsList.map(i => i.quantity || 0);
         const avgQty = quantities.reduce((a, b) => a + b, 0) / quantities.length;
         
         if (quantity >= avgQty * 1.5) return 'high';
@@ -253,8 +307,15 @@ const generateReportPdf = async (reportData, reportType) => {
         return startY + 28;
       };
 
+      // Helper function to draw placeholder image
+      const drawPlaceholder = (imgX, imgY) => {
+        doc.roundedRect(imgX, imgY, imgSize, imgSize, 4).fillAndStroke('#f3f4f6', borderColor);
+        doc.fillColor('#9ca3af').fontSize(12).font('Helvetica')
+          .text('N/A', imgX + 4, imgY + imgSize/2 - 6, { width: imgSize - 8, align: 'center' });
+      };
+
       // Helper function to draw item row - matching admin panel style
-      const drawItemRow = (item, idx, startY, allItems) => {
+      const drawItemRow = (item, idx, startY, allItemsList) => {
         const rowY = startY;
         
         // Alternating row background for better readability
@@ -274,28 +335,27 @@ const generateReportPdf = async (reportData, reportType) => {
           .text(String(idx + 1), x + 8, textY, { width: cols.sno });
         x += cols.sno;
         
-        // Image - matching admin panel 40x40 rounded style with object-cover (fill box, no gaps)
+        // Image - with proper error handling to not break the table
         const imgBuffer = imageMap[item.name];
         const imgX = x + 4;
+        
+        let imageDrawn = false;
         if (imgBuffer) {
           try {
-            // Draw rounded rectangle clip for image
             doc.save();
             doc.roundedRect(imgX, imgY, imgSize, imgSize, 4).clip();
-            // Use cover option to fill the entire box (crops image to fit, no gaps)
             doc.image(imgBuffer, imgX, imgY, { cover: [imgSize, imgSize], align: 'center', valign: 'center' });
             doc.restore();
-            // Border around image
             doc.roundedRect(imgX, imgY, imgSize, imgSize, 4).stroke(borderColor);
+            imageDrawn = true;
           } catch (e) {
-            // Draw placeholder if image fails
-            doc.roundedRect(imgX, imgY, imgSize, imgSize, 4).fillAndStroke('#f3f4f6', borderColor);
-            doc.fillColor('#9ca3af').fontSize(14).text('?', imgX + imgSize/2 - 4, imgY + imgSize/2 - 7);
+            // Image failed to render, will draw placeholder
+            doc.restore(); // Make sure to restore even on error
           }
-        } else {
-          // Draw placeholder box - matching admin panel placeholder
-          doc.roundedRect(imgX, imgY, imgSize, imgSize, 4).fillAndStroke('#f3f4f6', borderColor);
-          doc.fillColor('#9ca3af').fontSize(14).text('?', imgX + imgSize/2 - 4, imgY + imgSize/2 - 7);
+        }
+        
+        if (!imageDrawn) {
+          drawPlaceholder(imgX, imgY);
         }
         x += cols.image;
         
@@ -304,22 +364,22 @@ const generateReportPdf = async (reportData, reportType) => {
           .text(item.name || '-', x + 4, textY, { width: cols.name - 8, lineBreak: false });
         x += cols.name;
         
-        // Rating column - matching admin panel star style
+        // Rating column - using * instead of star emoji
         if (item.totalRatings > 0) {
-          doc.fillColor('#facc15').fontSize(9).text('★', x + 8, textY, { width: 12 });
-          doc.fillColor(darkColor).text(`${(item.avgRating || 0).toFixed(1)}`, x + 20, textY, { width: 20 });
-          doc.fillColor(grayColor).fontSize(7).text(`(${item.totalRatings})`, x + 40, textY + 1, { width: 25 });
+          doc.fillColor('#f59e0b').fontSize(10).font('Helvetica-Bold').text('*', x + 10, textY - 1, { width: 10 });
+          doc.fillColor(darkColor).fontSize(9).font('Helvetica').text(`${(item.avgRating || 0).toFixed(1)}`, x + 20, textY, { width: 22 });
+          doc.fillColor(grayColor).fontSize(7).text(`(${item.totalRatings})`, x + 42, textY + 1, { width: 25 });
         } else {
-          doc.fillColor('#9ca3af').fontSize(9).text('-', x + 4, textY, { width: cols.rating, align: 'center' });
+          doc.fillColor('#9ca3af').fontSize(9).font('Helvetica').text('-', x + 4, textY, { width: cols.rating, align: 'center' });
         }
         x += cols.rating;
         
-        // Interest column with badge - matching admin panel InterestBadge
-        const interest = getInterestLevel(item.quantity, allItems);
+        // Interest column with badge - using text arrows instead of emoji
+        const interest = getInterestLevel(item.quantity, allItemsList);
         const interestConfig = {
-          high: { color: '#22c55e', bg: '#f0fdf4', label: 'High', icon: '↑' },
-          constant: { color: '#eab308', bg: '#fefce8', label: 'Stable', icon: '→' },
-          low: { color: '#ef4444', bg: '#fef2f2', label: 'Low', icon: '↓' }
+          high: { color: '#22c55e', bg: '#f0fdf4', label: 'High', icon: '^' },
+          constant: { color: '#eab308', bg: '#fefce8', label: 'Stable', icon: '-' },
+          low: { color: '#ef4444', bg: '#fef2f2', label: 'Low', icon: 'v' }
         };
         const { color: interestColor, bg: interestBg, label: interestLabel, icon: interestIcon } = interestConfig[interest];
         
@@ -346,7 +406,7 @@ const generateReportPdf = async (reportData, reportType) => {
       };
 
       // Helper function to draw complete item table - matching admin panel card style
-      const drawItemTable = (title, emoji, items, startY, allItems, showAll = false) => {
+      const drawItemTable = (title, icon, items, startY, allItemsList, showAll = false) => {
         let currentY = startY;
         
         // Check if we need a new page
@@ -369,8 +429,9 @@ const generateReportPdf = async (reportData, reportType) => {
         doc.roundedRect(tableStartX, currentY, tableWidth, 32, 8).stroke(borderColor);
         doc.moveTo(tableStartX, currentY + 32).lineTo(tableStartX + tableWidth, currentY + 32).stroke(borderColor);
         
+        // Title with icon (text-based, no emoji)
         doc.fillColor(darkColor).fontSize(12).font('Helvetica-Bold')
-          .text(`${emoji} ${title}`, tableStartX + 12, currentY + 10);
+          .text(`${icon} ${title}`, tableStartX + 12, currentY + 10);
         currentY += 36;
 
         // Table header
@@ -378,7 +439,9 @@ const generateReportPdf = async (reportData, reportType) => {
 
         // Table rows
         doc.font('Helvetica').fontSize(9);
-        itemsToShow.forEach((item, idx) => {
+        for (let idx = 0; idx < itemsToShow.length; idx++) {
+          const item = itemsToShow[idx];
+          
           // Check if we need a new page
           if (currentY > 720) {
             doc.addPage();
@@ -387,8 +450,13 @@ const generateReportPdf = async (reportData, reportType) => {
             currentY = drawTableHeader(currentY);
           }
           
-          currentY = drawItemRow(item, idx, currentY, allItems);
-        });
+          try {
+            currentY = drawItemRow(item, idx, currentY, allItemsList);
+          } catch (rowError) {
+            // If row fails, skip to next row
+            currentY += rowHeight;
+          }
+        }
         
         // No data message
         if (itemsToShow.length === 0) {
@@ -400,21 +468,21 @@ const generateReportPdf = async (reportData, reportType) => {
         return currentY + 20;
       };
 
-      // Top Selling Items
+      // Top Selling Items (using [HOT] instead of fire emoji)
       if (reportData.topSellingItems && reportData.topSellingItems.length > 0) {
-        y = drawItemTable('Top Selling Items', '🔥', reportData.topSellingItems, y, reportData.allItemsSold || []);
+        y = drawItemTable('Top Selling Items', '[HOT]', reportData.topSellingItems, y, reportData.allItemsSold || []);
       }
 
-      // Least Selling Items
+      // Least Selling Items (using [LOW] instead of chart emoji)
       if (reportData.leastSellingItems && reportData.leastSellingItems.length > 0) {
-        y = drawItemTable('Least Selling Items', '📉', reportData.leastSellingItems, y, reportData.allItemsSold || []);
+        y = drawItemTable('Least Selling Items', '[LOW]', reportData.leastSellingItems, y, reportData.allItemsSold || []);
       }
 
-      // All Items Sold - show ALL items on new page
+      // All Items Sold - show ALL items on new page (using [ALL] instead of package emoji)
       if (reportData.allItemsSold && reportData.allItemsSold.length > 0) {
         doc.addPage();
         y = 50;
-        y = drawItemTable('All Items Sold', '📦', reportData.allItemsSold, y, reportData.allItemsSold, true);
+        y = drawItemTable('All Items Sold', '[ALL]', reportData.allItemsSold, y, reportData.allItemsSold, true);
       }
 
       // Footer on last page
