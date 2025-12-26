@@ -492,31 +492,49 @@ const chatbot = {
   isWebsiteOrderIntent(text) {
     if (!text || typeof text !== 'string') return null;
     
-    console.log('🔍 Checking website order intent:', text);
+    // Check if this looks like a website order message
+    const lowerText = text.toLowerCase();
+    if (!lowerText.includes("i'd like to order") && !lowerText.includes("i like to order") && !lowerText.includes("like to order")) {
+      return null;
+    }
     
-    // Pattern for website order format - handle various emoji/symbol markers
-    const patterns = [
-      // Format with ◆ diamond: "◆ Gongura Chicken ◆ Price: ₹267"
-      /[◆◇♦]\s*([^◆◇♦₹\n]+?)\s*[◆◇♦]\s*Price[:\s]*₹?\s*(\d+)/i,
-      // Format with 🍽️: "🍽️ *ItemName* 💰 Price: ₹XXX"
-      /🍽️\s*\*?\s*([^*💰₹\n]+?)\s*\*?\s*💰?\s*Price[:\s]*₹?\s*(\d+)/i,
-      // Format: "Hi! I'd like to order:" then newline then item
-      /i'?d?\s*like\s*to\s*order[:\s]*\n*[◆◇♦🍽️]*\s*\*?\s*([^*◆◇♦💰₹\n]+?)\s*\*?\s*\n*[◆◇♦💰]*\s*Price[:\s]*₹?\s*(\d+)/i,
-      // Simple format: "Order: ItemName"
-      /order[:\s]+([^-₹◆◇♦\n]+?)(?:\s*[-–]\s*₹?\s*(\d+))?$/i,
-    ];
+    console.log('🔍 Checking website order intent for:', text);
     
-    for (const pattern of patterns) {
-      const match = text.match(pattern);
-      if (match && match[1]) {
-        const itemName = match[1].trim().replace(/^\*|\*$/g, '').replace(/^[◆◇♦🍽️\s]+|[◆◇♦💰\s]+$/g, '').trim();
-        const price = match[2] ? parseInt(match[2]) : null;
-        console.log('✅ Website order extracted:', { itemName, price });
-        if (itemName.length > 1) {
-          return { itemName, price };
-        }
+    // Extract item name between ◆ symbols or after order:
+    // Format: "Hi! I'd like to order:\n\n◆ Gongura Chicken\n◆ Price: ₹267"
+    
+    // Try to find item name between first ◆ and second ◆ or "Price"
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    
+    let itemName = null;
+    let price = null;
+    
+    for (const line of lines) {
+      // Check for item name line (starts with ◆ but not Price)
+      if (line.startsWith('◆') && !line.toLowerCase().includes('price')) {
+        itemName = line.replace(/^◆\s*/, '').replace(/\*+/g, '').trim();
+      }
+      // Check for price line
+      if (line.toLowerCase().includes('price') && line.includes('₹')) {
+        const priceMatch = line.match(/₹\s*(\d+)/);
+        if (priceMatch) price = parseInt(priceMatch[1]);
       }
     }
+    
+    // Fallback: try regex patterns
+    if (!itemName) {
+      // Pattern: "order:" followed by item name
+      const match = text.match(/order[:\s]*\n*[◆\*]?\s*([^◆\*₹\n]+?)(?:\s*[◆\*]|\s*price|\s*₹|\n|$)/i);
+      if (match && match[1]) {
+        itemName = match[1].trim();
+      }
+    }
+    
+    if (itemName && itemName.length > 1) {
+      console.log('✅ Website order extracted:', { itemName, price });
+      return { itemName, price };
+    }
+    
     return null;
   },
 
@@ -1658,35 +1676,47 @@ const chatbot = {
         const websiteOrder = this.isWebsiteOrderIntent(message);
         console.log('🌐 Website order detected:', websiteOrder);
         
-        // Try exact match first (case-insensitive)
+        // Try exact match first (case-insensitive, trimmed)
+        const searchName = websiteOrder.itemName.toLowerCase().trim();
         const exactMatch = menuItems.find(item => 
-          item.name.toLowerCase() === websiteOrder.itemName.toLowerCase()
+          item.name.toLowerCase().trim() === searchName
         );
         
         if (exactMatch) {
           // Found exact match - show item details with Add to Cart option
+          console.log('✅ Exact match found:', exactMatch.name);
           state.selectedItem = exactMatch._id.toString();
           customer.conversationState = state;
           await customer.save();
           await this.sendItemDetailsForOrder(phone, exactMatch);
           state.currentStep = 'viewing_item_details';
         } else {
-          // No exact match - try partial match
-          const partialMatches = menuItems.filter(item => 
-            item.name.toLowerCase().includes(websiteOrder.itemName.toLowerCase()) ||
-            websiteOrder.itemName.toLowerCase().includes(item.name.toLowerCase())
+          // No exact match - try to find items that START with the search term
+          // This prevents "Chicken" from matching "Gongura Chicken"
+          let partialMatches = menuItems.filter(item => 
+            item.name.toLowerCase().trim().startsWith(searchName) ||
+            searchName.startsWith(item.name.toLowerCase().trim())
           );
+          
+          // If no startsWith matches, try contains but only if search term is significant
+          if (partialMatches.length === 0 && searchName.length >= 4) {
+            partialMatches = menuItems.filter(item => 
+              item.name.toLowerCase().includes(searchName)
+            );
+          }
           
           if (partialMatches.length === 1) {
             // Single partial match - show item details
             const item = partialMatches[0];
+            console.log('✅ Single partial match found:', item.name);
             state.selectedItem = item._id.toString();
             customer.conversationState = state;
             await customer.save();
             await this.sendItemDetailsForOrder(phone, item);
             state.currentStep = 'viewing_item_details';
           } else if (partialMatches.length > 1) {
-            // Multiple matches - show options
+            // Multiple matches - show options as list
+            console.log('⚠️ Multiple matches found:', partialMatches.map(i => i.name));
             const sections = [{
               title: `Items matching "${websiteOrder.itemName}"`,
               rows: partialMatches.slice(0, 10).map(item => ({
@@ -1699,6 +1729,7 @@ const chatbot = {
             state.currentStep = 'select_item';
           } else {
             // No match found
+            console.log('❌ No match found for:', websiteOrder.itemName);
             await whatsapp.sendButtons(phone, `❌ Sorry, "${websiteOrder.itemName}" is not available.\n\nPlease browse our menu!`, [
               { id: 'view_menu', text: 'View Menu' },
               { id: 'home', text: 'Main Menu' }
