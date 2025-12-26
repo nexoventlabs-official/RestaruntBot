@@ -10,7 +10,6 @@ export default function UserMenu() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [foodType, setFoodType] = useState('all');
   const [loading, setLoading] = useState(true);
-  const [itemsLoading, setItemsLoading] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -36,7 +35,6 @@ export default function UserMenu() {
   };
 
   const loadItems = async () => {
-    setItemsLoading(true);
     try {
       const params = new URLSearchParams();
       if (selectedCategory !== 'all') params.append('category', selectedCategory);
@@ -45,8 +43,6 @@ export default function UserMenu() {
       setItems(res.data);
     } catch (err) {
       console.error('Error loading items:', err);
-    } finally {
-      setItemsLoading(false);
     }
   };
 
@@ -171,13 +167,8 @@ export default function UserMenu() {
         </div>
 
         {/* Menu Items by Category */}
-        <div className={`space-y-8 transition-opacity duration-300 ${itemsLoading ? 'opacity-50' : 'opacity-100'}`}>
-          {itemsLoading && (
-            <div className="flex justify-center py-8">
-              <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          )}
-          {!itemsLoading && (selectedCategory !== 'all' ? [selectedCategory] : filteredCategories).map(cat => {
+        <div className="space-y-8">
+          {(selectedCategory !== 'all' ? [selectedCategory] : filteredCategories).map(cat => {
             const itemsInCategory = items.filter(i => {
               const itemCats = Array.isArray(i.category) ? i.category : [i.category];
               return itemCats.includes(cat);
@@ -245,7 +236,7 @@ export default function UserMenu() {
               </div>
             );
           })}
-          {!itemsLoading && filteredCategories.length === 0 && (
+          {filteredCategories.length === 0 && (
             <div className="bg-white rounded-2xl shadow-md p-12 text-center">
               <span className="text-6xl mb-4 block">🍽️</span>
               <h3 className="text-lg font-semibold text-gray-700">No items found</h3>
