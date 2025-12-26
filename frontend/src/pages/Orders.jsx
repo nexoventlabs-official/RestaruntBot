@@ -151,7 +151,7 @@ const ScrollableItemsList = ({ items }) => {
     <div className="relative">
       <div 
         ref={scrollRef} 
-        className="space-y-2 max-h-36 overflow-y-auto" 
+        className="space-y-2 h-36 overflow-y-auto" 
         onScroll={checkScroll}
       >
         {items?.map((item, i) => (
@@ -450,7 +450,7 @@ export default function Orders() {
             const isUpdated = updatedIds.has(order._id);
             const totalItems = order.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
             return (
-              <div key={order._id} className={`bg-white rounded-2xl shadow-card overflow-hidden transition-all duration-300 hover:shadow-lg ${isUpdated ? 'ring-2 ring-primary-400 scale-[1.01]' : ''}`}>
+              <div key={order._id} className={`bg-white rounded-2xl shadow-card overflow-hidden transition-all duration-300 hover:shadow-lg flex flex-col ${isUpdated ? 'ring-2 ring-primary-400 scale-[1.01]' : ''}`}>
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-dark-100">
                   <div className="flex items-center justify-between mb-3">
@@ -481,7 +481,7 @@ export default function Orders() {
                 </div>
 
                 {/* Content */}
-                <div className="p-5 space-y-4">
+                <div className="p-5 space-y-4 flex-1 flex flex-col">
                   {/* Items Section */}
                   <div className="bg-dark-50 rounded-xl p-3">
                     <div className="flex items-center justify-between mb-2.5">
@@ -521,7 +521,7 @@ export default function Orders() {
                   )}
 
                   {/* Payment & Total */}
-                  <div className="flex items-center justify-between pt-2 border-t border-dark-100">
+                  <div className="flex items-center justify-between pt-2 border-t border-dark-100 mt-auto">
                     <div className="flex items-center gap-2">
                       <CreditCard className="w-4 h-4 text-dark-300" />
                       <span className="text-sm text-dark-500">{order.paymentMethod?.toUpperCase()}</span>
