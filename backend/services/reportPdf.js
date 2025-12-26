@@ -314,6 +314,88 @@ const generateReportPdf = async (reportData, reportType) => {
           .text('N/A', imgX + 4, imgY + imgSize/2 - 6, { width: imgSize - 8, align: 'center' });
       };
 
+      // Helper function to draw fire icon (for top selling)
+      const drawFireIcon = (x, y, size = 14) => {
+        doc.save();
+        const s = size / 14; // scale factor
+        doc.translate(x, y);
+        doc.scale(s);
+        // Flame shape
+        doc.path('M7 0C7 0 3 4 3 8C3 10.5 4.5 12.5 7 13C5.5 11.5 5.5 9 7 7C8.5 9 8.5 11.5 7 13C9.5 12.5 11 10.5 11 8C11 4 7 0 7 0Z')
+          .fill('#ef4444');
+        doc.restore();
+      };
+
+      // Helper function to draw chart down icon (for least selling)
+      const drawChartDownIcon = (x, y, size = 14) => {
+        doc.save();
+        doc.translate(x, y);
+        const s = size / 14;
+        doc.scale(s);
+        // Down arrow with line
+        doc.moveTo(2, 2).lineTo(2, 12).stroke('#ef4444');
+        doc.moveTo(2, 12).lineTo(12, 12).stroke('#ef4444');
+        doc.moveTo(4, 4).lineTo(7, 7).lineTo(9, 5).lineTo(12, 10).strokeColor('#ef4444').lineWidth(1.5).stroke();
+        // Arrow head
+        doc.path('M12 10L10 7L12 8Z').fill('#ef4444');
+        doc.restore();
+      };
+
+      // Helper function to draw package/box icon (for all items)
+      const drawPackageIcon = (x, y, size = 14) => {
+        doc.save();
+        doc.translate(x, y);
+        const s = size / 14;
+        doc.scale(s);
+        // Box outline
+        doc.rect(1, 3, 12, 10).strokeColor('#3b82f6').lineWidth(1.2).stroke();
+        // Top flaps
+        doc.moveTo(1, 3).lineTo(7, 0).lineTo(13, 3).strokeColor('#3b82f6').stroke();
+        // Center line
+        doc.moveTo(7, 0).lineTo(7, 8).stroke();
+        doc.moveTo(1, 3).lineTo(7, 6).lineTo(13, 3).stroke();
+        doc.restore();
+      };
+
+      // Helper function to draw star icon
+      const drawStarIcon = (x, y, size = 10) => {
+        doc.save();
+        doc.translate(x, y);
+        const s = size / 10;
+        doc.scale(s);
+        doc.path('M5 0L6.1 3.5H10L6.9 5.5L8 9L5 7L2 9L3.1 5.5L0 3.5H3.9Z')
+          .fill('#f59e0b');
+        doc.restore();
+      };
+
+      // Helper function to draw trend up arrow
+      const drawTrendUp = (x, y, size = 10) => {
+        doc.save();
+        doc.translate(x, y);
+        const s = size / 10;
+        doc.scale(s);
+        doc.path('M5 0L10 6H6V10H4V6H0Z').fill('#22c55e');
+        doc.restore();
+      };
+
+      // Helper function to draw trend down arrow
+      const drawTrendDown = (x, y, size = 10) => {
+        doc.save();
+        doc.translate(x, y);
+        const s = size / 10;
+        doc.scale(s);
+        doc.path('M5 10L10 4H6V0H4V4H0Z').fill('#ef4444');
+        doc.restore();
+      };
+
+      // Helper function to draw stable/minus icon
+      const drawStable = (x, y, size = 10) => {
+        doc.save();
+        doc.translate(x, y);
+        doc.rect(0, 3, size, 4).fill('#eab308');
+        doc.restore();
+      };
+
       // Helper function to draw item row - matching admin panel style
       const drawItemRow = (item, idx, startY, allItemsList) => {
         const rowY = startY;
@@ -364,9 +446,9 @@ const generateReportPdf = async (reportData, reportType) => {
           .text(item.name || '-', x + 4, textY, { width: cols.name - 8, lineBreak: false });
         x += cols.name;
         
-        // Rating column - using * instead of star emoji
+        // Rating column - with star icon
         if (item.totalRatings > 0) {
-          doc.fillColor('#f59e0b').fontSize(10).font('Helvetica-Bold').text('*', x + 10, textY - 1, { width: 10 });
+          drawStarIcon(x + 8, textY, 10);
           doc.fillColor(darkColor).fontSize(9).font('Helvetica').text(`${(item.avgRating || 0).toFixed(1)}`, x + 20, textY, { width: 22 });
           doc.fillColor(grayColor).fontSize(7).text(`(${item.totalRatings})`, x + 42, textY + 1, { width: 25 });
         } else {
@@ -374,23 +456,26 @@ const generateReportPdf = async (reportData, reportType) => {
         }
         x += cols.rating;
         
-        // Interest column with badge - using text arrows instead of emoji
+        // Interest column with badge and icon
         const interest = getInterestLevel(item.quantity, allItemsList);
         const interestConfig = {
-          high: { color: '#22c55e', bg: '#f0fdf4', label: 'High', icon: '^' },
-          constant: { color: '#eab308', bg: '#fefce8', label: 'Stable', icon: '-' },
-          low: { color: '#ef4444', bg: '#fef2f2', label: 'Low', icon: 'v' }
+          high: { color: '#22c55e', bg: '#f0fdf4', label: 'High', drawIcon: drawTrendUp },
+          constant: { color: '#eab308', bg: '#fefce8', label: 'Stable', drawIcon: drawStable },
+          low: { color: '#ef4444', bg: '#fef2f2', label: 'Low', drawIcon: drawTrendDown }
         };
-        const { color: interestColor, bg: interestBg, label: interestLabel, icon: interestIcon } = interestConfig[interest];
+        const { color: interestColor, bg: interestBg, label: interestLabel, drawIcon } = interestConfig[interest];
         
         // Draw badge background
-        const badgeWidth = 50;
+        const badgeWidth = 52;
         const badgeHeight = 18;
         const badgeX = x + (cols.interest - badgeWidth) / 2;
         const badgeY = textY - 4;
         doc.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 9).fill(interestBg);
+        // Draw icon
+        drawIcon(badgeX + 6, badgeY + 4, 10);
+        // Draw label
         doc.fillColor(interestColor).fontSize(8).font('Helvetica-Bold')
-          .text(`${interestIcon} ${interestLabel}`, badgeX + 4, badgeY + 5, { width: badgeWidth - 8, align: 'center' });
+          .text(interestLabel, badgeX + 18, badgeY + 5, { width: badgeWidth - 22 });
         x += cols.interest;
         
         // Qty Sold
@@ -406,7 +491,7 @@ const generateReportPdf = async (reportData, reportType) => {
       };
 
       // Helper function to draw complete item table - matching admin panel card style
-      const drawItemTable = (title, icon, items, startY, allItemsList, showAll = false) => {
+      const drawItemTable = (title, iconType, items, startY, allItemsList, showAll = false) => {
         let currentY = startY;
         
         // Check if we need a new page
@@ -429,9 +514,20 @@ const generateReportPdf = async (reportData, reportType) => {
         doc.roundedRect(tableStartX, currentY, tableWidth, 32, 8).stroke(borderColor);
         doc.moveTo(tableStartX, currentY + 32).lineTo(tableStartX + tableWidth, currentY + 32).stroke(borderColor);
         
-        // Title with icon (text-based, no emoji)
+        // Draw icon based on type
+        const iconX = tableStartX + 12;
+        const iconY = currentY + 9;
+        if (iconType === 'fire') {
+          drawFireIcon(iconX, iconY, 14);
+        } else if (iconType === 'chartDown') {
+          drawChartDownIcon(iconX, iconY, 14);
+        } else if (iconType === 'package') {
+          drawPackageIcon(iconX, iconY, 14);
+        }
+        
+        // Title text
         doc.fillColor(darkColor).fontSize(12).font('Helvetica-Bold')
-          .text(`${icon} ${title}`, tableStartX + 12, currentY + 10);
+          .text(title, tableStartX + 30, currentY + 10);
         currentY += 36;
 
         // Table header
@@ -468,21 +564,21 @@ const generateReportPdf = async (reportData, reportType) => {
         return currentY + 20;
       };
 
-      // Top Selling Items (using [HOT] instead of fire emoji)
+      // Top Selling Items (with fire icon)
       if (reportData.topSellingItems && reportData.topSellingItems.length > 0) {
-        y = drawItemTable('Top Selling Items', '[HOT]', reportData.topSellingItems, y, reportData.allItemsSold || []);
+        y = drawItemTable('Top Selling Items', 'fire', reportData.topSellingItems, y, reportData.allItemsSold || []);
       }
 
-      // Least Selling Items (using [LOW] instead of chart emoji)
+      // Least Selling Items (with chart down icon)
       if (reportData.leastSellingItems && reportData.leastSellingItems.length > 0) {
-        y = drawItemTable('Least Selling Items', '[LOW]', reportData.leastSellingItems, y, reportData.allItemsSold || []);
+        y = drawItemTable('Least Selling Items', 'chartDown', reportData.leastSellingItems, y, reportData.allItemsSold || []);
       }
 
-      // All Items Sold - show ALL items on new page (using [ALL] instead of package emoji)
+      // All Items Sold - show ALL items on new page (with package icon)
       if (reportData.allItemsSold && reportData.allItemsSold.length > 0) {
         doc.addPage();
         y = 50;
-        y = drawItemTable('All Items Sold', '[ALL]', reportData.allItemsSold, y, reportData.allItemsSold, true);
+        y = drawItemTable('All Items Sold', 'package', reportData.allItemsSold, y, reportData.allItemsSold, true);
       }
 
       // Footer on last page
