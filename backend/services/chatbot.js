@@ -486,7 +486,54 @@ const chatbot = {
     return null;
   },
 
-  // Helper to detect website order format
+  // Helper to detect website CART order format (multiple items)
+  // Detects: "🛒 Order from Website\n1. Item x2 - ₹XXX\n2. Item x1 - ₹XXX\nTotal: ₹XXX"
+  // Returns: { items: [{ name, quantity, price }], total: number } or null
+  isWebsiteCartOrderIntent(text) {
+    if (!text || typeof text !== 'string') return null;
+    
+    const lowerText = text.toLowerCase();
+    
+    // Must contain "order from website" or similar cart indicators
+    if (!lowerText.includes('order from website') && !lowerText.includes('cart order')) {
+      return null;
+    }
+    
+    console.log('🛒 Website CART order check - message:', text);
+    
+    const items = [];
+    let total = null;
+    
+    // Parse each line looking for item patterns like "1. Item Name x2 - ₹398"
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    
+    for (const line of lines) {
+      // Pattern: "1. Item Name x2 - ₹398" or "1. Item Name x2 - Rs398"
+      const itemMatch = line.match(/^\d+\.\s*(.+?)\s*x(\d+)\s*[-–]\s*₹?(\d+)/i);
+      if (itemMatch) {
+        const name = itemMatch[1].trim();
+        const quantity = parseInt(itemMatch[2]);
+        const price = parseInt(itemMatch[3]);
+        items.push({ name, quantity, price });
+        console.log('📦 Found cart item:', { name, quantity, price });
+      }
+      
+      // Extract total
+      const totalMatch = line.match(/total[:\s]*₹?\s*(\d+)/i);
+      if (totalMatch) {
+        total = parseInt(totalMatch[1]);
+      }
+    }
+    
+    if (items.length > 0) {
+      console.log('✅ Website cart order extracted:', { items, total });
+      return { items, total };
+    }
+    
+    return null;
+  },
+
+  // Helper to detect website order format (single item)
   // Detects messages from website with item name and price
   // Returns: { itemName: string, price: number } or null
   isWebsiteOrderIntent(text) {
@@ -1686,6 +1733,60 @@ const chatbot = {
             `📍 Location saved!\n\n${formattedAddress}\n\nStart ordering to use this address.`,
             [
               { id: 'place_order', text: 'Start Order' },
+              { id: 'home', text: 'Main Menu' }
+            ]
+          );
+          state.currentStep = 'main_menu';
+        }
+      }
+      // ========== WEBSITE CART ORDER (multiple items from website cart) ==========
+      // Detect cart orders from website with format "🛒 Order from Website\n1. Item x2 - ₹XXX"
+      else if (!selectedId && message && this.isWebsiteCartOrderIntent(message)) {
+        const cartOrder = this.isWebsiteCartOrderIntent(message);
+        console.log('🛒 Website CART order detected:', cartOrder);
+        
+        // Add all items to customer's cart
+        customer.cart = customer.cart || [];
+        let addedCount = 0;
+        let notFoundItems = [];
+        
+        for (const cartItem of cartOrder.items) {
+          // Find exact match for each item
+          const menuItem = menuItems.find(m => 
+            m.name.toLowerCase().trim() === cartItem.name.toLowerCase().trim()
+          );
+          
+          if (menuItem) {
+            // Check if already in cart
+            const existingIndex = customer.cart.findIndex(c => 
+              c.menuItem?.toString() === menuItem._id.toString()
+            );
+            
+            if (existingIndex >= 0) {
+              customer.cart[existingIndex].quantity += cartItem.quantity;
+            } else {
+              customer.cart.push({ menuItem: menuItem._id, quantity: cartItem.quantity });
+            }
+            addedCount++;
+            console.log(`✅ Added to cart: ${menuItem.name} x${cartItem.quantity}`);
+          } else {
+            notFoundItems.push(cartItem.name);
+            console.log(`❌ Item not found: ${cartItem.name}`);
+          }
+        }
+        
+        await customer.save();
+        
+        if (addedCount > 0) {
+          // Show cart summary and proceed to checkout
+          await this.sendCart(phone, customer);
+          state.currentStep = 'viewing_cart';
+        } else {
+          // No items were added
+          await whatsapp.sendButtons(phone, 
+            `❌ Sorry, we couldn't find the items in your order.\n\nPlease browse our menu to add items.`,
+            [
+              { id: 'view_menu', text: 'View Menu' },
               { id: 'home', text: 'Main Menu' }
             ]
           );
