@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { 
-  Calendar, TrendingUp, TrendingDown, Minus, Package, IndianRupee, 
+  Calendar, TrendingUp, TrendingDown, Minus, Package, DollarSign, 
   ShoppingBag, BarChart3, RefreshCw, Mail, FileDown, X, CheckCircle, AlertCircle, Star
 } from 'lucide-react';
 import api from '../api';
@@ -87,6 +87,33 @@ const StatCard = ({ title, value, subtitle, icon: Icon, trend, trendValue, color
       <p className="text-2xl font-bold text-dark-900">{value}</p>
       <p className="text-sm text-dark-400 mt-1">{title}</p>
       {subtitle && <p className="text-xs text-dark-300 mt-0.5">{subtitle}</p>}
+    </div>
+  );
+};
+
+// Revenue Chart Component
+const RevenueChart = ({ data, title }) => {
+  const maxValue = Math.max(...data.map(d => d.revenue || 0), 1);
+  
+  return (
+    <div className="bg-white rounded-xl p-4 shadow-card">
+      <h3 className="font-semibold text-dark-900 mb-4">{title}</h3>
+      <div className="flex items-end gap-2 h-48">
+        {data.map((item, idx) => (
+          <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+            <div className="w-full bg-dark-100 rounded-t-lg relative" style={{ height: '160px' }}>
+              <div 
+                className="absolute bottom-0 w-full bg-gradient-to-t from-primary-600 to-primary-400 rounded-t-lg transition-all duration-500"
+                style={{ height: `${(item.revenue / maxValue) * 100}%` }}
+              />
+            </div>
+            <span className="text-xs text-dark-400 truncate w-full text-center">{item.label}</span>
+          </div>
+        ))}
+        {data.length === 0 && (
+          <p className="text-dark-400 text-center py-4 w-full">No data available</p>
+        )}
+      </div>
     </div>
   );
 };
@@ -336,7 +363,7 @@ export default function Reports() {
             <StatCard
               title="Total Revenue"
               value={formatCurrency(reportData.totalRevenue)}
-              icon={IndianRupee}
+              icon={DollarSign}
               color="green"
             />
             <StatCard
@@ -364,8 +391,8 @@ export default function Reports() {
             <StatCard title="Delivered" value={reportData.deliveredOrders || 0} icon={Package} color="green" />
             <StatCard title="Cancelled" value={reportData.cancelledOrders || 0} icon={Package} color="red" />
             <StatCard title="Refunded" value={reportData.refundedOrders || 0} icon={Package} color="orange" />
-            <StatCard title="COD Orders" value={reportData.codOrders || 0} icon={IndianRupee} color="blue" />
-            <StatCard title="UPI Orders" value={reportData.upiOrders || 0} icon={IndianRupee} color="primary" />
+            <StatCard title="COD Orders" value={reportData.codOrders || 0} icon={DollarSign} color="blue" />
+            <StatCard title="UPI Orders" value={reportData.upiOrders || 0} icon={DollarSign} color="primary" />
           </div>
 
           {/* Top Selling Items Table */}
@@ -487,6 +514,11 @@ export default function Reports() {
               </table>
             </div>
           </div>
+
+          {/* Revenue Trend */}
+          {reportData.revenueTrend && reportData.revenueTrend.length > 0 && (
+            <RevenueChart data={reportData.revenueTrend} title="📈 Revenue Trend" />
+          )}
 
           {/* Items Breakdown Table */}
           <div className="bg-white rounded-xl shadow-card overflow-hidden">
