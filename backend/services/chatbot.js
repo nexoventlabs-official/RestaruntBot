@@ -2547,7 +2547,7 @@ const chatbot = {
     }
     
     let msg = `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n\n`;
-    msg += `${ratingDisplay}\n`;
+    msg += `${ratingDisplay}\n\n`;
     msg += `💰 *Price:* ₹${item.price} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
     msg += `⏱️ *Prep Time:* ${item.preparationTime || 15} mins\n`;
     if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
@@ -2583,7 +2583,7 @@ const chatbot = {
     }
     
     let msg = `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n\n`;
-    msg += `${ratingDisplay}\n`;
+    msg += `${ratingDisplay}\n\n`;
     msg += `💰 *Price:* ₹${item.price} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
     msg += `⏱️ *Prep Time:* ${item.preparationTime || 15} mins\n`;
     if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
