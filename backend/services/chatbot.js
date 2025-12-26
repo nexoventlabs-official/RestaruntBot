@@ -13,33 +13,62 @@ const generateOrderId = () => 'ORD' + Date.now().toString(36).toUpperCase();
 const chatbot = {
   // Helper to detect cancel order intent from text/voice
   // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
+  // Enhanced with voice recognition alternatives
   isCancelIntent(text) {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     const cancelPatterns = [
-      // English
-      /\bcancel\b/, /\bcancel order\b/, /\bcancel my order\b/, /\bcancel item\b/,
+      // ========== ENGLISH - Primary patterns ==========
+      /\bcancel\b/, /\bcancel order\b/, /\bcancel my order\b/, /\bcancel the order\b/, /\bcancel item\b/,
       /\bremove order\b/, /\bstop order\b/, /\bdon'?t want\b/, /\bdont want\b/, /\bno need\b/,
-      // Hindi
+      /\bcancel it\b/, /\bcancel this\b/, /\bcancel that\b/, /\bplease cancel\b/,
+      /\bi want to cancel\b/, /\bi want cancel\b/, /\bwant to cancel\b/, /\bwant cancel\b/,
+      /\bneed to cancel\b/, /\bhave to cancel\b/, /\bcan you cancel\b/, /\bcould you cancel\b/,
+      /\bcancel please\b/, /\bcancel pls\b/, /\bcancel plz\b/,
+      // Voice recognition alternatives for "cancel"
+      /\bkansil\b/, /\bkancel\b/, /\bcancil\b/, /\bcancal\b/, /\bcansal\b/, /\bcansil\b/,
+      /\bkensel\b/, /\bkencel\b/, /\bcancel\b/, /\bcancell\b/,
+      // "cancel my order" voice alternatives
+      /\bcancel my\b/, /\bkansil my\b/, /\bcansal my\b/, /\bcancil my\b/,
+      /\bcancel mai\b/, /\bcancel meri\b/, /\bcancel mera\b/,
+      // ========== HINDI ==========
       /\bcancel karo\b/, /\bcancel kar do\b/, /\border cancel\b/, /\bcancel करो\b/,
       /\bऑर्डर कैंसल\b/, /\bकैंसल\b/, /\bरद्द करो\b/, /\bरद्द कर दो\b/,
-      // Telugu
+      /\bcancel karna hai\b/, /\bcancel karna\b/, /\bcancel chahiye\b/,
+      /\border cancel karo\b/, /\border cancel kar do\b/, /\bmera order cancel\b/,
+      /\bcancel kar dijiye\b/, /\bcancel karwa do\b/, /\bcancel karwao\b/,
+      /\bband karo\b/, /\bband kar do\b/, /\border band karo\b/,
+      // ========== TELUGU ==========
       /\bcancel cheyyi\b/, /\bcancel cheyyandi\b/, /\border cancel cheyyi\b/,
       /\bక్యాన్సల్\b/, /\bఆర్డర్ క్యాన్సల్\b/, /\bరద్దు చేయండి\b/, /\bరద్దు\b/,
-      // Tamil
+      /\bcancel chey\b/, /\bcancel chesko\b/, /\bcancel cheyali\b/,
+      /\bnaa order cancel\b/, /\border cancel cheyyandi\b/,
+      // ========== TAMIL ==========
       /\bcancel pannunga\b/, /\bcancel pannu\b/, /\border cancel\b/,
       /\bகேன்சல்\b/, /\bஆர்டர் கேன்சல்\b/, /\bரத்து செய்\b/, /\bரத்து\b/,
-      // Kannada
+      /\bcancel panna\b/, /\bcancel pannanum\b/, /\bcancel pannunga\b/,
+      /\ben order cancel\b/, /\border cancel pannunga\b/,
+      // ========== KANNADA ==========
       /\bcancel maadi\b/, /\border cancel maadi\b/,
       /\bಕ್ಯಾನ್ಸಲ್\b/, /\bಆರ್ಡರ್ ಕ್ಯಾನ್ಸಲ್\b/, /\bರದ್ದು\b/,
-      // Malayalam
+      /\bcancel madu\b/, /\bcancel madbeku\b/, /\bnanna order cancel\b/,
+      // ========== MALAYALAM ==========
       /\bcancel cheyyuka\b/, /\bക്യാൻസൽ\b/, /\bഓർഡർ ക്യാൻസൽ\b/, /\bറദ്ദാക്കുക\b/,
-      // Bengali
+      /\bcancel cheyyu\b/, /\bcancel cheyyane\b/, /\bente order cancel\b/,
+      // ========== BENGALI ==========
       /\bcancel koro\b/, /\bক্যান্সেল\b/, /\bঅর্ডার ক্যান্সেল\b/, /\bবাতিল করো\b/,
-      // Marathi
+      /\bcancel kore dao\b/, /\bcancel korte chai\b/, /\bamar order cancel\b/,
+      // ========== MARATHI ==========
       /\bcancel kara\b/, /\bकॅन्सल करा\b/, /\bऑर्डर कॅन्सल\b/, /\bरद्द करा\b/,
-      // Gujarati
-      /\bcancel karo\b/, /\bકેન્સલ\b/, /\bઓર્ડર કેન્સલ\b/, /\bરદ કરો\b/
+      /\bcancel karaycha\b/, /\bcancel karun dya\b/, /\bmaza order cancel\b/,
+      // ========== GUJARATI ==========
+      /\bcancel karo\b/, /\bકેન્સલ\b/, /\bઓર્ડર કેન્સલ\b/, /\bરદ કરો\b/,
+      /\bcancel karvu\b/, /\bcancel kari do\b/, /\bmaru order cancel\b/,
+      // ========== MIXED PATTERNS ==========
+      /\bcancel krdo\b/, /\bcancel krna\b/, /\bcancel krne\b/,
+      /\border ko cancel\b/, /\border cancel krdo\b/, /\border cancel krna\b/,
+      /\bplz cancel\b/, /\bpls cancel\b/, /\bplease cancel order\b/,
+      /\bi dont want order\b/, /\bi don't want order\b/, /\bi dont want this order\b/
     ];
     return cancelPatterns.some(pattern => pattern.test(lowerText));
   },
@@ -80,6 +109,12 @@ const chatbot = {
   isCartIntent(text) {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
+    
+    // IMPORTANT: First check if this is a cancel/refund intent - those take priority
+    if (this.isCancelIntent(text) || this.isRefundIntent(text)) {
+      return false;
+    }
+    
     const cartPatterns = [
       // ========== ENGLISH - ALL VOICE MISTAKES ==========
       // Cart variations (cart, card, cut, kart, cot, caught, cat, court)
@@ -91,11 +126,10 @@ const chatbot = {
       /\bmy caught\b/, /\bview caught\b/, /\bshow caught\b/, /\bsee caught\b/,
       /\bmy cat\b/, /\bview cat\b/, /\bshow cat\b/, /\bsee cat\b/,
       /\bmy court\b/, /\bview court\b/, /\bshow court\b/, /\bsee court\b/,
-      // Items variations
+      // Items variations (but NOT "cancel my order" type patterns)
       /\bmy items\b/, /\bshow items\b/, /\bview items\b/, /\bsee items\b/, /\bcheck items\b/,
       /\bshow my items\b/, /\bview my items\b/, /\bsee my items\b/, /\bcheck my items\b/,
-      /\bmy order items\b/, /\bshow order\b/, /\bview order\b/, /\bmy order\b/,
-      /\bshow my order\b/, /\bview my order\b/, /\bsee my order\b/,
+      /\bmy order items\b/,
       // Basket variations
       /\bmy basket\b/, /\bshow basket\b/, /\bview basket\b/, /\bsee basket\b/,
       // What's in cart
