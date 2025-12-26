@@ -2379,11 +2379,14 @@ const chatbot = {
     const pageItems = items.slice(startIdx, startIdx + ITEMS_PER_PAGE);
 
     // Build rows for the list
-    const rows = pageItems.map(item => ({
-      rowId: `view_${item._id}`,
-      title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
-      description: `₹${item.price} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
-    }));
+    const rows = pageItems.map(item => {
+      const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
+      return {
+        rowId: `view_${item._id}`,
+        title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
+        description: `${ratingStr} • ₹${item.price} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
+      };
+    });
 
     // Only items in the list, no navigation rows
     const sections = [{ title: `${category} (${items.length} items)`, rows }];
@@ -2425,11 +2428,14 @@ const chatbot = {
     const pageItems = menuItems.slice(startIdx, startIdx + ITEMS_PER_PAGE);
 
     // Build rows for the list
-    const rows = pageItems.map(item => ({
-      rowId: `view_${item._id}`,
-      title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
-      description: `₹${item.price} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
-    }));
+    const rows = pageItems.map(item => {
+      const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
+      return {
+        rowId: `view_${item._id}`,
+        title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
+        description: `${ratingStr} • ₹${item.price} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
+      };
+    });
 
     const sections = [{ title: `All Items (${menuItems.length})`, rows }];
 
@@ -2469,11 +2475,14 @@ const chatbot = {
     const pageItems = items.slice(startIdx, startIdx + ITEMS_PER_PAGE);
 
     // Build rows for the list - use view_ prefix so user can see details first
-    const rows = pageItems.map(item => ({
-      rowId: `view_${item._id}`,
-      title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
-      description: `₹${item.price} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
-    }));
+    const rows = pageItems.map(item => {
+      const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
+      return {
+        rowId: `view_${item._id}`,
+        title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
+        description: `${ratingStr} • ₹${item.price} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
+      };
+    });
 
     const sections = [{ title: `"${tagKeyword}" Items (${items.length})`, rows }];
 
@@ -2703,11 +2712,14 @@ const chatbot = {
     const pageItems = items.slice(startIdx, startIdx + ITEMS_PER_PAGE);
 
     // Build rows for the list
-    const rows = pageItems.map(item => ({
-      rowId: `add_${item._id}`,
-      title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
-      description: `₹${item.price} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
-    }));
+    const rows = pageItems.map(item => {
+      const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
+      return {
+        rowId: `add_${item._id}`,
+        title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
+        description: `${ratingStr} • ₹${item.price} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
+      };
+    });
 
     const sections = [{ title: `${category} (${items.length} items)`, rows }];
 
@@ -2748,11 +2760,14 @@ const chatbot = {
     const pageItems = menuItems.slice(startIdx, startIdx + ITEMS_PER_PAGE);
 
     // Build rows for the list
-    const rows = pageItems.map(item => ({
-      rowId: `add_${item._id}`,
-      title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
-      description: `₹${item.price} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
-    }));
+    const rows = pageItems.map(item => {
+      const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
+      return {
+        rowId: `add_${item._id}`,
+        title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
+        description: `${ratingStr} • ₹${item.price} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
+      };
+    });
 
     const sections = [{ title: `All Items (${menuItems.length})`, rows }];
 
