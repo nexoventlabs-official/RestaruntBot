@@ -487,46 +487,55 @@ const chatbot = {
   },
 
   // Helper to detect website order format
-  // Detects: "Hi! I'd like to order: ◆ ItemName ◆ Price: ₹XXX"
+  // Detects messages from website with item name and price
   // Returns: { itemName: string, price: number } or null
   isWebsiteOrderIntent(text) {
     if (!text || typeof text !== 'string') return null;
     
-    // Check if this looks like a website order message
     const lowerText = text.toLowerCase();
-    if (!lowerText.includes("i'd like to order") && !lowerText.includes("i like to order") && !lowerText.includes("like to order")) {
+    
+    // Must contain order-related phrases or website format markers
+    const hasOrderPhrase = lowerText.includes('like to order') || 
+                          lowerText.includes('want to order') ||
+                          lowerText.includes("i'd like to order");
+    const hasWebsiteFormat = text.includes('◆') || (lowerText.includes('price') && text.includes('₹'));
+    
+    if (!hasOrderPhrase && !hasWebsiteFormat) {
       return null;
     }
     
-    console.log('🔍 Checking website order intent for:', text);
-    
-    // Extract item name between ◆ symbols or after order:
-    // Format: "Hi! I'd like to order:\n\n◆ Gongura Chicken\n◆ Price: ₹267"
-    
-    // Try to find item name between first ◆ and second ◆ or "Price"
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    console.log('🔍 Website order check - message:', text);
     
     let itemName = null;
     let price = null;
     
+    // Method 1: Parse line by line for ◆ format
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    console.log('📝 Lines:', lines);
+    
     for (const line of lines) {
-      // Check for item name line (starts with ◆ but not Price)
+      // Item name line: starts with ◆ but NOT price
       if (line.startsWith('◆') && !line.toLowerCase().includes('price')) {
         itemName = line.replace(/^◆\s*/, '').replace(/\*+/g, '').trim();
+        console.log('📌 Found item line:', itemName);
       }
-      // Check for price line
+      // Price line
       if (line.toLowerCase().includes('price') && line.includes('₹')) {
         const priceMatch = line.match(/₹\s*(\d+)/);
         if (priceMatch) price = parseInt(priceMatch[1]);
       }
     }
     
-    // Fallback: try regex patterns
-    if (!itemName) {
-      // Pattern: "order:" followed by item name
-      const match = text.match(/order[:\s]*\n*[◆\*]?\s*([^◆\*₹\n]+?)(?:\s*[◆\*]|\s*price|\s*₹|\n|$)/i);
-      if (match && match[1]) {
-        itemName = match[1].trim();
+    // Method 2: If no ◆ found, try to extract from "order:" pattern
+    if (!itemName && hasOrderPhrase) {
+      // Look for text after "order:" and before "price" or newline
+      const orderMatch = text.match(/order[:\s]*\n*([^◆₹\n]+?)(?:\n|price|₹|$)/i);
+      if (orderMatch && orderMatch[1]) {
+        const extracted = orderMatch[1].trim().replace(/\*+/g, '').replace(/^[◆\s]+|[◆\s]+$/g, '');
+        if (extracted.length > 1 && !extracted.toLowerCase().includes('please')) {
+          itemName = extracted;
+          console.log('📌 Extracted from order pattern:', itemName);
+        }
       }
     }
     
@@ -535,6 +544,7 @@ const chatbot = {
       return { itemName, price };
     }
     
+    console.log('❌ Could not extract item name from website order');
     return null;
   },
 
