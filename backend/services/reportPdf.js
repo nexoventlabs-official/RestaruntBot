@@ -377,27 +377,16 @@ const generateReportPdf = async (reportData, reportType) => {
         y = drawPremiumTable('All Items Sold', '📦', reportData.allItemsSold, y, reportData.allItemsSold, true);
       }
 
-      // ============ FOOTER ============
-      const addFooter = () => {
-        // Footer line
-        doc.moveTo(40, pageHeight - 45).lineTo(pageWidth - 40, pageHeight - 45).stroke(colors.border);
-        
-        // Footer text
-        doc.fillColor(colors.lightGray).fontSize(8).font('Helvetica')
-          .text('This is a computer-generated report. No signature required.', 40, pageHeight - 35, { 
-            width: contentWidth, 
-            align: 'center' 
-          });
-        doc.fillColor(colors.primary).fontSize(8).font('Helvetica-Bold')
-          .text('FoodAdmin', 40, pageHeight - 25, { width: contentWidth, align: 'center' });
-      };
-
-      // Add footer to all pages
-      const pages = doc.bufferedPageRange();
-      for (let i = 0; i < pages.count; i++) {
-        doc.switchToPage(i);
-        addFooter();
-      }
+      // ============ FOOTER ON CURRENT PAGE ============
+      // Footer line
+      doc.moveTo(40, pageHeight - 45).lineTo(pageWidth - 40, pageHeight - 45).stroke(colors.border);
+      
+      // Footer text
+      doc.fillColor(colors.lightGray).fontSize(8).font('Helvetica')
+        .text('This is a computer-generated report. No signature required.', 40, pageHeight - 35, { 
+          width: contentWidth, 
+          align: 'center' 
+        });
 
       doc.end();
     } catch (error) {
