@@ -527,12 +527,18 @@ const chatbot = {
       }
       
       // This line might be the item name - clean it up
-      // Remove all diamond/bullet symbols: ◆ ◇ ♦ ● ○ • ◉ ◎
-      let cleanedLine = line.replace(/[◆◇♦●○•◉◎]/g, '').trim();
-      // Remove asterisks
-      cleanedLine = cleanedLine.replace(/\*+/g, '').trim();
-      // Remove leading/trailing special chars
-      cleanedLine = cleanedLine.replace(/^[\s\-:]+|[\s\-:]+$/g, '').trim();
+      // Remove ALL non-alphanumeric characters from start, keep the rest
+      // This handles any unicode symbols like ◆ ◇ ♦ ● etc
+      let cleanedLine = line;
+      
+      // Remove any character that's not a letter, number, or space from the beginning
+      cleanedLine = cleanedLine.replace(/^[^\w\s]+/g, '').trim();
+      // Also remove from end
+      cleanedLine = cleanedLine.replace(/[^\w\s]+$/g, '').trim();
+      // Remove asterisks anywhere
+      cleanedLine = cleanedLine.replace(/\*/g, '').trim();
+      
+      console.log('🔄 Cleaned line:', `"${line}" -> "${cleanedLine}"`);
       
       if (cleanedLine.length > 1) {
         itemName = cleanedLine;
