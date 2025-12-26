@@ -498,7 +498,7 @@ const chatbot = {
     const hasOrderPhrase = lowerText.includes('like to order') || 
                           lowerText.includes('want to order') ||
                           lowerText.includes("i'd like to order");
-    const hasWebsiteFormat = text.includes('◆') || (lowerText.includes('price') && text.includes('₹'));
+    const hasWebsiteFormat = lowerText.includes('price') && text.includes('₹');
     
     if (!hasOrderPhrase && !hasWebsiteFormat) {
       return null;
@@ -509,35 +509,41 @@ const chatbot = {
     let itemName = null;
     let price = null;
     
-    // Method 1: Parse line by line for ◆ format
+    // Method 1: Parse line by line
     const lines = text.split('\n').map(l => l.trim()).filter(l => l);
     console.log('📝 Lines:', lines);
     
     for (const line of lines) {
-      // Item name line: starts with ◆ but NOT price
-      if (line.startsWith('◆') && !line.toLowerCase().includes('price')) {
-        itemName = line.replace(/^◆\s*/, '').replace(/\*+/g, '').trim();
-        console.log('📌 Found item line:', itemName);
+      const lowerLine = line.toLowerCase();
+      
+      // Skip lines that contain "price", "hi", "please", "confirm", "availability"
+      if (lowerLine.includes('price') || 
+          lowerLine.includes('hi!') || 
+          lowerLine.includes('please') || 
+          lowerLine.includes('confirm') ||
+          lowerLine.includes('availability') ||
+          lowerLine.includes('order')) {
+        continue;
       }
-      // Price line
-      if (line.toLowerCase().includes('price') && line.includes('₹')) {
-        const priceMatch = line.match(/₹\s*(\d+)/);
-        if (priceMatch) price = parseInt(priceMatch[1]);
+      
+      // This line might be the item name - clean it up
+      // Remove all diamond/bullet symbols: ◆ ◇ ♦ ● ○ • ◉ ◎
+      let cleanedLine = line.replace(/[◆◇♦●○•◉◎]/g, '').trim();
+      // Remove asterisks
+      cleanedLine = cleanedLine.replace(/\*+/g, '').trim();
+      // Remove leading/trailing special chars
+      cleanedLine = cleanedLine.replace(/^[\s\-:]+|[\s\-:]+$/g, '').trim();
+      
+      if (cleanedLine.length > 1) {
+        itemName = cleanedLine;
+        console.log('📌 Found item name:', itemName);
+        break; // Take the first valid line as item name
       }
     }
     
-    // Method 2: If no ◆ found, try to extract from "order:" pattern
-    if (!itemName && hasOrderPhrase) {
-      // Look for text after "order:" and before "price" or newline
-      const orderMatch = text.match(/order[:\s]*\n*([^◆₹\n]+?)(?:\n|price|₹|$)/i);
-      if (orderMatch && orderMatch[1]) {
-        const extracted = orderMatch[1].trim().replace(/\*+/g, '').replace(/^[◆\s]+|[◆\s]+$/g, '');
-        if (extracted.length > 1 && !extracted.toLowerCase().includes('please')) {
-          itemName = extracted;
-          console.log('📌 Extracted from order pattern:', itemName);
-        }
-      }
-    }
+    // Extract price
+    const priceMatch = text.match(/₹\s*(\d+)/);
+    if (priceMatch) price = parseInt(priceMatch[1]);
     
     if (itemName && itemName.length > 1) {
       console.log('✅ Website order extracted:', { itemName, price });
