@@ -10,27 +10,8 @@ const REPORT_TYPE_LABELS = {
   custom: 'Custom Range Report'
 };
 
-// Premium color palette
-const colors = {
-  primary: '#6366f1',      // Indigo
-  primaryDark: '#4f46e5',
-  primaryLight: '#a5b4fc',
-  secondary: '#0ea5e9',    // Sky blue
-  success: '#10b981',      // Emerald
-  warning: '#f59e0b',      // Amber
-  danger: '#ef4444',       // Red
-  purple: '#8b5cf6',       // Purple
-  dark: '#1e293b',         // Slate 800
-  darkGray: '#475569',     // Slate 600
-  gray: '#64748b',         // Slate 500
-  lightGray: '#94a3b8',    // Slate 400
-  border: '#e2e8f0',       // Slate 200
-  background: '#f8fafc',   // Slate 50
-  white: '#ffffff'
-};
-
-// Format currency for PDF
-const formatCurrency = (val) => `Rs. ${(val || 0).toLocaleString('en-IN')}`;
+// Format currency for PDF (using Rs. since Helvetica doesn't support ₹)
+const formatCurrency = (val) => `Rs.${(val || 0).toLocaleString('en-IN')}`;
 
 // Fetch image from URL and return as buffer
 const fetchImageBuffer = (url) => {
@@ -41,7 +22,7 @@ const fetchImageBuffer = (url) => {
     }
     
     const protocol = url.startsWith('https') ? https : http;
-    const timeout = setTimeout(() => resolve(null), 5000);
+    const timeout = setTimeout(() => resolve(null), 5000); // 5s timeout
     
     protocol.get(url, (res) => {
       if (res.statusCode !== 200) {
@@ -83,6 +64,7 @@ const prefetchImages = async (items) => {
 };
 
 const generateReportPdf = async (reportData, reportType) => {
+  // Pre-fetch images for all items
   const allItems = [
     ...(reportData.topSellingItems || []),
     ...(reportData.leastSellingItems || []),
@@ -92,301 +74,233 @@ const generateReportPdf = async (reportData, reportType) => {
 
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ margin: 40, size: 'A4' });
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
       const chunks = [];
-      const pageWidth = doc.page.width;
-      const pageHeight = doc.page.height;
-      const contentWidth = pageWidth - 80;
 
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Helper: Draw rounded rectangle
-      const drawRoundedRect = (x, y, w, h, r, fillColor, strokeColor = null) => {
-        doc.roundedRect(x, y, w, h, r);
-        if (strokeColor) {
-          doc.fillAndStroke(fillColor, strokeColor);
-        } else {
-          doc.fill(fillColor);
-        }
-      };
+      const primaryColor = '#e63946';
+      const darkColor = '#1c1d21';
+      const grayColor = '#61636b';
+      const rowHeight = 35; // Increased row height for images
+      const imgSize = 25; // Image size
 
-      // Helper: Draw stat card
-      const drawStatCard = (x, y, width, height, label, value, accentColor) => {
-        // Card background
-        drawRoundedRect(x, y, width, height, 8, colors.white);
-        // Left accent bar
-        doc.roundedRect(x, y, 4, height, 2).fill(accentColor);
-        // Value
-        doc.fillColor(colors.dark).fontSize(18).font('Helvetica-Bold')
-          .text(value, x + 15, y + 15, { width: width - 25 });
-        // Label
-        doc.fillColor(colors.gray).fontSize(9).font('Helvetica')
-          .text(label, x + 15, y + 38, { width: width - 25 });
-      };
-
-      // Helper: Draw mini stat
-      const drawMiniStat = (x, y, width, label, value, color) => {
-        drawRoundedRect(x, y, width, 50, 6, colors.white);
-        doc.fillColor(color).fontSize(20).font('Helvetica-Bold')
-          .text(String(value), x + 12, y + 10, { width: width - 24 });
-        doc.fillColor(colors.darkGray).fontSize(8).font('Helvetica')
-          .text(label, x + 12, y + 32, { width: width - 24 });
-      };
-
-      // ============ HEADER SECTION ============
-      // Gradient-like header background
-      doc.rect(0, 0, pageWidth, 140).fill(colors.primary);
-      doc.rect(0, 100, pageWidth, 40).fill(colors.primaryDark);
+      // Header
+      doc.rect(0, 0, doc.page.width, 120).fill(primaryColor);
+      doc.fillColor('white').fontSize(28).font('Helvetica-Bold')
+        .text('FoodAdmin', 50, 40);
+      doc.fontSize(12).font('Helvetica')
+        .text('Restaurant Management System', 50, 75);
       
-      // Decorative circles
-      doc.circle(pageWidth - 60, 30, 80).fill(colors.primaryLight).opacity(0.1);
-      doc.circle(pageWidth - 20, 80, 50).fill(colors.primaryLight).opacity(0.1);
-      doc.opacity(1);
-
-      // Logo/Brand
-      doc.fillColor(colors.white).fontSize(26).font('Helvetica-Bold')
-        .text('FoodAdmin', 40, 35);
-      doc.fillColor(colors.primaryLight).fontSize(10).font('Helvetica')
-        .text('Restaurant Management System', 40, 65);
-
-      // Report title with date range
+      // Generate report title with date range
       const formatDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-      let reportTitle = REPORT_TYPE_LABELS[reportType] || 'Report';
-      let dateSubtitle = '';
+      let reportTitle = 'Report';
       
       if (reportData.dateRange) {
         const fromDate = formatDate(reportData.dateRange.start);
         const toDate = formatDate(reportData.dateRange.end);
-        dateSubtitle = reportType === 'today' ? fromDate : `${fromDate} - ${toDate}`;
+        
+        switch (reportType) {
+          case 'today':
+            reportTitle = `Today's Report (${fromDate})`;
+            break;
+          case 'weekly':
+            reportTitle = `Weekly Report (${fromDate} - ${toDate})`;
+            break;
+          case 'monthly':
+            reportTitle = `Monthly Report (${fromDate} - ${toDate})`;
+            break;
+          case 'yearly':
+            reportTitle = `Annual Report (${fromDate} - ${toDate})`;
+            break;
+          case 'custom':
+            reportTitle = `${fromDate} - ${toDate}`;
+            break;
+          default:
+            reportTitle = REPORT_TYPE_LABELS[reportType] || 'Report';
+        }
+      } else {
+        reportTitle = REPORT_TYPE_LABELS[reportType] || 'Report';
       }
+      
+      doc.fontSize(14).font('Helvetica-Bold')
+        .text(reportTitle, 50, 95);
 
-      // Report badge
-      drawRoundedRect(40, 105, 180, 26, 13, colors.white);
-      doc.fillColor(colors.primary).fontSize(11).font('Helvetica-Bold')
-        .text(reportTitle, 55, 111);
-
-      // Generated date (right side)
+      // Date info
       const dateStr = new Date().toLocaleDateString('en-IN', { 
-        day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        day: '2-digit', month: 'long', year: 'numeric' 
       });
-      doc.fillColor(colors.primaryLight).fontSize(9).font('Helvetica')
-        .text(`Generated: ${dateStr}`, pageWidth - 200, 45, { width: 160, align: 'right' });
-      if (dateSubtitle) {
-        doc.fillColor(colors.white).fontSize(10).font('Helvetica-Bold')
-          .text(dateSubtitle, pageWidth - 200, 60, { width: 160, align: 'right' });
-      }
+      doc.fontSize(10).font('Helvetica').fillColor('white')
+        .text(`Generated: ${dateStr}`, doc.page.width - 200, 50, { width: 150, align: 'right' });
 
-      let y = 160;
+      let y = 150;
 
-      // ============ SUMMARY SECTION ============
-      doc.fillColor(colors.dark).fontSize(14).font('Helvetica-Bold')
-        .text('Revenue Overview', 40, y);
-      y += 25;
+      // Summary Section
+      doc.fillColor(darkColor).fontSize(16).font('Helvetica-Bold')
+        .text('Summary', 50, y);
+      y += 30;
 
-      // Summary cards - 4 columns
-      const cardWidth = (contentWidth - 30) / 4;
+      // Summary boxes
       const summaryData = [
-        { label: 'Total Revenue', value: formatCurrency(reportData.totalRevenue), color: colors.success },
-        { label: 'Total Orders', value: String(reportData.totalOrders || 0), color: colors.secondary },
-        { label: 'Items Sold', value: String(reportData.totalItemsSold || 0), color: colors.purple },
-        { label: 'Avg Order Value', value: formatCurrency(reportData.avgOrderValue), color: colors.primary }
+        { label: 'Total Revenue', value: formatCurrency(reportData.totalRevenue) },
+        { label: 'Total Orders', value: String(reportData.totalOrders || 0) },
+        { label: 'Items Sold', value: String(reportData.totalItemsSold || 0) },
+        { label: 'Avg Order Value', value: formatCurrency(reportData.avgOrderValue) }
       ];
 
+      const boxWidth = 120;
       summaryData.forEach((item, i) => {
-        drawStatCard(40 + (i * (cardWidth + 10)), y, cardWidth, 55, item.label, item.value, item.color);
+        const x = 50 + (i * (boxWidth + 15));
+        doc.rect(x, y, boxWidth, 60).fillAndStroke('#f8f9fb', '#e2e3e5');
+        doc.fillColor(grayColor).fontSize(9).font('Helvetica')
+          .text(item.label, x + 10, y + 10, { width: boxWidth - 20 });
+        doc.fillColor(darkColor).fontSize(16).font('Helvetica-Bold')
+          .text(item.value, x + 10, y + 30, { width: boxWidth - 20 });
       });
-      y += 75;
+      y += 80;
 
-      // ============ ORDER STATUS SECTION ============
-      doc.fillColor(colors.dark).fontSize(14).font('Helvetica-Bold')
-        .text('Order Statistics', 40, y);
+      // Order Status Section
+      doc.fillColor(darkColor).fontSize(14).font('Helvetica-Bold')
+        .text('Order Status Breakdown', 50, y);
       y += 25;
 
-      // Status cards - 5 columns
-      const miniWidth = (contentWidth - 40) / 5;
       const statusData = [
-        { label: 'Delivered', value: reportData.deliveredOrders || 0, color: colors.success },
-        { label: 'Cancelled', value: reportData.cancelledOrders || 0, color: colors.danger },
-        { label: 'Refunded', value: reportData.refundedOrders || 0, color: colors.warning },
-        { label: 'COD Orders', value: reportData.codOrders || 0, color: colors.secondary },
-        { label: 'UPI Orders', value: reportData.upiOrders || 0, color: colors.purple }
+        { label: 'Delivered', value: reportData.deliveredOrders || 0, color: '#22c55e' },
+        { label: 'Cancelled', value: reportData.cancelledOrders || 0, color: '#ef4444' },
+        { label: 'Refunded', value: reportData.refundedOrders || 0, color: '#f97316' },
+        { label: 'COD Orders', value: reportData.codOrders || 0, color: '#3b82f6' },
+        { label: 'UPI Orders', value: reportData.upiOrders || 0, color: '#8b5cf6' }
       ];
 
       statusData.forEach((item, i) => {
-        drawMiniStat(40 + (i * (miniWidth + 10)), y, miniWidth, item.label, item.value, item.color);
+        const x = 50 + (i * 100);
+        doc.fillColor(item.color).fontSize(18).font('Helvetica-Bold')
+          .text(String(item.value), x, y);
+        doc.fillColor(grayColor).fontSize(9).font('Helvetica')
+          .text(item.label, x, y + 20);
       });
-      y += 70;
+      y += 55;
 
-      // ============ HELPER: Interest Level ============
+      // Helper function to calculate interest level
       const getInterestLevel = (quantity, allItems) => {
         if (!allItems || allItems.length === 0) return 'low';
         const quantities = allItems.map(i => i.quantity || 0);
         const avgQty = quantities.reduce((a, b) => a + b, 0) / quantities.length;
+        
         if (quantity >= avgQty * 1.5) return 'high';
         if (quantity >= avgQty * 0.5) return 'constant';
         return 'low';
       };
 
-      // ============ HELPER: Draw Premium Table ============
-      const drawPremiumTable = (title, emoji, items, startY, allItems, showAll = false) => {
+      // Helper function to draw item table with images, ratings and interest
+      const drawItemTable = (title, items, startY, allItems, showAll = false) => {
         let currentY = startY;
-        const imgSize = 28;
-        const rowHeight = 38;
         
-        if (currentY > 620) {
+        // Check if we need a new page
+        if (currentY > 650) {
           doc.addPage();
           currentY = 50;
         }
-
-        // Section header with emoji
-        doc.fillColor(colors.dark).fontSize(13).font('Helvetica-Bold')
-          .text(`${emoji}  ${title}`, 40, currentY);
-        currentY += 25;
-
-        // Table container
-        const tableWidth = contentWidth;
-        const colWidths = [35, 40, 130, 55, 60, 45, 70]; // S.No, Image, Name, Rating, Interest, Qty, Revenue
         
-        // Table header background
-        drawRoundedRect(40, currentY, tableWidth, 28, 6, colors.primary);
-        
-        // Header text
-        doc.fillColor(colors.white).fontSize(8).font('Helvetica-Bold');
-        let colX = 48;
-        const headers = ['#', 'Image', 'Item Name', 'Rating', 'Interest', 'Qty', 'Revenue'];
-        headers.forEach((header, i) => {
-          const align = i >= 4 ? 'center' : 'left';
-          doc.text(header, colX, currentY + 9, { width: colWidths[i] - 8, align });
-          colX += colWidths[i];
-        });
-        currentY += 32;
+        doc.fillColor(darkColor).fontSize(14).font('Helvetica-Bold')
+          .text(title, 50, currentY);
+        currentY += 20;
 
-        // Table rows
+        // Table header
+        doc.fillColor(grayColor).fontSize(8).font('Helvetica-Bold');
+        doc.text('S.No', 50, currentY, { width: 25 });
+        doc.text('Image', 75, currentY, { width: 35 });
+        doc.text('Item Name', 115, currentY, { width: 120 });
+        doc.text('Rating', 240, currentY, { width: 45 });
+        doc.text('Interest', 290, currentY, { width: 50 });
+        doc.text('Qty', 345, currentY, { width: 35 });
+        doc.text('Revenue', 385, currentY, { width: 65 });
+        currentY += 15;
+        doc.moveTo(50, currentY).lineTo(450, currentY).stroke('#e2e3e5');
+        currentY += 5;
+
         const itemsToShow = showAll ? items : items.slice(0, 5);
-        
+        doc.font('Helvetica').fontSize(8);
         itemsToShow.forEach((item, idx) => {
+          // Check if we need a new page
           if (currentY > 720) {
             doc.addPage();
             currentY = 50;
           }
-
-          // Alternating row background
-          const rowBg = idx % 2 === 0 ? colors.white : colors.background;
-          const isLast = idx === itemsToShow.length - 1;
           
-          if (isLast) {
-            drawRoundedRect(40, currentY, tableWidth, rowHeight, 6, rowBg);
-          } else {
-            doc.rect(40, currentY, tableWidth, rowHeight).fill(rowBg);
-          }
-
-          colX = 48;
-          const textY = currentY + (rowHeight - 10) / 2;
-
-          // S.No
-          doc.fillColor(colors.darkGray).fontSize(9).font('Helvetica-Bold')
-            .text(String(idx + 1), colX, textY, { width: colWidths[0] - 8 });
-          colX += colWidths[0];
-
-          // Image
+          const rowY = currentY;
+          
+          // Draw image if available - use cover to ensure consistent size
           const imgBuffer = imageMap[item.name];
-          const imgY = currentY + (rowHeight - imgSize) / 2;
-          drawRoundedRect(colX, imgY, imgSize, imgSize, 4, colors.border);
+          // Draw background/border for image cell first
+          doc.rect(75, rowY, imgSize, imgSize).fillAndStroke('#f8f8f8', '#e0e0e0');
           
           if (imgBuffer) {
             try {
+              // Save graphics state, clip to square, draw image with cover
               doc.save();
-              doc.roundedRect(colX, imgY, imgSize, imgSize, 4).clip();
-              doc.image(imgBuffer, colX, imgY, { cover: [imgSize, imgSize], align: 'center', valign: 'center' });
+              doc.rect(75, rowY, imgSize, imgSize).clip();
+              doc.image(imgBuffer, 75, rowY, { cover: [imgSize, imgSize], align: 'center', valign: 'center' });
               doc.restore();
-            } catch (e) {}
+            } catch (e) {
+              // Placeholder already drawn above
+            }
           }
-          colX += colWidths[1];
-
-          // Item Name
-          doc.fillColor(colors.dark).fontSize(9).font('Helvetica')
-            .text(item.name || '-', colX, textY, { width: colWidths[2] - 8, lineBreak: false });
-          colX += colWidths[2];
-
-          // Rating
+          
+          // Draw text (vertically centered with image)
+          const textY = rowY + (imgSize - 8) / 2;
+          doc.fillColor(darkColor).text(String(idx + 1), 50, textY, { width: 25 });
+          doc.text(item.name || '-', 115, textY, { width: 120 });
+          
+          // Rating column
           if (item.totalRatings > 0) {
-            doc.fillColor(colors.warning).fontSize(9).font('Helvetica-Bold')
-              .text(`★ ${(item.avgRating || 0).toFixed(1)}`, colX, textY, { width: colWidths[3] - 8 });
+            doc.fillColor('#f59e0b').text(`${(item.avgRating || 0).toFixed(1)}`, 240, textY, { width: 20 });
+            doc.fillColor(grayColor).text(`(${item.totalRatings})`, 260, textY, { width: 25 });
           } else {
-            doc.fillColor(colors.lightGray).fontSize(9).font('Helvetica')
-              .text('No rating', colX, textY, { width: colWidths[3] - 8 });
+            doc.fillColor(grayColor).text('-', 240, textY, { width: 45 });
           }
-          colX += colWidths[3];
-
-          // Interest badge
+          
+          // Interest column with colored indicator
           const interest = getInterestLevel(item.quantity, allItems);
           const interestConfig = {
-            high: { color: colors.success, bg: '#dcfce7', label: '↑ High' },
-            constant: { color: colors.warning, bg: '#fef3c7', label: '→ Stable' },
-            low: { color: colors.danger, bg: '#fee2e2', label: '↓ Low' }
+            high: { color: '#22c55e', label: 'High' },
+            constant: { color: '#eab308', label: 'Stable' },
+            low: { color: '#ef4444', label: 'Low' }
           };
-          const { color: intColor, bg: intBg, label: intLabel } = interestConfig[interest];
+          const { color: interestColor, label: interestLabel } = interestConfig[interest];
+          doc.fillColor(interestColor).text(interestLabel, 290, textY, { width: 50 });
           
-          drawRoundedRect(colX, textY - 3, 48, 16, 8, intBg);
-          doc.fillColor(intColor).fontSize(7).font('Helvetica-Bold')
-            .text(intLabel, colX + 5, textY, { width: 40 });
-          colX += colWidths[4];
-
-          // Quantity
-          doc.fillColor(colors.dark).fontSize(9).font('Helvetica-Bold')
-            .text(String(item.quantity || 0), colX, textY, { width: colWidths[5] - 8, align: 'center' });
-          colX += colWidths[5];
-
-          // Revenue
-          doc.fillColor(colors.success).fontSize(9).font('Helvetica-Bold')
-            .text(formatCurrency(item.revenue), colX, textY, { width: colWidths[6] - 8, align: 'right' });
-
+          doc.fillColor(darkColor).text(String(item.quantity || 0), 345, textY, { width: 35 });
+          doc.text(formatCurrency(item.revenue), 385, textY, { width: 65 });
+          
           currentY += rowHeight;
         });
-
-        // Table border
-        doc.roundedRect(40, startY + 25, tableWidth, currentY - startY - 25, 6).stroke(colors.border);
-
-        return currentY + 20;
+        
+        return currentY + 10;
       };
 
-      // ============ TOP SELLING ITEMS ============
+      // Top Selling Items
       if (reportData.topSellingItems && reportData.topSellingItems.length > 0) {
-        y = drawPremiumTable('Top Selling Items', '🔥', reportData.topSellingItems, y, reportData.allItemsSold || []);
+        y = drawItemTable('Top Selling Items', reportData.topSellingItems, y, reportData.allItemsSold || []);
       }
 
-      // ============ LEAST SELLING ITEMS ============
+      // Least Selling Items
       if (reportData.leastSellingItems && reportData.leastSellingItems.length > 0) {
-        y = drawPremiumTable('Least Selling Items', '📉', reportData.leastSellingItems, y, reportData.allItemsSold || []);
+        y = drawItemTable('Least Selling Items', reportData.leastSellingItems, y, reportData.allItemsSold || []);
       }
 
-      // ============ ALL ITEMS SOLD ============
+      // All Items Sold - show ALL items
       if (reportData.allItemsSold && reportData.allItemsSold.length > 0) {
         doc.addPage();
         y = 50;
-        
-        // Page header for continuation
-        doc.fillColor(colors.primary).fontSize(18).font('Helvetica-Bold')
-          .text('Complete Items Report', 40, y);
-        doc.fillColor(colors.gray).fontSize(10).font('Helvetica')
-          .text(`Total ${reportData.allItemsSold.length} items`, 40, y + 22);
-        y += 50;
-        
-        y = drawPremiumTable('All Items Sold', '📦', reportData.allItemsSold, y, reportData.allItemsSold, true);
+        y = drawItemTable('All Items Sold', reportData.allItemsSold, y, reportData.allItemsSold, true);
       }
 
-      // ============ FOOTER ON CURRENT PAGE ============
-      // Footer line
-      doc.moveTo(40, pageHeight - 45).lineTo(pageWidth - 40, pageHeight - 45).stroke(colors.border);
-      
-      // Footer text
-      doc.fillColor(colors.lightGray).fontSize(8).font('Helvetica')
-        .text('This is a computer-generated report. No signature required.', 40, pageHeight - 35, { 
-          width: contentWidth, 
-          align: 'center' 
-        });
+      // Footer on last page
+      doc.fillColor(grayColor).fontSize(8).font('Helvetica')
+        .text('This is a computer-generated report. No signature required.', 50, doc.page.height - 50, { align: 'center', width: doc.page.width - 100 });
 
       doc.end();
     } catch (error) {
