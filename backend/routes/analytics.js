@@ -59,7 +59,9 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
     const [
       cumulativeStats,
       currentOrders,
+      currentDeliveredOrders,
       todayOrdersFromDb,
+      todayDeliveredOrdersCount,
       currentRevenue,
       todayDeliveredRevenue,
       currentCustomers,
@@ -71,8 +73,10 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
       ordersByStatus
     ] = await Promise.all([
       DashboardStats.findOne().lean(),
-      Order.countDocuments(), // Count ALL orders in database
-      Order.countDocuments({ createdAt: { $gte: today } }),
+      Order.countDocuments(), // Count ALL orders in database (for internal tracking)
+      Order.countDocuments({ status: 'delivered' }), // Count only delivered orders
+      Order.countDocuments({ createdAt: { $gte: today } }), // All orders today
+      Order.countDocuments({ createdAt: { $gte: today }, status: 'delivered' }), // Delivered orders today
       Order.aggregate([{ $match: { paymentStatus: 'paid', status: { $nin: ['cancelled', 'refunded'] }, refundStatus: { $nin: ['completed', 'pending'] } } }, { $group: { _id: null, total: { $sum: '$totalAmount' } } }]),
       // Today's delivered + paid orders (still in DB)
       Order.aggregate([{ 
@@ -97,7 +101,8 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
     const stats = cumulativeStats || { totalOrders: 0, totalRevenue: 0, totalCustomers: 0, todayRevenue: 0, todayOrders: 0, todayDate: '', weeklyHistory: [] };
 
     // Combine cumulative + current stats
-    const totalOrders = stats.totalOrders + currentOrders;
+    // Total Orders = cumulative (from deleted orders) + current delivered orders
+    const totalOrders = stats.totalOrders + currentDeliveredOrders;
     const totalRevenue = stats.totalRevenue + (currentRevenue[0]?.total || 0);
     const totalCustomers = currentCustomers; // Just count customers with hasOrdered: true (they persist)
     
@@ -114,18 +119,18 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
       todayRevenue = stats.todayRevenue || 0;
       todayOrders = stats.todayOrders || 0;
     } else {
-      // New day or stats not initialized - just use current DB value
+      // New day or stats not initialized - just use current DB value (delivered orders only)
       todayRevenue = currentDeliveredRevenue;
-      todayOrders = todayOrdersFromDb;
+      todayOrders = todayDeliveredOrdersCount;
       
       // Initialize today's stats if needed
-      if (currentDeliveredRevenue > 0 || todayOrdersFromDb > 0) {
+      if (currentDeliveredRevenue > 0 || todayDeliveredOrdersCount > 0) {
         DashboardStats.findOneAndUpdate(
           {},
           { 
             todayDate: todayStr, 
             todayRevenue: currentDeliveredRevenue,
-            todayOrders: todayOrdersFromDb,
+            todayOrders: todayDeliveredOrdersCount,
             lastUpdated: new Date()
           },
           { upsert: true }
