@@ -232,18 +232,21 @@ const generateReportPdf = async (reportData, reportType) => {
           
           const rowY = currentY;
           
-          // Draw image if available
+          // Draw image if available - use clipping to ensure exact size
           const imgBuffer = imageMap[item.name];
           if (imgBuffer) {
             try {
-              // Use cover to ensure all images are exactly the same size (cropped to fit)
+              // Save graphics state, clip to exact size, draw image, restore
+              doc.save();
+              doc.rect(75, rowY, imgSize, imgSize).clip();
               doc.image(imgBuffer, 75, rowY, { 
-                width: imgSize, 
-                height: imgSize, 
-                cover: [imgSize, imgSize],
+                fit: [imgSize, imgSize],
                 align: 'center',
                 valign: 'center'
               });
+              doc.restore();
+              // Draw border around image
+              doc.rect(75, rowY, imgSize, imgSize).stroke('#e0e0e0');
             } catch (e) {
               // Draw placeholder if image fails
               doc.rect(75, rowY, imgSize, imgSize).fillAndStroke('#f0f0f0', '#e0e0e0');
