@@ -290,7 +290,7 @@ router.get('/report', authMiddleware, async (req, res) => {
         }
       ]),
       
-      // Item statistics from current orders (with image lookup)
+      // Item statistics from current orders (with image and rating lookup)
       Order.aggregate([
         { $match: { ...dateFilter, status: { $nin: ['cancelled', 'refunded'] } } },
         { $unwind: '$items' },
@@ -319,6 +319,22 @@ router.get('/report', authMiddleware, async (req, res) => {
                 $ifNull: [
                   { $arrayElemAt: ['$menuItemData.image', 0] },
                   { $arrayElemAt: ['$menuItemByName.image', 0] }
+                ]
+              }
+            },
+            avgRating: {
+              $first: {
+                $ifNull: [
+                  { $arrayElemAt: ['$menuItemData.avgRating', 0] },
+                  { $arrayElemAt: ['$menuItemByName.avgRating', 0] }
+                ]
+              }
+            },
+            totalRatings: {
+              $first: {
+                $ifNull: [
+                  { $arrayElemAt: ['$menuItemData.totalRatings', 0] },
+                  { $arrayElemAt: ['$menuItemByName.totalRatings', 0] }
                 ]
               }
             },
@@ -360,8 +376,8 @@ router.get('/report', authMiddleware, async (req, res) => {
       // Historical report data (from deleted orders)
       ReportHistory.find({ date: { $gte: startDateStr, $lte: endDateStr } }).lean(),
       
-      // Get ALL menu items (including unavailable ones)
-      MenuItem.find({}, { name: 1, image: 1, category: 1, price: 1, available: 1 }).lean()
+      // Get ALL menu items (including unavailable ones) with ratings
+      MenuItem.find({}, { name: 1, image: 1, category: 1, price: 1, available: 1, avgRating: 1, totalRatings: 1 }).lean()
     ]);
 
     // Combine current stats with historical data
@@ -418,8 +434,10 @@ router.get('/report', authMiddleware, async (req, res) => {
         combinedItemsMap[item.name].quantity += item.quantity;
         combinedItemsMap[item.name].revenue += item.revenue;
         if (item.image) combinedItemsMap[item.name].image = item.image;
+        if (item.avgRating) combinedItemsMap[item.name].avgRating = item.avgRating;
+        if (item.totalRatings) combinedItemsMap[item.name].totalRatings = item.totalRatings;
       } else {
-        combinedItemsMap[item.name] = { name: item.name, image: item.image, category: item.category, quantity: item.quantity, revenue: item.revenue };
+        combinedItemsMap[item.name] = { name: item.name, image: item.image, category: item.category, quantity: item.quantity, revenue: item.revenue, avgRating: item.avgRating || 0, totalRatings: item.totalRatings || 0 };
       }
     }
     
@@ -432,12 +450,20 @@ router.get('/report', authMiddleware, async (req, res) => {
           image: menuItem.image,
           category: Array.isArray(menuItem.category) ? menuItem.category[0] : menuItem.category,
           quantity: 0,
-          revenue: 0
+          revenue: 0,
+          avgRating: menuItem.avgRating || 0,
+          totalRatings: menuItem.totalRatings || 0
         };
       } else {
-        // Update image if not set
+        // Update image and rating if not set
         if (!combinedItemsMap[menuItem.name].image && menuItem.image) {
           combinedItemsMap[menuItem.name].image = menuItem.image;
+        }
+        if (!combinedItemsMap[menuItem.name].avgRating && menuItem.avgRating) {
+          combinedItemsMap[menuItem.name].avgRating = menuItem.avgRating;
+        }
+        if (!combinedItemsMap[menuItem.name].totalRatings && menuItem.totalRatings) {
+          combinedItemsMap[menuItem.name].totalRatings = menuItem.totalRatings;
         }
       }
     }
@@ -464,9 +490,9 @@ router.get('/report', authMiddleware, async (req, res) => {
     const codOrders = (paymentStats.find(p => p._id === 'cod')?.count || 0) + histCod;
     const upiOrders = (paymentStats.find(p => p._id === 'upi')?.count || 0) + histUpi;
 
-    // Top and least selling items
-    const topSellingItems = allItemsSold.slice(0, 10);
-    const leastSellingItems = [...allItemsSold].sort((a, b) => a.quantity - b.quantity).slice(0, 10);
+    // Top and least selling items (limit to 5)
+    const topSellingItems = allItemsSold.slice(0, 5);
+    const leastSellingItems = [...allItemsSold].sort((a, b) => a.quantity - b.quantity).slice(0, 5);
 
     // Revenue trend (group by date) - combine current orders + historical
     const ordersByDate = {};

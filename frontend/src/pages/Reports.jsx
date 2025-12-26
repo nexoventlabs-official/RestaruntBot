@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
-  Calendar, TrendingUp, Package, DollarSign, 
-  ShoppingBag, BarChart3, RefreshCw, Mail, FileDown, X, CheckCircle, AlertCircle
+  Calendar, TrendingUp, TrendingDown, Minus, Package, DollarSign, 
+  ShoppingBag, BarChart3, RefreshCw, Mail, FileDown, X, CheckCircle, AlertCircle, Star
 } from 'lucide-react';
 import api from '../api';
 
@@ -223,6 +223,33 @@ export default function Reports() {
 
   const formatCurrency = (val) => `₹${(val || 0).toLocaleString('en-IN')}`;
 
+  // Helper to determine interest level based on quantity sold
+  const getInterestLevel = (quantity, allItems) => {
+    if (!allItems || allItems.length === 0) return 'low';
+    const quantities = allItems.map(i => i.quantity || 0);
+    const maxQty = Math.max(...quantities);
+    const avgQty = quantities.reduce((a, b) => a + b, 0) / quantities.length;
+    
+    if (quantity >= avgQty * 1.5) return 'high';
+    if (quantity >= avgQty * 0.5) return 'constant';
+    return 'low';
+  };
+
+  const InterestBadge = ({ level }) => {
+    const config = {
+      high: { icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50', label: 'High' },
+      constant: { icon: Minus, color: 'text-yellow-600', bg: 'bg-yellow-50', label: 'Stable' },
+      low: { icon: TrendingDown, color: 'text-red-600', bg: 'bg-red-50', label: 'Low' }
+    };
+    const { icon: Icon, color, bg, label } = config[level] || config.low;
+    return (
+      <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${bg}`}>
+        <Icon className={`w-3.5 h-3.5 ${color}`} />
+        <span className={`text-xs font-medium ${color}`}>{label}</span>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -380,12 +407,14 @@ export default function Reports() {
                     <th className="text-left px-4 py-3 text-sm font-medium text-dark-600 w-12">S.No</th>
                     <th className="text-left px-4 py-3 text-sm font-medium text-dark-600 w-16">Image</th>
                     <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">Item Name</th>
+                    <th className="text-center px-4 py-3 text-sm font-medium text-dark-600">Rating</th>
+                    <th className="text-center px-4 py-3 text-sm font-medium text-dark-600">Interest</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Qty Sold</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Revenue</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-dark-100">
-                  {(reportData.topSellingItems || []).slice(0, 10).map((item, idx) => (
+                  {(reportData.topSellingItems || []).slice(0, 5).map((item, idx) => (
                     <tr key={idx} className="hover:bg-dark-50">
                       <td className="px-4 py-3 text-sm text-dark-500">{idx + 1}</td>
                       <td className="px-4 py-2">
@@ -398,13 +427,27 @@ export default function Reports() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm text-dark-900">{item.name}</td>
+                      <td className="px-4 py-3 text-sm text-center">
+                        {item.totalRatings > 0 ? (
+                          <div className="flex items-center justify-center gap-1">
+                            <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                            <span className="text-dark-900">{item.avgRating?.toFixed(1)}</span>
+                            <span className="text-dark-400 text-xs">({item.totalRatings})</span>
+                          </div>
+                        ) : (
+                          <span className="text-dark-300">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <InterestBadge level={getInterestLevel(item.quantity, reportData.allItemsSold)} />
+                      </td>
                       <td className="px-4 py-3 text-sm text-dark-900 text-right">{item.quantity}</td>
                       <td className="px-4 py-3 text-sm text-dark-900 text-right">{formatCurrency(item.revenue)}</td>
                     </tr>
                   ))}
                   {(!reportData.topSellingItems || reportData.topSellingItems.length === 0) && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-dark-400">No data available</td>
+                      <td colSpan={7} className="px-4 py-8 text-center text-dark-400">No data available</td>
                     </tr>
                   )}
                 </tbody>
@@ -424,12 +467,14 @@ export default function Reports() {
                     <th className="text-left px-4 py-3 text-sm font-medium text-dark-600 w-12">S.No</th>
                     <th className="text-left px-4 py-3 text-sm font-medium text-dark-600 w-16">Image</th>
                     <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">Item Name</th>
+                    <th className="text-center px-4 py-3 text-sm font-medium text-dark-600">Rating</th>
+                    <th className="text-center px-4 py-3 text-sm font-medium text-dark-600">Interest</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Qty Sold</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Revenue</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-dark-100">
-                  {(reportData.leastSellingItems || []).slice(0, 10).map((item, idx) => (
+                  {(reportData.leastSellingItems || []).slice(0, 5).map((item, idx) => (
                     <tr key={idx} className="hover:bg-dark-50">
                       <td className="px-4 py-3 text-sm text-dark-500">{idx + 1}</td>
                       <td className="px-4 py-2">
@@ -442,13 +487,27 @@ export default function Reports() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm text-dark-900">{item.name}</td>
+                      <td className="px-4 py-3 text-sm text-center">
+                        {item.totalRatings > 0 ? (
+                          <div className="flex items-center justify-center gap-1">
+                            <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                            <span className="text-dark-900">{item.avgRating?.toFixed(1)}</span>
+                            <span className="text-dark-400 text-xs">({item.totalRatings})</span>
+                          </div>
+                        ) : (
+                          <span className="text-dark-300">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <InterestBadge level={getInterestLevel(item.quantity, reportData.allItemsSold)} />
+                      </td>
                       <td className="px-4 py-3 text-sm text-dark-900 text-right">{item.quantity}</td>
                       <td className="px-4 py-3 text-sm text-dark-900 text-right">{formatCurrency(item.revenue)}</td>
                     </tr>
                   ))}
                   {(!reportData.leastSellingItems || reportData.leastSellingItems.length === 0) && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-dark-400">No data available</td>
+                      <td colSpan={7} className="px-4 py-8 text-center text-dark-400">No data available</td>
                     </tr>
                   )}
                 </tbody>
@@ -473,6 +532,8 @@ export default function Reports() {
                     <th className="text-left px-4 py-3 text-sm font-medium text-dark-600 w-12">S.No</th>
                     <th className="text-left px-4 py-3 text-sm font-medium text-dark-600 w-16">Image</th>
                     <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">Item Name</th>
+                    <th className="text-center px-4 py-3 text-sm font-medium text-dark-600">Rating</th>
+                    <th className="text-center px-4 py-3 text-sm font-medium text-dark-600">Interest</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Qty Sold</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Revenue</th>
                   </tr>
@@ -491,13 +552,27 @@ export default function Reports() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm text-dark-900">{item.name}</td>
+                      <td className="px-4 py-3 text-sm text-center">
+                        {item.totalRatings > 0 ? (
+                          <div className="flex items-center justify-center gap-1">
+                            <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                            <span className="text-dark-900">{item.avgRating?.toFixed(1)}</span>
+                            <span className="text-dark-400 text-xs">({item.totalRatings})</span>
+                          </div>
+                        ) : (
+                          <span className="text-dark-300">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <InterestBadge level={getInterestLevel(item.quantity, reportData.allItemsSold)} />
+                      </td>
                       <td className="px-4 py-3 text-sm text-dark-900 text-right">{item.quantity}</td>
                       <td className="px-4 py-3 text-sm text-dark-900 text-right">{formatCurrency(item.revenue)}</td>
                     </tr>
                   ))}
                   {(!reportData.allItemsSold || reportData.allItemsSold.length === 0) && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-dark-400">No items sold in this period</td>
+                      <td colSpan={7} className="px-4 py-8 text-center text-dark-400">No items sold in this period</td>
                     </tr>
                   )}
                 </tbody>

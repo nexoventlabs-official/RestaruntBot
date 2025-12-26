@@ -183,8 +183,19 @@ const generateReportPdf = async (reportData, reportType) => {
       });
       y += 55;
 
-      // Helper function to draw item table with images
-      const drawItemTable = (title, items, startY, showAll = false) => {
+      // Helper function to calculate interest level
+      const getInterestLevel = (quantity, allItems) => {
+        if (!allItems || allItems.length === 0) return 'low';
+        const quantities = allItems.map(i => i.quantity || 0);
+        const avgQty = quantities.reduce((a, b) => a + b, 0) / quantities.length;
+        
+        if (quantity >= avgQty * 1.5) return 'high';
+        if (quantity >= avgQty * 0.5) return 'constant';
+        return 'low';
+      };
+
+      // Helper function to draw item table with images, ratings and interest
+      const drawItemTable = (title, items, startY, allItems, showAll = false) => {
         let currentY = startY;
         
         // Check if we need a new page
@@ -198,18 +209,20 @@ const generateReportPdf = async (reportData, reportType) => {
         currentY += 20;
 
         // Table header
-        doc.fillColor(grayColor).fontSize(9).font('Helvetica-Bold');
-        doc.text('S.No', 50, currentY, { width: 30 });
-        doc.text('Image', 80, currentY, { width: 40 });
-        doc.text('Item Name', 125, currentY, { width: 180 });
-        doc.text('Qty', 310, currentY, { width: 50 });
-        doc.text('Revenue', 370, currentY, { width: 80 });
+        doc.fillColor(grayColor).fontSize(8).font('Helvetica-Bold');
+        doc.text('S.No', 50, currentY, { width: 25 });
+        doc.text('Image', 75, currentY, { width: 35 });
+        doc.text('Item Name', 115, currentY, { width: 120 });
+        doc.text('Rating', 240, currentY, { width: 45 });
+        doc.text('Interest', 290, currentY, { width: 50 });
+        doc.text('Qty', 345, currentY, { width: 35 });
+        doc.text('Revenue', 385, currentY, { width: 65 });
         currentY += 15;
         doc.moveTo(50, currentY).lineTo(450, currentY).stroke('#e2e3e5');
         currentY += 5;
 
-        const itemsToShow = showAll ? items : items.slice(0, 10);
-        doc.font('Helvetica').fontSize(9);
+        const itemsToShow = showAll ? items : items.slice(0, 5);
+        doc.font('Helvetica').fontSize(8);
         itemsToShow.forEach((item, idx) => {
           // Check if we need a new page
           if (currentY > 720) {
@@ -223,22 +236,41 @@ const generateReportPdf = async (reportData, reportType) => {
           const imgBuffer = imageMap[item.name];
           if (imgBuffer) {
             try {
-              doc.image(imgBuffer, 80, rowY, { width: imgSize, height: imgSize, fit: [imgSize, imgSize] });
+              doc.image(imgBuffer, 75, rowY, { width: imgSize, height: imgSize, fit: [imgSize, imgSize] });
             } catch (e) {
               // Draw placeholder if image fails
-              doc.rect(80, rowY, imgSize, imgSize).fillAndStroke('#f0f0f0', '#e0e0e0');
+              doc.rect(75, rowY, imgSize, imgSize).fillAndStroke('#f0f0f0', '#e0e0e0');
             }
           } else {
             // Draw placeholder box
-            doc.rect(80, rowY, imgSize, imgSize).fillAndStroke('#f0f0f0', '#e0e0e0');
+            doc.rect(75, rowY, imgSize, imgSize).fillAndStroke('#f0f0f0', '#e0e0e0');
           }
           
           // Draw text (vertically centered with image)
-          const textY = rowY + (imgSize - 9) / 2;
-          doc.fillColor(darkColor).text(String(idx + 1), 50, textY, { width: 30 });
-          doc.text(item.name || '-', 125, textY, { width: 180 });
-          doc.text(String(item.quantity || 0), 310, textY, { width: 50 });
-          doc.text(formatCurrency(item.revenue), 370, textY, { width: 80 });
+          const textY = rowY + (imgSize - 8) / 2;
+          doc.fillColor(darkColor).text(String(idx + 1), 50, textY, { width: 25 });
+          doc.text(item.name || '-', 115, textY, { width: 120 });
+          
+          // Rating column
+          if (item.totalRatings > 0) {
+            doc.fillColor('#f59e0b').text(`${(item.avgRating || 0).toFixed(1)}`, 240, textY, { width: 20 });
+            doc.fillColor(grayColor).text(`(${item.totalRatings})`, 260, textY, { width: 25 });
+          } else {
+            doc.fillColor(grayColor).text('-', 240, textY, { width: 45 });
+          }
+          
+          // Interest column with colored indicator
+          const interest = getInterestLevel(item.quantity, allItems);
+          const interestConfig = {
+            high: { color: '#22c55e', label: 'High' },
+            constant: { color: '#eab308', label: 'Stable' },
+            low: { color: '#ef4444', label: 'Low' }
+          };
+          const { color: interestColor, label: interestLabel } = interestConfig[interest];
+          doc.fillColor(interestColor).text(interestLabel, 290, textY, { width: 50 });
+          
+          doc.fillColor(darkColor).text(String(item.quantity || 0), 345, textY, { width: 35 });
+          doc.text(formatCurrency(item.revenue), 385, textY, { width: 65 });
           
           currentY += rowHeight;
         });
@@ -248,19 +280,19 @@ const generateReportPdf = async (reportData, reportType) => {
 
       // Top Selling Items
       if (reportData.topSellingItems && reportData.topSellingItems.length > 0) {
-        y = drawItemTable('Top Selling Items', reportData.topSellingItems, y);
+        y = drawItemTable('Top Selling Items', reportData.topSellingItems, y, reportData.allItemsSold || []);
       }
 
       // Least Selling Items
       if (reportData.leastSellingItems && reportData.leastSellingItems.length > 0) {
-        y = drawItemTable('Least Selling Items', reportData.leastSellingItems, y);
+        y = drawItemTable('Least Selling Items', reportData.leastSellingItems, y, reportData.allItemsSold || []);
       }
 
       // All Items Sold - show ALL items
       if (reportData.allItemsSold && reportData.allItemsSold.length > 0) {
         doc.addPage();
         y = 50;
-        y = drawItemTable('All Items Sold', reportData.allItemsSold, y, true);
+        y = drawItemTable('All Items Sold', reportData.allItemsSold, y, reportData.allItemsSold, true);
       }
 
       // Footer on last page
