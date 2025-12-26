@@ -236,7 +236,14 @@ const generateReportPdf = async (reportData, reportType) => {
           const imgBuffer = imageMap[item.name];
           if (imgBuffer) {
             try {
-              doc.image(imgBuffer, 75, rowY, { width: imgSize, height: imgSize, fit: [imgSize, imgSize] });
+              // Use cover to ensure all images are exactly the same size (cropped to fit)
+              doc.image(imgBuffer, 75, rowY, { 
+                width: imgSize, 
+                height: imgSize, 
+                cover: [imgSize, imgSize],
+                align: 'center',
+                valign: 'center'
+              });
             } catch (e) {
               // Draw placeholder if image fails
               doc.rect(75, rowY, imgSize, imgSize).fillAndStroke('#f0f0f0', '#e0e0e0');
