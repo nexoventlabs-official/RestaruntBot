@@ -9,6 +9,8 @@ import Reports from './pages/Reports';
 import Refunds from './pages/Refunds';
 import NotFound from './pages/NotFound';
 import Layout from './components/Layout';
+import UserMenu from './pages/UserMenu';
+import Review from './pages/Review';
 import api from './api';
 
 function App() {
@@ -48,8 +50,13 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={auth ? <Navigate to="/" /> : <Login setAuth={setAuth} />} />
-        <Route path="/" element={auth ? <Layout /> : <Navigate to="/login" />}>
+        {/* Public User Routes */}
+        <Route path="/" element={<UserMenu />} />
+        <Route path="/review/:phone/:orderId" element={<Review />} />
+        
+        {/* Admin Routes */}
+        <Route path="/admin/login" element={auth ? <Navigate to="/admin" /> : <Login setAuth={setAuth} />} />
+        <Route path="/admin" element={auth ? <Layout /> : <Navigate to="/admin/login" />}>
           <Route index element={<Dashboard />} />
           <Route path="orders" element={<Orders />} />
           <Route path="menu" element={<Menu />} />
@@ -57,6 +64,10 @@ function App() {
           <Route path="refunds" element={<Refunds />} />
           <Route path="reports" element={<Reports />} />
         </Route>
+        
+        {/* Legacy redirect - old login to new admin login */}
+        <Route path="/login" element={<Navigate to="/admin/login" />} />
+        
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>

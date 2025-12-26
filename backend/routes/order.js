@@ -229,19 +229,17 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           msg += `━━━━━━━━━━━━━━━\n`;
           msg += `\n🙏 Thank you for ordering!\nWe hope you enjoy your meal! 🍽️`;
           
-          // Send combined message with review CTA button if Google Review URL is configured
-          const googleReviewUrl = process.env.GOOGLE_REVIEW_URL;
-          if (googleReviewUrl && googleReviewUrl !== 'https://g.page/r/YOUR_GOOGLE_REVIEW_LINK') {
-            await whatsapp.sendCtaUrl(
-              order.customer.phone,
-              msg,
-              'Leave a Review ⭐',
-              googleReviewUrl,
-              'Your feedback helps us improve!'
-            );
-          } else {
-            await whatsapp.sendMessage(order.customer.phone, msg);
-          }
+          // Send combined message with review CTA button - link to website review page
+          const frontendUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
+          const reviewUrl = `${frontendUrl}/review/${order.customer.phone}/${order.orderId}`;
+          
+          await whatsapp.sendCtaUrl(
+            order.customer.phone,
+            msg,
+            'Leave a Review ⭐',
+            reviewUrl,
+            'Your feedback helps us improve!'
+          );
         } else {
           // Add refund info if order was cancelled with pending refund
           if (status === 'cancelled' && order.refundStatus === 'pending' && order.refundId) {

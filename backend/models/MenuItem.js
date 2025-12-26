@@ -12,6 +12,14 @@ const menuItemSchema = new mongoose.Schema({
   available: { type: Boolean, default: true },
   preparationTime: { type: Number, default: 15 },
   tags: [String],
+  ratings: [{
+    phone: { type: String, required: true },
+    orderId: { type: String, required: true },
+    rating: { type: Number, required: true, min: 1, max: 5 },
+    createdAt: { type: Date, default: Date.now }
+  }],
+  avgRating: { type: Number, default: 0 },
+  totalRatings: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

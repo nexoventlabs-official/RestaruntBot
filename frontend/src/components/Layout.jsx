@@ -11,12 +11,12 @@ import {
 } from 'lucide-react';
 
 const navItems = [
-  { path: '/', icon: LayoutDashboard, label: 'Dashboard', description: 'Overview & stats' },
-  { path: '/orders', icon: ShoppingBag, label: 'Orders', description: 'Manage orders' },
-  { path: '/refunds', icon: RefreshCw, label: 'Refunds', description: 'Refund requests' },
-  { path: '/menu', icon: UtensilsCrossed, label: 'Menu', description: 'Food items' },
-  { path: '/customers', icon: Users, label: 'Customers', description: 'Customer data' },
-  { path: '/reports', icon: BarChart3, label: 'Reports', description: 'Analytics & reports' },
+  { path: '/admin', icon: LayoutDashboard, label: 'Dashboard', description: 'Overview & stats' },
+  { path: '/admin/orders', icon: ShoppingBag, label: 'Orders', description: 'Manage orders' },
+  { path: '/admin/refunds', icon: RefreshCw, label: 'Refunds', description: 'Refund requests' },
+  { path: '/admin/menu', icon: UtensilsCrossed, label: 'Menu', description: 'Food items' },
+  { path: '/admin/customers', icon: Users, label: 'Customers', description: 'Customer data' },
+  { path: '/admin/reports', icon: BarChart3, label: 'Reports', description: 'Analytics & reports' },
 ];
 
 export default function Layout() {
@@ -25,7 +25,7 @@ export default function Layout() {
 
   const logout = () => {
     localStorage.removeItem('token');
-    navigate('/login');
+    navigate('/admin/login');
   };
 
   const currentPage = navItems.find(item => item.path === location.pathname);

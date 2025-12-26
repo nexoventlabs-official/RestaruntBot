@@ -14,6 +14,7 @@ const customerRoutes = require('./routes/customer');
 const analyticsRoutes = require('./routes/analytics');
 const aiRoutes = require('./routes/ai');
 const categoryRoutes = require('./routes/category');
+const publicRoutes = require('./routes/public');
 const orderScheduler = require('./services/orderScheduler');
 const dailyCleanup = require('./services/dailyCleanup');
 const orderCleanup = require('./services/orderCleanup');
@@ -52,6 +53,7 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/public', publicRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
