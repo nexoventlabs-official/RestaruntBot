@@ -451,36 +451,58 @@ const chatbot = {
     
     // Patterns for showing menu/items
     const menuPatterns = [
-      // English
+      // English - "all menu", "all items", "full menu", etc.
       /\bshow\s+(?:me\s+)?(?:the\s+)?menu\b/, /\bshow\s+(?:me\s+)?(?:all\s+)?items\b/,
       /\bshow\s+(?:me\s+)?(?:the\s+)?food\b/, /\bwhat\s+(?:do\s+you\s+have|items|food)\b/,
       /\blist\s+(?:all\s+)?(?:items|menu|food)\b/, /\bdisplay\s+(?:menu|items)\b/,
       /\bsee\s+(?:the\s+)?(?:menu|items|food)\b/, /\bview\s+(?:all\s+)?(?:items|food)\b/,
       /\ball\s+items\b/, /\bfull\s+menu\b/, /\bentire\s+menu\b/,
-      // Hindi
+      /\ball\s+menu\b/, /\bshow\s+all\s+menu\b/, /\bview\s+all\s+menu\b/, /\bsee\s+all\s+menu\b/,
+      /\bcomplete\s+menu\b/, /\bwhole\s+menu\b/, /\btotal\s+menu\b/,
+      /\ball\s+food\b/, /\bshow\s+all\s+food\b/, /\bfull\s+items\b/,
+      // Hindi - "sab menu", "pura menu", "all menu dikhao"
       /\bmenu\s+dikhao\b/, /\bsab\s+items\s+dikhao\b/, /\bkhana\s+dikhao\b/,
       /\bमेन्यू\s+दिखाओ\b/, /\bसब\s+आइटम\b/, /\bखाना\s+दिखाओ\b/, /\bक्या\s+है\b/,
-      // Telugu
+      /\bsab\s+menu\b/, /\bsab\s+menu\s+dikhao\b/, /\bpura\s+menu\b/, /\bpura\s+menu\s+dikhao\b/,
+      /\ball\s+menu\s+dikhao\b/, /\bfull\s+menu\s+dikhao\b/, /\bsara\s+menu\b/,
+      /\bसब\s+मेन्यू\b/, /\bपूरा\s+मेन्यू\b/, /\bसारा\s+मेन्यू\b/, /\bपूरा\s+मेन्यू\s+दिखाओ\b/,
+      // Telugu - "antha menu", "motham menu", "all menu chupinchu"
       /\bmenu\s+chupinchu\b/, /\banni\s+items\s+chupinchu\b/, /\bమెనూ\s+చూపించు\b/,
       /\bఅన్ని\s+ఐటమ్స్\b/, /\bఏమి\s+ఉంది\b/,
-      // Tamil
+      /\bantha\s+menu\b/, /\bmotham\s+menu\b/, /\ball\s+menu\s+chupinchu\b/, /\bfull\s+menu\s+chupinchu\b/,
+      /\banni\s+menu\b/, /\banni\s+menu\s+chupinchu\b/,
+      /\bఅంతా\s+మెనూ\b/, /\bమొత్తం\s+మెనూ\b/, /\bఅన్ని\s+మెనూ\b/,
+      // Tamil - "ella menu", "muzhu menu", "all menu kaattu"
       /\bmenu\s+kaattu\b/, /\bella\s+items\s+kaattu\b/, /\bமெனு\s+காட்டு\b/,
       /\bஎல்லா\s+ஐட்டம்ஸ்\b/, /\bஎன்ன\s+இருக்கு\b/,
-      // Kannada
+      /\bella\s+menu\b/, /\bmuzhu\s+menu\b/, /\ball\s+menu\s+kaattu\b/, /\bfull\s+menu\s+kaattu\b/,
+      /\bella\s+menu\s+kaattu\b/,
+      /\bஎல்லா\s+மெனு\b/, /\bமுழு\s+மெனு\b/,
+      // Kannada - "ella menu", "puri menu", "all menu toorisu"
       /\bmenu\s+toorisu\b/, /\bella\s+items\s+toorisu\b/, /\bಮೆನು\s+ತೋರಿಸು\b/,
       /\bಎಲ್ಲಾ\s+ಐಟಮ್ಸ್\b/, /\bಏನು\s+ಇದೆ\b/,
-      // Malayalam
+      /\bella\s+menu\b/, /\bella\s+menu\s+toorisu\b/, /\bpuri\s+menu\b/, /\ball\s+menu\s+toorisu\b/,
+      /\bಎಲ್ಲಾ\s+ಮೆನು\b/, /\bಪೂರ್ಣ\s+ಮೆನು\b/,
+      // Malayalam - "ellam menu", "muzhuvan menu", "all menu kaanikkuka"
       /\bmenu\s+kaanikkuka\b/, /\bellam\s+kaanikkuka\b/, /\bമെനു\s+കാണിക്കുക\b/,
       /\bഎല്ലാം\s+കാണിക്കുക\b/, /\bഎന്താണ്\s+ഉള്ളത്\b/,
-      // Bengali
+      /\bellam\s+menu\b/, /\bmuzhuvan\s+menu\b/, /\ball\s+menu\s+kaanikkuka\b/, /\bfull\s+menu\s+kaanikkuka\b/,
+      /\bഎല്ലാം\s+മെനു\b/, /\bമുഴുവൻ\s+മെനു\b/,
+      // Bengali - "sob menu", "puro menu", "all menu dekho"
       /\bmenu\s+dekho\b/, /\bsob\s+items\s+dekho\b/, /\bমেনু\s+দেখো\b/,
       /\bসব\s+আইটেম\b/, /\bকি\s+আছে\b/,
-      // Marathi
+      /\bsob\s+menu\b/, /\bpuro\s+menu\b/, /\ball\s+menu\s+dekho\b/, /\bfull\s+menu\s+dekho\b/,
+      /\bসব\s+মেনু\b/, /\bপুরো\s+মেনু\b/,
+      // Marathi - "sagla menu", "purn menu", "all menu dakhva"
       /\bmenu\s+dakhva\b/, /\bsagla\s+dakhva\b/, /\bमेन्यू\s+दाखवा\b/,
       /\bसगळे\s+आइटम\b/, /\bकाय\s+आहे\b/,
-      // Gujarati
+      /\bsagla\s+menu\b/, /\bpurn\s+menu\b/, /\ball\s+menu\s+dakhva\b/, /\bfull\s+menu\s+dakhva\b/,
+      /\bसगळा\s+मेन्यू\b/, /\bपूर्ण\s+मेन्यू\b/,
+      // Gujarati - "badhu menu", "puru menu", "all menu batavo"
       /\bmenu\s+batavo\b/, /\bbadha\s+items\s+batavo\b/, /\bમેનુ\s+બતાવો\b/,
-      /\bબધા\s+આઇટમ્સ\b/, /\bશું\s+છે\b/
+      /\bબધા\s+આઇટમ્સ\b/, /\bશું\s+છે\b/,
+      /\bbadhu\s+menu\b/, /\bbadha\s+menu\b/, /\bpuru\s+menu\b/, /\ball\s+menu\s+batavo\b/, /\bfull\s+menu\s+batavo\b/,
+      /\bબધું\s+મેનુ\b/, /\bબધા\s+મેનુ\b/, /\bપૂરું\s+મેનુ\b/
     ];
     
     // Patterns specifically for veg items - compound patterns only (standalone handled separately)
