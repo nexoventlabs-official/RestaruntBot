@@ -60,6 +60,7 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
       cumulativeStats,
       currentDeliveredOrders,
       todayAllOrdersCount,
+      todayDeliveredCount,
       currentRevenue,
       todayDeliveredRevenue,
       currentCustomers,
@@ -72,7 +73,14 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
     ] = await Promise.all([
       DashboardStats.findOne().lean(),
       Order.countDocuments({ status: 'delivered' }), // Count only delivered orders for total
-      Order.countDocuments({ createdAt: { $gte: today } }), // All orders created today (for Today Orders display)
+      Order.countDocuments({ createdAt: { $gte: today } }), // Orders created today
+      Order.countDocuments({ 
+        $or: [
+          { createdAt: { $gte: today } }, // Created today
+          { deliveredAt: { $gte: today } }, // Delivered today
+          { updatedAt: { $gte: today }, status: { $in: ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'] } } // Active today
+        ]
+      }), // All orders active today
       Order.aggregate([{ $match: { paymentStatus: 'paid', status: { $nin: ['cancelled', 'refunded'] }, refundStatus: { $nin: ['completed', 'pending'] } } }, { $group: { _id: null, total: { $sum: '$totalAmount' } } }]),
       // Today's delivered + paid orders (still in DB)
       Order.aggregate([{ 
@@ -102,10 +110,11 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
     const totalRevenue = stats.totalRevenue + (currentRevenue[0]?.total || 0);
     const totalCustomers = currentCustomers; // Just count customers with hasOrdered: true (they persist)
     
-    // Today's orders = all orders created today (not just delivered)
-    const todayOrders = todayAllOrdersCount;
+    // Today's orders = orders that are active/delivered today
+    // This includes: created today OR delivered today OR updated today with active status
+    const todayOrders = todayDeliveredCount;
     
-    // Today's revenue = only from delivered orders
+    // Today's revenue = only from delivered orders today
     const todayRevenue = todayDeliveredRevenue[0]?.total || 0;
 
     res.json({
