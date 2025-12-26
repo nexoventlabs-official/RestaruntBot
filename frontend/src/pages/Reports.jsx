@@ -419,9 +419,9 @@ export default function Reports() {
                       <td className="px-4 py-3 text-sm text-dark-500">{idx + 1}</td>
                       <td className="px-4 py-2">
                         {item.image ? (
-                          <img src={item.image} alt={item.name} className="w-10 h-10 min-w-[40px] min-h-[40px] max-w-[40px] max-h-[40px] rounded-lg object-cover" />
+                          <img src={item.image} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
                         ) : (
-                          <div className="w-10 h-10 min-w-[40px] min-h-[40px] max-w-[40px] max-h-[40px] rounded-lg bg-dark-100 flex items-center justify-center">
+                          <div className="w-10 h-10 rounded-lg bg-dark-100 flex items-center justify-center">
                             <Package className="w-5 h-5 text-dark-300" />
                           </div>
                         )}
@@ -479,9 +479,9 @@ export default function Reports() {
                       <td className="px-4 py-3 text-sm text-dark-500">{idx + 1}</td>
                       <td className="px-4 py-2">
                         {item.image ? (
-                          <img src={item.image} alt={item.name} className="w-10 h-10 min-w-[40px] min-h-[40px] max-w-[40px] max-h-[40px] rounded-lg object-cover" />
+                          <img src={item.image} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
                         ) : (
-                          <div className="w-10 h-10 min-w-[40px] min-h-[40px] max-w-[40px] max-h-[40px] rounded-lg bg-dark-100 flex items-center justify-center">
+                          <div className="w-10 h-10 rounded-lg bg-dark-100 flex items-center justify-center">
                             <Package className="w-5 h-5 text-dark-300" />
                           </div>
                         )}
@@ -544,9 +544,9 @@ export default function Reports() {
                       <td className="px-4 py-3 text-sm text-dark-500">{idx + 1}</td>
                       <td className="px-4 py-2">
                         {item.image ? (
-                          <img src={item.image} alt={item.name} className="w-10 h-10 min-w-[40px] min-h-[40px] max-w-[40px] max-h-[40px] rounded-lg object-cover" />
+                          <img src={item.image} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
                         ) : (
-                          <div className="w-10 h-10 min-w-[40px] min-h-[40px] max-w-[40px] max-h-[40px] rounded-lg bg-dark-100 flex items-center justify-center">
+                          <div className="w-10 h-10 rounded-lg bg-dark-100 flex items-center justify-center">
                             <Package className="w-5 h-5 text-dark-300" />
                           </div>
                         )}

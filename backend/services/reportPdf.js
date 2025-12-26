@@ -13,25 +13,18 @@ const REPORT_TYPE_LABELS = {
 // Format currency for PDF (using Rs. since Helvetica doesn't support ₹)
 const formatCurrency = (val) => `Rs.${(val || 0).toLocaleString('en-IN')}`;
 
-// Fetch image from URL and return as buffer with redirect support
-const fetchImageBuffer = (url, redirectCount = 0) => {
+// Fetch image from URL and return as buffer
+const fetchImageBuffer = (url) => {
   return new Promise((resolve) => {
-    if (!url || redirectCount > 5) {
+    if (!url) {
       resolve(null);
       return;
     }
     
     const protocol = url.startsWith('https') ? https : http;
-    const timeout = setTimeout(() => resolve(null), 10000); // 10s timeout
+    const timeout = setTimeout(() => resolve(null), 5000); // 5s timeout
     
     protocol.get(url, (res) => {
-      // Handle redirects
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        clearTimeout(timeout);
-        resolve(fetchImageBuffer(res.headers.location, redirectCount + 1));
-        return;
-      }
-      
       if (res.statusCode !== 200) {
         clearTimeout(timeout);
         resolve(null);
@@ -42,13 +35,7 @@ const fetchImageBuffer = (url, redirectCount = 0) => {
       res.on('data', chunk => chunks.push(chunk));
       res.on('end', () => {
         clearTimeout(timeout);
-        const buffer = Buffer.concat(chunks);
-        // Verify it's a valid image (check for common image headers)
-        if (buffer.length > 0) {
-          resolve(buffer);
-        } else {
-          resolve(null);
-        }
+        resolve(Buffer.concat(chunks));
       });
       res.on('error', () => {
         clearTimeout(timeout);
@@ -61,20 +48,14 @@ const fetchImageBuffer = (url, redirectCount = 0) => {
   });
 };
 
-// Pre-fetch all images for items using unique identifier
+// Pre-fetch all images for items
 const prefetchImages = async (items) => {
   const imageMap = {};
-  const promises = items.map(async (item, index) => {
+  const promises = items.map(async (item) => {
     if (item.image) {
       const buffer = await fetchImageBuffer(item.image);
       if (buffer) {
-        // Use combination of name and index for unique key
-        const key = `${item.name}_${item._id || index}`;
-        imageMap[key] = buffer;
-        // Also store by name for backward compatibility
-        if (!imageMap[item.name]) {
-          imageMap[item.name] = buffer;
-        }
+        imageMap[item.name] = buffer;
       }
     }
   });
@@ -83,18 +64,17 @@ const prefetchImages = async (items) => {
 };
 
 const generateReportPdf = async (reportData, reportType) => {
-  // Ensure items arrays exist and have data
-  const topSellingItems = reportData.topSellingItems || [];
-  const leastSellingItems = reportData.leastSellingItems || [];
-  const allItemsSold = reportData.allItemsSold || [];
-  
   // Pre-fetch images for all items
-  const allItems = [...topSellingItems, ...leastSellingItems, ...allItemsSold];
+  const allItems = [
+    ...(reportData.topSellingItems || []),
+    ...(reportData.leastSellingItems || []),
+    ...(reportData.allItemsSold || [])
+  ];
   const imageMap = await prefetchImages(allItems);
 
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ margin: 40, size: 'A4' });
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
       const chunks = [];
 
       doc.on('data', chunk => chunks.push(chunk));
@@ -104,16 +84,8 @@ const generateReportPdf = async (reportData, reportType) => {
       const primaryColor = '#e63946';
       const darkColor = '#1c1d21';
       const grayColor = '#61636b';
-      const lightGray = '#f8f9fb';
-      const borderColor = '#e5e7eb';
-      const greenColor = '#22c55e';
-      const redColor = '#ef4444';
-      const yellowColor = '#eab308';
-      
-      // Match admin panel image size: 40x40px
-      const imgSize = 40;
-      const rowHeight = 50; // Increased for larger images
-      const pageWidth = doc.page.width - 80; // Account for margins
+      const rowHeight = 35; // Increased row height for images
+      const imgSize = 25; // Image size
 
       // Header
       doc.rect(0, 0, doc.page.width, 120).fill(primaryColor);
@@ -165,78 +137,56 @@ const generateReportPdf = async (reportData, reportType) => {
 
       let y = 150;
 
-      // Summary Section - matching admin panel StatCard style
+      // Summary Section
       doc.fillColor(darkColor).fontSize(16).font('Helvetica-Bold')
-        .text('Summary', 40, y);
+        .text('Summary', 50, y);
       y += 30;
 
-      // Summary boxes - matching admin panel card style with colored icons
+      // Summary boxes
       const summaryData = [
-        { label: 'Total Revenue', value: formatCurrency(reportData.totalRevenue), color: greenColor },
-        { label: 'Total Orders', value: String(reportData.totalOrders || 0), color: '#3b82f6' },
-        { label: 'Items Sold', value: String(reportData.totalItemsSold || 0), color: '#f97316' },
-        { label: 'Avg Order Value', value: formatCurrency(reportData.avgOrderValue), color: primaryColor }
+        { label: 'Total Revenue', value: formatCurrency(reportData.totalRevenue) },
+        { label: 'Total Orders', value: String(reportData.totalOrders || 0) },
+        { label: 'Items Sold', value: String(reportData.totalItemsSold || 0) },
+        { label: 'Avg Order Value', value: formatCurrency(reportData.avgOrderValue) }
       ];
 
-      const boxWidth = 125;
-      const boxHeight = 70;
+      const boxWidth = 120;
       summaryData.forEach((item, i) => {
-        const x = 40 + (i * (boxWidth + 10));
-        // Card background with subtle shadow effect
-        doc.rect(x, y, boxWidth, boxHeight).fill('white');
-        doc.rect(x, y, boxWidth, boxHeight).stroke(borderColor);
-        
-        // Colored icon circle
-        doc.circle(x + 20, y + 20, 12).fill(item.color + '20'); // Light version of color
-        doc.fillColor(item.color).fontSize(12).font('Helvetica-Bold')
-          .text('$', x + 15, y + 14);
-        
-        // Value
-        doc.fillColor(darkColor).fontSize(18).font('Helvetica-Bold')
-          .text(item.value, x + 10, y + 38, { width: boxWidth - 20 });
-        // Label
+        const x = 50 + (i * (boxWidth + 15));
+        doc.rect(x, y, boxWidth, 60).fillAndStroke('#f8f9fb', '#e2e3e5');
         doc.fillColor(grayColor).fontSize(9).font('Helvetica')
-          .text(item.label, x + 10, y + 55, { width: boxWidth - 20 });
+          .text(item.label, x + 10, y + 10, { width: boxWidth - 20 });
+        doc.fillColor(darkColor).fontSize(16).font('Helvetica-Bold')
+          .text(item.value, x + 10, y + 30, { width: boxWidth - 20 });
       });
-      y += boxHeight + 20;
+      y += 80;
 
-      // Order Status Section - matching admin panel style
+      // Order Status Section
       doc.fillColor(darkColor).fontSize(14).font('Helvetica-Bold')
-        .text('Order Status Breakdown', 40, y);
+        .text('Order Status Breakdown', 50, y);
       y += 25;
 
       const statusData = [
-        { label: 'Delivered', value: reportData.deliveredOrders || 0, color: greenColor },
-        { label: 'Cancelled', value: reportData.cancelledOrders || 0, color: redColor },
+        { label: 'Delivered', value: reportData.deliveredOrders || 0, color: '#22c55e' },
+        { label: 'Cancelled', value: reportData.cancelledOrders || 0, color: '#ef4444' },
         { label: 'Refunded', value: reportData.refundedOrders || 0, color: '#f97316' },
         { label: 'COD Orders', value: reportData.codOrders || 0, color: '#3b82f6' },
-        { label: 'UPI Orders', value: reportData.upiOrders || 0, color: primaryColor }
+        { label: 'UPI Orders', value: reportData.upiOrders || 0, color: '#8b5cf6' }
       ];
 
-      const statusBoxWidth = 100;
-      const statusBoxHeight = 60;
       statusData.forEach((item, i) => {
-        const x = 40 + (i * (statusBoxWidth + 8));
-        // Card background
-        doc.rect(x, y, statusBoxWidth, statusBoxHeight).fill('white');
-        doc.rect(x, y, statusBoxWidth, statusBoxHeight).stroke(borderColor);
-        
-        // Colored icon circle
-        doc.circle(x + 18, y + 18, 10).fill(item.color + '20');
-        
-        // Value
-        doc.fillColor(darkColor).fontSize(20).font('Helvetica-Bold')
-          .text(String(item.value), x + 10, y + 32, { width: statusBoxWidth - 20 });
-        // Label
-        doc.fillColor(grayColor).fontSize(8).font('Helvetica')
-          .text(item.label, x + 10, y + 48, { width: statusBoxWidth - 20 });
+        const x = 50 + (i * 100);
+        doc.fillColor(item.color).fontSize(18).font('Helvetica-Bold')
+          .text(String(item.value), x, y);
+        doc.fillColor(grayColor).fontSize(9).font('Helvetica')
+          .text(item.label, x, y + 20);
       });
-      y += statusBoxHeight + 25;
+      y += 55;
 
       // Helper function to calculate interest level
-      const getInterestLevel = (quantity, items) => {
-        if (!items || items.length === 0) return 'low';
-        const quantities = items.map(i => i.quantity || 0);
+      const getInterestLevel = (quantity, allItems) => {
+        if (!allItems || allItems.length === 0) return 'low';
+        const quantities = allItems.map(i => i.quantity || 0);
         const avgQty = quantities.reduce((a, b) => a + b, 0) / quantities.length;
         
         if (quantity >= avgQty * 1.5) return 'high';
@@ -244,195 +194,105 @@ const generateReportPdf = async (reportData, reportType) => {
         return 'low';
       };
 
-      // Helper function to draw rounded rectangle (for images)
-      const drawRoundedRect = (x, y, width, height, radius, fillColor, strokeColor) => {
-        doc.save();
-        doc.roundedRect(x, y, width, height, radius);
-        if (fillColor) {
-          doc.fillColor(fillColor).fill();
-        }
-        if (strokeColor) {
-          doc.strokeColor(strokeColor).stroke();
-        }
-        doc.restore();
-      };
-
-      // Helper function to draw item table matching admin panel style
-      const drawItemTable = (title, emoji, items, startY, referenceItems, showAll = false) => {
+      // Helper function to draw item table with images, ratings and interest
+      const drawItemTable = (title, items, startY, allItems, showAll = false) => {
         let currentY = startY;
         
         // Check if we need a new page
-        if (currentY > 680) {
+        if (currentY > 650) {
           doc.addPage();
           currentY = 50;
         }
         
-        // Title with emoji
         doc.fillColor(darkColor).fontSize(14).font('Helvetica-Bold')
-          .text(`${emoji} ${title}`, 40, currentY);
-        currentY += 30;
+          .text(title, 50, currentY);
+        currentY += 20;
 
-        // Table header - matching admin panel bg-dark-50 style
-        const headerHeight = 35;
-        doc.rect(40, currentY, pageWidth, headerHeight).fill(lightGray);
-        doc.rect(40, currentY, pageWidth, headerHeight).stroke(borderColor);
-        
-        // Column positions matching admin panel proportions
-        const col = {
-          sno: 50,
-          image: 90,
-          name: 145,
-          rating: 290,
-          interest: 360,
-          qty: 430,
-          revenue: 480
-        };
-        
-        doc.fillColor(grayColor).fontSize(9).font('Helvetica-Bold');
-        const headerY = currentY + 12;
-        doc.text('S.No', col.sno, headerY, { width: 35 });
-        doc.text('Image', col.image, headerY, { width: 45 });
-        doc.text('Item Name', col.name, headerY, { width: 140 });
-        doc.text('Rating', col.rating, headerY, { width: 60 });
-        doc.text('Interest', col.interest, headerY, { width: 60 });
-        doc.text('Qty', col.qty, headerY, { width: 40 });
-        doc.text('Revenue', col.revenue, headerY, { width: 70 });
-        currentY += headerHeight;
+        // Table header
+        doc.fillColor(grayColor).fontSize(8).font('Helvetica-Bold');
+        doc.text('S.No', 50, currentY, { width: 25 });
+        doc.text('Image', 75, currentY, { width: 35 });
+        doc.text('Item Name', 115, currentY, { width: 120 });
+        doc.text('Rating', 240, currentY, { width: 45 });
+        doc.text('Interest', 290, currentY, { width: 50 });
+        doc.text('Qty', 345, currentY, { width: 35 });
+        doc.text('Revenue', 385, currentY, { width: 65 });
+        currentY += 15;
+        doc.moveTo(50, currentY).lineTo(450, currentY).stroke('#e2e3e5');
+        currentY += 5;
 
-        // Table rows
         const itemsToShow = showAll ? items : items.slice(0, 5);
-        
-        if (itemsToShow.length === 0) {
-          // No data row
-          doc.rect(40, currentY, pageWidth, rowHeight).fill('white');
-          doc.rect(40, currentY, pageWidth, rowHeight).stroke(borderColor);
-          doc.fillColor(grayColor).fontSize(10).font('Helvetica')
-            .text('No data available', 40, currentY + 18, { width: pageWidth, align: 'center' });
+        doc.font('Helvetica').fontSize(8);
+        itemsToShow.forEach((item, idx) => {
+          // Check if we need a new page
+          if (currentY > 720) {
+            doc.addPage();
+            currentY = 50;
+          }
+          
+          const rowY = currentY;
+          
+          // Draw image if available
+          const imgBuffer = imageMap[item.name];
+          if (imgBuffer) {
+            try {
+              doc.image(imgBuffer, 75, rowY, { width: imgSize, height: imgSize, fit: [imgSize, imgSize] });
+            } catch (e) {
+              // Draw placeholder if image fails
+              doc.rect(75, rowY, imgSize, imgSize).fillAndStroke('#f0f0f0', '#e0e0e0');
+            }
+          } else {
+            // Draw placeholder box
+            doc.rect(75, rowY, imgSize, imgSize).fillAndStroke('#f0f0f0', '#e0e0e0');
+          }
+          
+          // Draw text (vertically centered with image)
+          const textY = rowY + (imgSize - 8) / 2;
+          doc.fillColor(darkColor).text(String(idx + 1), 50, textY, { width: 25 });
+          doc.text(item.name || '-', 115, textY, { width: 120 });
+          
+          // Rating column
+          if (item.totalRatings > 0) {
+            doc.fillColor('#f59e0b').text(`${(item.avgRating || 0).toFixed(1)}`, 240, textY, { width: 20 });
+            doc.fillColor(grayColor).text(`(${item.totalRatings})`, 260, textY, { width: 25 });
+          } else {
+            doc.fillColor(grayColor).text('-', 240, textY, { width: 45 });
+          }
+          
+          // Interest column with colored indicator
+          const interest = getInterestLevel(item.quantity, allItems);
+          const interestConfig = {
+            high: { color: '#22c55e', label: 'High' },
+            constant: { color: '#eab308', label: 'Stable' },
+            low: { color: '#ef4444', label: 'Low' }
+          };
+          const { color: interestColor, label: interestLabel } = interestConfig[interest];
+          doc.fillColor(interestColor).text(interestLabel, 290, textY, { width: 50 });
+          
+          doc.fillColor(darkColor).text(String(item.quantity || 0), 345, textY, { width: 35 });
+          doc.text(formatCurrency(item.revenue), 385, textY, { width: 65 });
+          
           currentY += rowHeight;
-        } else {
-          itemsToShow.forEach((item, idx) => {
-            // Check if we need a new page
-            if (currentY > 720) {
-              doc.addPage();
-              currentY = 50;
-              
-              // Redraw header on new page
-              doc.rect(40, currentY, pageWidth, headerHeight).fill(lightGray);
-              doc.rect(40, currentY, pageWidth, headerHeight).stroke(borderColor);
-              doc.fillColor(grayColor).fontSize(9).font('Helvetica-Bold');
-              const newHeaderY = currentY + 12;
-              doc.text('S.No', col.sno, newHeaderY, { width: 35 });
-              doc.text('Image', col.image, newHeaderY, { width: 45 });
-              doc.text('Item Name', col.name, newHeaderY, { width: 140 });
-              doc.text('Rating', col.rating, newHeaderY, { width: 60 });
-              doc.text('Interest', col.interest, newHeaderY, { width: 60 });
-              doc.text('Qty', col.qty, newHeaderY, { width: 40 });
-              doc.text('Revenue', col.revenue, newHeaderY, { width: 70 });
-              currentY += headerHeight;
-            }
-            
-            const rowY = currentY;
-            
-            // Alternating row background (white/light gray for hover effect simulation)
-            doc.rect(40, rowY, pageWidth, rowHeight).fill('white');
-            doc.rect(40, rowY, pageWidth, rowHeight).stroke(borderColor);
-            
-            // Draw image - 40x40 with rounded corners matching admin panel
-            const imgX = col.image;
-            const imgY = rowY + (rowHeight - imgSize) / 2;
-            const imgBuffer = imageMap[item.name];
-            
-            if (imgBuffer) {
-              try {
-                // Save state for clipping
-                doc.save();
-                // Create rounded clipping path
-                doc.roundedRect(imgX, imgY, imgSize, imgSize, 6).clip();
-                // Draw image to fill the clipped area (object-cover effect)
-                doc.image(imgBuffer, imgX, imgY, { 
-                  width: imgSize, 
-                  height: imgSize,
-                  fit: [imgSize, imgSize],
-                  align: 'center',
-                  valign: 'center'
-                });
-                doc.restore();
-                // Draw border around image
-                doc.roundedRect(imgX, imgY, imgSize, imgSize, 6).stroke(borderColor);
-              } catch (e) {
-                // Draw placeholder if image fails
-                drawRoundedRect(imgX, imgY, imgSize, imgSize, 6, lightGray, borderColor);
-              }
-            } else {
-              // Draw placeholder box matching admin panel style
-              drawRoundedRect(imgX, imgY, imgSize, imgSize, 6, lightGray, borderColor);
-            }
-            
-            // Text content - vertically centered
-            const textY = rowY + (rowHeight - 10) / 2;
-            
-            // S.No
-            doc.fillColor(grayColor).fontSize(10).font('Helvetica')
-              .text(String(idx + 1), col.sno, textY, { width: 35 });
-            
-            // Item Name
-            doc.fillColor(darkColor).fontSize(10).font('Helvetica')
-              .text(item.name || '-', col.name, textY, { width: 140 });
-            
-            // Rating with star
-            if (item.totalRatings > 0) {
-              doc.fillColor('#f59e0b').fontSize(10).font('Helvetica')
-                .text('★', col.rating, textY, { width: 12 });
-              doc.fillColor(darkColor)
-                .text(`${(item.avgRating || 0).toFixed(1)}`, col.rating + 12, textY, { width: 25 });
-              doc.fillColor(grayColor).fontSize(8)
-                .text(`(${item.totalRatings})`, col.rating + 38, textY + 1, { width: 25 });
-            } else {
-              doc.fillColor(grayColor).fontSize(10).font('Helvetica')
-                .text('-', col.rating, textY, { width: 60 });
-            }
-            
-            // Interest badge with arrow and colored text
-            const interest = getInterestLevel(item.quantity, referenceItems);
-            const interestConfig = {
-              high: { arrow: '↗', color: greenColor, label: 'High' },
-              constant: { arrow: '→', color: yellowColor, label: 'Stable' },
-              low: { arrow: '↘', color: redColor, label: 'Low' }
-            };
-            const { arrow, color: interestColor, label: interestLabel } = interestConfig[interest];
-            doc.fillColor(interestColor).fontSize(10).font('Helvetica')
-              .text(`${arrow} ${interestLabel}`, col.interest, textY, { width: 60 });
-            
-            // Quantity
-            doc.fillColor(darkColor).fontSize(10).font('Helvetica')
-              .text(String(item.quantity || 0), col.qty, textY, { width: 40 });
-            
-            // Revenue
-            doc.fillColor(darkColor).fontSize(10).font('Helvetica')
-              .text(formatCurrency(item.revenue), col.revenue, textY, { width: 70 });
-            
-            currentY += rowHeight;
-          });
-        }
+        });
         
-        return currentY + 15;
+        return currentY + 10;
       };
 
       // Top Selling Items
-      if (topSellingItems.length > 0) {
-        y = drawItemTable('Top Selling Items', '🔥', topSellingItems, y, allItemsSold);
+      if (reportData.topSellingItems && reportData.topSellingItems.length > 0) {
+        y = drawItemTable('Top Selling Items', reportData.topSellingItems, y, reportData.allItemsSold || []);
       }
 
       // Least Selling Items
-      if (leastSellingItems.length > 0) {
-        y = drawItemTable('Least Selling Items', '📉', leastSellingItems, y, allItemsSold);
+      if (reportData.leastSellingItems && reportData.leastSellingItems.length > 0) {
+        y = drawItemTable('Least Selling Items', reportData.leastSellingItems, y, reportData.allItemsSold || []);
       }
 
       // All Items Sold - show ALL items
-      if (allItemsSold.length > 0) {
+      if (reportData.allItemsSold && reportData.allItemsSold.length > 0) {
         doc.addPage();
         y = 50;
-        y = drawItemTable('All Items Sold', '📦', allItemsSold, y, allItemsSold, true);
+        y = drawItemTable('All Items Sold', reportData.allItemsSold, y, reportData.allItemsSold, true);
       }
 
       // Footer on last page
