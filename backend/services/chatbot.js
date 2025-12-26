@@ -2514,9 +2514,20 @@ const chatbot = {
 
     const foodTypeLabel = item.foodType === 'veg' ? '🥦 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
     
+    // Rating display
+    let ratingDisplay = '';
+    if (item.totalRatings > 0) {
+      const fullStars = Math.floor(item.avgRating);
+      const stars = '⭐'.repeat(fullStars);
+      ratingDisplay = `${stars} ${item.avgRating} (${item.totalRatings} reviews)`;
+    } else {
+      ratingDisplay = '☆☆☆☆☆ No ratings yet';
+    }
+    
     let msg = `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n\n`;
     msg += `💰 *Price:* ₹${item.price} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
     msg += `⏱️ *Prep Time:* ${item.preparationTime || 15} mins\n`;
+    msg += `⭐ *Rating:* ${ratingDisplay}\n`;
     if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
     msg += `\n📝 ${item.description || 'Delicious dish prepared fresh!'}`;
 
@@ -2539,9 +2550,20 @@ const chatbot = {
   async sendItemDetailsForOrder(phone, item) {
     const foodTypeLabel = item.foodType === 'veg' ? '🥦 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
     
+    // Rating display
+    let ratingDisplay = '';
+    if (item.totalRatings > 0) {
+      const fullStars = Math.floor(item.avgRating);
+      const stars = '⭐'.repeat(fullStars);
+      ratingDisplay = `${stars} ${item.avgRating} (${item.totalRatings} reviews)`;
+    } else {
+      ratingDisplay = '☆☆☆☆☆ No ratings yet';
+    }
+    
     let msg = `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n\n`;
     msg += `💰 *Price:* ₹${item.price} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
     msg += `⏱️ *Prep Time:* ${item.preparationTime || 15} mins\n`;
+    msg += `⭐ *Rating:* ${ratingDisplay}\n`;
     if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
     msg += `\n📝 ${item.description || 'Delicious dish prepared fresh!'}`;
 
