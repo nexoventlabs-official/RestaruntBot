@@ -744,22 +744,27 @@ const googleSheets = {
     try {
       console.log('📊 updateOrderStatus called:', { orderId, status, paymentStatus });
       
-      // For delivered, cancelled, or refunded status, move to respective sheet
+      // For delivered status
       if (status === 'delivered') {
         return await this.moveOrderToSheet(orderId, status, paymentStatus, status);
       }
       
       // For cancelled orders - handle UPI paid orders specially
       if (status === 'cancelled') {
-        // Move to cancelled sheet first
-        const cancelledResult = await this.moveOrderToSheet(orderId, 'cancelled', 'cancelled', 'cancelled');
+        // Check if this is a UPI paid order needing refund (paymentStatus will be 'refund_processing')
+        const isUpiRefund = paymentStatus === 'refund_processing';
         
-        // If this is a UPI paid order (refund_processing), also add to refunded sheet with "Refund Processing"
-        if (paymentStatus === 'refund_processing') {
+        if (isUpiRefund) {
+          console.log('📊 UPI paid order cancelled, adding to both cancelled and refunded sheets...');
+          // For UPI refund: cancelled sheet shows "Paid", refunded sheet shows "Refund Processing"
+          const cancelledResult = await this.moveOrderToSheet(orderId, 'cancelled', 'paid', 'cancelled');
+          // Now add to refunded sheet
           await this.addOrderToRefundedSheet(orderId);
+          return cancelledResult;
+        } else {
+          // Regular cancellation (COD or unpaid)
+          return await this.moveOrderToSheet(orderId, 'cancelled', paymentStatus || 'cancelled', 'cancelled');
         }
-        
-        return cancelledResult;
       }
       
       // For refunded status - update the refunded sheet entry
@@ -778,70 +783,48 @@ const googleSheets = {
       // Get the 'new' sheet for active orders
       const newSheet = await this.getSheetIdByType(sheets, 'new');
       const actualSheetName = newSheet ? newSheet.sheetName : await this.getFirstSheetName(sheets);
-      console.log('📊 Using sheet name:', actualSheetName, 'SPREADSHEET_ID:', SPREADSHEET_ID ? 'SET' : 'NOT SET');
       
       // Find the row with this order ID
-      console.log('📊 Fetching column A from sheet...');
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
         range: `${actualSheetName}!A:A`
       });
       
       const rows = response.data.values || [];
-      console.log('📊 Found', rows.length, 'rows in sheet, searching for:', orderId);
-      
-      // Log first few order IDs for debugging
-      console.log('📊 First 5 order IDs in sheet:', rows.slice(0, 5).map(r => r[0]));
-      
       const rowIndex = rows.findIndex(row => row[0] === orderId);
       
       if (rowIndex === -1) {
         console.log('❌ Order not found in sheet:', orderId);
-        console.log('📊 All order IDs:', rows.map(r => r[0]));
         return false;
       }
       
-      console.log('📊 Found order at row index:', rowIndex, '(Sheet row:', rowIndex + 1, ')');
-      
-      // Update status (column K = 11) and optionally payment status (column J = 10)
+      // Update status and payment status
       const updates = [];
       
       if (status) {
-        const statusLabel = STATUS_LABELS[status] || status;
-        const statusRange = `${actualSheetName}!K${rowIndex + 1}`;
-        console.log('📊 Will update Order Status at:', statusRange, 'to:', statusLabel);
         updates.push({
-          range: statusRange,
-          values: [[statusLabel]]
+          range: `${actualSheetName}!K${rowIndex + 1}`,
+          values: [[STATUS_LABELS[status] || status]]
         });
       }
       
       if (paymentStatus) {
-        const paymentLabel = STATUS_LABELS[paymentStatus] || paymentStatus.charAt(0).toUpperCase() + paymentStatus.slice(1);
-        const paymentRange = `${actualSheetName}!J${rowIndex + 1}`;
-        console.log('📊 Will update Payment Status at:', paymentRange, 'to:', paymentLabel);
         updates.push({
-          range: paymentRange,
-          values: [[paymentLabel]]
+          range: `${actualSheetName}!J${rowIndex + 1}`,
+          values: [[STATUS_LABELS[paymentStatus] || paymentStatus.charAt(0).toUpperCase() + paymentStatus.slice(1)]]
         });
       }
       
       if (updates.length > 0) {
-        console.log('📊 Executing batchUpdate with', updates.length, 'updates...');
-        const updateResponse = await sheets.spreadsheets.values.batchUpdate({
+        await sheets.spreadsheets.values.batchUpdate({
           spreadsheetId: SPREADSHEET_ID,
-          resource: {
-            valueInputOption: 'RAW',
-            data: updates
-          }
+          resource: { valueInputOption: 'RAW', data: updates }
         });
-        console.log('✅ Cell values updated. Response:', updateResponse.data.totalUpdatedCells, 'cells updated');
       }
       
-      // Update row color based on status
+      // Update row color
       if (status) {
         const sheetId = newSheet ? newSheet.sheetId : await this.getSheetId(sheets);
-        console.log('📊 Updating row color for sheetId:', sheetId);
         await this.updateRowColor(sheets, sheetId, rowIndex, status);
       }
       
@@ -849,7 +832,6 @@ const googleSheets = {
       return true;
     } catch (error) {
       console.error('❌ Google Sheets update error:', error.message);
-      console.error('❌ Full error:', JSON.stringify(error.response?.data || error, null, 2));
       return false;
     }
   },
