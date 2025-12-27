@@ -3396,7 +3396,7 @@ const chatbot = {
     let confirmMsg = `✅ *Order Confirmed!*\n\n`;
     confirmMsg += `📦 Order ID: *${orderId}*\n`;
     confirmMsg += `💵 Payment: *Cash on Delivery*\n`;
-    confirmMsg += `� Totnal: *₹${total}*\n\n`;
+    confirmMsg += `💰 Total: *₹${total}*\n\n`;
     confirmMsg += `━━━━━━━━━━━━━━━\n`;
     confirmMsg += `*Items:*\n`;
     items.forEach((item, i) => {
@@ -3407,6 +3407,7 @@ const chatbot = {
 
     await whatsapp.sendButtons(phone, confirmMsg, [
       { id: 'track_order', text: 'Track Order' },
+      { id: `cancel_${orderId}`, text: 'Cancel Order' },
       { id: 'home', text: 'Main Menu' }
     ]);
 
