@@ -9,6 +9,199 @@ const googleSheets = require('../services/googleSheets');
 const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
+// Razorpay Webhook - receives payment and refund events
+router.post('/razorpay-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  try {
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    
+    // Verify webhook signature if secret is configured
+    if (webhookSecret) {
+      const signature = req.headers['x-razorpay-signature'];
+      const body = req.body.toString();
+      
+      const expectedSignature = crypto
+        .createHmac('sha256', webhookSecret)
+        .update(body)
+        .digest('hex');
+      
+      if (signature !== expectedSignature) {
+        console.log('❌ Razorpay webhook signature mismatch');
+        return res.status(400).json({ error: 'Invalid signature' });
+      }
+    }
+    
+    const event = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    console.log('📥 Razorpay webhook event:', event.event);
+    
+    const payload = event.payload;
+    
+    // Handle refund events
+    if (event.event === 'refund.processed' || event.event === 'refund.created') {
+      const refund = payload.refund?.entity;
+      const paymentId = refund?.payment_id;
+      
+      if (!paymentId) {
+        console.log('⚠️ No payment ID in refund webhook');
+        return res.json({ status: 'ok' });
+      }
+      
+      console.log('💰 Refund webhook received:', { refundId: refund.id, paymentId, amount: refund.amount / 100, status: refund.status });
+      
+      // Find order by payment ID
+      const order = await Order.findOne({ 
+        $or: [
+          { razorpayPaymentId: paymentId },
+          { paymentId: paymentId }
+        ]
+      });
+      
+      if (!order) {
+        console.log('⚠️ Order not found for payment:', paymentId);
+        return res.json({ status: 'ok' });
+      }
+      
+      // Update order with refund details
+      if (refund.status === 'processed') {
+        order.refundStatus = 'completed';
+        order.refundId = refund.id;
+        order.refundProcessedAt = new Date();
+        order.paymentStatus = 'refunded';
+        order.status = 'refunded';
+        order.statusUpdatedAt = new Date();
+        order.trackingUpdates.push({ 
+          status: 'refunded', 
+          message: `Refund of ₹${refund.amount / 100} processed. Refund ID: ${refund.id}`, 
+          timestamp: new Date() 
+        });
+        await order.save();
+        
+        console.log('✅ Order updated with refund:', order.orderId);
+        
+        // Emit event for real-time updates
+        const dataEvents = require('../services/eventEmitter');
+        dataEvents.emit('orders');
+        dataEvents.emit('dashboard');
+        
+        // Update Google Sheets - move to refunded sheet
+        googleSheets.updateOrderStatus(order.orderId, 'refunded', 'refunded').catch(err =>
+          console.error('Google Sheets sync error:', err)
+        );
+        
+        // Notify customer
+        try {
+          await whatsapp.sendButtons(order.customer.phone,
+            `✅ *Refund Successful!*\n\nOrder: ${order.orderId}\nAmount: ₹${refund.amount / 100}\nRefund ID: ${refund.id}\n\n💳 The amount will be credited to your account within 5-7 business days.`,
+            [
+              { id: 'place_order', text: 'New Order' },
+              { id: 'home', text: 'Main Menu' }
+            ]
+          );
+        } catch (whatsappErr) {
+          console.error('WhatsApp notification failed:', whatsappErr.message);
+        }
+      }
+      
+      return res.json({ status: 'ok' });
+    }
+    
+    // Handle refund failed event
+    if (event.event === 'refund.failed') {
+      const refund = payload.refund?.entity;
+      const paymentId = refund?.payment_id;
+      
+      if (!paymentId) {
+        return res.json({ status: 'ok' });
+      }
+      
+      console.log('❌ Refund failed webhook:', { refundId: refund.id, paymentId, reason: refund.failure_reason });
+      
+      const order = await Order.findOne({ 
+        $or: [
+          { razorpayPaymentId: paymentId },
+          { paymentId: paymentId }
+        ]
+      });
+      
+      if (!order) {
+        return res.json({ status: 'ok' });
+      }
+      
+      order.refundStatus = 'failed';
+      order.refundError = refund.failure_reason || 'Refund failed';
+      order.paymentStatus = 'refund_failed';
+      order.status = 'cancelled';
+      order.statusUpdatedAt = new Date();
+      order.trackingUpdates.push({ 
+        status: 'refund_failed', 
+        message: `Refund failed: ${refund.failure_reason || 'Unknown error'}`, 
+        timestamp: new Date() 
+      });
+      await order.save();
+      
+      // Emit event for real-time updates
+      const dataEvents = require('../services/eventEmitter');
+      dataEvents.emit('orders');
+      dataEvents.emit('dashboard');
+      
+      // Update Google Sheets - move to refundfailed sheet
+      googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed').catch(err =>
+        console.error('Google Sheets sync error:', err)
+      );
+      
+      // Notify customer
+      try {
+        await whatsapp.sendButtons(order.customer.phone,
+          `⚠️ *Refund Issue*\n\nOrder: ${order.orderId}\nAmount: ₹${order.totalAmount}\n\nWe couldn't process your refund automatically.\nOur team will contact you within 24 hours to resolve this.`,
+          [
+            { id: 'place_order', text: 'New Order' },
+            { id: 'home', text: 'Main Menu' }
+          ]
+        );
+      } catch (whatsappErr) {
+        console.error('WhatsApp notification failed:', whatsappErr.message);
+      }
+      
+      return res.json({ status: 'ok' });
+    }
+    
+    // Handle payment captured event (backup for callback)
+    if (event.event === 'payment.captured') {
+      const payment = payload.payment?.entity;
+      const paymentLinkId = payment?.notes?.payment_link_id || payment?.payment_link_id;
+      
+      if (paymentLinkId) {
+        const order = await Order.findOne({ razorpayOrderId: paymentLinkId });
+        if (order && order.paymentStatus !== 'paid') {
+          order.paymentStatus = 'paid';
+          order.razorpayPaymentId = payment.id;
+          order.status = 'confirmed';
+          order.trackingUpdates.push({ status: 'confirmed', message: 'Payment received via webhook', timestamp: new Date() });
+          await order.save();
+          
+          console.log('✅ Payment captured via webhook:', order.orderId);
+          
+          // Emit event for real-time updates
+          const dataEvents = require('../services/eventEmitter');
+          dataEvents.emit('orders');
+          dataEvents.emit('dashboard');
+          
+          // Update Google Sheets
+          googleSheets.updateOrderStatus(order.orderId, 'confirmed', 'paid').catch(err =>
+            console.error('Google Sheets sync error:', err)
+          );
+        }
+      }
+      
+      return res.json({ status: 'ok' });
+    }
+    
+    res.json({ status: 'ok' });
+  } catch (error) {
+    console.error('❌ Razorpay webhook error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/callback', async (req, res) => {
   try {
     const { razorpay_payment_id, razorpay_payment_link_id, razorpay_payment_link_status } = req.query;
