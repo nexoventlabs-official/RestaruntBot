@@ -4,6 +4,14 @@ const { google } = require('googleapis');
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
 const SHEET_NAME = process.env.GOOGLE_SHEET_NAME || 'Sheet1'; // Can be configured via env
 
+// Sheet names for different order statuses
+const SHEET_NAMES = {
+  new: 'new',           // New/active orders (gid=0)
+  delivered: 'delivered', // Delivered orders (gid=444615781)
+  cancelled: 'cancelled', // Cancelled orders (gid=1204708234)
+  refunded: 'refunded'    // Refunded orders (gid=1126647795)
+};
+
 // Status colors (RGB values 0-1)
 const STATUS_COLORS = {
   pending: { red: 1, green: 0.95, blue: 0.8 },        // Light Yellow
@@ -218,10 +226,14 @@ const googleSheets = {
       
       console.log('📊 Adding order to Google Sheet:', order.orderId);
       
+      // Get the 'new' sheet for new orders
+      const newSheet = await this.getSheetIdByType(sheets, 'new');
+      const targetSheetName = newSheet ? newSheet.sheetName : SHEET_NAME;
+      
       const date = new Date(order.createdAt || Date.now());
       
       // Check and add date header if this is the first order of the day
-      await this.checkAndAddDateHeader(sheets, date);
+      await this.checkAndAddDateHeaderForSheet(sheets, date, targetSheetName);
       
       // Convert to IST (Indian Standard Time - UTC+5:30)
       const istOptions = { timeZone: 'Asia/Kolkata' };
@@ -254,7 +266,7 @@ const googleSheets = {
       
       const response = await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${SHEET_NAME}!A:N`,
+        range: `${targetSheetName}!A:N`,
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
         resource: { values: [row] }
@@ -266,7 +278,7 @@ const googleSheets = {
         const match = updatedRange.match(/!A(\d+):/);
         if (match) {
           const rowIndex = parseInt(match[1]) - 1;
-          const sheetId = await this.getSheetId(sheets);
+          const sheetId = newSheet ? newSheet.sheetId : await this.getSheetId(sheets);
           await this.updateRowColor(sheets, sheetId, rowIndex, order.status || 'pending');
         }
       }
@@ -280,18 +292,389 @@ const googleSheets = {
     }
   },
 
+  // Check and add date header for a specific sheet
+  async checkAndAddDateHeaderForSheet(sheets, date, sheetName) {
+    try {
+      // Convert to IST (Indian Standard Time - UTC+5:30)
+      const istOptions = { timeZone: 'Asia/Kolkata' };
+      
+      // Format date for comparison (DD/MM/YYYY format used in India)
+      const dateStr = date.toLocaleDateString('en-IN', istOptions);
+      
+      // Get day name in IST
+      const dayName = date.toLocaleDateString('en-IN', { ...istOptions, weekday: 'long' });
+      
+      // Get full year in IST
+      const year = date.toLocaleDateString('en-IN', { ...istOptions, year: 'numeric' });
+      
+      // Create date header text
+      const dateHeaderText = `📅 ${dayName}, ${dateStr} (${year})`;
+      
+      // Get all values from column A to check for existing date header
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheetName}!A:A`
+      });
+      
+      const rows = response.data.values || [];
+      
+      // Check if date header already exists for today
+      const dateHeaderExists = rows.some(row => row[0] && row[0].includes(dateStr));
+      
+      if (!dateHeaderExists) {
+        console.log('📅 Adding date header for:', dateHeaderText, 'in sheet:', sheetName);
+        
+        // Add date header row
+        const headerRow = [dateHeaderText, '', '', '', '', '', '', '', '', '', '', '', '', ''];
+        
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheetName}!A:N`,
+          valueInputOption: 'RAW',
+          insertDataOption: 'INSERT_ROWS',
+          resource: { values: [headerRow] }
+        });
+        
+        // Get the row number that was just added and style it
+        const getResponse = await sheets.spreadsheets.values.get({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheetName}!A:A`
+        });
+        
+        const updatedRows = getResponse.data.values || [];
+        const headerRowIndex = updatedRows.findIndex(row => row[0] === dateHeaderText);
+        
+        if (headerRowIndex !== -1) {
+          const sheetId = await this.getSheetId(sheets, sheetName);
+          
+          // Style the date header row with a distinct color and bold text
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: SPREADSHEET_ID,
+            resource: {
+              requests: [
+                {
+                  repeatCell: {
+                    range: {
+                      sheetId: sheetId,
+                      startRowIndex: headerRowIndex,
+                      endRowIndex: headerRowIndex + 1,
+                      startColumnIndex: 0,
+                      endColumnIndex: 14
+                    },
+                    cell: {
+                      userEnteredFormat: {
+                        backgroundColor: { red: 0.2, green: 0.4, blue: 0.6 }, // Dark blue background
+                        textFormat: {
+                          bold: true,
+                          fontSize: 12,
+                          foregroundColor: { red: 1, green: 1, blue: 1 } // White text
+                        },
+                        horizontalAlignment: 'CENTER'
+                      }
+                    },
+                    fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'
+                  }
+                },
+                {
+                  mergeCells: {
+                    range: {
+                      sheetId: sheetId,
+                      startRowIndex: headerRowIndex,
+                      endRowIndex: headerRowIndex + 1,
+                      startColumnIndex: 0,
+                      endColumnIndex: 14
+                    },
+                    mergeType: 'MERGE_ALL'
+                  }
+                }
+              ]
+            }
+          });
+          
+          console.log('✅ Date header styled and merged');
+        }
+        
+        return true;
+      }
+      
+      console.log('📅 Date header already exists for:', dateStr);
+      return false;
+    } catch (error) {
+      console.error('❌ Error adding date header:', error.message);
+      return false;
+    }
+  },
+
   // Get sheet ID by name
-  async getSheetId(sheets) {
+  async getSheetId(sheets, sheetName = null) {
     try {
       const response = await sheets.spreadsheets.get({
         spreadsheetId: SPREADSHEET_ID
       });
       
-      const sheet = response.data.sheets.find(s => s.properties.title === SHEET_NAME);
+      const targetName = sheetName || SHEET_NAME;
+      const sheet = response.data.sheets.find(s => s.properties.title === targetName);
       return sheet ? sheet.properties.sheetId : 0;
     } catch (error) {
       console.error('Error getting sheet ID:', error.message);
       return 0;
+    }
+  },
+
+  // Get sheet ID by sheet name from SHEET_NAMES config
+  async getSheetIdByType(sheets, sheetType) {
+    try {
+      const sheetName = SHEET_NAMES[sheetType];
+      if (!sheetName) {
+        console.error('❌ Unknown sheet type:', sheetType);
+        return null;
+      }
+      
+      const response = await sheets.spreadsheets.get({
+        spreadsheetId: SPREADSHEET_ID
+      });
+      
+      const sheet = response.data.sheets.find(s => 
+        s.properties.title.toLowerCase() === sheetName.toLowerCase()
+      );
+      
+      if (!sheet) {
+        console.error('❌ Sheet not found:', sheetName);
+        return null;
+      }
+      
+      return {
+        sheetId: sheet.properties.sheetId,
+        sheetName: sheet.properties.title
+      };
+    } catch (error) {
+      console.error('Error getting sheet ID by type:', error.message);
+      return null;
+    }
+  },
+
+  // Find order row in a specific sheet
+  async findOrderInSheet(sheets, sheetName, orderId) {
+    try {
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheetName}!A:N`
+      });
+      
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row[0] === orderId);
+      
+      if (rowIndex === -1) {
+        return null;
+      }
+      
+      return {
+        rowIndex,
+        rowData: rows[rowIndex]
+      };
+    } catch (error) {
+      console.error(`Error finding order in sheet ${sheetName}:`, error.message);
+      return null;
+    }
+  },
+
+  // Move order from one sheet to another based on status
+  async moveOrderToSheet(orderId, targetStatus, paymentStatus = null) {
+    try {
+      console.log('📊 moveOrderToSheet called:', { orderId, targetStatus, paymentStatus });
+      
+      const auth = getAuthClient();
+      if (!auth) {
+        console.error('❌ Google auth not available');
+        return false;
+      }
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      
+      // Determine target sheet based on status
+      let targetSheetType = 'new';
+      if (targetStatus === 'delivered') {
+        targetSheetType = 'delivered';
+      } else if (targetStatus === 'cancelled') {
+        targetSheetType = 'cancelled';
+      } else if (targetStatus === 'refunded') {
+        targetSheetType = 'refunded';
+      }
+      
+      // Get source sheet (new orders sheet)
+      const sourceSheet = await this.getSheetIdByType(sheets, 'new');
+      if (!sourceSheet) {
+        console.error('❌ Source sheet (new) not found');
+        return false;
+      }
+      
+      // Find order in source sheet
+      const orderData = await this.findOrderInSheet(sheets, sourceSheet.sheetName, orderId);
+      
+      if (!orderData) {
+        // Order might already be in another sheet, try to find it
+        console.log('📊 Order not in new sheet, checking other sheets...');
+        
+        // Check if already in target sheet
+        const targetSheet = await this.getSheetIdByType(sheets, targetSheetType);
+        if (targetSheet) {
+          const existingOrder = await this.findOrderInSheet(sheets, targetSheet.sheetName, orderId);
+          if (existingOrder) {
+            console.log('📊 Order already in target sheet, updating status...');
+            // Just update the status in the target sheet
+            return await this.updateOrderInSheet(sheets, targetSheet.sheetName, existingOrder.rowIndex, targetStatus, paymentStatus);
+          }
+        }
+        
+        // Check cancelled sheet if moving to refunded
+        if (targetSheetType === 'refunded') {
+          const cancelledSheet = await this.getSheetIdByType(sheets, 'cancelled');
+          if (cancelledSheet) {
+            const cancelledOrder = await this.findOrderInSheet(sheets, cancelledSheet.sheetName, orderId);
+            if (cancelledOrder) {
+              console.log('📊 Found order in cancelled sheet, moving to refunded...');
+              // Move from cancelled to refunded
+              return await this.moveOrderBetweenSheets(sheets, cancelledSheet, cancelledOrder, targetSheetType, targetStatus, paymentStatus);
+            }
+          }
+        }
+        
+        console.log('❌ Order not found in any sheet:', orderId);
+        return false;
+      }
+      
+      // If target is same as source (new), just update status
+      if (targetSheetType === 'new') {
+        return await this.updateOrderInSheet(sheets, sourceSheet.sheetName, orderData.rowIndex, targetStatus, paymentStatus);
+      }
+      
+      // Move order to target sheet
+      const targetSheet = await this.getSheetIdByType(sheets, targetSheetType);
+      if (!targetSheet) {
+        console.error('❌ Target sheet not found:', targetSheetType);
+        return false;
+      }
+      
+      return await this.moveOrderBetweenSheets(sheets, sourceSheet, orderData, targetSheetType, targetStatus, paymentStatus);
+      
+    } catch (error) {
+      console.error('❌ moveOrderToSheet error:', error.message);
+      return false;
+    }
+  },
+
+  // Helper to move order between sheets
+  async moveOrderBetweenSheets(sheets, sourceSheet, orderData, targetSheetType, targetStatus, paymentStatus) {
+    try {
+      const targetSheet = await this.getSheetIdByType(sheets, targetSheetType);
+      if (!targetSheet) {
+        console.error('❌ Target sheet not found:', targetSheetType);
+        return false;
+      }
+      
+      // Prepare row data with updated status
+      const rowData = [...orderData.rowData];
+      
+      // Ensure we have all 14 columns
+      while (rowData.length < 14) {
+        rowData.push('');
+      }
+      
+      // Update status (column K = index 10) and payment status (column J = index 9)
+      rowData[10] = STATUS_LABELS[targetStatus] || targetStatus;
+      if (paymentStatus) {
+        rowData[9] = paymentStatus.charAt(0).toUpperCase() + paymentStatus.slice(1);
+      }
+      
+      // Add row to target sheet
+      console.log('📊 Adding order to', targetSheet.sheetName, 'sheet...');
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${targetSheet.sheetName}!A:N`,
+        valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
+        resource: { values: [rowData] }
+      });
+      
+      // Delete row from source sheet
+      console.log('📊 Deleting order from', sourceSheet.sheetName, 'sheet...');
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: sourceSheet.sheetId,
+                dimension: 'ROWS',
+                startIndex: orderData.rowIndex,
+                endIndex: orderData.rowIndex + 1
+              }
+            }
+          }]
+        }
+      });
+      
+      // Apply color to the new row in target sheet
+      const targetSheetResponse = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${targetSheet.sheetName}!A:A`
+      });
+      const targetRows = targetSheetResponse.data.values || [];
+      const newRowIndex = targetRows.findIndex(row => row[0] === rowData[0]);
+      
+      if (newRowIndex !== -1) {
+        await this.updateRowColor(sheets, targetSheet.sheetId, newRowIndex, targetStatus);
+      }
+      
+      console.log('✅ Order moved to', targetSheet.sheetName, 'sheet:', rowData[0]);
+      return true;
+      
+    } catch (error) {
+      console.error('❌ moveOrderBetweenSheets error:', error.message);
+      return false;
+    }
+  },
+
+  // Update order status within a specific sheet
+  async updateOrderInSheet(sheets, sheetName, rowIndex, status, paymentStatus) {
+    try {
+      const updates = [];
+      
+      if (status) {
+        const statusLabel = STATUS_LABELS[status] || status;
+        updates.push({
+          range: `${sheetName}!K${rowIndex + 1}`,
+          values: [[statusLabel]]
+        });
+      }
+      
+      if (paymentStatus) {
+        const paymentLabel = paymentStatus.charAt(0).toUpperCase() + paymentStatus.slice(1);
+        updates.push({
+          range: `${sheetName}!J${rowIndex + 1}`,
+          values: [[paymentLabel]]
+        });
+      }
+      
+      if (updates.length > 0) {
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: SPREADSHEET_ID,
+          resource: {
+            valueInputOption: 'RAW',
+            data: updates
+          }
+        });
+      }
+      
+      // Update row color
+      const sheetId = await this.getSheetId(sheets, sheetName);
+      await this.updateRowColor(sheets, sheetId, rowIndex, status);
+      
+      console.log('✅ Order updated in', sheetName, 'sheet');
+      return true;
+    } catch (error) {
+      console.error('❌ updateOrderInSheet error:', error.message);
+      return false;
     }
   },
 
@@ -354,6 +737,11 @@ const googleSheets = {
     try {
       console.log('📊 updateOrderStatus called:', { orderId, status, paymentStatus });
       
+      // For delivered, cancelled, or refunded status, move to respective sheet
+      if (status === 'delivered' || status === 'cancelled' || status === 'refunded') {
+        return await this.moveOrderToSheet(orderId, status, paymentStatus);
+      }
+      
       const auth = getAuthClient();
       if (!auth) {
         console.error('❌ Google auth not available for update');
@@ -362,8 +750,9 @@ const googleSheets = {
       
       const sheets = google.sheets({ version: 'v4', auth });
       
-      // Get actual sheet name
-      const actualSheetName = await this.getFirstSheetName(sheets);
+      // Get the 'new' sheet for active orders
+      const newSheet = await this.getSheetIdByType(sheets, 'new');
+      const actualSheetName = newSheet ? newSheet.sheetName : await this.getFirstSheetName(sheets);
       console.log('📊 Using sheet name:', actualSheetName, 'SPREADSHEET_ID:', SPREADSHEET_ID ? 'SET' : 'NOT SET');
       
       // Find the row with this order ID
@@ -426,7 +815,7 @@ const googleSheets = {
       
       // Update row color based on status
       if (status) {
-        const sheetId = await this.getSheetId(sheets);
+        const sheetId = newSheet ? newSheet.sheetId : await this.getSheetId(sheets);
         console.log('📊 Updating row color for sheetId:', sheetId);
         await this.updateRowColor(sheets, sheetId, rowIndex, status);
       }
