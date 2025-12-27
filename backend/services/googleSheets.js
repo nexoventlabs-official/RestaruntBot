@@ -22,7 +22,8 @@ const STATUS_COLORS = {
   delivered: { red: 0.85, green: 1, blue: 0.85 },
   cancelled: { red: 1, green: 0.85, blue: 0.85 },
   refunded: { red: 1, green: 0.8, blue: 0.8 },
-  refund_processing: { red: 1, green: 0.9, blue: 0.92 }
+  refund_processing: { red: 1, green: 0.9, blue: 0.92 },
+  refund_failed: { red: 1, green: 0.7, blue: 0.7 }
 };
 
 // Status display labels
@@ -35,7 +36,8 @@ const STATUS_LABELS = {
   delivered: 'Delivered',
   cancelled: 'Cancelled',
   refunded: 'Refunded',
-  refund_processing: 'Refund Processing'
+  refund_processing: 'Refund Processing',
+  refund_failed: 'Refund Failed'
 };
 
 // Initialize Google Sheets API with Service Account
@@ -367,9 +369,9 @@ const googleSheets = {
         const refundedSheet = await this.getSheetByType(sheets, 'refunded');
         if (!refundedSheet) return false;
         
-        const orderData = await this.findOrderInSheet(sheets, refundedSheet.sheetName, orderId);
+        let orderData = await this.findOrderInSheet(sheets, refundedSheet.sheetName, orderId);
         if (!orderData) {
-          console.log('❌ Order not found in refunded sheet:', orderId);
+          console.log('⚠️ Order not found in refunded sheet:', orderId);
           // Try to find in cancelled sheet and add to refunded
           const cancelledSheet = await this.getSheetByType(sheets, 'cancelled');
           if (cancelledSheet) {
@@ -380,6 +382,7 @@ const googleSheets = {
               return true;
             }
           }
+          console.log('❌ Order not found in refunded or cancelled sheet:', orderId);
           return false;
         }
 
@@ -396,6 +399,45 @@ const googleSheets = {
         });
         await this.updateRowColor(sheets, refundedSheet.sheetId, orderData.rowIndex, 'refunded');
         console.log('✅ Refunded sheet updated:', orderId);
+        return true;
+      }
+
+      // Handle refund_failed orders - update existing entry in refunded sheet
+      if (status === 'refund_failed') {
+        const refundedSheet = await this.getSheetByType(sheets, 'refunded');
+        if (!refundedSheet) return false;
+        
+        let orderData = await this.findOrderInSheet(sheets, refundedSheet.sheetName, orderId);
+        
+        // If not found in refunded sheet, try to add from cancelled sheet
+        if (!orderData) {
+          console.log('⚠️ Order not found in refunded sheet, checking cancelled sheet:', orderId);
+          const cancelledSheet = await this.getSheetByType(sheets, 'cancelled');
+          if (cancelledSheet) {
+            const cancelledOrder = await this.findOrderInSheet(sheets, cancelledSheet.sheetName, orderId);
+            if (cancelledOrder) {
+              console.log('📊 Found in cancelled sheet, adding to refunded with failed status...');
+              await this.addOrderToSheet(sheets, 'refunded', cancelledOrder.rowData, 'refund_failed', 'refund_failed', 'refund_failed');
+              return true;
+            }
+          }
+          console.log('❌ Order not found in refunded or cancelled sheet for failed update:', orderId);
+          return false;
+        }
+
+        // Update the refunded sheet entry with failed status
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: SPREADSHEET_ID,
+          resource: {
+            valueInputOption: 'RAW',
+            data: [
+              { range: `${refundedSheet.sheetName}!J${orderData.rowIndex + 1}`, values: [['Refund Failed']] },
+              { range: `${refundedSheet.sheetName}!K${orderData.rowIndex + 1}`, values: [['Refund Failed']] }
+            ]
+          }
+        });
+        await this.updateRowColor(sheets, refundedSheet.sheetId, orderData.rowIndex, 'refund_failed');
+        console.log('✅ Refund failed status updated in sheet:', orderId);
         return true;
       }
 

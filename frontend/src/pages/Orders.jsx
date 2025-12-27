@@ -44,7 +44,8 @@ const statusConfig = {
   out_for_delivery: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-500', icon: Truck, label: 'On the Way' },
   delivered: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', dot: 'bg-green-500', icon: CheckCircle, label: 'Delivered' },
   cancelled: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', dot: 'bg-red-500', icon: X, label: 'Cancelled' },
-  refunded: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', dot: 'bg-red-600', icon: RefreshCw, label: 'Refunded' },
+  refunded: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-300', dot: 'bg-green-600', icon: RefreshCw, label: 'Refunded' },
+  refund_failed: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', dot: 'bg-red-600', icon: X, label: 'Refund Failed' },
   refund_processing: { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200', dot: 'bg-pink-500', icon: RefreshCw, label: 'Refund Processing' }
 };
 

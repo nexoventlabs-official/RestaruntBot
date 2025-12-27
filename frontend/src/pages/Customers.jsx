@@ -95,7 +95,8 @@ export default function Customers() {
       preparing: { bg: 'bg-orange-100', text: 'text-orange-700', icon: '◐' },
       pending: { bg: 'bg-amber-100', text: 'text-amber-700', icon: '○' },
       cancelled: { bg: 'bg-red-100', text: 'text-red-700', icon: '✕' },
-      refunded: { bg: 'bg-gray-100', text: 'text-gray-600', icon: '↩' }
+      refunded: { bg: 'bg-green-100', text: 'text-green-600', icon: '↩' },
+      refund_failed: { bg: 'bg-red-100', text: 'text-red-700', icon: '✕' }
     };
     return styles[status] || styles.pending;
   };

@@ -24,12 +24,12 @@ const orderSchema = new mongoose.Schema({
   totalAmount: { type: Number, required: true },
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled', 'refunded'],
+    enum: ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled', 'refunded', 'refund_failed'],
     default: 'pending'
   },
   serviceType: { type: String, enum: ['delivery', 'pickup', 'dine_in'], required: true },
   paymentMethod: { type: String, enum: ['upi', 'cod'], default: 'upi' },
-  paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded', 'cancelled', 'refund_processing'], default: 'pending' },
+  paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded', 'cancelled', 'refund_processing', 'refund_failed'], default: 'pending' },
   paymentId: { type: String },
   razorpayOrderId: { type: String },
   razorpayPaymentId: { type: String },

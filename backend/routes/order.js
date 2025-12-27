@@ -335,8 +335,21 @@ router.post('/:orderId/refund/approve', authMiddleware, async (req, res) => {
       } catch (refundError) {
         console.error('Razorpay refund error:', refundError);
         order.refundStatus = 'failed';
+        order.status = 'refund_failed';
+        order.paymentStatus = 'refund_failed';
         order.trackingUpdates.push({ status: 'refund_failed', message: refundError.message });
         await order.save();
+        
+        // Sync to Google Sheets with failed status
+        googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed').catch(err => 
+          console.error('Google Sheets sync error:', err)
+        );
+        
+        // Emit event for real-time updates
+        const dataEvents = require('../services/eventEmitter');
+        dataEvents.emit('orders');
+        dataEvents.emit('dashboard');
+        
         return res.status(500).json({ error: 'Refund processing failed: ' + refundError.message });
       }
     } else {
