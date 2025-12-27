@@ -416,18 +416,18 @@ const googleSheets = {
       // Handle refunded orders - move from refundprocessing to refunded sheet
       if (status === 'refunded') {
         let orderData = null;
-        let sourceSheet = null;
         let sourceSheetId = null;
+        let sourceRowIndex = -1;
         
         // Try to find in refundprocessing sheet first
         const processingSheet = await this.getSheetByType(sheets, 'refundprocessing');
         if (processingSheet) {
           const processingOrder = await this.findOrderInSheet(sheets, processingSheet.sheetName, orderId);
           if (processingOrder) {
-            console.log('📊 Found in refundprocessing sheet, moving to refunded...');
+            console.log('📊 Found in refundprocessing sheet, will move to refunded...');
             orderData = processingOrder;
-            sourceSheet = processingSheet.sheetName;
             sourceSheetId = processingSheet.sheetId;
+            sourceRowIndex = processingOrder.rowIndex;
           }
         }
         
@@ -439,7 +439,6 @@ const googleSheets = {
             if (cancelledOrder) {
               console.log('📊 Found in cancelled sheet, adding to refunded...');
               orderData = cancelledOrder;
-              sourceSheet = cancelledSheet.sheetName;
               // Don't delete from cancelled sheet, just copy to refunded
             }
           }
@@ -487,13 +486,14 @@ const googleSheets = {
           return false;
         }
         
+        // Delete from refundprocessing FIRST (before adding to refunded)
+        if (sourceSheetId && sourceRowIndex !== -1) {
+          console.log('🗑️ Deleting from refundprocessing sheet, row:', sourceRowIndex);
+          await this.deleteOrderFromSheet(sheets, sourceSheetId, sourceRowIndex);
+        }
+        
         // Add to refunded sheet
         await this.addOrderToSheet(sheets, 'refunded', orderData.rowData, 'refunded', 'refunded', 'refunded');
-        
-        // Delete from refundprocessing if it was found there
-        if (sourceSheet === 'refundprocessing' && sourceSheetId) {
-          await this.deleteOrderFromSheet(sheets, sourceSheetId, orderData.rowIndex);
-        }
         
         return true;
       }
@@ -501,18 +501,18 @@ const googleSheets = {
       // Handle refund_failed orders - move from refundprocessing to refundfailed sheet
       if (status === 'refund_failed') {
         let orderData = null;
-        let sourceSheet = null;
         let sourceSheetId = null;
+        let sourceRowIndex = -1;
         
         // Try to find in refundprocessing sheet first
         const processingSheet = await this.getSheetByType(sheets, 'refundprocessing');
         if (processingSheet) {
           const processingOrder = await this.findOrderInSheet(sheets, processingSheet.sheetName, orderId);
           if (processingOrder) {
-            console.log('📊 Found in refundprocessing sheet, moving to refundfailed...');
+            console.log('📊 Found in refundprocessing sheet, will move to refundfailed...');
             orderData = processingOrder;
-            sourceSheet = processingSheet.sheetName;
             sourceSheetId = processingSheet.sheetId;
+            sourceRowIndex = processingOrder.rowIndex;
           }
         }
         
@@ -524,7 +524,6 @@ const googleSheets = {
             if (cancelledOrder) {
               console.log('📊 Found in cancelled sheet, adding to refundfailed...');
               orderData = cancelledOrder;
-              sourceSheet = cancelledSheet.sheetName;
             }
           }
         }
@@ -571,13 +570,14 @@ const googleSheets = {
           return false;
         }
         
+        // Delete from refundprocessing FIRST (before adding to refundfailed)
+        if (sourceSheetId && sourceRowIndex !== -1) {
+          console.log('🗑️ Deleting from refundprocessing sheet, row:', sourceRowIndex);
+          await this.deleteOrderFromSheet(sheets, sourceSheetId, sourceRowIndex);
+        }
+        
         // Add to refundfailed sheet
         await this.addOrderToSheet(sheets, 'refundfailed', orderData.rowData, 'refund_failed', 'refund_failed', 'refund_failed');
-        
-        // Delete from refundprocessing if it was found there
-        if (sourceSheet === 'refundprocessing' && sourceSheetId) {
-          await this.deleteOrderFromSheet(sheets, sourceSheetId, orderData.rowIndex);
-        }
         
         return true;
       }
