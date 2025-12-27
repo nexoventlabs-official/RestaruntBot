@@ -121,6 +121,18 @@ app.get('/api/sync-cancelled', async (req, res) => {
   }
 });
 
+// Sync pending refund orders to refundprocessing sheet
+app.get('/api/sync-pending-refunds', async (req, res) => {
+  const googleSheets = require('./services/googleSheets');
+  console.log('🔄 Syncing pending refund orders to Google Sheets...');
+  try {
+    const result = await googleSheets.syncPendingRefunds();
+    res.json({ success: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

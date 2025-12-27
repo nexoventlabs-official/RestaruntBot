@@ -348,40 +348,43 @@ const googleSheets = {
           orderData = await this.findOrderInSheet(sheets, newSheet.sheetName, orderId);
         }
         
+        // Get order from database to check refund status
+        let dbOrder = null;
+        try {
+          const Order = require('../models/Order');
+          dbOrder = await Order.findOne({ orderId });
+        } catch (dbErr) {
+          console.error('Error fetching order from database:', dbErr.message);
+        }
+        
         if (!orderData) {
           console.log('⚠️ Order not found in neworders sheet, trying to fetch from database...');
           // Try to get order data from database and create row data
-          try {
-            const Order = require('../models/Order');
-            const order = await Order.findOne({ orderId });
-            if (order) {
-              const date = new Date(order.createdAt || Date.now());
-              const istOptions = { timeZone: 'Asia/Kolkata' };
-              const itemsStr = order.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
-              
-              orderData = {
-                rowData: [
-                  order.orderId,
-                  date.toLocaleDateString('en-IN', istOptions),
-                  date.toLocaleTimeString('en-IN', istOptions),
-                  order.customer?.phone || '',
-                  order.customer?.name || '',
-                  itemsStr,
-                  order.totalAmount,
-                  order.serviceType,
-                  (order.paymentMethod || 'upi').toUpperCase(),
-                  'Paid',
-                  'Cancelled',
-                  order.deliveryAddress?.address || '',
-                  order.deliveryAddress?.latitude || '',
-                  order.deliveryAddress?.longitude || ''
-                ],
-                rowIndex: -1 // Not in sheet
-              };
-              console.log('✅ Created order data from database for:', orderId);
-            }
-          } catch (dbErr) {
-            console.error('Error fetching order from database:', dbErr.message);
+          if (dbOrder) {
+            const date = new Date(dbOrder.createdAt || Date.now());
+            const istOptions = { timeZone: 'Asia/Kolkata' };
+            const itemsStr = dbOrder.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
+            
+            orderData = {
+              rowData: [
+                dbOrder.orderId,
+                date.toLocaleDateString('en-IN', istOptions),
+                date.toLocaleTimeString('en-IN', istOptions),
+                dbOrder.customer?.phone || '',
+                dbOrder.customer?.name || '',
+                itemsStr,
+                dbOrder.totalAmount,
+                dbOrder.serviceType,
+                (dbOrder.paymentMethod || 'upi').toUpperCase(),
+                'Paid',
+                'Cancelled',
+                dbOrder.deliveryAddress?.address || '',
+                dbOrder.deliveryAddress?.latitude || '',
+                dbOrder.deliveryAddress?.longitude || ''
+              ],
+              rowIndex: -1 // Not in sheet
+            };
+            console.log('✅ Created order data from database for:', orderId);
           }
         }
         
@@ -390,7 +393,9 @@ const googleSheets = {
           return false;
         }
 
-        const isUpiRefund = paymentStatus === 'refund_processing';
+        // Check if this is a UPI refund - check both paymentStatus and refundStatus from DB
+        const isUpiRefund = paymentStatus === 'refund_processing' || 
+                           (dbOrder && dbOrder.refundStatus === 'pending' && dbOrder.paymentStatus === 'paid' && dbOrder.razorpayPaymentId);
 
         // Add to cancelled sheet
         await this.addOrderToSheet(sheets, 'cancelled', orderData.rowData, isUpiRefund ? 'paid' : (paymentStatus || 'cancelled'), 'cancelled', 'cancelled');
@@ -634,6 +639,69 @@ const googleSheets = {
       return true;
     } catch (error) {
       console.error('❌ Google Sheets init error:', error.message);
+      return false;
+    }
+  },
+
+  // Sync pending refund orders to refundprocessing sheet
+  async syncPendingRefunds() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return false;
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const Order = require('../models/Order');
+      
+      // Find all orders with pending refund status
+      const pendingOrders = await Order.find({
+        refundStatus: { $in: ['pending', 'scheduled'] },
+        paymentStatus: 'paid',
+        razorpayPaymentId: { $exists: true, $ne: null }
+      });
+      
+      console.log(`📊 Found ${pendingOrders.length} pending refund orders to sync`);
+      
+      for (const order of pendingOrders) {
+        // Check if already in refundprocessing sheet
+        const processingSheet = await this.getSheetByType(sheets, 'refundprocessing');
+        if (processingSheet) {
+          const existingOrder = await this.findOrderInSheet(sheets, processingSheet.sheetName, order.orderId);
+          if (existingOrder) {
+            console.log(`⏭️ Order ${order.orderId} already in refundprocessing sheet`);
+            continue;
+          }
+        }
+        
+        // Create row data from order
+        const date = new Date(order.createdAt || Date.now());
+        const istOptions = { timeZone: 'Asia/Kolkata' };
+        const itemsStr = order.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
+        
+        const rowData = [
+          order.orderId,
+          date.toLocaleDateString('en-IN', istOptions),
+          date.toLocaleTimeString('en-IN', istOptions),
+          order.customer?.phone || '',
+          order.customer?.name || '',
+          itemsStr,
+          order.totalAmount,
+          order.serviceType,
+          (order.paymentMethod || 'upi').toUpperCase(),
+          'Paid',
+          'Refund Processing',
+          order.deliveryAddress?.address || '',
+          order.deliveryAddress?.latitude || '',
+          order.deliveryAddress?.longitude || ''
+        ];
+        
+        // Add to refundprocessing sheet
+        await this.addOrderToSheet(sheets, 'refundprocessing', rowData, 'paid', 'refund_processing', 'refund_processing');
+        console.log(`✅ Synced order ${order.orderId} to refundprocessing sheet`);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Error syncing pending refunds:', error.message);
       return false;
     }
   }
