@@ -165,38 +165,20 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
       order.paymentStatus = 'cancelled';
     }
     
-    // For paid UPI orders that are cancelled, process refund automatically
+    // For paid UPI orders that are cancelled, mark refund as pending (wait for Razorpay)
     if (status === 'cancelled' && order.paymentStatus === 'paid' && order.razorpayPaymentId) {
-      console.log('💰 Processing auto refund for order:', order.orderId);
+      console.log('💰 Marking refund as pending for order:', order.orderId);
       
-      try {
-        const refund = await razorpayService.refund(order.razorpayPaymentId, order.totalAmount);
-        
-        order.refundStatus = 'completed';
-        order.refundId = refund.id;
-        order.refundAmount = order.totalAmount;
-        order.refundRequestedAt = new Date();
-        order.refundProcessedAt = new Date();
-        order.paymentStatus = 'refunded';
-        order.status = 'refunded';
-        order.trackingUpdates.push({ 
-          status: 'refunded', 
-          message: `Refund of ₹${order.totalAmount} processed successfully. Refund ID: ${refund.id}`, 
-          timestamp: new Date() 
-        });
-        console.log('✅ Auto refund completed for order:', order.orderId, 'Refund ID:', refund.id);
-      } catch (refundError) {
-        console.error('❌ Auto refund failed for order:', order.orderId, refundError.message);
-        order.refundStatus = 'failed';
-        order.refundAmount = order.totalAmount;
-        order.refundRequestedAt = new Date();
-        order.refundError = refundError.message;
-        order.trackingUpdates.push({ 
-          status: 'refund_failed', 
-          message: `Refund failed: ${refundError.message}`, 
-          timestamp: new Date() 
-        });
-      }
+      order.refundStatus = 'pending';
+      order.refundAmount = order.totalAmount;
+      order.refundRequestedAt = new Date();
+      order.paymentStatus = 'refund_processing';
+      order.trackingUpdates.push({ 
+        status: 'refund_processing', 
+        message: `Refund of ₹${order.totalAmount} is being processed`, 
+        timestamp: new Date() 
+      });
+      console.log('⏳ Refund pending for order:', order.orderId);
     }
     
     try {
@@ -209,9 +191,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
 
     // Sync status update to Google Sheets
     try {
-      const sheetStatus = order.refundStatus === 'completed' ? 'refunded' : (order.refundStatus === 'failed' ? 'refund_failed' : order.status);
-      console.log('📊 Syncing to Google Sheets:', order.orderId, sheetStatus, order.paymentStatus);
-      const sheetUpdated = await googleSheets.updateOrderStatus(order.orderId, sheetStatus, order.paymentStatus);
+      console.log('📊 Syncing to Google Sheets:', order.orderId, order.status, order.paymentStatus);
+      const sheetUpdated = await googleSheets.updateOrderStatus(order.orderId, order.status, order.paymentStatus);
       if (sheetUpdated) {
         console.log('✅ Google Sheets synced successfully');
       } else {
@@ -264,9 +245,9 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             'Your feedback helps us improve!'
           );
         } else {
-          // Add refund info if order was cancelled/refunded
-          if (order.refundStatus === 'completed' && order.refundId) {
-            msg = `✅ *Order Cancelled & Refunded*\n\nOrder: ${order.orderId}\n\n💰 *Refund Processed*\nAmount: ₹${order.totalAmount}\nRefund ID: ${order.refundId}\n\n💳 The amount will be credited to your account within 5-7 business days.`;
+          // Add refund info if order was cancelled with pending refund
+          if (order.refundStatus === 'pending' && order.paymentStatus === 'refund_processing') {
+            msg += `\n\n💰 *Refund Processing*\nAmount: ₹${order.totalAmount}\n\n⏱️ Your refund will be processed within 5-7 business days.`;
           } else if (order.refundStatus === 'failed') {
             msg += `\n\n⚠️ *Refund Issue*\nWe couldn't process your refund automatically.\nAmount: ₹${order.totalAmount}\n\nOur team will contact you within 24 hours to resolve this.`;
           }
