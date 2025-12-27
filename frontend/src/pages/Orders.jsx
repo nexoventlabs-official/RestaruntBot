@@ -377,6 +377,25 @@ export default function Orders() {
     }
   };
 
+  const processRefund = async (orderId) => {
+    if (updatingId) return;
+    if (!confirm(`Process refund for order ${orderId}?`)) return;
+    
+    const order = orders.find(o => o.orderId === orderId);
+    if (!order) return;
+    
+    setUpdatingId(order._id);
+    try {
+      await api.post(`/payment/process-refund/${orderId}`);
+      fetchOrders(false);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to process refund');
+      fetchOrders(false);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   const filteredOrders = orders.filter(order => 
     order.orderId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     order.customer?.phone?.includes(searchTerm)
@@ -514,11 +533,27 @@ export default function Orders() {
 
                   {/* Refund Status */}
                   {order.refundStatus && order.refundStatus !== 'none' && (
-                    <div className={`flex items-center gap-2 p-2.5 rounded-lg ${order.refundStatus === 'pending' ? 'bg-amber-50' : order.refundStatus === 'completed' ? 'bg-green-50' : 'bg-red-50'}`}>
-                      <RefreshCw className={`w-3.5 h-3.5 ${order.refundStatus === 'pending' ? 'text-amber-600' : order.refundStatus === 'completed' ? 'text-green-600' : 'text-red-600'}`} />
-                      <span className={`text-xs font-medium ${order.refundStatus === 'pending' ? 'text-amber-700' : order.refundStatus === 'completed' ? 'text-green-700' : 'text-red-700'}`}>
-                        Refund {order.refundStatus}{order.refundAmount ? ` • ₹${order.refundAmount}` : ''}
-                      </span>
+                    <div className={`flex items-center justify-between gap-2 p-2.5 rounded-lg ${order.refundStatus === 'pending' ? 'bg-amber-50' : order.refundStatus === 'completed' ? 'bg-green-50' : 'bg-red-50'}`}>
+                      <div className="flex items-center gap-2">
+                        <RefreshCw className={`w-3.5 h-3.5 ${order.refundStatus === 'pending' ? 'text-amber-600' : order.refundStatus === 'completed' ? 'text-green-600' : 'text-red-600'}`} />
+                        <span className={`text-xs font-medium ${order.refundStatus === 'pending' ? 'text-amber-700' : order.refundStatus === 'completed' ? 'text-green-700' : 'text-red-700'}`}>
+                          Refund {order.refundStatus}{order.refundAmount ? ` • ₹${order.refundAmount}` : ''}
+                        </span>
+                      </div>
+                      {(order.refundStatus === 'pending' || order.refundStatus === 'failed') && (
+                        <button 
+                          onClick={() => processRefund(order.orderId)} 
+                          disabled={updatingId === order._id}
+                          className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-1"
+                        >
+                          {updatingId === order._id ? (
+                            <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-3 h-3" />
+                          )}
+                          Process
+                        </button>
+                      )}
                     </div>
                   )}
 
