@@ -92,7 +92,8 @@ export default function Refunds() {
         setDialog(prev => ({ ...prev, isOpen: false }));
         setProcessingId(orderId);
         try {
-          await api.post(`/orders/${orderId}/refund/approve`);
+          // Use longer timeout for refund operations (60 seconds)
+          await api.post(`/orders/${orderId}/refund/approve`, {}, { timeout: 60000 });
           setDialog({
             isOpen: true,
             title: 'Refund Approved',
@@ -103,13 +104,20 @@ export default function Refunds() {
           });
           fetchRefunds();
         } catch (err) {
+          // Check if it's a timeout error - refund might still be processing
+          const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout');
           setDialog({
             isOpen: true,
-            title: 'Refund Failed',
-            message: err.response?.data?.error || 'Failed to approve refund. Please try again.',
-            type: 'error',
+            title: isTimeout ? 'Processing' : 'Refund Failed',
+            message: isTimeout 
+              ? 'Refund is taking longer than expected. Please check the status in a moment.'
+              : (err.response?.data?.error || 'Failed to approve refund. Please try again.'),
+            type: isTimeout ? 'warning' : 'error',
             showCancel: false,
-            onConfirm: () => setDialog(prev => ({ ...prev, isOpen: false }))
+            onConfirm: () => {
+              setDialog(prev => ({ ...prev, isOpen: false }));
+              fetchRefunds();
+            }
           });
         } finally {
           setProcessingId(null);
