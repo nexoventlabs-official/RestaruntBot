@@ -35,7 +35,7 @@ const Dialog = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 !mt-0" style={{ marginTop: 0 }}>
       <div className="absolute inset-0 bg-black/50" onClick={loading ? undefined : onClose} />
       <div className="relative bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 animate-in fade-in zoom-in duration-200">
         <button 
