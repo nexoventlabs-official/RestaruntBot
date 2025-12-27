@@ -356,7 +356,7 @@ const googleSheets = {
         // If UPI refund, also add to refunded sheet with "Refund Processing"
         if (isUpiRefund) {
           console.log('📊 Adding UPI order to refunded sheet with Refund Processing...');
-          await this.addOrderToSheet(sheets, 'refunded', orderData.rowData, 'refund_processing', 'cancelled', 'refund_processing');
+          await this.addOrderToSheet(sheets, 'refunded', orderData.rowData, 'paid', 'refund_processing', 'refund_processing');
         }
 
         // Delete from neworders
@@ -378,7 +378,7 @@ const googleSheets = {
             const cancelledOrder = await this.findOrderInSheet(sheets, cancelledSheet.sheetName, orderId);
             if (cancelledOrder) {
               console.log('📊 Found in cancelled sheet, adding to refunded...');
-              await this.addOrderToSheet(sheets, 'refunded', cancelledOrder.rowData, 'refunded', 'refunded', 'refunded');
+              await this.addOrderToSheet(sheets, 'refunded', cancelledOrder.rowData, 'paid', 'refunded', 'refunded');
               return true;
             }
           }
@@ -386,13 +386,13 @@ const googleSheets = {
           return false;
         }
 
-        // Update the refunded sheet entry
+        // Update the refunded sheet entry - Payment: Paid, Order Status: Refunded
         await sheets.spreadsheets.values.batchUpdate({
           spreadsheetId: SPREADSHEET_ID,
           resource: {
             valueInputOption: 'RAW',
             data: [
-              { range: `${refundedSheet.sheetName}!J${orderData.rowIndex + 1}`, values: [['Refunded']] },
+              { range: `${refundedSheet.sheetName}!J${orderData.rowIndex + 1}`, values: [['Paid']] },
               { range: `${refundedSheet.sheetName}!K${orderData.rowIndex + 1}`, values: [['Refunded']] }
             ]
           }
@@ -417,7 +417,7 @@ const googleSheets = {
             const cancelledOrder = await this.findOrderInSheet(sheets, cancelledSheet.sheetName, orderId);
             if (cancelledOrder) {
               console.log('📊 Found in cancelled sheet, adding to refunded with failed status...');
-              await this.addOrderToSheet(sheets, 'refunded', cancelledOrder.rowData, 'refund_failed', 'refund_failed', 'refund_failed');
+              await this.addOrderToSheet(sheets, 'refunded', cancelledOrder.rowData, 'paid', 'refund_failed', 'refund_failed');
               return true;
             }
           }
@@ -425,13 +425,13 @@ const googleSheets = {
           return false;
         }
 
-        // Update the refunded sheet entry with failed status
+        // Update the refunded sheet entry - Payment: Paid, Order Status: Refund Failed
         await sheets.spreadsheets.values.batchUpdate({
           spreadsheetId: SPREADSHEET_ID,
           resource: {
             valueInputOption: 'RAW',
             data: [
-              { range: `${refundedSheet.sheetName}!J${orderData.rowIndex + 1}`, values: [['Refund Failed']] },
+              { range: `${refundedSheet.sheetName}!J${orderData.rowIndex + 1}`, values: [['Paid']] },
               { range: `${refundedSheet.sheetName}!K${orderData.rowIndex + 1}`, values: [['Refund Failed']] }
             ]
           }
