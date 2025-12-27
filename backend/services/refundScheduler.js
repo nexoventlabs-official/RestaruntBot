@@ -93,6 +93,8 @@ const refundScheduler = {
         
         // Update order with failure status
         order.refundStatus = 'failed';
+        order.status = 'refund_failed';
+        order.paymentStatus = 'refund_failed';
         order.refundError = refundError.message;
         order.trackingUpdates.push({
           status: 'refund_failed',
@@ -104,6 +106,13 @@ const refundScheduler = {
         // Emit event for real-time updates
         const dataEvents = require('./eventEmitter');
         dataEvents.emit('orders');
+        
+        // Sync to Google Sheets - move to refundfailed sheet
+        try {
+          await googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed');
+        } catch (err) {
+          console.error('Google Sheets sync error for failed refund:', err.message);
+        }
         
         // Send failure notification
         await this.sendRefundFailureMessage(order);

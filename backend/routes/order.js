@@ -66,7 +66,9 @@ router.get('/refunds', authMiddleware, async (req, res) => {
     } else if (status === 'completed') {
       query.refundStatus = 'completed';
     } else if (status === 'rejected') {
-      query.refundStatus = { $in: ['rejected', 'failed'] };
+      query.refundStatus = 'rejected';
+    } else if (status === 'failed') {
+      query.refundStatus = 'failed';
     }
     // 'all' returns all non-none refund statuses
     

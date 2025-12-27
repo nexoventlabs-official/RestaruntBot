@@ -184,6 +184,7 @@ export default function Refunds() {
           {[
             { value: 'pending', label: 'Pending' },
             { value: 'completed', label: 'Completed' },
+            { value: 'failed', label: 'Failed' },
             { value: 'rejected', label: 'Rejected' },
             { value: 'all', label: 'All' },
           ].map(tab => (
