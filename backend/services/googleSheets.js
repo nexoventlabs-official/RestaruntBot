@@ -467,7 +467,7 @@ const googleSheets = {
                   order.serviceType,
                   (order.paymentMethod || 'upi').toUpperCase(),
                   'Refunded',
-                  'Refunded',
+                  'Cancelled',
                   order.deliveryAddress?.address || '',
                   order.deliveryAddress?.latitude || '',
                   order.deliveryAddress?.longitude || ''
@@ -492,8 +492,8 @@ const googleSheets = {
           await this.deleteOrderFromSheet(sheets, sourceSheetId, sourceRowIndex);
         }
         
-        // Add to refunded sheet
-        await this.addOrderToSheet(sheets, 'refunded', orderData.rowData, 'refunded', 'refunded', 'refunded');
+        // Add to refunded sheet - Payment Status: Refunded, Order Status: Cancelled
+        await this.addOrderToSheet(sheets, 'refunded', orderData.rowData, 'refunded', 'cancelled', 'refunded');
         
         return true;
       }
