@@ -192,11 +192,20 @@ const googleSheets = {
     }
   },
 
-  // Add order to a specific sheet
+  // Add order to a specific sheet (with duplicate check)
   async addOrderToSheet(sheets, sheetType, rowData, paymentStatus, orderStatus, colorStatus) {
     try {
       const sheet = await this.getSheetByType(sheets, sheetType);
       if (!sheet) return false;
+
+      const orderId = rowData[0];
+      
+      // Check if order already exists in this sheet
+      const existingOrder = await this.findOrderInSheet(sheets, sheet.sheetName, orderId);
+      if (existingOrder) {
+        console.log(`⏭️ Order ${orderId} already exists in ${sheet.sheetName}, skipping add`);
+        return true; // Return true since order is already there
+      }
 
       await this.addDateHeader(sheets, sheet.sheetName, sheet.sheetId);
 
