@@ -163,18 +163,19 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
       order.paymentStatus = 'cancelled';
     }
     
-    // Mark refund as pending for admin approval (paid UPI orders)
+    // For paid UPI orders that are cancelled, set refund processing status
     if (status === 'cancelled' && order.paymentStatus === 'paid' && order.razorpayPaymentId) {
-      console.log('💰 Marking refund as pending for order:', order.orderId);
+      console.log('💰 Setting refund processing for order:', order.orderId);
       order.refundStatus = 'pending';
       order.refundAmount = order.totalAmount;
       order.refundRequestedAt = new Date();
+      order.paymentStatus = 'refund_processing'; // Show refund processing status
       order.trackingUpdates.push({ 
-        status: 'refund_pending', 
-        message: `Refund of ₹${order.totalAmount} pending admin approval`, 
+        status: 'refund_processing', 
+        message: `Refund of ₹${order.totalAmount} is being processed`, 
         timestamp: new Date() 
       });
-      console.log('⏳ Refund pending approval for order:', order.orderId);
+      console.log('⏳ Refund processing for order:', order.orderId);
     }
     
     try {

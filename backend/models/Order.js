@@ -29,7 +29,7 @@ const orderSchema = new mongoose.Schema({
   },
   serviceType: { type: String, enum: ['delivery', 'pickup', 'dine_in'], required: true },
   paymentMethod: { type: String, enum: ['upi', 'cod'], default: 'upi' },
-  paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded', 'cancelled'], default: 'pending' },
+  paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded', 'cancelled', 'refund_processing'], default: 'pending' },
   paymentId: { type: String },
   razorpayOrderId: { type: String },
   razorpayPaymentId: { type: String },

@@ -44,7 +44,8 @@ const statusConfig = {
   out_for_delivery: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-500', icon: Truck, label: 'On the Way' },
   delivered: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', dot: 'bg-green-500', icon: CheckCircle, label: 'Delivered' },
   cancelled: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', dot: 'bg-red-500', icon: X, label: 'Cancelled' },
-  refunded: { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200', dot: 'bg-gray-500', icon: RefreshCw, label: 'Refunded' }
+  refunded: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', dot: 'bg-red-600', icon: RefreshCw, label: 'Refunded' },
+  refund_processing: { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200', dot: 'bg-pink-500', icon: RefreshCw, label: 'Refund Processing' }
 };
 
 const filterOptions = [
@@ -525,8 +526,15 @@ export default function Orders() {
                     <div className="flex items-center gap-2">
                       <CreditCard className="w-4 h-4 text-dark-300" />
                       <span className="text-sm text-dark-500">{order.paymentMethod?.toUpperCase()}</span>
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${order.paymentStatus === 'paid' ? 'bg-green-50 text-green-700' : order.paymentStatus === 'refunded' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>
-                        {order.paymentMethod === 'cod' && order.paymentStatus === 'pending' ? 'COD' : order.paymentStatus}
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        order.paymentStatus === 'paid' ? 'bg-green-50 text-green-700' : 
+                        order.paymentStatus === 'refunded' ? 'bg-red-100 text-red-700' : 
+                        order.paymentStatus === 'refund_processing' ? 'bg-pink-50 text-pink-700' :
+                        'bg-amber-50 text-amber-700'
+                      }`}>
+                        {order.paymentMethod === 'cod' && order.paymentStatus === 'pending' ? 'COD' : 
+                         order.paymentStatus === 'refund_processing' ? 'Refund Processing' : 
+                         order.paymentStatus}
                       </span>
                     </div>
                     <span className="text-lg font-bold text-dark-900">₹{order.totalAmount}</span>

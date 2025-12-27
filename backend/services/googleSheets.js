@@ -21,7 +21,8 @@ const STATUS_COLORS = {
   out_for_delivery: { red: 0.85, green: 0.88, blue: 1 }, // Light Indigo
   delivered: { red: 0.85, green: 1, blue: 0.85 },     // Light Green
   cancelled: { red: 1, green: 0.85, blue: 0.85 },     // Light Red
-  refunded: { red: 0.9, green: 0.9, blue: 0.9 }       // Light Gray
+  refunded: { red: 1, green: 0.8, blue: 0.8 },        // Red for refunded
+  refund_processing: { red: 1, green: 0.9, blue: 0.92 } // Light Pink for refund processing
 };
 
 // Status display labels
@@ -33,7 +34,8 @@ const STATUS_LABELS = {
   out_for_delivery: 'On the Way',
   delivered: 'Delivered',
   cancelled: 'Cancelled',
-  refunded: 'Refunded'
+  refunded: 'Refunded',
+  refund_processing: 'Refund Processing'
 };
 
 // Initialize Google Sheets API with Service Account
@@ -479,9 +481,9 @@ const googleSheets = {
   },
 
   // Move order from one sheet to another based on status
-  async moveOrderToSheet(orderId, targetStatus, paymentStatus = null) {
+  async moveOrderToSheet(orderId, targetStatus, paymentStatus = null, colorStatus = null) {
     try {
-      console.log('📊 moveOrderToSheet called:', { orderId, targetStatus, paymentStatus });
+      console.log('📊 moveOrderToSheet called:', { orderId, targetStatus, paymentStatus, colorStatus });
       
       const auth = getAuthClient();
       if (!auth) {
@@ -522,7 +524,7 @@ const googleSheets = {
           if (existingOrder) {
             console.log('📊 Order already in target sheet, updating status...');
             // Just update the status in the target sheet
-            return await this.updateOrderInSheet(sheets, targetSheet.sheetName, existingOrder.rowIndex, targetStatus, paymentStatus);
+            return await this.updateOrderInSheet(sheets, targetSheet.sheetName, existingOrder.rowIndex, targetStatus, paymentStatus, colorStatus || targetStatus);
           }
         }
         
@@ -534,7 +536,7 @@ const googleSheets = {
             if (cancelledOrder) {
               console.log('📊 Found order in cancelled sheet, moving to refunded...');
               // Move from cancelled to refunded
-              return await this.moveOrderBetweenSheets(sheets, cancelledSheet, cancelledOrder, targetSheetType, targetStatus, paymentStatus);
+              return await this.moveOrderBetweenSheets(sheets, cancelledSheet, cancelledOrder, targetSheetType, targetStatus, paymentStatus, colorStatus || targetStatus);
             }
           }
         }
@@ -545,7 +547,7 @@ const googleSheets = {
       
       // If target is same as source (new), just update status
       if (targetSheetType === 'new') {
-        return await this.updateOrderInSheet(sheets, sourceSheet.sheetName, orderData.rowIndex, targetStatus, paymentStatus);
+        return await this.updateOrderInSheet(sheets, sourceSheet.sheetName, orderData.rowIndex, targetStatus, paymentStatus, colorStatus || targetStatus);
       }
       
       // Move order to target sheet
@@ -555,7 +557,7 @@ const googleSheets = {
         return false;
       }
       
-      return await this.moveOrderBetweenSheets(sheets, sourceSheet, orderData, targetSheetType, targetStatus, paymentStatus);
+      return await this.moveOrderBetweenSheets(sheets, sourceSheet, orderData, targetSheetType, targetStatus, paymentStatus, colorStatus || targetStatus);
       
     } catch (error) {
       console.error('❌ moveOrderToSheet error:', error.message);
@@ -564,7 +566,7 @@ const googleSheets = {
   },
 
   // Helper to move order between sheets
-  async moveOrderBetweenSheets(sheets, sourceSheet, orderData, targetSheetType, targetStatus, paymentStatus) {
+  async moveOrderBetweenSheets(sheets, sourceSheet, orderData, targetSheetType, targetStatus, paymentStatus, colorStatus) {
     try {
       const targetSheet = await this.getSheetIdByType(sheets, targetSheetType);
       if (!targetSheet) {
@@ -587,7 +589,7 @@ const googleSheets = {
       // Update status (column K = index 10) and payment status (column J = index 9)
       rowData[10] = STATUS_LABELS[targetStatus] || targetStatus;
       if (paymentStatus) {
-        rowData[9] = paymentStatus.charAt(0).toUpperCase() + paymentStatus.slice(1);
+        rowData[9] = STATUS_LABELS[paymentStatus] || paymentStatus.charAt(0).toUpperCase() + paymentStatus.slice(1);
       }
       
       // Add row to target sheet
@@ -627,7 +629,8 @@ const googleSheets = {
       const newRowIndex = targetRows.findIndex(row => row[0] === rowData[0]);
       
       if (newRowIndex !== -1) {
-        await this.updateRowColor(sheets, targetSheet.sheetId, newRowIndex, targetStatus);
+        // Use colorStatus for row color (e.g., refund_processing for pink)
+        await this.updateRowColor(sheets, targetSheet.sheetId, newRowIndex, colorStatus || targetStatus);
       }
       
       console.log('✅ Order moved to', targetSheet.sheetName, 'sheet:', rowData[0]);
@@ -640,7 +643,7 @@ const googleSheets = {
   },
 
   // Update order status within a specific sheet
-  async updateOrderInSheet(sheets, sheetName, rowIndex, status, paymentStatus) {
+  async updateOrderInSheet(sheets, sheetName, rowIndex, status, paymentStatus, colorStatus) {
     try {
       const updates = [];
       
@@ -653,7 +656,7 @@ const googleSheets = {
       }
       
       if (paymentStatus) {
-        const paymentLabel = paymentStatus.charAt(0).toUpperCase() + paymentStatus.slice(1);
+        const paymentLabel = STATUS_LABELS[paymentStatus] || paymentStatus.charAt(0).toUpperCase() + paymentStatus.slice(1);
         updates.push({
           range: `${sheetName}!J${rowIndex + 1}`,
           values: [[paymentLabel]]
@@ -670,9 +673,9 @@ const googleSheets = {
         });
       }
       
-      // Update row color
+      // Update row color using colorStatus
       const sheetId = await this.getSheetId(sheets, sheetName);
-      await this.updateRowColor(sheets, sheetId, rowIndex, status);
+      await this.updateRowColor(sheets, sheetId, rowIndex, colorStatus || status);
       
       console.log('✅ Order updated in', sheetName, 'sheet');
       return true;
@@ -743,7 +746,9 @@ const googleSheets = {
       
       // For delivered, cancelled, or refunded status, move to respective sheet
       if (status === 'delivered' || status === 'cancelled' || status === 'refunded') {
-        return await this.moveOrderToSheet(orderId, status, paymentStatus);
+        // For cancelled orders with refund_processing payment status, use refund_processing color
+        const effectiveStatus = (status === 'cancelled' && paymentStatus === 'refund_processing') ? 'refund_processing' : status;
+        return await this.moveOrderToSheet(orderId, status, paymentStatus, effectiveStatus);
       }
       
       const auth = getAuthClient();
@@ -796,7 +801,7 @@ const googleSheets = {
       }
       
       if (paymentStatus) {
-        const paymentLabel = paymentStatus.charAt(0).toUpperCase() + paymentStatus.slice(1);
+        const paymentLabel = STATUS_LABELS[paymentStatus] || paymentStatus.charAt(0).toUpperCase() + paymentStatus.slice(1);
         const paymentRange = `${actualSheetName}!J${rowIndex + 1}`;
         console.log('📊 Will update Payment Status at:', paymentRange, 'to:', paymentLabel);
         updates.push({
