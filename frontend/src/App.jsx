@@ -6,7 +6,6 @@ import Orders from './pages/Orders';
 import Menu from './pages/Menu';
 import Customers from './pages/Customers';
 import Reports from './pages/Reports';
-import Refunds from './pages/Refunds';
 import NotFound from './pages/NotFound';
 import Layout from './components/Layout';
 import UserMenu from './pages/UserMenu';
@@ -61,7 +60,6 @@ function App() {
           <Route path="orders" element={<Orders />} />
           <Route path="menu" element={<Menu />} />
           <Route path="customers" element={<Customers />} />
-          <Route path="refunds" element={<Refunds />} />
           <Route path="reports" element={<Reports />} />
         </Route>
         

@@ -3811,24 +3811,46 @@ const chatbot = {
     
     let msg = `✅ *Order Cancelled*\n\nOrder ${orderId} has been cancelled.`;
     
-    // Schedule refund if already paid via UPI/online (mark as pending for admin approval)
+    // Auto refund if already paid via UPI/online
     if (order.paymentStatus === 'paid' && order.razorpayPaymentId) {
-      console.log('💰 Marking refund as pending for order:', orderId, 'Payment ID:', order.razorpayPaymentId);
+      console.log('💰 Processing auto refund for order:', orderId, 'Payment ID:', order.razorpayPaymentId);
       
-      order.refundStatus = 'pending';
-      order.refundAmount = order.totalAmount;
-      order.refundRequestedAt = new Date();
-      order.trackingUpdates.push({ 
-        status: 'refund_pending', 
-        message: `Refund of ₹${order.totalAmount} pending admin approval`, 
-        timestamp: new Date() 
-      });
-      
-      msg += `\n\n💰 *Refund Requested*\nYour refund of ₹${order.totalAmount} is pending approval.\n\n⏱️ You'll receive a confirmation once processed.`;
-      console.log('⏳ Refund pending approval for order:', orderId);
+      try {
+        const razorpayService = require('./razorpay');
+        const refund = await razorpayService.refund(order.razorpayPaymentId, order.totalAmount);
+        
+        order.refundStatus = 'completed';
+        order.refundId = refund.id;
+        order.refundAmount = order.totalAmount;
+        order.refundRequestedAt = new Date();
+        order.refundProcessedAt = new Date();
+        order.paymentStatus = 'refunded';
+        order.status = 'refunded';
+        order.trackingUpdates.push({ 
+          status: 'refunded', 
+          message: `Refund of ₹${order.totalAmount} processed successfully. Refund ID: ${refund.id}`, 
+          timestamp: new Date() 
+        });
+        
+        msg = `✅ *Order Cancelled & Refunded*\n\nOrder ${orderId} has been cancelled.\n\n💰 *Refund Processed*\nAmount: ₹${order.totalAmount}\nRefund ID: ${refund.id}\n\n💳 The amount will be credited to your account within 5-7 business days.`;
+        console.log('✅ Auto refund completed for order:', orderId, 'Refund ID:', refund.id);
+      } catch (refundError) {
+        console.error('❌ Auto refund failed for order:', orderId, refundError.message);
+        order.refundStatus = 'failed';
+        order.refundAmount = order.totalAmount;
+        order.refundRequestedAt = new Date();
+        order.refundError = refundError.message;
+        order.trackingUpdates.push({ 
+          status: 'refund_failed', 
+          message: `Refund failed: ${refundError.message}`, 
+          timestamp: new Date() 
+        });
+        
+        msg += `\n\n⚠️ *Refund Issue*\nWe couldn't process your refund automatically.\nAmount: ₹${order.totalAmount}\n\nOur team will contact you within 24 hours to resolve this.`;
+      }
     } else if (order.paymentStatus === 'paid' && !order.razorpayPaymentId) {
       // Paid but no payment ID (edge case)
-      order.refundStatus = 'pending';
+      order.refundStatus = 'failed';
       order.refundAmount = order.totalAmount;
       msg += `\n\n💰 *Refund Processing*\nYour refund of ₹${order.totalAmount} is being processed. Our team will contact you shortly.`;
     }
@@ -3840,8 +3862,9 @@ const chatbot = {
     dataEvents.emit('orders');
     dataEvents.emit('dashboard');
     
-    // Sync cancellation to Google Sheets
-    googleSheets.updateOrderStatus(order.orderId, 'cancelled', order.paymentStatus).catch(err => 
+    // Sync to Google Sheets
+    const sheetStatus = order.refundStatus === 'completed' ? 'refunded' : 'cancelled';
+    googleSheets.updateOrderStatus(order.orderId, sheetStatus, order.paymentStatus).catch(err => 
       console.error('Google Sheets sync error:', err)
     );
     console.log('📊 Customer cancelled order, syncing to Google Sheets:', order.orderId);
@@ -3916,36 +3939,76 @@ const chatbot = {
 
     if (order.refundStatus === 'pending' || order.refundStatus === 'scheduled') {
       await whatsapp.sendButtons(phone, 
-        `⏳ *Refund Already Scheduled*\n\nYour refund of ₹${order.totalAmount} is being processed.\n\n⏱️ You'll receive a confirmation once complete.`,
+        `⏳ *Refund Already Processing*\n\nYour refund of ₹${order.totalAmount} is being processed.\n\n⏱️ You'll receive a confirmation once complete.`,
         [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
       );
       return;
     }
 
-    // Mark refund as pending for admin approval
-    order.refundStatus = 'pending';
-    order.refundAmount = order.totalAmount;
-    order.status = 'cancelled';
-    order.statusUpdatedAt = new Date();
-    order.refundRequestedAt = new Date();
-    order.trackingUpdates.push({ status: 'refund_pending', message: 'Refund requested by customer, pending admin approval', timestamp: new Date() });
+    // Process refund automatically
+    let msg = '';
+    
+    if (order.razorpayPaymentId) {
+      try {
+        const razorpayService = require('./razorpay');
+        const refund = await razorpayService.refund(order.razorpayPaymentId, order.totalAmount);
+        
+        order.refundStatus = 'completed';
+        order.refundId = refund.id;
+        order.refundAmount = order.totalAmount;
+        order.status = 'refunded';
+        order.paymentStatus = 'refunded';
+        order.statusUpdatedAt = new Date();
+        order.refundRequestedAt = new Date();
+        order.refundProcessedAt = new Date();
+        order.trackingUpdates.push({ status: 'refunded', message: `Refund of ₹${order.totalAmount} processed. Refund ID: ${refund.id}`, timestamp: new Date() });
+        
+        msg = `✅ *Refund Successful!*\n\nOrder: ${orderId}\nAmount: ₹${order.totalAmount}\nRefund ID: ${refund.id}\n\n💳 The amount will be credited to your account within 5-7 business days.`;
+        console.log('✅ Refund completed for order:', orderId, 'Refund ID:', refund.id);
+        
+        // Sync to Google Sheets
+        googleSheets.updateOrderStatus(order.orderId, 'refunded', 'refunded').catch(err => 
+          console.error('Google Sheets sync error:', err)
+        );
+      } catch (refundError) {
+        console.error('❌ Refund failed for order:', orderId, refundError.message);
+        order.refundStatus = 'failed';
+        order.refundAmount = order.totalAmount;
+        order.status = 'cancelled';
+        order.statusUpdatedAt = new Date();
+        order.refundRequestedAt = new Date();
+        order.refundError = refundError.message;
+        order.trackingUpdates.push({ status: 'refund_failed', message: `Refund failed: ${refundError.message}`, timestamp: new Date() });
+        
+        msg = `⚠️ *Refund Issue*\n\nOrder: ${orderId}\nAmount: ₹${order.totalAmount}\n\nWe couldn't process your refund automatically.\nOur team will contact you within 24 hours to resolve this.`;
+        
+        // Sync to Google Sheets
+        googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed').catch(err => 
+          console.error('Google Sheets sync error:', err)
+        );
+      }
+    } else {
+      order.refundStatus = 'failed';
+      order.refundAmount = order.totalAmount;
+      order.status = 'cancelled';
+      order.statusUpdatedAt = new Date();
+      order.refundRequestedAt = new Date();
+      order.trackingUpdates.push({ status: 'refund_failed', message: 'No payment ID found for refund', timestamp: new Date() });
+      
+      msg = `⚠️ *Refund Issue*\n\nOrder: ${orderId}\nAmount: ₹${order.totalAmount}\n\nWe couldn't process your refund automatically.\nOur team will contact you within 24 hours to resolve this.`;
+    }
+    
     await order.save();
     
     // Emit event for real-time updates
     const dataEvents = require('./eventEmitter');
     dataEvents.emit('orders');
     dataEvents.emit('dashboard');
-    
-    // Sync to Google Sheets
-    googleSheets.updateOrderStatus(order.orderId, 'cancelled', order.paymentStatus).catch(err => 
-      console.error('Google Sheets sync error:', err)
-    );
-    console.log('📊 Customer requested refund, syncing to Google Sheets:', order.orderId);
 
-    await whatsapp.sendButtons(phone,
-      `✅ *Refund Requested!*\n\nOrder: ${orderId}\nAmount: ₹${order.totalAmount}\n\n⏱️ Your refund is pending approval.\nYou'll receive a confirmation once processed.`,
-      [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
-    );
+    await whatsapp.sendButtons(phone, msg, [
+      { id: 'order_status', text: 'View Orders' }, 
+      { id: 'home', text: 'Main Menu' }
+    ]);
   },
 
   // ============ HELP ============

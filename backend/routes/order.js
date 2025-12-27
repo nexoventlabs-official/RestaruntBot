@@ -165,24 +165,43 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
       order.paymentStatus = 'cancelled';
     }
     
-    // For paid UPI orders that are cancelled, set refund processing status
+    // For paid UPI orders that are cancelled, process refund automatically
     if (status === 'cancelled' && order.paymentStatus === 'paid' && order.razorpayPaymentId) {
-      console.log('💰 Setting refund processing for order:', order.orderId);
-      order.refundStatus = 'pending';
-      order.refundAmount = order.totalAmount;
-      order.refundRequestedAt = new Date();
-      order.paymentStatus = 'refund_processing'; // Show refund processing status
-      order.trackingUpdates.push({ 
-        status: 'refund_processing', 
-        message: `Refund of ₹${order.totalAmount} is being processed`, 
-        timestamp: new Date() 
-      });
-      console.log('⏳ Refund processing for order:', order.orderId);
+      console.log('💰 Processing auto refund for order:', order.orderId);
+      
+      try {
+        const refund = await razorpayService.refund(order.razorpayPaymentId, order.totalAmount);
+        
+        order.refundStatus = 'completed';
+        order.refundId = refund.id;
+        order.refundAmount = order.totalAmount;
+        order.refundRequestedAt = new Date();
+        order.refundProcessedAt = new Date();
+        order.paymentStatus = 'refunded';
+        order.status = 'refunded';
+        order.trackingUpdates.push({ 
+          status: 'refunded', 
+          message: `Refund of ₹${order.totalAmount} processed successfully. Refund ID: ${refund.id}`, 
+          timestamp: new Date() 
+        });
+        console.log('✅ Auto refund completed for order:', order.orderId, 'Refund ID:', refund.id);
+      } catch (refundError) {
+        console.error('❌ Auto refund failed for order:', order.orderId, refundError.message);
+        order.refundStatus = 'failed';
+        order.refundAmount = order.totalAmount;
+        order.refundRequestedAt = new Date();
+        order.refundError = refundError.message;
+        order.trackingUpdates.push({ 
+          status: 'refund_failed', 
+          message: `Refund failed: ${refundError.message}`, 
+          timestamp: new Date() 
+        });
+      }
     }
     
     try {
       await order.save();
-      console.log('✅ Order saved to DB:', order.orderId, 'status:', status, 'paymentStatus:', order.paymentStatus);
+      console.log('✅ Order saved to DB:', order.orderId, 'status:', order.status, 'paymentStatus:', order.paymentStatus);
     } catch (saveErr) {
       console.error('❌ Order save error:', saveErr.message);
       return res.status(500).json({ error: 'Failed to save order: ' + saveErr.message });
@@ -190,8 +209,9 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
 
     // Sync status update to Google Sheets
     try {
-      console.log('📊 Syncing to Google Sheets:', order.orderId, status, order.paymentStatus);
-      const sheetUpdated = await googleSheets.updateOrderStatus(order.orderId, status, order.paymentStatus);
+      const sheetStatus = order.refundStatus === 'completed' ? 'refunded' : (order.refundStatus === 'failed' ? 'refund_failed' : order.status);
+      console.log('📊 Syncing to Google Sheets:', order.orderId, sheetStatus, order.paymentStatus);
+      const sheetUpdated = await googleSheets.updateOrderStatus(order.orderId, sheetStatus, order.paymentStatus);
       if (sheetUpdated) {
         console.log('✅ Google Sheets synced successfully');
       } else {
@@ -244,10 +264,10 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             'Your feedback helps us improve!'
           );
         } else {
-          // Add refund info if order was cancelled with pending refund
-          if (status === 'cancelled' && order.refundStatus === 'pending' && order.refundId) {
-            msg += `\n\n💰 *Refund Processing*\nYour refund of ₹${order.totalAmount} is being processed.\n\n⏱️ Your money will be refunded in 5-10 minutes.`;
-          } else if (status === 'cancelled' && order.refundStatus === 'failed') {
+          // Add refund info if order was cancelled/refunded
+          if (order.refundStatus === 'completed' && order.refundId) {
+            msg = `✅ *Order Cancelled & Refunded*\n\nOrder: ${order.orderId}\n\n💰 *Refund Processed*\nAmount: ₹${order.totalAmount}\nRefund ID: ${order.refundId}\n\n💳 The amount will be credited to your account within 5-7 business days.`;
+          } else if (order.refundStatus === 'failed') {
             msg += `\n\n⚠️ *Refund Issue*\nWe couldn't process your refund automatically.\nAmount: ₹${order.totalAmount}\n\nOur team will contact you within 24 hours to resolve this.`;
           }
           
