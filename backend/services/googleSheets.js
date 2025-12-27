@@ -9,7 +9,9 @@ const SHEET_NAMES = {
   new: 'neworders',
   delivered: 'delivered',
   cancelled: 'cancelled',
-  refunded: 'refunded'
+  refunded: 'refunded',
+  refundprocessing: 'refundprocessing',
+  refundfailed: 'refundfailed'
 };
 
 // Status colors (RGB values 0-1)
@@ -353,10 +355,10 @@ const googleSheets = {
         // Add to cancelled sheet
         await this.addOrderToSheet(sheets, 'cancelled', orderData.rowData, isUpiRefund ? 'paid' : (paymentStatus || 'cancelled'), 'cancelled', 'cancelled');
         
-        // If UPI refund, also add to refunded sheet with "Refund Processing"
+        // If UPI refund, also add to refundprocessing sheet
         if (isUpiRefund) {
-          console.log('📊 Adding UPI order to refunded sheet with Refund Processing...');
-          await this.addOrderToSheet(sheets, 'refunded', orderData.rowData, 'paid', 'refund_processing', 'refund_processing');
+          console.log('📊 Adding UPI order to refundprocessing sheet...');
+          await this.addOrderToSheet(sheets, 'refundprocessing', orderData.rowData, 'paid', 'refund_processing', 'refund_processing');
         }
 
         // Delete from neworders
@@ -364,81 +366,68 @@ const googleSheets = {
         return true;
       }
 
-      // Handle refunded orders - update existing entry in refunded sheet
+      // Handle refunded orders - move from refundprocessing to refunded sheet
       if (status === 'refunded') {
         const refundedSheet = await this.getSheetByType(sheets, 'refunded');
         if (!refundedSheet) return false;
         
-        let orderData = await this.findOrderInSheet(sheets, refundedSheet.sheetName, orderId);
-        if (!orderData) {
-          console.log('⚠️ Order not found in refunded sheet:', orderId);
-          // Try to find in cancelled sheet and add to refunded
-          const cancelledSheet = await this.getSheetByType(sheets, 'cancelled');
-          if (cancelledSheet) {
-            const cancelledOrder = await this.findOrderInSheet(sheets, cancelledSheet.sheetName, orderId);
-            if (cancelledOrder) {
-              console.log('📊 Found in cancelled sheet, adding to refunded...');
-              await this.addOrderToSheet(sheets, 'refunded', cancelledOrder.rowData, 'paid', 'refunded', 'refunded');
-              return true;
-            }
+        // Try to find in refundprocessing sheet first
+        const processingSheet = await this.getSheetByType(sheets, 'refundprocessing');
+        if (processingSheet) {
+          const processingOrder = await this.findOrderInSheet(sheets, processingSheet.sheetName, orderId);
+          if (processingOrder) {
+            console.log('📊 Found in refundprocessing sheet, moving to refunded...');
+            await this.addOrderToSheet(sheets, 'refunded', processingOrder.rowData, 'paid', 'refunded', 'refunded');
+            await this.deleteOrderFromSheet(sheets, processingSheet.sheetId, processingOrder.rowIndex);
+            return true;
           }
-          console.log('❌ Order not found in refunded or cancelled sheet:', orderId);
-          return false;
         }
-
-        // Update the refunded sheet entry - Payment: Paid, Order Status: Refunded
-        await sheets.spreadsheets.values.batchUpdate({
-          spreadsheetId: SPREADSHEET_ID,
-          resource: {
-            valueInputOption: 'RAW',
-            data: [
-              { range: `${refundedSheet.sheetName}!J${orderData.rowIndex + 1}`, values: [['Paid']] },
-              { range: `${refundedSheet.sheetName}!K${orderData.rowIndex + 1}`, values: [['Refunded']] }
-            ]
+        
+        // Try to find in cancelled sheet
+        const cancelledSheet = await this.getSheetByType(sheets, 'cancelled');
+        if (cancelledSheet) {
+          const cancelledOrder = await this.findOrderInSheet(sheets, cancelledSheet.sheetName, orderId);
+          if (cancelledOrder) {
+            console.log('📊 Found in cancelled sheet, adding to refunded...');
+            await this.addOrderToSheet(sheets, 'refunded', cancelledOrder.rowData, 'paid', 'refunded', 'refunded');
+            return true;
           }
-        });
-        await this.updateRowColor(sheets, refundedSheet.sheetId, orderData.rowIndex, 'refunded');
-        console.log('✅ Refunded sheet updated:', orderId);
-        return true;
+        }
+        
+        console.log('❌ Order not found in refundprocessing or cancelled sheet:', orderId);
+        return false;
       }
 
-      // Handle refund_failed orders - update existing entry in refunded sheet
+      // Handle refund_failed orders - move from refundprocessing to refundfailed sheet
       if (status === 'refund_failed') {
-        const refundedSheet = await this.getSheetByType(sheets, 'refunded');
-        if (!refundedSheet) return false;
+        const failedSheet = await this.getSheetByType(sheets, 'refundfailed');
+        if (!failedSheet) return false;
         
-        let orderData = await this.findOrderInSheet(sheets, refundedSheet.sheetName, orderId);
-        
-        // If not found in refunded sheet, try to add from cancelled sheet
-        if (!orderData) {
-          console.log('⚠️ Order not found in refunded sheet, checking cancelled sheet:', orderId);
-          const cancelledSheet = await this.getSheetByType(sheets, 'cancelled');
-          if (cancelledSheet) {
-            const cancelledOrder = await this.findOrderInSheet(sheets, cancelledSheet.sheetName, orderId);
-            if (cancelledOrder) {
-              console.log('📊 Found in cancelled sheet, adding to refunded with failed status...');
-              await this.addOrderToSheet(sheets, 'refunded', cancelledOrder.rowData, 'paid', 'refund_failed', 'refund_failed');
-              return true;
-            }
+        // Try to find in refundprocessing sheet first
+        const processingSheet = await this.getSheetByType(sheets, 'refundprocessing');
+        if (processingSheet) {
+          const processingOrder = await this.findOrderInSheet(sheets, processingSheet.sheetName, orderId);
+          if (processingOrder) {
+            console.log('📊 Found in refundprocessing sheet, moving to refundfailed...');
+            await this.addOrderToSheet(sheets, 'refundfailed', processingOrder.rowData, 'paid', 'refund_failed', 'refund_failed');
+            await this.deleteOrderFromSheet(sheets, processingSheet.sheetId, processingOrder.rowIndex);
+            return true;
           }
-          console.log('❌ Order not found in refunded or cancelled sheet for failed update:', orderId);
-          return false;
         }
-
-        // Update the refunded sheet entry - Payment: Paid, Order Status: Refund Failed
-        await sheets.spreadsheets.values.batchUpdate({
-          spreadsheetId: SPREADSHEET_ID,
-          resource: {
-            valueInputOption: 'RAW',
-            data: [
-              { range: `${refundedSheet.sheetName}!J${orderData.rowIndex + 1}`, values: [['Paid']] },
-              { range: `${refundedSheet.sheetName}!K${orderData.rowIndex + 1}`, values: [['Refund Failed']] }
-            ]
+        
+        // Try to find in cancelled sheet
+        const cancelledSheet = await this.getSheetByType(sheets, 'cancelled');
+        if (cancelledSheet) {
+          const cancelledOrder = await this.findOrderInSheet(sheets, cancelledSheet.sheetName, orderId);
+          if (cancelledOrder) {
+            console.log('📊 Found in cancelled sheet, adding to refundfailed...');
+            await this.addOrderToSheet(sheets, 'refundfailed', cancelledOrder.rowData, 'paid', 'refund_failed', 'refund_failed');
+            return true;
           }
-        });
-        await this.updateRowColor(sheets, refundedSheet.sheetId, orderData.rowIndex, 'refund_failed');
-        console.log('✅ Refund failed status updated in sheet:', orderId);
-        return true;
+        }
+        
+        console.log('❌ Order not found in refundprocessing or cancelled sheet for failed update:', orderId);
+        return false;
       }
 
       // For other statuses, update in neworders sheet
