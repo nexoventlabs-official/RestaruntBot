@@ -572,6 +572,10 @@ const googleSheets = {
         return false;
       }
       
+      // Add date header to target sheet if needed
+      const date = new Date();
+      await this.checkAndAddDateHeaderForSheet(sheets, date, targetSheet.sheetName);
+      
       // Prepare row data with updated status
       const rowData = [...orderData.rowData];
       
