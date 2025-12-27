@@ -6,7 +6,7 @@ const SHEET_NAME = process.env.GOOGLE_SHEET_NAME || 'Sheet1'; // Can be configur
 
 // Sheet names for different order statuses
 const SHEET_NAMES = {
-  new: 'new',           // New/active orders (gid=0)
+  new: 'neworders',       // New/active orders (gid=0)
   delivered: 'delivered', // Delivered orders (gid=444615781)
   cancelled: 'cancelled', // Cancelled orders (gid=1204708234)
   refunded: 'refunded'    // Refunded orders (gid=1126647795)
