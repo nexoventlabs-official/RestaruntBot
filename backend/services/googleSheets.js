@@ -745,10 +745,26 @@ const googleSheets = {
       console.log('📊 updateOrderStatus called:', { orderId, status, paymentStatus });
       
       // For delivered, cancelled, or refunded status, move to respective sheet
-      if (status === 'delivered' || status === 'cancelled' || status === 'refunded') {
-        // For cancelled orders with refund_processing payment status, use refund_processing color
-        const effectiveStatus = (status === 'cancelled' && paymentStatus === 'refund_processing') ? 'refund_processing' : status;
-        return await this.moveOrderToSheet(orderId, status, paymentStatus, effectiveStatus);
+      if (status === 'delivered') {
+        return await this.moveOrderToSheet(orderId, status, paymentStatus, status);
+      }
+      
+      // For cancelled orders - handle UPI paid orders specially
+      if (status === 'cancelled') {
+        // Move to cancelled sheet first
+        const cancelledResult = await this.moveOrderToSheet(orderId, 'cancelled', 'cancelled', 'cancelled');
+        
+        // If this is a UPI paid order (refund_processing), also add to refunded sheet with "Refund Processing"
+        if (paymentStatus === 'refund_processing') {
+          await this.addOrderToRefundedSheet(orderId);
+        }
+        
+        return cancelledResult;
+      }
+      
+      // For refunded status - update the refunded sheet entry
+      if (status === 'refunded') {
+        return await this.updateRefundedSheetOrder(orderId, paymentStatus);
       }
       
       const auth = getAuthClient();
@@ -834,6 +850,119 @@ const googleSheets = {
     } catch (error) {
       console.error('❌ Google Sheets update error:', error.message);
       console.error('❌ Full error:', JSON.stringify(error.response?.data || error, null, 2));
+      return false;
+    }
+  },
+
+  // Add cancelled UPI order to refunded sheet with "Refund Processing" status
+  async addOrderToRefundedSheet(orderId) {
+    try {
+      console.log('📊 Adding order to refunded sheet with Refund Processing:', orderId);
+      
+      const auth = getAuthClient();
+      if (!auth) return false;
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      
+      // Get order data from cancelled sheet
+      const cancelledSheet = await this.getSheetIdByType(sheets, 'cancelled');
+      if (!cancelledSheet) return false;
+      
+      const orderData = await this.findOrderInSheet(sheets, cancelledSheet.sheetName, orderId);
+      if (!orderData) return false;
+      
+      // Get refunded sheet
+      const refundedSheet = await this.getSheetIdByType(sheets, 'refunded');
+      if (!refundedSheet) return false;
+      
+      // Add date header if needed
+      await this.checkAndAddDateHeaderForSheet(sheets, new Date(), refundedSheet.sheetName);
+      
+      // Prepare row data
+      const rowData = [...orderData.rowData];
+      while (rowData.length < 14) rowData.push('');
+      
+      // Set payment status to "Refund Processing"
+      rowData[9] = 'Refund Processing';
+      rowData[10] = 'Cancelled'; // Order status stays cancelled until refund completes
+      
+      // Add to refunded sheet
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${refundedSheet.sheetName}!A:N`,
+        valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
+        resource: { values: [rowData] }
+      });
+      
+      // Apply pink color for refund processing
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${refundedSheet.sheetName}!A:A`
+      });
+      const rows = response.data.values || [];
+      const newRowIndex = rows.findIndex(row => row[0] === orderId);
+      
+      if (newRowIndex !== -1) {
+        await this.updateRowColor(sheets, refundedSheet.sheetId, newRowIndex, 'refund_processing');
+      }
+      
+      console.log('✅ Order added to refunded sheet with Refund Processing:', orderId);
+      return true;
+    } catch (error) {
+      console.error('❌ addOrderToRefundedSheet error:', error.message);
+      return false;
+    }
+  },
+
+  // Update order in refunded sheet when refund is completed
+  async updateRefundedSheetOrder(orderId, paymentStatus) {
+    try {
+      console.log('📊 Updating refunded sheet order:', orderId, paymentStatus);
+      
+      const auth = getAuthClient();
+      if (!auth) return false;
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      
+      // Get refunded sheet
+      const refundedSheet = await this.getSheetIdByType(sheets, 'refunded');
+      if (!refundedSheet) return false;
+      
+      // Find order in refunded sheet
+      const orderData = await this.findOrderInSheet(sheets, refundedSheet.sheetName, orderId);
+      if (!orderData) {
+        console.log('❌ Order not found in refunded sheet:', orderId);
+        return false;
+      }
+      
+      // Update payment status and order status
+      const updates = [
+        {
+          range: `${refundedSheet.sheetName}!J${orderData.rowIndex + 1}`,
+          values: [['Refunded']]
+        },
+        {
+          range: `${refundedSheet.sheetName}!K${orderData.rowIndex + 1}`,
+          values: [['Refunded']]
+        }
+      ];
+      
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+          valueInputOption: 'RAW',
+          data: updates
+        }
+      });
+      
+      // Update row color to red for refunded
+      await this.updateRowColor(sheets, refundedSheet.sheetId, orderData.rowIndex, 'refunded');
+      
+      console.log('✅ Refunded sheet order updated to Refunded:', orderId);
+      return true;
+    } catch (error) {
+      console.error('❌ updateRefundedSheetOrder error:', error.message);
       return false;
     }
   }
