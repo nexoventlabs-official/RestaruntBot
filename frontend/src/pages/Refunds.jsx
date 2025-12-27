@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, CheckCircle, X, Clock, AlertCircle, CreditCard, Phone, Package } from 'lucide-react';
 import api from '../api';
+import Dialog from '../components/Dialog';
 
 const refundStatusConfig = {
   scheduled: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500', label: 'Pending Approval' },
@@ -35,6 +36,10 @@ export default function Refunds() {
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
   const [filter, setFilter] = useState('pending'); // pending, completed, rejected, all
+  
+  // Dialog states
+  const [dialog, setDialog] = useState({ isOpen: false, title: '', message: '', type: 'info', onConfirm: null, showCancel: false });
+  const [rejectDialog, setRejectDialog] = useState({ isOpen: false, orderId: null, reason: '' });
 
   const fetchRefunds = useCallback(async () => {
     try {
@@ -76,34 +81,79 @@ export default function Refunds() {
 
   const approveRefund = async (orderId) => {
     if (processingId) return;
-    if (!confirm(`Approve refund for order ${orderId}? This will process the refund via Razorpay.`)) return;
     
+    setDialog({
+      isOpen: true,
+      title: 'Approve Refund',
+      message: `Are you sure you want to approve the refund for order ${orderId}? This will process the refund via Razorpay.`,
+      type: 'confirm',
+      showCancel: true,
+      onConfirm: async () => {
+        setDialog(prev => ({ ...prev, isOpen: false }));
+        setProcessingId(orderId);
+        try {
+          await api.post(`/orders/${orderId}/refund/approve`);
+          setDialog({
+            isOpen: true,
+            title: 'Refund Approved',
+            message: 'The refund has been successfully processed.',
+            type: 'success',
+            showCancel: false,
+            onConfirm: () => setDialog(prev => ({ ...prev, isOpen: false }))
+          });
+          fetchRefunds();
+        } catch (err) {
+          setDialog({
+            isOpen: true,
+            title: 'Refund Failed',
+            message: err.response?.data?.error || 'Failed to approve refund. Please try again.',
+            type: 'error',
+            showCancel: false,
+            onConfirm: () => setDialog(prev => ({ ...prev, isOpen: false }))
+          });
+        } finally {
+          setProcessingId(null);
+        }
+      }
+    });
+  };
+
+  const openRejectDialog = (orderId) => {
+    if (processingId) return;
+    setRejectDialog({ isOpen: true, orderId, reason: '' });
+  };
+
+  const handleRejectConfirm = async () => {
+    const { orderId, reason } = rejectDialog;
+    setRejectDialog(prev => ({ ...prev, isOpen: false }));
     setProcessingId(orderId);
+    
     try {
-      await api.post(`/orders/${orderId}/refund/approve`);
+      await api.post(`/orders/${orderId}/refund/reject`, { reason: reason || 'Rejected by admin' });
+      setDialog({
+        isOpen: true,
+        title: 'Refund Rejected',
+        message: 'The refund request has been rejected.',
+        type: 'success',
+        showCancel: false,
+        onConfirm: () => setDialog(prev => ({ ...prev, isOpen: false }))
+      });
       fetchRefunds();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to approve refund');
+      setDialog({
+        isOpen: true,
+        title: 'Rejection Failed',
+        message: err.response?.data?.error || 'Failed to reject refund. Please try again.',
+        type: 'error',
+        showCancel: false,
+        onConfirm: () => setDialog(prev => ({ ...prev, isOpen: false }))
+      });
     } finally {
       setProcessingId(null);
     }
   };
 
-  const rejectRefund = async (orderId) => {
-    if (processingId) return;
-    const reason = prompt('Enter rejection reason (optional):');
-    if (reason === null) return; // User cancelled
-    
-    setProcessingId(orderId);
-    try {
-      await api.post(`/orders/${orderId}/refund/reject`, { reason: reason || 'Rejected by admin' });
-      fetchRefunds();
-    } catch (err) {
-      alert(err.response?.data?.error || 'Failed to reject refund');
-    } finally {
-      setProcessingId(null);
-    }
-  };
+  const rejectRefund = (orderId) => openRejectDialog(orderId);
 
   const pendingCount = refunds.filter(r => r.refundStatus === 'scheduled' || r.refundStatus === 'pending').length;
 
@@ -320,6 +370,34 @@ export default function Refunds() {
           })}
         </div>
       )}
+
+      {/* Approve/Error/Success Dialog */}
+      <Dialog
+        isOpen={dialog.isOpen}
+        onClose={() => setDialog(prev => ({ ...prev, isOpen: false }))}
+        title={dialog.title}
+        message={dialog.message}
+        type={dialog.type}
+        onConfirm={dialog.onConfirm}
+        showCancel={dialog.showCancel}
+        confirmText={dialog.type === 'confirm' ? 'Approve' : 'OK'}
+      />
+
+      {/* Reject Dialog with Input */}
+      <Dialog
+        isOpen={rejectDialog.isOpen}
+        onClose={() => setRejectDialog(prev => ({ ...prev, isOpen: false }))}
+        title="Reject Refund"
+        message={`Are you sure you want to reject the refund for order ${rejectDialog.orderId}?`}
+        type="warning"
+        onConfirm={handleRejectConfirm}
+        showCancel={true}
+        confirmText="Reject"
+        showInput={true}
+        inputValue={rejectDialog.reason}
+        onInputChange={(value) => setRejectDialog(prev => ({ ...prev, reason: value }))}
+        inputPlaceholder="Enter rejection reason (optional)"
+      />
     </div>
   );
 }
