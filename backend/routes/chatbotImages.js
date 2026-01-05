@@ -127,6 +127,18 @@ const defaultImages = [
     name: 'Payment Timeout Cancelled',
     description: 'Shown when order is cancelled due to payment not received within 15 minutes',
     imageUrl: ''
+  },
+  {
+    key: 'cart_empty',
+    name: 'Cart Empty',
+    description: 'Shown when customer views an empty cart',
+    imageUrl: ''
+  },
+  {
+    key: 'help_support',
+    name: 'Help & Support',
+    description: 'Shown when displaying help and support information',
+    imageUrl: ''
   }
 ];
 

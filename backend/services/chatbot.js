@@ -3496,7 +3496,8 @@ const chatbot = {
     const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
     if (!freshCustomer?.cart?.length) {
-      await whatsapp.sendButtons(phone,
+      const cartEmptyImageUrl = await chatbotImagesService.getImageUrl('cart_empty');
+      await sendWithOptionalImage(phone, cartEmptyImageUrl,
         '🛒 *Your Cart is Empty*\n\nStart adding delicious items!',
         [
           { id: 'view_menu', text: 'View Menu' },
@@ -3527,7 +3528,8 @@ const chatbot = {
       freshCustomer.cart = [];
       await freshCustomer.save();
       
-      await whatsapp.sendButtons(phone,
+      const cartEmptyImageUrl = await chatbotImagesService.getImageUrl('cart_empty');
+      await sendWithOptionalImage(phone, cartEmptyImageUrl,
         '🛒 *Your Cart is Empty*\n\nStart adding delicious items!',
         [
           { id: 'view_menu', text: 'View Menu' },
@@ -4003,7 +4005,8 @@ const chatbot = {
       `• "cart" - View cart\n` +
       `• "status" - Check orders`;
 
-    await whatsapp.sendButtons(phone, msg, [
+    const helpSupportImageUrl = await chatbotImagesService.getImageUrl('help_support');
+    await sendWithOptionalImage(phone, helpSupportImageUrl, msg, [
       { id: 'home', text: 'Main Menu' },
       { id: 'place_order', text: 'Order Now' }
     ]);
