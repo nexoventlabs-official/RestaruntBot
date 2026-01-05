@@ -10,6 +10,7 @@ import NotFound from './pages/NotFound';
 import Layout from './components/Layout';
 import UserMenu from './pages/UserMenu';
 import Review from './pages/Review';
+import Track from './pages/Track';
 import ChatbotImages from './pages/ChatbotImages';
 import api from './api';
 
@@ -53,6 +54,7 @@ function App() {
         {/* Public User Routes */}
         <Route path="/" element={<UserMenu />} />
         <Route path="/review/:phone/:orderId" element={<Review />} />
+        <Route path="/track/:orderId" element={<Track />} />
         
         {/* Admin Routes */}
         <Route path="/admin/login" element={auth ? <Navigate to="/admin" /> : <Login setAuth={setAuth} />} />
