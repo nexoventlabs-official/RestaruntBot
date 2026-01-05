@@ -369,6 +369,53 @@ const metaCloud = {
     }
   },
 
+  // Send image with CTA URL button - for external links with image header
+  async sendImageWithCtaUrl(phone, imageUrl, message, buttonText, url, footer = '') {
+    try {
+      const { baseUrl, accessToken } = getConfig();
+      const to = phone.replace('@c.us', '').replace(/\D/g, '');
+      
+      console.log('📤 Meta sendImageWithCtaUrl to:', to);
+      
+      // Transform to square image for consistent display
+      const squareImageUrl = getSquareImageUrl(imageUrl);
+      
+      const payload = {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'cta_url',
+          header: {
+            type: 'image',
+            image: { link: squareImageUrl }
+          },
+          body: {
+            text: message
+          },
+          footer: footer ? { text: footer } : undefined,
+          action: {
+            name: 'cta_url',
+            parameters: {
+              display_text: buttonText,
+              url: url
+            }
+          }
+        }
+      };
+      
+      const response = await axios.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      });
+      console.log('✅ Meta sendImageWithCtaUrl success');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Meta Cloud image CTA URL error:', error.response?.data || error.message);
+      // Fallback to CTA URL without image
+      return this.sendCtaUrl(phone, message, buttonText, url, footer);
+    }
+  },
+
   // Send CTA URL button - for external links like Google Review
   async sendCtaUrl(phone, message, buttonText, url, footer = '') {
     try {

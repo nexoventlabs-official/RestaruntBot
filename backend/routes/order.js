@@ -233,18 +233,62 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           msg += `━━━━━━━━━━━━━━━\n`;
           msg += `\n🙏 Thank you for ordering!\nWe hope you enjoy your meal! 🍽️`;
           
-          // Send combined message with review CTA button - link to website review page
+          // Send combined message with image and review CTA button
           const frontendUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
           const reviewUrl = `${frontendUrl}/review/${order.customer.phone}/${order.orderId}`;
+          const deliveredImageUrl = 'https://customer-assets.emergentagent.com/job_imgtourl/artifacts/q5l9q4av_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_30%20PM.png';
           
-          await whatsapp.sendCtaUrl(
+          await whatsapp.sendImageWithCtaUrl(
             order.customer.phone,
+            deliveredImageUrl,
             msg,
             'Leave a Review ⭐',
             reviewUrl,
             'Your feedback helps us improve!'
           );
-        } else {
+        } else if (status === 'out_for_delivery') {
+          // Send image with track order button for out_for_delivery status
+          const frontendUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
+          const trackOrderUrl = `${frontendUrl}/track/${order.orderId}`;
+          const deliveryImageUrl = 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/qusd2g8y_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_16%20PM.png';
+          
+          await whatsapp.sendImageWithCtaUrl(
+            order.customer.phone,
+            deliveryImageUrl,
+            msg,
+            'Track Your Order 📍',
+            trackOrderUrl,
+            'Tap to track your delivery'
+          );
+        } else if (status === 'preparing') {
+          // Send image with track order button for preparing status
+          const frontendUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
+          const trackOrderUrl = `${frontendUrl}/track/${order.orderId}`;
+          const preparingImageUrl = 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/nbe1dy2a_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_22%20PM.png';
+          
+          await whatsapp.sendImageWithCtaUrl(
+            order.customer.phone,
+            preparingImageUrl,
+            msg,
+            'Track Your Order 📍',
+            trackOrderUrl,
+            'Tap to track your order'
+          );
+        } else if (status === 'ready') {
+          // Send image with track order button for ready status
+          const frontendUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
+          const trackOrderUrl = `${frontendUrl}/track/${order.orderId}`;
+          const readyImageUrl = 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/0dpayh1q_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_09%20PM.png';
+          
+          await whatsapp.sendImageWithCtaUrl(
+            order.customer.phone,
+            readyImageUrl,
+            msg,
+            'Track Your Order 📍',
+            trackOrderUrl,
+            'Tap to track your order'
+          );
+        } else if (status === 'cancelled') {
           // Add refund info if order was cancelled with pending refund
           if (order.refundStatus === 'pending' && order.paymentStatus === 'refund_processing') {
             msg += `\n\n💰 *Refund Processing*\nAmount: ₹${order.totalAmount}\n\n⏱️ Your refund will be processed within 5-7 business days.`;
@@ -252,6 +296,12 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             msg += `\n\n⚠️ *Refund Issue*\nWe couldn't process your refund automatically.\nAmount: ₹${order.totalAmount}\n\nOur team will contact you within 24 hours to resolve this.`;
           }
           
+          // Send image with cancelled message
+          const cancelledImageUrl = 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/4ysetjer_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_24%20PM.png';
+          
+          await whatsapp.sendImage(order.customer.phone, cancelledImageUrl, msg);
+        } else {
+          // Other statuses (confirmed, etc.)
           await whatsapp.sendMessage(order.customer.phone, msg);
         }
       } catch (whatsappError) {

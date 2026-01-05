@@ -36,6 +36,10 @@ const whatsapp = {
 
   async sendCtaUrl(phone, message, buttonText, url, footer = '') {
     return metaCloud.sendCtaUrl(phone, message, buttonText, url, footer);
+  },
+
+  async sendImageWithCtaUrl(phone, imageUrl, message, buttonText, url, footer = '') {
+    return metaCloud.sendImageWithCtaUrl(phone, imageUrl, message, buttonText, url, footer);
   }
 };
 
