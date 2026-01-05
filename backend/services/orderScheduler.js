@@ -70,7 +70,11 @@ const orderScheduler = {
         `⚠️ *Reason:* Payment not received within 15 minutes.\n\n` +
         `If you still want to order, please start a new order by sending "hi".`;
       
-      const cancelledImageUrl = await chatbotImagesService.getImageUrl('order_cancelled');
+      // Use payment_timeout_cancelled image, fallback to order_cancelled
+      let cancelledImageUrl = await chatbotImagesService.getImageUrl('payment_timeout_cancelled');
+      if (!cancelledImageUrl) {
+        cancelledImageUrl = await chatbotImagesService.getImageUrl('order_cancelled');
+      }
       
       if (cancelledImageUrl) {
         await whatsapp.sendImageWithButtons(order.customer.phone, cancelledImageUrl, message, [

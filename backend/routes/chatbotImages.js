@@ -121,6 +121,12 @@ const defaultImages = [
     name: 'Browse Menu',
     description: 'Shown when displaying menu browsing options (Veg/Non-Veg/All)',
     imageUrl: ''
+  },
+  {
+    key: 'payment_timeout_cancelled',
+    name: 'Payment Timeout Cancelled',
+    description: 'Shown when order is cancelled due to payment not received within 15 minutes',
+    imageUrl: ''
   }
 ];
 
