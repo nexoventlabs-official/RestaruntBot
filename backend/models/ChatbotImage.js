@@ -21,7 +21,8 @@ const chatbotImageSchema = new mongoose.Schema({
       'item_not_available',
       'order_tracking',
       'order_summary',
-      'order_details'
+      'order_details',
+      'browse_menu'
     ]
   },
   name: {

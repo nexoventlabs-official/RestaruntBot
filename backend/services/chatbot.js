@@ -2668,7 +2668,8 @@ const chatbot = {
 
   // ============ MENU BROWSING ============
   async sendFoodTypeSelection(phone) {
-    await whatsapp.sendButtons(phone,
+    const browseMenuImageUrl = await chatbotImagesService.getImageUrl('browse_menu');
+    await sendWithOptionalImage(phone, browseMenuImageUrl,
       '🍽️ *Browse Menu*\n\nWhat would you like to see?',
       [
         { id: 'food_veg', text: 'Veg Only' },

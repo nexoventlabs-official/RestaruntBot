@@ -115,6 +115,12 @@ const defaultImages = [
     name: 'Order Details',
     description: 'Shown when displaying order details with payment link',
     imageUrl: ''
+  },
+  {
+    key: 'browse_menu',
+    name: 'Browse Menu',
+    description: 'Shown when displaying menu browsing options (Veg/Non-Veg/All)',
+    imageUrl: ''
   }
 ];
 
