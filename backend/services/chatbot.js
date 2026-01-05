@@ -3683,7 +3683,7 @@ const chatbot = {
     }).sort({ createdAt: -1 }).limit(5);
 
     if (!orders.length) {
-      const noActiveOrdersImageUrl = 'https://customer-assets.emergentagent.com/job_aba631ff-39f5-485d-9dc9-4b55cdde1a45/artifacts/zpade6jl_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_56_06%20PM.png';
+      const noActiveOrdersImageUrl = 'https://customer-assets.emergentagent.com/job_pic-url-maker/artifacts/6xfvk4ug_ChatGPT%20Image%20Jan%205%2C%202026%2C%2011_04_46%20AM.png';
       await whatsapp.sendImageWithButtons(phone, noActiveOrdersImageUrl,
         '📍 *No Active Orders*\n\nNo orders to track right now.',
         [{ id: 'place_order', text: 'Order Now' }, { id: 'home', text: 'Main Menu' }]
