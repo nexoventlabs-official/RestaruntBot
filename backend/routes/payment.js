@@ -6,6 +6,7 @@ const whatsapp = require('../services/whatsapp');
 const brevoMail = require('../services/brevoMail');
 const razorpayService = require('../services/razorpay');
 const googleSheets = require('../services/googleSheets');
+const chatbotImagesService = require('../services/chatbotImages');
 const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
@@ -247,7 +248,7 @@ router.get('/callback', async (req, res) => {
         confirmMsg += `🙏 Thank you for your order!\nWe're preparing it now.`;
 
         // Send WhatsApp confirmation with image and buttons
-        const confirmedImageUrl = 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/s75p7355_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_13%20PM.png';
+        const confirmedImageUrl = await chatbotImagesService.getImageUrl('payment_success');
         
         await whatsapp.sendImageWithButtons(order.customer.phone, confirmedImageUrl, confirmMsg, [
           { id: 'track_order', text: 'Track Order' },

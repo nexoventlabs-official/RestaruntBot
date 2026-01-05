@@ -5,6 +5,7 @@ const whatsapp = require('../services/whatsapp');
 const brevoMail = require('../services/brevoMail');
 const googleSheets = require('../services/googleSheets');
 const razorpayService = require('../services/razorpay');
+const chatbotImagesService = require('../services/chatbotImages');
 const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
@@ -236,7 +237,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           // Send combined message with image and review CTA button
           const frontendUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
           const reviewUrl = `${frontendUrl}/review/${order.customer.phone}/${order.orderId}`;
-          const deliveredImageUrl = 'https://customer-assets.emergentagent.com/job_imgtourl/artifacts/q5l9q4av_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_30%20PM.png';
+          const deliveredImageUrl = await chatbotImagesService.getImageUrl('delivered');
           
           await whatsapp.sendImageWithCtaUrl(
             order.customer.phone,
@@ -250,7 +251,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           // Send image with track order button for out_for_delivery status
           const frontendUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
           const trackOrderUrl = `${frontendUrl}/track/${order.orderId}`;
-          const deliveryImageUrl = 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/qusd2g8y_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_16%20PM.png';
+          const deliveryImageUrl = await chatbotImagesService.getImageUrl('out_for_delivery');
           
           await whatsapp.sendImageWithCtaUrl(
             order.customer.phone,
@@ -264,7 +265,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           // Send image with track order button for preparing status
           const frontendUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
           const trackOrderUrl = `${frontendUrl}/track/${order.orderId}`;
-          const preparingImageUrl = 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/nbe1dy2a_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_22%20PM.png';
+          const preparingImageUrl = await chatbotImagesService.getImageUrl('preparing');
           
           await whatsapp.sendImageWithCtaUrl(
             order.customer.phone,
@@ -278,7 +279,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           // Send image with track order button for ready status
           const frontendUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
           const trackOrderUrl = `${frontendUrl}/track/${order.orderId}`;
-          const readyImageUrl = 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/0dpayh1q_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_09%20PM.png';
+          const readyImageUrl = await chatbotImagesService.getImageUrl('ready');
           
           await whatsapp.sendImageWithCtaUrl(
             order.customer.phone,
@@ -297,7 +298,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           }
           
           // Send image with cancelled message
-          const cancelledImageUrl = 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/4ysetjer_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_24%20PM.png';
+          const cancelledImageUrl = await chatbotImagesService.getImageUrl('order_cancelled');
           
           await whatsapp.sendImage(order.customer.phone, cancelledImageUrl, msg);
         } else {

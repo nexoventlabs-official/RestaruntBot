@@ -9,7 +9,12 @@ const defaultImages = {
   no_orders_found: 'https://customer-assets.emergentagent.com/job_imgtourl/artifacts/6al1ikel_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_56_02%20PM.png',
   your_orders: 'https://customer-assets.emergentagent.com/job_aba631ff-39f5-485d-9dc9-4b55cdde1a45/artifacts/so72utoq_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_56_10%20PM.png',
   no_active_orders: 'https://customer-assets.emergentagent.com/job_pic-url-maker/artifacts/6xfvk4ug_ChatGPT%20Image%20Jan%205%2C%202026%2C%2011_04_46%20AM.png',
-  order_cancelled: 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/4ysetjer_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_24%20PM.png'
+  order_cancelled: 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/4ysetjer_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_24%20PM.png',
+  payment_success: 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/s75p7355_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_13%20PM.png',
+  preparing: 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/nbe1dy2a_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_22%20PM.png',
+  out_for_delivery: 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/qusd2g8y_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_16%20PM.png',
+  ready: 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/0dpayh1q_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_09%20PM.png',
+  delivered: 'https://customer-assets.emergentagent.com/job_imgtourl/artifacts/q5l9q4av_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_30%20PM.png'
 };
 
 // Cache for images (refresh every 5 minutes)

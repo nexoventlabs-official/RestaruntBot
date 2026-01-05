@@ -1,6 +1,7 @@
 const Order = require('../models/Order');
 const whatsapp = require('./whatsapp');
 const googleSheets = require('./googleSheets');
+const chatbotImagesService = require('./chatbotImages');
 
 const PENDING_TIMEOUT_MINUTES = 15;
 
@@ -69,7 +70,7 @@ const orderScheduler = {
         `⚠️ *Reason:* Payment not received within 15 minutes.\n\n` +
         `If you still want to order, please start a new order by sending "hi".`;
       
-      const cancelledImageUrl = 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/4ysetjer_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_24%20PM.png';
+      const cancelledImageUrl = await chatbotImagesService.getImageUrl('order_cancelled');
       
       await whatsapp.sendImageWithButtons(order.customer.phone, cancelledImageUrl, message, [
         { id: 'place_order', text: 'New Order' },

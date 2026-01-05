@@ -12,7 +12,12 @@ const chatbotImageSchema = new mongoose.Schema({
       'no_orders_found',
       'your_orders',
       'no_active_orders',
-      'order_cancelled'
+      'order_cancelled',
+      'payment_success',
+      'preparing',
+      'out_for_delivery',
+      'ready',
+      'delivered'
     ]
   },
   name: {
