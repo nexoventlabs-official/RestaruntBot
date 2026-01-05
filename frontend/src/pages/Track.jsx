@@ -107,11 +107,11 @@ export default function Track() {
           <div className="bg-white rounded-xl shadow-sm p-6">
             <h3 className="font-semibold text-gray-800 mb-4">Order Progress</h3>
             <div className="relative">
-              {statusOrder.slice(0, -1).map((status, index) => {
+              {statusOrder.map((status, index) => {
                 const config = statusConfig[status];
                 const isCompleted = index < currentStatusIndex;
                 const isCurrent = index === currentStatusIndex;
-                const isLast = index === statusOrder.length - 2;
+                const isLast = index === statusOrder.length - 1;
                 
                 return (
                   <div key={status} className="flex items-start mb-4 last:mb-0">
