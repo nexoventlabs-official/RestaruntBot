@@ -115,12 +115,23 @@ router.get('/', auth, async (req, res) => {
   try {
     let images = await ChatbotImage.find().sort('name');
     
-    // If no images exist, initialize defaults
+    // If no images exist, initialize all defaults
     if (images.length === 0) {
       for (const img of defaultImages) {
         await ChatbotImage.create(img);
       }
       images = await ChatbotImage.find().sort('name');
+    } else {
+      // Check for missing images and add them
+      const existingKeys = images.map(img => img.key);
+      const missingImages = defaultImages.filter(img => !existingKeys.includes(img.key));
+      
+      if (missingImages.length > 0) {
+        for (const img of missingImages) {
+          await ChatbotImage.create(img);
+        }
+        images = await ChatbotImage.find().sort('name');
+      }
     }
     
     res.json(images);
