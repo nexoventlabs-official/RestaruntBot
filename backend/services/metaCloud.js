@@ -193,7 +193,7 @@ const metaCloud = {
     }
   },
 
-  async sendOrder(phone, order, items, paymentUrl) {
+  async sendOrder(phone, order, items, paymentUrl, imageUrl = null) {
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -206,14 +206,17 @@ const metaCloud = {
       orderMsg += `━━━━━━━━━━━━━━━\n`;
       orderMsg += `*Total*    ₹${order.totalAmount}.00`;
 
-      // Send with CTA URL button - this opens Razorpay payment page
+      // Build CTA payload - with optional image header
       const ctaPayload = {
         messaging_product: 'whatsapp',
         to,
         type: 'interactive',
         interactive: {
           type: 'cta_url',
-          header: {
+          header: imageUrl ? {
+            type: 'image',
+            image: { link: getSquareImageUrl(imageUrl) }
+          } : {
             type: 'text',
             text: 'Order details'
           },

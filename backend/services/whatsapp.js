@@ -18,8 +18,8 @@ const whatsapp = {
     return metaCloud.sendTemplateButtons(phone, message, buttons, footer);
   },
 
-  async sendOrder(phone, order, items, paymentUrl) {
-    return metaCloud.sendOrder(phone, order, items, paymentUrl);
+  async sendOrder(phone, order, items, paymentUrl, imageUrl = null) {
+    return metaCloud.sendOrder(phone, order, items, paymentUrl, imageUrl);
   },
 
   async sendImage(phone, imageUrl, caption = '') {

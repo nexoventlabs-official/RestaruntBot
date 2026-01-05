@@ -103,6 +103,18 @@ const defaultImages = [
     name: 'Order Tracking',
     description: 'Shown when displaying order tracking details',
     imageUrl: ''
+  },
+  {
+    key: 'order_summary',
+    name: 'Order Summary',
+    description: 'Shown when displaying order summary before payment',
+    imageUrl: ''
+  },
+  {
+    key: 'order_details',
+    name: 'Order Details',
+    description: 'Shown when displaying order details with payment link',
+    imageUrl: ''
   }
 ];
 

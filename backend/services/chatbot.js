@@ -3313,7 +3313,8 @@ const chatbot = {
     
     cartMsg += `💳 Select payment method:`;
 
-    await whatsapp.sendButtons(phone, cartMsg, [
+    const orderSummaryImageUrl = await chatbotImagesService.getImageUrl('order_summary');
+    await sendWithOptionalImage(phone, orderSummaryImageUrl, cartMsg, [
       { id: 'pay_upi', text: 'UPI/APP' },
       { id: 'pay_cod', text: 'COD' },
       { id: 'clear_cart', text: 'Cancel' }
@@ -3644,7 +3645,8 @@ const chatbot = {
       order.razorpayOrderId = paymentLink.id;
       await order.save();
 
-      await whatsapp.sendOrder(phone, order, items, paymentLink.short_url);
+      const orderDetailsImageUrl = await chatbotImagesService.getImageUrl('order_details');
+      await whatsapp.sendOrder(phone, order, items, paymentLink.short_url, orderDetailsImageUrl);
       return { success: true };
     } catch (err) {
       console.error('Payment link error:', err);
