@@ -9,8 +9,8 @@ const getConfig = () => ({
 });
 
 // Transform image URL to square format using wsrv.nl (free image proxy)
-// This ensures menu item images appear as consistent squares in WhatsApp
-const getSquareImageUrl = (imageUrl, forceSquare = true) => {
+// This ensures all images appear as consistent squares in WhatsApp
+const getSquareImageUrl = (imageUrl) => {
   if (!imageUrl) return imageUrl;
   
   // Skip if already using wsrv.nl
@@ -18,12 +18,6 @@ const getSquareImageUrl = (imageUrl, forceSquare = true) => {
   
   // Skip data URLs
   if (imageUrl.startsWith('data:')) return imageUrl;
-  
-  // Skip square transformation for notification/status images (customer-assets URLs)
-  // These should display in their original aspect ratio like BigHaat
-  if (imageUrl.includes('customer-assets.emergentagent.com') || !forceSquare) {
-    return imageUrl;
-  }
   
   try {
     // Use wsrv.nl to resize and crop to square (300x300 is good for WhatsApp)
