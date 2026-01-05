@@ -32,7 +32,7 @@ const chatbotImageSchema = new mongoose.Schema({
   },
   imageUrl: {
     type: String,
-    required: true
+    default: ''
   },
   cloudinaryPublicId: {
     type: String,
