@@ -10,6 +10,7 @@ import NotFound from './pages/NotFound';
 import Layout from './components/Layout';
 import UserMenu from './pages/UserMenu';
 import Review from './pages/Review';
+import ChatbotImages from './pages/ChatbotImages';
 import api from './api';
 
 function App() {
@@ -61,6 +62,7 @@ function App() {
           <Route path="menu" element={<Menu />} />
           <Route path="customers" element={<Customers />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="chatbot-images" element={<ChatbotImages />} />
         </Route>
         
         {/* Legacy redirect - old login to new admin login */}

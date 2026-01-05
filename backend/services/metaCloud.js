@@ -1,4 +1,5 @@
 const axios = require('axios');
+const cloudinaryService = require('./cloudinary');
 
 const getConfig = () => ({
   phoneNumberId: process.env.META_PHONE_NUMBER_ID,
@@ -8,26 +9,21 @@ const getConfig = () => ({
   baseUrl: `https://graph.facebook.com/v24.0/${process.env.META_PHONE_NUMBER_ID}`
 });
 
-// Transform image URL to square format using wsrv.nl (free image proxy)
-// This ensures all images appear as consistent squares in WhatsApp
+// Transform image URL using Cloudinary for high-quality WhatsApp images
+// Menu item images use 1:1 ratio (300x300), chatbot banner images are already optimized
 const getSquareImageUrl = (imageUrl) => {
   if (!imageUrl) return imageUrl;
-  
-  // Skip if already using wsrv.nl
-  if (imageUrl.includes('wsrv.nl')) return imageUrl;
   
   // Skip data URLs
   if (imageUrl.startsWith('data:')) return imageUrl;
   
-  try {
-    // Use wsrv.nl to resize and crop to square (300x300 is good for WhatsApp)
-    // w=300, h=300, fit=cover ensures square crop from center
-    const encodedUrl = encodeURIComponent(imageUrl);
-    return `https://wsrv.nl/?url=${encodedUrl}&w=300&h=300&fit=cover&output=jpg&q=85`;
-  } catch (error) {
-    console.log('⚠️ Could not transform image URL:', error.message);
+  // Skip already optimized Cloudinary URLs (chatbot images from admin panel)
+  if (imageUrl.includes('cloudinary.com') && imageUrl.includes('restaurant-bot/chatbot-images')) {
     return imageUrl;
   }
+  
+  // Use Cloudinary for optimized, high-quality images (1:1 for menu items)
+  return cloudinaryService.getOptimizedUrl(imageUrl, '1:1');
 };
 
 const metaCloud = {

@@ -6,7 +6,8 @@ import {
   Users, 
   LogOut, 
   ChefHat,
-  BarChart3
+  BarChart3,
+  Image
 } from 'lucide-react';
 
 const navItems = [
@@ -15,6 +16,7 @@ const navItems = [
   { path: '/admin/menu', icon: UtensilsCrossed, label: 'Menu', description: 'Food items' },
   { path: '/admin/customers', icon: Users, label: 'Customers', description: 'Customer data' },
   { path: '/admin/reports', icon: BarChart3, label: 'Reports', description: 'Analytics & reports' },
+  { path: '/admin/chatbot-images', icon: Image, label: 'Bot Images', description: 'WhatsApp images' },
 ];
 
 export default function Layout() {

@@ -6,6 +6,7 @@ const whatsapp = require('./whatsapp');
 const razorpayService = require('./razorpay');
 const googleSheets = require('./googleSheets');
 const groqAi = require('./groqAi');
+const chatbotImagesService = require('./chatbotImages');
 const axios = require('axios');
 
 const generateOrderId = () => 'ORD' + Date.now().toString(36).toUpperCase();
@@ -1909,7 +1910,7 @@ const chatbot = {
       else if (selection === 'clear_cart' || (!selectedId && this.isClearCartIntent(msg))) {
         customer.cart = [];
         await customer.save();
-        const cartClearedImageUrl = 'https://customer-assets.emergentagent.com/job_imgtourl/artifacts/kvm8soy5_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_51%20PM.png';
+        const cartClearedImageUrl = await chatbotImagesService.getImageUrl('cart_cleared');
         await whatsapp.sendImageWithButtons(phone, cartClearedImageUrl, '🗑️ Cart cleared!', [
           { id: 'place_order', text: 'New Order' },
           { id: 'home', text: 'Main Menu' }
@@ -3174,7 +3175,7 @@ const chatbot = {
   async sendAddedToCart(phone, item, qty, cart) {
     const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
     const unitInfo = `${item.quantity || 1} ${item.unit || 'piece'}`;
-    const addedToCartImageUrl = 'https://customer-assets.emergentagent.com/job_imgtourl/artifacts/qixmcggk_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_37%20PM.png';
+    const addedToCartImageUrl = await chatbotImagesService.getImageUrl('added_to_cart');
     
     await whatsapp.sendImageWithButtons(phone, addedToCartImageUrl,
       `✅ *Added to Cart!*\n\n${qty}x ${item.name} (${unitInfo})\n💰 ₹${item.price * qty}\n\n🛒 Cart: ${cartCount} items`,
@@ -3408,7 +3409,7 @@ const chatbot = {
     confirmMsg += `━━━━━━━━━━━━━━━\n\n`;
     confirmMsg += `🙏 Thank you for your order!\nPlease keep ₹${total} ready for payment.`;
 
-    const confirmedImageUrl = 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/s75p7355_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_13%20PM.png';
+    const confirmedImageUrl = await chatbotImagesService.getImageUrl('order_confirmed');
     
     await whatsapp.sendImageWithButtons(phone, confirmedImageUrl, confirmMsg, [
       { id: 'track_order', text: 'Track Order' },
@@ -3645,7 +3646,7 @@ const chatbot = {
     const orders = await Order.find({ 'customer.phone': phone }).sort({ createdAt: -1 }).limit(5);
     
     if (!orders.length) {
-      const noOrdersFoundImageUrl = 'https://customer-assets.emergentagent.com/job_imgtourl/artifacts/6al1ikel_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_56_02%20PM.png';
+      const noOrdersFoundImageUrl = await chatbotImagesService.getImageUrl('no_orders_found');
       await whatsapp.sendImageWithButtons(phone, noOrdersFoundImageUrl,
         '📋 *No Orders Found*\n\nYou haven\'t placed any orders yet.',
         [{ id: 'place_order', text: 'Order Now' }, { id: 'home', text: 'Main Menu' }]
@@ -3669,7 +3670,7 @@ const chatbot = {
       msg += `   ${new Date(o.createdAt).toLocaleDateString()}\n\n`;
     });
 
-    const yourOrdersImageUrl = 'https://customer-assets.emergentagent.com/job_aba631ff-39f5-485d-9dc9-4b55cdde1a45/artifacts/so72utoq_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_56_10%20PM.png';
+    const yourOrdersImageUrl = await chatbotImagesService.getImageUrl('your_orders');
     await whatsapp.sendImageWithButtons(phone, yourOrdersImageUrl, msg, [
       { id: 'track_order', text: 'Track Order' },
       { id: 'home', text: 'Main Menu' }
@@ -3683,7 +3684,7 @@ const chatbot = {
     }).sort({ createdAt: -1 }).limit(5);
 
     if (!orders.length) {
-      const noActiveOrdersImageUrl = 'https://customer-assets.emergentagent.com/job_pic-url-maker/artifacts/6xfvk4ug_ChatGPT%20Image%20Jan%205%2C%202026%2C%2011_04_46%20AM.png';
+      const noActiveOrdersImageUrl = await chatbotImagesService.getImageUrl('no_active_orders');
       await whatsapp.sendImageWithButtons(phone, noActiveOrdersImageUrl,
         '📍 *No Active Orders*\n\nNo orders to track right now.',
         [{ id: 'place_order', text: 'Order Now' }, { id: 'home', text: 'Main Menu' }]
@@ -3762,7 +3763,7 @@ const chatbot = {
     }).sort({ createdAt: -1 }).limit(5);
 
     if (!orders.length) {
-      const noOrdersImageUrl = 'https://customer-assets.emergentagent.com/job_imgtourl/artifacts/6al1ikel_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_56_02%20PM.png';
+      const noOrdersImageUrl = await chatbotImagesService.getImageUrl('no_orders_found');
       await whatsapp.sendImageWithButtons(phone, noOrdersImageUrl,
         '❌ *No Orders to Cancel*\n\nNo cancellable orders found.',
         [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
@@ -3858,7 +3859,7 @@ const chatbot = {
     );
     console.log('📊 Customer cancelled order, syncing to Google Sheets:', order.orderId);
 
-    const cancelledImageUrl = 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/4ysetjer_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_24%20PM.png';
+    const cancelledImageUrl = await chatbotImagesService.getImageUrl('order_cancelled');
     
     await whatsapp.sendImageWithButtons(phone, cancelledImageUrl, msg, [
       { id: 'place_order', text: 'New Order' },

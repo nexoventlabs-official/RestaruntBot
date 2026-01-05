@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Edit, Trash2, Sparkles, X, Image, FolderPlus, Search, Clock, ChevronDown, Check, Pause, Play } from 'lucide-react';
+import { Plus, Edit, Trash2, Sparkles, X, Image, FolderPlus, Search, Clock, ChevronDown, Check, Pause, Play, Upload } from 'lucide-react';
 import api from '../api';
 
 // Custom Dropdown Component
@@ -185,50 +185,57 @@ export default function Menu() {
   const [deleting, setDeleting] = useState(false);
   const initialLoadDone = useRef(false);
   const lastTapRef = useRef({});
-  const [imageError, setImageError] = useState('');
-  const [categoryImageError, setCategoryImageError] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [categoryImageFile, setCategoryImageFile] = useState(null);
+  const [categoryImagePreview, setCategoryImagePreview] = useState('');
+  const imageInputRef = useRef(null);
+  const categoryImageInputRef = useRef(null);
 
-  // Validate image URL for WhatsApp compatibility - STRICT validation
-  const validateImageUrl = (url) => {
-    if (!url) return { valid: true, error: '' };
-    
-    const urlLower = url.toLowerCase();
-    
-    // Remove query parameters for extension check
-    const urlWithoutQuery = urlLower.split('?')[0];
-    
-    // Check for unsupported formats anywhere in URL
-    const unsupportedFormats = ['.webp', '.gif', '.bmp', '.svg', '.tiff', '.ico', '.avif', '.heic', '.heif'];
-    for (const fmt of unsupportedFormats) {
-      if (urlLower.includes(fmt)) {
-        return { valid: false, error: `${fmt.toUpperCase()} format not supported by WhatsApp. Use JPG or PNG only.` };
-      }
-    }
-    
-    // STRICT: URL must end with .jpg, .jpeg, or .png (before query params)
-    const supportedFormats = ['.jpg', '.jpeg', '.png'];
-    const hasValidExtension = supportedFormats.some(fmt => urlWithoutQuery.endsWith(fmt));
-    
-    if (!hasValidExtension) {
-      return { 
-        valid: false, 
-        error: 'Image URL must end with .jpg, .jpeg, or .png for WhatsApp compatibility.' 
+  // Handle image file selection for menu items
+  const handleImageFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
       };
+      reader.readAsDataURL(file);
     }
-    
-    return { valid: true, error: '' };
   };
 
-  const handleImageChange = (url) => {
-    const { error } = validateImageUrl(url);
-    setImageError(error);
-    setForm({ ...form, image: url });
+  // Handle image file selection for categories
+  const handleCategoryImageFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setCategoryImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCategoryImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
-  const handleCategoryImageChange = (url) => {
-    const { error } = validateImageUrl(url);
-    setCategoryImageError(error);
-    setCategoryForm({ ...categoryForm, image: url });
+  // Remove image for menu items
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview('');
+    setForm({ ...form, image: '' });
+    if (imageInputRef.current) {
+      imageInputRef.current.value = '';
+    }
+  };
+
+  // Remove image for categories
+  const removeCategoryImage = () => {
+    setCategoryImageFile(null);
+    setCategoryImagePreview('');
+    setCategoryForm({ ...categoryForm, image: '' });
+    if (categoryImageInputRef.current) {
+      categoryImageInputRef.current.value = '';
+    }
   };
 
   // Double tap handler for pause/resume category
@@ -290,9 +297,13 @@ export default function Menu() {
       setEditing(item);
       const categoryArray = Array.isArray(item.category) ? item.category : (item.category ? [item.category] : []);
       setForm({ name: item.name, description: item.description || '', price: item.price, category: categoryArray, unit: item.unit || 'piece', quantity: item.quantity || 1, foodType: item.foodType || 'veg', available: item.available, preparationTime: item.preparationTime || 15, tags: item.tags?.join(', ') || '', image: item.image || '' });
+      setImagePreview(item.image || '');
+      setImageFile(null);
     } else {
       setEditing(null);
       setForm({ name: '', description: '', price: '', category: [], unit: 'piece', quantity: 1, foodType: 'veg', available: true, preparationTime: 15, tags: '', image: '' });
+      setImagePreview('');
+      setImageFile(null);
     }
     setShowModal(true);
   };
@@ -312,20 +323,41 @@ export default function Menu() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (imageError) {
-      alert('Please fix the image URL error before saving');
-      return;
-    }
     if (saving) return; // Prevent double submission
     setSaving(true);
     try {
+      const formData = new FormData();
+      formData.append('name', form.name);
+      formData.append('description', form.description);
+      formData.append('price', form.price);
+      formData.append('category', JSON.stringify(form.category));
+      formData.append('unit', form.unit);
+      formData.append('quantity', form.quantity);
+      formData.append('foodType', form.foodType);
+      formData.append('available', form.available);
+      formData.append('preparationTime', form.preparationTime);
+      formData.append('tags', form.tags);
+      
+      // Handle image
+      if (imageFile) {
+        formData.append('image', imageFile);
+      } else if (!imagePreview && editing?.image) {
+        // Image was removed
+        formData.append('removeImage', 'true');
+      }
+      
       if (editing) {
-        await api.put(`/menu/${editing._id}`, form);
+        await api.put(`/menu/${editing._id}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
       } else {
-        await api.post('/menu', form);
+        await api.post('/menu', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
       }
       setShowModal(false);
-      setImageError('');
+      setImageFile(null);
+      setImagePreview('');
       fetchItems();
     } catch (err) {
       alert('Failed to save item');
@@ -694,18 +726,39 @@ export default function Menu() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-dark-700 mb-2">Image URL</label>
-                <input type="url" value={form.image} onChange={(e) => handleImageChange(e.target.value)}
-                  className={`w-full px-4 py-3 bg-dark-50 border rounded-xl focus:bg-white transition-all ${imageError ? 'border-red-500 focus:border-red-500' : 'border-dark-200 focus:border-primary-500'}`} placeholder="https://example.com/image.jpg" />
-                {imageError && (
-                  <p className="text-red-500 text-sm mt-1">⚠️ {imageError}</p>
-                )}
-                <p className="text-dark-400 text-xs mt-1">Only JPG and PNG formats supported for WhatsApp</p>
-                {form.image && !imageError && (
-                  <div className="mt-3 rounded-xl overflow-hidden border border-dark-200 h-40 bg-dark-100">
-                    <img src={form.image} alt="Preview" className="w-full h-full object-cover" onError={(e) => e.target.style.display = 'none'} />
-                  </div>
-                )}
+                <label className="block text-sm font-semibold text-dark-700 mb-2">Image</label>
+                <div className="space-y-3">
+                  {/* Image Preview */}
+                  {(imagePreview || form.image) && (
+                    <div className="relative rounded-xl overflow-hidden border border-dark-200 h-40 bg-dark-100">
+                      <img src={imagePreview || form.image} alt="Preview" className="w-full h-full object-cover" onError={(e) => e.target.style.display = 'none'} />
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                  {/* Upload Button */}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageFileChange}
+                    ref={imageInputRef}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current?.click()}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-dark-50 border border-dark-200 border-dashed rounded-xl hover:bg-dark-100 transition-colors text-dark-600"
+                  >
+                    <Upload className="w-5 h-5" />
+                    {imagePreview || form.image ? 'Change Image' : 'Upload Image'}
+                  </button>
+                  <p className="text-dark-400 text-xs">Images are automatically optimized for WhatsApp</p>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-dark-700 mb-2">Tags (comma separated)</label>
@@ -765,11 +818,11 @@ export default function Menu() {
 
       {/* Category Modal */}
       {showCategoryModal && (
-        <div className="modal-backdrop !mt-0" onClick={() => { setShowCategoryModal(false); setEditingCategory(null); setCategoryForm({ name: '', description: '', image: '' }); }}>
+        <div className="modal-backdrop !mt-0" onClick={() => { setShowCategoryModal(false); setEditingCategory(null); setCategoryForm({ name: '', description: '', image: '' }); setCategoryImageFile(null); setCategoryImagePreview(''); }}>
           <div className="modal-content w-full max-w-lg mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-5 border-b border-dark-100">
               <h2 className="text-xl font-bold text-dark-900">{editingCategory ? 'Edit Category' : 'Manage Categories'}</h2>
-              <button onClick={() => { setShowCategoryModal(false); setEditingCategory(null); setCategoryForm({ name: '', description: '', image: '' }); }} className="p-2 hover:bg-dark-100 rounded-xl transition-colors">
+              <button onClick={() => { setShowCategoryModal(false); setEditingCategory(null); setCategoryForm({ name: '', description: '', image: '' }); setCategoryImageFile(null); setCategoryImagePreview(''); }} className="p-2 hover:bg-dark-100 rounded-xl transition-colors">
                 <X className="w-5 h-5 text-dark-500" />
               </button>
             </div>
@@ -780,13 +833,31 @@ export default function Menu() {
                 if (savingCategory) return; // Prevent double submission
                 setSavingCategory(true);
                 try {
+                  const formData = new FormData();
+                  formData.append('name', categoryForm.name);
+                  formData.append('description', categoryForm.description || '');
+                  
+                  // Handle image
+                  if (categoryImageFile) {
+                    formData.append('image', categoryImageFile);
+                  } else if (!categoryImagePreview && editingCategory?.image) {
+                    // Image was removed
+                    formData.append('removeImage', 'true');
+                  }
+                  
                   if (editingCategory) {
-                    await api.put(`/categories/${editingCategory._id}`, categoryForm);
+                    await api.put(`/categories/${editingCategory._id}`, formData, {
+                      headers: { 'Content-Type': 'multipart/form-data' }
+                    });
                     setEditingCategory(null);
                   } else {
-                    await api.post('/categories', categoryForm);
+                    await api.post('/categories', formData, {
+                      headers: { 'Content-Type': 'multipart/form-data' }
+                    });
                   }
                   setCategoryForm({ name: '', description: '', image: '' });
+                  setCategoryImageFile(null);
+                  setCategoryImagePreview('');
                   fetchCategories();
                 } catch (err) {
                   alert(err.response?.data?.error || 'Failed to save category');
@@ -796,19 +867,39 @@ export default function Menu() {
               }} className="space-y-3 mb-5">
                 <input type="text" value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
                   placeholder="Category name" className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" required />
-                <input type="url" value={categoryForm.image} onChange={(e) => handleCategoryImageChange(e.target.value)}
-                  placeholder="Image URL (optional - JPG/PNG only)" className={`w-full px-4 py-3 bg-dark-50 border rounded-xl focus:bg-white transition-all ${categoryImageError ? 'border-red-500 focus:border-red-500' : 'border-dark-200 focus:border-primary-500'}`} />
-                {categoryImageError && (
-                  <p className="text-red-500 text-sm">⚠️ {categoryImageError}</p>
-                )}
-                {categoryForm.image && !categoryImageError && (
-                  <div className="w-20 h-20 rounded-xl overflow-hidden border border-dark-200 bg-dark-100 mx-auto">
-                    <img src={categoryForm.image} alt="Preview" className="w-full h-full object-cover" onError={(e) => e.target.style.display = 'none'} />
-                  </div>
-                )}
+                {/* Category Image Upload */}
+                <div className="space-y-2">
+                  {(categoryImagePreview || categoryForm.image) && (
+                    <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-dark-200 bg-dark-100 mx-auto">
+                      <img src={categoryImagePreview || categoryForm.image} alt="Preview" className="w-full h-full object-cover" onError={(e) => e.target.style.display = 'none'} />
+                      <button
+                        type="button"
+                        onClick={removeCategoryImage}
+                        className="absolute -top-1 -right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCategoryImageFileChange}
+                    ref={categoryImageInputRef}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => categoryImageInputRef.current?.click()}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-dark-50 border border-dark-200 border-dashed rounded-xl hover:bg-dark-100 transition-colors text-dark-600 text-sm"
+                  >
+                    <Upload className="w-4 h-4" />
+                    {categoryImagePreview || categoryForm.image ? 'Change Image' : 'Upload Image (optional)'}
+                  </button>
+                </div>
                 <div className="flex gap-2">
                   {editingCategory && (
-                    <button type="button" onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', description: '', image: '' }); }}
+                    <button type="button" onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', description: '', image: '' }); setCategoryImageFile(null); setCategoryImagePreview(''); }}
                       className="flex-1 bg-dark-100 text-dark-700 px-5 py-3 rounded-xl font-medium hover:bg-dark-200 transition-colors">Cancel</button>
                   )}
                   <button 
@@ -862,6 +953,8 @@ export default function Menu() {
                       <button onClick={() => {
                         setEditingCategory(cat);
                         setCategoryForm({ name: cat.name, description: cat.description || '', image: cat.image || '' });
+                        setCategoryImagePreview(cat.image || '');
+                        setCategoryImageFile(null);
                       }} className="absolute -top-1 -left-1 p-1.5 bg-primary-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
                         <Edit className="w-3 h-3" />
                       </button>

@@ -2,7 +2,22 @@ const express = require('express');
 const Category = require('../models/Category');
 const MenuItem = require('../models/MenuItem');
 const authMiddleware = require('../middleware/auth');
+const cloudinaryService = require('../services/cloudinary');
+const multer = require('multer');
 const router = express.Router();
+
+// Configure multer for memory storage
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  }
+});
 
 // Get all categories
 router.get('/', async (req, res) => {
@@ -15,14 +30,22 @@ router.get('/', async (req, res) => {
 });
 
 // Create category
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
   try {
     const { name, description, image } = req.body;
     const existing = await Category.findOne({ name: { $regex: new RegExp(`^${name}`, 'i') } });
     if (existing) {
       return res.status(400).json({ error: 'Category already exists' });
     }
-    const category = new Category({ name, description, image });
+    
+    let imageUrl = image || null;
+    
+    // If file uploaded, upload to Cloudinary
+    if (req.file) {
+      imageUrl = await cloudinaryService.uploadFromBuffer(req.file.buffer, 'restaurant-bot/categories');
+    }
+    
+    const category = new Category({ name, description, image: imageUrl });
     await category.save();
     res.status(201).json(category);
   } catch (error) {
@@ -31,12 +54,46 @@ router.post('/', authMiddleware, async (req, res) => {
 });
 
 // Update category
-router.put('/:id', authMiddleware, async (req, res) => {
+router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
   try {
-    const { name, description, image, isActive, isPaused, sortOrder } = req.body;
+    const { name, description, image, isActive, isPaused, sortOrder, removeImage } = req.body;
+    
+    // Get existing category to check for old image
+    const existingCategory = await Category.findById(req.params.id);
+    let imageUrl = existingCategory?.image || null;
+    
+    // If removeImage flag is set, clear the image
+    if (removeImage === 'true' || removeImage === true) {
+      if (existingCategory?.image && existingCategory.image.includes('cloudinary.com')) {
+        try {
+          const publicId = existingCategory.image.split('/').slice(-2).join('/').split('.')[0];
+          await cloudinaryService.deleteImage(publicId);
+        } catch (e) {
+          console.log('Could not delete old image:', e.message);
+        }
+      }
+      imageUrl = null;
+    }
+    // If new file uploaded, upload to Cloudinary
+    else if (req.file) {
+      if (existingCategory?.image && existingCategory.image.includes('cloudinary.com')) {
+        try {
+          const publicId = existingCategory.image.split('/').slice(-2).join('/').split('.')[0];
+          await cloudinaryService.deleteImage(publicId);
+        } catch (e) {
+          console.log('Could not delete old image:', e.message);
+        }
+      }
+      imageUrl = await cloudinaryService.uploadFromBuffer(req.file.buffer, 'restaurant-bot/categories');
+    }
+    // If image URL provided (for backward compatibility)
+    else if (image && image !== existingCategory?.image) {
+      imageUrl = image;
+    }
+    
     const category = await Category.findByIdAndUpdate(
       req.params.id,
-      { name, description, image, isActive, isPaused, sortOrder },
+      { name, description, image: imageUrl, isActive, isPaused, sortOrder },
       { new: true }
     );
     res.json(category);
@@ -63,13 +120,23 @@ router.patch('/:id/toggle-pause', authMiddleware, async (req, res) => {
 // Delete category
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
-    // Get the category name before deleting
+    // Get the category before deleting
     const category = await Category.findById(req.params.id);
     if (!category) {
       return res.status(404).json({ error: 'Category not found' });
     }
 
     const categoryName = category.name;
+    
+    // Delete category image from Cloudinary if exists
+    if (category.image && category.image.includes('cloudinary.com')) {
+      try {
+        const publicId = category.image.split('/').slice(-2).join('/').split('.')[0];
+        await cloudinaryService.deleteImage(publicId);
+      } catch (e) {
+        console.log('Could not delete category image:', e.message);
+      }
+    }
 
     // Find all menu items that have this category
     const itemsWithCategory = await MenuItem.find({ category: categoryName });
@@ -80,6 +147,15 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     for (const item of itemsWithCategory) {
       if (item.category.length === 1) {
         // Item only has this category, delete it
+        // Also delete item image from Cloudinary
+        if (item.image && item.image.includes('cloudinary.com')) {
+          try {
+            const publicId = item.image.split('/').slice(-2).join('/').split('.')[0];
+            await cloudinaryService.deleteImage(publicId);
+          } catch (e) {
+            console.log('Could not delete item image:', e.message);
+          }
+        }
         await MenuItem.findByIdAndDelete(item._id);
         deletedItemsCount++;
       } else {
