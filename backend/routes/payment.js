@@ -250,11 +250,19 @@ router.get('/callback', async (req, res) => {
         // Send WhatsApp confirmation with image and buttons
         const confirmedImageUrl = await chatbotImagesService.getImageUrl('payment_success');
         
-        await whatsapp.sendImageWithButtons(order.customer.phone, confirmedImageUrl, confirmMsg, [
-          { id: 'track_order', text: 'Track Order' },
-          { id: `cancel_${order.orderId}`, text: 'Cancel Order' },
-          { id: 'help', text: 'Help' }
-        ]);
+        if (confirmedImageUrl) {
+          await whatsapp.sendImageWithButtons(order.customer.phone, confirmedImageUrl, confirmMsg, [
+            { id: 'track_order', text: 'Track Order' },
+            { id: `cancel_${order.orderId}`, text: 'Cancel Order' },
+            { id: 'help', text: 'Help' }
+          ]);
+        } else {
+          await whatsapp.sendButtons(order.customer.phone, confirmMsg, [
+            { id: 'track_order', text: 'Track Order' },
+            { id: `cancel_${order.orderId}`, text: 'Cancel Order' },
+            { id: 'help', text: 'Help' }
+          ]);
+        }
 
         // Send email if available
         if (order.customer.email) {

@@ -18,79 +18,91 @@ const upload = multer({
   }
 });
 
-// Default images configuration
+// Default images configuration (no URLs - admin must upload)
 const defaultImages = [
   {
     key: 'cart_cleared',
     name: 'Cart Cleared',
     description: 'Shown when customer clears their cart',
-    imageUrl: 'https://customer-assets.emergentagent.com/job_imgtourl/artifacts/kvm8soy5_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_51%20PM.png'
+    imageUrl: ''
   },
   {
     key: 'added_to_cart',
     name: 'Added to Cart',
     description: 'Shown when item is added to cart',
-    imageUrl: 'https://customer-assets.emergentagent.com/job_imgtourl/artifacts/qixmcggk_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_37%20PM.png'
+    imageUrl: ''
   },
   {
     key: 'order_confirmed',
     name: 'Order Confirmed',
     description: 'Shown when order is confirmed (COD)',
-    imageUrl: 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/s75p7355_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_13%20PM.png'
+    imageUrl: ''
   },
   {
     key: 'no_orders_found',
     name: 'No Orders Found',
     description: 'Shown when customer has no order history',
-    imageUrl: 'https://customer-assets.emergentagent.com/job_imgtourl/artifacts/6al1ikel_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_56_02%20PM.png'
+    imageUrl: ''
   },
   {
     key: 'your_orders',
     name: 'Your Orders',
     description: 'Shown when displaying order history',
-    imageUrl: 'https://customer-assets.emergentagent.com/job_aba631ff-39f5-485d-9dc9-4b55cdde1a45/artifacts/so72utoq_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_56_10%20PM.png'
+    imageUrl: ''
   },
   {
     key: 'no_active_orders',
     name: 'No Active Orders',
     description: 'Shown when no orders to track',
-    imageUrl: 'https://customer-assets.emergentagent.com/job_pic-url-maker/artifacts/6xfvk4ug_ChatGPT%20Image%20Jan%205%2C%202026%2C%2011_04_46%20AM.png'
+    imageUrl: ''
   },
   {
     key: 'order_cancelled',
     name: 'Order Cancelled',
     description: 'Shown when order is cancelled',
-    imageUrl: 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/4ysetjer_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_24%20PM.png'
+    imageUrl: ''
   },
   {
     key: 'payment_success',
     name: 'Payment Success',
     description: 'Shown when online payment is successful',
-    imageUrl: 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/s75p7355_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_13%20PM.png'
+    imageUrl: ''
   },
   {
     key: 'preparing',
     name: 'Preparing Order',
     description: 'Shown when order status changes to preparing',
-    imageUrl: 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/nbe1dy2a_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_22%20PM.png'
+    imageUrl: ''
   },
   {
     key: 'out_for_delivery',
     name: 'Out for Delivery',
     description: 'Shown when order is out for delivery',
-    imageUrl: 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/qusd2g8y_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_16%20PM.png'
+    imageUrl: ''
   },
   {
     key: 'ready',
     name: 'Order Ready',
     description: 'Shown when order is ready for pickup/delivery',
-    imageUrl: 'https://customer-assets.emergentagent.com/job_77792ac9-dc9d-42cc-8b47-74a726032c8b/artifacts/0dpayh1q_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_09%20PM.png'
+    imageUrl: ''
   },
   {
     key: 'delivered',
     name: 'Order Delivered',
     description: 'Shown when order is delivered',
-    imageUrl: 'https://customer-assets.emergentagent.com/job_imgtourl/artifacts/q5l9q4av_ChatGPT%20Image%20Jan%202%2C%202026%2C%2004_55_30%20PM.png'
+    imageUrl: ''
+  },
+  {
+    key: 'item_not_available',
+    name: 'Item Not Available',
+    description: 'Shown when requested item is not available',
+    imageUrl: ''
+  },
+  {
+    key: 'order_tracking',
+    name: 'Order Tracking',
+    description: 'Shown when displaying order tracking details',
+    imageUrl: ''
   }
 ];
 

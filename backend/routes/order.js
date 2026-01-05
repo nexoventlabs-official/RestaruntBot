@@ -9,6 +9,15 @@ const chatbotImagesService = require('../services/chatbotImages');
 const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
+// Helper to send message with optional image and CTA URL
+const sendWithOptionalImageCta = async (phone, imageUrl, message, buttonText, url, footer = '') => {
+  if (imageUrl) {
+    await whatsapp.sendImageWithCtaUrl(phone, imageUrl, message, buttonText, url, footer);
+  } else {
+    await whatsapp.sendCtaUrl(phone, message, buttonText, url, footer);
+  }
+};
+
 // Lightweight endpoint to check for updates (returns hash only)
 router.get('/check-updates', authMiddleware, async (req, res) => {
   try {
@@ -239,7 +248,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           const reviewUrl = `${frontendUrl}/review/${order.customer.phone}/${order.orderId}`;
           const deliveredImageUrl = await chatbotImagesService.getImageUrl('delivered');
           
-          await whatsapp.sendImageWithCtaUrl(
+          await sendWithOptionalImageCta(
             order.customer.phone,
             deliveredImageUrl,
             msg,
@@ -253,7 +262,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           const trackOrderUrl = `${frontendUrl}/track/${order.orderId}`;
           const deliveryImageUrl = await chatbotImagesService.getImageUrl('out_for_delivery');
           
-          await whatsapp.sendImageWithCtaUrl(
+          await sendWithOptionalImageCta(
             order.customer.phone,
             deliveryImageUrl,
             msg,
@@ -267,7 +276,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           const trackOrderUrl = `${frontendUrl}/track/${order.orderId}`;
           const preparingImageUrl = await chatbotImagesService.getImageUrl('preparing');
           
-          await whatsapp.sendImageWithCtaUrl(
+          await sendWithOptionalImageCta(
             order.customer.phone,
             preparingImageUrl,
             msg,
@@ -281,7 +290,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           const trackOrderUrl = `${frontendUrl}/track/${order.orderId}`;
           const readyImageUrl = await chatbotImagesService.getImageUrl('ready');
           
-          await whatsapp.sendImageWithCtaUrl(
+          await sendWithOptionalImageCta(
             order.customer.phone,
             readyImageUrl,
             msg,
@@ -299,8 +308,11 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           
           // Send image with cancelled message
           const cancelledImageUrl = await chatbotImagesService.getImageUrl('order_cancelled');
-          
-          await whatsapp.sendImage(order.customer.phone, cancelledImageUrl, msg);
+          if (cancelledImageUrl) {
+            await whatsapp.sendImage(order.customer.phone, cancelledImageUrl, msg);
+          } else {
+            await whatsapp.sendMessage(order.customer.phone, msg);
+          }
         } else {
           // Other statuses (confirmed, etc.)
           await whatsapp.sendMessage(order.customer.phone, msg);

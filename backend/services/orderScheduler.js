@@ -72,10 +72,17 @@ const orderScheduler = {
       
       const cancelledImageUrl = await chatbotImagesService.getImageUrl('order_cancelled');
       
-      await whatsapp.sendImageWithButtons(order.customer.phone, cancelledImageUrl, message, [
-        { id: 'place_order', text: 'New Order' },
-        { id: 'help', text: 'Help' }
-      ]);
+      if (cancelledImageUrl) {
+        await whatsapp.sendImageWithButtons(order.customer.phone, cancelledImageUrl, message, [
+          { id: 'place_order', text: 'New Order' },
+          { id: 'help', text: 'Help' }
+        ]);
+      } else {
+        await whatsapp.sendButtons(order.customer.phone, message, [
+          { id: 'place_order', text: 'New Order' },
+          { id: 'help', text: 'Help' }
+        ]);
+      }
       
       console.log(`✅ Order ${order.orderId} cancelled and customer notified`);
       return true;

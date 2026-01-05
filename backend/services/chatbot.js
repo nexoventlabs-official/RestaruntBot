@@ -11,6 +11,24 @@ const axios = require('axios');
 
 const generateOrderId = () => 'ORD' + Date.now().toString(36).toUpperCase();
 
+// Helper to send message with optional image
+const sendWithOptionalImage = async (phone, imageUrl, message, buttons, footer = '') => {
+  if (imageUrl) {
+    await whatsapp.sendImageWithButtons(phone, imageUrl, message, buttons, footer);
+  } else {
+    await whatsapp.sendButtons(phone, message, buttons, footer);
+  }
+};
+
+// Helper to send message with optional image and CTA URL
+const sendWithOptionalImageCta = async (phone, imageUrl, message, buttonText, url, footer = '') => {
+  if (imageUrl) {
+    await whatsapp.sendImageWithCtaUrl(phone, imageUrl, message, buttonText, url, footer);
+  } else {
+    await whatsapp.sendCtaUrl(phone, message, buttonText, url, footer);
+  }
+};
+
 const chatbot = {
   // Helper to detect cancel order intent from text/voice
   // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
@@ -1888,7 +1906,8 @@ const chatbot = {
           } else {
             // No match found
             console.log('❌ No match found for:', websiteOrder.itemName);
-            await whatsapp.sendButtons(phone, `❌ Sorry, "${websiteOrder.itemName}" is not available.\n\nPlease browse our menu!`, [
+            const itemNotAvailableImageUrl = await chatbotImagesService.getImageUrl('item_not_available');
+            await sendWithOptionalImage(phone, itemNotAvailableImageUrl, `❌ Sorry, "${websiteOrder.itemName}" is not available.\n\nPlease browse our menu!`, [
               { id: 'view_menu', text: 'View Menu' },
               { id: 'home', text: 'Main Menu' }
             ]);
@@ -1911,7 +1930,7 @@ const chatbot = {
         customer.cart = [];
         await customer.save();
         const cartClearedImageUrl = await chatbotImagesService.getImageUrl('cart_cleared');
-        await whatsapp.sendImageWithButtons(phone, cartClearedImageUrl, '🗑️ Cart cleared!', [
+        await sendWithOptionalImage(phone, cartClearedImageUrl, '🗑️ Cart cleared!', [
           { id: 'place_order', text: 'New Order' },
           { id: 'home', text: 'Main Menu' }
         ]);
@@ -3177,7 +3196,7 @@ const chatbot = {
     const unitInfo = `${item.quantity || 1} ${item.unit || 'piece'}`;
     const addedToCartImageUrl = await chatbotImagesService.getImageUrl('added_to_cart');
     
-    await whatsapp.sendImageWithButtons(phone, addedToCartImageUrl,
+    await sendWithOptionalImage(phone, addedToCartImageUrl,
       `✅ *Added to Cart!*\n\n${qty}x ${item.name} (${unitInfo})\n💰 ₹${item.price * qty}\n\n🛒 Cart: ${cartCount} items`,
       [
         { id: 'add_more', text: 'Add More' },
@@ -3411,7 +3430,7 @@ const chatbot = {
 
     const confirmedImageUrl = await chatbotImagesService.getImageUrl('order_confirmed');
     
-    await whatsapp.sendImageWithButtons(phone, confirmedImageUrl, confirmMsg, [
+    await sendWithOptionalImage(phone, confirmedImageUrl, confirmMsg, [
       { id: 'track_order', text: 'Track Order' },
       { id: `cancel_${orderId}`, text: 'Cancel Order' },
       { id: 'home', text: 'Main Menu' }
@@ -3647,7 +3666,7 @@ const chatbot = {
     
     if (!orders.length) {
       const noOrdersFoundImageUrl = await chatbotImagesService.getImageUrl('no_orders_found');
-      await whatsapp.sendImageWithButtons(phone, noOrdersFoundImageUrl,
+      await sendWithOptionalImage(phone, noOrdersFoundImageUrl,
         '📋 *No Orders Found*\n\nYou haven\'t placed any orders yet.',
         [{ id: 'place_order', text: 'Order Now' }, { id: 'home', text: 'Main Menu' }]
       );
@@ -3671,7 +3690,7 @@ const chatbot = {
     });
 
     const yourOrdersImageUrl = await chatbotImagesService.getImageUrl('your_orders');
-    await whatsapp.sendImageWithButtons(phone, yourOrdersImageUrl, msg, [
+    await sendWithOptionalImage(phone, yourOrdersImageUrl, msg, [
       { id: 'track_order', text: 'Track Order' },
       { id: 'home', text: 'Main Menu' }
     ]);
@@ -3685,7 +3704,7 @@ const chatbot = {
 
     if (!orders.length) {
       const noActiveOrdersImageUrl = await chatbotImagesService.getImageUrl('no_active_orders');
-      await whatsapp.sendImageWithButtons(phone, noActiveOrdersImageUrl,
+      await sendWithOptionalImage(phone, noActiveOrdersImageUrl,
         '📍 *No Active Orders*\n\nNo orders to track right now.',
         [{ id: 'place_order', text: 'Order Now' }, { id: 'home', text: 'Main Menu' }]
       );
@@ -3749,7 +3768,8 @@ const chatbot = {
       msg += `⏰ *ETA:* ${new Date(order.estimatedDeliveryTime).toLocaleString()}`;
     }
 
-    await whatsapp.sendButtons(phone, msg, [
+    const orderTrackingImageUrl = await chatbotImagesService.getImageUrl('order_tracking');
+    await sendWithOptionalImage(phone, orderTrackingImageUrl, msg, [
       { id: 'order_status', text: 'All Orders' },
       { id: 'home', text: 'Main Menu' }
     ]);
@@ -3764,7 +3784,7 @@ const chatbot = {
 
     if (!orders.length) {
       const noOrdersImageUrl = await chatbotImagesService.getImageUrl('no_orders_found');
-      await whatsapp.sendImageWithButtons(phone, noOrdersImageUrl,
+      await sendWithOptionalImage(phone, noOrdersImageUrl,
         '❌ *No Orders to Cancel*\n\nNo cancellable orders found.',
         [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
       );
@@ -3861,7 +3881,7 @@ const chatbot = {
 
     const cancelledImageUrl = await chatbotImagesService.getImageUrl('order_cancelled');
     
-    await whatsapp.sendImageWithButtons(phone, cancelledImageUrl, msg, [
+    await sendWithOptionalImage(phone, cancelledImageUrl, msg, [
       { id: 'place_order', text: 'New Order' },
       { id: 'home', text: 'Main Menu' }
     ]);
