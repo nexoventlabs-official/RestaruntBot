@@ -3,7 +3,56 @@ const MenuItem = require('../models/MenuItem');
 const Category = require('../models/Category');
 const Order = require('../models/Order');
 const DeliveryBoy = require('../models/DeliveryBoy');
+const HeroSection = require('../models/HeroSection');
+const Offer = require('../models/Offer');
 const router = express.Router();
+
+// Get active hero sections (public)
+router.get('/hero-sections', async (req, res) => {
+  try {
+    const heroes = await HeroSection.find({ isActive: true }).sort({ order: 1, createdAt: -1 });
+    res.json(heroes);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get active offers (public)
+router.get('/offers', async (req, res) => {
+  try {
+    const now = new Date();
+    const offers = await Offer.find({ 
+      isActive: true,
+      $or: [
+        { validUntil: null },
+        { validUntil: { $gte: now } }
+      ],
+      validFrom: { $lte: now }
+    }).sort({ createdAt: -1 });
+    res.json(offers);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get popup offers (public)
+router.get('/popup-offers', async (req, res) => {
+  try {
+    const now = new Date();
+    const offers = await Offer.find({ 
+      isActive: true,
+      showAsPopup: true,
+      $or: [
+        { validUntil: null },
+        { validUntil: { $gte: now } }
+      ],
+      validFrom: { $lte: now }
+    }).sort({ createdAt: -1 }).limit(1);
+    res.json(offers[0] || null);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Get all categories (public)
 router.get('/categories', async (req, res) => {

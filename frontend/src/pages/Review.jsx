@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
+import { StarIcon, ArrowLeftIcon, CheckCircleIcon, XCircleIcon, TruckIcon } from '../components/Icons';
 
 const API_URL = 'https://restaruntbot.onrender.com/api/public';
 
@@ -22,7 +23,6 @@ export default function Review() {
     try {
       const res = await axios.get(`${API_URL}/review/${phone}/${orderId}`);
       setOrder(res.data);
-      // Pre-fill existing ratings
       const existingRatings = {};
       res.data.items.forEach(item => {
         if (item.existingRating) {
@@ -30,7 +30,6 @@ export default function Review() {
         }
       });
       setRatings(existingRatings);
-      // Pre-fill delivery partner rating if exists
       if (res.data.deliveryPartner?.existingRating) {
         setDeliveryRating(res.data.deliveryPartner.existingRating);
       }
@@ -70,28 +69,40 @@ export default function Review() {
     }
   };
 
-  const StarRating = ({ itemId, currentRating, onRate, isDelivery = false }) => (
-    <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map(star => (
-        <button
-          key={star}
-          onClick={() => isDelivery ? setDeliveryRating(star) : handleRating(itemId, star)}
-          className={`text-3xl transition-transform hover:scale-110 ${
-            star <= (isDelivery ? deliveryRating : (ratings[itemId] || 0)) ? 'text-yellow-400' : 'text-gray-300'
-          }`}
-        >
-          ★
-        </button>
-      ))}
-    </div>
-  );
+  const StarRating = ({ itemId, isDelivery = false }) => {
+    const currentRating = isDelivery ? deliveryRating : (ratings[itemId] || 0);
+    const [hoverRating, setHoverRating] = useState(0);
+
+    return (
+      <div className="flex gap-1">
+        {[1, 2, 3, 4, 5].map(star => (
+          <button
+            key={star}
+            onClick={() => isDelivery ? setDeliveryRating(star) : handleRating(itemId, star)}
+            onMouseEnter={() => setHoverRating(star)}
+            onMouseLeave={() => setHoverRating(0)}
+            className="p-1 transition-transform hover:scale-110"
+          >
+            <StarIcon 
+              className={`w-8 h-8 transition-colors ${
+                star <= (hoverRating || currentRating) 
+                  ? 'text-yellow-400' 
+                  : 'text-gray-300'
+              }`}
+              filled={star <= (hoverRating || currentRating)}
+            />
+          </button>
+        ))}
+      </div>
+    );
+  };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading your order...</p>
+          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-gray-600 font-medium">Loading your order...</p>
         </div>
       </div>
     );
@@ -100,11 +111,16 @@ export default function Review() {
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
-          <div className="text-6xl mb-4">😕</div>
-          <h2 className="text-xl font-bold text-gray-800 mb-2">Order Not Found</h2>
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <XCircleIcon className="w-10 h-10 text-red-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Order Not Found</h2>
           <p className="text-gray-500 mb-6">{error}</p>
-          <Link to="/" className="inline-block bg-orange-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-orange-600 transition">
+          <Link 
+            to="/" 
+            className="inline-flex items-center gap-2 bg-orange-500 text-white px-6 py-3 rounded-xl font-medium hover:bg-orange-600 transition-colors"
+          >
             View Our Menu
           </Link>
         </div>
@@ -115,11 +131,16 @@ export default function Review() {
   if (submitted) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
-          <div className="text-6xl mb-4">🎉</div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Thank You!</h2>
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircleIcon className="w-10 h-10 text-green-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Thank You!</h2>
           <p className="text-gray-500 mb-6">Your feedback helps us serve you better!</p>
-          <Link to="/" className="inline-block bg-orange-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-orange-600 transition">
+          <Link 
+            to="/" 
+            className="inline-flex items-center gap-2 bg-orange-500 text-white px-6 py-3 rounded-xl font-medium hover:bg-orange-600 transition-colors"
+          >
             View Our Menu
           </Link>
         </div>
@@ -130,43 +151,64 @@ export default function Review() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm">
+      <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-4">
-          <Link to="/" className="text-orange-600 hover:text-orange-700 text-sm">← Back to Menu</Link>
-          <h1 className="text-2xl font-bold text-gray-800 mt-2">Rate Your Order</h1>
-          <p className="text-gray-500 text-sm">Order #{order.orderId}</p>
+          <Link to="/" className="flex items-center gap-2 text-gray-600 hover:text-orange-600 transition-colors">
+            <ArrowLeftIcon className="w-5 h-5" />
+            <span className="font-medium">Back to Menu</span>
+          </Link>
+          <div className="mt-4">
+            <h1 className="text-2xl font-bold text-gray-900">Rate Your Order</h1>
+            <p className="text-gray-500">Order #{order.orderId}</p>
+          </div>
         </div>
       </header>
 
       <div className="max-w-2xl mx-auto px-4 py-6">
         {/* Order Summary */}
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-          <div className="flex justify-between items-center text-sm text-gray-500">
-            <span>Delivered on {new Date(order.deliveredAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
-            <span className="font-semibold text-gray-800">₹{order.totalAmount}</span>
+        <div className="bg-white rounded-2xl shadow-sm p-4 mb-6">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2 text-gray-500">
+              <CheckCircleIcon className="w-5 h-5 text-green-500" />
+              <span>Delivered on {new Date(order.deliveredAt).toLocaleDateString('en-GB', { 
+                day: '2-digit', month: 'short', year: 'numeric' 
+              })}</span>
+            </div>
+            <span className="font-bold text-gray-900">₹{order.totalAmount}</span>
           </div>
         </div>
 
         {/* Delivery Partner Rating */}
         {order.deliveryPartner && (
-          <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-            <h3 className="font-semibold text-gray-800 mb-4">Rate Your Delivery Partner</h3>
+          <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
+            <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <TruckIcon className="w-5 h-5 text-orange-500" />
+              Rate Your Delivery Partner
+            </h3>
             <div className="flex gap-4 items-center">
-              <div className="w-16 h-16 rounded-full bg-gray-100 overflow-hidden flex-shrink-0">
+              <div className="w-16 h-16 rounded-2xl bg-gray-100 overflow-hidden flex-shrink-0">
                 {order.deliveryPartner.photo ? (
-                  <img src={order.deliveryPartner.photo} alt={order.deliveryPartner.name} className="w-full h-full object-cover" />
+                  <img 
+                    src={order.deliveryPartner.photo} 
+                    alt={order.deliveryPartner.name} 
+                    className="w-full h-full object-cover" 
+                  />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-400 text-2xl">🚴</div>
+                  <div className="w-full h-full flex items-center justify-center">
+                    <TruckIcon className="w-8 h-8 text-gray-400" />
+                  </div>
                 )}
               </div>
               <div className="flex-1">
-                <h4 className="font-medium text-gray-800">{order.deliveryPartner.name}</h4>
+                <h4 className="font-medium text-gray-900">{order.deliveryPartner.name}</h4>
                 {order.deliveryPartner.avgRating > 0 && (
-                  <p className="text-xs text-gray-400">
-                    Avg rating: {order.deliveryPartner.avgRating} ★ ({order.deliveryPartner.totalRatings} reviews)
-                  </p>
+                  <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
+                    <StarIcon className="w-4 h-4 text-yellow-400" filled />
+                    <span>{order.deliveryPartner.avgRating}</span>
+                    <span>({order.deliveryPartner.totalRatings} reviews)</span>
+                  </div>
                 )}
-                <div className="mt-2">
+                <div className="mt-3">
                   <p className="text-sm text-gray-600 mb-2">
                     {order.deliveryPartner.existingRating ? 'Update your rating:' : 'Rate delivery:'}
                   </p>
@@ -178,27 +220,45 @@ export default function Review() {
         )}
 
         {/* Items to Rate */}
-        <h3 className="font-semibold text-gray-800 mb-3">Rate Your Food</h3>
+        <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <svg className="w-5 h-5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          </svg>
+          Rate Your Food
+        </h3>
+        
         <div className="space-y-4">
           {order.items.map(item => (
-            <div key={item.menuItemId} className="bg-white rounded-xl shadow-sm p-4">
+            <div key={item.menuItemId} className="bg-white rounded-2xl shadow-sm p-4">
               <div className="flex gap-4">
-                {item.image && (
-                  <img src={item.image} alt={item.name} className="w-20 h-20 rounded-lg object-cover" />
+                {item.image ? (
+                  <img 
+                    src={item.image} 
+                    alt={item.name} 
+                    className="w-20 h-20 rounded-xl object-cover flex-shrink-0" 
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-8 h-8 text-orange-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                    </svg>
+                  </div>
                 )}
                 <div className="flex-1">
-                  <h3 className="font-semibold text-gray-800">{item.name}</h3>
+                  <h3 className="font-semibold text-gray-900">{item.name}</h3>
                   <p className="text-sm text-gray-500">Qty: {item.quantity} × ₹{item.price}</p>
                   {item.avgRating > 0 && (
-                    <p className="text-xs text-gray-400 mt-1">
-                      Avg rating: {item.avgRating} ★ ({item.totalRatings} reviews)
-                    </p>
+                    <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
+                      <StarIcon className="w-4 h-4 text-yellow-400" filled />
+                      <span>{item.avgRating}</span>
+                      <span>({item.totalRatings} reviews)</span>
+                    </div>
                   )}
                   <div className="mt-3">
                     <p className="text-sm text-gray-600 mb-2">
                       {item.existingRating ? 'Update your rating:' : 'Rate this item:'}
                     </p>
-                    <StarRating itemId={item.menuItemId} currentRating={item.existingRating} />
+                    <StarRating itemId={item.menuItemId} />
                   </div>
                 </div>
               </div>
@@ -207,19 +267,27 @@ export default function Review() {
         </div>
 
         {/* Submit Button */}
-        <div className="mt-8">
+        <div className="mt-8 pb-8">
           <button
             onClick={handleSubmit}
             disabled={submitting || (Object.keys(ratings).length === 0 && !deliveryRating)}
-            className={`w-full py-4 rounded-xl font-semibold text-white transition ${
+            className={`w-full py-4 rounded-xl font-semibold text-white transition-all ${
               submitting || (Object.keys(ratings).length === 0 && !deliveryRating)
                 ? 'bg-gray-300 cursor-not-allowed'
-                : 'bg-orange-500 hover:bg-orange-600'
+                : 'bg-orange-500 hover:bg-orange-600 shadow-lg hover:shadow-xl'
             }`}
           >
-            {submitting ? 'Submitting...' : 'Submit Review'}
+            {submitting ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Submitting...
+              </span>
+            ) : 'Submit Review'}
           </button>
-          <p className="text-center text-sm text-gray-400 mt-3">
+          <p className="text-center text-sm text-gray-400 mt-4">
             {Object.keys(ratings).length} of {order.items.length} items rated
             {order.deliveryPartner && (deliveryRating ? ' • Delivery rated ✓' : '')}
           </p>

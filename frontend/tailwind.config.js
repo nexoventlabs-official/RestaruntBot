@@ -43,7 +43,7 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['Poppins', 'system-ui', '-apple-system', 'sans-serif'],
       },
       boxShadow: {
         'card': '0 2px 12px rgba(0, 0, 0, 0.08)',

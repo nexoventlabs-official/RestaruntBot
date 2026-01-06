@@ -7,13 +7,17 @@ import {
   ChefHat,
   BarChart3,
   Image,
-  Bike
+  Bike,
+  Sparkles,
+  Tag
 } from 'lucide-react';
 
 const navItems = [
   { path: '/admin', icon: LayoutDashboard, label: 'Dashboard', description: 'Overview & stats' },
   { path: '/admin/orders', icon: ShoppingBag, label: 'Orders', description: 'Manage orders' },
   { path: '/admin/menu', icon: UtensilsCrossed, label: 'Menu', description: 'Food items' },
+  { path: '/admin/hero-sections', icon: Sparkles, label: 'Hero', description: 'Homepage banners' },
+  { path: '/admin/offers', icon: Tag, label: 'Offers', description: 'Promotions & deals' },
   { path: '/admin/delivery-persons', icon: Bike, label: 'Delivery', description: 'Delivery partners' },
   { path: '/admin/reports', icon: BarChart3, label: 'Reports', description: 'Analytics & reports' },
   { path: '/admin/chatbot-images', icon: Image, label: 'Bot Images', description: 'WhatsApp images' },

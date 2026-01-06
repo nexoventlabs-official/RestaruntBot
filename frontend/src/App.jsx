@@ -7,13 +7,19 @@ import Menu from './pages/Menu';
 import Reports from './pages/Reports';
 import NotFound from './pages/NotFound';
 import Layout from './components/Layout';
-import UserMenu from './pages/UserMenu';
+import UserLayout from './components/UserLayout';
+import Home from './pages/Home';
+import UserMenuPage from './pages/UserMenuPage';
+import About from './pages/About';
+import Contact from './pages/Contact';
 import Review from './pages/Review';
 import Track from './pages/Track';
 import ChatbotImages from './pages/ChatbotImages';
 import DeliveryPersons from './pages/DeliveryPersons';
 import DeliveryLogin from './pages/DeliveryLogin';
 import DeliveryDashboard from './pages/DeliveryDashboard';
+import HeroSections from './pages/HeroSections';
+import Offers from './pages/Offers';
 import api from './api';
 
 function App() {
@@ -53,8 +59,15 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public User Routes */}
-        <Route path="/" element={<UserMenu />} />
+        {/* Public User Routes with UserLayout */}
+        <Route element={<UserLayout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/menu" element={<UserMenuPage />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
+        </Route>
+        
+        {/* Other Public Routes */}
         <Route path="/review/:phone/:orderId" element={<Review />} />
         <Route path="/track/:orderId" element={<Track />} />
         
@@ -64,6 +77,8 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="orders" element={<Orders />} />
           <Route path="menu" element={<Menu />} />
+          <Route path="hero-sections" element={<HeroSections />} />
+          <Route path="offers" element={<Offers />} />
           <Route path="reports" element={<Reports />} />
           <Route path="chatbot-images" element={<ChatbotImages />} />
           <Route path="delivery-persons" element={<DeliveryPersons />} />
