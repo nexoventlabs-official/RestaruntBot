@@ -3788,7 +3788,7 @@ const chatbot = {
     orders.forEach(o => {
       msg += `${statusEmoji[o.status] || '•'} *${o.orderId}*\n`;
       msg += `   ${statusLabel[o.status] || o.status.replace('_', ' ')} | ₹${o.totalAmount}\n`;
-      msg += `   ${new Date(o.createdAt).toLocaleDateString()}\n\n`;
+      msg += `   ${new Date(o.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}\n\n`;
     });
 
     const yourOrdersImageUrl = await chatbotImagesService.getImageUrl('your_orders');
@@ -3863,11 +3863,11 @@ const chatbot = {
     
     order.trackingUpdates.forEach(u => {
       msg += `${statusEmoji[u.status] || '•'} ${u.message}\n`;
-      msg += `   ${new Date(u.timestamp).toLocaleString()}\n\n`;
+      msg += `   ${new Date(u.timestamp).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}\n\n`;
     });
 
     if (order.estimatedDeliveryTime) {
-      msg += `⏰ *ETA:* ${new Date(order.estimatedDeliveryTime).toLocaleString()}`;
+      msg += `⏰ *ETA:* ${new Date(order.estimatedDeliveryTime).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
     }
 
     const orderTrackingImageUrl = await chatbotImagesService.getImageUrl('order_tracking');

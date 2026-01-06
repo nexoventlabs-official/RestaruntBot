@@ -355,7 +355,7 @@ router.put('/:id/delivery-time', authMiddleware, async (req, res) => {
     
     try {
       await whatsapp.sendMessage(order.customer.phone,
-        `⏰ *Delivery Update*\n\nOrder: ${order.orderId}\nEstimated delivery: ${new Date(estimatedDeliveryTime).toLocaleString()}`);
+        `⏰ *Delivery Update*\n\nOrder: ${order.orderId}\nEstimated delivery: ${new Date(estimatedDeliveryTime).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}`);
     } catch (whatsappError) {
       console.error('WhatsApp notification failed:', whatsappError.message);
     }
