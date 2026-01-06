@@ -4,7 +4,7 @@ const DashboardStats = require('../models/DashboardStats');
 const dataEvents = require('./eventEmitter');
 const googleSheets = require('./googleSheets');
 
-const RETENTION_DAYS = 10; // Keep data for 10 days
+const RETENTION_DAYS = 15; // Delete hidden orders after 15 days
 
 const dailyCleanup = {
   // Check if it's midnight (12:00 AM)
@@ -99,74 +99,63 @@ const dailyCleanup = {
     }
   },
 
-  // Clean up orders older than 10 days
+  // Clean up hidden orders older than 15 days (stats already saved when hidden)
   async cleanupOldOrders() {
     try {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - RETENTION_DAYS);
-      cutoffDate.setHours(23, 59, 59, 999);
       
-      // Find orders to delete
-      const ordersToDelete = await Order.find({
-        createdAt: { $lt: cutoffDate }
+      // Only delete orders that are hidden AND statusUpdatedAt is older than 15 days
+      const result = await Order.deleteMany({
+        isHidden: true,
+        statusUpdatedAt: { $lt: cutoffDate, $exists: true }
       });
       
-      if (ordersToDelete.length === 0) {
-        console.log('📦 No orders older than 10 days to clean up');
-        return 0;
+      if (result.deletedCount > 0) {
+        console.log(`🗑️ Permanently deleted ${result.deletedCount} hidden orders older than ${RETENTION_DAYS} days`);
+      } else {
+        console.log(`📦 No hidden orders older than ${RETENTION_DAYS} days to delete`);
       }
       
-      // Save stats before deleting
-      await this.saveOrderStats(ordersToDelete);
-      
-      // Delete old orders
-      const result = await Order.deleteMany({
-        createdAt: { $lt: cutoffDate }
-      });
-      
-      console.log(`🗑️ Deleted ${result.deletedCount} orders older than ${RETENTION_DAYS} days`);
       return result.deletedCount;
     } catch (error) {
-      console.error('❌ Error cleaning up orders:', error.message);
+      console.error('❌ Error cleaning up old orders:', error.message);
       return 0;
     }
   },
 
-  // Clean up customers who haven't ordered in 10 days
+  // Clean up customers who haven't ordered in 15 days
   async cleanupInactiveCustomers() {
     try {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - RETENTION_DAYS);
       
-      // Find customers whose last interaction was more than 10 days ago
-      // and who don't have any recent orders
+      // Find customers whose last interaction was more than 15 days ago
       const inactiveCustomers = await Customer.find({
         $or: [
           { 'conversationState.lastInteraction': { $lt: cutoffDate } },
-          { 'conversationState.lastInteraction': { $exists: false } }
+          { 'conversationState.lastInteraction': { $exists: false }, createdAt: { $lt: cutoffDate } }
         ]
       });
       
       let deletedCount = 0;
       
       for (const customer of inactiveCustomers) {
-        // Check if customer has any orders in the last 10 days
-        const recentOrders = await Order.countDocuments({
+        // Check if customer has any non-hidden orders
+        const activeOrders = await Order.countDocuments({
           'customer.phone': customer.phone,
-          createdAt: { $gte: cutoffDate }
+          isHidden: { $ne: true }
         });
         
-        if (recentOrders === 0) {
-          // No recent orders, safe to delete
+        if (activeOrders === 0) {
           await Customer.deleteOne({ _id: customer._id });
           deletedCount++;
         }
       }
       
       if (deletedCount > 0) {
-        // Save customer count to stats
         await this.saveCustomerStats(deletedCount);
-        console.log(`🗑️ Deleted ${deletedCount} inactive customers (no orders in ${RETENTION_DAYS} days)`);
+        console.log(`🗑️ Deleted ${deletedCount} inactive customers`);
       } else {
         console.log('👥 No inactive customers to clean up');
       }
@@ -181,14 +170,14 @@ const dailyCleanup = {
   // Run daily cleanup
   async runCleanup() {
     console.log('🧹 Starting daily cleanup...');
-    console.log(`📅 Removing data older than ${RETENTION_DAYS} days`);
+    console.log(`📅 Deleting hidden orders older than ${RETENTION_DAYS} days`);
     
     const ordersDeleted = await this.cleanupOldOrders();
     const customersDeleted = await this.cleanupInactiveCustomers();
     
     console.log('✅ Daily cleanup completed!');
-    console.log(`   Orders removed: ${ordersDeleted}`);
-    console.log(`   Customers removed: ${customersDeleted}`);
+    console.log(`   Hidden orders deleted: ${ordersDeleted}`);
+    console.log(`   Inactive customers deleted: ${customersDeleted}`);
     
     return { ordersDeleted, customersDeleted };
   },
@@ -203,7 +192,7 @@ const dailyCleanup = {
     console.log(`📅 Daily cleanup scheduler started`);
     console.log(`   - Today's revenue resets at 12:00 AM`);
     console.log(`   - Empty date headers cleanup at 12:00 AM`);
-    console.log(`   - Data retention: ${RETENTION_DAYS} days`);
+    console.log(`   - Hidden orders deleted after ${RETENTION_DAYS} days`);
     
     // Check every minute
     setInterval(async () => {
