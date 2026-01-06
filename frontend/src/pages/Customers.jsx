@@ -240,7 +240,7 @@ export default function Customers() {
                         <h2 className="text-2xl font-bold truncate">{selected.name || 'Unknown'}</h2>
                         <div className="flex items-center gap-2 text-white/80 text-sm mt-1">
                           <Calendar className="w-4 h-4" />
-                          <span>Customer since {new Date(selected.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}</span>
+                          <span>Customer since {new Date(selected.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
                         </div>
                       </div>
                     </div>
@@ -337,7 +337,7 @@ export default function Customers() {
                             </div>
                             <div className="flex items-center justify-between">
                               <span className="text-dark-400 text-sm">
-                                {new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                {new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                               </span>
                               <span className="font-bold text-primary-600">₹{order.totalAmount}</span>
                             </div>

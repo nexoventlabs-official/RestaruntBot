@@ -142,7 +142,7 @@ export default function Review() {
         {/* Order Summary */}
         <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
           <div className="flex justify-between items-center text-sm text-gray-500">
-            <span>Delivered on {new Date(order.deliveredAt).toLocaleDateString()}</span>
+            <span>Delivered on {new Date(order.deliveredAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
             <span className="font-semibold text-gray-800">₹{order.totalAmount}</span>
           </div>
         </div>

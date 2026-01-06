@@ -206,7 +206,7 @@ export default function Track() {
               <div className="flex justify-between">
                 <span className="text-gray-500">Estimated Delivery</span>
                 <span className="font-medium text-gray-800">
-                  {new Date(order.estimatedDeliveryTime).toLocaleString()}
+                  {new Date(order.estimatedDeliveryTime).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
             )}
@@ -227,7 +227,7 @@ export default function Track() {
                     <div className="flex-1">
                       <p className="font-medium text-gray-800">{update.message}</p>
                       <p className="text-sm text-gray-500">
-                        {new Date(update.timestamp).toLocaleString()}
+                        {new Date(update.timestamp).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
                   </div>
