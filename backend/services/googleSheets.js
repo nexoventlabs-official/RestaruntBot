@@ -780,6 +780,91 @@ const googleSheets = {
       console.error('❌ Google Sheets payment method update error:', error.message);
       return false;
     }
+  },
+
+  // Clean up empty date headers from all sheets
+  async cleanupEmptyDateHeaders() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return false;
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheetTypes = ['new', 'delivered', 'cancelled', 'refunded', 'refundprocessing', 'refundfailed'];
+      
+      let totalRemoved = 0;
+      
+      for (const sheetType of sheetTypes) {
+        const sheet = await this.getSheetByType(sheets, sheetType);
+        if (!sheet) continue;
+        
+        try {
+          // Get all rows from the sheet
+          const response = await sheets.spreadsheets.values.get({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${sheet.sheetName}!A:A`
+          });
+          
+          const rows = response.data.values || [];
+          const rowsToDelete = [];
+          
+          // Find date header rows (they start with 📅)
+          for (let i = 0; i < rows.length; i++) {
+            const cellValue = rows[i]?.[0] || '';
+            if (cellValue.startsWith('📅')) {
+              // Check if next row is another date header or empty (no orders under this date)
+              const nextRow = rows[i + 1]?.[0] || '';
+              const isNextRowDateHeader = nextRow.startsWith('📅');
+              const isNextRowEmpty = !nextRow || nextRow.trim() === '';
+              const isLastRow = i === rows.length - 1;
+              
+              // If next row is another date header, empty, or this is the last row - this date header has no orders
+              if (isNextRowDateHeader || isNextRowEmpty || isLastRow) {
+                rowsToDelete.push(i);
+              }
+            }
+          }
+          
+          // Delete rows from bottom to top to maintain correct indices
+          if (rowsToDelete.length > 0) {
+            rowsToDelete.sort((a, b) => b - a); // Sort descending
+            
+            for (const rowIndex of rowsToDelete) {
+              await sheets.spreadsheets.batchUpdate({
+                spreadsheetId: SPREADSHEET_ID,
+                resource: {
+                  requests: [{
+                    deleteDimension: {
+                      range: {
+                        sheetId: sheet.sheetId,
+                        dimension: 'ROWS',
+                        startIndex: rowIndex,
+                        endIndex: rowIndex + 1
+                      }
+                    }
+                  }]
+                }
+              });
+              totalRemoved++;
+            }
+            
+            console.log(`🗑️ Removed ${rowsToDelete.length} empty date headers from ${sheet.sheetName}`);
+          }
+        } catch (sheetError) {
+          console.error(`Error cleaning ${sheet.sheetName}:`, sheetError.message);
+        }
+      }
+      
+      if (totalRemoved > 0) {
+        console.log(`✅ Total empty date headers removed: ${totalRemoved}`);
+      } else {
+        console.log('📅 No empty date headers to remove');
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Error cleaning up empty date headers:', error.message);
+      return false;
+    }
   }
 };
 

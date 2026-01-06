@@ -2,6 +2,7 @@ const Order = require('../models/Order');
 const Customer = require('../models/Customer');
 const DashboardStats = require('../models/DashboardStats');
 const dataEvents = require('./eventEmitter');
+const googleSheets = require('./googleSheets');
 
 const RETENTION_DAYS = 10; // Keep data for 10 days
 
@@ -51,6 +52,10 @@ const dailyCleanup = {
         
         console.log(`✅ Today's stats reset for ${today}`);
         dataEvents.emit('dashboard');
+        
+        // Clean up empty date headers from Google Sheets
+        console.log('📅 Cleaning up empty date headers from Google Sheets...');
+        await googleSheets.cleanupEmptyDateHeaders();
       }
     } catch (error) {
       console.error('❌ Error resetting today stats:', error.message);
@@ -197,6 +202,7 @@ const dailyCleanup = {
   start() {
     console.log(`📅 Daily cleanup scheduler started`);
     console.log(`   - Today's revenue resets at 12:00 AM`);
+    console.log(`   - Empty date headers cleanup at 12:00 AM`);
     console.log(`   - Data retention: ${RETENTION_DAYS} days`);
     
     // Check every minute
