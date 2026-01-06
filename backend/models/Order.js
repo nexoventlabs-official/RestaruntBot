@@ -43,6 +43,10 @@ const orderSchema = new mongoose.Schema({
   returnReason: { type: String },
   cancellationReason: { type: String },
   statusUpdatedAt: { type: Date }, // Track when status changed to delivered/cancelled for auto-cleanup
+  // Delivery partner assignment
+  assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'DeliveryBoy', default: null },
+  assignedAt: { type: Date },
+  deliveryPartnerName: { type: String },
   trackingUpdates: [{
     status: String,
     timestamp: { type: Date, default: Date.now },

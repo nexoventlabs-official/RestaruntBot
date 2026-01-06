@@ -713,6 +713,38 @@ const googleSheets = {
       console.error('❌ Error syncing pending refunds:', error.message);
       return false;
     }
+  },
+
+  // Update delivery partner name in Google Sheet
+  async updateDeliveryPartner(orderId, deliveryPartnerName) {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return false;
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const newSheet = await this.getSheetByType(sheets, 'new');
+      if (!newSheet) return false;
+      
+      const orderData = await this.findOrderInSheet(sheets, newSheet.sheetName, orderId);
+      if (!orderData) {
+        console.log('❌ Order not found in neworders sheet for delivery partner update');
+        return false;
+      }
+      
+      // Add delivery partner name to column O (15th column, index 14)
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${newSheet.sheetName}!O${orderData.rowIndex + 1}`,
+        valueInputOption: 'RAW',
+        resource: { values: [[deliveryPartnerName]] }
+      });
+      
+      console.log('✅ Delivery partner updated in Google Sheet:', orderId, deliveryPartnerName);
+      return true;
+    } catch (error) {
+      console.error('❌ Google Sheets delivery partner update error:', error.message);
+      return false;
+    }
   }
 };
 

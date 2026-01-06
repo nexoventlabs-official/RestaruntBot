@@ -1,9 +1,14 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const DeliveryBoy = require('../models/DeliveryBoy');
+const Order = require('../models/Order');
 const auth = require('../middleware/auth');
 const brevoMail = require('../services/brevoMail');
 const cloudinaryService = require('../services/cloudinary');
+const googleSheets = require('../services/googleSheets');
+const whatsapp = require('../services/whatsapp');
+const chatbotImagesService = require('../services/chatbotImages');
+const dataEvents = require('../services/eventEmitter');
 const multer = require('multer');
 const router = express.Router();
 
@@ -410,6 +415,305 @@ router.post('/status', async (req, res) => {
     await DeliveryBoy.findByIdAndUpdate(decoded.id, { isOnline });
     
     res.json({ message: 'Status updated' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ DELIVERY BOY ORDER ROUTES ============
+
+// Middleware to verify delivery boy token
+const verifyDeliveryToken = async (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token' });
+  
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    if (decoded.role !== 'delivery') {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    
+    const deliveryBoy = await DeliveryBoy.findById(decoded.id).select('-password');
+    
+    if (!deliveryBoy) {
+      return res.status(401).json({ error: 'Account deleted' });
+    }
+    
+    if (!deliveryBoy.isActive) {
+      return res.status(401).json({ error: 'Account deactivated' });
+    }
+    
+    if (deliveryBoy.tokenVersion !== decoded.tokenVersion) {
+      return res.status(401).json({ error: 'Session expired' });
+    }
+    
+    req.deliveryBoy = deliveryBoy;
+    next();
+  } catch (error) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
+// Get available orders (preparing status, not assigned, delivery type only)
+router.get('/orders/available', verifyDeliveryToken, async (req, res) => {
+  try {
+    const orders = await Order.find({
+      status: 'preparing',
+      serviceType: 'delivery',
+      assignedTo: null
+    }).sort({ createdAt: 1 }); // Oldest first
+    
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get my assigned orders (orders assigned to this delivery boy)
+router.get('/orders/my', verifyDeliveryToken, async (req, res) => {
+  try {
+    const orders = await Order.find({
+      assignedTo: req.deliveryBoy._id,
+      status: { $in: ['ready', 'out_for_delivery'] }
+    }).sort({ assignedAt: -1 });
+    
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get delivery history (delivered orders by this delivery boy)
+router.get('/orders/history', verifyDeliveryToken, async (req, res) => {
+  try {
+    const orders = await Order.find({
+      assignedTo: req.deliveryBoy._id,
+      status: 'delivered'
+    }).sort({ deliveredAt: -1 }).limit(50);
+    
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Claim order (Mark as Ready) - First delivery boy to click gets the order
+router.post('/orders/:orderId/claim', verifyDeliveryToken, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    // Use findOneAndUpdate with conditions to ensure atomic operation
+    const order = await Order.findOneAndUpdate(
+      {
+        orderId,
+        status: 'preparing',
+        assignedTo: null,
+        serviceType: 'delivery'
+      },
+      {
+        $set: {
+          status: 'ready',
+          assignedTo: req.deliveryBoy._id,
+          assignedAt: new Date(),
+          deliveryPartnerName: req.deliveryBoy.name
+        },
+        $push: {
+          trackingUpdates: {
+            status: 'ready',
+            timestamp: new Date(),
+            message: `Order is ready. Assigned to ${req.deliveryBoy.name}`
+          }
+        }
+      },
+      { new: true }
+    );
+    
+    if (!order) {
+      return res.status(400).json({ error: 'Order not available or already claimed' });
+    }
+    
+    // Update Google Sheets with delivery partner info
+    await googleSheets.updateOrderStatus(orderId, 'ready');
+    await googleSheets.updateDeliveryPartner(orderId, req.deliveryBoy.name);
+    
+    // Send WhatsApp notification to customer
+    const readyImageUrl = await chatbotImagesService.getImageUrl('ready');
+    const phone = order.customer.phone;
+    if (readyImageUrl) {
+      await whatsapp.sendImageWithButtons(phone, readyImageUrl,
+        `📦 *Order Ready!*\n\nYour order #${orderId} is ready!\n\n🚴 Delivery Partner: *${req.deliveryBoy.name}*\n\nYour order will be picked up shortly.`,
+        [{ id: 'track_order', text: 'Track Order' }]
+      );
+    } else {
+      await whatsapp.sendButtons(phone,
+        `📦 *Order Ready!*\n\nYour order #${orderId} is ready!\n\n🚴 Delivery Partner: *${req.deliveryBoy.name}*\n\nYour order will be picked up shortly.`,
+        [{ id: 'track_order', text: 'Track Order' }]
+      );
+    }
+    
+    // Emit event for real-time updates
+    dataEvents.emit('orders');
+    
+    res.json({ message: 'Order claimed successfully', order });
+  } catch (error) {
+    console.error('Claim order error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update order status (Out for Delivery)
+router.post('/orders/:orderId/out-for-delivery', verifyDeliveryToken, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    const order = await Order.findOneAndUpdate(
+      {
+        orderId,
+        status: 'ready',
+        assignedTo: req.deliveryBoy._id
+      },
+      {
+        $set: { status: 'out_for_delivery' },
+        $push: {
+          trackingUpdates: {
+            status: 'out_for_delivery',
+            timestamp: new Date(),
+            message: `${req.deliveryBoy.name} is on the way with your order`
+          }
+        }
+      },
+      { new: true }
+    );
+    
+    if (!order) {
+      return res.status(400).json({ error: 'Order not found or not assigned to you' });
+    }
+    
+    // Update Google Sheets
+    await googleSheets.updateOrderStatus(orderId, 'out_for_delivery');
+    
+    // Send WhatsApp notification
+    const outForDeliveryImageUrl = await chatbotImagesService.getImageUrl('out_for_delivery');
+    const phone = order.customer.phone;
+    if (outForDeliveryImageUrl) {
+      await whatsapp.sendImageWithCtaUrl(phone, outForDeliveryImageUrl,
+        `🛵 *Out for Delivery!*\n\nYour order #${orderId} is on the way!\n\n🚴 ${req.deliveryBoy.name} is delivering your order.`,
+        'Track Order',
+        `https://restaruntbot.vercel.app/track/${orderId}`,
+        'Tap to track'
+      );
+    } else {
+      await whatsapp.sendCtaUrl(phone,
+        `🛵 *Out for Delivery!*\n\nYour order #${orderId} is on the way!\n\n🚴 ${req.deliveryBoy.name} is delivering your order.`,
+        'Track Order',
+        `https://restaruntbot.vercel.app/track/${orderId}`,
+        'Tap to track'
+      );
+    }
+    
+    dataEvents.emit('orders');
+    
+    res.json({ message: 'Order marked as out for delivery', order });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mark order as Delivered
+router.post('/orders/:orderId/delivered', verifyDeliveryToken, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    const order = await Order.findOneAndUpdate(
+      {
+        orderId,
+        status: 'out_for_delivery',
+        assignedTo: req.deliveryBoy._id
+      },
+      {
+        $set: {
+          status: 'delivered',
+          deliveredAt: new Date(),
+          statusUpdatedAt: new Date(),
+          paymentStatus: 'paid' // Mark as paid on delivery
+        },
+        $push: {
+          trackingUpdates: {
+            status: 'delivered',
+            timestamp: new Date(),
+            message: `Order delivered by ${req.deliveryBoy.name}`
+          }
+        }
+      },
+      { new: true }
+    );
+    
+    if (!order) {
+      return res.status(400).json({ error: 'Order not found or not assigned to you' });
+    }
+    
+    // Update Google Sheets - move to delivered sheet
+    await googleSheets.updateOrderStatus(orderId, 'delivered', 'paid');
+    
+    // Send WhatsApp notification with review link
+    const deliveredImageUrl = await chatbotImagesService.getImageUrl('delivered');
+    const phone = order.customer.phone;
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    const reviewUrl = `https://restaruntbot.vercel.app/review/${cleanPhone}/${orderId}`;
+    
+    if (deliveredImageUrl) {
+      await whatsapp.sendImageWithCtaUrl(phone, deliveredImageUrl,
+        `✅ *Order Delivered!*\n\nYour order #${orderId} has been delivered!\n\nThank you for ordering with us! 🙏\n\nWe'd love to hear your feedback.`,
+        'Rate Your Order',
+        reviewUrl,
+        'Tap to review'
+      );
+    } else {
+      await whatsapp.sendCtaUrl(phone,
+        `✅ *Order Delivered!*\n\nYour order #${orderId} has been delivered!\n\nThank you for ordering with us! 🙏\n\nWe'd love to hear your feedback.`,
+        'Rate Your Order',
+        reviewUrl,
+        'Tap to review'
+      );
+    }
+    
+    dataEvents.emit('orders');
+    dataEvents.emit('dashboard');
+    
+    res.json({ message: 'Order marked as delivered', order });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get order stats for delivery boy
+router.get('/orders/stats', verifyDeliveryToken, async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const [todayDelivered, totalDelivered, activeOrders] = await Promise.all([
+      Order.countDocuments({
+        assignedTo: req.deliveryBoy._id,
+        status: 'delivered',
+        deliveredAt: { $gte: today }
+      }),
+      Order.countDocuments({
+        assignedTo: req.deliveryBoy._id,
+        status: 'delivered'
+      }),
+      Order.countDocuments({
+        assignedTo: req.deliveryBoy._id,
+        status: { $in: ['ready', 'out_for_delivery'] }
+      })
+    ]);
+    
+    res.json({
+      todayDelivered,
+      totalDelivered,
+      activeOrders
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
