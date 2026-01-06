@@ -1,5 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 import { useCart } from '../hooks/useCart';
 import CartSidebar from './CartSidebar';
 import WhatsAppFloat from './WhatsAppFloat';
@@ -10,6 +11,8 @@ import {
 } from './Icons';
 
 const WHATSAPP_NUMBER = '15551858897';
+const API_URL = 'https://restaruntbot.onrender.com/api/public';
+const SSE_URL = 'https://restaruntbot.onrender.com/api/events';
 
 const navLinks = [
   { path: '/', label: 'Home', icon: HomeIcon },
@@ -18,18 +21,78 @@ const navLinks = [
   { path: '/contact', label: 'Contact', icon: PhoneIcon },
 ];
 
-export default function UserLayout({ availableItems = [] }) {
+export default function UserLayout() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('cart');
   const [scrolled, setScrolled] = useState(false);
+  const [availableItems, setAvailableItems] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const eventSourceRef = useRef(null);
 
   const { 
     cart, wishlist, cartTotal, cartCount, 
     addToCart, removeFromCart, updateQuantity, clearCart, 
     addToWishlist, removeFromWishlist, isInWishlist, isInCart 
   } = useCart();
+
+  // Fetch available items and categories
+  const loadAvailableItems = async () => {
+    try {
+      const [catRes, itemRes] = await Promise.all([
+        axios.get(`${API_URL}/categories`),
+        axios.get(`${API_URL}/menu`)
+      ]);
+      setCategories(catRes.data);
+      
+      // Filter items based on active categories
+      const activeCategoryNames = catRes.data
+        .filter(cat => cat.isActive && !cat.isPaused)
+        .map(cat => cat.name);
+      
+      const available = itemRes.data.filter(item => {
+        const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+        return itemCategories.some(cat => activeCategoryNames.includes(cat));
+      });
+      
+      setAvailableItems(available);
+    } catch (err) {
+      console.error('Error loading available items:', err);
+    }
+  };
+
+  // Setup SSE for real-time updates
+  const setupSSE = () => {
+    try {
+      eventSourceRef.current = new EventSource(SSE_URL);
+      eventSourceRef.current.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'menu') loadAvailableItems();
+        } catch (e) {}
+      };
+      eventSourceRef.current.onerror = () => {
+        setTimeout(() => {
+          if (eventSourceRef.current) eventSourceRef.current.close();
+          setupSSE();
+        }, 5000);
+      };
+    } catch (e) {
+      console.error('SSE setup error:', e);
+    }
+  };
+
+  // Load available items on mount and setup SSE
+  useEffect(() => {
+    loadAvailableItems();
+    setupSSE();
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    };
+  }, []);
 
   // Handle scroll for navbar background
   useEffect(() => {
