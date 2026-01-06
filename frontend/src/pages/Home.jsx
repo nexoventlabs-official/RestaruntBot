@@ -3,9 +3,9 @@ import { Link, useOutletContext } from 'react-router-dom';
 import axios from 'axios';
 import HeroCarousel from '../components/HeroCarousel';
 import { 
-  StarIcon, HeartIcon, CartIcon, PlusIcon, MinusIcon, 
   ArrowRightIcon, TruckIcon, ClockIcon, CheckCircleIcon 
 } from '../components/Icons';
+import { Star, Heart, ShoppingCart, Plus, Minus } from 'lucide-react';
 
 const API_URL = 'https://restaruntbot.onrender.com/api/public';
 
@@ -50,28 +50,27 @@ export default function Home() {
   };
 
   const ItemSkeleton = () => (
-    <div className="bg-white rounded-2xl overflow-hidden shadow-sm animate-pulse">
-      <div className="h-48 bg-gray-200" />
-      <div className="p-4">
-        <div className="h-5 bg-gray-200 rounded w-3/4 mb-2" />
-        <div className="h-4 bg-gray-200 rounded w-1/2 mb-3" />
+    <div className="relative pt-28">
+      <div className="absolute -top-8 left-1/2 -translate-x-1/2 z-10 w-56 h-56">
+        <div className="w-full h-full bg-gray-300 rounded-full animate-pulse"></div>
+      </div>
+      <div className="bg-white rounded-3xl pt-24 px-5 pb-5 shadow-[0_2px_15px_rgba(0,0,0,0.08)] border border-gray-100 animate-pulse">
+        <div className="flex justify-between mb-2">
+          <div className="h-5 w-28 bg-gray-200 rounded"></div>
+          <div className="h-5 w-5 bg-gray-200 rounded-full"></div>
+        </div>
+        <div className="flex gap-1 mb-3">
+          {[...Array(5)].map((_, i) => <div key={i} className="h-4 w-4 bg-gray-200 rounded"></div>)}
+        </div>
+        <div className="h-4 w-full bg-gray-200 rounded mb-1"></div>
+        <div className="h-4 w-3/4 bg-gray-200 rounded mb-4"></div>
         <div className="flex justify-between items-center">
-          <div className="h-6 bg-gray-200 rounded w-16" />
-          <div className="h-10 w-10 bg-gray-200 rounded-xl" />
+          <div className="h-7 w-16 bg-gray-200 rounded"></div>
+          <div className="h-12 w-12 bg-gray-200 rounded-xl"></div>
         </div>
       </div>
     </div>
   );
-
-  const renderStars = (rating) => {
-    return [...Array(5)].map((_, i) => (
-      <StarIcon 
-        key={i} 
-        className={`w-4 h-4 ${i < Math.round(rating) ? 'text-yellow-400' : 'text-gray-300'}`}
-        filled={i < Math.round(rating)}
-      />
-    ));
-  };
 
   const renderItemCard = (item) => {
     const inCart = isInCart ? isInCart(item._id) : false;
@@ -79,88 +78,85 @@ export default function Home() {
     const rating = item.avgRating || 0;
     const totalRatings = item.totalRatings || 0;
 
+    const renderStars = () => {
+      const stars = [];
+      for (let i = 1; i <= 5; i++) {
+        stars.push(
+          <Star 
+            key={i} 
+            className={`w-3.5 h-3.5 ${i <= Math.round(rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} 
+          />
+        );
+      }
+      return stars;
+    };
+
     return (
-      <div key={item._id} className="group bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
-        {/* Image */}
-        <div className="relative h-48 overflow-hidden">
+      <div key={item._id} className="group relative pt-28">
+        {/* Floating Image */}
+        <div className="absolute -top-8 left-1/2 -translate-x-1/2 z-10 w-56 h-56 flex items-center justify-center">
           {item.image ? (
             <img 
               src={item.image} 
               alt={item.name} 
-              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+              className="max-h-full max-w-full object-contain group-hover:scale-110 transition-transform duration-300 drop-shadow-xl" 
             />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-orange-100 to-orange-200 flex items-center justify-center">
-              <svg className="w-16 h-16 text-orange-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
-            </div>
-          )}
-          
-          {/* Wishlist Button */}
-          <button 
-            onClick={(e) => handleToggleWishlist(item, e)} 
-            className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-md hover:scale-110 transition-transform"
-          >
-            <HeartIcon 
-              className={`w-5 h-5 ${isInWishlist && isInWishlist(item._id) ? 'text-red-500' : 'text-gray-400'}`}
-              filled={isInWishlist && isInWishlist(item._id)}
-            />
-          </button>
-
-          {/* Food Type Badge */}
-          {item.foodType && (
-            <div className={`absolute top-3 left-3 w-5 h-5 rounded border-2 flex items-center justify-center ${
-              item.foodType === 'veg' ? 'border-green-500' : 'border-red-500'
-            }`}>
-              <div className={`w-2.5 h-2.5 rounded-full ${
-                item.foodType === 'veg' ? 'bg-green-500' : 'bg-red-500'
-              }`} />
+            <div className="w-40 h-40 bg-gradient-to-br from-orange-100 to-orange-200 rounded-full flex items-center justify-center">
+              <span className="text-6xl">🍽️</span>
             </div>
           )}
         </div>
 
-        {/* Content */}
-        <div className="p-4">
-          <h3 className="font-semibold text-gray-900 mb-1 line-clamp-1">{item.name}</h3>
-          
+        {/* Card */}
+        <div className="bg-white rounded-3xl pt-24 px-5 pb-5 shadow-[0_2px_15px_rgba(0,0,0,0.08)] border border-gray-100 hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-shadow">
+          {/* Name & Wishlist */}
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <h3 className="font-bold text-gray-900 uppercase text-sm tracking-wide line-clamp-1">{item.name}</h3>
+            <button 
+              onClick={(e) => handleToggleWishlist(item, e)} 
+              className="p-1 hover:scale-110 transition-transform flex-shrink-0"
+            >
+              <Heart className={`w-5 h-5 ${isInWishlist && isInWishlist(item._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
+            </button>
+          </div>
+
           {/* Rating */}
-          <div className="flex items-center gap-1 mb-2">
-            <div className="flex">{renderStars(rating)}</div>
+          <div className="flex items-center gap-1 mb-3">
+            <div className="flex">{renderStars()}</div>
             <span className="text-xs text-gray-500">({totalRatings})</span>
           </div>
 
           {/* Description */}
           {item.description && (
-            <p className="text-sm text-gray-500 line-clamp-2 mb-3 min-h-[40px]">{item.description}</p>
+            <p className="text-sm text-gray-500 line-clamp-2 mb-4 min-h-[40px]">{item.description}</p>
           )}
 
-          {/* Price & Cart */}
+          {/* Price & Cart Button */}
           <div className="flex items-center justify-between">
-            <span className="text-xl font-bold text-orange-600">₹{item.price}</span>
-            
+            <span className="text-xl font-bold text-green-600">₹{item.price}</span>
             {inCart ? (
-              <div className="flex items-center gap-1 bg-orange-500 rounded-xl px-2 py-1">
+              <div className="flex items-center gap-1 bg-green-600 rounded-xl px-2 py-1.5">
                 <button 
                   onClick={(e) => { e.stopPropagation(); updateQuantity(item._id, cartItem.quantity - 1); }} 
-                  className="p-1.5 text-white hover:bg-orange-600 rounded-lg transition-colors"
+                  className="p-1 text-white hover:bg-green-700 rounded"
                 >
-                  <MinusIcon className="w-4 h-4" />
+                  <Minus className="w-4 h-4" />
                 </button>
-                <span className="w-8 text-center font-semibold text-white">{cartItem?.quantity || 0}</span>
+                <span className="w-6 text-center font-semibold text-white">{cartItem?.quantity || 0}</span>
                 <button 
                   onClick={(e) => { e.stopPropagation(); addToCart(item); }} 
-                  className="p-1.5 text-white hover:bg-orange-600 rounded-lg transition-colors"
+                  className="p-1 text-white hover:bg-green-700 rounded"
                 >
-                  <PlusIcon className="w-4 h-4" />
+                  <Plus className="w-4 h-4" />
                 </button>
               </div>
             ) : (
               <button 
                 onClick={(e) => handleAddToCart(item, e)} 
-                className="w-11 h-11 bg-orange-500 text-white rounded-xl flex items-center justify-center hover:bg-orange-600 transition-colors shadow-md hover:shadow-lg"
+                className="w-12 h-12 bg-green-600 text-white rounded-xl flex items-center justify-center hover:bg-green-700 transition-colors shadow-md"
               >
-                <CartIcon className="w-5 h-5" />
+                <ShoppingCart className="w-5 h-5" />
               </button>
             )}
           </div>
@@ -212,7 +208,7 @@ export default function Home() {
       </section>
 
       {/* Top Items Section */}
-      <section className="py-16 bg-gray-50">
+      <section className="py-16 bg-[#EDEAE3]">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between mb-10">
             <div>
@@ -228,21 +224,19 @@ export default function Home() {
           </div>
 
           {loading ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8 pt-8">
               <ItemSkeleton />
               <ItemSkeleton />
               <ItemSkeleton />
               <ItemSkeleton />
             </div>
           ) : topItems.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8 pt-8">
               {topItems.map(renderItemCard)}
             </div>
           ) : (
             <div className="text-center py-16 bg-white rounded-2xl">
-              <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
+              <span className="text-6xl mb-4 block">🍽️</span>
               <p className="text-gray-500">No items available yet</p>
             </div>
           )}
