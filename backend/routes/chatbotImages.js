@@ -145,6 +145,12 @@ const defaultImages = [
     name: 'View Cart',
     description: 'Shown when displaying cart with items',
     imageUrl: ''
+  },
+  {
+    key: 'select_quantity',
+    name: 'Select Quantity',
+    description: 'Shown when asking how many items customer wants to add',
+    imageUrl: ''
   }
 ];
 

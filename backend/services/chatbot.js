@@ -3182,7 +3182,9 @@ const chatbot = {
   async sendQuantitySelection(phone, item) {
     const unitLabel = item.unit || 'piece';
     const qtyLabel = item.quantity || 1;
-    await whatsapp.sendButtons(phone,
+    const selectQtyImageUrl = await chatbotImagesService.getImageUrl('select_quantity');
+    
+    await sendWithOptionalImage(phone, selectQtyImageUrl,
       `*${item.name}*\n💰 ₹${item.price} / ${qtyLabel} ${unitLabel}\n\nHow many would you like?`,
       [
         { id: 'qty_1', text: '1' },
