@@ -63,7 +63,7 @@ const sendPasswordEmail = async (email, name, password) => {
         
         <p style="color: #e63946; font-weight: bold;">⚠️ Please change your password after first login!</p>
         
-        <p style="color: #61636b;">Login at: <a href="https://restaruntbot.vercel.app/delivery/login" style="color: #e63946;">Delivery Portal</a></p>
+        <p style="color: #61636b;">Login at: <a href="https://restarunt-bot.vercel.app/delivery/login" style="color: #e63946;">Delivery Portal</a></p>
       </div>
       <div style="padding: 20px; text-align: center; color: #61636b; font-size: 12px;">
         <p>This is an automated message from FoodAdmin.</p>
@@ -541,7 +541,7 @@ router.post('/orders/:orderId/claim', verifyDeliveryToken, async (req, res) => {
     // Send WhatsApp notification to customer
     const readyImageUrl = await chatbotImagesService.getImageUrl('ready');
     const phone = order.customer.phone;
-    const trackUrl = `https://restaruntbot.vercel.app/track/${orderId}`;
+    const trackUrl = `https://restarunt-bot.vercel.app/track/${orderId}`;
     if (readyImageUrl) {
       await whatsapp.sendImageWithCtaUrl(phone, readyImageUrl,
         `📦 *Order Ready!*\n\nYour order #${orderId} is ready!\n\n🚴 Delivery Partner: *${req.deliveryBoy.name}*\n\nYour order will be picked up shortly.`,
@@ -606,14 +606,14 @@ router.post('/orders/:orderId/out-for-delivery', verifyDeliveryToken, async (req
       await whatsapp.sendImageWithCtaUrl(phone, outForDeliveryImageUrl,
         `🛵 *Your Order is On the Way!*\n\nYour order #${orderId} is on the way!\n\n🚴 ${req.deliveryBoy.name} is delivering your order.`,
         'Track Order',
-        `https://restaruntbot.vercel.app/track/${orderId}`,
+        `https://restarunt-bot.vercel.app/track/${orderId}`,
         'Tap to track'
       );
     } else {
       await whatsapp.sendCtaUrl(phone,
         `🛵 *Your Order is On the Way!*\n\nYour order #${orderId} is on the way!\n\n🚴 ${req.deliveryBoy.name} is delivering your order.`,
         'Track Order',
-        `https://restaruntbot.vercel.app/track/${orderId}`,
+        `https://restarunt-bot.vercel.app/track/${orderId}`,
         'Tap to track'
       );
     }
@@ -704,7 +704,7 @@ router.post('/orders/:orderId/delivered', verifyDeliveryToken, async (req, res) 
     const deliveredImageUrl = await chatbotImagesService.getImageUrl('delivered');
     const phone = order.customer.phone;
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
-    const reviewUrl = `https://restaruntbot.vercel.app/review/${cleanPhone}/${orderId}`;
+    const reviewUrl = `https://restarunt-bot.vercel.app/review/${cleanPhone}/${orderId}`;
     
     if (deliveredImageUrl) {
       await whatsapp.sendImageWithCtaUrl(phone, deliveredImageUrl,
@@ -838,7 +838,7 @@ router.get('/orders/:orderId/check-payment', verifyDeliveryToken, async (req, re
           const deliveredImageUrl = await chatbotImagesService.getImageUrl('delivered');
           const phone = updatedOrder.customer.phone;
           const cleanPhone = phone.replace(/\D/g, '').slice(-10);
-          const reviewUrl = `https://restaruntbot.vercel.app/review/${cleanPhone}/${orderId}`;
+          const reviewUrl = `https://restarunt-bot.vercel.app/review/${cleanPhone}/${orderId}`;
           
           if (deliveredImageUrl) {
             await whatsapp.sendImageWithCtaUrl(phone, deliveredImageUrl,

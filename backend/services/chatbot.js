@@ -4024,7 +4024,7 @@ const chatbot = {
 
   // ============ WEBSITE LINK ============
   async sendWebsiteLink(phone) {
-    const websiteUrl = 'https://restaruntbot.vercel.app';
+    const websiteUrl = 'https://restarunt-bot.vercel.app';
     const msg = `🌐 *Visit Our Website*\n\n` +
       `Order delicious food directly from our website!\n\n` +
       `✨ Browse full menu with images\n` +
