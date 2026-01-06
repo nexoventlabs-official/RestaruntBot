@@ -3,6 +3,7 @@ const Category = require('../models/Category');
 const MenuItem = require('../models/MenuItem');
 const authMiddleware = require('../middleware/auth');
 const cloudinaryService = require('../services/cloudinary');
+const dataEvents = require('../services/eventEmitter');
 const multer = require('multer');
 const router = express.Router();
 
@@ -47,6 +48,10 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
     
     const category = new Category({ name, description, image: imageUrl });
     await category.save();
+    
+    // Emit event for real-time updates
+    dataEvents.emit('menu');
+    
     res.status(201).json(category);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -96,6 +101,10 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
       { name, description, image: imageUrl, isActive, isPaused, sortOrder },
       { new: true }
     );
+    
+    // Emit event for real-time updates
+    dataEvents.emit('menu');
+    
     res.json(category);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -111,6 +120,10 @@ router.patch('/:id/toggle-pause', authMiddleware, async (req, res) => {
     }
     category.isPaused = !category.isPaused;
     await category.save();
+    
+    // Emit event for real-time updates
+    dataEvents.emit('menu');
+    
     res.json(category);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -169,6 +182,9 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 
     // Delete the category
     await Category.findByIdAndDelete(req.params.id);
+
+    // Emit event for real-time updates
+    dataEvents.emit('menu');
 
     res.json({
       success: true,

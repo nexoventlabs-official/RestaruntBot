@@ -2,6 +2,7 @@ const express = require('express');
 const MenuItem = require('../models/MenuItem');
 const authMiddleware = require('../middleware/auth');
 const cloudinaryService = require('../services/cloudinary');
+const dataEvents = require('../services/eventEmitter');
 const multer = require('multer');
 const router = express.Router();
 
@@ -66,6 +67,10 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
       image: imageUrl
     });
     await item.save();
+    
+    // Emit event for real-time updates
+    dataEvents.emit('menu');
+    
     res.status(201).json(item);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -131,6 +136,10 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
     };
     
     const item = await MenuItem.findByIdAndUpdate(req.params.id, update, { new: true });
+    
+    // Emit event for real-time updates
+    dataEvents.emit('menu');
+    
     res.json(item);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -151,6 +160,10 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     }
     
     await MenuItem.findByIdAndDelete(req.params.id);
+    
+    // Emit event for real-time updates
+    dataEvents.emit('menu');
+    
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
