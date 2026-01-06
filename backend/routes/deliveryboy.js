@@ -541,15 +541,20 @@ router.post('/orders/:orderId/claim', verifyDeliveryToken, async (req, res) => {
     // Send WhatsApp notification to customer
     const readyImageUrl = await chatbotImagesService.getImageUrl('ready');
     const phone = order.customer.phone;
+    const trackUrl = `https://restaruntbot.vercel.app/track/${orderId}`;
     if (readyImageUrl) {
-      await whatsapp.sendImageWithButtons(phone, readyImageUrl,
+      await whatsapp.sendImageWithCtaUrl(phone, readyImageUrl,
         `📦 *Order Ready!*\n\nYour order #${orderId} is ready!\n\n🚴 Delivery Partner: *${req.deliveryBoy.name}*\n\nYour order will be picked up shortly.`,
-        [{ id: 'track_order', text: 'Track Order' }]
+        'Track Order',
+        trackUrl,
+        'Tap to track your order'
       );
     } else {
-      await whatsapp.sendButtons(phone,
+      await whatsapp.sendCtaUrl(phone,
         `📦 *Order Ready!*\n\nYour order #${orderId} is ready!\n\n🚴 Delivery Partner: *${req.deliveryBoy.name}*\n\nYour order will be picked up shortly.`,
-        [{ id: 'track_order', text: 'Track Order' }]
+        'Track Order',
+        trackUrl,
+        'Tap to track your order'
       );
     }
     
