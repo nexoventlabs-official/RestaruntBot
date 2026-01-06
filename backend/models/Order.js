@@ -35,6 +35,8 @@ const orderSchema = new mongoose.Schema({
   paymentId: { type: String },
   razorpayOrderId: { type: String },
   razorpayPaymentId: { type: String },
+  codPaymentLinkId: { type: String }, // For COD orders paid via QR
+  codPaymentId: { type: String }, // Payment ID for COD UPI payments
   refundId: { type: String },
   refundAmount: { type: Number },
   refundStatus: { type: String, enum: ['none', 'pending', 'scheduled', 'approved', 'completed', 'rejected', 'failed'], default: 'none' },

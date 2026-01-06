@@ -750,8 +750,11 @@ router.post('/orders/:orderId/generate-qr', verifyDeliveryToken, async (req, res
       order.customer.name || 'Customer'
     );
     
-    // Generate QR code URL using Razorpay's QR feature or a QR service
-    // Razorpay payment links have built-in QR support
+    // Store payment link ID in order for verification
+    order.codPaymentLinkId = paymentLink.id;
+    await order.save();
+    
+    // Generate QR code URL
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(paymentLink.short_url)}`;
     
     res.json({
@@ -763,6 +766,112 @@ router.post('/orders/:orderId/generate-qr', verifyDeliveryToken, async (req, res
     });
   } catch (error) {
     console.error('Generate QR error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Check COD payment status
+router.get('/orders/:orderId/check-payment', verifyDeliveryToken, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { paymentLinkId } = req.query;
+    
+    const order = await Order.findOne({
+      orderId,
+      status: 'out_for_delivery',
+      assignedTo: req.deliveryBoy._id
+    });
+    
+    if (!order) {
+      return res.status(400).json({ error: 'Order not found' });
+    }
+    
+    // Check payment link status via Razorpay API
+    const Razorpay = require('razorpay');
+    const razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET
+    });
+    
+    try {
+      const paymentLinkDetails = await razorpay.paymentLink.fetch(paymentLinkId || order.codPaymentLinkId);
+      
+      if (paymentLinkDetails.status === 'paid') {
+        // Payment successful - auto mark as delivered
+        const updatedOrder = await Order.findOneAndUpdate(
+          {
+            orderId,
+            status: 'out_for_delivery',
+            assignedTo: req.deliveryBoy._id
+          },
+          {
+            $set: {
+              status: 'delivered',
+              deliveredAt: new Date(),
+              statusUpdatedAt: new Date(),
+              paymentStatus: 'paid',
+              actualPaymentMethod: 'upi',
+              codPaymentId: paymentLinkDetails.payments?.[0]?.payment_id || paymentLinkId
+            },
+            $push: {
+              trackingUpdates: {
+                status: 'delivered',
+                timestamp: new Date(),
+                message: `Order delivered by ${req.deliveryBoy.name}. Payment: COD (UPI via QR)`
+              }
+            }
+          },
+          { new: true }
+        );
+        
+        if (updatedOrder) {
+          // Update Google Sheets
+          await googleSheets.updateOrderStatus(orderId, 'delivered', 'paid');
+          await googleSheets.updatePaymentMethod(orderId, 'COD/UPI');
+          
+          // Send WhatsApp notification
+          const deliveredImageUrl = await chatbotImagesService.getImageUrl('delivered');
+          const phone = updatedOrder.customer.phone;
+          const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+          const reviewUrl = `https://restaruntbot.vercel.app/review/${cleanPhone}/${orderId}`;
+          
+          if (deliveredImageUrl) {
+            await whatsapp.sendImageWithCtaUrl(phone, deliveredImageUrl,
+              `✅ *Order Delivered!*\n\nYour order #${orderId} has been delivered!\n\n💳 Payment received via UPI.\n\nThank you for ordering with us! 🙏`,
+              'Rate Your Order',
+              reviewUrl,
+              'Tap to review'
+            );
+          } else {
+            await whatsapp.sendCtaUrl(phone,
+              `✅ *Order Delivered!*\n\nYour order #${orderId} has been delivered!\n\n💳 Payment received via UPI.\n\nThank you for ordering with us! 🙏`,
+              'Rate Your Order',
+              reviewUrl,
+              'Tap to review'
+            );
+          }
+          
+          dataEvents.emit('orders');
+          dataEvents.emit('dashboard');
+        }
+        
+        return res.json({ 
+          status: 'paid', 
+          message: 'Payment successful! Order marked as delivered.',
+          order: updatedOrder
+        });
+      }
+      
+      res.json({ 
+        status: paymentLinkDetails.status,
+        message: paymentLinkDetails.status === 'created' ? 'Waiting for payment...' : `Payment status: ${paymentLinkDetails.status}`
+      });
+    } catch (razorpayError) {
+      console.error('Razorpay fetch error:', razorpayError);
+      res.json({ status: 'pending', message: 'Checking payment status...' });
+    }
+  } catch (error) {
+    console.error('Check payment error:', error);
     res.status(500).json({ error: error.message });
   }
 });

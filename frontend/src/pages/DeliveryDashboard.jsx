@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bike, LogOut, User, Lock, Eye, EyeOff, Check, X, Settings, Package, MapPin, Phone, Clock, RefreshCw, Banknote, QrCode } from 'lucide-react';
+import { Bike, LogOut, User, Eye, EyeOff, Check, X, Settings, Package, MapPin, Phone, Clock, RefreshCw, Banknote, QrCode, Loader } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api';
@@ -19,6 +19,9 @@ export default function DeliveryDashboard() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [qrData, setQrData] = useState(null);
   const [loadingQr, setLoadingQr] = useState(false);
+  const [checkingPayment, setCheckingPayment] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState(null);
+  const paymentPollRef = useRef(null);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [showPasswords, setShowPasswords] = useState({ current: false, new: false, confirm: false });
   const [passwordError, setPasswordError] = useState('');
@@ -173,9 +176,12 @@ export default function DeliveryDashboard() {
   const handleGenerateQR = async () => {
     if (!selectedOrder || loadingQr) return;
     setLoadingQr(true);
+    setPaymentStatus(null);
     try {
       const res = await axios.post(`${API_URL}/delivery/orders/${selectedOrder.orderId}/generate-qr`, {}, { headers });
       setQrData(res.data);
+      // Start polling for payment status
+      startPaymentPolling(selectedOrder.orderId, res.data.paymentLinkId);
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to generate QR');
     } finally {
@@ -183,8 +189,71 @@ export default function DeliveryDashboard() {
     }
   };
 
+  // Poll for payment status when QR is shown
+  const startPaymentPolling = (orderId, paymentLinkId) => {
+    // Clear any existing polling
+    if (paymentPollRef.current) {
+      clearInterval(paymentPollRef.current);
+    }
+    
+    setCheckingPayment(true);
+    setPaymentStatus('Waiting for payment...');
+    
+    paymentPollRef.current = setInterval(async () => {
+      try {
+        const res = await axios.get(
+          `${API_URL}/delivery/orders/${orderId}/check-payment?paymentLinkId=${paymentLinkId}`, 
+          { headers }
+        );
+        
+        if (res.data.status === 'paid') {
+          // Payment successful - stop polling and close modal
+          clearInterval(paymentPollRef.current);
+          paymentPollRef.current = null;
+          setCheckingPayment(false);
+          setPaymentStatus('Payment successful! ✅');
+          
+          // Wait a moment to show success message, then close
+          setTimeout(() => {
+            setShowPaymentModal(false);
+            setSelectedOrder(null);
+            setQrData(null);
+            setPaymentStatus(null);
+            loadOrders();
+            loadStats();
+          }, 1500);
+        } else {
+          setPaymentStatus(res.data.message || 'Waiting for payment...');
+        }
+      } catch (err) {
+        console.error('Payment check error:', err);
+        setPaymentStatus('Checking payment status...');
+      }
+    }, 3000); // Poll every 3 seconds
+  };
+
+  // Stop polling when modal closes
+  const stopPaymentPolling = () => {
+    if (paymentPollRef.current) {
+      clearInterval(paymentPollRef.current);
+      paymentPollRef.current = null;
+    }
+    setCheckingPayment(false);
+    setPaymentStatus(null);
+  };
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (paymentPollRef.current) {
+        clearInterval(paymentPollRef.current);
+      }
+    };
+  }, []);
+
   const handleCollectUPI = async () => {
     if (!selectedOrder || actionLoading) return;
+    stopPaymentPolling();
     setActionLoading(selectedOrder.orderId);
     try {
       await axios.post(`${API_URL}/delivery/orders/${selectedOrder.orderId}/delivered`, 
@@ -462,7 +531,7 @@ export default function DeliveryDashboard() {
           <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="p-4 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-semibold text-lg">Collect Payment</h3>
-              <button onClick={() => { setShowPaymentModal(false); setSelectedOrder(null); setQrData(null); }} className="p-2 hover:bg-gray-100 rounded-lg">
+              <button onClick={() => { stopPaymentPolling(); setShowPaymentModal(false); setSelectedOrder(null); setQrData(null); }} className="p-2 hover:bg-gray-100 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -513,9 +582,23 @@ export default function DeliveryDashboard() {
                     </a>
                   </div>
                   
+                  {/* Payment Status Indicator */}
+                  {checkingPayment && (
+                    <div className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl ${
+                      paymentStatus?.includes('successful') ? 'bg-green-100 text-green-700' : 'bg-blue-50 text-blue-600'
+                    }`}>
+                      {paymentStatus?.includes('successful') ? (
+                        <Check className="w-5 h-5" />
+                      ) : (
+                        <Loader className="w-5 h-5 animate-spin" />
+                      )}
+                      <span className="text-sm font-medium">{paymentStatus}</span>
+                    </div>
+                  )}
+                  
                   <button
                     onClick={handleCollectUPI}
-                    disabled={actionLoading}
+                    disabled={actionLoading || paymentStatus?.includes('successful')}
                     className="w-full py-4 bg-green-500 text-white rounded-xl font-semibold hover:bg-green-600 transition disabled:opacity-50 flex items-center justify-center gap-3"
                   >
                     {actionLoading ? (
@@ -525,7 +608,7 @@ export default function DeliveryDashboard() {
                     )}
                   </button>
                   
-                  <button onClick={() => setQrData(null)} className="w-full py-2 text-gray-500 text-sm hover:bg-gray-100 rounded-lg">
+                  <button onClick={() => { stopPaymentPolling(); setQrData(null); }} className="w-full py-2 text-gray-500 text-sm hover:bg-gray-100 rounded-lg">
                     ← Back to options
                   </button>
                 </div>
