@@ -1,4 +1,4 @@
-import { X, Minus, Plus, Trash2, Heart, ShoppingCart } from 'lucide-react';
+import { X, Minus, Plus, Trash2, Heart, ShoppingCart, AlertCircle } from 'lucide-react';
 
 // WhatsApp Icon Component
 const WhatsAppIcon = ({ className }) => (
@@ -11,21 +11,37 @@ export default function CartSidebar({
   isOpen, onClose, activeTab, setActiveTab,
   cart, wishlist, cartTotal, cartCount,
   updateQuantity, removeFromCart, clearCart,
-  addToCart, removeFromWishlist, whatsappNumber
+  addToCart, removeFromWishlist, whatsappNumber,
+  availableItems = []
 }) {
-  // Generate WhatsApp message for cart items
+  // Check if item is available
+  const isItemAvailable = (itemId) => {
+    return availableItems.some(item => item._id === itemId);
+  };
+
+  // Get available cart items only
+  const availableCartItems = cart.filter(item => isItemAvailable(item._id));
+  const unavailableCartItems = cart.filter(item => !isItemAvailable(item._id));
+  const availableCartTotal = availableCartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const hasUnavailableItems = unavailableCartItems.length > 0;
+
+  // Check if wishlist item is available
+  const unavailableWishlistItems = wishlist.filter(item => !isItemAvailable(item._id));
+  const hasUnavailableWishlistItems = unavailableWishlistItems.length > 0;
+
+  // Generate WhatsApp message for available cart items only
   const generateWhatsAppMessage = () => {
-    if (cart.length === 0) return '';
+    if (availableCartItems.length === 0) return '';
     let msg = '🛒 *Order from Website*\n\n';
-    cart.forEach((item, i) => {
+    availableCartItems.forEach((item, i) => {
       msg += `${i + 1}. ${item.name} x${item.quantity} - ₹${item.price * item.quantity}\n`;
     });
-    msg += `\n💰 *Total: ₹${cartTotal}*\n\nPlease confirm my order!`;
+    msg += `\n💰 *Total: ₹${availableCartTotal}*\n\nPlease confirm my order!`;
     return encodeURIComponent(msg);
   };
 
   const handleOrderAll = () => {
-    if (cart.length === 0) return;
+    if (availableCartItems.length === 0) return;
     const msg = generateWhatsAppMessage();
     window.open(`https://wa.me/${whatsappNumber}?text=${msg}`, '_blank');
   };
@@ -70,7 +86,19 @@ export default function CartSidebar({
               </div>
             ) : (
               <div className="space-y-4">
-                {cart.map(item => (
+                {/* Unavailable items warning */}
+                {hasUnavailableItems && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-red-700">Some items are unavailable</p>
+                      <p className="text-xs text-red-600 mt-1">These items won't be included in your order</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Available items */}
+                {availableCartItems.map(item => (
                   <div key={item._id} className="flex gap-3 bg-gray-50 rounded-xl p-3">
                     {item.image ? (
                       <img src={item.image} alt={item.name} className="w-20 h-20 rounded-lg object-cover" />
@@ -98,6 +126,37 @@ export default function CartSidebar({
                     </div>
                   </div>
                 ))}
+
+                {/* Unavailable items */}
+                {unavailableCartItems.length > 0 && (
+                  <>
+                    <div className="border-t pt-4 mt-4">
+                      <p className="text-sm font-medium text-gray-500 mb-3">Unavailable Items</p>
+                    </div>
+                    {unavailableCartItems.map(item => (
+                      <div key={item._id} className="flex gap-3 bg-gray-100 rounded-xl p-3 opacity-60">
+                        {item.image ? (
+                          <img src={item.image} alt={item.name} className="w-20 h-20 rounded-lg object-cover grayscale" />
+                        ) : (
+                          <div className="w-20 h-20 rounded-lg bg-gray-200 flex items-center justify-center">
+                            <span className="text-2xl">🍽️</span>
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-medium text-gray-600">{item.name}</h4>
+                            <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs rounded-full">Unavailable</span>
+                          </div>
+                          <p className="text-sm text-gray-400">{item.unitQty} {item.unit}</p>
+                          <p className="text-gray-400 line-through">₹{item.price * item.quantity}</p>
+                          <button onClick={() => removeFromCart(item._id)} className="mt-2 px-3 py-1 bg-red-100 text-red-600 text-sm rounded-lg hover:bg-red-200">
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             )
           ) : (
@@ -109,30 +168,52 @@ export default function CartSidebar({
               </div>
             ) : (
               <div className="space-y-4">
-                {wishlist.map(item => (
-                  <div key={item._id} className="flex gap-3 bg-gray-50 rounded-xl p-3">
-                    {item.image ? (
-                      <img src={item.image} alt={item.name} className="w-20 h-20 rounded-lg object-cover" />
-                    ) : (
-                      <div className="w-20 h-20 rounded-lg bg-gray-200 flex items-center justify-center">
-                        <span className="text-2xl">🍽️</span>
-                      </div>
-                    )}
-                    <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">{item.name}</h4>
-                      <p className="text-sm text-gray-500">{item.unitQty} {item.unit}</p>
-                      <p className="text-orange-600 font-semibold">₹{item.price}</p>
-                      <div className="flex gap-2 mt-2">
-                        <button onClick={() => { addToCart(item); removeFromWishlist(item._id); }} className="px-3 py-1 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600">
-                          Add to Cart
-                        </button>
-                        <button onClick={() => removeFromWishlist(item._id)} className="p-1 text-red-500 hover:bg-red-50 rounded-full">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                {/* Unavailable wishlist items warning */}
+                {hasUnavailableWishlistItems && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-yellow-700">Some items are currently unavailable</p>
                     </div>
                   </div>
-                ))}
+                )}
+
+                {wishlist.map(item => {
+                  const available = isItemAvailable(item._id);
+                  return (
+                    <div key={item._id} className={`flex gap-3 rounded-xl p-3 ${available ? 'bg-gray-50' : 'bg-gray-100 opacity-60'}`}>
+                      {item.image ? (
+                        <img src={item.image} alt={item.name} className={`w-20 h-20 rounded-lg object-cover ${!available ? 'grayscale' : ''}`} />
+                      ) : (
+                        <div className="w-20 h-20 rounded-lg bg-gray-200 flex items-center justify-center">
+                          <span className="text-2xl">🍽️</span>
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className={`font-medium ${available ? 'text-gray-900' : 'text-gray-600'}`}>{item.name}</h4>
+                          {!available && <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs rounded-full">Unavailable</span>}
+                        </div>
+                        <p className="text-sm text-gray-500">{item.unitQty} {item.unit}</p>
+                        <p className={available ? 'text-orange-600 font-semibold' : 'text-gray-400'}>₹{item.price}</p>
+                        <div className="flex gap-2 mt-2">
+                          {available ? (
+                            <button onClick={() => { addToCart(item); removeFromWishlist(item._id); }} className="px-3 py-1 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600">
+                              Add to Cart
+                            </button>
+                          ) : (
+                            <span className="px-3 py-1 bg-gray-200 text-gray-500 text-sm rounded-lg cursor-not-allowed">
+                              Unavailable
+                            </span>
+                          )}
+                          <button onClick={() => removeFromWishlist(item._id)} className="p-1 text-red-500 hover:bg-red-50 rounded-full">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )
           )}
@@ -143,12 +224,24 @@ export default function CartSidebar({
           <div className="border-t p-4 space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Total</span>
-              <span className="text-xl font-bold text-gray-900">₹{cartTotal}</span>
+              <div className="text-right">
+                {hasUnavailableItems && cartTotal !== availableCartTotal && (
+                  <span className="text-sm text-gray-400 line-through mr-2">₹{cartTotal}</span>
+                )}
+                <span className="text-xl font-bold text-gray-900">₹{availableCartTotal}</span>
+              </div>
             </div>
-            <button onClick={handleOrderAll} className="w-full py-3 bg-green-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-green-600 transition-colors">
-              <WhatsAppIcon className="w-5 h-5" />
-              Order via WhatsApp
-            </button>
+            {availableCartItems.length > 0 ? (
+              <button onClick={handleOrderAll} className="w-full py-3 bg-green-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-green-600 transition-colors">
+                <WhatsAppIcon className="w-5 h-5" />
+                Order via WhatsApp
+              </button>
+            ) : (
+              <button disabled className="w-full py-3 bg-gray-300 text-gray-500 rounded-xl font-semibold flex items-center justify-center gap-2 cursor-not-allowed">
+                <WhatsAppIcon className="w-5 h-5" />
+                No available items
+              </button>
+            )}
             <button onClick={clearCart} className="w-full py-2 text-red-500 text-sm hover:bg-red-50 rounded-lg">
               Clear Cart
             </button>
