@@ -14,6 +14,8 @@ import ChatbotImages from './pages/ChatbotImages';
 import DeliveryPersons from './pages/DeliveryPersons';
 import DeliveryLogin from './pages/DeliveryLogin';
 import DeliveryDashboard from './pages/DeliveryDashboard';
+import Banners from './pages/Banners';
+import Offers from './pages/Offers';
 import api from './api';
 
 function App() {
@@ -67,6 +69,8 @@ function App() {
           <Route path="reports" element={<Reports />} />
           <Route path="chatbot-images" element={<ChatbotImages />} />
           <Route path="delivery-persons" element={<DeliveryPersons />} />
+          <Route path="banners" element={<Banners />} />
+          <Route path="offers" element={<Offers />} />
         </Route>
         
         {/* Delivery Boy Routes */}

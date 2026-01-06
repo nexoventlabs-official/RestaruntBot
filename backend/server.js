@@ -17,6 +17,8 @@ const categoryRoutes = require('./routes/category');
 const publicRoutes = require('./routes/public');
 const chatbotImagesRoutes = require('./routes/chatbotImages');
 const deliveryBoyRoutes = require('./routes/deliveryboy');
+const bannerRoutes = require('./routes/banner');
+const offerRoutes = require('./routes/offer');
 const orderScheduler = require('./services/orderScheduler');
 const dailyCleanup = require('./services/dailyCleanup');
 const orderCleanup = require('./services/orderCleanup');
@@ -58,6 +60,8 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/chatbot-images', chatbotImagesRoutes);
 app.use('/api/delivery', deliveryBoyRoutes);
+app.use('/api/banners', bannerRoutes);
+app.use('/api/offers', offerRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -93,6 +97,7 @@ dataEvents.on('orders', () => broadcast('orders'));
 dataEvents.on('dashboard', () => broadcast('dashboard'));
 dataEvents.on('customers', () => broadcast('customers'));
 dataEvents.on('menu', () => broadcast('menu'));
+dataEvents.on('deliveryboys', () => broadcast('deliveryboys'));
 
 // Test endpoint for Google Sheets sync
 app.get('/api/test-sheets/:orderId/:status', async (req, res) => {
