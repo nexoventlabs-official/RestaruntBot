@@ -12,8 +12,6 @@ const Customer = require('./models/Customer');
 const ReportHistory = require('./models/ReportHistory');
 const DeliveryBoy = require('./models/DeliveryBoy');
 const ChatbotImage = require('./models/ChatbotImage');
-const Banner = require('./models/Banner');
-const Offer = require('./models/Offer');
 
 // Configure Cloudinary
 cloudinary.config({
@@ -92,22 +90,12 @@ async function resetAllData() {
     const chatbotResult = await ChatbotImage.deleteMany({});
     console.log(`🤖 Chatbot Images deleted: ${chatbotResult.deletedCount}`);
 
-    // Clear Banners
-    const bannerResult = await Banner.deleteMany({});
-    console.log(`🖼️ Banners deleted: ${bannerResult.deletedCount}`);
-
-    // Clear Offers
-    const offerResult = await Offer.deleteMany({});
-    console.log(`🏷️ Offers deleted: ${offerResult.deletedCount}`);
-
     // Clear Cloudinary images
     console.log('\n☁️ Clearing Cloudinary images...\n');
     
     let totalCloudinaryDeleted = 0;
     totalCloudinaryDeleted += await deleteCloudinaryFolder('restaurant-bot/menu');
     totalCloudinaryDeleted += await deleteCloudinaryFolder('restaurant-bot/categories');
-    totalCloudinaryDeleted += await deleteCloudinaryFolder('restaurant-bot/banners');
-    totalCloudinaryDeleted += await deleteCloudinaryFolder('restaurant-bot/offers');
     totalCloudinaryDeleted += await deleteCloudinaryFolder('restaurant-bot/delivery-boys');
     totalCloudinaryDeleted += await deleteCloudinaryFolder('restaurant-bot/chatbot');
     
