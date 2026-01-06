@@ -126,7 +126,8 @@ export default function UserMenu() {
     addToCart(item); 
   };
 
-  const filteredCategories = [...new Set(availableItems.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))];
+  const filteredCategories = [...new Set(availableItems.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))]
+    .filter(cat => activeCategoryNames.includes(cat));
 
   const MenuItemSkeleton = () => (
     <div className="bg-white rounded-2xl shadow-md overflow-hidden animate-pulse">
