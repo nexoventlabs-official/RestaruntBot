@@ -745,6 +745,51 @@ const googleSheets = {
       console.error('❌ Google Sheets delivery partner update error:', error.message);
       return false;
     }
+  },
+
+  // Update payment method in Google Sheet (for COD orders showing actual collection method)
+  async updatePaymentMethod(orderId, paymentMethodLabel) {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return false;
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      
+      // Try to find in neworders sheet first
+      let sheet = await this.getSheetByType(sheets, 'new');
+      let orderData = null;
+      
+      if (sheet) {
+        orderData = await this.findOrderInSheet(sheets, sheet.sheetName, orderId);
+      }
+      
+      // If not in neworders, try delivered sheet
+      if (!orderData) {
+        sheet = await this.getSheetByType(sheets, 'delivered');
+        if (sheet) {
+          orderData = await this.findOrderInSheet(sheets, sheet.sheetName, orderId);
+        }
+      }
+      
+      if (!orderData) {
+        console.log('❌ Order not found for payment method update');
+        return false;
+      }
+      
+      // Update payment method in column I (9th column, index 8)
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!I${orderData.rowIndex + 1}`,
+        valueInputOption: 'RAW',
+        resource: { values: [[paymentMethodLabel]] }
+      });
+      
+      console.log('✅ Payment method updated in Google Sheet:', orderId, paymentMethodLabel);
+      return true;
+    } catch (error) {
+      console.error('❌ Google Sheets payment method update error:', error.message);
+      return false;
+    }
   }
 };
 

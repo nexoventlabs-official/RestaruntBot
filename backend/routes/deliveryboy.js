@@ -9,6 +9,7 @@ const googleSheets = require('../services/googleSheets');
 const whatsapp = require('../services/whatsapp');
 const chatbotImagesService = require('../services/chatbotImages');
 const dataEvents = require('../services/eventEmitter');
+const razorpayService = require('../services/razorpay');
 const multer = require('multer');
 const router = express.Router();
 
@@ -624,6 +625,40 @@ router.post('/orders/:orderId/out-for-delivery', verifyDeliveryToken, async (req
 router.post('/orders/:orderId/delivered', verifyDeliveryToken, async (req, res) => {
   try {
     const { orderId } = req.params;
+    const { collectionMethod } = req.body; // 'cash' or 'upi' for COD orders
+    
+    // First get the order to check payment method
+    const existingOrder = await Order.findOne({
+      orderId,
+      status: 'out_for_delivery',
+      assignedTo: req.deliveryBoy._id
+    });
+    
+    if (!existingOrder) {
+      return res.status(400).json({ error: 'Order not found or not assigned to you' });
+    }
+    
+    // For COD orders, require collection method
+    if (existingOrder.paymentMethod === 'cod' && !collectionMethod) {
+      return res.status(400).json({ 
+        error: 'Collection method required for COD orders',
+        requiresCollection: true,
+        paymentMethod: 'cod',
+        totalAmount: existingOrder.totalAmount
+      });
+    }
+    
+    // Determine actual payment method and payment status
+    let actualPaymentMethod = null;
+    let paymentStatus = 'paid';
+    
+    if (existingOrder.paymentMethod === 'upi') {
+      // Already paid online
+      actualPaymentMethod = 'upi';
+    } else if (existingOrder.paymentMethod === 'cod') {
+      // COD - check how payment was collected
+      actualPaymentMethod = collectionMethod; // 'cash' or 'upi'
+    }
     
     const order = await Order.findOneAndUpdate(
       {
@@ -636,25 +671,29 @@ router.post('/orders/:orderId/delivered', verifyDeliveryToken, async (req, res) 
           status: 'delivered',
           deliveredAt: new Date(),
           statusUpdatedAt: new Date(),
-          paymentStatus: 'paid' // Mark as paid on delivery
+          paymentStatus: paymentStatus,
+          actualPaymentMethod: actualPaymentMethod
         },
         $push: {
           trackingUpdates: {
             status: 'delivered',
             timestamp: new Date(),
-            message: `Order delivered by ${req.deliveryBoy.name}`
+            message: `Order delivered by ${req.deliveryBoy.name}. Payment: ${existingOrder.paymentMethod === 'cod' ? `COD (${collectionMethod})` : 'UPI (Prepaid)'}`
           }
         }
       },
       { new: true }
     );
     
-    if (!order) {
-      return res.status(400).json({ error: 'Order not found or not assigned to you' });
+    // Determine payment method label for Google Sheets
+    let paymentMethodLabel = existingOrder.paymentMethod.toUpperCase();
+    if (existingOrder.paymentMethod === 'cod' && collectionMethod) {
+      paymentMethodLabel = `COD/${collectionMethod.toUpperCase()}`;
     }
     
-    // Update Google Sheets - move to delivered sheet
+    // Update Google Sheets - move to delivered sheet with payment method
     await googleSheets.updateOrderStatus(orderId, 'delivered', 'paid');
+    await googleSheets.updatePaymentMethod(orderId, paymentMethodLabel);
     
     // Send WhatsApp notification with review link
     const deliveredImageUrl = await chatbotImagesService.getImageUrl('delivered');
@@ -683,6 +722,47 @@ router.post('/orders/:orderId/delivered', verifyDeliveryToken, async (req, res) 
     
     res.json({ message: 'Order marked as delivered', order });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate QR code for COD payment collection
+router.post('/orders/:orderId/generate-qr', verifyDeliveryToken, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    const order = await Order.findOne({
+      orderId,
+      status: 'out_for_delivery',
+      assignedTo: req.deliveryBoy._id,
+      paymentMethod: 'cod'
+    });
+    
+    if (!order) {
+      return res.status(400).json({ error: 'Order not found or not eligible for QR payment' });
+    }
+    
+    // Create Razorpay payment link for COD collection
+    const paymentLink = await razorpayService.createPaymentLink(
+      order.totalAmount,
+      `${orderId}-COD`,
+      order.customer.phone,
+      order.customer.name || 'Customer'
+    );
+    
+    // Generate QR code URL using Razorpay's QR feature or a QR service
+    // Razorpay payment links have built-in QR support
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(paymentLink.short_url)}`;
+    
+    res.json({
+      qrUrl,
+      paymentUrl: paymentLink.short_url,
+      paymentLinkId: paymentLink.id,
+      amount: order.totalAmount,
+      orderId: order.orderId
+    });
+  } catch (error) {
+    console.error('Generate QR error:', error);
     res.status(500).json({ error: error.message });
   }
 });
