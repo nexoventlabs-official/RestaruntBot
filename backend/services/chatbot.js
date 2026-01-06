@@ -2042,6 +2042,10 @@ const chatbot = {
         await this.sendHelp(phone);
         state.currentStep = 'main_menu';
       }
+      else if (selection === 'open_website') {
+        await this.sendWebsiteLink(phone);
+        state.currentStep = 'main_menu';
+      }
       // ========== TEXT-BASED ADD TO CART (e.g., "add biryani to cart") ==========
       else if (!selectedId && this.isAddToCartIntent(msg)) {
         const addIntent = this.isAddToCartIntent(msg);
@@ -2658,8 +2662,11 @@ const chatbot = {
           ]
         },
         {
-          title: 'Support',
-          rows: [{ rowId: 'help', title: 'Help', description: 'Get assistance' }]
+          title: 'More',
+          rows: [
+            { rowId: 'open_website', title: 'Open Website 🌐', description: 'Order through our website' },
+            { rowId: 'help', title: 'Help', description: 'Get assistance' }
+          ]
         }
       ],
       'Powered by AI'
@@ -4013,6 +4020,19 @@ const chatbot = {
       { id: 'home', text: 'Main Menu' },
       { id: 'place_order', text: 'Order Now' }
     ]);
+  },
+
+  // ============ WEBSITE LINK ============
+  async sendWebsiteLink(phone) {
+    const websiteUrl = 'https://restaruntbot.vercel.app';
+    const msg = `🌐 *Visit Our Website*\n\n` +
+      `Order delicious food directly from our website!\n\n` +
+      `✨ Browse full menu with images\n` +
+      `🛒 Easy ordering experience\n` +
+      `📱 Mobile-friendly design`;
+
+    const openWebsiteImageUrl = await chatbotImagesService.getImageUrl('open_website');
+    await sendWithOptionalImageCta(phone, openWebsiteImageUrl, msg, 'Open Website', websiteUrl, 'Tap to visit');
   }
 };
 

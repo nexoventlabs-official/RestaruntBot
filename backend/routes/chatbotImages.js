@@ -151,6 +151,12 @@ const defaultImages = [
     name: 'Select Quantity',
     description: 'Shown when asking how many items customer wants to add',
     imageUrl: ''
+  },
+  {
+    key: 'open_website',
+    name: 'Open Website',
+    description: 'Shown when user selects Open Website option with CTA button',
+    imageUrl: ''
   }
 ];
 
