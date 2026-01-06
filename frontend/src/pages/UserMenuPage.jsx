@@ -119,30 +119,33 @@ export default function UserMenuPage() {
     addToCart(item); 
   };
 
-  const handleWhatsAppOrder = async (item, e) => {
+  const handleWhatsAppOrder = (item, e) => {
     e.stopPropagation();
     if (!isItemAvailable(item._id)) return;
     
-    // Prompt user for phone number
-    const phone = prompt('Enter your WhatsApp number (with country code, e.g., 919876543210):');
-    if (!phone || phone.trim() === '') return;
+    // Format food type
+    const foodTypeLabel = item.foodType === 'veg' ? '🥦 Veg' : 
+                          item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
+                          item.foodType === 'egg' ? '🥚 Egg' : '';
     
-    // Clean phone number
-    const cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.length < 10) {
-      alert('Please enter a valid phone number');
-      return;
+    // Rating display
+    let ratingDisplay = '';
+    if (item.totalRatings > 0) {
+      const stars = '⭐'.repeat(Math.floor(item.avgRating || 0));
+      ratingDisplay = `${stars} ${item.avgRating} (${item.totalRatings} reviews)`;
+    } else {
+      ratingDisplay = '☆☆☆☆☆ No ratings yet';
     }
     
-    try {
-      const response = await axios.post(`${API_URL}/whatsapp-item/${item._id}`, { phone: cleanPhone });
-      if (response.data.success) {
-        alert('Item details sent to your WhatsApp! Please check your messages.');
-      }
-    } catch (error) {
-      console.error('Error sending to WhatsApp:', error);
-      alert('Failed to send item details. Please try again.');
-    }
+    // Build message like chatbot format
+    let msg = `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n\n`;
+    msg += `${ratingDisplay}\n\n`;
+    msg += `💰 *Price:* ₹${item.price} / ${item.unitQty || 1} ${item.unit || 'piece'}\n`;
+    msg += `⏱️ *Prep Time:* ${item.preparationTime || 15} mins\n`;
+    if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
+    msg += `\n📝 ${item.description || 'Delicious dish prepared fresh!'}`;
+    
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   const filteredCategories = [...new Set(availableItems.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))]
