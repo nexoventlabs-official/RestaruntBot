@@ -5,6 +5,7 @@ const Order = require('../models/Order');
 const DeliveryBoy = require('../models/DeliveryBoy');
 const HeroSection = require('../models/HeroSection');
 const Offer = require('../models/Offer');
+const whatsapp = require('../services/whatsapp');
 const router = express.Router();
 
 // Get active hero sections (public)
@@ -276,6 +277,69 @@ router.get('/track/:orderId', async (req, res) => {
       updatedAt: order.updatedAt
     });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Send item details via WhatsApp (for website integration)
+router.post('/whatsapp-item/:itemId', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { phone } = req.body;
+    
+    if (!phone) {
+      return res.status(400).json({ error: 'Phone number is required' });
+    }
+    
+    const item = await MenuItem.findById(itemId);
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    
+    // Check if item is available
+    if (!item.available) {
+      return res.status(400).json({ error: 'Item is currently unavailable' });
+    }
+    
+    // Format food type label
+    const foodTypeLabel = item.foodType === 'veg' ? '🥦 Veg' : 
+                          item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
+                          item.foodType === 'egg' ? '🥚 Egg' : '';
+    
+    // Rating display
+    let ratingDisplay = '';
+    if (item.totalRatings > 0) {
+      const fullStars = Math.floor(item.avgRating);
+      const stars = '⭐'.repeat(fullStars);
+      ratingDisplay = `${stars} ${item.avgRating} (${item.totalRatings} reviews)`;
+    } else {
+      ratingDisplay = '☆☆☆☆☆ No ratings yet';
+    }
+    
+    // Build message
+    let msg = `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n\n`;
+    msg += `${ratingDisplay}\n\n`;
+    msg += `💰 *Price:* ₹${item.price} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
+    msg += `⏱️ *Prep Time:* ${item.preparationTime || 15} mins\n`;
+    if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
+    msg += `\n📝 ${item.description || 'Delicious dish prepared fresh!'}`;
+    
+    const buttons = [
+      { id: `add_${item._id}`, text: 'Add to Cart' },
+      { id: 'view_menu', text: 'Back to Menu' },
+      { id: 'review_pay', text: 'Review & Pay' }
+    ];
+    
+    // Send via WhatsApp
+    if (item.image && !item.image.startsWith('data:')) {
+      await whatsapp.sendImageWithButtons(phone, item.image, msg, buttons);
+    } else {
+      await whatsapp.sendButtons(phone, msg, buttons);
+    }
+    
+    res.json({ success: true, message: 'Item details sent to WhatsApp' });
+  } catch (error) {
+    console.error('Error sending item to WhatsApp:', error);
     res.status(500).json({ error: error.message });
   }
 });

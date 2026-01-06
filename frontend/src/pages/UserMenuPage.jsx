@@ -119,11 +119,30 @@ export default function UserMenuPage() {
     addToCart(item); 
   };
 
-  const handleWhatsAppOrder = (item, e) => {
+  const handleWhatsAppOrder = async (item, e) => {
     e.stopPropagation();
     if (!isItemAvailable(item._id)) return;
-    const msg = `🛒 *Order from Website*\n\n1. ${item.name} x1 - ₹${item.price}\n\n💰 *Total: ₹${item.price}*\n\nPlease confirm my order!`;
-    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
+    
+    // Prompt user for phone number
+    const phone = prompt('Enter your WhatsApp number (with country code, e.g., 919876543210):');
+    if (!phone || phone.trim() === '') return;
+    
+    // Clean phone number
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length < 10) {
+      alert('Please enter a valid phone number');
+      return;
+    }
+    
+    try {
+      const response = await axios.post(`${API_URL}/whatsapp-item/${item._id}`, { phone: cleanPhone });
+      if (response.data.success) {
+        alert('Item details sent to your WhatsApp! Please check your messages.');
+      }
+    } catch (error) {
+      console.error('Error sending to WhatsApp:', error);
+      alert('Failed to send item details. Please try again.');
+    }
   };
 
   const filteredCategories = [...new Set(availableItems.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))]
