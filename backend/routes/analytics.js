@@ -112,7 +112,6 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
     
     // Today's orders = use stored stats (includes deleted orders) 
     // The stats.todayOrders is incremented when orders are delivered and persists even after auto-deletion
-    const todayStr = getTodayString();
     const todayOrders = stats.todayDate === todayStr ? stats.todayOrders : 0;
     
     // Today's revenue = use stored stats (includes deleted orders)
