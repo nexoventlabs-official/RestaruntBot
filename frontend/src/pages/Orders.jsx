@@ -20,6 +20,8 @@ const getOrderChanges = (oldOrders, newOrders) => {
       oldOrder.status !== newOrder.status ||
       oldOrder.paymentStatus !== newOrder.paymentStatus ||
       oldOrder.refundStatus !== newOrder.refundStatus ||
+      oldOrder.deliveryPartnerName !== newOrder.deliveryPartnerName ||
+      oldOrder.assignedTo !== newOrder.assignedTo ||
       oldOrder.updatedAt !== newOrder.updatedAt
     ) {
       changedIds.add(newOrder._id); // Modified order
@@ -499,6 +501,13 @@ export default function Orders() {
                       <p className="text-xs text-dark-400">{order.customer?.phone}</p>
                     </div>
                   </div>
+                  {/* Delivery Partner */}
+                  {order.deliveryPartnerName && (
+                    <div className="flex items-center gap-2 mt-2 px-2 py-1.5 bg-indigo-50 rounded-lg">
+                      <Truck className="w-3.5 h-3.5 text-indigo-500" />
+                      <span className="text-xs font-medium text-indigo-700">{order.deliveryPartnerName}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Content */}
