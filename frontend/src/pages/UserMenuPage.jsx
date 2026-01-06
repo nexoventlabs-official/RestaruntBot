@@ -128,11 +128,13 @@ export default function UserMenuPage() {
                           item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
                           item.foodType === 'egg' ? '🥚 Egg' : '';
     
-    // Rating display
+    // Rating display with gold stars
     let ratingDisplay = '';
     if (item.totalRatings > 0) {
-      const stars = '⭐'.repeat(Math.floor(item.avgRating || 0));
-      ratingDisplay = `${stars} ${item.avgRating} (${item.totalRatings} reviews)`;
+      const fullStars = Math.floor(item.avgRating || 0);
+      const emptyStars = 5 - fullStars;
+      const goldStars = '★'.repeat(fullStars) + '☆'.repeat(emptyStars);
+      ratingDisplay = `${goldStars} ${item.avgRating} (${item.totalRatings} reviews)`;
     } else {
       ratingDisplay = '☆☆☆☆☆ No ratings yet';
     }
