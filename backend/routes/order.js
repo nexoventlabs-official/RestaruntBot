@@ -22,7 +22,8 @@ const sendWithOptionalImageCta = async (phone, imageUrl, message, buttonText, ur
 router.get('/check-updates', authMiddleware, async (req, res) => {
   try {
     const { status, lastHash } = req.query;
-    const query = status ? { status } : {};
+    const query = { isHidden: { $ne: true } };
+    if (status) query.status = status;
     
     // Get count and latest update timestamp - very lightweight query
     const [count, latestOrder] = await Promise.all([
@@ -48,7 +49,8 @@ router.get('/check-updates', authMiddleware, async (req, res) => {
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
-    const query = status ? { status } : {};
+    const query = { isHidden: { $ne: true } };
+    if (status) query.status = status;
     const orders = await Order.find(query)
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)

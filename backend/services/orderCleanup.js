@@ -165,54 +165,43 @@ const orderCleanup = {
     }
   },
 
-  // Remove delivered, cancelled, and refunded orders older than 1 hour from status update
+  // Hide delivered, cancelled, and refunded orders older than 1 hour from status update
   async cleanupCompletedOrders() {
     try {
       const cutoffTime = new Date(Date.now() - CLEANUP_DELAY_HOURS * 60 * 60 * 1000);
       
-      // Find delivered/cancelled/refunded orders where statusUpdatedAt is older than 1 hour
-      const ordersToRemove = await Order.find({
+      // Find delivered/cancelled/refunded orders where statusUpdatedAt is older than 1 hour and not already hidden
+      const ordersToHide = await Order.find({
         status: { $in: ['delivered', 'cancelled', 'refunded'] },
-        statusUpdatedAt: { $lt: cutoffTime, $exists: true }
+        statusUpdatedAt: { $lt: cutoffTime, $exists: true },
+        isHidden: { $ne: true }
       });
       
-      if (ordersToRemove.length === 0) {
+      if (ordersToHide.length === 0) {
         return 0;
       }
       
-      console.log(`🧹 Found ${ordersToRemove.length} completed orders to remove (status updated >1 hour ago)`);
+      console.log(`🧹 Found ${ordersToHide.length} completed orders to hide (status updated >1 hour ago)`);
       
-      // Save cumulative stats before deleting (for total revenue/orders tracking)
-      await this.saveOrderStats(ordersToRemove);
+      // Save cumulative stats before hiding (for total revenue/orders tracking)
+      await this.saveOrderStats(ordersToHide);
       
-      // Collect unique customer phones before deleting orders
-      const customerPhones = [...new Set(ordersToRemove.map(o => o.customer?.phone).filter(Boolean))];
+      // Hide the orders instead of deleting
+      const orderIds = ordersToHide.map(o => o._id);
+      const result = await Order.updateMany(
+        { _id: { $in: orderIds } },
+        { $set: { isHidden: true } }
+      );
       
-      // Delete the orders
-      const orderIds = ordersToRemove.map(o => o._id);
-      const result = await Order.deleteMany({ _id: { $in: orderIds } });
-      
-      console.log(`✅ Removed ${result.deletedCount} delivered/cancelled/refunded orders`);
-      
-      // Delete customers who have no remaining orders
-      let customersDeleted = 0;
-      for (const phone of customerPhones) {
-        const deleted = await this.deleteCustomerIfNoOrders(phone);
-        if (deleted) customersDeleted++;
-      }
-      
-      if (customersDeleted > 0) {
-        console.log(`👥 Removed ${customersDeleted} customers with no remaining orders`);
-        dataEvents.emit('customers');
-      }
+      console.log(`✅ Hidden ${result.modifiedCount} delivered/cancelled/refunded orders from admin dashboard`);
       
       // Emit event to update frontend
       dataEvents.emit('orders');
       dataEvents.emit('dashboard');
       
-      return result.deletedCount;
+      return result.modifiedCount;
     } catch (error) {
-      console.error('❌ Error cleaning up completed orders:', error.message);
+      console.error('❌ Error hiding completed orders:', error.message);
       return 0;
     }
   },
