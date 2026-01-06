@@ -7,7 +7,8 @@ import {
   LogOut, 
   ChefHat,
   BarChart3,
-  Image
+  Image,
+  Bike
 } from 'lucide-react';
 
 const navItems = [
@@ -15,6 +16,7 @@ const navItems = [
   { path: '/admin/orders', icon: ShoppingBag, label: 'Orders', description: 'Manage orders' },
   { path: '/admin/menu', icon: UtensilsCrossed, label: 'Menu', description: 'Food items' },
   { path: '/admin/customers', icon: Users, label: 'Customers', description: 'Customer data' },
+  { path: '/admin/delivery-persons', icon: Bike, label: 'Delivery', description: 'Delivery partners' },
   { path: '/admin/reports', icon: BarChart3, label: 'Reports', description: 'Analytics & reports' },
   { path: '/admin/chatbot-images', icon: Image, label: 'Bot Images', description: 'WhatsApp images' },
 ];

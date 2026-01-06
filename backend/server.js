@@ -16,6 +16,7 @@ const aiRoutes = require('./routes/ai');
 const categoryRoutes = require('./routes/category');
 const publicRoutes = require('./routes/public');
 const chatbotImagesRoutes = require('./routes/chatbotImages');
+const deliveryBoyRoutes = require('./routes/deliveryboy');
 const orderScheduler = require('./services/orderScheduler');
 const dailyCleanup = require('./services/dailyCleanup');
 const orderCleanup = require('./services/orderCleanup');
@@ -56,6 +57,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/chatbot-images', chatbotImagesRoutes);
+app.use('/api/delivery', deliveryBoyRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 

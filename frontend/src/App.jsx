@@ -12,6 +12,9 @@ import UserMenu from './pages/UserMenu';
 import Review from './pages/Review';
 import Track from './pages/Track';
 import ChatbotImages from './pages/ChatbotImages';
+import DeliveryPersons from './pages/DeliveryPersons';
+import DeliveryLogin from './pages/DeliveryLogin';
+import DeliveryDashboard from './pages/DeliveryDashboard';
 import api from './api';
 
 function App() {
@@ -65,7 +68,12 @@ function App() {
           <Route path="customers" element={<Customers />} />
           <Route path="reports" element={<Reports />} />
           <Route path="chatbot-images" element={<ChatbotImages />} />
+          <Route path="delivery-persons" element={<DeliveryPersons />} />
         </Route>
+        
+        {/* Delivery Boy Routes */}
+        <Route path="/delivery/login" element={<DeliveryLogin />} />
+        <Route path="/delivery" element={<DeliveryDashboard />} />
         
         {/* Legacy redirect - old login to new admin login */}
         <Route path="/login" element={<Navigate to="/admin/login" />} />
