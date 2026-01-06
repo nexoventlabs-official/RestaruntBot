@@ -314,7 +314,7 @@ export default function UserMenu() {
         addToCart={addToCart} 
         removeFromWishlist={removeFromWishlist} 
         whatsappNumber={WHATSAPP_NUMBER}
-        availableItems={items}
+        availableItems={availableItems}
       />
 
       <footer className="bg-white border-t mt-8 py-6">
