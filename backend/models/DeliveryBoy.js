@@ -16,6 +16,15 @@ const deliveryBoySchema = new mongoose.Schema({
   passwordChangedAt: { type: Date },
   // Token version - increment to invalidate all tokens
   tokenVersion: { type: Number, default: 0 },
+  // Ratings from customers
+  ratings: [{
+    orderId: { type: String, required: true },
+    phone: { type: String, required: true },
+    rating: { type: Number, min: 1, max: 5, required: true },
+    createdAt: { type: Date, default: Date.now }
+  }],
+  avgRating: { type: Number, default: 0 },
+  totalRatings: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }
 });
 

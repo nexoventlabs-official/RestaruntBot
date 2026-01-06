@@ -2,6 +2,7 @@ const express = require('express');
 const MenuItem = require('../models/MenuItem');
 const Category = require('../models/Category');
 const Order = require('../models/Order');
+const DeliveryBoy = require('../models/DeliveryBoy');
 const router = express.Router();
 
 // Get all categories (public)
@@ -65,11 +66,30 @@ router.get('/review/:phone/:orderId', async (req, res) => {
       };
     });
     
+    // Get delivery partner info if assigned
+    let deliveryPartner = null;
+    if (order.assignedTo && order.serviceType === 'delivery') {
+      const partner = await DeliveryBoy.findById(order.assignedTo).select('name photo avgRating totalRatings ratings');
+      if (partner) {
+        const existingDeliveryRating = partner.ratings?.find(r => r.orderId === orderId);
+        deliveryPartner = {
+          id: partner._id,
+          name: partner.name,
+          photo: partner.photo,
+          avgRating: partner.avgRating || 0,
+          totalRatings: partner.totalRatings || 0,
+          existingRating: existingDeliveryRating?.rating || null
+        };
+      }
+    }
+    
     res.json({
       orderId: order.orderId,
       deliveredAt: order.deliveredAt,
       totalAmount: order.totalAmount,
-      items: itemsWithRatings
+      serviceType: order.serviceType,
+      items: itemsWithRatings,
+      deliveryPartner
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -80,7 +100,7 @@ router.get('/review/:phone/:orderId', async (req, res) => {
 router.post('/review/:phone/:orderId', async (req, res) => {
   try {
     const { phone, orderId } = req.params;
-    const { ratings } = req.body; // Array of { menuItemId, rating }
+    const { ratings, deliveryRating } = req.body; // ratings: Array of { menuItemId, rating }, deliveryRating: number
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
     
     // Verify order exists and is delivered
@@ -119,6 +139,31 @@ router.post('/review/:phone/:orderId', async (req, res) => {
       menuItem.totalRatings = totalRatings;
       
       await menuItem.save();
+    }
+    
+    // Update delivery partner rating if provided
+    if (deliveryRating && order.assignedTo && deliveryRating >= 1 && deliveryRating <= 5) {
+      const deliveryBoy = await DeliveryBoy.findById(order.assignedTo);
+      if (deliveryBoy) {
+        // Check if user already rated this delivery partner for this order
+        const existingDeliveryRatingIndex = deliveryBoy.ratings.findIndex(r => r.orderId === orderId);
+        
+        if (existingDeliveryRatingIndex >= 0) {
+          // Update existing rating
+          deliveryBoy.ratings[existingDeliveryRatingIndex].rating = deliveryRating;
+        } else {
+          // Add new rating
+          deliveryBoy.ratings.push({ phone: cleanPhone, orderId, rating: deliveryRating });
+        }
+        
+        // Recalculate average
+        const totalDeliveryRatings = deliveryBoy.ratings.length;
+        const sumDeliveryRatings = deliveryBoy.ratings.reduce((sum, r) => sum + r.rating, 0);
+        deliveryBoy.avgRating = totalDeliveryRatings > 0 ? Math.round((sumDeliveryRatings / totalDeliveryRatings) * 10) / 10 : 0;
+        deliveryBoy.totalRatings = totalDeliveryRatings;
+        
+        await deliveryBoy.save();
+      }
     }
     
     res.json({ success: true, message: 'Thank you for your feedback!' });

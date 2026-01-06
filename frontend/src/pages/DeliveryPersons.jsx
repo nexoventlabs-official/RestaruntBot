@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, RefreshCw, User, Mail, Phone, Calendar, Camera, X, Key } from 'lucide-react';
+import { Plus, Trash2, User, Mail, Phone, Calendar, Camera, X, Key, Star } from 'lucide-react';
 import api from '../api';
 
 export default function DeliveryPersons() {
@@ -170,6 +170,16 @@ export default function DeliveryPersons() {
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
                     <span>{boy.age} years old</span>
+                  </div>
+                  {/* Rating Display */}
+                  <div className="flex items-center gap-2">
+                    <Star className="w-4 h-4 text-yellow-500" />
+                    <span className="text-yellow-600 font-medium">
+                      {boy.avgRating > 0 ? `${boy.avgRating} ★` : 'No ratings'}
+                    </span>
+                    {boy.totalRatings > 0 && (
+                      <span className="text-dark-400 text-xs">({boy.totalRatings} reviews)</span>
+                    )}
                   </div>
                 </div>
                 

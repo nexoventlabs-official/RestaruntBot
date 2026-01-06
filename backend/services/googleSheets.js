@@ -85,7 +85,7 @@ const googleSheets = {
     try {
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheetName}!A:N`
+        range: `${sheetName}!A:O`
       });
       
       const rows = response.data.values || [];
