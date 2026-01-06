@@ -4,7 +4,6 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Orders from './pages/Orders';
 import Menu from './pages/Menu';
-import Customers from './pages/Customers';
 import Reports from './pages/Reports';
 import NotFound from './pages/NotFound';
 import Layout from './components/Layout';
@@ -65,7 +64,6 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="orders" element={<Orders />} />
           <Route path="menu" element={<Menu />} />
-          <Route path="customers" element={<Customers />} />
           <Route path="reports" element={<Reports />} />
           <Route path="chatbot-images" element={<ChatbotImages />} />
           <Route path="delivery-persons" element={<DeliveryPersons />} />
