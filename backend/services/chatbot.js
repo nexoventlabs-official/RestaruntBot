@@ -11,6 +11,41 @@ const axios = require('axios');
 
 const generateOrderId = () => 'ORD' + Date.now().toString(36).toUpperCase();
 
+// Helper to check if cart items are still available
+const checkCartAvailability = async (cart) => {
+  if (!cart || cart.length === 0) return { available: true, unavailableItems: [] };
+  
+  const unavailableItems = [];
+  const categories = await Category.find({ isActive: true });
+  const pausedCategories = categories.filter(c => c.isPaused).map(c => c.name);
+  
+  for (const cartItem of cart) {
+    const menuItem = await MenuItem.findById(cartItem.menuItem);
+    if (!menuItem) {
+      unavailableItems.push({ name: cartItem.menuItem?.name || 'Unknown item', reason: 'deleted' });
+      continue;
+    }
+    
+    // Check if item is unavailable
+    if (!menuItem.available) {
+      unavailableItems.push({ name: menuItem.name, reason: 'unavailable' });
+      continue;
+    }
+    
+    // Check if item's category is paused
+    const itemCategories = Array.isArray(menuItem.category) ? menuItem.category : [menuItem.category];
+    const allCategoriesPaused = itemCategories.every(cat => pausedCategories.includes(cat));
+    if (allCategoriesPaused) {
+      unavailableItems.push({ name: menuItem.name, reason: 'category_paused' });
+    }
+  }
+  
+  return {
+    available: unavailableItems.length === 0,
+    unavailableItems
+  };
+};
+
 // Helper to send message with optional image
 const sendWithOptionalImage = async (phone, imageUrl, message, buttons, footer = '') => {
   if (imageUrl) {
@@ -2119,9 +2154,27 @@ const chatbot = {
           ]);
           state.currentStep = 'main_menu';
         } else {
-          // Ask for delivery location first
-          await this.requestLocation(phone);
-          state.currentStep = 'awaiting_location';
+          // Check if cart items are still available
+          const availabilityCheck = await checkCartAvailability(customer.cart);
+          
+          if (!availabilityCheck.available) {
+            // Some items are unavailable - notify user
+            const unavailableNames = availabilityCheck.unavailableItems.map(i => i.name).join(', ');
+            const itemNotAvailableImageUrl = await chatbotImagesService.getImageUrl('item_not_available');
+            
+            const msg = `😔 *Sorry!*\n\nSome items in your cart are currently unavailable:\n\n❌ ${unavailableNames}\n\nPlease remove these items from your cart and try again.`;
+            
+            await sendWithOptionalImage(phone, itemNotAvailableImageUrl, msg, [
+              { id: 'view_cart', text: 'View Cart' },
+              { id: 'clear_cart', text: 'Clear Cart' },
+              { id: 'home', text: 'Main Menu' }
+            ]);
+            state.currentStep = 'viewing_cart';
+          } else {
+            // All items available - proceed to location
+            await this.requestLocation(phone);
+            state.currentStep = 'awaiting_location';
+          }
         }
       }
       else if (selection === 'share_location') {
@@ -2152,9 +2205,26 @@ const chatbot = {
           ]);
           state.currentStep = 'main_menu';
         } else {
-          state.paymentMethod = 'upi';
-          const result = await this.processCheckout(phone, customer, state);
-          if (result.success) state.currentStep = 'awaiting_payment';
+          // Check if cart items are still available before payment
+          const availabilityCheck = await checkCartAvailability(customer.cart);
+          
+          if (!availabilityCheck.available) {
+            const unavailableNames = availabilityCheck.unavailableItems.map(i => i.name).join(', ');
+            const itemNotAvailableImageUrl = await chatbotImagesService.getImageUrl('item_not_available');
+            
+            const msg = `😔 *Sorry!*\n\nSome items in your cart are currently unavailable:\n\n❌ ${unavailableNames}\n\nPlease remove these items from your cart and try again.`;
+            
+            await sendWithOptionalImage(phone, itemNotAvailableImageUrl, msg, [
+              { id: 'view_cart', text: 'View Cart' },
+              { id: 'clear_cart', text: 'Clear Cart' },
+              { id: 'home', text: 'Main Menu' }
+            ]);
+            state.currentStep = 'viewing_cart';
+          } else {
+            state.paymentMethod = 'upi';
+            const result = await this.processCheckout(phone, customer, state);
+            if (result.success) state.currentStep = 'awaiting_payment';
+          }
         }
       }
       else if (selection === 'pay_cod') {
@@ -2164,9 +2234,26 @@ const chatbot = {
           ]);
           state.currentStep = 'main_menu';
         } else {
-          state.paymentMethod = 'cod';
-          const result = await this.processCODOrder(phone, customer, state);
-          if (result.success) state.currentStep = 'order_confirmed';
+          // Check if cart items are still available before COD order
+          const availabilityCheck = await checkCartAvailability(customer.cart);
+          
+          if (!availabilityCheck.available) {
+            const unavailableNames = availabilityCheck.unavailableItems.map(i => i.name).join(', ');
+            const itemNotAvailableImageUrl = await chatbotImagesService.getImageUrl('item_not_available');
+            
+            const msg = `😔 *Sorry!*\n\nSome items in your cart are currently unavailable:\n\n❌ ${unavailableNames}\n\nPlease remove these items from your cart and try again.`;
+            
+            await sendWithOptionalImage(phone, itemNotAvailableImageUrl, msg, [
+              { id: 'view_cart', text: 'View Cart' },
+              { id: 'clear_cart', text: 'Clear Cart' },
+              { id: 'home', text: 'Main Menu' }
+            ]);
+            state.currentStep = 'viewing_cart';
+          } else {
+            state.paymentMethod = 'cod';
+            const result = await this.processCODOrder(phone, customer, state);
+            if (result.success) state.currentStep = 'order_confirmed';
+          }
         }
       }
       else if (selection === 'confirm_order' || selection === 'pay_now') {
