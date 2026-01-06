@@ -604,14 +604,14 @@ router.post('/orders/:orderId/out-for-delivery', verifyDeliveryToken, async (req
     const phone = order.customer.phone;
     if (outForDeliveryImageUrl) {
       await whatsapp.sendImageWithCtaUrl(phone, outForDeliveryImageUrl,
-        `🛵 *Out for Delivery!*\n\nYour order #${orderId} is on the way!\n\n🚴 ${req.deliveryBoy.name} is delivering your order.`,
+        `🛵 *Your Order is On the Way!*\n\nYour order #${orderId} is on the way!\n\n🚴 ${req.deliveryBoy.name} is delivering your order.`,
         'Track Order',
         `https://restaruntbot.vercel.app/track/${orderId}`,
         'Tap to track'
       );
     } else {
       await whatsapp.sendCtaUrl(phone,
-        `🛵 *Out for Delivery!*\n\nYour order #${orderId} is on the way!\n\n🚴 ${req.deliveryBoy.name} is delivering your order.`,
+        `🛵 *Your Order is On the Way!*\n\nYour order #${orderId} is on the way!\n\n🚴 ${req.deliveryBoy.name} is delivering your order.`,
         'Track Order',
         `https://restaruntbot.vercel.app/track/${orderId}`,
         'Tap to track'
