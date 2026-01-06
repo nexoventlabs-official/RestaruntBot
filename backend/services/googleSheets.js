@@ -85,7 +85,7 @@ const googleSheets = {
     try {
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheetName}!A:O`
+        range: `${sheetName}!A:K`
       });
       
       const rows = response.data.values || [];
@@ -117,13 +117,13 @@ const googleSheets = {
       const rows = response.data.values || [];
       if (rows.some(row => row[0] && row[0].includes(dateStr))) return;
 
-      // Add header
+      // Add header (11 columns now)
       await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheetName}!A:N`,
+        range: `${sheetName}!A:K`,
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
-        resource: { values: [[dateHeaderText, '', '', '', '', '', '', '', '', '', '', '', '', '']] }
+        resource: { values: [[dateHeaderText, '', '', '', '', '', '', '', '', '', '']] }
       });
 
       // Style header
@@ -140,7 +140,7 @@ const googleSheets = {
             requests: [
               {
                 repeatCell: {
-                  range: { sheetId, startRowIndex: headerRowIndex, endRowIndex: headerRowIndex + 1, startColumnIndex: 0, endColumnIndex: 14 },
+                  range: { sheetId, startRowIndex: headerRowIndex, endRowIndex: headerRowIndex + 1, startColumnIndex: 0, endColumnIndex: 11 },
                   cell: {
                     userEnteredFormat: {
                       backgroundColor: { red: 0.2, green: 0.4, blue: 0.6 },
@@ -153,7 +153,7 @@ const googleSheets = {
               },
               {
                 mergeCells: {
-                  range: { sheetId, startRowIndex: headerRowIndex, endRowIndex: headerRowIndex + 1, startColumnIndex: 0, endColumnIndex: 14 },
+                  range: { sheetId, startRowIndex: headerRowIndex, endRowIndex: headerRowIndex + 1, startColumnIndex: 0, endColumnIndex: 11 },
                   mergeType: 'MERGE_ALL'
                 }
               }
@@ -175,7 +175,7 @@ const googleSheets = {
         resource: {
           requests: [{
             repeatCell: {
-              range: { sheetId, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: 0, endColumnIndex: 14 },
+              range: { sheetId, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: 0, endColumnIndex: 11 },
               cell: {
                 userEnteredFormat: {
                   backgroundColor: color,
@@ -209,16 +209,16 @@ const googleSheets = {
 
       await this.addDateHeader(sheets, sheet.sheetName, sheet.sheetId);
 
-      // Prepare row data
+      // Prepare row data (11 columns: OrderID, Time, Phone, Name, Items, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner)
       const newRowData = [...rowData];
-      while (newRowData.length < 14) newRowData.push('');
-      newRowData[9] = STATUS_LABELS[paymentStatus] || paymentStatus;
-      newRowData[10] = STATUS_LABELS[orderStatus] || orderStatus;
+      while (newRowData.length < 11) newRowData.push('');
+      newRowData[7] = STATUS_LABELS[paymentStatus] || paymentStatus;
+      newRowData[8] = STATUS_LABELS[orderStatus] || orderStatus;
 
       // Add row
       await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A:N`,
+        range: `${sheet.sheetName}!A:K`,
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
         resource: { values: [newRowData] }
@@ -279,26 +279,24 @@ const googleSheets = {
       const istOptions = { timeZone: 'Asia/Kolkata' };
       const itemsStr = order.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
 
+      // New column structure: OrderID, Time, Phone, Name, Items, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
       const row = [
         order.orderId,
-        date.toLocaleDateString('en-IN', istOptions),
         date.toLocaleTimeString('en-IN', istOptions),
         order.customer?.phone || '',
         order.customer?.name || '',
         itemsStr,
         order.totalAmount,
-        order.serviceType,
         (order.paymentMethod || 'upi').toUpperCase(),
         (order.paymentStatus || 'pending').charAt(0).toUpperCase() + (order.paymentStatus || 'pending').slice(1),
         STATUS_LABELS[order.status] || order.status || 'Pending',
         order.deliveryAddress?.address || '',
-        order.deliveryAddress?.latitude || '',
-        order.deliveryAddress?.longitude || ''
+        '' // Delivery Partner (empty initially)
       ];
 
       const response = await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A:N`,
+        range: `${sheet.sheetName}!A:K`,
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
         resource: { values: [row] }
@@ -374,22 +372,20 @@ const googleSheets = {
             const istOptions = { timeZone: 'Asia/Kolkata' };
             const itemsStr = dbOrder.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
             
+            // New column structure: OrderID, Time, Phone, Name, Items, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
             orderData = {
               rowData: [
                 dbOrder.orderId,
-                date.toLocaleDateString('en-IN', istOptions),
                 date.toLocaleTimeString('en-IN', istOptions),
                 dbOrder.customer?.phone || '',
                 dbOrder.customer?.name || '',
                 itemsStr,
                 dbOrder.totalAmount,
-                dbOrder.serviceType,
                 (dbOrder.paymentMethod || 'upi').toUpperCase(),
                 'Paid',
                 'Cancelled',
                 dbOrder.deliveryAddress?.address || '',
-                dbOrder.deliveryAddress?.latitude || '',
-                dbOrder.deliveryAddress?.longitude || ''
+                dbOrder.deliveryPartnerName || ''
               ],
               rowIndex: -1 // Not in sheet
             };
@@ -464,22 +460,20 @@ const googleSheets = {
               const istOptions = { timeZone: 'Asia/Kolkata' };
               const itemsStr = order.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
               
+              // New column structure: OrderID, Time, Phone, Name, Items, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
               orderData = {
                 rowData: [
                   order.orderId,
-                  date.toLocaleDateString('en-IN', istOptions),
                   date.toLocaleTimeString('en-IN', istOptions),
                   order.customer?.phone || '',
                   order.customer?.name || '',
                   itemsStr,
                   order.totalAmount,
-                  order.serviceType,
                   (order.paymentMethod || 'upi').toUpperCase(),
                   'Refunded',
                   'Cancelled',
                   order.deliveryAddress?.address || '',
-                  order.deliveryAddress?.latitude || '',
-                  order.deliveryAddress?.longitude || ''
+                  order.deliveryPartnerName || ''
                 ],
                 rowIndex: -1
               };
@@ -548,22 +542,20 @@ const googleSheets = {
               const istOptions = { timeZone: 'Asia/Kolkata' };
               const itemsStr = order.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
               
+              // New column structure: OrderID, Time, Phone, Name, Items, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
               orderData = {
                 rowData: [
                   order.orderId,
-                  date.toLocaleDateString('en-IN', istOptions),
                   date.toLocaleTimeString('en-IN', istOptions),
                   order.customer?.phone || '',
                   order.customer?.name || '',
                   itemsStr,
                   order.totalAmount,
-                  order.serviceType,
                   (order.paymentMethod || 'upi').toUpperCase(),
                   'Refund Failed',
                   'Refund Failed',
                   order.deliveryAddress?.address || '',
-                  order.deliveryAddress?.latitude || '',
-                  order.deliveryAddress?.longitude || ''
+                  order.deliveryPartnerName || ''
                 ],
                 rowIndex: -1
               };
@@ -603,10 +595,10 @@ const googleSheets = {
 
       const updates = [];
       if (status) {
-        updates.push({ range: `${newSheet.sheetName}!K${orderData.rowIndex + 1}`, values: [[STATUS_LABELS[status] || status]] });
+        updates.push({ range: `${newSheet.sheetName}!I${orderData.rowIndex + 1}`, values: [[STATUS_LABELS[status] || status]] });
       }
       if (paymentStatus) {
-        updates.push({ range: `${newSheet.sheetName}!J${orderData.rowIndex + 1}`, values: [[STATUS_LABELS[paymentStatus] || paymentStatus]] });
+        updates.push({ range: `${newSheet.sheetName}!H${orderData.rowIndex + 1}`, values: [[STATUS_LABELS[paymentStatus] || paymentStatus]] });
       }
 
       if (updates.length > 0) {
@@ -633,14 +625,14 @@ const googleSheets = {
       
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${SHEET_NAME}!A1:N1`
+        range: `${SHEET_NAME}!A1:K1`
       });
       
       if (!response.data.values || response.data.values.length === 0) {
-        const headers = ['Order ID', 'Date', 'Time', 'Customer Phone', 'Customer Name', 'Items', 'Total Amount', 'Service Type', 'Payment Method', 'Payment Status', 'Order Status', 'Delivery Address', 'Latitude', 'Longitude'];
+        const headers = ['Order ID', 'Time', 'Customer Phone', 'Customer Name', 'Items', 'Total Amount', 'Payment Method', 'Payment Status', 'Order Status', 'Delivery Address', 'Delivery Partner'];
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!A1:N1`,
+          range: `${SHEET_NAME}!A1:K1`,
           valueInputOption: 'RAW',
           resource: { values: [headers] }
         });
@@ -686,21 +678,19 @@ const googleSheets = {
         const istOptions = { timeZone: 'Asia/Kolkata' };
         const itemsStr = order.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
         
+        // New column structure: OrderID, Time, Phone, Name, Items, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
         const rowData = [
           order.orderId,
-          date.toLocaleDateString('en-IN', istOptions),
           date.toLocaleTimeString('en-IN', istOptions),
           order.customer?.phone || '',
           order.customer?.name || '',
           itemsStr,
           order.totalAmount,
-          order.serviceType,
           (order.paymentMethod || 'upi').toUpperCase(),
           'Paid',
           'Refund Processing',
           order.deliveryAddress?.address || '',
-          order.deliveryAddress?.latitude || '',
-          order.deliveryAddress?.longitude || ''
+          order.deliveryPartnerName || ''
         ];
         
         // Add to refundprocessing sheet
@@ -731,10 +721,10 @@ const googleSheets = {
         return false;
       }
       
-      // Add delivery partner name to column O (15th column, index 14)
+      // Add delivery partner name to column K (11th column)
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${newSheet.sheetName}!O${orderData.rowIndex + 1}`,
+        range: `${newSheet.sheetName}!K${orderData.rowIndex + 1}`,
         valueInputOption: 'RAW',
         resource: { values: [[deliveryPartnerName]] }
       });
@@ -776,10 +766,10 @@ const googleSheets = {
         return false;
       }
       
-      // Update payment method in column I (9th column, index 8)
+      // Update payment method in column G (7th column)
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!I${orderData.rowIndex + 1}`,
+        range: `${sheet.sheetName}!G${orderData.rowIndex + 1}`,
         valueInputOption: 'RAW',
         resource: { values: [[paymentMethodLabel]] }
       });
