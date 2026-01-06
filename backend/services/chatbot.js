@@ -3542,7 +3542,8 @@ const chatbot = {
     cartMsg += `━━━━━━━━━━━━━━━\n`;
     cartMsg += `*Total: ₹${total}*`;
 
-    await whatsapp.sendButtons(phone, cartMsg, [
+    const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
+    await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [
       { id: 'review_pay', text: 'Review & Pay' },
       { id: 'add_more', text: 'Add More' },
       { id: 'clear_cart', text: 'Clear Cart' }

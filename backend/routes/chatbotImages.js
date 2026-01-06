@@ -139,6 +139,12 @@ const defaultImages = [
     name: 'Help & Support',
     description: 'Shown when displaying help and support information',
     imageUrl: ''
+  },
+  {
+    key: 'view_cart',
+    name: 'View Cart',
+    description: 'Shown when displaying cart with items',
+    imageUrl: ''
   }
 ];
 

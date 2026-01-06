@@ -25,7 +25,8 @@ const chatbotImageSchema = new mongoose.Schema({
       'browse_menu',
       'payment_timeout_cancelled',
       'cart_empty',
-      'help_support'
+      'help_support',
+      'view_cart'
     ]
   },
   name: {
