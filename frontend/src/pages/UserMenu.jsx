@@ -85,9 +85,23 @@ export default function UserMenu() {
     finally { setItemsLoading(false); }
   };
 
-  // Check if item is available (exists in current items list)
+  // Get active (non-paused) category names
+  const activeCategoryNames = categories
+    .filter(cat => cat.isActive && !cat.isPaused)
+    .map(cat => cat.name);
+
+  // Filter items to only include those from active categories
+  const availableItems = items.filter(item => {
+    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+    return itemCategories.some(cat => activeCategoryNames.includes(cat));
+  });
+
+  // Check if item is available (exists in available items list - not from paused category)
   const isItemAvailable = (itemId) => {
-    return items.some(item => item._id === itemId);
+    const item = items.find(i => i._id === itemId);
+    if (!item) return false;
+    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+    return itemCategories.some(cat => activeCategoryNames.includes(cat));
   };
 
   // Check if category is available
@@ -112,7 +126,7 @@ export default function UserMenu() {
     addToCart(item); 
   };
 
-  const filteredCategories = [...new Set(items.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))];
+  const filteredCategories = [...new Set(availableItems.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))];
 
   const MenuItemSkeleton = () => (
     <div className="bg-white rounded-2xl shadow-md overflow-hidden animate-pulse">
@@ -239,7 +253,7 @@ export default function UserMenu() {
               <span className={`text-sm font-medium ${selectedCategory === 'all' ? 'text-orange-600' : 'text-gray-600'}`}>All Items</span>
               {selectedCategory === 'all' && <div className="w-8 h-1 bg-orange-500 rounded-full mt-1"></div>}
             </button>
-            {categories.map(cat => (
+            {categories.filter(cat => cat.isActive && !cat.isPaused).map(cat => (
               <button key={cat._id} onClick={() => setSelectedCategory(cat.name)} className="flex flex-col items-center min-w-[80px] transition-all">
                 <div className="w-16 h-16 rounded-full overflow-hidden mb-2 bg-gray-100">
                   {cat.image ? <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gray-200 flex items-center justify-center"><span className="text-gray-400 text-xl">🍽️</span></div>}
@@ -254,7 +268,7 @@ export default function UserMenu() {
         <div className={`space-y-8 transition-opacity duration-300 ${itemsLoading ? 'opacity-50' : 'opacity-100'}`}>
           {itemsLoading && <div className="flex justify-center py-8"><div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin"></div></div>}
           {!itemsLoading && (selectedCategory !== 'all' ? [selectedCategory] : filteredCategories).map(cat => {
-            const itemsInCategory = items.filter(i => (Array.isArray(i.category) ? i.category : [i.category]).includes(cat));
+            const itemsInCategory = availableItems.filter(i => (Array.isArray(i.category) ? i.category : [i.category]).includes(cat));
             if (itemsInCategory.length === 0) return null;
             return (
               <div key={cat}>
