@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Plus, Trash2, User, Mail, Phone, Calendar, Camera, X, Key, Star } from 'lucide-react';
 import api from '../api';
 
@@ -10,12 +10,9 @@ export default function DeliveryPersons() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', dob: '' });
   const [photo, setPhoto] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
+  const eventSourceRef = useRef(null);
 
-  useEffect(() => {
-    loadDeliveryBoys();
-  }, []);
-
-  const loadDeliveryBoys = async () => {
+  const loadDeliveryBoys = useCallback(async () => {
     try {
       const res = await api.get('/delivery');
       setDeliveryBoys(res.data);
@@ -24,7 +21,36 @@ export default function DeliveryPersons() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadDeliveryBoys();
+    
+    // Setup SSE for real-time updates
+    const baseUrl = api.defaults.baseURL?.replace('/api', '') || '';
+    eventSourceRef.current = new EventSource(`${baseUrl}/api/events`);
+    
+    eventSourceRef.current.onmessage = (event) => {
+      try {
+        const { type } = JSON.parse(event.data);
+        if (type === 'deliveryboys') {
+          loadDeliveryBoys();
+        }
+      } catch (e) {}
+    };
+    
+    eventSourceRef.current.onerror = () => {
+      eventSourceRef.current?.close();
+      setTimeout(() => {
+        const baseUrl = api.defaults.baseURL?.replace('/api', '') || '';
+        eventSourceRef.current = new EventSource(`${baseUrl}/api/events`);
+      }, 3000);
+    };
+    
+    return () => {
+      eventSourceRef.current?.close();
+    };
+  }, [loadDeliveryBoys]);
 
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];

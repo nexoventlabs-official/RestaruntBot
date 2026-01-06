@@ -415,6 +415,9 @@ router.post('/status', async (req, res) => {
     
     await DeliveryBoy.findByIdAndUpdate(decoded.id, { isOnline });
     
+    // Emit event for real-time updates in admin panel
+    dataEvents.emit('deliveryboys');
+    
     res.json({ message: 'Status updated' });
   } catch (error) {
     res.status(500).json({ error: error.message });
