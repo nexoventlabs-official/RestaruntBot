@@ -110,12 +110,13 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
     const totalRevenue = stats.totalRevenue + (currentRevenue[0]?.total || 0);
     const totalCustomers = currentCustomers; // Just count customers with hasOrdered: true (they persist)
     
-    // Today's orders = orders that are active/delivered today
-    // This includes: created today OR delivered today OR updated today with active status
-    const todayOrders = todayDeliveredCount;
+    // Today's orders = use stored stats (includes deleted orders) 
+    // The stats.todayOrders is incremented when orders are delivered and persists even after auto-deletion
+    const todayStr = getTodayString();
+    const todayOrders = stats.todayDate === todayStr ? stats.todayOrders : 0;
     
-    // Today's revenue = only from delivered orders today
-    const todayRevenue = todayDeliveredRevenue[0]?.total || 0;
+    // Today's revenue = use stored stats (includes deleted orders)
+    const todayRevenue = stats.todayDate === todayStr ? stats.todayRevenue : 0;
 
     res.json({
       totalOrders,
