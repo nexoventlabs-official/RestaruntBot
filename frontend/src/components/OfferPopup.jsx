@@ -96,21 +96,21 @@ export default function OfferPopup() {
         {/* Image Container */}
         <div className="relative">
           {/* Offer Image */}
-          <div className="rounded-2xl shadow-2xl relative max-h-[85vh] flex flex-col">
+          <div className="rounded-2xl shadow-2xl relative overflow-hidden">
             {/* Close Button - Fixed at top right */}
             <button
               onClick={handleClose}
-              className="absolute top-2 right-2 z-20 text-white/80 p-1 rounded-full transition-all hover:bg-red-500 hover:text-white"
+              className="absolute top-2 right-2 z-20 text-white bg-black/30 p-1.5 rounded-full transition-all hover:bg-red-500 hover:text-white"
               aria-label="Close"
             >
               <X className="w-5 h-5" />
             </button>
             {/* Scrollable image container */}
-            <div className="overflow-y-auto overflow-x-hidden rounded-2xl">
+            <div className="overflow-y-auto overflow-x-hidden rounded-2xl max-h-[85vh]">
               <img 
                 src={currentOffer.image} 
                 alt="Special Offer"
-                style={{ maxWidth: '85vw', width: 'auto', height: 'auto' }}
+                style={{ maxWidth: '90vw', maxHeight: '85vh', width: 'auto', height: 'auto' }}
                 className="block"
               />
             </div>
