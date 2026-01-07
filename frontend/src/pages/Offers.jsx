@@ -131,12 +131,12 @@ export default function Offers() {
                 offer.isActive ? 'border-green-200' : 'border-dark-100 opacity-60'
               }`}
             >
-              {/* Image */}
-              <div className="aspect-[4/5] relative">
+              {/* Image - Original Size */}
+              <div className="relative">
                 <img 
                   src={offer.image} 
                   alt="Offer"
-                  className="w-full h-full object-cover"
+                  className="w-full h-auto object-contain"
                 />
                 
                 {/* Status Badge */}
@@ -197,7 +197,7 @@ export default function Offers() {
                       <img 
                         src={imagePreview} 
                         alt="Preview" 
-                        className="w-full aspect-[4/5] object-cover"
+                        className="w-full h-auto object-contain"
                       />
                       <button
                         type="button"

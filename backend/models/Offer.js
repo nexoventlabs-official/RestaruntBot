@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const offerSchema = new mongoose.Schema({
-  title: { type: String, required: true },
+  title: { type: String, default: '' },
   description: { type: String },
   image: { type: String, required: true },
   code: { type: String },
