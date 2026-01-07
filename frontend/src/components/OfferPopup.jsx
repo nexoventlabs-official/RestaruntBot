@@ -77,7 +77,7 @@ export default function OfferPopup() {
 
   return (
     <div 
-      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300 ${
+      className={`fixed inset-0 z-[100] flex items-center justify-center p-8 transition-all duration-300 ${
         isClosing ? 'opacity-0' : 'opacity-100'
       }`}
     >
@@ -87,52 +87,56 @@ export default function OfferPopup() {
         onClick={handleClose}
       />
       
-      {/* Popup */}
+      {/* Popup Container */}
       <div 
-        className={`relative max-w-md lg:max-w-2xl w-auto transform transition-all duration-300 ${
+        className={`relative flex flex-col items-center transform transition-all duration-300 ${
           isClosing ? 'scale-95 opacity-0' : 'scale-100 opacity-100'
         }`}
       >
-        {/* Close Button */}
-        <button
-          onClick={handleClose}
-          className="absolute -top-3 -right-3 z-10 bg-white hover:bg-gray-100 text-gray-700 p-2 rounded-full shadow-xl transition-all hover:scale-110"
-          aria-label="Close"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        {/* Image Container */}
+        <div className="relative">
+          {/* Close Button */}
+          <button
+            onClick={handleClose}
+            className="absolute -top-4 -right-4 z-20 bg-white hover:bg-gray-100 text-gray-700 p-2.5 rounded-full shadow-xl transition-all hover:scale-110"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
 
-        {/* Navigation Arrows - Only show if multiple offers */}
-        {offers.length > 1 && (
-          <>
-            {currentIndex > 0 && (
-              <button
-                onClick={handlePrev}
-                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-12 z-10 bg-white hover:bg-gray-100 text-gray-700 p-2 rounded-full shadow-xl transition-all hover:scale-110"
-                aria-label="Previous"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-            )}
-            {currentIndex < offers.length - 1 && (
-              <button
-                onClick={handleNext}
-                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-12 z-10 bg-white hover:bg-gray-100 text-gray-700 p-2 rounded-full shadow-xl transition-all hover:scale-110"
-                aria-label="Next"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            )}
-          </>
-        )}
+          {/* Navigation Arrows - Only show if multiple offers */}
+          {offers.length > 1 && (
+            <>
+              {currentIndex > 0 && (
+                <button
+                  onClick={handlePrev}
+                  className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-14 z-10 bg-white hover:bg-gray-100 text-gray-700 p-2.5 rounded-full shadow-xl transition-all hover:scale-110"
+                  aria-label="Previous"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+              )}
+              {currentIndex < offers.length - 1 && (
+                <button
+                  onClick={handleNext}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-14 z-10 bg-white hover:bg-gray-100 text-gray-700 p-2.5 rounded-full shadow-xl transition-all hover:scale-110"
+                  aria-label="Next"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              )}
+            </>
+          )}
 
-        {/* Offer Image Card */}
-        <div className="rounded-2xl overflow-hidden shadow-2xl">
-          <img 
-            src={currentOffer.image} 
-            alt="Special Offer"
-            className="max-w-full max-h-[80vh] object-contain"
-          />
+          {/* Offer Image */}
+          <div className="rounded-2xl overflow-hidden shadow-2xl">
+            <img 
+              src={currentOffer.image} 
+              alt="Special Offer"
+              style={{ maxWidth: '85vw', maxHeight: '70vh', width: 'auto', height: 'auto' }}
+              className="block"
+            />
+          </div>
         </div>
 
         {/* Dots Indicator - Only show if multiple offers */}
