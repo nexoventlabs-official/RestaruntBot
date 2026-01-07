@@ -28,7 +28,8 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
     
     let imageUrl = '';
     if (req.file) {
-      imageUrl = await cloudinary.uploadFromBuffer(req.file.buffer, 'offers');
+      // Use uploadPreserveAspect to maintain original aspect ratio for offer cards
+      imageUrl = await cloudinary.uploadPreserveAspect(req.file.buffer, 'offers');
     } else if (req.body.image) {
       imageUrl = req.body.image;
     }
@@ -85,7 +86,8 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
     };
 
     if (req.file) {
-      updateData.image = await cloudinary.uploadFromBuffer(req.file.buffer, 'offers');
+      // Use uploadPreserveAspect to maintain original aspect ratio for offer cards
+      updateData.image = await cloudinary.uploadPreserveAspect(req.file.buffer, 'offers');
     } else if (req.body.image) {
       updateData.image = req.body.image;
     }

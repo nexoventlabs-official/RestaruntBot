@@ -77,6 +77,42 @@ const cloudinaryService = {
   },
 
   /**
+   * Upload image preserving original aspect ratio (for offer cards, banners, etc.)
+   * @param {Buffer} buffer - Image buffer
+   * @param {string} folder - Folder name
+   * @param {string} publicId - Optional custom public ID
+   * @returns {Promise<string>} - Optimized Cloudinary URL
+   */
+  async uploadPreserveAspect(buffer, folder = 'restaurant-bot', publicId = null) {
+    return new Promise((resolve, reject) => {
+      const options = {
+        folder,
+        resource_type: 'image',
+        transformation: [
+          { width: 800, crop: 'scale' },
+          { quality: 'auto:best', fetch_format: 'auto' }
+        ]
+      };
+
+      if (publicId) {
+        options.public_id = publicId;
+      }
+
+      const uploadStream = cloudinary.uploader.upload_stream(options, (error, result) => {
+        if (error) {
+          console.error('❌ Cloudinary buffer upload error:', error.message);
+          reject(error);
+        } else {
+          console.log('✅ Cloudinary buffer upload success:', result.secure_url);
+          resolve(result.secure_url);
+        }
+      });
+
+      uploadStream.end(buffer);
+    });
+  },
+
+  /**
    * Get optimized URL for WhatsApp (transforms existing Cloudinary URL or external URL)
    * @param {string} imageUrl - Original image URL
    * @param {string} aspectRatio - Aspect ratio: '1:1' for menu items, '2:1' for chatbot banners
