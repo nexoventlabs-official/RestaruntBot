@@ -123,11 +123,11 @@ export default function Offers() {
           </button>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4">
           {offers.map((offer) => (
             <div 
               key={offer._id} 
-              className={`bg-white rounded-2xl overflow-hidden shadow-sm border relative group ${
+              className={`bg-white rounded-2xl overflow-hidden shadow-sm border relative group break-inside-avoid ${
                 offer.isActive ? 'border-green-200' : 'border-dark-100 opacity-60'
               }`}
             >
@@ -136,7 +136,7 @@ export default function Offers() {
                 <img 
                   src={offer.image} 
                   alt="Offer"
-                  className="w-full h-auto object-contain"
+                  className="w-full h-auto"
                 />
                 
                 {/* Status Badge */}
