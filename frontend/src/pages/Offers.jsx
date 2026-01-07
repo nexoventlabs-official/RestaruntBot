@@ -193,7 +193,7 @@ export default function Offers() {
               <div>
                 <div className="border-2 border-dashed border-dark-200 rounded-xl overflow-hidden hover:border-primary-400 transition-colors">
                   {imagePreview ? (
-                    <div className="relative">
+                    <div className="relative max-h-[60vh] overflow-y-auto">
                       <img 
                         src={imagePreview} 
                         alt="Preview" 
@@ -202,9 +202,10 @@ export default function Offers() {
                       <button
                         type="button"
                         onClick={() => { setImageFile(null); setImagePreview(''); }}
-                        className="absolute top-3 right-3 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-lg"
+                        className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-lg sticky"
+                        style={{ position: 'sticky', top: '8px', float: 'right', marginTop: '-36px', marginRight: '8px' }}
                       >
-                        <X className="w-5 h-5" />
+                        <X className="w-4 h-4" />
                       </button>
                     </div>
                   ) : (

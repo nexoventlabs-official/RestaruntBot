@@ -96,14 +96,8 @@ export default function OfferPopup() {
         {/* Image Container */}
         <div className="relative">
           {/* Offer Image */}
-          <div className="rounded-2xl overflow-hidden shadow-2xl relative">
-            <img 
-              src={currentOffer.image} 
-              alt="Special Offer"
-              style={{ maxWidth: '85vw', maxHeight: '70vh', width: 'auto', height: 'auto' }}
-              className="block"
-            />
-            {/* Close Button - Inside banner top right corner */}
+          <div className="rounded-2xl shadow-2xl relative max-h-[85vh] flex flex-col">
+            {/* Close Button - Fixed at top right */}
             <button
               onClick={handleClose}
               className="absolute top-2 right-2 z-20 text-white/80 p-1 rounded-full transition-all hover:bg-red-500 hover:text-white"
@@ -111,6 +105,15 @@ export default function OfferPopup() {
             >
               <X className="w-5 h-5" />
             </button>
+            {/* Scrollable image container */}
+            <div className="overflow-y-auto overflow-x-hidden rounded-2xl">
+              <img 
+                src={currentOffer.image} 
+                alt="Special Offer"
+                style={{ maxWidth: '85vw', width: 'auto', height: 'auto' }}
+                className="block"
+              />
+            </div>
           </div>
         </div>
 
