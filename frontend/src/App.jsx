@@ -18,7 +18,6 @@ import ChatbotImages from './pages/ChatbotImages';
 import DeliveryPersons from './pages/DeliveryPersons';
 import DeliveryLogin from './pages/DeliveryLogin';
 import DeliveryDashboard from './pages/DeliveryDashboard';
-import HeroSections from './pages/HeroSections';
 import Offers from './pages/Offers';
 import api from './api';
 
@@ -77,7 +76,6 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="orders" element={<Orders />} />
           <Route path="menu" element={<Menu />} />
-          <Route path="hero-sections" element={<HeroSections />} />
           <Route path="offers" element={<Offers />} />
           <Route path="reports" element={<Reports />} />
           <Route path="chatbot-images" element={<ChatbotImages />} />

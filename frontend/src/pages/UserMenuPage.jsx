@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import axios from 'axios';
-import { Star, Plus, Minus, Heart, ShoppingCart } from 'lucide-react';
+import { Star, Plus, Minus, Heart, ShoppingCart, X, Clock, Package } from 'lucide-react';
 
 const API_URL = 'https://restaruntbot.onrender.com/api/public';
 const SSE_URL = 'https://restaruntbot.onrender.com/api/events';
@@ -14,13 +14,43 @@ const WhatsAppIcon = ({ className }) => (
   </svg>
 );
 
+// Food Type Badge Component
+const FoodTypeBadge = ({ type, size = 'md' }) => {
+  const config = {
+    veg: { color: 'green', label: 'Veg', icon: '🥦' },
+    nonveg: { color: 'red', label: 'Non-Veg', icon: '🍗' },
+    egg: { color: 'yellow', label: 'Egg', icon: '🥚' }
+  };
+  const { color, label, icon } = config[type] || config.veg;
+  const sizeClasses = size === 'lg' ? 'px-3 py-1.5 text-sm' : 'px-2 py-1 text-xs';
+  
+  return (
+    <span className={`inline-flex items-center gap-1 ${sizeClasses} rounded-full font-medium border-2 ${
+      color === 'green' ? 'border-green-500 text-green-600 bg-green-50' :
+      color === 'red' ? 'border-red-500 text-red-600 bg-red-50' :
+      'border-yellow-500 text-yellow-600 bg-yellow-50'
+    }`}>
+      <span className={`w-2 h-2 rounded-full ${
+        color === 'green' ? 'bg-green-500' :
+        color === 'red' ? 'bg-red-500' :
+        'bg-yellow-500'
+      }`} />
+      {label}
+    </span>
+  );
+};
+
 export default function UserMenuPage() {
   const [categories, setCategories] = useState([]);
   const [items, setItems] = useState([]);
+  const [allItems, setAllItems] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [foodType, setFoodType] = useState('all');
   const [loading, setLoading] = useState(true);
   const [itemsLoading, setItemsLoading] = useState(false);
+  const [bannerFading, setBannerFading] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [dialogQuantity, setDialogQuantity] = useState(1);
   const eventSourceRef = useRef(null);
 
   const context = useOutletContext();
@@ -40,6 +70,16 @@ export default function UserMenuPage() {
   }, []);
   
   useEffect(() => { loadItems(); }, [selectedCategory, foodType]);
+
+  // Handle food type change with fade effect
+  const handleFoodTypeChange = (type) => {
+    if (type === foodType) return;
+    setBannerFading(true);
+    setTimeout(() => {
+      setFoodType(type);
+      setTimeout(() => setBannerFading(false), 50);
+    }, 300);
+  };
 
   const setupSSE = () => {
     try {
@@ -69,6 +109,7 @@ export default function UserMenuPage() {
       ]);
       setCategories(catRes.data);
       setItems(itemRes.data);
+      setAllItems(itemRes.data);
     } catch (err) { 
       console.error('Error loading data:', err); 
     } finally { 
@@ -100,6 +141,22 @@ export default function UserMenuPage() {
     return itemCategories.some(cat => activeCategoryNames.includes(cat));
   });
 
+  // Get item count for a category from all items (not filtered)
+  const getCategoryItemCount = (categoryName) => {
+    return allItems.filter(item => {
+      const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+      return itemCategories.includes(categoryName) && itemCategories.some(cat => activeCategoryNames.includes(cat));
+    }).length;
+  };
+
+  // Get total items count
+  const getTotalItemsCount = () => {
+    return allItems.filter(item => {
+      const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+      return itemCategories.some(cat => activeCategoryNames.includes(cat));
+    }).length;
+  };
+
   const isItemAvailable = (itemId) => {
     const item = items.find(i => i._id === itemId);
     if (!item) return false;
@@ -120,7 +177,7 @@ export default function UserMenuPage() {
   };
 
   const handleWhatsAppOrder = (item, e) => {
-    e.stopPropagation();
+    e?.stopPropagation();
     if (!isItemAvailable(item._id)) return;
     
     // Format food type
@@ -150,37 +207,123 @@ export default function UserMenuPage() {
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
+  // Open item detail dialog
+  const openItemDialog = (item) => {
+    setSelectedItem(item);
+    setDialogQuantity(cart?.find(c => c._id === item._id)?.quantity || 1);
+    // Prevent body scroll when dialog is open
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+    // Stop Lenis if it exists
+    if (window.lenis) window.lenis.stop();
+  };
+
+  // Close item detail dialog
+  const closeItemDialog = () => {
+    setSelectedItem(null);
+    setDialogQuantity(1);
+    // Restore body scroll
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
+    // Start Lenis if it exists
+    if (window.lenis) window.lenis.start();
+  };
+
+  // Add to cart from dialog
+  const handleDialogAddToCart = () => {
+    if (!selectedItem || !addToCart) return;
+    for (let i = 0; i < dialogQuantity; i++) {
+      addToCart(selectedItem);
+    }
+    closeItemDialog();
+  };
+
+  // WhatsApp order from dialog with quantity
+  const handleDialogWhatsApp = () => {
+    if (!selectedItem) return;
+    const item = selectedItem;
+    
+    const foodTypeLabel = item.foodType === 'veg' ? '🥦 Veg' : 
+                          item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
+                          item.foodType === 'egg' ? '🥚 Egg' : '';
+    
+    let msg = `Hi! I'd like to order:\n\n`;
+    msg += `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n`;
+    msg += `📦 *Quantity:* ${dialogQuantity}\n`;
+    msg += `💰 *Price:* ₹${item.price} x ${dialogQuantity} = ₹${item.price * dialogQuantity}\n`;
+    msg += `\nPlease confirm my order. Thank you!`;
+    
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
+    closeItemDialog();
+  };
+
   const filteredCategories = [...new Set(availableItems.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))]
     .filter(cat => activeCategoryNames.includes(cat));
 
   const MenuItemSkeleton = () => (
-    <div className="relative pt-28">
-      <div className="absolute -top-8 left-1/2 -translate-x-1/2 z-10 w-56 h-56">
+    <div className="relative pt-20 sm:pt-24">
+      <div className="absolute -top-6 sm:-top-8 left-1/2 -translate-x-1/2 z-10 w-36 h-36 sm:w-44 sm:h-44 md:w-48 md:h-48">
         <div className="w-full h-full bg-gray-300 rounded-full animate-pulse"></div>
       </div>
-      <div className="bg-white rounded-3xl pt-24 px-5 pb-5 shadow-[0_2px_15px_rgba(0,0,0,0.08)] border border-gray-100 animate-pulse">
+      <div className="bg-white rounded-2xl sm:rounded-3xl pt-16 sm:pt-20 md:pt-22 px-3 sm:px-4 md:px-5 pb-3 sm:pb-4 md:pb-5 shadow-[0_2px_15px_rgba(0,0,0,0.08)] border border-gray-100 animate-pulse">
         <div className="flex justify-between mb-2">
-          <div className="h-5 w-28 bg-gray-200 rounded"></div>
-          <div className="h-5 w-5 bg-gray-200 rounded-full"></div>
+          <div className="h-4 sm:h-5 w-20 sm:w-28 bg-gray-200 rounded"></div>
+          <div className="h-4 sm:h-5 w-4 sm:w-5 bg-gray-200 rounded-full"></div>
         </div>
-        <div className="flex gap-1 mb-3">
-          {[...Array(5)].map((_, i) => <div key={i} className="h-4 w-4 bg-gray-200 rounded"></div>)}
+        <div className="flex gap-0.5 sm:gap-1 mb-2 sm:mb-3">
+          {[...Array(5)].map((_, i) => <div key={i} className="h-3 w-3 sm:h-4 sm:w-4 bg-gray-200 rounded"></div>)}
         </div>
-        <div className="h-4 w-full bg-gray-200 rounded mb-1"></div>
-        <div className="h-4 w-3/4 bg-gray-200 rounded mb-4"></div>
+        <div className="h-3 sm:h-4 w-full bg-gray-200 rounded mb-1"></div>
+        <div className="h-3 sm:h-4 w-3/4 bg-gray-200 rounded mb-2 sm:mb-4"></div>
         <div className="flex justify-between items-center">
-          <div className="h-7 w-16 bg-gray-200 rounded"></div>
-          <div className="h-12 w-12 bg-gray-200 rounded-xl"></div>
+          <div className="h-6 sm:h-7 w-14 sm:w-16 bg-gray-200 rounded"></div>
+          <div className="h-8 sm:h-10 md:h-11 w-8 sm:w-10 md:w-11 bg-gray-200 rounded-lg sm:rounded-xl"></div>
         </div>
       </div>
     </div>
   );
 
+  // Banner data for each food type
+  const bannerData = {
+    all: {
+      title: 'Our Menu',
+      subtitle: 'Explore our delicious collection of dishes',
+      image: '/banner-delicious-tacos.jpg',
+      align: 'center'
+    },
+    veg: {
+      title: 'Vegetarian Menu',
+      subtitle: 'Fresh and healthy vegetarian delights',
+      image: '/vegetables-with-salt-corn-cob.jpg',
+      align: 'left'
+    },
+    nonveg: {
+      title: 'Non-Veg Menu',
+      subtitle: 'Savor our premium meat selections',
+      image: '/preparing-raw-barbeque-chicken-cooking.jpg',
+      align: 'right'
+    },
+    egg: {
+      title: 'Egg Specials',
+      subtitle: 'Delicious egg-based dishes for you',
+      image: '/friied-eggs-with-vegetables.jpg',
+      align: 'left'
+    }
+  };
+
+  const currentBanner = bannerData[foodType] || bannerData.all;
+
   if (loading) {
     return (
-      <div className="pt-20 min-h-screen bg-[#EDEAE3]">
+      <div className="min-h-screen bg-[#ffffff]">
+        {/* Hero Banner Skeleton */}
+        <section className="relative pt-28 pb-16 bg-gray-300 animate-pulse">
+          <div className="max-w-6xl mx-auto px-4 text-center">
+            <div className="h-10 w-64 bg-gray-400 rounded mx-auto mb-4"></div>
+            <div className="h-6 w-96 bg-gray-400 rounded mx-auto"></div>
+          </div>
+        </section>
         <div className="max-w-7xl mx-auto px-4 py-8">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Our Menu</h1>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8 pt-8">
             {[...Array(8)].map((_, i) => <MenuItemSkeleton key={i} />)}
           </div>
@@ -202,7 +345,7 @@ export default function UserMenuPage() {
         stars.push(
           <Star 
             key={i} 
-            className={`w-3.5 h-3.5 ${i <= Math.round(rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} 
+            className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${i <= Math.round(rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} 
           />
         );
       }
@@ -210,9 +353,13 @@ export default function UserMenuPage() {
     };
     
     return (
-      <div key={item._id} className={`group relative pt-28 ${!available ? 'opacity-60' : ''}`}>
+      <div 
+        key={item._id} 
+        className={`group relative pt-20 sm:pt-24 cursor-pointer ${!available ? 'opacity-60' : ''}`}
+        onClick={() => available && openItemDialog(item)}
+      >
         {/* Floating Image */}
-        <div className="absolute -top-8 left-1/2 -translate-x-1/2 z-10 w-56 h-56 flex items-center justify-center">
+        <div className="absolute -top-6 sm:-top-8 left-1/2 -translate-x-1/2 z-10 w-36 h-36 sm:w-44 sm:h-44 md:w-48 md:h-48 flex items-center justify-center">
           {item.image ? (
             <img 
               src={item.image} 
@@ -220,82 +367,87 @@ export default function UserMenuPage() {
               className={`max-h-full max-w-full object-contain group-hover:scale-110 transition-transform duration-300 drop-shadow-xl ${!available ? 'grayscale' : ''}`} 
             />
           ) : (
-            <div className="w-40 h-40 bg-gradient-to-br from-orange-100 to-orange-200 rounded-full flex items-center justify-center">
-              <span className="text-6xl">🍽️</span>
+            <div className="w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 bg-gradient-to-br from-orange-100 to-orange-200 rounded-full flex items-center justify-center">
+              <span className="text-4xl sm:text-5xl md:text-6xl">🍽️</span>
             </div>
           )}
           {!available && (
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium">Unavailable</span>
+              <span className="bg-red-500 text-white px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium">Unavailable</span>
             </div>
           )}
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-3xl pt-24 px-5 pb-5 shadow-[0_2px_15px_rgba(0,0,0,0.08)] border border-gray-100 hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-shadow">
+        <div className="bg-white rounded-2xl sm:rounded-3xl pt-16 sm:pt-20 md:pt-22 px-3 sm:px-4 md:px-5 pb-3 sm:pb-4 md:pb-5 shadow-[0_2px_15px_rgba(0,0,0,0.08)] border border-gray-100 hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-shadow">
           {/* Name & Wishlist */}
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <h3 className="font-bold text-gray-900 uppercase text-sm tracking-wide line-clamp-1">{item.name}</h3>
+          <div className="flex items-center justify-between gap-1 sm:gap-2 mb-1">
+            <h3 className="font-bold text-gray-900 uppercase text-xs sm:text-sm tracking-wide line-clamp-1">{item.name}</h3>
             <button 
               onClick={(e) => handleToggleWishlist(item, e)} 
-              className="p-1 hover:scale-110 transition-transform flex-shrink-0"
+              className="p-0.5 sm:p-1 hover:scale-110 transition-transform flex-shrink-0"
             >
-              <Heart className={`w-5 h-5 ${isInWishlist && isInWishlist(item._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
+              <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${isInWishlist && isInWishlist(item._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
             </button>
           </div>
 
           {/* Rating */}
-          <div className="flex items-center gap-1 mb-3">
+          <div className="flex items-center gap-0.5 sm:gap-1 mb-2 sm:mb-3">
             <div className="flex">{renderStars()}</div>
-            <span className="text-xs text-gray-500">({totalRatings})</span>
+            <span className="text-[10px] sm:text-xs text-gray-500">({totalRatings})</span>
           </div>
 
           {/* Description */}
           {item.description && (
-            <p className="text-sm text-gray-500 line-clamp-2 mb-4 min-h-[40px]">{item.description}</p>
+            <p className="text-xs sm:text-sm text-gray-500 line-clamp-2 mb-2 sm:mb-4 min-h-[32px] sm:min-h-[40px]">{item.description}</p>
           )}
 
           {/* Price & Action Buttons */}
           <div className="flex items-center justify-between">
-            <span className="text-xl font-bold text-green-600">₹{item.price}</span>
-            <div className="flex items-center gap-2">
+            <div className="relative">
+              <img src="/button.png" alt="" className="h-6 sm:h-7 md:h-8 w-auto" style={{ filter: 'brightness(0) saturate(100%) invert(19%) sepia(97%) saturate(7043%) hue-rotate(359deg) brightness(101%) contrast(117%)' }} />
+              <span className="absolute inset-0 flex items-center justify-center text-white font-bold text-[10px] sm:text-xs md:text-sm">
+                ₹{item.price}
+              </span>
+            </div>
+            <div className="flex items-center gap-1 sm:gap-2">
               {/* WhatsApp Button */}
               {available && (
                 <button 
                   onClick={(e) => handleWhatsAppOrder(item, e)} 
-                  className="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center hover:bg-green-600 transition-colors shadow-md"
+                  className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-green-500 text-white rounded-lg sm:rounded-xl flex items-center justify-center hover:bg-green-600 transition-colors shadow-md"
                   title="Order via WhatsApp"
                 >
-                  <WhatsAppIcon className="w-5 h-5" />
+                  <WhatsAppIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
               )}
               {/* Cart Button */}
               {!available ? (
-                <div className="w-12 h-12 bg-gray-300 text-gray-500 rounded-xl flex items-center justify-center cursor-not-allowed">
-                  <ShoppingCart className="w-5 h-5" />
+                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 bg-gray-300 text-gray-500 rounded-lg sm:rounded-xl flex items-center justify-center cursor-not-allowed">
+                  <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
               ) : inCart ? (
-                <div className="flex items-center gap-1 bg-green-600 rounded-xl px-2 py-1.5">
+                <div className="flex items-center gap-0.5 sm:gap-1 bg-green-600 rounded-lg sm:rounded-xl px-1.5 sm:px-2 py-1 sm:py-1.5">
                   <button 
                     onClick={(e) => { e.stopPropagation(); updateQuantity(item._id, cartItem.quantity - 1); }} 
-                    className="p-1 text-white hover:bg-green-700 rounded"
+                    className="p-0.5 sm:p-1 text-white hover:bg-green-700 rounded"
                   >
-                    <Minus className="w-4 h-4" />
+                    <Minus className="w-3 h-3 sm:w-4 sm:h-4" />
                   </button>
-                  <span className="w-6 text-center font-semibold text-white">{cartItem?.quantity || 0}</span>
+                  <span className="w-4 sm:w-6 text-center font-semibold text-white text-xs sm:text-sm">{cartItem?.quantity || 0}</span>
                   <button 
                     onClick={(e) => { e.stopPropagation(); addToCart(item); }} 
-                    className="p-1 text-white hover:bg-green-700 rounded"
+                    className="p-0.5 sm:p-1 text-white hover:bg-green-700 rounded"
                   >
-                    <Plus className="w-4 h-4" />
+                    <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
                   </button>
                 </div>
               ) : (
                 <button 
                   onClick={(e) => handleAddToCart(item, e)} 
-                  className="w-12 h-12 bg-orange-500 text-white rounded-xl flex items-center justify-center hover:bg-orange-600 transition-colors shadow-md"
+                  className="w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 bg-orange-500 text-white rounded-lg sm:rounded-xl flex items-center justify-center hover:bg-orange-600 transition-colors shadow-md"
                 >
-                  <ShoppingCart className="w-5 h-5" />
+                  <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
               )}
             </div>
@@ -306,113 +458,185 @@ export default function UserMenuPage() {
   };
 
   return (
-    <div className="pt-20 min-h-screen bg-[#EDEAE3]">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Our Menu</h1>
-          <p className="text-gray-500 mt-2">Explore our delicious dishes</p>
+    <div className="min-h-screen bg-[#ffffff]">
+      {/* Hero Banner Section */}
+      <section 
+        className={`relative text-white pt-28 pb-16 bg-cover bg-center transition-opacity duration-300 ${bannerFading ? 'opacity-0' : 'opacity-100'}`}
+        style={{ backgroundImage: `url('${currentBanner.image}')` }}
+      >
+        <div className={`relative max-w-6xl mx-auto px-4 ${
+          currentBanner.align === 'left' ? 'text-left' : 
+          currentBanner.align === 'right' ? 'text-right' : 'text-center'
+        }`}>
+          <span className="inline-block px-4 py-1.5 bg-[#3f9065] text-white text-sm font-medium rounded-full mb-4 tracking-wide uppercase">
+            {foodType === 'all' ? 'Explore' : foodType === 'veg' ? '🥦 Pure Veg' : foodType === 'nonveg' ? '🍗 Non-Veg' : '🥚 Egg Special'}
+          </span>
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 drop-shadow-lg">
+            <span className="text-white">{currentBanner.title.split(' ')[0]}</span>{' '}
+            <span className="text-[#ff9924]">{currentBanner.title.split(' ').slice(1).join(' ')}</span>
+          </h1>
+          <p className={`text-lg md:text-xl text-gray-100 font-light drop-shadow-md ${
+            currentBanner.align === 'center' ? 'max-w-2xl mx-auto' : 'max-w-xl'
+          } ${currentBanner.align === 'right' ? 'ml-auto' : ''}`}>
+            {currentBanner.subtitle}
+          </p>
         </div>
+      </section>
 
+      <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Food Type Filter */}
-        <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
+        <div className="flex items-center justify-center gap-4 md:gap-8 mb-8 py-6">
+          {/* All */}
           <button 
-            onClick={() => setFoodType('all')} 
-            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
+            onClick={() => handleFoodTypeChange('all')} 
+            className="flex flex-col items-center gap-2 group"
+          >
+            <div className={`w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-4 transition-all duration-300 ${
               foodType === 'all' 
-                ? 'bg-gray-900 text-white shadow-lg' 
-                : 'bg-white text-gray-600 hover:bg-gray-100 shadow-sm'
-            }`}
-          >
-            All
+                ? 'border-gray-900 shadow-lg scale-110' 
+                : 'border-transparent hover:border-gray-300'
+            }`}>
+              <img src="/all.png" alt="All" className="w-full h-full object-cover" />
+            </div>
+            <span className={`text-sm font-medium transition-colors ${
+              foodType === 'all' ? 'text-gray-900' : 'text-gray-500 group-hover:text-gray-700'
+            }`}>All</span>
           </button>
+
+          {/* Veg */}
           <button 
-            onClick={() => setFoodType('veg')} 
-            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
+            onClick={() => handleFoodTypeChange('veg')} 
+            className="flex flex-col items-center gap-2 group"
+          >
+            <div className={`w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-4 transition-all duration-300 ${
               foodType === 'veg' 
-                ? 'bg-green-500 text-white shadow-lg' 
-                : 'bg-white text-gray-600 hover:bg-gray-100 shadow-sm'
-            }`}
-          >
-            <span className={`w-3 h-3 rounded border-2 flex items-center justify-center ${foodType === 'veg' ? 'border-white' : 'border-green-500'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${foodType === 'veg' ? 'bg-white' : 'bg-green-500'}`} />
+                ? 'border-green-500 shadow-lg scale-110' 
+                : 'border-transparent hover:border-green-300'
+            }`}>
+              <img src="/veg.png" alt="Veg" className="w-full h-full object-cover" />
+            </div>
+            <span className={`text-sm font-medium transition-colors flex items-center gap-1 ${
+              foodType === 'veg' ? 'text-green-600' : 'text-gray-500 group-hover:text-green-600'
+            }`}>
+              <span className="w-3 h-3 rounded border-2 border-green-500 flex items-center justify-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+              </span>
+              Veg
             </span>
-            Veg
           </button>
+
+          {/* Non-Veg */}
           <button 
-            onClick={() => setFoodType('nonveg')} 
-            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
+            onClick={() => handleFoodTypeChange('nonveg')} 
+            className="flex flex-col items-center gap-2 group"
+          >
+            <div className={`w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-4 transition-all duration-300 ${
               foodType === 'nonveg' 
-                ? 'bg-red-500 text-white shadow-lg' 
-                : 'bg-white text-gray-600 hover:bg-gray-100 shadow-sm'
-            }`}
-          >
-            <span className={`w-3 h-3 rounded border-2 flex items-center justify-center ${foodType === 'nonveg' ? 'border-white' : 'border-red-500'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${foodType === 'nonveg' ? 'bg-white' : 'bg-red-500'}`} />
+                ? 'border-red-500 shadow-lg scale-110' 
+                : 'border-transparent hover:border-red-300'
+            }`}>
+              <img src="/non-veg.png" alt="Non-Veg" className="w-full h-full object-cover" />
+            </div>
+            <span className={`text-sm font-medium transition-colors flex items-center gap-1 ${
+              foodType === 'nonveg' ? 'text-red-600' : 'text-gray-500 group-hover:text-red-600'
+            }`}>
+              <span className="w-3 h-3 rounded border-2 border-red-500 flex items-center justify-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+              </span>
+              Non-Veg
             </span>
-            Non-Veg
           </button>
+
+          {/* Egg */}
           <button 
-            onClick={() => setFoodType('egg')} 
-            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
-              foodType === 'egg' 
-                ? 'bg-yellow-500 text-white shadow-lg' 
-                : 'bg-white text-gray-600 hover:bg-gray-100 shadow-sm'
-            }`}
+            onClick={() => handleFoodTypeChange('egg')} 
+            className="flex flex-col items-center gap-2 group"
           >
-            <span className={`w-3 h-3 rounded border-2 flex items-center justify-center ${foodType === 'egg' ? 'border-white' : 'border-yellow-500'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${foodType === 'egg' ? 'bg-white' : 'bg-yellow-500'}`} />
+            <div className={`w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-4 transition-all duration-300 ${
+              foodType === 'egg' 
+                ? 'border-yellow-500 shadow-lg scale-110' 
+                : 'border-transparent hover:border-yellow-300'
+            }`}>
+              <img src="/egg.png" alt="Egg" className="w-full h-full object-cover" />
+            </div>
+            <span className={`text-sm font-medium transition-colors flex items-center gap-1 ${
+              foodType === 'egg' ? 'text-yellow-600' : 'text-gray-500 group-hover:text-yellow-600'
+            }`}>
+              <span className="w-3 h-3 rounded border-2 border-yellow-500 flex items-center justify-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+              </span>
+              Egg
             </span>
-            Egg
           </button>
         </div>
 
         {/* Category Filter */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm mb-8">
-          <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+        <div className="mb-8 overflow-x-auto pb-4 scrollbar-hide">
+          <div className="flex gap-4 md:gap-6">
+            {/* All Items */}
             <button 
               onClick={() => setSelectedCategory('all')} 
-              className="flex flex-col items-center min-w-[80px] transition-all group"
+              className="flex-shrink-0 group"
             >
-              <div className={`w-16 h-16 rounded-2xl overflow-hidden mb-2 transition-all ${
-                selectedCategory === 'all' 
-                  ? 'ring-2 ring-orange-500 ring-offset-2' 
-                  : 'group-hover:ring-2 group-hover:ring-gray-200'
-              }`}>
-                <div className={`w-full h-full flex items-center justify-center ${
-                  selectedCategory === 'all' 
-                    ? 'bg-gradient-to-br from-orange-400 to-orange-600' 
-                    : 'bg-gray-100'
-                }`}>
-                  <span className={`text-lg font-bold ${selectedCategory === 'all' ? 'text-white' : 'text-gray-500'}`}>All</span>
-                </div>
-              </div>
-              <span className={`text-sm font-medium ${selectedCategory === 'all' ? 'text-orange-600' : 'text-gray-600'}`}>All Items</span>
-            </button>
-            {categories.filter(cat => cat.isActive && !cat.isPaused).map(cat => (
-              <button 
-                key={cat._id} 
-                onClick={() => setSelectedCategory(cat.name)} 
-                className="flex flex-col items-center min-w-[80px] transition-all group"
-              >
-                <div className={`w-16 h-16 rounded-2xl overflow-hidden mb-2 transition-all ${
-                  selectedCategory === cat.name 
-                    ? 'ring-2 ring-orange-500 ring-offset-2' 
-                    : 'group-hover:ring-2 group-hover:ring-gray-200'
-                }`}>
-                  {cat.image ? (
-                    <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                      <span className="text-2xl">🍽️</span>
+              <div className="relative overflow-hidden w-36 md:w-44">
+                <div className={`${selectedCategory === 'all' ? 'bg-[#3f9065]' : 'bg-[#F5F1E8] group-hover:bg-[#3f9065]'} rounded-t-full rounded-b-3xl pt-6 pb-14 px-4 transition-all duration-300`}>
+                  <div className="flex justify-center mb-4">
+                    <div className={`w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center ${selectedCategory === 'all' ? 'bg-white/20' : 'bg-orange-100'} transition-all duration-300`}>
+                      <span className={`text-lg md:text-xl font-bold ${selectedCategory === 'all' ? 'text-white' : 'text-orange-500 group-hover:text-white'} transition-colors duration-300`}>All</span>
                     </div>
-                  )}
+                  </div>
+                  <div className="text-center">
+                    <h3 className={`font-semibold text-sm md:text-base transition-colors duration-300 ${selectedCategory === 'all' ? 'text-white' : 'text-gray-900 group-hover:text-white'}`}>All Items</h3>
+                    <p className={`text-xs mt-0.5 transition-colors duration-300 ${selectedCategory === 'all' ? 'text-white/80' : 'text-gray-400 group-hover:text-white/80'}`}>{getTotalItemsCount()} Items</p>
+                  </div>
                 </div>
-                <span className={`text-sm font-medium text-center line-clamp-1 ${
-                  selectedCategory === cat.name ? 'text-orange-600' : 'text-gray-600'
-                }`}>{cat.name}</span>
-              </button>
-            ))}
+                <img 
+                  src="/cat-1-bottom.png" 
+                  alt="" 
+                  className="absolute -bottom-2 left-0 right-0 w-full h-auto pointer-events-none"
+                />
+              </div>
+            </button>
+
+            {/* Category Items */}
+            {categories.filter(cat => cat.isActive && !cat.isPaused).map(cat => {
+              const itemCount = getCategoryItemCount(cat.name);
+              
+              return (
+                <button 
+                  key={cat._id} 
+                  onClick={() => setSelectedCategory(cat.name)} 
+                  className="flex-shrink-0 group"
+                >
+                  <div className="relative overflow-hidden w-36 md:w-44">
+                    <div className={`${selectedCategory === cat.name ? 'bg-[#3f9065]' : 'bg-[#F5F1E8] group-hover:bg-[#3f9065]'} rounded-t-full rounded-b-3xl pt-6 pb-14 px-4 transition-all duration-300`}>
+                      <div className="flex justify-center mb-4">
+                        {cat.image ? (
+                          <img 
+                            src={cat.image} 
+                            alt={cat.name} 
+                            className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-lg transition-transform group-hover:scale-110"
+                          />
+                        ) : (
+                          <div className="w-20 h-20 md:w-24 md:h-24 bg-orange-100 rounded-full flex items-center justify-center">
+                            <span className="text-3xl">🍽️</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-center">
+                        <h3 className={`font-semibold text-sm md:text-base transition-colors duration-300 line-clamp-1 ${selectedCategory === cat.name ? 'text-white' : 'text-gray-900 group-hover:text-white'}`}>{cat.name}</h3>
+                        <p className={`text-xs mt-0.5 transition-colors duration-300 ${selectedCategory === cat.name ? 'text-white/80' : 'text-gray-400 group-hover:text-white/80'}`}>{itemCount} Items</p>
+                      </div>
+                    </div>
+                    <img 
+                      src="/cat-1-bottom.png" 
+                      alt="" 
+                      className="absolute -bottom-2 left-0 right-0 w-full h-auto pointer-events-none"
+                    />
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -454,6 +678,155 @@ export default function UserMenuPage() {
           )}
         </div>
       </div>
+
+      {/* Item Detail Dialog */}
+      {selectedItem && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{ touchAction: 'none' }}
+          onClick={closeItemDialog}
+          onTouchMove={(e) => e.preventDefault()}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          
+          {/* Dialog - Horizontal on PC, Vertical on Mobile */}
+          <div 
+            className="relative bg-white rounded-2xl sm:rounded-3xl w-full max-w-md lg:max-w-4xl max-h-[90vh] lg:max-h-[80vh] overflow-hidden shadow-2xl flex flex-col lg:flex-row"
+            style={{ overscrollBehavior: 'contain', touchAction: 'pan-y' }}
+            data-lenis-prevent
+            onClick={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              onClick={closeItemDialog}
+              className="absolute top-3 right-3 z-10 bg-white/90 hover:bg-white text-gray-700 p-2 rounded-full shadow-lg transition-all hover:scale-110"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Left Side - Image (PC) / Top (Mobile) */}
+            <div className="relative h-48 sm:h-56 lg:h-auto lg:w-[45%] bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center flex-shrink-0">
+              {selectedItem.image ? (
+                <img 
+                  src={selectedItem.image} 
+                  alt={selectedItem.name}
+                  className="max-h-full max-w-full object-contain p-6 lg:p-8"
+                />
+              ) : (
+                <span className="text-7xl lg:text-8xl">🍽️</span>
+              )}
+              
+              {/* Food Type Badge */}
+              {selectedItem.foodType && (
+                <div className="absolute top-3 left-3">
+                  <FoodTypeBadge type={selectedItem.foodType} size="lg" />
+                </div>
+              )}
+            </div>
+
+            {/* Right Side - Details (PC) / Bottom (Mobile) */}
+            <div className="flex-1 overflow-y-auto scrollbar-dialog p-5 sm:p-6 lg:p-8">
+              {/* Name & Price */}
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{selectedItem.name}</h2>
+                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-orange-500 whitespace-nowrap">
+                  ₹{selectedItem.price}
+                </div>
+              </div>
+
+              {/* Rating */}
+              <div className="flex items-center gap-2 mb-4">
+                <div className="flex">
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <Star 
+                      key={i} 
+                      className={`w-4 h-4 sm:w-5 sm:h-5 ${i <= Math.round(selectedItem.avgRating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} 
+                    />
+                  ))}
+                </div>
+                <span className="text-sm text-gray-500">
+                  {selectedItem.avgRating?.toFixed(1) || '0.0'} ({selectedItem.totalRatings || 0} reviews)
+                </span>
+              </div>
+
+              {/* Description */}
+              {selectedItem.description && (
+                <p className="text-gray-600 text-sm sm:text-base lg:text-base mb-4 leading-relaxed">
+                  {selectedItem.description}
+                </p>
+              )}
+
+              {/* Details Grid */}
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                {/* Preparation Time */}
+                <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
+                  <Clock className="w-5 h-5 text-orange-500" />
+                  <div>
+                    <p className="text-xs text-gray-500">Prep Time</p>
+                    <p className="font-semibold text-gray-900">{selectedItem.preparationTime || 15} mins</p>
+                  </div>
+                </div>
+
+                {/* Unit */}
+                <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
+                  <Package className="w-5 h-5 text-orange-500" />
+                  <div>
+                    <p className="text-xs text-gray-500">Unit</p>
+                    <p className="font-semibold text-gray-900">{selectedItem.unitQty || 1} {selectedItem.unit || 'piece'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quantity Selector */}
+              <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3 mb-5">
+                <span className="font-medium text-gray-700">Quantity</span>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setDialogQuantity(Math.max(1, dialogQuantity - 1))}
+                    className="w-9 h-9 bg-white border border-gray-200 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="w-8 text-center font-bold text-lg">{dialogQuantity}</span>
+                  <button 
+                    onClick={() => setDialogQuantity(dialogQuantity + 1)}
+                    className="w-9 h-9 bg-white border border-gray-200 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Total Price */}
+              <div className="flex items-center justify-between mb-5 pb-4 border-b border-gray-100">
+                <span className="text-gray-600">Total</span>
+                <span className="text-2xl font-bold text-gray-900">₹{selectedItem.price * dialogQuantity}</span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={handleDialogWhatsApp}
+                  className="flex-1 flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-xl font-semibold transition-colors"
+                >
+                  <WhatsAppIcon className="w-5 h-5" />
+                  <span>WhatsApp</span>
+                </button>
+
+                <button
+                  onClick={handleDialogAddToCart}
+                  className="flex-[2] flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white py-3 px-4 rounded-xl font-semibold transition-colors"
+                >
+                  <ShoppingCart className="w-5 h-5" />
+                  Add to Cart
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

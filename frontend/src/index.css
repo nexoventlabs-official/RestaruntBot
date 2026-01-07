@@ -23,6 +23,27 @@
     -ms-user-select: text;
   }
 
+  /* Lenis smooth scroll styles */
+  html.lenis, html.lenis body {
+    height: auto;
+  }
+
+  .lenis.lenis-smooth {
+    scroll-behavior: auto !important;
+  }
+
+  .lenis.lenis-smooth [data-lenis-prevent] {
+    overscroll-behavior: contain;
+  }
+
+  .lenis.lenis-stopped {
+    overflow: hidden;
+  }
+
+  .lenis.lenis-scrolling iframe {
+    pointer-events: none;
+  }
+
   html {
     margin: 0;
     padding: 0;
@@ -36,6 +57,7 @@
     padding: 0 !important;
     min-height: 100%;
     width: 100%;
+    overflow-x: hidden;
   }
 
   #root {
@@ -43,6 +65,7 @@
     padding: 0;
     min-height: 100%;
     width: 100%;
+    overflow-x: hidden;
   }
 
   body {
@@ -255,4 +278,105 @@ select option:checked {
 
 .animate-progress {
   animation: progress linear forwards;
+}
+
+
+/* Infinite marquee animation for category slider */
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* Step-by-step marquee animation - moves one card every 3 seconds with very smooth scroll */
+@keyframes marqueeStep {
+  0%, 65% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-200px); /* width of one card (176px + 24px margin) */
+  }
+}
+
+.animate-marquee-step {
+  animation: marqueeStep 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-marquee-step:hover {
+  animation-play-state: paused;
+}
+
+
+/* GSAP Animation Utility Classes */
+.gsap-fade-in {
+  opacity: 0;
+}
+
+.gsap-fade-up {
+  opacity: 0;
+  transform: translateY(60px);
+}
+
+.gsap-fade-left {
+  opacity: 0;
+  transform: translateX(-60px);
+}
+
+.gsap-fade-right {
+  opacity: 0;
+  transform: translateX(60px);
+}
+
+.gsap-scale-in {
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+/* Smooth will-change for better performance */
+.will-animate {
+  will-change: transform, opacity;
+}
+
+/* GPU acceleration for smooth animations */
+.gpu-accelerated {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+
+/* Custom scrollbar for dialog - visible on PC */
+.scrollbar-dialog {
+  scrollbar-width: thin;
+  scrollbar-color: #ff9924 #f3f4f6;
+}
+
+.scrollbar-dialog::-webkit-scrollbar {
+  display: block;
+  width: 8px;
+}
+
+.scrollbar-dialog::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 10px;
+}
+
+.scrollbar-dialog::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #ff9924 0%, #ff6b00 100%);
+  border-radius: 10px;
+}
+
+.scrollbar-dialog::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #ff6b00 0%, #e65c00 100%);
 }
