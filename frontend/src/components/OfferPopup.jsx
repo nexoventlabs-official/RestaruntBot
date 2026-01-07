@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X } from 'lucide-react';
 
 const API_URL = 'https://restaruntbot.onrender.com/api/public';
 
@@ -95,47 +95,22 @@ export default function OfferPopup() {
       >
         {/* Image Container */}
         <div className="relative">
-          {/* Close Button */}
-          <button
-            onClick={handleClose}
-            className="absolute -top-4 -right-4 z-20 bg-white hover:bg-gray-100 text-gray-700 p-2.5 rounded-full shadow-xl transition-all hover:scale-110"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
-
-          {/* Navigation Arrows - Only show if multiple offers */}
-          {offers.length > 1 && (
-            <>
-              {currentIndex > 0 && (
-                <button
-                  onClick={handlePrev}
-                  className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-14 z-10 bg-white hover:bg-gray-100 text-gray-700 p-2.5 rounded-full shadow-xl transition-all hover:scale-110"
-                  aria-label="Previous"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-              )}
-              {currentIndex < offers.length - 1 && (
-                <button
-                  onClick={handleNext}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-14 z-10 bg-white hover:bg-gray-100 text-gray-700 p-2.5 rounded-full shadow-xl transition-all hover:scale-110"
-                  aria-label="Next"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              )}
-            </>
-          )}
-
           {/* Offer Image */}
-          <div className="rounded-2xl overflow-hidden shadow-2xl">
+          <div className="rounded-2xl overflow-hidden shadow-2xl relative">
             <img 
               src={currentOffer.image} 
               alt="Special Offer"
               style={{ maxWidth: '85vw', maxHeight: '70vh', width: 'auto', height: 'auto' }}
               className="block"
             />
+            {/* Close Button - Inside banner top right corner */}
+            <button
+              onClick={handleClose}
+              className="absolute top-2 right-2 z-20 text-white/80 p-1 rounded-full transition-all hover:bg-red-500 hover:text-white"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
         </div>
 
