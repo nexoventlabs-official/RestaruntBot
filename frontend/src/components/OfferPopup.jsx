@@ -55,7 +55,7 @@ export default function OfferPopup() {
       
       {/* Popup - Just the image with close button */}
       <div 
-        className={`relative max-w-sm w-full transform transition-all duration-300 ${
+        className={`relative max-w-md lg:max-w-2xl w-auto transform transition-all duration-300 ${
           isClosing ? 'scale-95 opacity-0' : 'scale-100 opacity-100'
         }`}
       >
@@ -73,7 +73,7 @@ export default function OfferPopup() {
           <img 
             src={offer.image} 
             alt="Special Offer"
-            className="w-full h-auto"
+            className="max-w-full max-h-[80vh] object-contain"
           />
         </div>
       </div>
