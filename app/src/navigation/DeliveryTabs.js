@@ -4,7 +4,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import DeliveryHomeScreen from '../screens/delivery/DeliveryHomeScreen';
-import AvailableOrdersScreen from '../screens/delivery/AvailableOrdersScreen';
 import MyOrdersScreen from '../screens/delivery/MyOrdersScreen';
 import DeliveryHistoryScreen from '../screens/delivery/DeliveryHistoryScreen';
 import DeliveryProfileScreen from '../screens/delivery/DeliveryProfileScreen';
@@ -12,15 +11,6 @@ import DeliveryOrderDetailScreen from '../screens/delivery/DeliveryOrderDetailSc
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
-
-function AvailableStack() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="AvailableList" component={AvailableOrdersScreen} />
-      <Stack.Screen name="DeliveryOrderDetail" component={DeliveryOrderDetailScreen} />
-    </Stack.Navigator>
-  );
-}
 
 function MyOrdersStack() {
   return (
@@ -58,7 +48,6 @@ export default function DeliveryTabs() {
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
           if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';
-          else if (route.name === 'Available') iconName = focused ? 'list' : 'list-outline';
           else if (route.name === 'MyOrders') iconName = focused ? 'bicycle' : 'bicycle-outline';
           else if (route.name === 'History') iconName = focused ? 'time' : 'time-outline';
           else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
@@ -67,7 +56,6 @@ export default function DeliveryTabs() {
       })}
     >
       <Tab.Screen name="Home" component={DeliveryHomeScreen} />
-      <Tab.Screen name="Available" component={AvailableStack} options={{ title: 'Available' }} />
       <Tab.Screen name="MyOrders" component={MyOrdersStack} options={{ title: 'My Orders' }} />
       <Tab.Screen name="History" component={HistoryStack} />
       <Tab.Screen name="Profile" component={DeliveryProfileScreen} />

@@ -123,7 +123,7 @@ export default function DeliveryHomeScreen() {
           <View style={styles.tipsContent}>
             <Text style={styles.tipsTitle}>Quick Tips</Text>
             <Text style={styles.tipsText}>• Stay online to receive new orders</Text>
-            <Text style={styles.tipsText}>• Check "Available" tab for new orders</Text>
+            <Text style={styles.tipsText}>• Check "My Orders" tab for active deliveries</Text>
             <Text style={styles.tipsText}>• Tap on address to navigate via Google Maps</Text>
           </View>
         </View>
