@@ -9,12 +9,13 @@ const upiPayment = {
   // Generate payment page URL (redirects to UPI app)
   // This creates a web page that auto-redirects to UPI intent
   generatePaymentPageUrl(amount, orderId) {
-    // URL to your payment redirect page
+    // URL to your payment redirect page - amount as integer for better compatibility
+    const amountStr = Number.isInteger(amount) ? amount.toString() : amount.toFixed(2);
     const params = new URLSearchParams({
       pa: UPI_ID,
       pn: MERCHANT_NAME,
-      am: amount.toFixed(2),
-      tn: `Order_${orderId}`,
+      am: amountStr,
+      tn: `Order ${orderId}`,
       tr: orderId,
       cu: 'INR'
     });
@@ -22,14 +23,15 @@ const upiPayment = {
     return `${WEBSITE_URL}/pay?${params.toString()}`;
   },
 
-  // Generate UPI deep link URL (for QR codes)
+  // Generate UPI deep link URL
   generateUpiLink(amount, orderId) {
+    const amountStr = Number.isInteger(amount) ? amount.toString() : amount.toFixed(2);
     const params = new URLSearchParams({
       pa: UPI_ID,
       pn: MERCHANT_NAME,
-      am: amount.toFixed(2),
+      am: amountStr,
       cu: 'INR',
-      tn: `Order_${orderId}`,
+      tn: `Order ${orderId}`,
       tr: orderId
     });
     

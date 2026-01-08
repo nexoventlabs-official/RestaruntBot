@@ -3912,7 +3912,6 @@ const chatbot = {
     // Get UPI payment details
     const upiPayment = require('./upiPayment');
     const upiId = upiPayment.getUpiId();
-    const qrCodeUrl = upiPayment.generateQrCodeUrl(total, orderId);
     const paymentPageUrl = upiPayment.generatePaymentPageUrl(total, orderId);
 
     // Build order summary message with UPI details
@@ -3924,17 +3923,14 @@ const chatbot = {
     });
     orderMsg += `━━━━━━━━━━━━━━━\n`;
     orderMsg += `*Total: ₹${total}*\n\n`;
-    orderMsg += `💳 *UPI ID:* ${upiId}\n`;
-    orderMsg += `📝 *Note:* Order_${orderId}\n\n`;
-    orderMsg += `Tap the button below to pay via UPI`;
+    orderMsg += `💳 *Pay to UPI:* ${upiId}\n`;
+    orderMsg += `📝 *Reference:* Order_${orderId}\n\n`;
+    orderMsg += `👇 Tap the button below to pay`;
 
     const orderDetailsImageUrl = await chatbotImagesService.getImageUrl('order_details');
     
     // Send order with Pay CTA button - opens payment page which redirects to UPI app
     await sendWithOptionalImageCta(phone, orderDetailsImageUrl, orderMsg, `Pay ₹${total}`, paymentPageUrl, 'Opens your UPI app');
-    
-    // Send QR code as separate image for those who prefer scanning
-    await whatsapp.sendImage(phone, qrCodeUrl, `📱 *Or scan this QR code*\n\nPay ₹${total} to: ${upiId}`);
 
     // Send follow-up message asking for transaction ID
     setTimeout(async () => {
