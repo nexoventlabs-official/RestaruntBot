@@ -29,17 +29,12 @@ const orderSchema = new mongoose.Schema({
   },
   serviceType: { type: String, enum: ['delivery', 'pickup', 'dine_in'], required: true },
   paymentMethod: { type: String, enum: ['upi', 'cod'], default: 'upi' },
-  paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded', 'cancelled', 'refund_processing', 'refund_failed', 'awaiting_verification'], default: 'pending' },
+  paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded', 'cancelled', 'refund_processing', 'refund_failed'], default: 'pending' },
   // Actual payment method used at delivery (for COD orders - can be 'cash' or 'upi')
   actualPaymentMethod: { type: String, enum: ['cash', 'upi', null], default: null },
   paymentId: { type: String },
   razorpayOrderId: { type: String },
   razorpayPaymentId: { type: String },
-  // UPI Direct Payment fields
-  upiTransactionId: { type: String }, // Customer provided transaction ID
-  upiTransactionVerified: { type: Boolean, default: false }, // Whether transaction is verified
-  upiTransactionScreenshot: { type: String }, // URL to screenshot if provided
-  upiPaymentReceivedAt: { type: Date }, // When customer submitted transaction proof
   codPaymentLinkId: { type: String }, // For COD orders paid via QR
   codPaymentId: { type: String }, // Payment ID for COD UPI payments
   refundId: { type: String },
