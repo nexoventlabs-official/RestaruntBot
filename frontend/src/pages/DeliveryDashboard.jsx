@@ -8,7 +8,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.c
 export default function DeliveryDashboard() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('available');
+  const [activeTab, setActiveTab] = useState('my');
   const [availableOrders, setAvailableOrders] = useState([]);
   const [myOrders, setMyOrders] = useState([]);
   const [historyOrders, setHistoryOrders] = useState([]);
@@ -467,7 +467,6 @@ export default function DeliveryDashboard() {
       <div className="max-w-lg mx-auto px-4">
         <div className="flex bg-white rounded-xl p-1 shadow-sm">
           {[
-            { id: 'available', label: 'Available', count: availableOrders.length },
             { id: 'my', label: 'My Orders', count: myOrders.length },
             { id: 'history', label: 'History' }
           ].map(tab => (
@@ -496,15 +495,6 @@ export default function DeliveryDashboard() {
       </div>
 
       <div className="max-w-lg mx-auto px-4 space-y-3">
-        {activeTab === 'available' && (
-          availableOrders.length > 0 ? availableOrders.map(order => renderOrderCard(order, 'available')) : (
-            <div className="text-center py-12">
-              <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500">No orders available</p>
-              <p className="text-xs text-gray-400 mt-1">Orders will appear when admin marks them as preparing</p>
-            </div>
-          )
-        )}
         {activeTab === 'my' && (
           myOrders.length > 0 ? myOrders.map(order => renderOrderCard(order, 'my')) : (
             <div className="text-center py-12">
