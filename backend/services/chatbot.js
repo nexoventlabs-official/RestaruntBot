@@ -2279,6 +2279,25 @@ const chatbot = {
         );
         state.currentStep = 'select_food_type_order';
       }
+      // ========== PAYMENT VERIFICATION BUTTONS ==========
+      else if (selection === 'send_transaction_id') {
+        // User clicked to send transaction ID
+        await whatsapp.sendMessage(phone,
+          `📝 *Send Transaction ID*\n\n` +
+          `Please type your *12-digit Transaction ID* or *UTR number* from your payment app.\n\n` +
+          `Example: 123456789012`
+        );
+        // Stay in awaiting_payment state - the transaction ID handler will process the next message
+      }
+      else if (selection === 'send_screenshot') {
+        // User clicked to send screenshot
+        await whatsapp.sendMessage(phone,
+          `📸 *Send Screenshot*\n\n` +
+          `Please send a *screenshot* of your payment confirmation from your UPI app.\n\n` +
+          `Make sure the Transaction ID and amount are visible in the screenshot.`
+        );
+        // Stay in awaiting_payment state - the screenshot handler will process the next image
+      }
 
       // ========== CATEGORY SELECTION ==========
       else if (selection === 'cat_all') {
@@ -2695,7 +2714,8 @@ const chatbot = {
       }
 
       // ========== NUMBER SELECTION (for paginated categories) ==========
-      else if (/^\d+$/.test(msg) && (state.currentStep === 'select_category' || state.currentStep === 'browsing_menu')) {
+      // Skip if awaiting UPI transaction - numbers could be transaction IDs
+      else if (/^\d+$/.test(msg) && !state.awaitingUpiTransaction && (state.currentStep === 'select_category' || state.currentStep === 'browsing_menu')) {
         const catNum = parseInt(msg);
         const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
         const categories = [...new Set(filteredItems.flatMap(m => Array.isArray(m.category) ? m.category : [m.category]))];
@@ -2730,7 +2750,8 @@ const chatbot = {
       }
 
       // ========== NUMBER SELECTION (for paginated items) ==========
-      else if (/^\d+$/.test(msg) && (state.currentStep === 'viewing_items' || state.currentStep === 'selecting_item')) {
+      // Skip if awaiting UPI transaction - numbers could be transaction IDs
+      else if (/^\d+$/.test(msg) && !state.awaitingUpiTransaction && (state.currentStep === 'viewing_items' || state.currentStep === 'selecting_item')) {
         const itemNum = parseInt(msg);
         const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
         let itemsList = filteredItems;
@@ -2870,84 +2891,141 @@ const chatbot = {
       // ========== UPI TRANSACTION VERIFICATION (TEXT MESSAGE) ==========
       // Check if user is awaiting payment and sent transaction ID as text
       // This MUST be before food search to avoid treating transaction IDs as food searches
-      else if (state.awaitingUpiTransaction && state.pendingOrderId && messageType === 'text') {
+      // Also check for pending orders even if state is not set (in case of state loss)
+      else if (messageType === 'text' && (
+        (state.awaitingUpiTransaction && state.pendingOrderId) || 
+        /^\d{10,}$/.test(msg)
+      )) {
+        // If message looks like a transaction ID (10+ digits), check for pending orders
         const upiPayment = require('./upiPayment');
-        const order = await Order.findOne({ orderId: state.pendingOrderId });
+        let order = null;
+        let shouldProcessAsTransaction = false;
         
-        if (!order) {
-          await whatsapp.sendButtons(phone, '❌ Order not found. Please try again.', [
-            { id: 'home', text: 'Main Menu' }
-          ]);
-          state.currentStep = 'main_menu';
-          state.awaitingUpiTransaction = false;
-          state.pendingOrderId = null;
-        } else if (order.upiVerified) {
-          // Already verified
-          await whatsapp.sendButtons(phone, 
-            `✅ Your order #${order.orderId} is already confirmed!\n\nWe're preparing your order.`,
-            [
-              { id: 'track_order', text: 'Track Order' },
-              { id: 'home', text: 'Main Menu' }
-            ]
-          );
-          state.currentStep = 'order_confirmed';
-          state.awaitingUpiTransaction = false;
-        } else {
-          // Analyze the text for transaction ID
-          console.log('📝 Analyzing text for transaction ID:', msg);
-          const result = await upiPayment.analyzeTransactionId(msg, order.totalAmount, order.orderId);
-          console.log('📝 Transaction ID analysis result:', result);
+        if (state.pendingOrderId) {
+          order = await Order.findOne({ orderId: state.pendingOrderId });
+          if (order && !order.upiVerified && order.paymentStatus === 'pending') {
+            shouldProcessAsTransaction = true;
+          }
+        }
+        
+        // If no order from state, check for recent pending UPI orders for this customer
+        if (!order && /^\d{10,}$/.test(msg)) {
+          order = await Order.findOne({ 
+            'customer.phone': phone, 
+            paymentMethod: 'upi',
+            paymentStatus: 'pending',
+            status: 'pending'
+          }).sort({ createdAt: -1 });
           
-          if (result.found && result.transactionId) {
-            // Transaction ID found - verify and confirm
-            order.upiTransactionId = result.transactionId;
-            order.upiVerified = true;
-            order.upiVerifiedAt = new Date();
-            order.paymentStatus = 'paid';
-            order.paymentMethod = 'upi';
-            order.status = 'confirmed';
-            order.trackingUpdates.push({ 
-              status: 'confirmed', 
-              message: `Payment verified. Transaction ID: ${result.transactionId}`,
-              timestamp: new Date()
-            });
-            await order.save();
-            
-            // Emit event for real-time updates
-            const dataEvents = require('./eventEmitter');
-            dataEvents.emit('orders');
-            dataEvents.emit('dashboard');
-            
-            // Sync to Google Sheets
-            googleSheets.updateOrderStatus(order.orderId, 'confirmed', 'paid').catch(err =>
-              console.error('Google Sheets sync error:', err)
-            );
-            
-            // Send confirmation
-            const paymentSuccessImageUrl = await chatbotImagesService.getImageUrl('payment_success');
-            const confirmMsg = `✅ *Payment Verified!*\n\n` +
-              `Order: #${order.orderId}\n` +
-              `Amount: ₹${order.totalAmount}\n` +
-              `Transaction ID: ${result.transactionId}\n\n` +
-              `🍽️ Your order is confirmed and being prepared!\n\n` +
-              `Thank you for your order! 🙏`;
-            
-            await sendWithOptionalImage(phone, paymentSuccessImageUrl, confirmMsg, [
-              { id: 'track_order', text: 'Track Order' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
-            
-            state.currentStep = 'order_confirmed';
-            state.awaitingUpiTransaction = false;
-          } else {
-            // Couldn't find valid transaction ID
-            await whatsapp.sendButtons(phone,
-              `⚠️ *Couldn't find Transaction ID*\n\nPlease send:\n1️⃣ Your *12-digit Transaction ID* or *UTR number*\n2️⃣ Or a *screenshot* of your payment confirmation\n\nExample: 123456789012`,
+          if (order) {
+            console.log('📝 Found pending UPI order from DB:', order.orderId);
+            state.pendingOrderId = order.orderId;
+            state.awaitingUpiTransaction = true;
+            shouldProcessAsTransaction = true;
+          }
+        }
+        
+        if (shouldProcessAsTransaction && order) {
+          if (order.upiVerified) {
+            // Already verified
+            await whatsapp.sendButtons(phone, 
+              `✅ Your order #${order.orderId} is already confirmed!\n\nWe're preparing your order.`,
               [
+                { id: 'track_order', text: 'Track Order' },
                 { id: 'home', text: 'Main Menu' }
               ]
             );
-            // Stay in awaiting_payment state
+            state.currentStep = 'order_confirmed';
+            state.awaitingUpiTransaction = false;
+          } else {
+            // Analyze the text for transaction ID
+            console.log('📝 Analyzing text for transaction ID:', msg, 'Order:', order.orderId);
+            const result = await upiPayment.analyzeTransactionId(msg, order.totalAmount, order.orderId);
+            console.log('📝 Transaction ID analysis result:', result);
+          
+            if (result.found && result.transactionId) {
+              // Transaction ID found - verify and confirm
+              order.upiTransactionId = result.transactionId;
+              order.upiVerified = true;
+              order.upiVerifiedAt = new Date();
+              order.paymentStatus = 'paid';
+              order.paymentMethod = 'upi';
+              order.status = 'confirmed';
+              order.trackingUpdates.push({ 
+                status: 'confirmed', 
+                message: `Payment verified. Transaction ID: ${result.transactionId}`,
+                timestamp: new Date()
+              });
+              await order.save();
+              
+              // Emit event for real-time updates
+              const dataEvents = require('./eventEmitter');
+              dataEvents.emit('orders');
+              dataEvents.emit('dashboard');
+              
+              // Sync to Google Sheets
+              googleSheets.updateOrderStatus(order.orderId, 'confirmed', 'paid').catch(err =>
+                console.error('Google Sheets sync error:', err)
+              );
+              
+              // Send confirmation
+              const paymentSuccessImageUrl = await chatbotImagesService.getImageUrl('payment_success');
+              const confirmMsg = `✅ *Payment Verified!*\n\n` +
+                `Order: #${order.orderId}\n` +
+                `Amount: ₹${order.totalAmount}\n` +
+                `Transaction ID: ${result.transactionId}\n\n` +
+                `🍽️ Your order is confirmed and being prepared!\n\n` +
+                `Thank you for your order! 🙏`;
+              
+              await sendWithOptionalImage(phone, paymentSuccessImageUrl, confirmMsg, [
+                { id: 'track_order', text: 'Track Order' },
+                { id: 'home', text: 'Main Menu' }
+              ]);
+              
+              state.currentStep = 'order_confirmed';
+              state.awaitingUpiTransaction = false;
+            } else {
+              // Couldn't find valid transaction ID
+              await whatsapp.sendButtons(phone,
+                `⚠️ *Couldn't find Transaction ID*\n\nPlease send:\n1️⃣ Your *12-digit Transaction ID* or *UTR number*\n2️⃣ Or a *screenshot* of your payment confirmation\n\nExample: 123456789012`,
+                [
+                  { id: 'send_transaction_id', text: '📝 Try Again' },
+                  { id: 'send_screenshot', text: '📸 Send Screenshot' }
+                ]
+              );
+              // Stay in awaiting_payment state
+            }
+          }
+        } else {
+          // No pending order found - fall through to food search
+          // This is handled by the next else block
+          const searchResult = await this.smartSearch(msg, menuItems);
+          
+          if (searchResult && searchResult.items && searchResult.items.length > 0) {
+            const matchingItems = searchResult.items;
+            const displayLabel = searchResult.label 
+              ? (searchResult.searchTerm ? `${searchResult.label} "${searchResult.searchTerm}"` : searchResult.label)
+              : (searchResult.searchTerm ? `"${searchResult.searchTerm}"` : 'Search Results');
+            
+            if (matchingItems.length === 1) {
+              const item = matchingItems[0];
+              state.selectedItem = item._id.toString();
+              await this.sendItemDetails(phone, menuItems, item._id.toString());
+              state.currentStep = 'viewing_item_details';
+            } else {
+              state.searchTag = msg.trim();
+              state.tagSearchResults = matchingItems.map(i => i._id.toString());
+              await this.sendSearchResults(phone, matchingItems, displayLabel);
+              state.currentStep = 'viewing_search_results';
+            }
+          } else {
+            await whatsapp.sendButtons(phone, 
+              `🔍 No items found for "${msg}".\n\nTry browsing our menu!`,
+              [
+                { id: 'place_order', text: 'Browse Menu' },
+                { id: 'home', text: 'Main Menu' }
+              ]
+            );
           }
         }
       }
@@ -4122,14 +4200,16 @@ const chatbot = {
     // Send order with Pay CTA button - opens payment page which redirects to UPI app
     await sendWithOptionalImageCta(phone, orderDetailsImageUrl, orderMsg, `Pay ₹${total}`, paymentPageUrl, 'Opens your UPI app');
 
-    // Send follow-up message asking for transaction ID
+    // Send follow-up message asking for transaction ID with clickable buttons
     setTimeout(async () => {
-      await whatsapp.sendMessage(phone,
-        `📝 *After Payment*\n\nOnce you complete the payment, please send:\n\n` +
-        `1️⃣ Your *Transaction ID* / *UTR Number*\n` +
-        `   OR\n` +
-        `2️⃣ *Screenshot* of payment confirmation\n\n` +
-        `We'll verify and confirm your order instantly! ✅`
+      await whatsapp.sendButtons(phone,
+        `📝 *After Payment*\n\nOnce you complete the payment, tap a button below to verify:\n\n` +
+        `We'll verify and confirm your order instantly! ✅`,
+        [
+          { id: 'send_transaction_id', text: '📝 Transaction ID/UTR' },
+          { id: 'send_screenshot', text: '📸 Send Screenshot' }
+        ],
+        'Choose how to verify payment'
       );
     }, 3000);
 
