@@ -2661,15 +2661,14 @@ const chatbot = {
           console.log('📝 Transaction ID analysis result:', result);
           
           if (result.found && result.transactionId) {
-            // Transaction ID found - verify and confirm
+            // Transaction ID found - mark as submitted for verification (NOT auto-confirmed)
             order.upiTransactionId = result.transactionId;
-            order.upiVerified = true;
-            order.upiVerifiedAt = new Date();
-            order.paymentStatus = 'paid';
-            order.status = 'confirmed';
+            order.upiVerified = false; // NOT verified yet - admin needs to verify
+            order.paymentStatus = 'verification_pending';
+            order.status = 'pending'; // Keep as pending until admin verifies
             order.trackingUpdates.push({
-              status: 'confirmed',
-              message: `Payment verified. Transaction ID: ${result.transactionId}`,
+              status: 'payment_submitted',
+              message: `Transaction ID submitted: ${result.transactionId}. Awaiting verification.`,
               timestamp: new Date()
             });
             await order.save();
@@ -2680,32 +2679,34 @@ const chatbot = {
             dataEvents.emit('dashboard');
             
             // Update Google Sheets
-            googleSheets.updateOrderStatus(order.orderId, 'confirmed', 'paid').catch(err =>
+            googleSheets.updateOrderStatus(order.orderId, 'pending', 'verification_pending').catch(err =>
               console.error('Google Sheets sync error:', err)
             );
             
-            const confirmedImageUrl = await chatbotImagesService.getImageUrl('payment_success');
+            const pendingImageUrl = await chatbotImagesService.getImageUrl('payment_pending') || await chatbotImagesService.getImageUrl('order_details');
             
-            let confirmMsg = `✅ *Payment Verified!*\n\n`;
+            let confirmMsg = `⏳ *Payment Submitted!*\n\n`;
             confirmMsg += `📦 Order ID: *${order.orderId}*\n`;
             confirmMsg += `💳 Transaction ID: *${result.transactionId}*\n`;
             confirmMsg += `💰 Amount: *₹${order.totalAmount}*\n\n`;
-            confirmMsg += `🙏 Thank you! We're preparing your order.`;
+            confirmMsg += `🔍 Your payment is being verified.\n`;
+            confirmMsg += `We'll confirm your order shortly!\n\n`;
+            confirmMsg += `⏱️ Usually takes 1-2 minutes.`;
             
-            // UPI orders don't get cancel/refund options
-            await sendWithOptionalImage(phone, confirmedImageUrl, confirmMsg, [
+            await sendWithOptionalImage(phone, pendingImageUrl, confirmMsg, [
               { id: 'track_order', text: 'Track Order' },
               { id: 'home', text: 'Main Menu' }
             ]);
             
-            state.currentStep = 'order_confirmed';
+            state.currentStep = 'payment_verification_pending';
             state.awaitingUpiTransaction = false;
           } else {
             // Couldn't find valid transaction ID
             await whatsapp.sendButtons(phone,
               `⚠️ *Couldn't find Transaction ID*\n\nPlease send:\n1️⃣ Your *12-digit Transaction ID* or *UTR number*\n2️⃣ Or a *screenshot* of your payment confirmation\n\nExample: 123456789012`,
               [
-                { id: 'home', text: 'Main Menu' }
+                { id: 'send_transaction_id', text: '📝 Try Again' },
+                { id: 'send_screenshot', text: '📸 Send Screenshot' }
               ]
             );
             // Stay in awaiting_payment state
@@ -2826,17 +2827,16 @@ const chatbot = {
             const result = await upiPayment.analyzeScreenshot(imageBuffer, order.totalAmount, order.orderId);
             console.log('📸 Screenshot analysis result:', result);
             
-            if (result.found && result.isValid && result.transactionId) {
-              // Valid transaction found - confirm order
+            if (result.found && result.transactionId) {
+              // Transaction ID found in screenshot - mark as submitted for verification
               order.upiTransactionId = result.transactionId;
-              order.upiVerified = true;
-              order.upiVerifiedAt = new Date();
-              order.paymentStatus = 'paid';
+              order.upiVerified = false; // NOT verified yet - admin needs to verify
               order.paymentMethod = 'upi';
-              order.status = 'confirmed';
+              order.paymentStatus = 'verification_pending';
+              order.status = 'pending'; // Keep as pending until admin verifies
               order.trackingUpdates.push({
-                status: 'confirmed',
-                message: `Payment verified via screenshot. Transaction ID: ${result.transactionId}`,
+                status: 'payment_submitted',
+                message: `Payment screenshot submitted. Transaction ID: ${result.transactionId}. Awaiting verification.`,
                 timestamp: new Date()
               });
               await order.save();
@@ -2847,24 +2847,26 @@ const chatbot = {
               dataEvents.emit('dashboard');
               
               // Update Google Sheets
-              googleSheets.updateOrderStatus(order.orderId, 'confirmed', 'paid').catch(err =>
+              googleSheets.updateOrderStatus(order.orderId, 'pending', 'verification_pending').catch(err =>
                 console.error('Google Sheets sync error:', err)
               );
               
-              const confirmedImageUrl = await chatbotImagesService.getImageUrl('payment_success');
+              const pendingImageUrl = await chatbotImagesService.getImageUrl('payment_pending') || await chatbotImagesService.getImageUrl('order_details');
               
-              let confirmMsg = `✅ *Payment Verified!*\n\n`;
+              let confirmMsg = `⏳ *Payment Submitted!*\n\n`;
               confirmMsg += `📦 Order ID: *${order.orderId}*\n`;
               confirmMsg += `💳 Transaction ID: *${result.transactionId}*\n`;
               confirmMsg += `💰 Amount: *₹${order.totalAmount}*\n\n`;
-              confirmMsg += `🙏 Thank you! We're preparing your order.`;
+              confirmMsg += `🔍 Your payment is being verified.\n`;
+              confirmMsg += `We'll confirm your order shortly!\n\n`;
+              confirmMsg += `⏱️ Usually takes 1-2 minutes.`;
               
-              await sendWithOptionalImage(phone, confirmedImageUrl, confirmMsg, [
+              await sendWithOptionalImage(phone, pendingImageUrl, confirmMsg, [
                 { id: 'track_order', text: 'Track Order' },
                 { id: 'home', text: 'Main Menu' }
               ]);
               
-              state.currentStep = 'order_confirmed';
+              state.currentStep = 'payment_verification_pending';
               state.awaitingUpiTransaction = false;
             } else {
               // Invalid or couldn't verify
@@ -2944,16 +2946,15 @@ const chatbot = {
             console.log('📝 Transaction ID analysis result:', result);
           
             if (result.found && result.transactionId) {
-              // Transaction ID found - verify and confirm
+              // Transaction ID found - mark as submitted for verification (NOT auto-confirmed)
               order.upiTransactionId = result.transactionId;
-              order.upiVerified = true;
-              order.upiVerifiedAt = new Date();
-              order.paymentStatus = 'paid';
+              order.upiVerified = false; // NOT verified yet - admin needs to verify
               order.paymentMethod = 'upi';
-              order.status = 'confirmed';
+              order.paymentStatus = 'verification_pending';
+              order.status = 'pending'; // Keep as pending until admin verifies
               order.trackingUpdates.push({ 
-                status: 'confirmed', 
-                message: `Payment verified. Transaction ID: ${result.transactionId}`,
+                status: 'payment_submitted', 
+                message: `Transaction ID submitted: ${result.transactionId}. Awaiting verification.`,
                 timestamp: new Date()
               });
               await order.save();
@@ -2964,25 +2965,26 @@ const chatbot = {
               dataEvents.emit('dashboard');
               
               // Sync to Google Sheets
-              googleSheets.updateOrderStatus(order.orderId, 'confirmed', 'paid').catch(err =>
+              googleSheets.updateOrderStatus(order.orderId, 'pending', 'verification_pending').catch(err =>
                 console.error('Google Sheets sync error:', err)
               );
               
-              // Send confirmation
-              const paymentSuccessImageUrl = await chatbotImagesService.getImageUrl('payment_success');
-              const confirmMsg = `✅ *Payment Verified!*\n\n` +
-                `Order: #${order.orderId}\n` +
-                `Amount: ₹${order.totalAmount}\n` +
-                `Transaction ID: ${result.transactionId}\n\n` +
-                `🍽️ Your order is confirmed and being prepared!\n\n` +
-                `Thank you for your order! 🙏`;
+              // Send pending verification message
+              const pendingImageUrl = await chatbotImagesService.getImageUrl('payment_pending') || await chatbotImagesService.getImageUrl('order_details');
+              const confirmMsg = `⏳ *Payment Submitted!*\n\n` +
+                `📦 Order ID: *${order.orderId}*\n` +
+                `💳 Transaction ID: *${result.transactionId}*\n` +
+                `💰 Amount: *₹${order.totalAmount}*\n\n` +
+                `🔍 Your payment is being verified.\n` +
+                `We'll confirm your order shortly!\n\n` +
+                `⏱️ Usually takes 1-2 minutes.`;
               
-              await sendWithOptionalImage(phone, paymentSuccessImageUrl, confirmMsg, [
+              await sendWithOptionalImage(phone, pendingImageUrl, confirmMsg, [
                 { id: 'track_order', text: 'Track Order' },
                 { id: 'home', text: 'Main Menu' }
               ]);
               
-              state.currentStep = 'order_confirmed';
+              state.currentStep = 'payment_verification_pending';
               state.awaitingUpiTransaction = false;
             } else {
               // Couldn't find valid transaction ID
@@ -4180,6 +4182,7 @@ const chatbot = {
     // Get UPI payment details
     const upiPayment = require('./upiPayment');
     const upiId = upiPayment.getUpiId();
+    const qrCodeUrl = upiPayment.generateQrCodeUrl(total, orderId);
     const paymentPageUrl = upiPayment.generatePaymentPageUrl(total, orderId);
 
     // Build order summary message with UPI details
@@ -4191,25 +4194,33 @@ const chatbot = {
     });
     orderMsg += `━━━━━━━━━━━━━━━\n`;
     orderMsg += `*Total: ₹${total}*\n\n`;
-    orderMsg += `💳 *Pay to UPI:* ${upiId}\n`;
-    orderMsg += `📝 *Reference:* Order_${orderId}\n\n`;
-    orderMsg += `👇 Tap the button below to pay`;
+    orderMsg += `💳 UPI ID: *${upiId}*\n`;
+    orderMsg += `💰 Amount: *₹${total}*\n`;
+    orderMsg += `📝 Reference: Order_${orderId}`;
 
     const orderDetailsImageUrl = await chatbotImagesService.getImageUrl('order_details');
     
-    // Send order with Pay CTA button - opens payment page which redirects to UPI app
+    // Send order with Pay CTA button - opens UPI app with details
     await sendWithOptionalImageCta(phone, orderDetailsImageUrl, orderMsg, `Pay ₹${total}`, paymentPageUrl, 'Opens your UPI app');
+    
+    // Send QR code as alternative (for scanning from another device or gallery)
+    await whatsapp.sendImage(phone, qrCodeUrl, 
+      `📱 *Or scan this QR*\n\n` +
+      `• From another device: Scan directly\n` +
+      `• Same phone: Long-press → Open with UPI app\n\n` +
+      `Amount: ₹${total}`
+    );
 
     // Send follow-up message asking for transaction ID with clickable buttons
     setTimeout(async () => {
       await whatsapp.sendButtons(phone,
-        `📝 *After Payment*\n\nOnce you complete the payment, tap a button below to verify:\n\n` +
-        `We'll verify and confirm your order instantly! ✅`,
+        `📝 *After Payment*\n\nOnce you complete the payment, tap a button below:\n\n` +
+        `We'll verify and confirm your order! ✅`,
         [
-          { id: 'send_transaction_id', text: '📝 Transaction ID/UTR' },
+          { id: 'send_transaction_id', text: '📝 Send Transaction ID' },
           { id: 'send_screenshot', text: '📸 Send Screenshot' }
         ],
-        'Choose how to verify payment'
+        'Verify your payment'
       );
     }, 3000);
 
