@@ -1,21 +1,36 @@
 // UPI Payment Service - Direct UPI Payment without Razorpay
-const groqAi = require('./groqAi');
 
 // Your UPI ID
 const UPI_ID = '8106811285@ybl';
 const MERCHANT_NAME = 'FoodAdmin';
+const WEBSITE_URL = process.env.WEBSITE_URL || 'https://restarunt-bot.vercel.app';
 
 const upiPayment = {
-  // Generate UPI deep link URL (for QR codes - more reliable)
-  generateUpiLink(amount, orderId, customerName = 'Customer') {
-    // UPI deep link format: upi://pay?pa=UPI_ID&pn=NAME&am=AMOUNT&cu=INR&tn=NOTE
+  // Generate payment page URL (redirects to UPI app)
+  // This creates a web page that auto-redirects to UPI intent
+  generatePaymentPageUrl(amount, orderId) {
+    // URL to your payment redirect page
+    const params = new URLSearchParams({
+      pa: UPI_ID,
+      pn: MERCHANT_NAME,
+      am: amount.toFixed(2),
+      tn: `Order_${orderId}`,
+      tr: orderId,
+      cu: 'INR'
+    });
+    
+    return `${WEBSITE_URL}/pay?${params.toString()}`;
+  },
+
+  // Generate UPI deep link URL (for QR codes)
+  generateUpiLink(amount, orderId) {
     const params = new URLSearchParams({
       pa: UPI_ID,
       pn: MERCHANT_NAME,
       am: amount.toFixed(2),
       cu: 'INR',
       tn: `Order_${orderId}`,
-      tr: orderId // Transaction reference
+      tr: orderId
     });
     
     return `upi://pay?${params.toString()}`;
@@ -24,18 +39,7 @@ const upiPayment = {
   // Generate QR code URL for UPI payment
   generateQrCodeUrl(amount, orderId) {
     const upiLink = this.generateUpiLink(amount, orderId);
-    // Using QR Server API to generate QR code
     return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(upiLink)}`;
-  },
-  
-  // Get payment instructions (no deep link - manual payment is more reliable)
-  getPaymentInstructions(amount, orderId) {
-    return {
-      upiId: UPI_ID,
-      amount: amount,
-      orderId: orderId,
-      note: `Order_${orderId}`
-    };
   },
 
   // Validate UPI transaction ID format

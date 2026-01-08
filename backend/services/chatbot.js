@@ -3909,10 +3909,11 @@ const chatbot = {
     state.pendingOrderId = orderId;
     state.awaitingUpiTransaction = true;
 
-    // Get UPI payment details (no deep link - manual payment is more reliable)
+    // Get UPI payment details
     const upiPayment = require('./upiPayment');
     const upiId = upiPayment.getUpiId();
     const qrCodeUrl = upiPayment.generateQrCodeUrl(total, orderId);
+    const paymentPageUrl = upiPayment.generatePaymentPageUrl(total, orderId);
 
     // Build order summary message with UPI details
     let orderMsg = `🧾 *ORDER #${orderId}*\n`;
@@ -3923,33 +3924,17 @@ const chatbot = {
     });
     orderMsg += `━━━━━━━━━━━━━━━\n`;
     orderMsg += `*Total: ₹${total}*\n\n`;
-    orderMsg += `━━━━━━━━━━━━━━━\n`;
-    orderMsg += `💳 *PAY VIA UPI*\n\n`;
-    orderMsg += `📱 *UPI ID:* \`${upiId}\`\n`;
-    orderMsg += `💰 *Amount:* ₹${total}\n`;
+    orderMsg += `💳 *UPI ID:* ${upiId}\n`;
     orderMsg += `📝 *Note:* Order_${orderId}\n\n`;
-    orderMsg += `━━━━━━━━━━━━━━━\n`;
-    orderMsg += `*How to Pay:*\n`;
-    orderMsg += `1️⃣ Open any UPI app (GPay, PhonePe, Paytm)\n`;
-    orderMsg += `2️⃣ Send ₹${total} to *${upiId}*\n`;
-    orderMsg += `3️⃣ Add note: Order_${orderId}\n`;
-    orderMsg += `4️⃣ Send us your Transaction ID`;
+    orderMsg += `Tap the button below to pay via UPI`;
 
     const orderDetailsImageUrl = await chatbotImagesService.getImageUrl('order_details');
     
-    // Send order details with QR code image
-    if (orderDetailsImageUrl) {
-      await whatsapp.sendImageWithButtons(phone, orderDetailsImageUrl, orderMsg, [
-        { id: 'home', text: 'Main Menu' }
-      ]);
-    } else {
-      await whatsapp.sendButtons(phone, orderMsg, [
-        { id: 'home', text: 'Main Menu' }
-      ]);
-    }
+    // Send order with Pay CTA button - opens payment page which redirects to UPI app
+    await sendWithOptionalImageCta(phone, orderDetailsImageUrl, orderMsg, `Pay ₹${total}`, paymentPageUrl, 'Opens your UPI app');
     
-    // Send QR code as separate image
-    await whatsapp.sendImage(phone, qrCodeUrl, `📱 Scan this QR code to pay ₹${total}\n\nOr pay manually to UPI ID: ${upiId}`);
+    // Send QR code as separate image for those who prefer scanning
+    await whatsapp.sendImage(phone, qrCodeUrl, `📱 *Or scan this QR code*\n\nPay ₹${total} to: ${upiId}`);
 
     // Send follow-up message asking for transaction ID
     setTimeout(async () => {
