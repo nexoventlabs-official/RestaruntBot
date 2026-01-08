@@ -315,7 +315,45 @@ router.post('/refund/:orderId', authMiddleware, async (req, res) => {
   try {
     const order = await Order.findOne({ orderId: req.params.orderId });
     if (!order) return res.status(404).json({ error: 'Order not found' });
-    if (!order.razorpayPaymentId && !order.paymentId) return res.status(400).json({ error: 'No payment found' });
+    
+    // UPI direct payment orders cannot be refunded
+    if (order.paymentMethod === 'upi' && order.upiVerified) {
+      return res.status(400).json({ error: 'UPI paid orders cannot be refunded. Please contact support.' });
+    }
+    
+    // COD orders don't need refund
+    if (order.paymentMethod === 'cod') {
+      order.status = 'cancelled';
+      order.paymentStatus = 'cancelled';
+      order.statusUpdatedAt = new Date();
+      order.trackingUpdates.push({ status: 'cancelled', message: 'Order cancelled by admin', timestamp: new Date() });
+      await order.save();
+      
+      // Emit event for real-time updates
+      const dataEvents = require('../services/eventEmitter');
+      dataEvents.emit('orders');
+      dataEvents.emit('dashboard');
+      
+      // Update Google Sheets
+      googleSheets.updateOrderStatus(order.orderId, 'cancelled', 'cancelled').catch(err =>
+        console.error('Google Sheets sync error:', err)
+      );
+      
+      await whatsapp.sendButtons(order.customer.phone,
+        `❌ *Order Cancelled*\n\nOrder: ${order.orderId}\n\nYour order has been cancelled.`,
+        [
+          { id: 'place_order', text: 'New Order' },
+          { id: 'home', text: 'Main Menu' }
+        ]
+      );
+      
+      return res.json({ success: true, message: 'Order cancelled', orderId: order.orderId });
+    }
+    
+    // For legacy Razorpay orders
+    if (!order.razorpayPaymentId && !order.paymentId) {
+      return res.status(400).json({ error: 'No payment found for refund' });
+    }
 
     const paymentId = order.razorpayPaymentId || order.paymentId;
     
@@ -401,10 +439,36 @@ router.post('/process-refund/:orderId', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Order already refunded' });
     }
     
+    // UPI direct payment orders cannot be refunded
+    if (order.paymentMethod === 'upi' && order.upiVerified) {
+      return res.status(400).json({ error: 'UPI paid orders cannot be refunded. Please contact support.' });
+    }
+    
+    // COD orders don't need refund
+    if (order.paymentMethod === 'cod') {
+      order.status = 'cancelled';
+      order.paymentStatus = 'cancelled';
+      order.statusUpdatedAt = new Date();
+      order.trackingUpdates.push({ status: 'cancelled', message: 'Order cancelled by admin', timestamp: new Date() });
+      await order.save();
+      
+      // Emit event for real-time updates
+      const dataEvents = require('../services/eventEmitter');
+      dataEvents.emit('orders');
+      dataEvents.emit('dashboard');
+      
+      // Update Google Sheets
+      googleSheets.updateOrderStatus(order.orderId, 'cancelled', 'cancelled').catch(err =>
+        console.error('Google Sheets sync error:', err)
+      );
+      
+      return res.json({ success: true, message: 'Order cancelled' });
+    }
+    
     const paymentId = order.razorpayPaymentId || order.paymentId;
-    if (!paymentId) return res.status(400).json({ error: 'No payment ID found' });
+    if (!paymentId) return res.status(400).json({ error: 'No payment ID found for refund' });
 
-    // Process refund via Razorpay
+    // Process refund via Razorpay (for legacy orders)
     try {
       const refund = await razorpayService.refund(paymentId, order.totalAmount);
       
