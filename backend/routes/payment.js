@@ -4,7 +4,6 @@ const Order = require('../models/Order');
 const Customer = require('../models/Customer');
 const whatsapp = require('../services/whatsapp');
 const brevoMail = require('../services/brevoMail');
-const razorpayService = require('../services/razorpay');
 const googleSheets = require('../services/googleSheets');
 const chatbotImagesService = require('../services/chatbotImages');
 const authMiddleware = require('../middleware/auth');
@@ -350,80 +349,16 @@ router.post('/refund/:orderId', authMiddleware, async (req, res) => {
       return res.json({ success: true, message: 'Order cancelled', orderId: order.orderId });
     }
     
-    // For legacy Razorpay orders
-    if (!order.razorpayPaymentId && !order.paymentId) {
-      return res.status(400).json({ error: 'No payment found for refund' });
+    // For legacy Razorpay orders - automatic refunds no longer supported
+    if (order.razorpayPaymentId || order.paymentId) {
+      return res.status(400).json({ 
+        error: 'Automatic refunds are no longer supported. Please contact support for manual refund processing.',
+        orderId: order.orderId
+      });
     }
-
-    const paymentId = order.razorpayPaymentId || order.paymentId;
     
-    // Process refund immediately via Razorpay
-    try {
-      const refund = await razorpayService.refund(paymentId, order.totalAmount);
-      
-      order.status = 'refunded';
-      order.refundStatus = 'completed';
-      order.refundId = refund.id;
-      order.refundAmount = order.totalAmount;
-      order.refundRequestedAt = new Date();
-      order.refundProcessedAt = new Date();
-      order.paymentStatus = 'refunded';
-      order.statusUpdatedAt = new Date();
-      order.trackingUpdates.push({ status: 'refunded', message: `Refund of ₹${order.totalAmount} processed. Refund ID: ${refund.id}`, timestamp: new Date() });
-      await order.save();
-
-      // Emit event for real-time updates
-      const dataEvents = require('../services/eventEmitter');
-      dataEvents.emit('orders');
-      dataEvents.emit('dashboard');
-
-      // Update Google Sheets - move to refunded sheet
-      googleSheets.updateOrderStatus(order.orderId, 'refunded', 'refunded').catch(err =>
-        console.error('Google Sheets sync error:', err)
-      );
-
-      await whatsapp.sendButtons(order.customer.phone,
-        `✅ *Refund Successful!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.totalAmount}\nRefund ID: ${refund.id}\n\n💳 The amount will be credited to your account within 5-7 business days.`,
-        [
-          { id: 'place_order', text: 'New Order' },
-          { id: 'home', text: 'Main Menu' }
-        ]
-      );
-
-      res.json({ success: true, message: 'Refund processed', refundId: refund.id, orderId: order.orderId });
-    } catch (refundError) {
-      console.error('Refund failed:', refundError.message);
-      
-      order.status = 'cancelled';
-      order.refundStatus = 'failed';
-      order.refundAmount = order.totalAmount;
-      order.refundRequestedAt = new Date();
-      order.refundError = refundError.message;
-      order.paymentStatus = 'refund_failed';
-      order.statusUpdatedAt = new Date();
-      order.trackingUpdates.push({ status: 'refund_failed', message: `Refund failed: ${refundError.message}`, timestamp: new Date() });
-      await order.save();
-
-      // Emit event for real-time updates
-      const dataEvents = require('../services/eventEmitter');
-      dataEvents.emit('orders');
-      dataEvents.emit('dashboard');
-
-      // Update Google Sheets - move to refundfailed sheet
-      googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed').catch(err =>
-        console.error('Google Sheets sync error:', err)
-      );
-
-      await whatsapp.sendButtons(order.customer.phone,
-        `⚠️ *Refund Issue*\n\nOrder: ${order.orderId}\nAmount: ₹${order.totalAmount}\n\nWe couldn't process your refund automatically.\nOur team will contact you within 24 hours to resolve this.`,
-        [
-          { id: 'place_order', text: 'New Order' },
-          { id: 'home', text: 'Main Menu' }
-        ]
-      );
-
-      res.status(500).json({ success: false, error: refundError.message, orderId: order.orderId });
-    }
+    // No payment found
+    return res.status(400).json({ error: 'No payment found for refund' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -468,62 +403,11 @@ router.post('/process-refund/:orderId', authMiddleware, async (req, res) => {
     const paymentId = order.razorpayPaymentId || order.paymentId;
     if (!paymentId) return res.status(400).json({ error: 'No payment ID found for refund' });
 
-    // Process refund via Razorpay (for legacy orders)
-    try {
-      const refund = await razorpayService.refund(paymentId, order.totalAmount);
-      
-      order.status = 'refunded';
-      order.refundStatus = 'completed';
-      order.refundId = refund.id;
-      order.refundAmount = order.totalAmount;
-      order.refundProcessedAt = new Date();
-      order.paymentStatus = 'refunded';
-      order.statusUpdatedAt = new Date();
-      order.trackingUpdates.push({ status: 'refunded', message: `Refund of ₹${order.totalAmount} processed. Refund ID: ${refund.id}`, timestamp: new Date() });
-      await order.save();
-
-      // Emit event for real-time updates
-      const dataEvents = require('../services/eventEmitter');
-      dataEvents.emit('orders');
-      dataEvents.emit('dashboard');
-
-      // Update Google Sheets - move to refunded sheet
-      googleSheets.updateOrderStatus(order.orderId, 'refunded', 'refunded').catch(err =>
-        console.error('Google Sheets sync error:', err)
-      );
-
-      await whatsapp.sendButtons(order.customer.phone,
-        `✅ *Refund Successful!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.totalAmount}\nRefund ID: ${refund.id}\n\n💳 The amount will be credited to your account within 5-7 business days.`,
-        [
-          { id: 'place_order', text: 'New Order' },
-          { id: 'home', text: 'Main Menu' }
-        ]
-      );
-
-      res.json({ success: true, message: 'Refund processed', refundId: refund.id });
-    } catch (refundError) {
-      console.error('Refund processing failed:', refundError.message);
-      
-      order.refundStatus = 'failed';
-      order.refundError = refundError.message;
-      order.paymentStatus = 'refund_failed';
-      order.status = 'cancelled';
-      order.statusUpdatedAt = new Date();
-      order.trackingUpdates.push({ status: 'refund_failed', message: `Refund failed: ${refundError.message}`, timestamp: new Date() });
-      await order.save();
-
-      // Emit event for real-time updates
-      const dataEvents = require('../services/eventEmitter');
-      dataEvents.emit('orders');
-      dataEvents.emit('dashboard');
-
-      // Update Google Sheets - move to refundfailed sheet
-      googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed').catch(err =>
-        console.error('Google Sheets sync error:', err)
-      );
-
-      res.status(500).json({ success: false, error: refundError.message });
-    }
+    // Legacy Razorpay orders - automatic refunds no longer supported
+    return res.status(400).json({ 
+      error: 'Automatic refunds are no longer supported. Please contact support for manual refund processing.',
+      orderId: order.orderId
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

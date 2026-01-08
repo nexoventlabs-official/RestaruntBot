@@ -7,7 +7,7 @@ function Pay() {
   const [error, setError] = useState(null);
 
   // Get UPI parameters from URL
-  const pa = searchParams.get('pa') || '8106811285@ybl'; // UPI ID
+  const pa = searchParams.get('pa') || 'gokrishna98@okaxis'; // UPI ID
   const pn = searchParams.get('pn') || 'FoodAdmin'; // Payee name
   const am = searchParams.get('am') || '0'; // Amount
   const tn = searchParams.get('tn') || ''; // Transaction note

@@ -1,8 +1,8 @@
-// UPI Payment Service - Direct UPI Payment without Razorpay
+// UPI Payment Service - Direct UPI Payment
 
-// Your UPI ID
-const UPI_ID = '8106811285@ybl';
-const MERCHANT_NAME = 'FoodAdmin';
+// Get UPI config from environment variables
+const UPI_ID = process.env.UPI_ID || 'gokrishna98@okaxis';
+const MERCHANT_NAME = process.env.UPI_MERCHANT_NAME || 'FoodAdmin';
 const WEBSITE_URL = process.env.WEBSITE_URL || 'https://restarunt-bot.vercel.app';
 
 const upiPayment = {

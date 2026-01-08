@@ -4,7 +4,6 @@ const Customer = require('../models/Customer');
 const whatsapp = require('../services/whatsapp');
 const brevoMail = require('../services/brevoMail');
 const googleSheets = require('../services/googleSheets');
-const razorpayService = require('../services/razorpay');
 const chatbotImagesService = require('../services/chatbotImages');
 const authMiddleware = require('../middleware/auth');
 const router = express.Router();
@@ -376,68 +375,36 @@ router.post('/:orderId/refund/approve', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'No pending refund request for this order' });
     }
 
-    const razorpayService = require('../services/razorpay');
     const paymentId = order.razorpayPaymentId || order.paymentId;
     
-    // Process refund via Razorpay if UPI payment with payment ID
+    // UPI direct payment orders cannot be refunded automatically
+    if (order.paymentMethod === 'upi' && order.upiVerified) {
+      return res.status(400).json({ error: 'UPI paid orders cannot be refunded automatically. Please process manually.' });
+    }
+    
+    // Legacy Razorpay orders - automatic refunds no longer supported
     if (order.paymentMethod === 'upi' && paymentId) {
-      try {
-        const refund = await razorpayService.refund(paymentId, order.refundAmount || order.totalAmount);
-        order.refundId = refund.id;
-        order.refundStatus = 'completed';
-        order.paymentStatus = 'refunded';
-        order.status = 'refunded';
-        order.statusUpdatedAt = new Date();
-        order.refundProcessedAt = new Date();
-        order.trackingUpdates.push({ status: 'refunded', message: `Refund of ₹${order.refundAmount || order.totalAmount} processed. Refund ID: ${refund.id}` });
-        
-        // Notify customer
-        try {
-          await whatsapp.sendButtons(order.customer.phone,
-            `✅ *Refund Successful!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.refundAmount || order.totalAmount}\nRefund ID: ${refund.id}\n\n💳 Amount will be credited to your account shortly.`,
-            [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
-          );
-        } catch (e) {
-          console.error('WhatsApp notification failed:', e.message);
-        }
-      } catch (refundError) {
-        console.error('Razorpay refund error:', refundError);
-        order.refundStatus = 'failed';
-        order.status = 'refund_failed';
-        order.paymentStatus = 'refund_failed';
-        order.trackingUpdates.push({ status: 'refund_failed', message: refundError.message });
-        await order.save();
-        
-        // Sync to Google Sheets with failed status
-        googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed').catch(err => 
-          console.error('Google Sheets sync error:', err)
-        );
-        
-        // Emit event for real-time updates
-        const dataEvents = require('../services/eventEmitter');
-        dataEvents.emit('orders');
-        dataEvents.emit('dashboard');
-        
-        return res.status(500).json({ error: 'Refund processing failed: ' + refundError.message });
-      }
-    } else {
-      // COD refund - manual process
-      order.refundStatus = 'completed';
-      order.paymentStatus = 'refunded';
-      order.status = 'refunded';
-      order.statusUpdatedAt = new Date();
-      order.refundProcessedAt = new Date();
-      order.trackingUpdates.push({ status: 'refunded', message: `COD refund of ₹${order.refundAmount || order.totalAmount} approved` });
-      
-      // Notify customer
-      try {
-        await whatsapp.sendButtons(order.customer.phone,
-          `✅ *Refund Approved!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.refundAmount || order.totalAmount}\n\n💵 Our team will contact you for the refund process.`,
-          [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
-        );
-      } catch (e) {
-        console.error('WhatsApp notification failed:', e.message);
-      }
+      return res.status(400).json({ 
+        error: 'Automatic refunds are no longer supported. Please contact support for manual refund processing.' 
+      });
+    }
+    
+    // COD refund - manual process
+    order.refundStatus = 'completed';
+    order.paymentStatus = 'refunded';
+    order.status = 'refunded';
+    order.statusUpdatedAt = new Date();
+    order.refundProcessedAt = new Date();
+    order.trackingUpdates.push({ status: 'refunded', message: `COD refund of ₹${order.refundAmount || order.totalAmount} approved` });
+    
+    // Notify customer
+    try {
+      await whatsapp.sendButtons(order.customer.phone,
+        `✅ *Refund Approved!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.refundAmount || order.totalAmount}\n\n💵 Our team will contact you for the refund process.`,
+        [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
+      );
+    } catch (e) {
+      console.error('WhatsApp notification failed:', e.message);
     }
     
     await order.save();

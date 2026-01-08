@@ -9,7 +9,7 @@ const googleSheets = require('../services/googleSheets');
 const whatsapp = require('../services/whatsapp');
 const chatbotImagesService = require('../services/chatbotImages');
 const dataEvents = require('../services/eventEmitter');
-const razorpayService = require('../services/razorpay');
+const upiPayment = require('../services/upiPayment');
 const multer = require('multer');
 const router = express.Router();
 
