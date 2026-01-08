@@ -185,9 +185,11 @@ export default function OrderDetailScreen({ route, navigation }) {
                   <Text style={styles.actionButtonText}>Mark as {STATUS_LABELS[nextStatus]}</Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity style={styles.cancelButton} onPress={cancelOrder}>
-                <Text style={styles.cancelButtonText}>Cancel Order</Text>
-              </TouchableOpacity>
+              {order.paymentMethod === 'cod' && (
+                <TouchableOpacity style={styles.cancelButton} onPress={cancelOrder}>
+                  <Text style={styles.cancelButtonText}>Cancel Order</Text>
+                </TouchableOpacity>
+              )}
             </>
           )}
         </View>

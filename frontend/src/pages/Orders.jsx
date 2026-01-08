@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   RefreshCw, X, Truck, ChefHat, CheckCircle, Package, Clock, 
-  Filter, Search, MapPin, CreditCard, ExternalLink, ChevronDown, ChevronUp
+  Filter, Search, MapPin, CreditCard, ExternalLink, ChevronDown, ChevronUp, User
 } from 'lucide-react';
 import api from '../api';
 
@@ -241,10 +241,27 @@ export default function Orders() {
   const [searchTerm, setSearchTerm] = useState('');
   const [updatedIds, setUpdatedIds] = useState(new Set());
   const [updatingId, setUpdatingId] = useState(null);
+  const [deliveryPartners, setDeliveryPartners] = useState([]);
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [loadingPartners, setLoadingPartners] = useState(false);
   const ordersRef = useRef([]);
   const hashRef = useRef('');
   const initialLoadDone = useRef(false);
   const isPollingRef = useRef(false);
+
+  // Fetch delivery partners
+  const fetchDeliveryPartners = useCallback(async () => {
+    setLoadingPartners(true);
+    try {
+      const res = await api.get('/deliveryboy');
+      setDeliveryPartners(res.data.filter(p => p.isActive));
+    } catch (err) {
+      console.error('Failed to fetch delivery partners');
+    } finally {
+      setLoadingPartners(false);
+    }
+  }, []);
 
   // Fetch full orders data
   const fetchOrders = useCallback(async (isBackground = false) => {
@@ -321,7 +338,8 @@ export default function Orders() {
       eventSource.onmessage = (event) => {
         try {
           const { type } = JSON.parse(event.data);
-          if (type === 'orders') checkForUpdates();
+          // Immediately fetch orders when SSE event received for instant updates
+          if (type === 'orders') fetchOrders(true);
         } catch (e) {}
       };
       
@@ -362,7 +380,7 @@ export default function Orders() {
     };
   }, [checkForUpdates]);
 
-  const updateStatus = async (id, status) => {
+  const updateStatus = async (id, status, deliveryBoyId = null) => {
     if (updatingId === id) return;
     setUpdatingId(id);
     setOrders(prev => prev.map(o => o._id === id ? { ...o, status } : o));
@@ -371,11 +389,36 @@ export default function Orders() {
     setTimeout(() => setUpdatedIds(new Set()), 1500);
     try {
       await api.put(`/orders/${id}/status`, { status });
+      // If delivery partner is selected, assign them
+      if (deliveryBoyId) {
+        await api.put(`/orders/${id}/assign-delivery`, { deliveryBoyId });
+      }
     } catch (err) {
       alert('Failed to update status');
       fetchOrders(false);
     } finally {
       setUpdatingId(null);
+      setShowDeliveryModal(false);
+      setSelectedOrder(null);
+    }
+  };
+
+  // Handle start preparing with delivery partner selection
+  const handleStartPreparing = async (order) => {
+    if (order.serviceType === 'delivery') {
+      setSelectedOrder(order);
+      await fetchDeliveryPartners();
+      setShowDeliveryModal(true);
+    } else {
+      // For non-delivery orders, just update status
+      updateStatus(order._id, 'preparing');
+    }
+  };
+
+  // Assign delivery partner and update status
+  const assignAndPrepare = (deliveryBoyId) => {
+    if (selectedOrder) {
+      updateStatus(selectedOrder._id, 'preparing', deliveryBoyId);
     }
   };
 
@@ -398,39 +441,6 @@ export default function Orders() {
     }
   };
 
-  const approvePayment = async (orderId, orderDbId) => {
-    if (updatingId) return;
-    if (!confirm(`Approve payment for order ${orderId}? This will confirm the order and notify the customer.`)) return;
-    
-    setUpdatingId(orderDbId);
-    try {
-      await api.post(`/orders/${orderId}/payment/approve`);
-      fetchOrders(false);
-    } catch (err) {
-      alert(err.response?.data?.error || 'Failed to approve payment');
-      fetchOrders(false);
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  const rejectPayment = async (orderId, orderDbId) => {
-    if (updatingId) return;
-    const reason = prompt('Enter rejection reason (optional):');
-    if (reason === null) return; // User cancelled
-    
-    setUpdatingId(orderDbId);
-    try {
-      await api.post(`/orders/${orderId}/payment/reject`, { reason });
-      fetchOrders(false);
-    } catch (err) {
-      alert(err.response?.data?.error || 'Failed to reject payment');
-      fetchOrders(false);
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
   const filteredOrders = orders.filter(order => 
     order.orderId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     order.customer?.phone?.includes(searchTerm)
@@ -439,13 +449,25 @@ export default function Orders() {
   const getActionButton = (order) => {
     if (order.refundStatus === 'completed' || order.refundStatus === 'pending') return null;
     const actions = {
-      confirmed: { label: 'Start Preparing', status: 'preparing', color: 'bg-orange-500 hover:bg-orange-600' },
+      confirmed: { label: 'Start Preparing', status: 'preparing', color: 'bg-orange-500 hover:bg-orange-600', useDeliveryModal: true },
       preparing: { label: 'Mark Ready', status: 'ready', color: 'bg-purple-500 hover:bg-purple-600' },
       ready: { label: 'Out for Delivery', status: 'out_for_delivery', color: 'bg-indigo-500 hover:bg-indigo-600' },
       out_for_delivery: { label: 'Mark Delivered', status: 'delivered', color: 'bg-green-500 hover:bg-green-600' },
     };
     const action = actions[order.status];
     if (!action) return null;
+    
+    // For confirmed orders with delivery service type, show delivery partner modal
+    if (action.useDeliveryModal && order.serviceType === 'delivery') {
+      return (
+        <button onClick={() => handleStartPreparing(order)} disabled={updatingId === order._id}
+          className={`${action.color} text-white px-4 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2`}>
+          {updatingId === order._id && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+          {action.label}
+        </button>
+      );
+    }
+    
     return (
       <button onClick={() => updateStatus(order._id, action.status)} disabled={updatingId === order._id}
         className={`${action.color} text-white px-4 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2`}>
@@ -573,8 +595,8 @@ export default function Orders() {
                     </div>
                   )}
 
-                  {/* Refund Status */}
-                  {order.refundStatus && order.refundStatus !== 'none' && (
+                  {/* Refund Status - only show for COD orders */}
+                  {order.refundStatus && order.refundStatus !== 'none' && order.paymentMethod === 'cod' && (
                     <div className={`flex items-center justify-between gap-2 p-2.5 rounded-lg ${order.refundStatus === 'pending' ? 'bg-amber-50' : order.refundStatus === 'completed' ? 'bg-green-50' : 'bg-red-50'}`}>
                       <div className="flex items-center gap-2">
                         <RefreshCw className={`w-3.5 h-3.5 ${order.refundStatus === 'pending' ? 'text-amber-600' : order.refundStatus === 'completed' ? 'text-green-600' : 'text-red-600'}`} />
@@ -599,49 +621,6 @@ export default function Orders() {
                     </div>
                   )}
 
-                  {/* Payment Verification Pending */}
-                  {order.paymentStatus === 'verification_pending' && (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-yellow-600" />
-                        <span className="text-sm font-semibold text-yellow-800">Payment Verification Required</span>
-                      </div>
-                      {order.upiTransactionId && (
-                        <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2">
-                          <CreditCard className="w-4 h-4 text-yellow-600" />
-                          <span className="text-xs text-dark-500">Transaction ID:</span>
-                          <span className="text-sm font-mono font-medium text-dark-800">{order.upiTransactionId}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2 pt-1">
-                        <button 
-                          onClick={() => approvePayment(order.orderId, order._id)} 
-                          disabled={updatingId === order._id}
-                          className="flex-1 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                        >
-                          {updatingId === order._id ? (
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          ) : (
-                            <CheckCircle className="w-4 h-4" />
-                          )}
-                          Approve
-                        </button>
-                        <button 
-                          onClick={() => rejectPayment(order.orderId, order._id)} 
-                          disabled={updatingId === order._id}
-                          className="flex-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                        >
-                          {updatingId === order._id ? (
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          ) : (
-                            <X className="w-4 h-4" />
-                          )}
-                          Reject
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
                   {/* Payment & Total */}
                   <div className="flex items-center justify-between pt-2 border-t border-dark-100 mt-auto">
                     <div className="flex items-center gap-2">
@@ -651,14 +630,10 @@ export default function Orders() {
                         order.paymentStatus === 'paid' ? 'bg-green-50 text-green-700' : 
                         order.paymentStatus === 'refunded' ? 'bg-red-100 text-red-700' : 
                         order.paymentStatus === 'refund_processing' ? 'bg-pink-50 text-pink-700' :
-                        order.paymentStatus === 'verification_pending' ? 'bg-yellow-50 text-yellow-700' :
-                        order.paymentStatus === 'rejected' ? 'bg-red-50 text-red-700' :
                         'bg-amber-50 text-amber-700'
                       }`}>
                         {order.paymentMethod === 'cod' && order.paymentStatus === 'pending' ? 'COD' : 
                          order.paymentStatus === 'refund_processing' ? 'Refund Processing' : 
-                         order.paymentStatus === 'verification_pending' ? '⏳ Awaiting Verification' :
-                         order.paymentStatus === 'rejected' ? 'Rejected' :
                          order.paymentStatus}
                       </span>
                     </div>
@@ -667,10 +642,10 @@ export default function Orders() {
                 </div>
 
                 {/* Actions */}
-                {(getActionButton(order) || (!['delivered', 'cancelled', 'refunded'].includes(order.status) && order.refundStatus !== 'completed' && order.refundStatus !== 'pending')) && (
+                {(getActionButton(order) || (!['delivered', 'cancelled', 'refunded'].includes(order.status) && order.refundStatus !== 'completed' && order.refundStatus !== 'pending' && order.paymentMethod === 'cod')) && (
                   <div className="px-5 pb-5 flex items-center gap-2">
                     {getActionButton(order)}
-                    {!['delivered', 'cancelled', 'refunded'].includes(order.status) && order.refundStatus !== 'completed' && order.refundStatus !== 'pending' && (
+                    {!['delivered', 'cancelled', 'refunded'].includes(order.status) && order.refundStatus !== 'completed' && order.refundStatus !== 'pending' && order.paymentMethod === 'cod' && (
                       <button onClick={() => { if(confirm('Cancel this order?')) updateStatus(order._id, 'cancelled'); }} disabled={updatingId === order._id}
                         className="px-4 py-2 bg-white border border-dark-200 text-dark-600 rounded-xl text-sm font-medium hover:bg-dark-50 hover:border-dark-300 transition-all disabled:opacity-50">
                         Cancel
@@ -681,6 +656,78 @@ export default function Orders() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Delivery Partner Selection Modal */}
+      {showDeliveryModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[80vh] overflow-hidden">
+            <div className="px-5 py-4 border-b border-dark-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-dark-900">Select Delivery Partner</h3>
+                <p className="text-sm text-dark-400">Order #{selectedOrder?.orderId}</p>
+              </div>
+              <button onClick={() => { setShowDeliveryModal(false); setSelectedOrder(null); }} 
+                className="w-8 h-8 rounded-lg bg-dark-100 flex items-center justify-center hover:bg-dark-200 transition-colors">
+                <X className="w-4 h-4 text-dark-500" />
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto max-h-[60vh]">
+              {loadingPartners ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="w-8 h-8 border-3 border-primary-200 border-t-primary-500 rounded-full animate-spin" />
+                </div>
+              ) : deliveryPartners.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-dark-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <User className="w-8 h-8 text-dark-300" />
+                  </div>
+                  <p className="text-dark-500">No active delivery partners</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {deliveryPartners.map(partner => (
+                    <button
+                      key={partner._id}
+                      onClick={() => assignAndPrepare(partner._id)}
+                      disabled={updatingId}
+                      className="w-full flex items-center gap-3 p-3 bg-dark-50 hover:bg-primary-50 rounded-xl transition-colors text-left disabled:opacity-50"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {partner.photo ? (
+                          <img src={partner.photo} alt={partner.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-lg font-bold text-primary-700">{partner.name[0].toUpperCase()}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-dark-900 truncate">{partner.name}</p>
+                        <p className="text-sm text-dark-400">{partner.phone}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`w-2 h-2 rounded-full ${partner.isOnline ? 'bg-green-500' : 'bg-dark-300'}`}></span>
+                          <span className="text-xs text-dark-400">{partner.isOnline ? 'Online' : 'Offline'}</span>
+                          {partner.avgRating > 0 && (
+                            <span className="text-xs text-amber-600">⭐ {partner.avgRating.toFixed(1)}</span>
+                          )}
+                        </div>
+                      </div>
+                      <Truck className="w-5 h-5 text-dark-300" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="px-5 py-4 border-t border-dark-100 bg-dark-50">
+              <button 
+                onClick={() => updateStatus(selectedOrder?._id, 'preparing')}
+                disabled={updatingId}
+                className="w-full py-2.5 text-sm font-medium text-dark-500 hover:text-dark-700 transition-colors disabled:opacity-50"
+              >
+                Skip - Assign Later
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

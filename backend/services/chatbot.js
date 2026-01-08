@@ -3,7 +3,7 @@ const MenuItem = require('../models/MenuItem');
 const Category = require('../models/Category');
 const Order = require('../models/Order');
 const whatsapp = require('./whatsapp');
-const upiPayment = require('./upiPayment');
+const razorpayService = require('./razorpay');
 const googleSheets = require('./googleSheets');
 const groqAi = require('./groqAi');
 const chatbotImagesService = require('./chatbotImages');
@@ -2279,25 +2279,6 @@ const chatbot = {
         );
         state.currentStep = 'select_food_type_order';
       }
-      // ========== PAYMENT VERIFICATION BUTTONS ==========
-      else if (selection === 'send_transaction_id') {
-        // User clicked to send transaction ID
-        await whatsapp.sendMessage(phone,
-          `📝 *Send Transaction ID*\n\n` +
-          `Please type your *12-digit Transaction ID* or *UTR number* from your payment app.\n\n` +
-          `Example: 123456789012`
-        );
-        // Stay in awaiting_payment state - the transaction ID handler will process the next message
-      }
-      else if (selection === 'send_screenshot') {
-        // User clicked to send screenshot
-        await whatsapp.sendMessage(phone,
-          `📸 *Send Screenshot*\n\n` +
-          `Please send a *screenshot* of your payment confirmation from your UPI app.\n\n` +
-          `Make sure the Transaction ID and amount are visible in the screenshot.`
-        );
-        // Stay in awaiting_payment state - the screenshot handler will process the next image
-      }
 
       // ========== CATEGORY SELECTION ==========
       else if (selection === 'cat_all') {
@@ -2546,180 +2527,8 @@ const chatbot = {
         }
       }
 
-      // ========== UPI TRANSACTION VERIFICATION ==========
-      // Handle UPI transaction ID or screenshot after payment
-      else if (state.currentStep === 'awaiting_payment' && state.awaitingUpiTransaction && state.pendingOrderId) {
-        const upiPayment = require('./upiPayment');
-        const order = await Order.findOne({ orderId: state.pendingOrderId });
-        
-        if (!order) {
-          await whatsapp.sendButtons(phone, '❌ Order not found. Please try again.', [
-            { id: 'home', text: 'Main Menu' }
-          ]);
-          state.currentStep = 'main_menu';
-          state.awaitingUpiTransaction = false;
-        } else if (order.upiVerified) {
-          // Already verified
-          await whatsapp.sendButtons(phone, 
-            `✅ Your order #${order.orderId} is already confirmed!\n\nWe're preparing your order.`,
-            [
-              { id: 'track_order', text: 'Track Order' },
-              { id: 'home', text: 'Main Menu' }
-            ]
-          );
-          state.currentStep = 'order_confirmed';
-          state.awaitingUpiTransaction = false;
-        } else if (messageType === 'image') {
-          // Handle screenshot verification
-          console.log('🖼️ Processing payment screenshot for order:', order.orderId);
-          
-          // Increment verification attempts
-          order.upiVerificationAttempts = (order.upiVerificationAttempts || 0) + 1;
-          await order.save();
-          
-          await whatsapp.sendMessage(phone, '🔍 Analyzing your payment screenshot...');
-          
-          try {
-            // Download the image from WhatsApp
-            const metaCloud = require('./metaCloud');
-            const imageBuffer = await metaCloud.downloadMedia(message.id);
-            
-            // Analyze screenshot using Groq Vision
-            const result = await upiPayment.analyzeScreenshot(imageBuffer, order.totalAmount, order.orderId);
-            console.log('📸 Screenshot analysis result:', result);
-            
-            if (result.found && result.transactionId) {
-              // Transaction ID found in screenshot - mark as submitted for verification (NOT auto-confirmed)
-              order.upiTransactionId = result.transactionId;
-              order.upiVerified = false; // NOT verified yet - admin needs to verify
-              order.paymentMethod = 'upi';
-              order.paymentStatus = 'verification_pending';
-              order.status = 'pending'; // Keep as pending until admin verifies
-              order.trackingUpdates.push({
-                status: 'payment_submitted',
-                message: `Payment screenshot submitted. Transaction ID: ${result.transactionId}. Awaiting admin verification.`,
-                timestamp: new Date()
-              });
-              await order.save();
-              
-              // Emit events
-              const dataEvents = require('./eventEmitter');
-              dataEvents.emit('orders');
-              dataEvents.emit('dashboard');
-              
-              // Update Google Sheets
-              googleSheets.updateOrderStatus(order.orderId, 'pending', 'verification_pending').catch(err =>
-                console.error('Google Sheets sync error:', err)
-              );
-              
-              const pendingImageUrl = await chatbotImagesService.getImageUrl('payment_pending') || await chatbotImagesService.getImageUrl('order_details');
-              
-              let confirmMsg = `⏳ *Payment Submitted!*\n\n`;
-              confirmMsg += `📦 Order ID: *${order.orderId}*\n`;
-              confirmMsg += `💳 Transaction ID: *${result.transactionId}*\n`;
-              confirmMsg += `💰 Amount: *₹${order.totalAmount}*\n\n`;
-              confirmMsg += `🔍 Your payment is being verified by our team.\n`;
-              confirmMsg += `📱 You'll receive a confirmation message once approved.\n\n`;
-              confirmMsg += `⏱️ Usually takes 5-10 minutes.`;
-              
-              await sendWithOptionalImage(phone, pendingImageUrl, confirmMsg, [
-                { id: 'track_order', text: 'Track Order' },
-                { id: 'home', text: 'Main Menu' }
-              ]);
-              
-              state.currentStep = 'payment_verification_pending';
-              state.awaitingUpiTransaction = false;
-            } else {
-              // Invalid or couldn't find transaction ID in screenshot
-              const reason = result.reason || 'Could not find transaction ID in screenshot';
-              await whatsapp.sendButtons(phone,
-                `⚠️ *Couldn't Read Screenshot*\n\n${reason}\n\nPlease try:\n1️⃣ Send a clearer screenshot\n2️⃣ Or type your Transaction ID/UTR number`,
-                [
-                  { id: 'send_transaction_id', text: '📝 Type Transaction ID' },
-                  { id: 'send_screenshot', text: '📸 Try Again' }
-                ]
-              );
-              // Stay in awaiting_payment state
-            }
-          } catch (imgErr) {
-            console.error('Screenshot processing error:', imgErr);
-            await whatsapp.sendButtons(phone,
-              `⚠️ Couldn't process the image.\n\nPlease send your *Transaction ID* or *UTR number* as text instead.`,
-              [
-                { id: 'send_transaction_id', text: '📝 Type Transaction ID' },
-                { id: 'home', text: 'Main Menu' }
-              ]
-            );
-          }
-        } else {
-          // Handle text-based transaction ID
-          console.log('📝 Processing transaction ID text for order:', order.orderId, 'Message:', msg);
-          
-          // Increment verification attempts
-          order.upiVerificationAttempts = (order.upiVerificationAttempts || 0) + 1;
-          await order.save();
-          
-          // Analyze the text for transaction ID
-          const result = await upiPayment.analyzeTransactionId(message, order.totalAmount, order.orderId);
-          console.log('📝 Transaction ID analysis result:', result);
-          
-          if (result.found && result.transactionId) {
-            // Transaction ID found - mark as submitted for verification (NOT auto-confirmed)
-            order.upiTransactionId = result.transactionId;
-            order.upiVerified = false; // NOT verified yet - admin needs to verify
-            order.paymentStatus = 'verification_pending';
-            order.status = 'pending'; // Keep as pending until admin verifies
-            order.trackingUpdates.push({
-              status: 'payment_submitted',
-              message: `Transaction ID submitted: ${result.transactionId}. Awaiting verification.`,
-              timestamp: new Date()
-            });
-            await order.save();
-            
-            // Emit events
-            const dataEvents = require('./eventEmitter');
-            dataEvents.emit('orders');
-            dataEvents.emit('dashboard');
-            
-            // Update Google Sheets
-            googleSheets.updateOrderStatus(order.orderId, 'pending', 'verification_pending').catch(err =>
-              console.error('Google Sheets sync error:', err)
-            );
-            
-            const pendingImageUrl = await chatbotImagesService.getImageUrl('payment_pending') || await chatbotImagesService.getImageUrl('order_details');
-            
-            let confirmMsg = `⏳ *Payment Submitted!*\n\n`;
-            confirmMsg += `📦 Order ID: *${order.orderId}*\n`;
-            confirmMsg += `💳 Transaction ID: *${result.transactionId}*\n`;
-            confirmMsg += `💰 Amount: *₹${order.totalAmount}*\n\n`;
-            confirmMsg += `🔍 Your payment is being verified by our team.\n`;
-            confirmMsg += `📱 You'll receive a confirmation message once approved.\n\n`;
-            confirmMsg += `⏱️ Usually takes 5-10 minutes.`;
-            
-            await sendWithOptionalImage(phone, pendingImageUrl, confirmMsg, [
-              { id: 'track_order', text: 'Track Order' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
-            
-            state.currentStep = 'payment_verification_pending';
-            state.awaitingUpiTransaction = false;
-          } else {
-            // Couldn't find valid transaction ID
-            await whatsapp.sendButtons(phone,
-              `⚠️ *Couldn't find Transaction ID*\n\nPlease send:\n1️⃣ Your *12-digit Transaction ID* or *UTR number*\n2️⃣ Or a *screenshot* of your payment confirmation\n\nExample: 123456789012`,
-              [
-                { id: 'send_transaction_id', text: '📝 Try Again' },
-                { id: 'send_screenshot', text: '📸 Send Screenshot' }
-              ]
-            );
-            // Stay in awaiting_payment state
-          }
-        }
-      }
-
       // ========== NUMBER SELECTION (for paginated categories) ==========
-      // Skip if awaiting UPI transaction - numbers could be transaction IDs
-      else if (/^\d+$/.test(msg) && !state.awaitingUpiTransaction && (state.currentStep === 'select_category' || state.currentStep === 'browsing_menu')) {
+      else if (/^\d+$/.test(msg) && (state.currentStep === 'select_category' || state.currentStep === 'browsing_menu')) {
         const catNum = parseInt(msg);
         const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
         const categories = [...new Set(filteredItems.flatMap(m => Array.isArray(m.category) ? m.category : [m.category]))];
@@ -2754,8 +2563,7 @@ const chatbot = {
       }
 
       // ========== NUMBER SELECTION (for paginated items) ==========
-      // Skip if awaiting UPI transaction - numbers could be transaction IDs
-      else if (/^\d+$/.test(msg) && !state.awaitingUpiTransaction && (state.currentStep === 'viewing_items' || state.currentStep === 'selecting_item')) {
+      else if (/^\d+$/.test(msg) && (state.currentStep === 'viewing_items' || state.currentStep === 'selecting_item')) {
         const itemNum = parseInt(msg);
         const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
         let itemsList = filteredItems;
@@ -2784,254 +2592,6 @@ const chatbot = {
           await whatsapp.sendButtons(phone, `❌ Invalid number. Please enter a number between 1 and ${itemsList.length}.`, [
             { id: 'home', text: 'Main Menu' }
           ]);
-        }
-      }
-
-      // ========== UPI SCREENSHOT VERIFICATION (IMAGE MESSAGE) ==========
-      // Check if user is awaiting payment and sent screenshot
-      // This MUST be before food search
-      else if (state.awaitingUpiTransaction && state.pendingOrderId && messageType === 'image') {
-        const upiPayment = require('./upiPayment');
-        const order = await Order.findOne({ orderId: state.pendingOrderId });
-        
-        if (!order) {
-          await whatsapp.sendButtons(phone, '❌ Order not found. Please try again.', [
-            { id: 'home', text: 'Main Menu' }
-          ]);
-          state.currentStep = 'main_menu';
-          state.awaitingUpiTransaction = false;
-          state.pendingOrderId = null;
-        } else if (order.upiVerified) {
-          await whatsapp.sendButtons(phone, 
-            `✅ Your order #${order.orderId} is already confirmed!\n\nWe're preparing your order.`,
-            [
-              { id: 'track_order', text: 'Track Order' },
-              { id: 'home', text: 'Main Menu' }
-            ]
-          );
-          state.currentStep = 'order_confirmed';
-          state.awaitingUpiTransaction = false;
-        } else {
-          // Handle screenshot verification
-          console.log('🖼️ Processing payment screenshot for order:', order.orderId);
-          
-          // Increment verification attempts
-          order.upiVerificationAttempts = (order.upiVerificationAttempts || 0) + 1;
-          await order.save();
-          
-          await whatsapp.sendMessage(phone, '🔍 Analyzing your payment screenshot...');
-          
-          try {
-            // Download the image from WhatsApp
-            const metaCloud = require('./metaCloud');
-            const imageBuffer = await metaCloud.downloadMedia(message.id);
-            
-            // Analyze screenshot using Groq Vision
-            const result = await upiPayment.analyzeScreenshot(imageBuffer, order.totalAmount, order.orderId);
-            console.log('📸 Screenshot analysis result:', result);
-            
-            if (result.found && result.transactionId) {
-              // Transaction ID found in screenshot - mark as submitted for verification
-              order.upiTransactionId = result.transactionId;
-              order.upiVerified = false; // NOT verified yet - admin needs to verify
-              order.paymentMethod = 'upi';
-              order.paymentStatus = 'verification_pending';
-              order.status = 'pending'; // Keep as pending until admin verifies
-              order.trackingUpdates.push({
-                status: 'payment_submitted',
-                message: `Payment screenshot submitted. Transaction ID: ${result.transactionId}. Awaiting verification.`,
-                timestamp: new Date()
-              });
-              await order.save();
-              
-              // Emit events
-              const dataEvents = require('./eventEmitter');
-              dataEvents.emit('orders');
-              dataEvents.emit('dashboard');
-              
-              // Update Google Sheets
-              googleSheets.updateOrderStatus(order.orderId, 'pending', 'verification_pending').catch(err =>
-                console.error('Google Sheets sync error:', err)
-              );
-              
-              const pendingImageUrl = await chatbotImagesService.getImageUrl('payment_pending') || await chatbotImagesService.getImageUrl('order_details');
-              
-              let confirmMsg = `⏳ *Payment Submitted!*\n\n`;
-              confirmMsg += `📦 Order ID: *${order.orderId}*\n`;
-              confirmMsg += `💳 Transaction ID: *${result.transactionId}*\n`;
-              confirmMsg += `💰 Amount: *₹${order.totalAmount}*\n\n`;
-              confirmMsg += `🔍 Your payment is being verified by our team.\n`;
-              confirmMsg += `📱 You'll receive a confirmation message once approved.\n\n`;
-              confirmMsg += `⏱️ Usually takes 5-10 minutes.`;
-              
-              await sendWithOptionalImage(phone, pendingImageUrl, confirmMsg, [
-                { id: 'track_order', text: 'Track Order' },
-                { id: 'home', text: 'Main Menu' }
-              ]);
-              
-              state.currentStep = 'payment_verification_pending';
-              state.awaitingUpiTransaction = false;
-            } else {
-              // Invalid or couldn't verify
-              const reason = result.reason || 'Could not verify payment from screenshot';
-              await whatsapp.sendButtons(phone,
-                `⚠️ *Verification Failed*\n\n${reason}\n\nPlease try:\n1️⃣ Send a clearer screenshot\n2️⃣ Or send your Transaction ID/UTR number as text`,
-                [
-                  { id: 'home', text: 'Main Menu' }
-                ]
-              );
-            }
-          } catch (imgErr) {
-            console.error('Screenshot processing error:', imgErr);
-            await whatsapp.sendButtons(phone,
-              `⚠️ Couldn't process the image.\n\nPlease send your *Transaction ID* or *UTR number* as text instead.`,
-              [
-                { id: 'home', text: 'Main Menu' }
-              ]
-            );
-          }
-        }
-      }
-
-      // ========== UPI TRANSACTION VERIFICATION (TEXT MESSAGE) ==========
-      // Check if user is awaiting payment and sent transaction ID as text
-      // This MUST be before food search to avoid treating transaction IDs as food searches
-      // Also check for pending orders even if state is not set (in case of state loss)
-      else if (messageType === 'text' && (
-        (state.awaitingUpiTransaction && state.pendingOrderId) || 
-        /^\d{10,}$/.test(msg)
-      )) {
-        // If message looks like a transaction ID (10+ digits), check for pending orders
-        const upiPayment = require('./upiPayment');
-        let order = null;
-        let shouldProcessAsTransaction = false;
-        
-        if (state.pendingOrderId) {
-          order = await Order.findOne({ orderId: state.pendingOrderId });
-          if (order && !order.upiVerified && order.paymentStatus === 'pending') {
-            shouldProcessAsTransaction = true;
-          }
-        }
-        
-        // If no order from state, check for recent pending UPI orders for this customer
-        if (!order && /^\d{10,}$/.test(msg)) {
-          order = await Order.findOne({ 
-            'customer.phone': phone, 
-            paymentMethod: 'upi',
-            paymentStatus: 'pending',
-            status: 'pending'
-          }).sort({ createdAt: -1 });
-          
-          if (order) {
-            console.log('📝 Found pending UPI order from DB:', order.orderId);
-            state.pendingOrderId = order.orderId;
-            state.awaitingUpiTransaction = true;
-            shouldProcessAsTransaction = true;
-          }
-        }
-        
-        if (shouldProcessAsTransaction && order) {
-          if (order.upiVerified) {
-            // Already verified
-            await whatsapp.sendButtons(phone, 
-              `✅ Your order #${order.orderId} is already confirmed!\n\nWe're preparing your order.`,
-              [
-                { id: 'track_order', text: 'Track Order' },
-                { id: 'home', text: 'Main Menu' }
-              ]
-            );
-            state.currentStep = 'order_confirmed';
-            state.awaitingUpiTransaction = false;
-          } else {
-            // Analyze the text for transaction ID
-            console.log('📝 Analyzing text for transaction ID:', msg, 'Order:', order.orderId);
-            const result = await upiPayment.analyzeTransactionId(msg, order.totalAmount, order.orderId);
-            console.log('📝 Transaction ID analysis result:', result);
-          
-            if (result.found && result.transactionId) {
-              // Transaction ID found - mark as submitted for verification (NOT auto-confirmed)
-              order.upiTransactionId = result.transactionId;
-              order.upiVerified = false; // NOT verified yet - admin needs to verify
-              order.paymentMethod = 'upi';
-              order.paymentStatus = 'verification_pending';
-              order.status = 'pending'; // Keep as pending until admin verifies
-              order.trackingUpdates.push({ 
-                status: 'payment_submitted', 
-                message: `Transaction ID submitted: ${result.transactionId}. Awaiting verification.`,
-                timestamp: new Date()
-              });
-              await order.save();
-              
-              // Emit event for real-time updates
-              const dataEvents = require('./eventEmitter');
-              dataEvents.emit('orders');
-              dataEvents.emit('dashboard');
-              
-              // Sync to Google Sheets
-              googleSheets.updateOrderStatus(order.orderId, 'pending', 'verification_pending').catch(err =>
-                console.error('Google Sheets sync error:', err)
-              );
-              
-              // Send pending verification message
-              const pendingImageUrl = await chatbotImagesService.getImageUrl('payment_pending') || await chatbotImagesService.getImageUrl('order_details');
-              const confirmMsg = `⏳ *Payment Submitted!*\n\n` +
-                `📦 Order ID: *${order.orderId}*\n` +
-                `💳 Transaction ID: *${result.transactionId}*\n` +
-                `💰 Amount: *₹${order.totalAmount}*\n\n` +
-                `🔍 Your payment is being verified by our team.\n` +
-                `📱 You'll receive a confirmation message once approved.\n\n` +
-                `⏱️ Usually takes 5-10 minutes.`;
-              
-              await sendWithOptionalImage(phone, pendingImageUrl, confirmMsg, [
-                { id: 'track_order', text: 'Track Order' },
-                { id: 'home', text: 'Main Menu' }
-              ]);
-              
-              state.currentStep = 'payment_verification_pending';
-              state.awaitingUpiTransaction = false;
-            } else {
-              // Couldn't find valid transaction ID
-              await whatsapp.sendButtons(phone,
-                `⚠️ *Couldn't find Transaction ID*\n\nPlease send:\n1️⃣ Your *12-digit Transaction ID* or *UTR number*\n2️⃣ Or a *screenshot* of your payment confirmation\n\nExample: 123456789012`,
-                [
-                  { id: 'send_transaction_id', text: '📝 Try Again' },
-                  { id: 'send_screenshot', text: '📸 Send Screenshot' }
-                ]
-              );
-              // Stay in awaiting_payment state
-            }
-          }
-        } else {
-          // No pending order found - fall through to food search
-          // This is handled by the next else block
-          const searchResult = await this.smartSearch(msg, menuItems);
-          
-          if (searchResult && searchResult.items && searchResult.items.length > 0) {
-            const matchingItems = searchResult.items;
-            const displayLabel = searchResult.label 
-              ? (searchResult.searchTerm ? `${searchResult.label} "${searchResult.searchTerm}"` : searchResult.label)
-              : (searchResult.searchTerm ? `"${searchResult.searchTerm}"` : 'Search Results');
-            
-            if (matchingItems.length === 1) {
-              const item = matchingItems[0];
-              state.selectedItem = item._id.toString();
-              await this.sendItemDetails(phone, menuItems, item._id.toString());
-              state.currentStep = 'viewing_item_details';
-            } else {
-              state.searchTag = msg.trim();
-              state.tagSearchResults = matchingItems.map(i => i._id.toString());
-              await this.sendSearchResults(phone, matchingItems, displayLabel);
-              state.currentStep = 'viewing_search_results';
-            }
-          } else {
-            await whatsapp.sendButtons(phone, 
-              `🔍 No items found for "${msg}".\n\nTry browsing our menu!`,
-              [
-                { id: 'place_order', text: 'Browse Menu' },
-                { id: 'home', text: 'Main Menu' }
-              ]
-            );
-          }
         }
       }
 
@@ -4133,8 +3693,7 @@ const chatbot = {
         latitude: freshCustomer.deliveryAddress.latitude,
         longitude: freshCustomer.deliveryAddress.longitude
       } : null,
-      paymentMethod: 'upi',
-      trackingUpdates: [{ status: 'pending', message: 'Order created, awaiting UPI payment' }]
+      trackingUpdates: [{ status: 'pending', message: 'Order created, awaiting payment' }]
     });
     await order.save();
 
@@ -4180,54 +3739,26 @@ const chatbot = {
     customer.orderHistory = freshCustomer.orderHistory;
     
     state.pendingOrderId = orderId;
-    state.awaitingUpiTransaction = true;
 
-    // Get UPI payment details
-    const upiPayment = require('./upiPayment');
-    const upiId = upiPayment.getUpiId();
-    const qrCodeUrl = upiPayment.generateQrCodeUrl(total, orderId);
-    const paymentPageUrl = upiPayment.generatePaymentPageUrl(total, orderId);
+    try {
+      const paymentLink = await razorpayService.createPaymentLink(total, orderId, freshCustomer.phone, freshCustomer.name);
+      order.razorpayOrderId = paymentLink.id;
+      await order.save();
 
-    // Build order summary message with UPI details
-    let orderMsg = `🧾 *ORDER #${orderId}*\n`;
-    orderMsg += `⏳ Awaiting Payment\n\n`;
-    items.forEach(item => {
-      orderMsg += `*${item.name}*\n`;
-      orderMsg += `Qty: ${item.quantity} × ₹${item.price} = ₹${item.quantity * item.price}\n\n`;
-    });
-    orderMsg += `━━━━━━━━━━━━━━━\n`;
-    orderMsg += `*Total: ₹${total}*\n\n`;
-    orderMsg += `💳 UPI ID: *${upiId}*\n`;
-    orderMsg += `💰 Amount: *₹${total}*\n`;
-    orderMsg += `📝 Reference: Order_${orderId}`;
-
-    const orderDetailsImageUrl = await chatbotImagesService.getImageUrl('order_details');
-    
-    // Send order with Pay CTA button - opens UPI app with details
-    await sendWithOptionalImageCta(phone, orderDetailsImageUrl, orderMsg, `Pay ₹${total}`, paymentPageUrl, 'Opens your UPI app');
-    
-    // Send QR code as alternative (for scanning from another device or gallery)
-    await whatsapp.sendImage(phone, qrCodeUrl, 
-      `📱 *Or scan this QR*\n\n` +
-      `• From another device: Scan directly\n` +
-      `• Same phone: Long-press → Open with UPI app\n\n` +
-      `Amount: ₹${total}`
-    );
-
-    // Send follow-up message asking for transaction ID with clickable buttons
-    setTimeout(async () => {
+      const orderDetailsImageUrl = await chatbotImagesService.getImageUrl('order_details');
+      await whatsapp.sendOrder(phone, order, items, paymentLink.short_url, orderDetailsImageUrl);
+      return { success: true };
+    } catch (err) {
+      console.error('Payment link error:', err);
       await whatsapp.sendButtons(phone,
-        `📝 *After Payment*\n\nOnce you complete the payment, tap a button below:\n\n` +
-        `We'll verify and confirm your order! ✅`,
+        `✅ *Order Created!*\n\nOrder ID: ${orderId}\nTotal: ₹${total}\n\n⚠️ Payment link unavailable.\nPlease contact us.`,
         [
-          { id: 'send_transaction_id', text: '📝 Send Transaction ID' },
-          { id: 'send_screenshot', text: '📸 Send Screenshot' }
-        ],
-        'Verify your payment'
+          { id: 'order_status', text: 'Check Status' },
+          { id: 'home', text: 'Main Menu' }
+        ]
       );
-    }, 3000);
-
-    return { success: true };
+      return { success: true };
+    }
   },
 
 
@@ -4348,21 +3879,15 @@ const chatbot = {
 
   async sendCancelOptions(phone) {
     // Can cancel orders that are not delivered, cancelled, or refunded
-    // Exclude UPI paid orders (they cannot be cancelled)
     const orders = await Order.find({
       'customer.phone': phone,
-      status: { $in: ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery'] },
-      // Exclude UPI verified orders
-      $or: [
-        { upiVerified: { $ne: true } },
-        { paymentMethod: 'cod' }
-      ]
+      status: { $in: ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery'] }
     }).sort({ createdAt: -1 }).limit(5);
 
     if (!orders.length) {
       const noOrdersImageUrl = await chatbotImagesService.getImageUrl('no_orders_found');
       await sendWithOptionalImage(phone, noOrdersImageUrl,
-        '❌ *No Orders to Cancel*\n\nNo cancellable orders found.\n\nNote: UPI paid orders cannot be cancelled.',
+        '❌ *No Orders to Cancel*\n\nNo cancellable orders found.',
         [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
       );
       return;
@@ -4378,7 +3903,7 @@ const chatbot = {
     const rows = orders.map(o => ({
       rowId: `cancel_${o.orderId}`,
       title: o.orderId,
-      description: `₹${o.totalAmount} - ${o.status} - ${o.paymentMethod === 'cod' ? 'COD' : 'Pending'}`
+      description: `₹${o.totalAmount} - ${o.status} - ${o.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}`
     }));
 
     await whatsapp.sendList(phone,
@@ -4407,15 +3932,6 @@ const chatbot = {
       return;
     }
 
-    // UPI orders (paid via direct UPI) cannot be cancelled or refunded
-    if (order.paymentMethod === 'upi' && order.upiVerified) {
-      await whatsapp.sendButtons(phone,
-        `❌ *Cannot Cancel*\n\nUPI paid orders cannot be cancelled.\n\nPlease contact support if you have any issues.`,
-        [{ id: 'track_order', text: 'Track Order' }, { id: 'home', text: 'Main Menu' }]
-      );
-      return;
-    }
-
     order.status = 'cancelled';
     order.statusUpdatedAt = new Date(); // For auto-cleanup
     order.cancellationReason = 'Customer requested';
@@ -4428,10 +3944,28 @@ const chatbot = {
     
     let msg = `✅ *Order Cancelled*\n\nOrder ${orderId} has been cancelled.`;
     
-    // For COD orders, no refund needed
-    if (order.paymentMethod === 'cod') {
-      // Just cancel, no refund processing
-      order.paymentStatus = 'cancelled';
+    // Mark refund as pending if already paid via UPI/online (wait for Razorpay webhook)
+    if (order.paymentStatus === 'paid' && order.razorpayPaymentId) {
+      console.log('💰 Marking refund as pending for order:', orderId, 'Payment ID:', order.razorpayPaymentId);
+      
+      order.refundStatus = 'pending';
+      order.refundAmount = order.totalAmount;
+      order.refundRequestedAt = new Date();
+      order.paymentStatus = 'refund_processing';
+      order.trackingUpdates.push({ 
+        status: 'refund_processing', 
+        message: `Refund of ₹${order.totalAmount} is being processed`, 
+        timestamp: new Date() 
+      });
+      
+      msg += `\n\n💰 *Refund Processing*\nAmount: ₹${order.totalAmount}\n\n⏱️ Your refund will be processed within 5-7 business days.`;
+      console.log('⏳ Refund pending for order:', orderId);
+    } else if (order.paymentStatus === 'paid' && !order.razorpayPaymentId) {
+      // Paid but no payment ID (edge case)
+      order.refundStatus = 'pending';
+      order.refundAmount = order.totalAmount;
+      order.paymentStatus = 'refund_processing';
+      msg += `\n\n💰 *Refund Processing*\nYour refund of ₹${order.totalAmount} is being processed. Our team will contact you shortly.`;
     }
     
     await order.save();
@@ -4457,22 +3991,16 @@ const chatbot = {
 
   async sendRefundOptions(phone) {
     // Show paid orders that are not delivered and not already refunded
-    // Exclude UPI direct payment orders (they cannot be refunded)
     const orders = await Order.find({
       'customer.phone': phone,
       paymentStatus: 'paid',
       status: { $nin: ['delivered', 'refunded'] },
-      refundStatus: { $ne: 'completed' },
-      // Exclude UPI direct payment orders
-      $or: [
-        { upiVerified: { $ne: true } },
-        { paymentMethod: 'cod' }
-      ]
+      refundStatus: { $ne: 'completed' }
     }).sort({ createdAt: -1 }).limit(5);
 
     if (!orders.length) {
       await whatsapp.sendButtons(phone,
-        '💰 *No Refundable Orders*\n\nNo orders available for refund.\n\nNote: UPI paid orders and delivered orders cannot be refunded.',
+        '💰 *No Refundable Orders*\n\nNo paid orders available for refund.\n\nNote: Delivered orders cannot be refunded.',
         [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
       );
       return;
@@ -4493,9 +4021,9 @@ const chatbot = {
 
     await whatsapp.sendList(phone,
       'Request Refund',
-      `You have ${orders.length} orders. Select which one to refund.`,
+      `You have ${orders.length} paid orders. Select which one to refund.`,
       'Select Order',
-      [{ title: 'Orders', rows }]
+      [{ title: 'Paid Orders', rows }]
     );
   },
 
@@ -4504,15 +4032,6 @@ const chatbot = {
     
     if (!order) {
       await whatsapp.sendButtons(phone, '❌ Order not found.', [{ id: 'home', text: 'Main Menu' }]);
-      return;
-    }
-
-    // UPI direct payment orders cannot be refunded
-    if (order.paymentMethod === 'upi' && order.upiVerified) {
-      await whatsapp.sendButtons(phone, 
-        '❌ *Cannot Refund*\n\nUPI paid orders cannot be refunded.\n\nPlease contact support if you have any issues.',
-        [{ id: 'track_order', text: 'Track Order' }, { id: 'home', text: 'Main Menu' }]
-      );
       return;
     }
 
@@ -4540,35 +4059,30 @@ const chatbot = {
       return;
     }
 
-    // For COD orders, just cancel - no refund needed
-    if (order.paymentMethod === 'cod') {
-      order.status = 'cancelled';
-      order.paymentStatus = 'cancelled';
-      order.statusUpdatedAt = new Date();
-      order.trackingUpdates.push({ status: 'cancelled', message: 'Order cancelled by customer', timestamp: new Date() });
-      await order.save();
-      
-      // Emit events
-      const dataEvents = require('./eventEmitter');
-      dataEvents.emit('orders');
-      dataEvents.emit('dashboard');
-      
-      // Sync to Google Sheets
-      googleSheets.updateOrderStatus(order.orderId, 'cancelled', 'cancelled').catch(err => 
-        console.error('Google Sheets sync error:', err)
-      );
-      
-      await whatsapp.sendButtons(phone,
-        `✅ *Order Cancelled*\n\nOrder ${orderId} has been cancelled.`,
-        [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
-      );
-      return;
-    }
+    // Mark refund as pending (wait for Razorpay to process)
+    order.refundStatus = 'pending';
+    order.refundAmount = order.totalAmount;
+    order.status = 'cancelled';
+    order.paymentStatus = 'refund_processing';
+    order.statusUpdatedAt = new Date();
+    order.refundRequestedAt = new Date();
+    order.trackingUpdates.push({ status: 'refund_processing', message: `Refund of ₹${order.totalAmount} requested`, timestamp: new Date() });
+    
+    await order.save();
+    
+    // Emit event for real-time updates
+    const dataEvents = require('./eventEmitter');
+    dataEvents.emit('orders');
+    dataEvents.emit('dashboard');
+    
+    // Sync to Google Sheets
+    googleSheets.updateOrderStatus(order.orderId, 'cancelled', 'refund_processing').catch(err => 
+      console.error('Google Sheets sync error:', err)
+    );
 
-    // This shouldn't happen with the new UPI flow, but handle edge cases
-    await whatsapp.sendButtons(phone,
-      `⚠️ *Cannot Process Refund*\n\nPlease contact support for assistance with order ${orderId}.`,
-      [{ id: 'home', text: 'Main Menu' }]
+    await whatsapp.sendButtons(phone, 
+      `✅ *Refund Requested!*\n\nOrder: ${orderId}\nAmount: ₹${order.totalAmount}\n\n⏱️ Your refund will be processed within 5-7 business days.`,
+      [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
     );
   },
 

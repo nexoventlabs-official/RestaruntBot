@@ -37,11 +37,6 @@ const orderSchema = new mongoose.Schema({
   razorpayPaymentId: { type: String },
   codPaymentLinkId: { type: String }, // For COD orders paid via QR
   codPaymentId: { type: String }, // Payment ID for COD UPI payments
-  // UPI Direct Payment fields
-  upiTransactionId: { type: String }, // Customer's UPI transaction ID
-  upiVerified: { type: Boolean, default: false }, // Whether transaction ID is verified
-  upiVerifiedAt: { type: Date }, // When transaction was verified
-  upiVerificationAttempts: { type: Number, default: 0 }, // Number of verification attempts
   refundId: { type: String },
   refundAmount: { type: Number },
   refundStatus: { type: String, enum: ['none', 'pending', 'scheduled', 'approved', 'completed', 'rejected', 'failed'], default: 'none' },

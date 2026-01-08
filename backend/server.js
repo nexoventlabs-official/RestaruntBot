@@ -104,6 +104,7 @@ dataEvents.on('orders', () => broadcast('orders'));
 dataEvents.on('dashboard', () => broadcast('dashboard'));
 dataEvents.on('customers', () => broadcast('customers'));
 dataEvents.on('menu', () => broadcast('menu'));
+dataEvents.on('deliveryboys', () => broadcast('deliveryboys'));
 
 // Test endpoint for Google Sheets sync
 app.get('/api/test-sheets/:orderId/:status', async (req, res) => {
