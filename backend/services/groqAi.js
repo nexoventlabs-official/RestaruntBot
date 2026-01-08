@@ -312,7 +312,7 @@ Expected: ₹500
 Output: {"verified": false, "transactionId": null, "amount": 450, "reason": "Amount mismatch: expected ₹500, got ₹450"}`
         }, {
           role: 'user',
-          content": `Verify payment:\nText: "${text}"\nExpected Amount: ₹${expectedAmount}\nOrder ID: ${orderId}`
+          content: `Verify payment:\nText: "${text}"\nExpected Amount: ₹${expectedAmount}\nOrder ID: ${orderId}`
         }],
         model: 'llama-3.1-8b-instant',
         max_tokens: 200,
