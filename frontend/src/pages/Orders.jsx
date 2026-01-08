@@ -398,6 +398,39 @@ export default function Orders() {
     }
   };
 
+  const approvePayment = async (orderId, orderDbId) => {
+    if (updatingId) return;
+    if (!confirm(`Approve payment for order ${orderId}? This will confirm the order and notify the customer.`)) return;
+    
+    setUpdatingId(orderDbId);
+    try {
+      await api.post(`/orders/${orderId}/payment/approve`);
+      fetchOrders(false);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to approve payment');
+      fetchOrders(false);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const rejectPayment = async (orderId, orderDbId) => {
+    if (updatingId) return;
+    const reason = prompt('Enter rejection reason (optional):');
+    if (reason === null) return; // User cancelled
+    
+    setUpdatingId(orderDbId);
+    try {
+      await api.post(`/orders/${orderId}/payment/reject`, { reason });
+      fetchOrders(false);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to reject payment');
+      fetchOrders(false);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   const filteredOrders = orders.filter(order => 
     order.orderId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     order.customer?.phone?.includes(searchTerm)
@@ -566,6 +599,49 @@ export default function Orders() {
                     </div>
                   )}
 
+                  {/* Payment Verification Pending */}
+                  {order.paymentStatus === 'verification_pending' && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-yellow-600" />
+                        <span className="text-sm font-semibold text-yellow-800">Payment Verification Required</span>
+                      </div>
+                      {order.upiTransactionId && (
+                        <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2">
+                          <CreditCard className="w-4 h-4 text-yellow-600" />
+                          <span className="text-xs text-dark-500">Transaction ID:</span>
+                          <span className="text-sm font-mono font-medium text-dark-800">{order.upiTransactionId}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 pt-1">
+                        <button 
+                          onClick={() => approvePayment(order.orderId, order._id)} 
+                          disabled={updatingId === order._id}
+                          className="flex-1 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          {updatingId === order._id ? (
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          ) : (
+                            <CheckCircle className="w-4 h-4" />
+                          )}
+                          Approve
+                        </button>
+                        <button 
+                          onClick={() => rejectPayment(order.orderId, order._id)} 
+                          disabled={updatingId === order._id}
+                          className="flex-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          {updatingId === order._id ? (
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          ) : (
+                            <X className="w-4 h-4" />
+                          )}
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Payment & Total */}
                   <div className="flex items-center justify-between pt-2 border-t border-dark-100 mt-auto">
                     <div className="flex items-center gap-2">
@@ -575,10 +651,14 @@ export default function Orders() {
                         order.paymentStatus === 'paid' ? 'bg-green-50 text-green-700' : 
                         order.paymentStatus === 'refunded' ? 'bg-red-100 text-red-700' : 
                         order.paymentStatus === 'refund_processing' ? 'bg-pink-50 text-pink-700' :
+                        order.paymentStatus === 'verification_pending' ? 'bg-yellow-50 text-yellow-700' :
+                        order.paymentStatus === 'rejected' ? 'bg-red-50 text-red-700' :
                         'bg-amber-50 text-amber-700'
                       }`}>
                         {order.paymentMethod === 'cod' && order.paymentStatus === 'pending' ? 'COD' : 
                          order.paymentStatus === 'refund_processing' ? 'Refund Processing' : 
+                         order.paymentStatus === 'verification_pending' ? '⏳ Awaiting Verification' :
+                         order.paymentStatus === 'rejected' ? 'Rejected' :
                          order.paymentStatus}
                       </span>
                     </div>

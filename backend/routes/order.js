@@ -365,6 +365,127 @@ router.put('/:id/delivery-time', authMiddleware, async (req, res) => {
   }
 });
 
+// Approve payment verification by orderId (for UPI payments awaiting admin verification)
+router.post('/:orderId/payment/approve', authMiddleware, async (req, res) => {
+  try {
+    const order = await Order.findOne({ orderId: req.params.orderId });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    
+    if (order.paymentStatus !== 'verification_pending') {
+      return res.status(400).json({ error: 'No pending payment verification for this order' });
+    }
+
+    // Approve the payment
+    order.upiVerified = true;
+    order.upiVerifiedAt = new Date();
+    order.paymentStatus = 'paid';
+    order.status = 'confirmed';
+    order.trackingUpdates.push({ 
+      status: 'confirmed', 
+      message: `Payment verified by admin. Transaction ID: ${order.upiTransactionId}`,
+      timestamp: new Date()
+    });
+    await order.save();
+    
+    // Emit event for real-time updates
+    const dataEvents = require('../services/eventEmitter');
+    dataEvents.emit('orders');
+    dataEvents.emit('dashboard');
+    
+    // Sync to Google Sheets
+    googleSheets.updateOrderStatus(order.orderId, order.status, order.paymentStatus).catch(err => 
+      console.error('Google Sheets sync error:', err)
+    );
+    
+    // Send order confirmation message to customer
+    try {
+      const confirmedImageUrl = await chatbotImagesService.getImageUrl('payment_success');
+      
+      let confirmMsg = `✅ *Order Placed Successfully!*\n\n`;
+      confirmMsg += `📦 Order ID: *${order.orderId}*\n`;
+      confirmMsg += `💳 Transaction ID: *${order.upiTransactionId}*\n`;
+      confirmMsg += `💰 Amount: *₹${order.totalAmount}*\n\n`;
+      confirmMsg += `━━━━━━━━━━━━━━━\n`;
+      confirmMsg += `📋 *Order Details*\n`;
+      confirmMsg += `━━━━━━━━━━━━━━━\n`;
+      
+      order.items.forEach((item, index) => {
+        confirmMsg += `${index + 1}. ${item.name}\n`;
+        confirmMsg += `   ${item.quantity} × ₹${item.price} = ₹${item.quantity * item.price}\n`;
+      });
+      
+      confirmMsg += `━━━━━━━━━━━━━━━\n`;
+      confirmMsg += `\n🙏 Thank you! We're preparing your order.`;
+      
+      if (confirmedImageUrl) {
+        await whatsapp.sendImageWithButtons(order.customer.phone, confirmedImageUrl, confirmMsg, [
+          { id: 'track_order', text: 'Track Order' },
+          { id: 'home', text: 'Main Menu' }
+        ]);
+      } else {
+        await whatsapp.sendButtons(order.customer.phone, confirmMsg, [
+          { id: 'track_order', text: 'Track Order' },
+          { id: 'home', text: 'Main Menu' }
+        ]);
+      }
+    } catch (whatsappError) {
+      console.error('WhatsApp notification failed:', whatsappError.message);
+    }
+    
+    res.json({ success: true, order });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Reject payment verification by orderId
+router.post('/:orderId/payment/reject', authMiddleware, async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const order = await Order.findOne({ orderId: req.params.orderId });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    
+    if (order.paymentStatus !== 'verification_pending') {
+      return res.status(400).json({ error: 'No pending payment verification for this order' });
+    }
+
+    // Reject the payment
+    order.paymentStatus = 'rejected';
+    order.status = 'cancelled';
+    order.statusUpdatedAt = new Date();
+    order.trackingUpdates.push({ 
+      status: 'payment_rejected', 
+      message: reason || 'Payment verification rejected by admin',
+      timestamp: new Date()
+    });
+    await order.save();
+    
+    // Emit event for real-time updates
+    const dataEvents = require('../services/eventEmitter');
+    dataEvents.emit('orders');
+    dataEvents.emit('dashboard');
+    
+    // Sync to Google Sheets
+    googleSheets.updateOrderStatus(order.orderId, order.status, order.paymentStatus).catch(err => 
+      console.error('Google Sheets sync error:', err)
+    );
+    
+    // Notify customer
+    try {
+      await whatsapp.sendButtons(order.customer.phone,
+        `❌ *Payment Verification Failed*\n\nOrder: ${order.orderId}\n\nReason: ${reason || 'We could not verify your payment. Please try again or contact support.'}\n\nIf you have made the payment, please contact us with your transaction details.`,
+        [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
+      );
+    } catch (whatsappError) {
+      console.error('WhatsApp notification failed:', whatsappError.message);
+    }
+    
+    res.json({ success: true, order });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Approve refund by orderId
 router.post('/:orderId/refund/approve', authMiddleware, async (req, res) => {
   try {
