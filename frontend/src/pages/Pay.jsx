@@ -4,7 +4,6 @@ import { useSearchParams } from 'react-router-dom';
 function Pay() {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState('redirecting');
-  const [error, setError] = useState(null);
 
   // Get UPI parameters from URL
   const pa = searchParams.get('pa') || 'gokrishna98@okaxis'; // UPI ID
@@ -14,56 +13,107 @@ function Pay() {
   const tr = searchParams.get('tr') || ''; // Transaction reference
   const cu = searchParams.get('cu') || 'INR'; // Currency
 
-  // Build UPI intent URL
-  const upiUrl = `upi://pay?pa=${encodeURIComponent(pa)}&pn=${encodeURIComponent(pn)}&am=${am}&cu=${cu}&tn=${encodeURIComponent(tn)}&tr=${encodeURIComponent(tr)}`;
+  // Build standard UPI intent URL (works with all UPI apps)
+  const buildUpiUrl = () => {
+    const params = new URLSearchParams();
+    params.set('pa', pa);
+    params.set('pn', pn);
+    params.set('am', am);
+    params.set('cu', cu);
+    if (tn) params.set('tn', tn);
+    if (tr) params.set('tr', tr);
+    return `upi://pay?${params.toString()}`;
+  };
+
+  const upiUrl = buildUpiUrl();
 
   useEffect(() => {
-    // Try to redirect to UPI app
-    const redirectToUpi = () => {
-      try {
-        // Create hidden iframe to trigger UPI intent (works better on some devices)
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = upiUrl;
-        document.body.appendChild(iframe);
+    // Detect if on mobile
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    if (isMobile) {
+      // On mobile, try to open UPI app directly
+      // Use a small delay to ensure page is loaded
+      const timer = setTimeout(() => {
+        window.location.href = upiUrl;
+      }, 500);
 
-        // Also try direct location change after a small delay
-        setTimeout(() => {
-          window.location.href = upiUrl;
-        }, 100);
-
-        // Set timeout to show manual options if redirect doesn't work
-        setTimeout(() => {
-          setStatus('manual');
-        }, 3000);
-      } catch (err) {
-        console.error('UPI redirect error:', err);
+      // Show manual options after 2.5 seconds if app doesn't open
+      const fallbackTimer = setTimeout(() => {
         setStatus('manual');
-      }
-    };
+      }, 2500);
 
-    redirectToUpi();
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(fallbackTimer);
+      };
+    } else {
+      // On desktop, show manual options immediately
+      setStatus('manual');
+    }
   }, [upiUrl]);
 
-  // Handle manual app selection
-  const openApp = (appScheme) => {
-    let appUrl = '';
+  // Handle app selection - use intent:// scheme for Android
+  const openApp = (appPackage) => {
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     
-    switch (appScheme) {
-      case 'phonepe':
-        appUrl = `phonepe://pay?pa=${encodeURIComponent(pa)}&pn=${encodeURIComponent(pn)}&am=${am}&cu=${cu}&tn=${encodeURIComponent(tn)}`;
-        break;
-      case 'gpay':
-        appUrl = `tez://upi/pay?pa=${encodeURIComponent(pa)}&pn=${encodeURIComponent(pn)}&am=${am}&cu=${cu}&tn=${encodeURIComponent(tn)}`;
-        break;
-      case 'paytm':
-        appUrl = `paytmmp://pay?pa=${encodeURIComponent(pa)}&pn=${encodeURIComponent(pn)}&am=${am}&cu=${cu}&tn=${encodeURIComponent(tn)}`;
-        break;
-      default:
-        appUrl = upiUrl;
+    if (isAndroid) {
+      // Android: Use intent:// scheme which is more reliable
+      let intentUrl = '';
+      
+      switch (appPackage) {
+        case 'phonepe':
+          // PhonePe Android intent
+          intentUrl = `intent://pay?pa=${encodeURIComponent(pa)}&pn=${encodeURIComponent(pn)}&am=${am}&cu=${cu}&tn=${encodeURIComponent(tn)}&tr=${encodeURIComponent(tr)}#Intent;scheme=upi;package=com.phonepe.app;end`;
+          break;
+        case 'gpay':
+          // Google Pay Android intent
+          intentUrl = `intent://pay?pa=${encodeURIComponent(pa)}&pn=${encodeURIComponent(pn)}&am=${am}&cu=${cu}&tn=${encodeURIComponent(tn)}&tr=${encodeURIComponent(tr)}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`;
+          break;
+        case 'paytm':
+          // Paytm Android intent
+          intentUrl = `intent://pay?pa=${encodeURIComponent(pa)}&pn=${encodeURIComponent(pn)}&am=${am}&cu=${cu}&tn=${encodeURIComponent(tn)}&tr=${encodeURIComponent(tr)}#Intent;scheme=upi;package=net.one97.paytm;end`;
+          break;
+        default:
+          // Generic UPI intent - lets Android choose the app
+          intentUrl = upiUrl;
+      }
+      
+      window.location.href = intentUrl;
+    } else if (isIOS) {
+      // iOS: Use app-specific URL schemes
+      let appUrl = '';
+      
+      switch (appPackage) {
+        case 'phonepe':
+          appUrl = `phonepe://pay?pa=${encodeURIComponent(pa)}&pn=${encodeURIComponent(pn)}&am=${am}&cu=${cu}&tn=${encodeURIComponent(tn)}&tr=${encodeURIComponent(tr)}`;
+          break;
+        case 'gpay':
+          appUrl = `gpay://upi/pay?pa=${encodeURIComponent(pa)}&pn=${encodeURIComponent(pn)}&am=${am}&cu=${cu}&tn=${encodeURIComponent(tn)}&tr=${encodeURIComponent(tr)}`;
+          break;
+        case 'paytm':
+          appUrl = `paytm://pay?pa=${encodeURIComponent(pa)}&pn=${encodeURIComponent(pn)}&am=${am}&cu=${cu}&tn=${encodeURIComponent(tn)}&tr=${encodeURIComponent(tr)}`;
+          break;
+        default:
+          appUrl = upiUrl;
+      }
+      
+      window.location.href = appUrl;
+      
+      // Fallback to generic UPI after delay
+      setTimeout(() => {
+        window.location.href = upiUrl;
+      }, 1000);
+    } else {
+      // Desktop or unknown - use generic UPI URL
+      window.location.href = upiUrl;
     }
-    
-    window.location.href = appUrl;
+  };
+
+  // Try generic UPI (opens app chooser on Android)
+  const openGenericUpi = () => {
+    window.location.href = upiUrl;
   };
 
   return (
@@ -78,7 +128,8 @@ function Pay() {
               </svg>
             </div>
             <h1 className="text-2xl font-bold text-gray-800 mb-2">Opening UPI App...</h1>
-            <p className="text-gray-500">Please wait while we redirect you to your UPI app</p>
+            <p className="text-gray-500 mb-4">Please wait while we redirect you</p>
+            <p className="text-sm text-gray-400">Amount: ₹{am}</p>
           </div>
         )}
 
@@ -96,55 +147,55 @@ function Pay() {
             {/* Payment Details */}
             <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left">
               <div className="flex justify-between mb-2">
-                <span className="text-gray-500">UPI ID</span>
-                <span className="font-medium text-gray-800">{pa}</span>
+                <span className="text-gray-500">Pay to</span>
+                <span className="font-medium text-gray-800">{pn}</span>
               </div>
               <div className="flex justify-between mb-2">
-                <span className="text-gray-500">Amount</span>
-                <span className="font-bold text-green-600">₹{am}</span>
+                <span className="text-gray-500">UPI ID</span>
+                <span className="font-medium text-gray-800 text-sm">{pa}</span>
               </div>
-              {tn && (
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Note</span>
-                  <span className="font-medium text-gray-800">{tn}</span>
-                </div>
-              )}
+              <div className="flex justify-between">
+                <span className="text-gray-500">Amount</span>
+                <span className="font-bold text-green-600 text-lg">₹{am}</span>
+              </div>
             </div>
 
+            {/* Primary CTA - Open any UPI app */}
+            <button
+              onClick={openGenericUpi}
+              className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-4 px-6 rounded-xl transition-all mb-4 shadow-lg"
+            >
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+              </svg>
+              Pay ₹{am} with UPI
+            </button>
+
             {/* App Selection Buttons */}
-            <div className="space-y-3">
+            <p className="text-sm text-gray-500 mb-3">Or choose a specific app:</p>
+            <div className="grid grid-cols-3 gap-3">
               <button
                 onClick={() => openApp('phonepe')}
-                className="w-full flex items-center justify-center gap-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-4 px-6 rounded-xl transition-all"
+                className="flex flex-col items-center justify-center gap-2 bg-purple-50 hover:bg-purple-100 p-4 rounded-xl transition-all border border-purple-200"
               >
-                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/PhonePe_Logo.png/220px-PhonePe_Logo.png" alt="PhonePe" className="w-6 h-6 object-contain bg-white rounded" />
-                Pay with PhonePe
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/PhonePe_Logo.png/220px-PhonePe_Logo.png" alt="PhonePe" className="w-10 h-10 object-contain" />
+                <span className="text-xs font-medium text-purple-700">PhonePe</span>
               </button>
               
               <button
                 onClick={() => openApp('gpay')}
-                className="w-full flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-xl transition-all"
+                className="flex flex-col items-center justify-center gap-2 bg-blue-50 hover:bg-blue-100 p-4 rounded-xl transition-all border border-blue-200"
               >
-                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f2/Google_Pay_Logo.svg/220px-Google_Pay_Logo.svg.png" alt="GPay" className="w-6 h-6 object-contain" />
-                Pay with Google Pay
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f2/Google_Pay_Logo.svg/220px-Google_Pay_Logo.svg.png" alt="GPay" className="w-10 h-10 object-contain" />
+                <span className="text-xs font-medium text-blue-700">Google Pay</span>
               </button>
               
               <button
                 onClick={() => openApp('paytm')}
-                className="w-full flex items-center justify-center gap-3 bg-sky-500 hover:bg-sky-600 text-white font-semibold py-4 px-6 rounded-xl transition-all"
+                className="flex flex-col items-center justify-center gap-2 bg-sky-50 hover:bg-sky-100 p-4 rounded-xl transition-all border border-sky-200"
               >
-                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/Paytm_Logo_%28standalone%29.svg/220px-Paytm_Logo_%28standalone%29.svg.png" alt="Paytm" className="w-6 h-6 object-contain" />
-                Pay with Paytm
-              </button>
-              
-              <button
-                onClick={() => openApp('upi')}
-                className="w-full flex items-center justify-center gap-3 bg-gray-800 hover:bg-gray-900 text-white font-semibold py-4 px-6 rounded-xl transition-all"
-              >
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                </svg>
-                Other UPI Apps
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/Paytm_Logo_%28standalone%29.svg/220px-Paytm_Logo_%28standalone%29.svg.png" alt="Paytm" className="w-10 h-10 object-contain" />
+                <span className="text-xs font-medium text-sky-700">Paytm</span>
               </button>
             </div>
 
@@ -152,7 +203,7 @@ function Pay() {
             <div className="mt-6 pt-6 border-t border-gray-200">
               <p className="text-sm text-gray-500 mb-2">Or pay manually using UPI ID:</p>
               <div className="bg-gray-100 rounded-lg p-3 flex items-center justify-between">
-                <code className="text-purple-600 font-mono font-bold">{pa}</code>
+                <code className="text-purple-600 font-mono font-bold text-sm">{pa}</code>
                 <button 
                   onClick={() => {
                     navigator.clipboard.writeText(pa);
@@ -163,6 +214,7 @@ function Pay() {
                   Copy
                 </button>
               </div>
+              <p className="text-xs text-gray-400 mt-2">Open any UPI app → Send Money → Enter UPI ID → Pay ₹{am}</p>
             </div>
           </div>
         )}
