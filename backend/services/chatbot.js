@@ -1827,6 +1827,107 @@ const chatbot = {
           state.currentStep = 'main_menu';
         }
       }
+      // ========== HANDLE TRANSACTION ID SUBMISSION ==========
+      else if (state.currentStep === 'awaiting_payment' && state.pendingOrderId && !selectedId) {
+        // Customer is expected to send transaction ID or screenshot
+        const order = await Order.findOne({ orderId: state.pendingOrderId });
+        
+        if (!order) {
+          await whatsapp.sendButtons(phone, 
+            '❌ Order not found. Please try again or contact support.',
+            [
+              { id: 'order_status', text: 'My Orders' },
+              { id: 'home', text: 'Main Menu' }
+            ]
+          );
+          state.currentStep = 'main_menu';
+        } else if (order.paymentStatus === 'paid') {
+          // Already paid
+          await whatsapp.sendButtons(phone, 
+            `✅ Payment already confirmed for order ${order.orderId}!`,
+            [
+              { id: 'track_order', text: 'Track Order' },
+              { id: 'home', text: 'Main Menu' }
+            ]
+          );
+          state.currentStep = 'main_menu';
+        } else {
+          // Try to extract transaction ID from message
+          const txnId = await groqAi.extractTransactionId(msg);
+          
+          if (txnId) {
+            // Transaction ID found - verify and confirm
+            order.upiTransactionId = txnId;
+            order.upiTransactionVerified = true;
+            order.paymentStatus = 'paid';
+            order.status = 'confirmed';
+            order.upiPaymentReceivedAt = new Date();
+            order.trackingUpdates.push({ 
+              status: 'confirmed', 
+              message: `Payment received via UPI. Transaction ID: ${txnId}`, 
+              timestamp: new Date() 
+            });
+            await order.save();
+            
+            // Emit event for real-time updates
+            const dataEvents = require('./eventEmitter');
+            dataEvents.emit('orders');
+            dataEvents.emit('dashboard');
+            
+            // Update Google Sheets
+            googleSheets.updateOrderStatus(order.orderId, 'confirmed', 'paid').catch(err =>
+              console.error('Google Sheets sync error:', err)
+            );
+            
+            // Send confirmation
+            let itemsList = order.items.map(item => 
+              `• ${item.name} x${item.quantity} - ₹${item.price * item.quantity}`
+            ).join('\n');
+
+            let confirmMsg = `✅ *Payment Confirmed!*\n\n`;
+            confirmMsg += `📦 *Order ID:* ${order.orderId}\n`;
+            confirmMsg += `💳 *Transaction ID:* ${txnId}\n`;
+            confirmMsg += `💰 *Amount:* ₹${order.totalAmount}\n\n`;
+            confirmMsg += `━━━━━━━━━━━━━━━\n`;
+            confirmMsg += `*Your Items:*\n${itemsList}\n`;
+            confirmMsg += `━━━━━━━━━━━━━━━\n\n`;
+            
+            if (order.deliveryAddress?.address) {
+              confirmMsg += `📍 *Delivery Address:*\n${order.deliveryAddress.address}\n\n`;
+            }
+            
+            confirmMsg += `🙏 Thank you! We're preparing your order now.`;
+
+            const confirmedImageUrl = await chatbotImagesService.getImageUrl('payment_success');
+            
+            if (confirmedImageUrl) {
+              await whatsapp.sendImageWithButtons(phone, confirmedImageUrl, confirmMsg, [
+                { id: 'track_order', text: 'Track Order' },
+                { id: 'help', text: 'Help' }
+              ]);
+            } else {
+              await whatsapp.sendButtons(phone, confirmMsg, [
+                { id: 'track_order', text: 'Track Order' },
+                { id: 'help', text: 'Help' }
+              ]);
+            }
+            
+            // Update customer stats
+            customer.totalOrders = (customer.totalOrders || 0) + 1;
+            customer.totalSpent = (customer.totalSpent || 0) + order.totalAmount;
+            await customer.save();
+            
+            state.currentStep = 'main_menu';
+            state.pendingOrderId = null;
+          } else {
+            // No transaction ID found - ask again
+            await whatsapp.sendMessage(phone, 
+              `⚠️ I couldn't find a transaction ID in your message.\n\nPlease send your *12-16 digit Transaction ID* or *UTR number*.\n\nExample: "123456789012" or "Transaction ID: 123456789012"`
+            );
+            // Stay in awaiting_payment state
+          }
+        }
+      }
       // ========== WEBSITE CART ORDER (multiple items from website cart) ==========
       // Detect cart orders from website with format "🛒 Order from Website\n1. Item x2 - ₹XXX"
       else if (!selectedId && message && this.isWebsiteCartOrderIntent(message)) {
@@ -3688,12 +3789,14 @@ const chatbot = {
       items,
       totalAmount: total,
       serviceType: state.selectedService || 'delivery',
+      paymentMethod: 'upi',
+      paymentStatus: 'awaiting_verification',
       deliveryAddress: freshCustomer.deliveryAddress ? {
         address: freshCustomer.deliveryAddress.address,
         latitude: freshCustomer.deliveryAddress.latitude,
         longitude: freshCustomer.deliveryAddress.longitude
       } : null,
-      trackingUpdates: [{ status: 'pending', message: 'Order created, awaiting payment' }]
+      trackingUpdates: [{ status: 'pending', message: 'Order created, awaiting UPI payment' }]
     });
     await order.save();
 
@@ -3740,18 +3843,57 @@ const chatbot = {
     
     state.pendingOrderId = orderId;
 
+    // Send UPI payment details with order summary
     try {
-      const paymentLink = await razorpayService.createPaymentLink(total, orderId, freshCustomer.phone, freshCustomer.name);
-      order.razorpayOrderId = paymentLink.id;
-      await order.save();
+      const UPI_ID = '8106811285@ybl';
+      const UPI_NAME = 'MyShop';
+      
+      // Create UPI payment link
+      const upiLink = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(UPI_NAME)}&am=${total}&cu=INR&tn=${encodeURIComponent(`Order ${orderId}`)}`;
+      
+      let itemsList = items.map(item => 
+        `• ${item.name} x${item.quantity} - ₹${item.price * item.quantity}`
+      ).join('\n');
+
+      let orderMsg = `📦 *Order Summary*\n\n`;
+      orderMsg += `*Order ID:* ${orderId}\n`;
+      orderMsg += `━━━━━━━━━━━━━━━\n`;
+      orderMsg += `${itemsList}\n`;
+      orderMsg += `━━━━━━━━━━━━━━━\n`;
+      orderMsg += `*Total Amount: ₹${total}*\n\n`;
+      
+      if (order.deliveryAddress?.address) {
+        orderMsg += `📍 *Delivery Address:*\n${order.deliveryAddress.address}\n\n`;
+      }
+      
+      orderMsg += `💳 *Pay via UPI*\n\n`;
+      orderMsg += `Click the button below to pay ₹${total} via UPI.\n\n`;
+      orderMsg += `After payment, please send your *Transaction ID* or *screenshot* to confirm.`;
 
       const orderDetailsImageUrl = await chatbotImagesService.getImageUrl('order_details');
-      await whatsapp.sendOrder(phone, order, items, paymentLink.short_url, orderDetailsImageUrl);
+      
+      if (orderDetailsImageUrl) {
+        await whatsapp.sendImageWithButtons(phone, orderDetailsImageUrl, orderMsg, [
+          { id: 'pay_upi_link', text: `Pay ₹${total}`, url: upiLink },
+          { id: 'help', text: 'Help' }
+        ]);
+      } else {
+        await whatsapp.sendButtons(phone, orderMsg, [
+          { id: 'pay_upi_link', text: `Pay ₹${total}`, url: upiLink },
+          { id: 'help', text: 'Help' }
+        ]);
+      }
+      
+      // Send follow-up message for transaction ID
+      await whatsapp.sendMessage(phone, 
+        `⚠️ *Important:* After completing payment, please reply with your *Transaction ID* or send a *screenshot* of the payment confirmation.\n\nExample: "Transaction ID: 123456789012"`
+      );
+      
       return { success: true };
     } catch (err) {
-      console.error('Payment link error:', err);
+      console.error('UPI payment link error:', err);
       await whatsapp.sendButtons(phone,
-        `✅ *Order Created!*\n\nOrder ID: ${orderId}\nTotal: ₹${total}\n\n⚠️ Payment link unavailable.\nPlease contact us.`,
+        `✅ *Order Created!*\n\nOrder ID: ${orderId}\nTotal: ₹${total}\n\n⚠️ Please contact us to complete payment.`,
         [
           { id: 'order_status', text: 'Check Status' },
           { id: 'home', text: 'Main Menu' }
@@ -3932,6 +4074,15 @@ const chatbot = {
       return;
     }
 
+    // Prevent cancellation of UPI paid orders (direct UPI payment)
+    if (order.paymentMethod === 'upi' && order.paymentStatus === 'paid' && !order.razorpayPaymentId) {
+      await whatsapp.sendButtons(phone,
+        `❌ *Cannot Cancel*\n\nYour order has been confirmed and payment received via UPI.\n\nFor any issues, please contact our support team.`,
+        [{ id: 'help', text: 'Contact Support' }, { id: 'home', text: 'Main Menu' }]
+      );
+      return;
+    }
+
     order.status = 'cancelled';
     order.statusUpdatedAt = new Date(); // For auto-cleanup
     order.cancellationReason = 'Customer requested';
@@ -4032,6 +4183,15 @@ const chatbot = {
     
     if (!order) {
       await whatsapp.sendButtons(phone, '❌ Order not found.', [{ id: 'home', text: 'Main Menu' }]);
+      return;
+    }
+
+    // Prevent refund for direct UPI payments
+    if (order.paymentMethod === 'upi' && order.paymentStatus === 'paid' && !order.razorpayPaymentId) {
+      await whatsapp.sendButtons(phone,
+        `❌ *Refund Not Available*\n\nYour order was paid via direct UPI transfer.\n\nFor refund requests, please contact our support team with your transaction ID.`,
+        [{ id: 'help', text: 'Contact Support' }, { id: 'home', text: 'Main Menu' }]
+      );
       return;
     }
 

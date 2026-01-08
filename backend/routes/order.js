@@ -118,6 +118,13 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     if (!order) return res.status(404).json({ error: 'Order not found' });
     console.log('📋 Found order:', order.orderId, 'current status:', order.status, 'new status:', status);
 
+    // Prevent cancellation of UPI paid orders
+    if (status === 'cancelled' && order.paymentMethod === 'upi' && order.paymentStatus === 'paid') {
+      return res.status(400).json({ 
+        error: 'UPI paid orders cannot be cancelled. Customer has already completed payment. Please contact customer for refund request.' 
+      });
+    }
+
     const statusLabels = {
       pending: 'Pending', confirmed: 'Confirmed', preparing: 'Preparing', ready: 'Ready',
       out_for_delivery: 'On the Way', delivered: 'Delivered', cancelled: 'Cancelled', refunded: 'Refunded'
@@ -371,6 +378,13 @@ router.post('/:orderId/refund/approve', authMiddleware, async (req, res) => {
   try {
     const order = await Order.findOne({ orderId: req.params.orderId });
     if (!order) return res.status(404).json({ error: 'Order not found' });
+    
+    // Prevent refund for UPI paid orders (they should not have refund option)
+    if (order.paymentMethod === 'upi' && order.paymentStatus === 'paid' && !order.razorpayPaymentId) {
+      return res.status(400).json({ 
+        error: 'Direct UPI paid orders cannot be refunded automatically. Please process refund manually.' 
+      });
+    }
     
     if (!['pending', 'scheduled', 'failed'].includes(order.refundStatus)) {
       return res.status(400).json({ error: 'No pending refund request for this order' });
