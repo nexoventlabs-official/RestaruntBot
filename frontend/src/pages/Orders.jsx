@@ -254,10 +254,11 @@ export default function Orders() {
   const fetchDeliveryPartners = useCallback(async () => {
     setLoadingPartners(true);
     try {
-      const res = await api.get('/deliveryboy');
-      setDeliveryPartners(res.data.filter(p => p.isActive));
+      const res = await api.get('/delivery');
+      // Show all delivery partners, not just active ones
+      setDeliveryPartners(res.data || []);
     } catch (err) {
-      console.error('Failed to fetch delivery partners');
+      console.error('Failed to fetch delivery partners:', err);
     } finally {
       setLoadingPartners(false);
     }
@@ -683,36 +684,69 @@ export default function Orders() {
                   <div className="w-16 h-16 bg-dark-100 rounded-full flex items-center justify-center mx-auto mb-3">
                     <User className="w-8 h-8 text-dark-300" />
                   </div>
-                  <p className="text-dark-500">No active delivery partners</p>
+                  <p className="text-dark-500">No delivery partners found</p>
+                  <p className="text-dark-400 text-sm mt-1">Add delivery partners in the Delivery section</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {deliveryPartners.map(partner => (
+                  {/* Sort: Online first, then by name */}
+                  {[...deliveryPartners]
+                    .sort((a, b) => {
+                      if (a.isOnline && !b.isOnline) return -1;
+                      if (!a.isOnline && b.isOnline) return 1;
+                      return a.name.localeCompare(b.name);
+                    })
+                    .map(partner => (
                     <button
                       key={partner._id}
-                      onClick={() => assignAndPrepare(partner._id)}
-                      disabled={updatingId}
-                      className="w-full flex items-center gap-3 p-3 bg-dark-50 hover:bg-primary-50 rounded-xl transition-colors text-left disabled:opacity-50"
+                      onClick={() => partner.isActive && assignAndPrepare(partner._id)}
+                      disabled={updatingId || !partner.isActive}
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors text-left ${
+                        !partner.isActive 
+                          ? 'bg-dark-100 opacity-60 cursor-not-allowed' 
+                          : 'bg-dark-50 hover:bg-primary-50'
+                      } disabled:opacity-50`}
                     >
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center overflow-hidden flex-shrink-0">
-                        {partner.photo ? (
-                          <img src={partner.photo} alt={partner.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-lg font-bold text-primary-700">{partner.name[0].toUpperCase()}</span>
-                        )}
+                      <div className="relative">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 ${
+                          partner.isActive ? 'bg-gradient-to-br from-primary-100 to-primary-200' : 'bg-dark-200'
+                        }`}>
+                          {partner.photo ? (
+                            <img src={partner.photo} alt={partner.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className={`text-lg font-bold ${partner.isActive ? 'text-primary-700' : 'text-dark-400'}`}>
+                              {partner.name[0].toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        {/* Online/Offline indicator dot */}
+                        <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white ${
+                          partner.isOnline ? 'bg-green-500' : 'bg-dark-300'
+                        }`}></span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-dark-900 truncate">{partner.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-dark-900 truncate">{partner.name}</p>
+                          {!partner.isActive && (
+                            <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">Inactive</span>
+                          )}
+                        </div>
                         <p className="text-sm text-dark-400">{partner.phone}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className={`w-2 h-2 rounded-full ${partner.isOnline ? 'bg-green-500' : 'bg-dark-300'}`}></span>
-                          <span className="text-xs text-dark-400">{partner.isOnline ? 'Online' : 'Offline'}</span>
+                        <div className="flex items-center gap-3 mt-1">
+                          <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
+                            partner.isOnline 
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-dark-100 text-dark-500'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${partner.isOnline ? 'bg-green-500' : 'bg-dark-400'}`}></span>
+                            {partner.isOnline ? 'Online' : 'Offline'}
+                          </span>
                           {partner.avgRating > 0 && (
-                            <span className="text-xs text-amber-600">⭐ {partner.avgRating.toFixed(1)}</span>
+                            <span className="text-xs text-amber-600 font-medium">⭐ {partner.avgRating.toFixed(1)}</span>
                           )}
                         </div>
                       </div>
-                      <Truck className="w-5 h-5 text-dark-300" />
+                      <Truck className={`w-5 h-5 ${partner.isActive ? 'text-primary-400' : 'text-dark-300'}`} />
                     </button>
                   ))}
                 </div>
