@@ -1827,7 +1827,7 @@ const chatbot = {
           state.currentStep = 'main_menu';
         }
       }
-      // ========== HANDLE TRANSACTION ID SUBMISSION ==========
+      // ========== HANDLE TRANSACTION ID SUBMISSION (TEXT OR IMAGE) ==========
       else if (state.currentStep === 'awaiting_payment' && state.pendingOrderId && !selectedId) {
         // Customer is expected to send transaction ID or screenshot
         const order = await Order.findOne({ orderId: state.pendingOrderId });
@@ -1852,8 +1852,28 @@ const chatbot = {
           );
           state.currentStep = 'main_menu';
         } else {
-          // Try to extract transaction ID from message
-          const txnId = await groqAi.extractTransactionId(msg);
+          let txnId = null;
+          
+          // Handle image message (screenshot)
+          if (messageType === 'image' && typeof message === 'object' && message.url) {
+            console.log('📸 Payment screenshot received:', message.url);
+            
+            // Store screenshot URL
+            order.upiTransactionScreenshot = message.url;
+            
+            // For now, ask customer to also send transaction ID
+            // TODO: Implement OCR/Vision API to extract from image
+            await whatsapp.sendMessage(phone, 
+              `✅ Screenshot received!\n\nPlease also send your *Transaction ID* (12-16 digits) to confirm payment.\n\nExample: "123456789012"`
+            );
+            await order.save();
+            return; // Stay in awaiting_payment state
+          }
+          
+          // Handle text message (transaction ID)
+          if (messageType === 'text' || !messageType) {
+            txnId = await groqAi.extractTransactionId(msg);
+          }
           
           if (txnId) {
             // Transaction ID found - verify and confirm
@@ -1922,7 +1942,7 @@ const chatbot = {
           } else {
             // No transaction ID found - ask again
             await whatsapp.sendMessage(phone, 
-              `⚠️ I couldn't find a transaction ID in your message.\n\nPlease send your *12-16 digit Transaction ID* or *UTR number*.\n\nExample: "123456789012" or "Transaction ID: 123456789012"`
+              `⚠️ I couldn't find a transaction ID in your message.\n\nPlease send your *12-16 digit Transaction ID* or *UTR number*, or send a *screenshot* of your payment.\n\nExample: "123456789012" or "Transaction ID: 123456789012"`
             );
             // Stay in awaiting_payment state
           }
@@ -3848,7 +3868,7 @@ const chatbot = {
       const UPI_ID = '8106811285@ybl';
       const UPI_NAME = 'MyShop';
       
-      // Create UPI payment link
+      // Create UPI payment link (PhonePe format)
       const upiLink = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(UPI_NAME)}&am=${total}&cu=INR&tn=${encodeURIComponent(`Order ${orderId}`)}`;
       
       let itemsList = items.map(item => 
@@ -3872,22 +3892,23 @@ const chatbot = {
 
       const orderDetailsImageUrl = await chatbotImagesService.getImageUrl('order_details');
       
+      // Use CTA URL button to open UPI app directly
       if (orderDetailsImageUrl) {
-        await whatsapp.sendImageWithButtons(phone, orderDetailsImageUrl, orderMsg, [
-          { id: 'pay_upi_link', text: `Pay ₹${total}`, url: upiLink },
-          { id: 'help', text: 'Help' }
-        ]);
+        await whatsapp.sendImageWithCtaUrl(
+          phone, 
+          orderDetailsImageUrl, 
+          orderMsg, 
+          `Pay ₹${total}`, 
+          upiLink
+        );
       } else {
-        await whatsapp.sendButtons(phone, orderMsg, [
-          { id: 'pay_upi_link', text: `Pay ₹${total}`, url: upiLink },
-          { id: 'help', text: 'Help' }
-        ]);
+        await whatsapp.sendCtaUrl(
+          phone, 
+          orderMsg, 
+          `Pay ₹${total}`, 
+          upiLink
+        );
       }
-      
-      // Send follow-up message for transaction ID
-      await whatsapp.sendMessage(phone, 
-        `⚠️ *Important:* After completing payment, please reply with your *Transaction ID* or send a *screenshot* of the payment confirmation.\n\nExample: "Transaction ID: 123456789012"`
-      );
       
       return { success: true };
     } catch (err) {
