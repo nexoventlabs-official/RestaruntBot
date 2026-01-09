@@ -28,7 +28,7 @@ export default function Payment() {
 
   const fetchOrder = async () => {
     try {
-      const res = await api.get(`/api/public/order/${orderId}`);
+      const res = await api.get(`/public/order/${orderId}`);
       if (res.data) {
         setOrder(res.data);
         if (res.data.paymentStatus === 'paid') {
@@ -52,7 +52,7 @@ export default function Payment() {
 
   const createRazorpayOrder = async (orderData) => {
     try {
-      const res = await api.post('/api/payment/create-upi-order', {
+      const res = await api.post('/payment/create-upi-order', {
         orderId: orderData.orderId,
         amount: orderData.totalAmount
       });
@@ -139,7 +139,7 @@ export default function Payment() {
   const handlePaymentSuccess = async (response) => {
     try {
       // Verify payment on backend
-      await api.post('/api/payment/verify-upi', {
+      await api.post('/payment/verify-upi', {
         orderId: order.orderId,
         razorpay_payment_id: response.razorpay_payment_id,
         razorpay_order_id: response.razorpay_order_id,
