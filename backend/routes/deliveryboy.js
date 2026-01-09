@@ -831,10 +831,8 @@ router.post('/orders/:orderId/generate-qr', verifyDeliveryToken, async (req, res
     let upiQrUrl = null;
     
     if (merchantVpa) {
-      // Build a short but informative transaction note (UPI has ~50-100 char limit)
-      // Format: "Order ID | Items count | Delivery by Name"
-      const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
-      const shortNote = `${orderId} | ${itemCount} items | Via ${req.deliveryBoy.name.split(' ')[0]}`;
+      // Format: "Order ID | Via Delivery Partner Full Name"
+      const shortNote = `${orderId} | Via ${req.deliveryBoy.name}`;
       
       const upiParams = new URLSearchParams();
       upiParams.append('pa', merchantVpa);
