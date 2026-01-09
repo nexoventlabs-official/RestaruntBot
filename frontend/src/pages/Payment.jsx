@@ -3,14 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { CheckCircle } from 'lucide-react';
 import api from '../api';
 
-// UPI App icons
+// UPI App configurations with proper deep link schemes
 const UPI_APPS = [
-  { id: 'gpay', name: 'Google Pay', icon: '💳', package: 'com.google.android.apps.nbu.paisa.user', scheme: 'gpay://' },
-  { id: 'phonepe', name: 'PhonePe', icon: '💜', package: 'com.phonepe.app', scheme: 'phonepe://' },
-  { id: 'paytm', name: 'Paytm', icon: '🔵', package: 'net.one97.paytm', scheme: 'paytm://' },
-  { id: 'bhim', name: 'BHIM', icon: '🇮🇳', package: 'in.org.npci.upiapp', scheme: 'bhim://' },
-  { id: 'amazonpay', name: 'Amazon Pay', icon: '🛒', package: 'in.amazon.mShop.android.shopping', scheme: 'amazonpay://' },
-  { id: 'whatsapp', name: 'WhatsApp Pay', icon: '💬', package: 'com.whatsapp', scheme: 'whatsapp://' }
+  { id: 'gpay', name: 'Google Pay', icon: '💳' },
+  { id: 'phonepe', name: 'PhonePe', icon: '💜' },
+  { id: 'paytm', name: 'Paytm', icon: '🔵' },
+  { id: 'bhim', name: 'BHIM UPI', icon: '🇮🇳' },
+  { id: 'cred', name: 'CRED', icon: '⚫' },
+  { id: 'other', name: 'Other UPI', icon: '📱' }
 ];
 
 export default function Payment() {
@@ -23,10 +23,32 @@ export default function Payment() {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
   const [razorpayOrder, setRazorpayOrder] = useState(null);
+  const [checkingPayment, setCheckingPayment] = useState(false);
 
   useEffect(() => {
     fetchOrder();
   }, [orderId]);
+
+  // Poll for payment status after UPI app redirect
+  useEffect(() => {
+    let interval;
+    if (checkingPayment) {
+      interval = setInterval(async () => {
+        try {
+          const res = await api.get(`/public/order/${orderId}`);
+          if (res.data?.paymentStatus === 'paid') {
+            setCheckingPayment(false);
+            setIsPaid(true);
+            setOrder(res.data);
+            clearInterval(interval);
+          }
+        } catch (err) {
+          console.error('Payment check error:', err);
+        }
+      }, 3000); // Check every 3 seconds
+    }
+    return () => clearInterval(interval);
+  }, [checkingPayment, orderId]);
 
   const fetchOrder = async () => {
     try {
@@ -38,7 +60,6 @@ export default function Payment() {
         } else if (res.data.status === 'cancelled') {
           setError('This order has been cancelled.');
         } else {
-          // Create Razorpay order for UPI intent
           await createRazorpayOrder(res.data);
         }
       } else {
@@ -64,14 +85,60 @@ export default function Payment() {
     }
   };
 
-  const handleUPIPayment = async (app) => {
-    if (!razorpayOrder || !order) return;
+  // Generate UPI intent URL
+  const generateUPIUrl = () => {
+    if (!order || !razorpayOrder) return null;
     
-    setSelectedApp(app?.id || 'upi');
+    // Use merchant VPA from backend or fallback
+    const vpa = razorpayOrder.merchantVpa;
+    if (!vpa) return null;
+    
+    const merchantName = razorpayOrder.merchantName || 'Restaurant';
+    const amount = order.totalAmount.toFixed(2);
+    const txnRef = razorpayOrder.razorpayOrderId;
+    const txnNote = `Order ${order.orderId}`;
+    
+    // Build UPI URL with proper encoding
+    const params = new URLSearchParams();
+    params.append('pa', vpa);
+    params.append('pn', merchantName);
+    params.append('am', amount);
+    params.append('cu', 'INR');
+    params.append('tn', txnNote);
+    params.append('tr', txnRef);
+    
+    return `upi://pay?${params.toString()}`;
+  };
+
+  // Open UPI app directly
+  const openUPIApp = async (app) => {
+    if (!order || !razorpayOrder) return;
+    
+    setSelectedApp(app.id);
     setPaymentLoading(true);
 
+    const upiUrl = generateUPIUrl();
+    
+    if (upiUrl && app.id !== 'other') {
+      // Start checking for payment completion
+      setCheckingPayment(true);
+      
+      // Try to open UPI intent
+      window.location.href = upiUrl;
+      
+      // Show fallback after delay if app doesn't open
+      setTimeout(() => {
+        setPaymentLoading(false);
+      }, 3000);
+    } else {
+      // Fallback to Razorpay checkout for "Other UPI" or if no VPA
+      openRazorpayCheckout();
+    }
+  };
+
+  // Razorpay checkout fallback
+  const openRazorpayCheckout = async () => {
     try {
-      // Load Razorpay script if not loaded
       if (!window.Razorpay) {
         await loadRazorpayScript();
       }
@@ -80,7 +147,7 @@ export default function Payment() {
         key: razorpayOrder.keyId,
         amount: razorpayOrder.amount,
         currency: 'INR',
-        name: 'Restaurant Order',
+        name: razorpayOrder.merchantName || 'Restaurant Order',
         description: `Order #${order.orderId}`,
         order_id: razorpayOrder.razorpayOrderId,
         prefill: {
@@ -93,13 +160,13 @@ export default function Payment() {
           color: '#f97316'
         },
         handler: function(response) {
-          // Payment successful
           handlePaymentSuccess(response);
         },
         modal: {
           ondismiss: function() {
             setPaymentLoading(false);
             setSelectedApp(null);
+            setCheckingPayment(false);
           }
         }
       };
@@ -119,15 +186,12 @@ export default function Payment() {
 
   const handlePaymentSuccess = async (response) => {
     try {
-      // Verify payment on backend
       await api.post('/payment/verify-upi', {
         orderId: order.orderId,
         razorpay_payment_id: response.razorpay_payment_id,
         razorpay_order_id: response.razorpay_order_id,
         razorpay_signature: response.razorpay_signature
       });
-      
-      // Redirect to success page
       navigate(`/payment-success/${order.orderId}`);
     } catch (err) {
       console.error('Verification error:', err);
@@ -135,6 +199,7 @@ export default function Payment() {
     } finally {
       setPaymentLoading(false);
       setSelectedApp(null);
+      setCheckingPayment(false);
     }
   };
 
@@ -143,47 +208,21 @@ export default function Payment() {
     setError(`Payment failed: ${error.description || 'Please try again'}`);
     setPaymentLoading(false);
     setSelectedApp(null);
+    setCheckingPayment(false);
   };
 
   const loadRazorpayScript = () => {
     return new Promise((resolve, reject) => {
+      if (document.querySelector('script[src*="razorpay"]')) {
+        resolve();
+        return;
+      }
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
       script.onload = resolve;
       script.onerror = reject;
       document.body.appendChild(script);
     });
-  };
-
-  // Generate UPI deep link for direct app opening
-  const generateUPILink = (app) => {
-    if (!order || !razorpayOrder) return null;
-    
-    const upiParams = new URLSearchParams({
-      pa: razorpayOrder.vpa || process.env.REACT_APP_UPI_VPA || 'merchant@upi',
-      pn: 'Restaurant',
-      am: order.totalAmount.toString(),
-      cu: 'INR',
-      tn: `Order ${order.orderId}`,
-      tr: razorpayOrder.razorpayOrderId || order.orderId
-    });
-
-    return `upi://pay?${upiParams.toString()}`;
-  };
-
-  const openUPIApp = (app) => {
-    const upiLink = generateUPILink(app);
-    if (upiLink) {
-      // Try to open the UPI app directly
-      window.location.href = upiLink;
-      
-      // Fallback to Razorpay checkout after a delay
-      setTimeout(() => {
-        handleUPIPayment(app);
-      }, 2000);
-    } else {
-      handleUPIPayment(app);
-    }
   };
 
   if (loading) {
@@ -205,10 +244,10 @@ export default function Payment() {
           <h1 className="text-xl font-bold text-gray-800 mb-2">Payment Issue</h1>
           <p className="text-gray-600 mb-6">{error}</p>
           <button
-            onClick={() => window.close()}
+            onClick={() => { setError(null); fetchOrder(); }}
             className="px-6 py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition-colors"
           >
-            Close
+            Try Again
           </button>
         </div>
       </div>
@@ -221,9 +260,7 @@ export default function Payment() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100 p-4">
         <div className="max-w-md mx-auto">
-          {/* Receipt Card */}
           <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-            {/* Header */}
             <div className="bg-gradient-to-r from-green-500 to-green-600 p-6 text-white text-center">
               <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
                 <CheckCircle className="w-10 h-10" />
@@ -231,10 +268,7 @@ export default function Payment() {
               <h1 className="text-2xl font-bold">Payment Successful</h1>
               <p className="text-green-100 mt-1">Thank you for your order!</p>
             </div>
-
-            {/* Receipt Body */}
             <div className="p-6">
-              {/* Order Info */}
               <div className="flex justify-between items-center pb-4 border-b border-dashed">
                 <div>
                   <p className="text-sm text-gray-500">Order ID</p>
@@ -247,8 +281,6 @@ export default function Payment() {
                   </p>
                 </div>
               </div>
-
-              {/* Items */}
               <div className="py-4 border-b border-dashed">
                 <p className="text-sm font-semibold text-gray-500 mb-3">ORDER ITEMS</p>
                 {order.items?.map((item, idx) => (
@@ -261,16 +293,12 @@ export default function Payment() {
                   </div>
                 ))}
               </div>
-
-              {/* Total */}
               <div className="py-4 border-b border-dashed">
                 <div className="flex justify-between items-center text-lg font-bold">
                   <span className="text-gray-800">Total Paid</span>
                   <span className="text-green-600">₹{order.totalAmount}</span>
                 </div>
               </div>
-
-              {/* Payment Info */}
               <div className="py-4">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-500">Payment Method</span>
@@ -278,40 +306,22 @@ export default function Payment() {
                 </div>
                 <div className="flex justify-between items-center text-sm mt-2">
                   <span className="text-gray-500">Payment Status</span>
-                  <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
-                    ✓ Paid
-                  </span>
+                  <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">✓ Paid</span>
                 </div>
                 <div className="flex justify-between items-center text-sm mt-2">
                   <span className="text-gray-500">Order Status</span>
                   <span className="font-medium text-gray-800 capitalize">{order.status?.replace('_', ' ')}</span>
                 </div>
               </div>
-
-              {/* Footer Message */}
               <div className="bg-green-50 rounded-xl p-4 mt-4 text-center">
-                <p className="text-green-700 text-sm">
-                  🎉 Your order is being prepared!<br/>
-                  Check WhatsApp for live updates.
-                </p>
+                <p className="text-green-700 text-sm">🎉 Your order is being prepared!<br/>Check WhatsApp for live updates.</p>
               </div>
             </div>
-
-            {/* Bottom Actions */}
             <div className="px-6 pb-6">
-              <button
-                onClick={() => window.close()}
-                className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
-              >
-                Close
-              </button>
+              <button onClick={() => window.close()} className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-colors">Close</button>
             </div>
           </div>
-
-          {/* Powered by */}
-          <p className="text-center text-xs text-gray-400 mt-4">
-            🔒 Secured by Razorpay
-          </p>
+          <p className="text-center text-xs text-gray-400 mt-4">🔒 Secured by Razorpay</p>
         </div>
       </div>
     );
@@ -326,8 +336,6 @@ export default function Payment() {
             <h1 className="text-2xl font-bold text-gray-800">Complete Payment</h1>
             <p className="text-gray-500">Order #{order?.orderId}</p>
           </div>
-
-          {/* Order Items */}
           <div className="border-t border-b py-4 mb-4">
             {order?.items?.map((item, idx) => (
               <div key={idx} className="flex justify-between items-center py-2">
@@ -339,50 +347,63 @@ export default function Payment() {
               </div>
             ))}
           </div>
-
-          {/* Total */}
           <div className="flex justify-between items-center text-xl font-bold">
             <span>Total Amount</span>
             <span className="text-orange-600">₹{order?.totalAmount}</span>
           </div>
         </div>
 
+        {/* Checking Payment Status */}
+        {checkingPayment && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent mx-auto mb-3"></div>
+            <p className="text-blue-700 font-medium">Waiting for payment confirmation...</p>
+            <p className="text-blue-600 text-sm mt-1">Complete payment in your UPI app</p>
+          </div>
+        )}
+
         {/* UPI Apps Selection */}
         <div className="bg-white rounded-2xl shadow-xl p-6">
           <h2 className="text-lg font-semibold text-gray-800 mb-4 text-center">
-            Select UPI App to Pay
+            {razorpayOrder?.merchantVpa ? 'Select UPI App to Pay' : 'Pay with UPI'}
           </h2>
           
-          <div className="grid grid-cols-3 gap-4">
-            {UPI_APPS.map((app) => (
-              <button
-                key={app.id}
-                onClick={() => openUPIApp(app)}
-                disabled={paymentLoading}
-                className={`flex flex-col items-center p-4 rounded-xl border-2 transition-all ${
-                  selectedApp === app.id
-                    ? 'border-orange-500 bg-orange-50'
-                    : 'border-gray-200 hover:border-orange-300 hover:bg-orange-50'
-                } ${paymentLoading && selectedApp !== app.id ? 'opacity-50' : ''}`}
-              >
-                <span className="text-3xl mb-2">{app.icon}</span>
-                <span className="text-xs font-medium text-gray-700 text-center">{app.name}</span>
-                {selectedApp === app.id && paymentLoading && (
-                  <div className="mt-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-orange-500 border-t-transparent"></div>
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
+          {razorpayOrder?.merchantVpa ? (
+            <div className="grid grid-cols-3 gap-4">
+              {UPI_APPS.map((app) => (
+                <button
+                  key={app.id}
+                  onClick={() => openUPIApp(app)}
+                  disabled={paymentLoading}
+                  className={`flex flex-col items-center p-4 rounded-xl border-2 transition-all ${
+                    selectedApp === app.id
+                      ? 'border-orange-500 bg-orange-50'
+                      : 'border-gray-200 hover:border-orange-300 hover:bg-orange-50'
+                  } ${paymentLoading && selectedApp !== app.id ? 'opacity-50' : ''}`}
+                >
+                  <span className="text-3xl mb-2">{app.icon}</span>
+                  <span className="text-xs font-medium text-gray-700 text-center">{app.name}</span>
+                  {selectedApp === app.id && paymentLoading && (
+                    <div className="mt-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-orange-500 border-t-transparent"></div>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-center text-gray-500 text-sm mb-4">
+              Click below to pay using any UPI app
+            </p>
+          )}
 
-          {/* Pay Any UPI Button */}
+          {/* Pay Button */}
           <button
-            onClick={() => handleUPIPayment({ id: 'upi' })}
+            onClick={() => openRazorpayCheckout()}
             disabled={paymentLoading}
             className="w-full mt-6 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {paymentLoading && selectedApp === 'upi' ? (
+            {paymentLoading && selectedApp === 'checkout' ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
                 Processing...
@@ -390,7 +411,7 @@ export default function Payment() {
             ) : (
               <>
                 <span>💳</span>
-                Pay ₹{order?.totalAmount} with Any UPI
+                Pay ₹{order?.totalAmount} via Razorpay
               </>
             )}
           </button>
