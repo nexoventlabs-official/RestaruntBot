@@ -219,6 +219,57 @@ export default function AdminMenuScreen({ navigation }) {
     }
   };
 
+  const completePauseCategory = async (category) => {
+    // Get all items in this category
+    const itemsInCategory = items.filter(item => {
+      const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+      return itemCategories.includes(category.name);
+    });
+    
+    const availableItems = itemsInCategory.filter(item => item.available);
+    
+    if (availableItems.length === 0) {
+      Alert.alert('Info', 'All items in this category are already unavailable');
+      return;
+    }
+
+    Alert.alert(
+      'Complete Pause',
+      `This will make ${availableItems.length} item(s) in "${category.name}" unavailable. Continue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Pause All',
+          onPress: async () => {
+            try {
+              // Update all items to unavailable
+              const updatePromises = availableItems.map(item => {
+                const tags = Array.isArray(item.tags) ? item.tags.join(', ') : (item.tags || '');
+                return api.put(`/menu/${item._id}`, { ...item, available: false, tags });
+              });
+              
+              // Optimistic update
+              setItems(prev => prev.map(item => {
+                const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+                if (itemCategories.includes(category.name) && item.available) {
+                  return { ...item, available: false };
+                }
+                return item;
+              }));
+              
+              await Promise.all(updatePromises);
+              Alert.alert('Success', `${availableItems.length} item(s) paused`);
+              fetchMenu();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to pause some items');
+              fetchMenu();
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Get paused category names
   const pausedCategoryNames = categories.filter(c => c.isPaused).map(c => c.name);
 
@@ -460,6 +511,7 @@ export default function AdminMenuScreen({ navigation }) {
                     [
                       { text: 'Cancel', style: 'cancel' },
                       { text: cat.isPaused ? 'Resume' : 'Pause', onPress: () => toggleCategoryPause(cat) },
+                      { text: 'Complete Pause', onPress: () => completePauseCategory(cat) },
                       { text: 'Edit', onPress: () => openCategoryModal(cat) },
                       { text: 'Delete', style: 'destructive', onPress: () => deleteCategory(cat) },
                     ]
