@@ -144,16 +144,8 @@ export default function Payment() {
         theme: {
           color: '#f97316'
         },
-        // Use Razorpay checkout config for payment methods
-        config: {
-          display: {
-            preferences: {
-              show_default_blocks: true
-            }
-          }
-        },
-        // Razorpay checkout configuration ID
-        checkout_config_id: 'config_S1f9Cvyp5wxWdE',
+        // Add config ID if available from backend
+        ...(razorpayOrder.configId && { checkout_config_id: razorpayOrder.configId }),
         handler: function(response) {
           handlePaymentSuccess(response);
         },

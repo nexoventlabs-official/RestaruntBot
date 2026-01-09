@@ -41,7 +41,7 @@ router.post('/create-upi-order', async (req, res) => {
       amount: razorpayOrder.amount,
       currency: razorpayOrder.currency,
       keyId: process.env.RAZORPAY_KEY_ID,
-      merchantVpa: process.env.MERCHANT_UPI_VPA || null,
+      configId: process.env.RAZORPAY_CONFIG_ID || null,
       merchantName: process.env.MERCHANT_NAME || 'Restaurant'
     });
   } catch (error) {
