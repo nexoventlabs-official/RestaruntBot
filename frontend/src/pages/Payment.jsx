@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { CheckCircle } from 'lucide-react';
 import api from '../api';
 
 // UPI App icons
@@ -18,6 +19,7 @@ export default function Payment() {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isPaid, setIsPaid] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
   const [razorpayOrder, setRazorpayOrder] = useState(null);
@@ -32,7 +34,7 @@ export default function Payment() {
       if (res.data) {
         setOrder(res.data);
         if (res.data.paymentStatus === 'paid') {
-          setError('This order has already been paid.');
+          setIsPaid(true);
         } else if (res.data.status === 'cancelled') {
           setError('This order has been cancelled.');
         } else {
@@ -208,6 +210,108 @@ export default function Payment() {
           >
             Close
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show paid receipt/bill
+  if (isPaid && order) {
+    const paidDate = order.updatedAt ? new Date(order.updatedAt) : new Date();
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100 p-4">
+        <div className="max-w-md mx-auto">
+          {/* Receipt Card */}
+          <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-green-500 to-green-600 p-6 text-white text-center">
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                <CheckCircle className="w-10 h-10" />
+              </div>
+              <h1 className="text-2xl font-bold">Payment Successful</h1>
+              <p className="text-green-100 mt-1">Thank you for your order!</p>
+            </div>
+
+            {/* Receipt Body */}
+            <div className="p-6">
+              {/* Order Info */}
+              <div className="flex justify-between items-center pb-4 border-b border-dashed">
+                <div>
+                  <p className="text-sm text-gray-500">Order ID</p>
+                  <p className="font-bold text-gray-800">{order.orderId}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-500">Date</p>
+                  <p className="font-medium text-gray-800">
+                    {paidDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </p>
+                </div>
+              </div>
+
+              {/* Items */}
+              <div className="py-4 border-b border-dashed">
+                <p className="text-sm font-semibold text-gray-500 mb-3">ORDER ITEMS</p>
+                {order.items?.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-800">{item.name}</span>
+                      <span className="text-gray-400 text-sm">×{item.quantity}</span>
+                    </div>
+                    <span className="font-medium text-gray-800">₹{item.price * item.quantity}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Total */}
+              <div className="py-4 border-b border-dashed">
+                <div className="flex justify-between items-center text-lg font-bold">
+                  <span className="text-gray-800">Total Paid</span>
+                  <span className="text-green-600">₹{order.totalAmount}</span>
+                </div>
+              </div>
+
+              {/* Payment Info */}
+              <div className="py-4">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-500">Payment Method</span>
+                  <span className="font-medium text-gray-800">UPI / Online</span>
+                </div>
+                <div className="flex justify-between items-center text-sm mt-2">
+                  <span className="text-gray-500">Payment Status</span>
+                  <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
+                    ✓ Paid
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-sm mt-2">
+                  <span className="text-gray-500">Order Status</span>
+                  <span className="font-medium text-gray-800 capitalize">{order.status?.replace('_', ' ')}</span>
+                </div>
+              </div>
+
+              {/* Footer Message */}
+              <div className="bg-green-50 rounded-xl p-4 mt-4 text-center">
+                <p className="text-green-700 text-sm">
+                  🎉 Your order is being prepared!<br/>
+                  Check WhatsApp for live updates.
+                </p>
+              </div>
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="px-6 pb-6">
+              <button
+                onClick={() => window.close()}
+                className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+
+          {/* Powered by */}
+          <p className="text-center text-xs text-gray-400 mt-4">
+            🔒 Secured by Razorpay
+          </p>
         </div>
       </div>
     );
