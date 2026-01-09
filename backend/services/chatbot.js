@@ -3741,15 +3741,15 @@ const chatbot = {
     state.pendingOrderId = orderId;
 
     try {
-      const paymentLink = await razorpayService.createPaymentLink(total, orderId, freshCustomer.phone, freshCustomer.name);
-      order.razorpayOrderId = paymentLink.id;
-      await order.save();
+      // Generate payment page URL (UPI app selection page)
+      const frontendUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
+      const paymentPageUrl = `${frontendUrl}/pay/${orderId}`;
 
       const orderDetailsImageUrl = await chatbotImagesService.getImageUrl('order_details');
-      await whatsapp.sendOrder(phone, order, items, paymentLink.short_url, orderDetailsImageUrl);
+      await whatsapp.sendOrder(phone, order, items, paymentPageUrl, orderDetailsImageUrl);
       return { success: true };
     } catch (err) {
-      console.error('Payment link error:', err);
+      console.error('Payment page error:', err);
       await whatsapp.sendButtons(phone,
         `✅ *Order Created!*\n\nOrder ID: ${orderId}\nTotal: ₹${total}\n\n⚠️ Payment link unavailable.\nPlease contact us.`,
         [

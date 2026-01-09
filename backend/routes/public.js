@@ -281,6 +281,43 @@ router.get('/track/:orderId', async (req, res) => {
   }
 });
 
+// Get order details for payment page (public)
+router.get('/order/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    const order = await Order.findOne({ orderId });
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    // Return order details for payment
+    res.json({
+      orderId: order.orderId,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      paymentMethod: order.paymentMethod,
+      totalAmount: order.totalAmount,
+      serviceType: order.serviceType,
+      items: order.items.map(item => ({
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        unit: item.unit,
+        unitQty: item.unitQty
+      })),
+      customer: {
+        phone: order.customer?.phone
+      },
+      deliveryAddress: order.deliveryAddress?.address || null,
+      createdAt: order.createdAt
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Send item details via WhatsApp (for website integration)
 router.post('/whatsapp-item/:itemId', async (req, res) => {
   try {

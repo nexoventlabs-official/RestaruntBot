@@ -10,6 +10,153 @@ const chatbotImagesService = require('../services/chatbotImages');
 const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
+// Create Razorpay order for UPI intent payment (no auth required - public endpoint)
+router.post('/create-upi-order', async (req, res) => {
+  try {
+    const { orderId, amount } = req.body;
+    
+    if (!orderId || !amount) {
+      return res.status(400).json({ error: 'Order ID and amount are required' });
+    }
+
+    // Verify order exists and is pending payment
+    const order = await Order.findOne({ orderId });
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    if (order.paymentStatus === 'paid') {
+      return res.status(400).json({ error: 'Order already paid' });
+    }
+
+    // Create Razorpay order
+    const razorpayOrder = await razorpayService.createOrder(amount, orderId);
+    
+    // Update order with Razorpay order ID
+    order.razorpayOrderId = razorpayOrder.id;
+    await order.save();
+
+    res.json({
+      razorpayOrderId: razorpayOrder.id,
+      amount: razorpayOrder.amount,
+      currency: razorpayOrder.currency,
+      keyId: process.env.RAZORPAY_KEY_ID
+    });
+  } catch (error) {
+    console.error('Create UPI order error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Verify UPI payment (no auth required - public endpoint)
+router.post('/verify-upi', async (req, res) => {
+  try {
+    const { orderId, razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
+
+    // Verify signature
+    const body = razorpay_order_id + '|' + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(body)
+      .digest('hex');
+
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({ error: 'Invalid payment signature' });
+    }
+
+    // Find and update order
+    const order = await Order.findOne({ orderId });
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    order.paymentStatus = 'paid';
+    order.paymentId = razorpay_payment_id;
+    order.razorpayPaymentId = razorpay_payment_id;
+    order.status = 'confirmed';
+    order.trackingUpdates.push({ 
+      status: 'confirmed', 
+      message: 'Payment received via UPI', 
+      timestamp: new Date() 
+    });
+    await order.save();
+
+    // Emit event for real-time updates
+    const dataEvents = require('../services/eventEmitter');
+    dataEvents.emit('orders');
+    dataEvents.emit('dashboard');
+
+    // Update Google Sheets
+    googleSheets.updateOrderStatus(order.orderId, 'confirmed', 'paid').catch(err =>
+      console.error('Google Sheets sync error:', err)
+    );
+
+    // Build detailed order confirmation message
+    let itemsList = order.items.map(item => 
+      `• ${item.name} x${item.quantity} - ₹${item.price * item.quantity}`
+    ).join('\n');
+
+    let confirmMsg = `✅ *Payment Successful!*\n\n`;
+    confirmMsg += `📦 *Order ID:* ${order.orderId}\n`;
+    confirmMsg += `💳 *Payment:* UPI\n`;
+    confirmMsg += `💰 *Amount Paid:* ₹${order.totalAmount}\n`;
+    confirmMsg += `🍽️ *Service:* ${order.serviceType.replace('_', ' ')}\n\n`;
+    confirmMsg += `━━━━━━━━━━━━━━━\n`;
+    confirmMsg += `*Your Items:*\n${itemsList}\n`;
+    confirmMsg += `━━━━━━━━━━━━━━━\n\n`;
+    
+    if (order.deliveryAddress?.address) {
+      confirmMsg += `📍 *Delivery Address:*\n${order.deliveryAddress.address}\n\n`;
+    }
+    
+    confirmMsg += `🙏 Thank you for your order!\nWe're preparing it now.`;
+
+    // Send WhatsApp confirmation
+    const confirmedImageUrl = await chatbotImagesService.getImageUrl('payment_success');
+    
+    try {
+      if (confirmedImageUrl) {
+        await whatsapp.sendImageWithButtons(order.customer.phone, confirmedImageUrl, confirmMsg, [
+          { id: 'track_order', text: 'Track Order' },
+          { id: `cancel_${order.orderId}`, text: 'Cancel Order' },
+          { id: 'help', text: 'Help' }
+        ]);
+      } else {
+        await whatsapp.sendButtons(order.customer.phone, confirmMsg, [
+          { id: 'track_order', text: 'Track Order' },
+          { id: `cancel_${order.orderId}`, text: 'Cancel Order' },
+          { id: 'help', text: 'Help' }
+        ]);
+      }
+    } catch (whatsappErr) {
+      console.error('WhatsApp notification failed:', whatsappErr.message);
+    }
+
+    // Send email if available
+    if (order.customer.email) {
+      try {
+        await brevoMail.sendOrderConfirmation(order.customer.email, order);
+      } catch (emailErr) {
+        console.error('Email error:', emailErr.message);
+      }
+    }
+
+    // Update customer stats
+    const customer = await Customer.findOne({ phone: order.customer.phone });
+    if (customer) {
+      customer.totalOrders = (customer.totalOrders || 0) + 1;
+      customer.totalSpent = (customer.totalSpent || 0) + order.totalAmount;
+      await customer.save();
+    }
+
+    console.log(`✅ UPI Payment verified for order ${order.orderId}`);
+    res.json({ success: true, message: 'Payment verified successfully' });
+  } catch (error) {
+    console.error('Verify UPI payment error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Razorpay Webhook - receives payment and refund events
 router.post('/razorpay-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   try {

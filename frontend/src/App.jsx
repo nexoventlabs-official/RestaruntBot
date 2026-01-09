@@ -14,6 +14,8 @@ import About from './pages/About';
 import Contact from './pages/Contact';
 import Review from './pages/Review';
 import Track from './pages/Track';
+import Payment from './pages/Payment';
+import PaymentSuccess from './pages/PaymentSuccess';
 import ChatbotImages from './pages/ChatbotImages';
 import DeliveryPersons from './pages/DeliveryPersons';
 import DeliveryLogin from './pages/DeliveryLogin';
@@ -69,6 +71,8 @@ function App() {
         {/* Other Public Routes */}
         <Route path="/review/:phone/:orderId" element={<Review />} />
         <Route path="/track/:orderId" element={<Track />} />
+        <Route path="/pay/:orderId" element={<Payment />} />
+        <Route path="/payment-success/:orderId" element={<PaymentSuccess />} />
         
         {/* Admin Routes */}
         <Route path="/admin/login" element={auth ? <Navigate to="/admin" /> : <Login setAuth={setAuth} />} />

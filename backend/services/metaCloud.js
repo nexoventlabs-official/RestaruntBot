@@ -204,7 +204,8 @@ const metaCloud = {
         orderMsg += `*${item.name}*\nQuantity ${item.quantity}    ₹${item.quantity * item.price}.00\n\n`;
       });
       orderMsg += `━━━━━━━━━━━━━━━\n`;
-      orderMsg += `*Total*    ₹${order.totalAmount}.00`;
+      orderMsg += `*Total*    ₹${order.totalAmount}.00\n\n`;
+      orderMsg += `💳 Select your UPI app to pay`;
 
       // Build CTA payload - with optional image header
       const ctaPayload = {
@@ -224,12 +225,12 @@ const metaCloud = {
             text: orderMsg
           },
           footer: {
-            text: 'Tap Continue to pay securely'
+            text: 'Tap to select UPI app & pay securely'
           },
           action: {
             name: 'cta_url',
             parameters: {
-              display_text: 'Continue',
+              display_text: 'Pay Now',
               url: paymentUrl
             }
           }
@@ -252,7 +253,7 @@ const metaCloud = {
       });
       orderMsg += `━━━━━━━━━━━━━━━\n`;
       orderMsg += `*Total: ₹${order.totalAmount}*\n\n`;
-      orderMsg += `💳 *Pay here:*\n${paymentUrl}`;
+      orderMsg += `💳 *Pay here (Select UPI App):*\n${paymentUrl}`;
 
       return this.sendMessage(phone, orderMsg);
     }
