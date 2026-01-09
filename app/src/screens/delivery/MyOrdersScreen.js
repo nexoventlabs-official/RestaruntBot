@@ -9,11 +9,13 @@ import * as Location from 'expo-location';
 import api from '../../config/api';
 
 const STATUS_COLORS = {
+  preparing: '#f97316',
   ready: '#10b981',
   out_for_delivery: '#06b6d4',
 };
 
 const STATUS_LABELS = {
+  preparing: 'Preparing',
   ready: 'Ready for Pickup',
   out_for_delivery: 'Out for Delivery',
 };
@@ -98,6 +100,19 @@ export default function MyOrdersScreen({ navigation }) {
       fetchOrders();
     } catch (error) {
       Alert.alert('Error', error.response?.data?.error || 'Failed to update order');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const markReady = async (orderId) => {
+    setActionLoading(orderId);
+    try {
+      await api.post(`/delivery/orders/${orderId}/mark-ready`);
+      Alert.alert('Success', 'Order marked as Ready');
+      fetchOrders();
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.error || 'Failed to mark order as ready');
     } finally {
       setActionLoading(null);
     }
@@ -263,6 +278,11 @@ export default function MyOrdersScreen({ navigation }) {
         
         {actionLoading === item.orderId ? (
           <ActivityIndicator color="#2a9d8f" />
+        ) : item.status === 'preparing' ? (
+          <TouchableOpacity style={[styles.actionButton, styles.preparingButton]} onPress={() => markReady(item.orderId)}>
+            <Ionicons name="checkmark-done-outline" size={18} color="#fff" />
+            <Text style={styles.actionButtonText}>Mark Ready</Text>
+          </TouchableOpacity>
         ) : item.status === 'ready' ? (
           <TouchableOpacity style={styles.actionButton} onPress={() => startDelivery(item.orderId)}>
             <Ionicons name="bicycle-outline" size={18} color="#fff" />
@@ -301,7 +321,7 @@ export default function MyOrdersScreen({ navigation }) {
             <View style={styles.emptyContainer}>
               <Ionicons name="bicycle-outline" size={64} color="#d1d5db" />
               <Text style={styles.emptyText}>No active orders</Text>
-              <Text style={styles.emptySubtext}>Claim orders from Available tab</Text>
+              <Text style={styles.emptySubtext}>Orders assigned by admin will appear here</Text>
             </View>
           }
         />
@@ -406,6 +426,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: '#2a9d8f', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 8,
   },
+  preparingButton: { backgroundColor: '#f97316' },
   deliveredButton: { backgroundColor: '#22c55e' },
   actionButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 },
