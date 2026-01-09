@@ -121,7 +121,7 @@ export default function Payment() {
     openRazorpayCheckout();
   };
 
-  // Razorpay checkout fallback
+  // Razorpay checkout with config
   const openRazorpayCheckout = async () => {
     try {
       if (!window.Razorpay) {
@@ -144,6 +144,16 @@ export default function Payment() {
         theme: {
           color: '#f97316'
         },
+        // Use Razorpay checkout config for payment methods
+        config: {
+          display: {
+            preferences: {
+              show_default_blocks: true
+            }
+          }
+        },
+        // Razorpay checkout configuration ID
+        checkout_config_id: 'config_S1f9Cvyp5wxWdE',
         handler: function(response) {
           handlePaymentSuccess(response);
         },
