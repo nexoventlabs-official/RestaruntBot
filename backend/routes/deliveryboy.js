@@ -769,12 +769,17 @@ router.post('/orders/:orderId/generate-qr', verifyDeliveryToken, async (req, res
     let upiQrUrl = null;
     
     if (merchantVpa) {
+      // Build a short but informative transaction note (UPI has ~50-100 char limit)
+      // Format: "Order ID | Items count | Delivery by Name"
+      const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+      const shortNote = `${orderId} | ${itemCount} items | Via ${req.deliveryBoy.name.split(' ')[0]}`;
+      
       const upiParams = new URLSearchParams();
       upiParams.append('pa', merchantVpa);
       upiParams.append('pn', merchantName);
       upiParams.append('am', order.totalAmount.toFixed(2));
       upiParams.append('cu', 'INR');
-      upiParams.append('tn', `Order ${orderId}`);
+      upiParams.append('tn', shortNote);
       upiParams.append('tr', `${orderId}-COD`);
       
       upiDeepLink = `upi://pay?${upiParams.toString()}`;
