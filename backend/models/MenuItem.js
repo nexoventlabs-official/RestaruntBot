@@ -10,6 +10,7 @@ const menuItemSchema = new mongoose.Schema({
   foodType: { type: String, default: 'none', enum: ['veg', 'nonveg', 'egg', 'none'] },
   image: { type: String },
   available: { type: Boolean, default: true },
+  isPaused: { type: Boolean, default: false },
   preparationTime: { type: Number, default: 15 },
   tags: [String],
   ratings: [{

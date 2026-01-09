@@ -231,46 +231,42 @@ export default function AdminMenuScreen({ navigation }) {
       return;
     }
 
-    // Get all categories that these items belong to (including current category)
-    const allRelatedCategoryNames = new Set();
-    itemsInCategory.forEach(item => {
-      const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-      itemCategories.forEach(cat => allRelatedCategoryNames.add(cat));
-    });
-
-    // Find category objects that need to be paused
-    const categoriesToPause = categories.filter(c => 
-      allRelatedCategoryNames.has(c.name) && !c.isPaused
-    );
+    const unpausedItems = itemsInCategory.filter(item => !item.isPaused);
+    
+    if (unpausedItems.length === 0) {
+      Alert.alert('Info', 'All items in this category are already paused');
+      return;
+    }
 
     Alert.alert(
       'Complete Pause',
-      categoriesToPause.length > 1 
-        ? `This will pause ${categoriesToPause.length} categories (${categoriesToPause.map(c => c.name).join(', ')}) to make all ${itemsInCategory.length} item(s) paused. Continue?`
-        : `This will pause the category "${category.name}" and all ${itemsInCategory.length} item(s) inside it. Continue?`,
+      `This will pause ${unpausedItems.length} item(s) in "${category.name}". Continue?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Pause All',
           onPress: async () => {
             try {
-              // Pause all related categories
-              const pausePromises = categoriesToPause.map(cat => 
-                api.patch(`/categories/${cat._id}/toggle-pause`)
-              );
+              // Use bulk pause API
+              await api.patch('/menu/bulk-pause', { 
+                categoryName: category.name, 
+                isPaused: true 
+              });
               
-              // Optimistic update for categories
-              setCategories(prev => prev.map(c => 
-                allRelatedCategoryNames.has(c.name) ? { ...c, isPaused: true } : c
-              ));
+              // Optimistic update
+              setItems(prev => prev.map(item => {
+                const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+                if (itemCategories.includes(category.name)) {
+                  return { ...item, isPaused: true };
+                }
+                return item;
+              }));
               
-              await Promise.all(pausePromises);
-              
-              Alert.alert('Success', `${categoriesToPause.length} category(s) and ${itemsInCategory.length} item(s) paused`);
-              fetchCategories();
+              Alert.alert('Success', `${unpausedItems.length} item(s) paused`);
+              fetchMenu();
             } catch (error) {
-              Alert.alert('Error', 'Failed to complete pause');
-              fetchCategories();
+              Alert.alert('Error', 'Failed to pause items');
+              fetchMenu();
             }
           },
         },
@@ -281,8 +277,12 @@ export default function AdminMenuScreen({ navigation }) {
   // Get paused category names
   const pausedCategoryNames = categories.filter(c => c.isPaused).map(c => c.name);
 
-  // Helper function to check if item is from paused category
-  const isItemFromPausedCategory = (item) => {
+  // Helper function to check if item is paused (either item itself or all its categories are paused)
+  const isItemPaused = (item) => {
+    // Check if item itself is paused
+    if (item.isPaused) return true;
+    
+    // Check if all categories of this item are paused
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
     return itemCategories.every(cat => pausedCategoryNames.includes(cat));
   };
@@ -308,7 +308,7 @@ export default function AdminMenuScreen({ navigation }) {
   const uniqueCategories = [...new Set(items.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))];
 
   const renderItem = ({ item }) => {
-    const isPaused = isItemFromPausedCategory(item);
+    const isPaused = isItemPaused(item);
     
     return (
       <TouchableOpacity

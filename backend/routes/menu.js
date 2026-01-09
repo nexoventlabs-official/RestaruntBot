@@ -170,4 +170,45 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// Toggle pause status for a menu item
+router.patch('/:id/toggle-pause', authMiddleware, async (req, res) => {
+  try {
+    const item = await MenuItem.findById(req.params.id);
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    item.isPaused = !item.isPaused;
+    await item.save();
+    
+    // Emit event for real-time updates
+    dataEvents.emit('menu');
+    
+    res.json(item);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Bulk pause items by category
+router.patch('/bulk-pause', authMiddleware, async (req, res) => {
+  try {
+    const { categoryName, isPaused } = req.body;
+    if (!categoryName) {
+      return res.status(400).json({ error: 'Category name is required' });
+    }
+    
+    const result = await MenuItem.updateMany(
+      { category: categoryName },
+      { isPaused: isPaused !== false }
+    );
+    
+    // Emit event for real-time updates
+    dataEvents.emit('menu');
+    
+    res.json({ success: true, modifiedCount: result.modifiedCount });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

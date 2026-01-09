@@ -404,8 +404,12 @@ export default function Menu() {
   // Get paused category names
   const pausedCategoryNames = categoryList.filter(c => c.isPaused).map(c => c.name);
   
-  // Helper function to check if item is from paused category
-  const isItemFromPausedCategory = (item) => {
+  // Helper function to check if item is paused (either item itself or all its categories are paused)
+  const isItemPaused = (item) => {
+    // Check if item itself is paused
+    if (item.isPaused) return true;
+    
+    // Check if all categories of this item are paused
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
     return itemCategories.every(cat => pausedCategoryNames.includes(cat));
   };
@@ -611,7 +615,7 @@ export default function Menu() {
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
                 {itemsInCategory.map(item => {
-                  const isPaused = isItemFromPausedCategory(item);
+                  const isPaused = isItemPaused(item);
                   return (
                   <div key={item._id} className={`bg-white rounded-2xl shadow-card overflow-hidden card-hover group ${isPaused ? 'ring-2 ring-yellow-300 bg-gray-50' : ''}`}>
                     <div className={`h-44 bg-dark-100 relative overflow-hidden ${isPaused ? 'grayscale opacity-60' : ''}`}>
