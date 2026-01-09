@@ -566,6 +566,17 @@ export default function DeliveryDashboard() {
                   <div className="bg-white border-2 border-gray-200 rounded-xl p-4 text-center">
                     <p className="text-sm text-gray-600 mb-3">Scan to pay ₹{qrData.amount}</p>
                     <img src={qrData.qrUrl} alt="Payment QR" className="w-48 h-48 mx-auto" />
+                    
+                    {/* UPI Deep Link Button - Opens UPI app directly */}
+                    {qrData.upiDeepLink && (
+                      <a 
+                        href={qrData.upiDeepLink}
+                        className="mt-4 w-full py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition flex items-center justify-center gap-2 inline-block"
+                      >
+                        📱 Open UPI App
+                      </a>
+                    )}
+                    
                     <p className="text-xs text-gray-400 mt-3">Or share payment link</p>
                     <a href={qrData.paymentUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 text-sm underline break-all">
                       {qrData.paymentUrl}

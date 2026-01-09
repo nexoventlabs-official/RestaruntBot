@@ -762,15 +762,38 @@ router.post('/orders/:orderId/generate-qr', verifyDeliveryToken, async (req, res
     order.codPaymentLinkId = paymentLink.id;
     await order.save();
     
-    // Generate QR code URL
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(paymentLink.short_url)}`;
+    // Generate UPI deep link for direct app opening
+    const merchantVpa = process.env.MERCHANT_UPI_VPA;
+    const merchantName = process.env.MERCHANT_NAME || 'Restaurant';
+    let upiDeepLink = null;
+    let upiQrUrl = null;
+    
+    if (merchantVpa) {
+      const upiParams = new URLSearchParams();
+      upiParams.append('pa', merchantVpa);
+      upiParams.append('pn', merchantName);
+      upiParams.append('am', order.totalAmount.toFixed(2));
+      upiParams.append('cu', 'INR');
+      upiParams.append('tn', `Order ${orderId}`);
+      upiParams.append('tr', `${orderId}-COD`);
+      
+      upiDeepLink = `upi://pay?${upiParams.toString()}`;
+      // QR code with UPI deep link - this will open UPI apps directly when scanned
+      upiQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(upiDeepLink)}`;
+    }
+    
+    // Fallback QR with Razorpay payment link
+    const razorpayQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(paymentLink.short_url)}`;
     
     res.json({
-      qrUrl,
+      // Use UPI QR if merchant VPA is configured, otherwise use Razorpay QR
+      qrUrl: upiQrUrl || razorpayQrUrl,
+      upiDeepLink: upiDeepLink,
       paymentUrl: paymentLink.short_url,
       paymentLinkId: paymentLink.id,
       amount: order.totalAmount,
-      orderId: order.orderId
+      orderId: order.orderId,
+      merchantVpa: merchantVpa || null
     });
   } catch (error) {
     console.error('Generate QR error:', error);
