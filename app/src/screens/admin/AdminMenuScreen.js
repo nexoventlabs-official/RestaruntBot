@@ -226,43 +226,55 @@ export default function AdminMenuScreen({ navigation }) {
       return itemCategories.includes(category.name);
     });
     
-    const availableItems = itemsInCategory.filter(item => item.available);
-    
-    if (availableItems.length === 0) {
-      Alert.alert('Info', 'All items in this category are already unavailable');
+    if (itemsInCategory.length === 0) {
+      Alert.alert('Info', 'No items in this category');
       return;
     }
 
     Alert.alert(
       'Complete Pause',
-      `This will make ${availableItems.length} item(s) in "${category.name}" unavailable. Continue?`,
+      `This will pause the category "${category.name}" and all ${itemsInCategory.length} item(s) inside it. Continue?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Pause All',
           onPress: async () => {
             try {
-              // Update all items to unavailable
-              const updatePromises = availableItems.map(item => {
-                const tags = Array.isArray(item.tags) ? item.tags.join(', ') : (item.tags || '');
-                return api.put(`/menu/${item._id}`, { ...item, available: false, tags });
-              });
+              // First pause the category if not already paused
+              if (!category.isPaused) {
+                setCategories(prev => prev.map(c => 
+                  c._id === category._id ? { ...c, isPaused: true } : c
+                ));
+                await api.patch(`/categories/${category._id}/toggle-pause`);
+              }
               
-              // Optimistic update
-              setItems(prev => prev.map(item => {
-                const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-                if (itemCategories.includes(category.name) && item.available) {
-                  return { ...item, available: false };
-                }
-                return item;
-              }));
+              // Then pause all items (set available: false)
+              const availableItems = itemsInCategory.filter(item => item.available);
+              if (availableItems.length > 0) {
+                const updatePromises = availableItems.map(item => {
+                  const tags = Array.isArray(item.tags) ? item.tags.join(', ') : (item.tags || '');
+                  return api.put(`/menu/${item._id}`, { ...item, available: false, tags });
+                });
+                
+                // Optimistic update
+                setItems(prev => prev.map(item => {
+                  const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+                  if (itemCategories.includes(category.name) && item.available) {
+                    return { ...item, available: false };
+                  }
+                  return item;
+                }));
+                
+                await Promise.all(updatePromises);
+              }
               
-              await Promise.all(updatePromises);
-              Alert.alert('Success', `${availableItems.length} item(s) paused`);
+              Alert.alert('Success', `Category and ${itemsInCategory.length} item(s) paused`);
               fetchMenu();
+              fetchCategories();
             } catch (error) {
-              Alert.alert('Error', 'Failed to pause some items');
+              Alert.alert('Error', 'Failed to complete pause');
               fetchMenu();
+              fetchCategories();
             }
           },
         },
