@@ -252,6 +252,7 @@ export default function Menu() {
         ));
         await api.patch(`/categories/${cat._id}/toggle-pause`);
         fetchCategories();
+        fetchItems(); // Refresh items to reflect availability changes
       } catch (err) {
         // Revert on error
         setCategoryList(prev => prev.map(c => 
@@ -943,11 +944,13 @@ export default function Menu() {
                         try {
                           await api.patch(`/categories/${cat._id}/toggle-pause`);
                           fetchCategories();
+                          fetchItems(); // Refresh items to reflect availability changes
                         } catch (err) {
                           alert('Failed to toggle pause status');
                         }
                       }} className={`absolute -top-1 left-1/2 -translate-x-1/2 p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${cat.isPaused ? 'bg-green-500 text-white' : 'bg-yellow-500 text-white'}`} title={cat.isPaused ? 'Resume category' : 'Pause category'}>
                         {cat.isPaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+                      </button>
                       </button>
                       {/* Edit button */}
                       <button onClick={() => {
