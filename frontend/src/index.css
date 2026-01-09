@@ -44,6 +44,30 @@
     pointer-events: none;
   }
 
+  /* Ultra-smooth scrolling enhancements */
+  html {
+    scroll-behavior: auto; /* Let Lenis handle scrolling */
+    -webkit-overflow-scrolling: touch; /* Smooth momentum on iOS */
+  }
+
+  /* Prevent scroll anchoring issues */
+  * {
+    overflow-anchor: none;
+  }
+
+  /* Smooth transform for all animated elements */
+  .smooth-transform {
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+
+  /* Prevent layout shifts during scroll */
+  body {
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+  }
+
   html {
     margin: 0;
     padding: 0;

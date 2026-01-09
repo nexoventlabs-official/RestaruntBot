@@ -34,7 +34,7 @@ export default function AdminOrdersScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState('all');
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       const params = filter !== 'all' ? { status: filter } : {};
       const response = await api.get('/orders', { params });
@@ -45,11 +45,19 @@ export default function AdminOrdersScreen({ navigation }) {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [filter]);
 
   useEffect(() => {
     fetchOrders();
-  }, [filter]);
+  }, [fetchOrders]);
+
+  // Refresh orders when screen comes into focus (e.g., after updating order status)
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchOrders();
+    });
+    return unsubscribe;
+  }, [navigation, fetchOrders]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
