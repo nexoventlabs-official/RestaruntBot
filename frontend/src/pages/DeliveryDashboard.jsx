@@ -118,6 +118,19 @@ export default function DeliveryDashboard() {
     }
   };
 
+  const handleMarkReady = async (orderId) => {
+    if (actionLoading) return;
+    setActionLoading(orderId);
+    try {
+      await axios.post(`${API_URL}/delivery/orders/${orderId}/mark-ready`, {}, { headers });
+      await loadOrders();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to mark order as ready');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleOutForDelivery = async (orderId) => {
     if (actionLoading) return;
     setActionLoading(orderId);
@@ -331,12 +344,14 @@ export default function DeliveryDashboard() {
           <p className="text-xs text-gray-500">{formatTime(order.createdAt)}</p>
         </div>
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-          order.status === 'preparing' ? 'bg-yellow-100 text-yellow-700' :
+          order.status === 'preparing' ? 'bg-orange-100 text-orange-700' :
           order.status === 'ready' ? 'bg-blue-100 text-blue-700' :
           order.status === 'out_for_delivery' ? 'bg-purple-100 text-purple-700' :
           order.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
         }`}>
-          {order.status === 'out_for_delivery' ? 'On the Way' : order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+          {order.status === 'preparing' ? 'Preparing' :
+           order.status === 'out_for_delivery' ? 'On the Way' : 
+           order.status.charAt(0).toUpperCase() + order.status.slice(1)}
         </span>
       </div>
       
@@ -380,6 +395,20 @@ export default function DeliveryDashboard() {
             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           ) : (
             <><Check className="w-5 h-5" />Mark Ready & Claim</>
+          )}
+        </button>
+      )}
+      
+      {type === 'my' && order.status === 'preparing' && (
+        <button
+          onClick={() => handleMarkReady(order.orderId)}
+          disabled={actionLoading === order.orderId}
+          className="w-full py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {actionLoading === order.orderId ? (
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          ) : (
+            <><Package className="w-5 h-5" />Mark Ready</>
           )}
         </button>
       )}

@@ -479,7 +479,7 @@ router.get('/orders/my', verifyDeliveryToken, async (req, res) => {
   try {
     const orders = await Order.find({
       assignedTo: req.deliveryBoy._id,
-      status: { $in: ['ready', 'out_for_delivery'] }
+      status: { $in: ['preparing', 'ready', 'out_for_delivery'] }
     }).sort({ assignedAt: -1 });
     
     res.json(orders);
@@ -567,6 +567,68 @@ router.post('/orders/:orderId/claim', verifyDeliveryToken, async (req, res) => {
     res.json({ message: 'Order claimed successfully', order });
   } catch (error) {
     console.error('Claim order error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mark order as Ready (for orders already assigned by admin)
+router.post('/orders/:orderId/mark-ready', verifyDeliveryToken, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    const order = await Order.findOneAndUpdate(
+      {
+        orderId,
+        status: 'preparing',
+        assignedTo: req.deliveryBoy._id,
+        serviceType: 'delivery'
+      },
+      {
+        $set: { status: 'ready' },
+        $push: {
+          trackingUpdates: {
+            status: 'ready',
+            timestamp: new Date(),
+            message: `Order is ready. ${req.deliveryBoy.name} will pick it up shortly.`
+          }
+        }
+      },
+      { new: true }
+    );
+    
+    if (!order) {
+      return res.status(400).json({ error: 'Order not found or not assigned to you' });
+    }
+    
+    // Update Google Sheets
+    await googleSheets.updateOrderStatus(orderId, 'ready');
+    
+    // Send WhatsApp notification to customer
+    const readyImageUrl = await chatbotImagesService.getImageUrl('ready');
+    const phone = order.customer.phone;
+    const trackUrl = `https://restarunt-bot.vercel.app/track/${orderId}`;
+    if (readyImageUrl) {
+      await whatsapp.sendImageWithCtaUrl(phone, readyImageUrl,
+        `📦 *Order Ready!*\n\nYour order #${orderId} is ready!\n\n🚴 Delivery Partner: *${req.deliveryBoy.name}*\n\nYour order will be picked up shortly.`,
+        'Track Order',
+        trackUrl,
+        'Tap to track your order'
+      );
+    } else {
+      await whatsapp.sendCtaUrl(phone,
+        `📦 *Order Ready!*\n\nYour order #${orderId} is ready!\n\n🚴 Delivery Partner: *${req.deliveryBoy.name}*\n\nYour order will be picked up shortly.`,
+        'Track Order',
+        trackUrl,
+        'Tap to track your order'
+      );
+    }
+    
+    // Emit event for real-time updates
+    dataEvents.emit('orders');
+    
+    res.json({ message: 'Order marked as ready', order });
+  } catch (error) {
+    console.error('Mark ready error:', error);
     res.status(500).json({ error: error.message });
   }
 });
