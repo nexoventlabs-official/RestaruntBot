@@ -231,41 +231,45 @@ export default function AdminMenuScreen({ navigation }) {
       return;
     }
 
+    const pausedItems = itemsInCategory.filter(item => item.isPaused);
     const unpausedItems = itemsInCategory.filter(item => !item.isPaused);
     
-    if (unpausedItems.length === 0) {
-      Alert.alert('Info', 'All items in this category are already paused');
-      return;
-    }
+    // Check if all items are paused - then show Resume All
+    const allPaused = unpausedItems.length === 0;
 
     Alert.alert(
-      'Complete Pause',
-      `This will pause ${unpausedItems.length} item(s) in "${category.name}". Continue?`,
+      allPaused ? 'Resume All' : 'Complete Pause',
+      allPaused 
+        ? `This will resume ${pausedItems.length} item(s) in "${category.name}". Continue?`
+        : `This will pause ${unpausedItems.length} item(s) in "${category.name}". Continue?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Pause All',
+          text: allPaused ? 'Resume All' : 'Pause All',
           onPress: async () => {
             try {
               // Use bulk pause API
               await api.patch('/menu/bulk-pause', { 
                 categoryName: category.name, 
-                isPaused: true 
+                isPaused: !allPaused 
               });
               
               // Optimistic update
               setItems(prev => prev.map(item => {
                 const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
                 if (itemCategories.includes(category.name)) {
-                  return { ...item, isPaused: true };
+                  return { ...item, isPaused: !allPaused };
                 }
                 return item;
               }));
               
-              Alert.alert('Success', `${unpausedItems.length} item(s) paused`);
+              Alert.alert('Success', allPaused 
+                ? `${pausedItems.length} item(s) resumed`
+                : `${unpausedItems.length} item(s) paused`
+              );
               fetchMenu();
             } catch (error) {
-              Alert.alert('Error', 'Failed to pause items');
+              Alert.alert('Error', allPaused ? 'Failed to resume items' : 'Failed to pause items');
               fetchMenu();
             }
           },
@@ -507,7 +511,15 @@ export default function AdminMenuScreen({ navigation }) {
               </View>
               <Text style={[styles.categoryChipText, selectedCategory === 'all' && styles.categoryChipTextActive]}>All</Text>
             </TouchableOpacity>
-            {categories.map(cat => (
+            {categories.map(cat => {
+              // Check if all items in this category are paused
+              const itemsInCat = items.filter(item => {
+                const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+                return itemCategories.includes(cat.name);
+              });
+              const allItemsPaused = itemsInCat.length > 0 && itemsInCat.every(item => item.isPaused);
+              
+              return (
               <TouchableOpacity
                 key={cat._id}
                 style={[styles.categoryChip, selectedCategory === cat.name && styles.categoryChipActive, cat.isPaused && styles.categoryChipPaused]}
@@ -519,7 +531,7 @@ export default function AdminMenuScreen({ navigation }) {
                     [
                       { text: 'Cancel', style: 'cancel' },
                       { text: cat.isPaused ? 'Resume' : 'Pause', onPress: () => toggleCategoryPause(cat) },
-                      { text: 'Complete Pause', onPress: () => completePauseCategory(cat) },
+                      { text: allItemsPaused ? 'Resume All' : 'Complete Pause', onPress: () => completePauseCategory(cat) },
                       { text: 'Edit', onPress: () => openCategoryModal(cat) },
                       { text: 'Delete', style: 'destructive', onPress: () => deleteCategory(cat) },
                     ]
@@ -540,7 +552,7 @@ export default function AdminMenuScreen({ navigation }) {
                 ]}>{cat.name}</Text>
                 {cat.isPaused && <Ionicons name="pause-circle" size={14} color="#f59e0b" />}
               </TouchableOpacity>
-            ))}
+            );})}
             <TouchableOpacity style={styles.addCategoryChip} onPress={() => openCategoryModal()}>
               <Ionicons name="add" size={20} color="#61636b" />
             </TouchableOpacity>
