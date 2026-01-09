@@ -65,7 +65,7 @@ export default function Payment() {
   const handleUPIPayment = async (app) => {
     if (!razorpayOrder || !order) return;
     
-    setSelectedApp(app.id);
+    setSelectedApp(app?.id || 'upi');
     setPaymentLoading(true);
 
     try {
@@ -89,27 +89,6 @@ export default function Payment() {
         },
         theme: {
           color: '#f97316'
-        },
-        // UPI Intent configuration
-        config: {
-          display: {
-            blocks: {
-              utib: {
-                name: 'Pay using UPI',
-                instruments: [
-                  {
-                    method: 'upi',
-                    flows: ['intent', 'collect'],
-                    apps: [app.id]
-                  }
-                ]
-              }
-            },
-            sequence: ['block.utib'],
-            preferences: {
-              show_default_blocks: false
-            }
-          }
         },
         handler: function(response) {
           // Payment successful
