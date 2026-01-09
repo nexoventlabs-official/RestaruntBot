@@ -1,23 +1,64 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView,
-  RefreshControl, TouchableOpacity, ActivityIndicator, FlatList
+  RefreshControl, TouchableOpacity, ActivityIndicator, Animated, Platform, StatusBar
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../config/api';
+import { colors, spacing, radius, typography, shadows } from '../../theme';
 
 const REPORT_TYPES = [
-  { id: 'today', label: 'Today' },
-  { id: 'weekly', label: 'This Week' },
-  { id: 'monthly', label: 'This Month' },
-  { id: 'yearly', label: 'This Year' },
+  { id: 'today', label: 'Today', icon: 'today-outline' },
+  { id: 'weekly', label: 'Week', icon: 'calendar-outline' },
+  { id: 'monthly', label: 'Month', icon: 'calendar' },
+  { id: 'yearly', label: 'Year', icon: 'calendar-number-outline' },
 ];
+
+const StatCard = ({ icon, title, value, color, bgColor, delay = 0 }) => {
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacityAnim, { toValue: 1, duration: 400, delay, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, friction: 8, tension: 40, delay, useNativeDriver: true }),
+    ]).start();
+  }, [value]);
+
+  return (
+    <Animated.View style={[styles.statCard, { opacity: opacityAnim, transform: [{ scale: scaleAnim }] }]}>
+      <View style={[styles.statIconContainer, { backgroundColor: bgColor }]}>
+        <Ionicons name={icon} size={22} color={color} />
+      </View>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statTitle}>{title}</Text>
+    </Animated.View>
+  );
+};
+
+const SmallStatCard = ({ icon, title, value, color, bgColor }) => (
+  <View style={styles.smallStatCard}>
+    <View style={[styles.smallIconContainer, { backgroundColor: bgColor }]}>
+      <Ionicons name={icon} size={16} color={color} />
+    </View>
+    <View style={styles.smallStatInfo}>
+      <Text style={styles.smallStatValue}>{value}</Text>
+      <Text style={styles.smallStatTitle}>{title}</Text>
+    </View>
+  </View>
+);
 
 export default function AdminReportsScreen() {
   const [reportType, setReportType] = useState('today');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [reportData, setReportData] = useState(null);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+  }, []);
 
   const fetchReport = useCallback(async (type) => {
     try {
@@ -25,446 +66,168 @@ export default function AdminReportsScreen() {
       setReportData(response.data);
     } catch (error) {
       console.error('Failed to fetch report:', error);
-      setReportData({
-        totalRevenue: 0,
-        totalOrders: 0,
-        totalItemsSold: 0,
-        avgOrderValue: 0,
-        deliveredOrders: 0,
-        cancelledOrders: 0,
-        refundedOrders: 0,
-        codOrders: 0,
-        upiOrders: 0,
-        topSellingItems: [],
-        leastSellingItems: [],
-      });
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+      setReportData({ totalRevenue: 0, totalOrders: 0, totalItemsSold: 0, avgOrderValue: 0, deliveredOrders: 0, cancelledOrders: 0, refundedOrders: 0, codOrders: 0, upiOrders: 0, topSellingItems: [], leastSellingItems: [] });
+    } finally { setLoading(false); setRefreshing(false); }
   }, []);
 
-  useEffect(() => {
-    setLoading(true);
-    fetchReport(reportType);
-  }, [reportType, fetchReport]);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchReport(reportType);
-  }, [reportType, fetchReport]);
-
+  useEffect(() => { setLoading(true); fetchReport(reportType); }, [reportType, fetchReport]);
+  const onRefresh = useCallback(() => { setRefreshing(true); fetchReport(reportType); }, [reportType, fetchReport]);
   const formatCurrency = (val) => `₹${(val || 0).toLocaleString('en-IN')}`;
-
-  const StatCard = ({ icon, title, value, color, subtitle }) => (
-    <View style={[styles.statCard, { borderLeftColor: color }]}>
-      <View style={[styles.iconContainer, { backgroundColor: color + '20' }]}>
-        <Ionicons name={icon} size={22} color={color} />
-      </View>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statTitle}>{title}</Text>
-      {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
-    </View>
-  );
-
-  const SmallStatCard = ({ icon, title, value, color }) => (
-    <View style={styles.smallStatCard}>
-      <View style={[styles.smallIconContainer, { backgroundColor: color + '20' }]}>
-        <Ionicons name={icon} size={16} color={color} />
-      </View>
-      <View style={styles.smallStatInfo}>
-        <Text style={styles.smallStatValue}>{value}</Text>
-        <Text style={styles.smallStatTitle}>{title}</Text>
-      </View>
-    </View>
-  );
-
-  const renderTopItem = ({ item, index }) => (
-    <View style={styles.topItemCard}>
-      <View style={styles.topItemRank}>
-        <Text style={styles.topItemRankText}>{index + 1}</Text>
-      </View>
-      <View style={styles.topItemInfo}>
-        <Text style={styles.topItemName} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.topItemQty}>{item.quantity} sold</Text>
-      </View>
-      <Text style={styles.topItemRevenue}>{formatCurrency(item.revenue)}</Text>
-    </View>
-  );
 
   if (loading && !reportData) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.zomato.red} />
+        <LinearGradient colors={[colors.zomato.red, colors.zomato.darkRed]} style={styles.header}>
           <Text style={styles.title}>Reports</Text>
-        </View>
-        <ActivityIndicator size="large" color="#e63946" style={{ flex: 1 }} />
+        </LinearGradient>
+        <ActivityIndicator size="large" color={colors.zomato.red} style={{ flex: 1 }} />
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.zomato.red} />
+      
+      <LinearGradient colors={[colors.zomato.red, colors.zomato.darkRed]} style={styles.header}>
         <Text style={styles.title}>Reports & Analytics</Text>
-      </View>
+        <Text style={styles.subtitle}>Track your business performance</Text>
+      </LinearGradient>
 
-      {/* Report Type Tabs */}
       <View style={styles.tabsContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsList}>
           {REPORT_TYPES.map((type) => (
-            <TouchableOpacity
-              key={type.id}
-              style={[styles.tab, reportType === type.id && styles.tabActive]}
-              onPress={() => setReportType(type.id)}
-            >
-              <Ionicons 
-                name="calendar-outline" 
-                size={16} 
-                color={reportType === type.id ? '#fff' : '#61636b'} 
-              />
-              <Text style={[styles.tabText, reportType === type.id && styles.tabTextActive]}>
-                {type.label}
-              </Text>
+            <TouchableOpacity key={type.id} style={[styles.tab, reportType === type.id && styles.tabActive]} onPress={() => setReportType(type.id)} activeOpacity={0.7}>
+              <Ionicons name={type.icon} size={16} color={reportType === type.id ? '#fff' : colors.light.text.secondary} />
+              <Text style={[styles.tabText, reportType === type.id && styles.tabTextActive]}>{type.label}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
       </View>
 
-      <ScrollView
-        style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#e63946']} />}
-      >
-        {/* Main Stats */}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.zomato.red]} />}>
         <View style={styles.statsGrid}>
-          <StatCard
-            icon="cash-outline"
-            title="Total Revenue"
-            value={formatCurrency(reportData?.totalRevenue)}
-            color="#22c55e"
-          />
-          <StatCard
-            icon="receipt-outline"
-            title="Total Orders"
-            value={reportData?.totalOrders || 0}
-            color="#3b82f6"
-          />
+          <StatCard icon="cash-outline" title="Revenue" value={formatCurrency(reportData?.totalRevenue)} color="#22C55E" bgColor="#DCFCE7" delay={0} />
+          <StatCard icon="receipt-outline" title="Orders" value={reportData?.totalOrders || 0} color="#3B82F6" bgColor="#DBEAFE" delay={100} />
         </View>
 
         <View style={styles.statsGrid}>
-          <StatCard
-            icon="cube-outline"
-            title="Items Sold"
-            value={reportData?.totalItemsSold || 0}
-            color="#f59e0b"
-          />
-          <StatCard
-            icon="trending-up-outline"
-            title="Avg Order Value"
-            value={formatCurrency(reportData?.avgOrderValue)}
-            color="#8b5cf6"
-          />
+          <StatCard icon="cube-outline" title="Items Sold" value={reportData?.totalItemsSold || 0} color="#F59E0B" bgColor="#FEF3C7" delay={200} />
+          <StatCard icon="trending-up-outline" title="Avg Order" value={formatCurrency(reportData?.avgOrderValue)} color="#8B5CF6" bgColor="#EDE9FE" delay={300} />
         </View>
 
-        {/* Order Status Breakdown */}
         <Text style={styles.sectionTitle}>Order Status</Text>
         <View style={styles.smallStatsGrid}>
-          <SmallStatCard icon="checkmark-circle" title="Delivered" value={reportData?.deliveredOrders || 0} color="#22c55e" />
-          <SmallStatCard icon="close-circle" title="Cancelled" value={reportData?.cancelledOrders || 0} color="#ef4444" />
-          <SmallStatCard icon="refresh-circle" title="Refunded" value={reportData?.refundedOrders || 0} color="#f59e0b" />
+          <SmallStatCard icon="checkmark-circle" title="Delivered" value={reportData?.deliveredOrders || 0} color="#22C55E" bgColor="#DCFCE7" />
+          <SmallStatCard icon="close-circle" title="Cancelled" value={reportData?.cancelledOrders || 0} color="#EF4444" bgColor="#FEE2E2" />
+          <SmallStatCard icon="refresh-circle" title="Refunded" value={reportData?.refundedOrders || 0} color="#F59E0B" bgColor="#FEF3C7" />
         </View>
 
-        {/* Payment Breakdown */}
         <Text style={styles.sectionTitle}>Payment Methods</Text>
         <View style={styles.paymentGrid}>
           <View style={styles.paymentCard}>
-            <Ionicons name="cash-outline" size={24} color="#f59e0b" />
+            <View style={[styles.paymentIcon, { backgroundColor: '#FEF3C7' }]}>
+              <Ionicons name="cash-outline" size={24} color="#F59E0B" />
+            </View>
             <Text style={styles.paymentValue}>{reportData?.codOrders || 0}</Text>
             <Text style={styles.paymentLabel}>COD Orders</Text>
           </View>
           <View style={styles.paymentCard}>
-            <Ionicons name="phone-portrait-outline" size={24} color="#8b5cf6" />
+            <View style={[styles.paymentIcon, { backgroundColor: '#EDE9FE' }]}>
+              <Ionicons name="phone-portrait-outline" size={24} color="#8B5CF6" />
+            </View>
             <Text style={styles.paymentValue}>{reportData?.upiOrders || 0}</Text>
             <Text style={styles.paymentLabel}>UPI Orders</Text>
           </View>
         </View>
 
-        {/* Top Selling Items */}
         {reportData?.topSellingItems?.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>🔥 Top Selling Items</Text>
-            <View style={styles.topItemsContainer}>
+            <Text style={styles.sectionTitle}>🔥 Top Selling</Text>
+            <View style={styles.itemsContainer}>
               {reportData.topSellingItems.slice(0, 5).map((item, index) => (
-                <View key={index} style={styles.topItemCard}>
-                  <View style={[styles.topItemRank, { backgroundColor: index < 3 ? '#fef3c7' : '#f3f4f6' }]}>
-                    <Text style={[styles.topItemRankText, { color: index < 3 ? '#f59e0b' : '#61636b' }]}>
-                      {index + 1}
-                    </Text>
+                <View key={index} style={styles.itemCard}>
+                  <View style={[styles.itemRank, { backgroundColor: index < 3 ? '#FEF3C7' : colors.light.surfaceSecondary }]}>
+                    <Text style={[styles.itemRankText, { color: index < 3 ? '#F59E0B' : colors.light.text.secondary }]}>{index + 1}</Text>
                   </View>
-                  <View style={styles.topItemInfo}>
-                    <Text style={styles.topItemName} numberOfLines={1}>{item.name}</Text>
-                    <View style={styles.topItemMeta}>
-                      <Text style={styles.topItemQty}>{item.quantity} sold</Text>
+                  <View style={styles.itemInfo}>
+                    <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+                    <View style={styles.itemMeta}>
+                      <Text style={styles.itemQty}>{item.quantity} sold</Text>
                       {item.avgRating > 0 && (
                         <View style={styles.ratingBadge}>
-                          <Ionicons name="star" size={10} color="#f59e0b" />
+                          <Ionicons name="star" size={10} color="#F59E0B" />
                           <Text style={styles.ratingText}>{item.avgRating?.toFixed(1)}</Text>
                         </View>
                       )}
                     </View>
                   </View>
-                  <Text style={styles.topItemRevenue}>{formatCurrency(item.revenue)}</Text>
+                  <Text style={styles.itemRevenue}>{formatCurrency(item.revenue)}</Text>
                 </View>
               ))}
             </View>
           </>
         )}
 
-        {/* Least Selling Items */}
-        {reportData?.leastSellingItems?.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>📉 Least Selling Items</Text>
-            <View style={styles.topItemsContainer}>
-              {reportData.leastSellingItems.slice(0, 5).map((item, index) => (
-                <View key={index} style={styles.topItemCard}>
-                  <View style={[styles.topItemRank, { backgroundColor: '#fee2e2' }]}>
-                    <Text style={[styles.topItemRankText, { color: '#ef4444' }]}>
-                      {index + 1}
-                    </Text>
-                  </View>
-                  <View style={styles.topItemInfo}>
-                    <Text style={styles.topItemName} numberOfLines={1}>{item.name}</Text>
-                    <Text style={styles.topItemQty}>{item.quantity} sold</Text>
-                  </View>
-                  <Text style={styles.topItemRevenue}>{formatCurrency(item.revenue)}</Text>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-
-        {/* Empty State */}
         {!reportData?.totalOrders && (
           <View style={styles.emptyContainer}>
-            <Ionicons name="bar-chart-outline" size={64} color="#d1d5db" />
-            <Text style={styles.emptyText}>No data for this period</Text>
-            <Text style={styles.emptySubtext}>Orders will appear in reports once placed</Text>
+            <View style={styles.emptyIconContainer}>
+              <Ionicons name="bar-chart-outline" size={48} color={colors.light.text.tertiary} />
+            </View>
+            <Text style={styles.emptyTitle}>No data for this period</Text>
+            <Text style={styles.emptyText}>Orders will appear in reports once placed</Text>
           </View>
         )}
 
-        <View style={{ height: 24 }} />
+        <View style={{ height: 100 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fb' },
-  header: { 
-    padding: 20, 
-    backgroundColor: '#fff', 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#e5e7eb' 
-  },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#1c1d21' },
-  tabsContainer: { 
-    backgroundColor: '#fff', 
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  tabsList: { paddingHorizontal: 16 },
-  tab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#f3f4f6',
-    marginRight: 8,
-  },
-  tabActive: {
-    backgroundColor: '#e63946',
-  },
-  tabText: {
-    fontSize: 14,
-    color: '#61636b',
-    fontWeight: '500',
-  },
-  tabTextActive: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  content: { flex: 1, padding: 16 },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    borderLeftWidth: 4,
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  statValue: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1c1d21',
-  },
-  statTitle: {
-    fontSize: 13,
-    color: '#61636b',
-    marginTop: 4,
-  },
-  statSubtitle: {
-    fontSize: 11,
-    color: '#9ca3af',
-    marginTop: 2,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1c1d21',
-    marginTop: 16,
-    marginBottom: 12,
-  },
-  smallStatsGrid: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  smallStatCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  smallIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  smallStatInfo: {
-    flex: 1,
-  },
-  smallStatValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1c1d21',
-  },
-  smallStatTitle: {
-    fontSize: 11,
-    color: '#61636b',
-  },
-  paymentGrid: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  paymentCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  paymentValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1c1d21',
-    marginTop: 8,
-  },
-  paymentLabel: {
-    fontSize: 12,
-    color: '#61636b',
-    marginTop: 4,
-  },
-  topItemsContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  topItemCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  topItemRank: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#f3f4f6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  topItemRankText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#61636b',
-  },
-  topItemInfo: {
-    flex: 1,
-  },
-  topItemName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1c1d21',
-  },
-  topItemMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 2,
-  },
-  topItemQty: {
-    fontSize: 12,
-    color: '#61636b',
-  },
-  ratingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  ratingText: {
-    fontSize: 11,
-    color: '#f59e0b',
-    fontWeight: '600',
-  },
-  topItemRevenue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#22c55e',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#61636b',
-    marginTop: 12,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#9ca3af',
-    marginTop: 4,
-  },
+  container: { flex: 1, backgroundColor: colors.light.background },
+  header: { paddingTop: Platform.OS === 'android' ? 50 : 16, paddingBottom: spacing.lg, paddingHorizontal: spacing.screenHorizontal, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  title: { fontSize: typography.display.small.fontSize, fontWeight: '700', color: '#fff' },
+  subtitle: { fontSize: typography.body.medium.fontSize, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+  tabsContainer: { backgroundColor: colors.light.surface, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.light.borderLight },
+  tabsList: { paddingHorizontal: spacing.screenHorizontal },
+  tab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.base, paddingVertical: spacing.sm, borderRadius: radius.full, backgroundColor: colors.light.surfaceSecondary, marginRight: spacing.sm },
+  tabActive: { backgroundColor: colors.zomato.red },
+  tabText: { fontSize: typography.label.medium.fontSize, color: colors.light.text.secondary, fontWeight: '500' },
+  tabTextActive: { color: '#fff', fontWeight: '600' },
+  content: { flex: 1, padding: spacing.screenHorizontal },
+  statsGrid: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
+  statCard: { flex: 1, backgroundColor: colors.light.surface, borderRadius: radius.xl, padding: spacing.base, ...shadows.card },
+  statIconContainer: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.md },
+  statValue: { fontSize: 22, fontWeight: '700', color: colors.light.text.primary },
+  statTitle: { fontSize: typography.body.small.fontSize, color: colors.light.text.secondary, marginTop: spacing.xs },
+  sectionTitle: { fontSize: typography.headline.small.fontSize, fontWeight: '600', color: colors.light.text.primary, marginTop: spacing.lg, marginBottom: spacing.md },
+  smallStatsGrid: { flexDirection: 'row', gap: spacing.sm },
+  smallStatCard: { flex: 1, backgroundColor: colors.light.surface, borderRadius: radius.lg, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, ...shadows.sm },
+  smallIconContainer: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  smallStatInfo: { flex: 1 },
+  smallStatValue: { fontSize: typography.title.large.fontSize, fontWeight: '700', color: colors.light.text.primary },
+  smallStatTitle: { fontSize: typography.label.small.fontSize, color: colors.light.text.tertiary },
+  paymentGrid: { flexDirection: 'row', gap: spacing.md },
+  paymentCard: { flex: 1, backgroundColor: colors.light.surface, borderRadius: radius.xl, padding: spacing.base, alignItems: 'center', ...shadows.card },
+  paymentIcon: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  paymentValue: { fontSize: 24, fontWeight: '700', color: colors.light.text.primary, marginTop: spacing.sm },
+  paymentLabel: { fontSize: typography.body.small.fontSize, color: colors.light.text.secondary, marginTop: spacing.xs },
+  itemsContainer: { backgroundColor: colors.light.surface, borderRadius: radius.xl, overflow: 'hidden', ...shadows.card },
+  itemCard: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.light.borderLight },
+  itemRank: { width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
+  itemRankText: { fontSize: typography.label.medium.fontSize, fontWeight: '700' },
+  itemInfo: { flex: 1 },
+  itemName: { fontSize: typography.title.medium.fontSize, fontWeight: '500', color: colors.light.text.primary },
+  itemMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 2 },
+  itemQty: { fontSize: typography.body.small.fontSize, color: colors.light.text.secondary },
+  ratingBadge: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  ratingText: { fontSize: typography.label.small.fontSize, color: '#F59E0B', fontWeight: '600' },
+  itemRevenue: { fontSize: typography.title.medium.fontSize, fontWeight: '600', color: '#22C55E' },
+  emptyContainer: { alignItems: 'center', paddingVertical: 60 },
+  emptyIconContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: colors.light.surfaceSecondary, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.base },
+  emptyTitle: { fontSize: typography.headline.small.fontSize, fontWeight: '600', color: colors.light.text.secondary },
+  emptyText: { fontSize: typography.body.medium.fontSize, color: colors.light.text.tertiary, marginTop: spacing.xs },
 });

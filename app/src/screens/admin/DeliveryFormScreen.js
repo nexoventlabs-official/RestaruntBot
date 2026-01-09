@@ -1,11 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView, TextInput,
-  TouchableOpacity, Image, Alert, ActivityIndicator, Switch
+  TouchableOpacity, Image, Alert, ActivityIndicator, Switch, Animated, Platform,
+  KeyboardAvoidingView
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import api from '../../config/api';
+
+// Zomato Theme Colors
+const ZOMATO_RED = '#E23744';
+const ZOMATO_DARK_RED = '#CB1A27';
 
 export default function DeliveryFormScreen({ route, navigation }) {
   const existingDeliveryBoy = route.params?.deliveryBoy;
@@ -19,6 +25,16 @@ export default function DeliveryFormScreen({ route, navigation }) {
   const [photo, setPhoto] = useState(existingDeliveryBoy?.photo || null);
   const [newPhoto, setNewPhoto] = useState(null);
   const [loading, setLoading] = useState(false);
+  
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
+    ]).start();
+  }, []);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -27,7 +43,6 @@ export default function DeliveryFormScreen({ route, navigation }) {
       aspect: [1, 1],
       quality: 0.8,
     });
-
     if (!result.canceled) {
       setNewPhoto(result.assets[0]);
       setPhoto(result.assets[0].uri);
@@ -39,7 +54,6 @@ export default function DeliveryFormScreen({ route, navigation }) {
       Alert.alert('Error', 'Please fill in name, phone, and date of birth');
       return;
     }
-
     if (!isEditing && !email.trim()) {
       Alert.alert('Error', 'Email is required for new delivery partners');
       return;
@@ -85,79 +99,148 @@ export default function DeliveryFormScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#1c1d21" />
-        </TouchableOpacity>
-        <Text style={styles.title}>{isEditing ? 'Edit Partner' : 'Add Partner'}</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      {/* Premium Header */}
+      <Animated.View style={{ opacity: fadeAnim }}>
+        <LinearGradient
+          colors={[ZOMATO_RED, ZOMATO_DARK_RED]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}
+        >
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{isEditing ? 'Edit Partner' : 'New Partner'}</Text>
+          <View style={{ width: 44 }} />
+        </LinearGradient>
+      </Animated.View>
 
-      <ScrollView style={styles.content}>
-        <TouchableOpacity style={styles.photoContainer} onPress={pickImage}>
-          {photo ? (
-            <Image source={{ uri: photo }} style={styles.photo} />
-          ) : (
-            <View style={styles.photoPlaceholder}>
-              <Ionicons name="camera-outline" size={40} color="#9ca3af" />
-              <Text style={styles.photoPlaceholderText}>Add Photo</Text>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+            {/* Photo Section */}
+            <View style={styles.photoSection}>
+              <TouchableOpacity style={styles.photoContainer} onPress={pickImage} activeOpacity={0.8}>
+                {photo ? (
+                  <Image source={{ uri: photo }} style={styles.photo} />
+                ) : (
+                  <View style={styles.photoPlaceholder}>
+                    <View style={styles.photoPlaceholderIcon}>
+                      <Ionicons name="person-outline" size={36} color={ZOMATO_RED} />
+                    </View>
+                    <Text style={styles.photoPlaceholderText}>Add Photo</Text>
+                  </View>
+                )}
+                <View style={styles.cameraButton}>
+                  <Ionicons name="camera" size={18} color="#fff" />
+                </View>
+              </TouchableOpacity>
             </View>
-          )}
-        </TouchableOpacity>
 
-        <View style={styles.form}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Name *</Text>
-            <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Full name" />
-          </View>
+            <View style={styles.form}>
+              {/* Name */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Full Name <Text style={styles.required}>*</Text></Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="person-outline" size={20} color="#9CA3AF" />
+                  <TextInput 
+                    style={styles.input} 
+                    value={name} 
+                    onChangeText={setName} 
+                    placeholder="Enter full name" 
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
+              </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email {!isEditing && '*'}</Text>
-            <TextInput
-              style={[styles.input, isEditing && styles.inputDisabled]}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="email@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              editable={!isEditing}
-            />
-            {isEditing && <Text style={styles.hint}>Email cannot be changed</Text>}
-          </View>
+              {/* Email */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Email {!isEditing && <Text style={styles.required}>*</Text>}</Text>
+                <View style={[styles.inputWrapper, isEditing && styles.inputDisabled]}>
+                  <Ionicons name="mail-outline" size={20} color="#9CA3AF" />
+                  <TextInput
+                    style={styles.input}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="email@example.com"
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    editable={!isEditing}
+                  />
+                </View>
+                {isEditing && <Text style={styles.inputHint}>Email cannot be changed</Text>}
+              </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Phone *</Text>
-            <TextInput
-              style={styles.input}
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="Phone number"
-              keyboardType="phone-pad"
-            />
-          </View>
+              {/* Phone */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Phone Number <Text style={styles.required}>*</Text></Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="call-outline" size={20} color="#9CA3AF" />
+                  <TextInput
+                    style={styles.input}
+                    value={phone}
+                    onChangeText={setPhone}
+                    placeholder="Enter phone number"
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="phone-pad"
+                  />
+                </View>
+              </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Date of Birth * (YYYY-MM-DD)</Text>
-            <TextInput
-              style={styles.input}
-              value={dob}
-              onChangeText={setDob}
-              placeholder="1990-01-15"
-            />
-          </View>
+              {/* Date of Birth */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Date of Birth <Text style={styles.required}>*</Text></Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="calendar-outline" size={20} color="#9CA3AF" />
+                  <TextInput
+                    style={styles.input}
+                    value={dob}
+                    onChangeText={setDob}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
+                <Text style={styles.inputHint}>Format: 1990-01-15</Text>
+              </View>
 
-          <View style={styles.switchRow}>
-            <Text style={styles.label}>Active</Text>
-            <Switch
-              value={isActive}
-              onValueChange={setIsActive}
-              trackColor={{ false: '#d1d5db', true: '#86efac' }}
-              thumbColor={isActive ? '#22c55e' : '#9ca3af'}
-            />
-          </View>
-        </View>
-      </ScrollView>
+              {/* Active Switch */}
+              <View style={styles.switchCard}>
+                <View style={styles.switchInfo}>
+                  <View style={[styles.switchIconContainer, { backgroundColor: isActive ? '#DCFCE7' : '#FEE2E2' }]}>
+                    <Ionicons name={isActive ? 'checkmark-circle' : 'close-circle'} size={24} color={isActive ? '#22C55E' : '#EF4444'} />
+                  </View>
+                  <View>
+                    <Text style={styles.switchLabel}>Account Status</Text>
+                    <Text style={styles.switchHint}>{isActive ? 'Partner can accept orders' : 'Partner is deactivated'}</Text>
+                  </View>
+                </View>
+                <Switch
+                  value={isActive}
+                  onValueChange={setIsActive}
+                  trackColor={{ false: '#FEE2E2', true: '#BBF7D0' }}
+                  thumbColor={isActive ? '#22C55E' : '#EF4444'}
+                />
+              </View>
 
+              {!isEditing && (
+                <View style={styles.infoCard}>
+                  <Ionicons name="information-circle" size={22} color="#3B82F6" />
+                  <Text style={styles.infoText}>
+                    A temporary password will be sent to the partner's email address.
+                  </Text>
+                </View>
+              )}
+            </View>
+          </Animated.View>
+          <View style={{ height: 120 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Footer */}
       <View style={styles.footer}>
         <TouchableOpacity
           style={[styles.submitButton, loading && styles.submitButtonDisabled]}
@@ -167,7 +250,10 @@ export default function DeliveryFormScreen({ route, navigation }) {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.submitButtonText}>{isEditing ? 'Update Partner' : 'Add Partner'}</Text>
+            <>
+              <Ionicons name={isEditing ? 'checkmark-circle' : 'person-add'} size={22} color="#fff" />
+              <Text style={styles.submitButtonText}>{isEditing ? 'Update Partner' : 'Add Partner'}</Text>
+            </>
           )}
         </TouchableOpacity>
       </View>
@@ -175,33 +261,94 @@ export default function DeliveryFormScreen({ route, navigation }) {
   );
 }
 
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fb' },
+  container: { flex: 1, backgroundColor: '#F8F8F8' },
+  
+  // Header
   header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb',
+    paddingTop: Platform.OS === 'android' ? 44 : 12,
+    paddingBottom: 20,
+    paddingHorizontal: 16,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  title: { fontSize: 18, fontWeight: 'bold', color: '#1c1d21' },
+  backButton: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
   content: { flex: 1, padding: 16 },
-  photoContainer: { alignItems: 'center', marginBottom: 24 },
-  photo: { width: 120, height: 120, borderRadius: 60 },
+  
+  // Photo
+  photoSection: { alignItems: 'center', marginBottom: 28 },
+  photoContainer: { position: 'relative' },
+  photo: { 
+    width: 130, height: 130, borderRadius: 65, borderWidth: 4, borderColor: '#fff',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8,
+  },
   photoPlaceholder: {
-    width: 120, height: 120, borderRadius: 60, backgroundColor: '#f3f4f6',
-    justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#e5e7eb', borderStyle: 'dashed',
+    width: 130, height: 130, borderRadius: 65, backgroundColor: '#fff',
+    justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#E8E8E8', borderStyle: 'dashed',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
   },
-  photoPlaceholderText: { color: '#9ca3af', marginTop: 8 },
-  form: { gap: 16 },
+  photoPlaceholderIcon: {
+    width: 64, height: 64, borderRadius: 32, backgroundColor: '#FEF2F2',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 4,
+  },
+  photoPlaceholderText: { color: '#696969', fontSize: 13, fontWeight: '600' },
+  cameraButton: {
+    position: 'absolute', bottom: 4, right: 4,
+    width: 38, height: 38, borderRadius: 19, backgroundColor: ZOMATO_RED,
+    justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#fff',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 4,
+  },
+  
+  // Form
+  form: { gap: 20 },
   inputGroup: { gap: 8 },
-  label: { fontSize: 14, fontWeight: '500', color: '#1c1d21' },
-  input: {
-    backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, height: 50,
-    borderWidth: 1, borderColor: '#e5e7eb', fontSize: 16,
+  label: { fontSize: 14, fontWeight: '700', color: '#1C1C1C' },
+  required: { color: ZOMATO_RED },
+  inputWrapper: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 16, height: 56,
+    borderWidth: 1.5, borderColor: '#E8E8E8',
   },
-  inputDisabled: { backgroundColor: '#f3f4f6', color: '#9ca3af' },
-  hint: { fontSize: 12, color: '#9ca3af' },
-  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  footer: { padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb' },
-  submitButton: { backgroundColor: '#e63946', height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  inputDisabled: { backgroundColor: '#F5F5F5' },
+  input: { flex: 1, fontSize: 15, color: '#1C1C1C', fontWeight: '500' },
+  inputHint: { fontSize: 12, color: '#9CA3AF', marginTop: 4 },
+
+  // Switch
+  switchCard: { 
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: '#fff', padding: 18, borderRadius: 16, borderWidth: 1.5, borderColor: '#E8E8E8',
+  },
+  switchInfo: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  switchIconContainer: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+  switchLabel: { fontSize: 15, fontWeight: '700', color: '#1C1C1C' },
+  switchHint: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+  
+  // Info Card
+  infoCard: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+    backgroundColor: '#EFF6FF', padding: 16, borderRadius: 14, borderWidth: 1, borderColor: '#DBEAFE',
+  },
+  infoText: { flex: 1, fontSize: 13, color: '#1E40AF', lineHeight: 20 },
+  
+  // Footer
+  footer: { 
+    padding: 16, paddingBottom: Platform.OS === 'ios' ? 32 : 16,
+    backgroundColor: '#fff', borderTopWidth: 0,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 10,
+  },
+  submitButton: { 
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: ZOMATO_RED, height: 56, borderRadius: 16,
+    shadowColor: ZOMATO_RED, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
+  },
   submitButtonDisabled: { opacity: 0.7 },
-  submitButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  submitButtonText: { color: '#fff', fontSize: 17, fontWeight: '700' },
 });

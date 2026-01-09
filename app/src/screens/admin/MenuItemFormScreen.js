@@ -1,16 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView, TextInput,
-  TouchableOpacity, Image, Alert, ActivityIndicator, Switch, Modal, FlatList
+  TouchableOpacity, Image, Alert, ActivityIndicator, Switch, Modal, FlatList,
+  Animated, Platform, KeyboardAvoidingView
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import api from '../../config/api';
 
+// Zomato Theme Colors
+const ZOMATO_RED = '#E23744';
+const ZOMATO_DARK_RED = '#CB1A27';
+
 const FOOD_TYPES = [
-  { value: 'veg', label: 'Veg', color: '#22c55e' },
-  { value: 'nonveg', label: 'Non-Veg', color: '#ef4444' },
-  { value: 'egg', label: 'Egg', color: '#f59e0b' },
+  { value: 'veg', label: 'Veg', color: '#22C55E', icon: 'leaf' },
+  { value: 'nonveg', label: 'Non-Veg', color: '#EF4444', icon: 'flame' },
+  { value: 'egg', label: 'Egg', color: '#F59E0B', icon: 'egg' },
 ];
 
 const UNITS = ['piece', 'plate', 'bowl', 'cup', 'slice', 'full', 'half', 'small', 'kg', 'gram', 'liter', 'ml', 'inch'];
@@ -36,12 +42,18 @@ export default function MenuItemFormScreen({ route, navigation }) {
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   
-  // Categories
   const [categories, setCategories] = useState([]);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showUnitPicker, setShowUnitPicker] = useState(false);
+  
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
+    ]).start();
     fetchCategories();
   }, []);
 
@@ -61,7 +73,6 @@ export default function MenuItemFormScreen({ route, navigation }) {
       aspect: [1, 1],
       quality: 0.8,
     });
-
     if (!result.canceled) {
       setNewImage(result.assets[0]);
       setImage(result.assets[0].uri);
@@ -80,10 +91,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
     }
     setAiLoading(true);
     try {
-      const response = await api.post('/ai/generate-description', { 
-        name, 
-        category: selectedCategories 
-      });
+      const response = await api.post('/ai/generate-description', { name, category: selectedCategories });
       setDescription(response.data.description);
     } catch (error) {
       Alert.alert('Error', 'Failed to generate description');
@@ -130,14 +138,10 @@ export default function MenuItemFormScreen({ route, navigation }) {
       }
 
       if (isEditing) {
-        await api.put(`/menu/${existingItem._id}`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        await api.put(`/menu/${existingItem._id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
         Alert.alert('Success', 'Menu item updated');
       } else {
-        await api.post('/menu', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        await api.post('/menu', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
         Alert.alert('Success', 'Menu item created');
       }
       navigation.goBack();
@@ -150,230 +154,235 @@ export default function MenuItemFormScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#1c1d21" />
-        </TouchableOpacity>
-        <Text style={styles.title}>{isEditing ? 'Edit Item' : 'Add Item'}</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Image */}
-        <View style={styles.imageSection}>
-          <TouchableOpacity style={styles.imageContainer} onPress={pickImage}>
-            {image ? (
-              <Image source={{ uri: image }} style={styles.image} />
-            ) : (
-              <View style={styles.imagePlaceholder}>
-                <Ionicons name="camera-outline" size={36} color="#9ca3af" />
-                <Text style={styles.imagePlaceholderText}>Add Image</Text>
-              </View>
-            )}
+      {/* Premium Header */}
+      <Animated.View style={{ opacity: fadeAnim }}>
+        <LinearGradient
+          colors={[ZOMATO_RED, ZOMATO_DARK_RED]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}
+        >
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          {image && (
-            <TouchableOpacity style={styles.removeImageButton} onPress={removeImage}>
-              <Ionicons name="close-circle" size={28} color="#ef4444" />
-            </TouchableOpacity>
-          )}
-        </View>
+          <Text style={styles.headerTitle}>{isEditing ? 'Edit Item' : 'New Item'}</Text>
+          <View style={{ width: 44 }} />
+        </LinearGradient>
+      </Animated.View>
 
-        <View style={styles.form}>
-          {/* Name */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Item Name *</Text>
-            <TextInput 
-              style={styles.input} 
-              value={name} 
-              onChangeText={setName} 
-              placeholder="e.g., Margherita Pizza" 
-              placeholderTextColor="#9ca3af"
-            />
-          </View>
-
-          {/* Description with AI */}
-          <View style={styles.inputGroup}>
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>Description</Text>
-              <TouchableOpacity 
-                style={styles.aiButton} 
-                onPress={generateDescription}
-                disabled={aiLoading}
-              >
-                {aiLoading ? (
-                  <ActivityIndicator size="small" color="#8b5cf6" />
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+            {/* Image Section */}
+            <View style={styles.imageSection}>
+              <TouchableOpacity style={styles.imageContainer} onPress={pickImage} activeOpacity={0.8}>
+                {image ? (
+                  <Image source={{ uri: image }} style={styles.image} />
                 ) : (
-                  <>
-                    <Ionicons name="sparkles" size={14} color="#8b5cf6" />
-                    <Text style={styles.aiButtonText}>AI Generate</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Describe your item..."
-              placeholderTextColor="#9ca3af"
-              multiline
-              numberOfLines={3}
-            />
-          </View>
-
-          {/* Price */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Price (₹) *</Text>
-            <TextInput
-              style={styles.input}
-              value={price}
-              onChangeText={setPrice}
-              placeholder="0"
-              placeholderTextColor="#9ca3af"
-              keyboardType="numeric"
-            />
-          </View>
-
-          {/* Categories */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Categories *</Text>
-            <TouchableOpacity 
-              style={styles.pickerButton}
-              onPress={() => setShowCategoryPicker(true)}
-            >
-              <View style={styles.selectedTags}>
-                {selectedCategories.length === 0 ? (
-                  <Text style={styles.pickerPlaceholder}>Select categories</Text>
-                ) : (
-                  selectedCategories.map(cat => (
-                    <View key={cat} style={styles.selectedTag}>
-                      <Text style={styles.selectedTagText}>{cat}</Text>
-                      <TouchableOpacity onPress={() => toggleCategory(cat)}>
-                        <Ionicons name="close" size={14} color="#fff" />
-                      </TouchableOpacity>
+                  <View style={styles.imagePlaceholder}>
+                    <View style={styles.imagePlaceholderIcon}>
+                      <Ionicons name="camera-outline" size={32} color={ZOMATO_RED} />
                     </View>
-                  ))
-                )}
-              </View>
-              <Ionicons name="chevron-down" size={20} color="#9ca3af" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Unit & Quantity */}
-          <View style={styles.rowInputs}>
-            <View style={[styles.inputGroup, { flex: 1 }]}>
-              <Text style={styles.label}>Quantity</Text>
-              <TextInput
-                style={styles.input}
-                value={quantity}
-                onChangeText={setQuantity}
-                placeholder="1"
-                placeholderTextColor="#9ca3af"
-                keyboardType="numeric"
-              />
-            </View>
-            <View style={[styles.inputGroup, { flex: 1 }]}>
-              <Text style={styles.label}>Unit</Text>
-              <TouchableOpacity 
-                style={styles.pickerButton}
-                onPress={() => setShowUnitPicker(true)}
-              >
-                <Text style={styles.pickerValue}>{unit}</Text>
-                <Ionicons name="chevron-down" size={20} color="#9ca3af" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Preparation Time */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Preparation Time (minutes)</Text>
-            <View style={styles.prepTimeContainer}>
-              <TouchableOpacity 
-                style={styles.prepTimeButton}
-                onPress={() => setPreparationTime(Math.max(0, parseInt(preparationTime || 0) - 5).toString())}
-              >
-                <Ionicons name="remove" size={20} color="#61636b" />
-              </TouchableOpacity>
-              <TextInput
-                style={styles.prepTimeInput}
-                value={preparationTime}
-                onChangeText={setPreparationTime}
-                keyboardType="numeric"
-                textAlign="center"
-              />
-              <TouchableOpacity 
-                style={styles.prepTimeButton}
-                onPress={() => setPreparationTime((parseInt(preparationTime || 0) + 5).toString())}
-              >
-                <Ionicons name="add" size={20} color="#61636b" />
-              </TouchableOpacity>
-              <Text style={styles.prepTimeLabel}>min</Text>
-            </View>
-          </View>
-
-          {/* Food Type */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Food Type</Text>
-            <View style={styles.foodTypeContainer}>
-              {FOOD_TYPES.map((type) => (
-                <TouchableOpacity
-                  key={type.value}
-                  style={[
-                    styles.foodTypeButton, 
-                    foodType === type.value && { backgroundColor: type.color, borderColor: type.color }
-                  ]}
-                  onPress={() => setFoodType(type.value)}
-                >
-                  <View style={[
-                    styles.foodTypeIcon, 
-                    { borderColor: foodType === type.value ? '#fff' : type.color }
-                  ]}>
-                    <View style={[
-                      styles.foodTypeDot, 
-                      { backgroundColor: foodType === type.value ? '#fff' : type.color }
-                    ]} />
+                    <Text style={styles.imagePlaceholderText}>Add Photo</Text>
+                    <Text style={styles.imagePlaceholderHint}>Tap to upload</Text>
                   </View>
-                  <Text style={[
-                    styles.foodTypeText, 
-                    foodType === type.value && { color: '#fff' }
-                  ]}>
-                    {type.label}
-                  </Text>
+                )}
+              </TouchableOpacity>
+              {image && (
+                <TouchableOpacity style={styles.removeImageButton} onPress={removeImage}>
+                  <Ionicons name="close-circle" size={32} color="#EF4444" />
                 </TouchableOpacity>
-              ))}
+              )}
             </View>
-          </View>
 
-          {/* Tags */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Tags (comma separated)</Text>
-            <TextInput
-              style={styles.input}
-              value={tags}
-              onChangeText={setTags}
-              placeholder="e.g., spicy, bestseller, new"
-              placeholderTextColor="#9ca3af"
-            />
-          </View>
+            <View style={styles.form}>
+              {/* Name */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Item Name <Text style={styles.required}>*</Text></Text>
+                <TextInput 
+                  style={styles.input} 
+                  value={name} 
+                  onChangeText={setName} 
+                  placeholder="e.g., Margherita Pizza" 
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
 
-          {/* Available */}
-          <View style={styles.switchRow}>
-            <View>
-              <Text style={styles.label}>Available</Text>
-              <Text style={styles.switchHint}>Item will be visible to customers</Text>
+              {/* Description with AI */}
+              <View style={styles.inputGroup}>
+                <View style={styles.labelRow}>
+                  <Text style={styles.label}>Description</Text>
+                  <TouchableOpacity style={styles.aiButton} onPress={generateDescription} disabled={aiLoading}>
+                    {aiLoading ? (
+                      <ActivityIndicator size="small" color="#8B5CF6" />
+                    ) : (
+                      <>
+                        <Ionicons name="sparkles" size={14} color="#8B5CF6" />
+                        <Text style={styles.aiButtonText}>AI Generate</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder="Describe your item..."
+                  placeholderTextColor="#9CA3AF"
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+
+              {/* Price */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Price <Text style={styles.required}>*</Text></Text>
+                <View style={styles.priceInputContainer}>
+                  <Text style={styles.currencySymbol}>₹</Text>
+                  <TextInput
+                    style={styles.priceInput}
+                    value={price}
+                    onChangeText={setPrice}
+                    placeholder="0"
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              {/* Categories */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Categories <Text style={styles.required}>*</Text></Text>
+                <TouchableOpacity style={styles.pickerButton} onPress={() => setShowCategoryPicker(true)}>
+                  <View style={styles.selectedTags}>
+                    {selectedCategories.length === 0 ? (
+                      <Text style={styles.pickerPlaceholder}>Select categories</Text>
+                    ) : (
+                      selectedCategories.map(cat => (
+                        <View key={cat} style={styles.selectedTag}>
+                          <Text style={styles.selectedTagText}>{cat}</Text>
+                          <TouchableOpacity onPress={() => toggleCategory(cat)}>
+                            <Ionicons name="close" size={14} color="#fff" />
+                          </TouchableOpacity>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                  <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Unit & Quantity */}
+              <View style={styles.rowInputs}>
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Quantity</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={quantity}
+                    onChangeText={setQuantity}
+                    placeholder="1"
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Unit</Text>
+                  <TouchableOpacity style={styles.pickerButton} onPress={() => setShowUnitPicker(true)}>
+                    <Text style={styles.pickerValue}>{unit}</Text>
+                    <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Preparation Time */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Preparation Time</Text>
+                <View style={styles.prepTimeContainer}>
+                  <TouchableOpacity 
+                    style={styles.prepTimeButton}
+                    onPress={() => setPreparationTime(Math.max(0, parseInt(preparationTime || 0) - 5).toString())}
+                  >
+                    <Ionicons name="remove" size={22} color={ZOMATO_RED} />
+                  </TouchableOpacity>
+                  <View style={styles.prepTimeInputWrapper}>
+                    <TextInput
+                      style={styles.prepTimeInput}
+                      value={preparationTime}
+                      onChangeText={setPreparationTime}
+                      keyboardType="numeric"
+                      textAlign="center"
+                    />
+                    <Text style={styles.prepTimeUnit}>min</Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.prepTimeButton}
+                    onPress={() => setPreparationTime((parseInt(preparationTime || 0) + 5).toString())}
+                  >
+                    <Ionicons name="add" size={22} color={ZOMATO_RED} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Food Type */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Food Type</Text>
+                <View style={styles.foodTypeContainer}>
+                  {FOOD_TYPES.map((type) => (
+                    <TouchableOpacity
+                      key={type.value}
+                      style={[styles.foodTypeButton, foodType === type.value && { backgroundColor: type.color, borderColor: type.color }]}
+                      onPress={() => setFoodType(type.value)}
+                    >
+                      <View style={[styles.foodTypeIcon, { borderColor: foodType === type.value ? '#fff' : type.color }]}>
+                        <View style={[styles.foodTypeDot, { backgroundColor: foodType === type.value ? '#fff' : type.color }]} />
+                      </View>
+                      <Text style={[styles.foodTypeText, foodType === type.value && { color: '#fff' }]}>{type.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Tags */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Tags</Text>
+                <TextInput
+                  style={styles.input}
+                  value={tags}
+                  onChangeText={setTags}
+                  placeholder="e.g., spicy, bestseller, new"
+                  placeholderTextColor="#9CA3AF"
+                />
+                <Text style={styles.inputHint}>Separate tags with commas</Text>
+              </View>
+
+              {/* Available Switch */}
+              <View style={styles.switchCard}>
+                <View style={styles.switchInfo}>
+                  <View style={styles.switchIconContainer}>
+                    <Ionicons name="checkmark-circle" size={24} color={available ? '#22C55E' : '#9CA3AF'} />
+                  </View>
+                  <View>
+                    <Text style={styles.switchLabel}>Available for Order</Text>
+                    <Text style={styles.switchHint}>Item will be visible to customers</Text>
+                  </View>
+                </View>
+                <Switch
+                  value={available}
+                  onValueChange={setAvailable}
+                  trackColor={{ false: '#E5E7EB', true: '#BBF7D0' }}
+                  thumbColor={available ? '#22C55E' : '#9CA3AF'}
+                />
+              </View>
             </View>
-            <Switch
-              value={available}
-              onValueChange={setAvailable}
-              trackColor={{ false: '#d1d5db', true: '#86efac' }}
-              thumbColor={available ? '#22c55e' : '#9ca3af'}
-            />
-          </View>
-        </View>
+          </Animated.View>
+          <View style={{ height: 120 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-        <View style={{ height: 100 }} />
-      </ScrollView>
-
+      {/* Footer */}
       <View style={styles.footer}>
         <TouchableOpacity
           style={[styles.submitButton, loading && styles.submitButtonDisabled]}
@@ -383,73 +392,57 @@ export default function MenuItemFormScreen({ route, navigation }) {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.submitButtonText}>{isEditing ? 'Update Item' : 'Add Item'}</Text>
+            <>
+              <Ionicons name={isEditing ? 'checkmark-circle' : 'add-circle'} size={22} color="#fff" />
+              <Text style={styles.submitButtonText}>{isEditing ? 'Update Item' : 'Add Item'}</Text>
+            </>
           )}
         </TouchableOpacity>
       </View>
 
       {/* Category Picker Modal */}
-      <Modal
-        visible={showCategoryPicker}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowCategoryPicker(false)}
-      >
+      <Modal visible={showCategoryPicker} animationType="slide" transparent={true} onRequestClose={() => setShowCategoryPicker(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Categories</Text>
-              <TouchableOpacity onPress={() => setShowCategoryPicker(false)}>
-                <Ionicons name="close" size={24} color="#61636b" />
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowCategoryPicker(false)}>
+                <Ionicons name="close" size={24} color="#696969" />
               </TouchableOpacity>
             </View>
             <FlatList
               data={categories}
               keyExtractor={(item) => item._id}
               renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.categoryOption}
-                  onPress={() => toggleCategory(item.name)}
-                >
-                  <View style={[
-                    styles.checkbox,
-                    selectedCategories.includes(item.name) && styles.checkboxChecked
-                  ]}>
-                    {selectedCategories.includes(item.name) && (
-                      <Ionicons name="checkmark" size={16} color="#fff" />
-                    )}
+                <TouchableOpacity style={styles.categoryOption} onPress={() => toggleCategory(item.name)}>
+                  <View style={[styles.checkbox, selectedCategories.includes(item.name) && styles.checkboxChecked]}>
+                    {selectedCategories.includes(item.name) && <Ionicons name="checkmark" size={16} color="#fff" />}
                   </View>
                   <Text style={styles.categoryOptionText}>{item.name}</Text>
                 </TouchableOpacity>
               )}
-              ListEmptyComponent={
-                <Text style={styles.emptyText}>No categories found. Add categories from Menu screen.</Text>
-              }
+              ListEmptyComponent={<Text style={styles.emptyText}>No categories found. Add categories from Menu screen.</Text>}
               contentContainerStyle={styles.modalList}
             />
-            <TouchableOpacity 
-              style={styles.modalDoneButton}
-              onPress={() => setShowCategoryPicker(false)}
-            >
-              <Text style={styles.modalDoneButtonText}>Done</Text>
-            </TouchableOpacity>
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.modalDoneButton} onPress={() => setShowCategoryPicker(false)}>
+                <Text style={styles.modalDoneButtonText}>Done</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
 
       {/* Unit Picker Modal */}
-      <Modal
-        visible={showUnitPicker}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowUnitPicker(false)}
-      >
+      <Modal visible={showUnitPicker} animationType="slide" transparent={true} onRequestClose={() => setShowUnitPicker(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Unit</Text>
-              <TouchableOpacity onPress={() => setShowUnitPicker(false)}>
-                <Ionicons name="close" size={24} color="#61636b" />
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowUnitPicker(false)}>
+                <Ionicons name="close" size={24} color="#696969" />
               </TouchableOpacity>
             </View>
             <FlatList
@@ -460,10 +453,8 @@ export default function MenuItemFormScreen({ route, navigation }) {
                   style={[styles.unitOption, unit === item && styles.unitOptionSelected]}
                   onPress={() => { setUnit(item); setShowUnitPicker(false); }}
                 >
-                  <Text style={[styles.unitOptionText, unit === item && styles.unitOptionTextSelected]}>
-                    {item}
-                  </Text>
-                  {unit === item && <Ionicons name="checkmark" size={20} color="#e63946" />}
+                  <Text style={[styles.unitOptionText, unit === item && styles.unitOptionTextSelected]}>{item}</Text>
+                  {unit === item && <Ionicons name="checkmark-circle" size={22} color={ZOMATO_RED} />}
                 </TouchableOpacity>
               )}
               contentContainerStyle={styles.modalList}
@@ -477,124 +468,173 @@ export default function MenuItemFormScreen({ route, navigation }) {
 
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fb' },
+  container: { flex: 1, backgroundColor: '#F8F8F8' },
+  
+  // Header
   header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb',
+    paddingTop: Platform.OS === 'android' ? 44 : 12,
+    paddingBottom: 20,
+    paddingHorizontal: 16,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  title: { fontSize: 18, fontWeight: 'bold', color: '#1c1d21' },
+  backButton: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
   content: { flex: 1, padding: 16 },
   
   // Image
-  imageSection: { alignItems: 'center', marginBottom: 20, position: 'relative' },
+  imageSection: { alignItems: 'center', marginBottom: 24, position: 'relative' },
   imageContainer: { alignItems: 'center' },
-  image: { width: 140, height: 140, borderRadius: 16 },
-  imagePlaceholder: {
-    width: 140, height: 140, borderRadius: 16, backgroundColor: '#f3f4f6',
-    justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#e5e7eb', borderStyle: 'dashed',
+  image: { 
+    width: 150, height: 150, borderRadius: 20, borderWidth: 3, borderColor: '#fff',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 6,
   },
-  imagePlaceholderText: { color: '#9ca3af', marginTop: 8, fontSize: 13 },
-  removeImageButton: { position: 'absolute', top: -8, right: '30%' },
+  imagePlaceholder: {
+    width: 150, height: 150, borderRadius: 20, backgroundColor: '#fff',
+    justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#E8E8E8', borderStyle: 'dashed',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+  },
+  imagePlaceholderIcon: {
+    width: 56, height: 56, borderRadius: 28, backgroundColor: '#FEF2F2',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 8,
+  },
+  imagePlaceholderText: { color: '#1C1C1C', fontSize: 14, fontWeight: '600' },
+  imagePlaceholderHint: { color: '#9CA3AF', fontSize: 12, marginTop: 2 },
+  removeImageButton: { position: 'absolute', top: -8, right: '25%' },
   
   // Form
-  form: { gap: 18 },
+  form: { gap: 20 },
   inputGroup: { gap: 8 },
-  label: { fontSize: 14, fontWeight: '600', color: '#1c1d21' },
+  label: { fontSize: 14, fontWeight: '700', color: '#1C1C1C' },
+  required: { color: ZOMATO_RED },
   labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   input: {
-    backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, height: 50,
-    borderWidth: 1, borderColor: '#e5e7eb', fontSize: 15, color: '#1c1d21',
+    backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 18, height: 54,
+    borderWidth: 1.5, borderColor: '#E8E8E8', fontSize: 15, color: '#1C1C1C', fontWeight: '500',
   },
-  textArea: { height: 90, textAlignVertical: 'top', paddingTop: 14 },
-  
+  textArea: { height: 100, textAlignVertical: 'top', paddingTop: 16 },
+  inputHint: { fontSize: 12, color: '#9CA3AF', marginTop: 4 },
+
   // AI Button
   aiButton: { 
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#f3e8ff', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#F3E8FF', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
   },
-  aiButtonText: { fontSize: 12, color: '#8b5cf6', fontWeight: '600' },
+  aiButtonText: { fontSize: 12, color: '#8B5CF6', fontWeight: '700' },
+  
+  // Price
+  priceInputContainer: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 14,
+    borderWidth: 1.5, borderColor: '#E8E8E8', paddingHorizontal: 18, height: 54,
+  },
+  currencySymbol: { fontSize: 20, fontWeight: '700', color: ZOMATO_RED, marginRight: 8 },
+  priceInput: { flex: 1, fontSize: 18, color: '#1C1C1C', fontWeight: '600' },
   
   // Picker
   pickerButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, height: 50,
-    borderWidth: 1, borderColor: '#e5e7eb',
+    backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 18, height: 54,
+    borderWidth: 1.5, borderColor: '#E8E8E8',
   },
-  pickerPlaceholder: { color: '#9ca3af', fontSize: 15 },
-  pickerValue: { color: '#1c1d21', fontSize: 15 },
-  selectedTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, flex: 1 },
+  pickerPlaceholder: { color: '#9CA3AF', fontSize: 15 },
+  pickerValue: { color: '#1C1C1C', fontSize: 15, fontWeight: '600' },
+  selectedTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, flex: 1 },
   selectedTag: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#e63946', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: ZOMATO_RED, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
   },
-  selectedTagText: { color: '#fff', fontSize: 13, fontWeight: '500' },
+  selectedTagText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   
   // Row inputs
-  rowInputs: { flexDirection: 'row', gap: 12 },
+  rowInputs: { flexDirection: 'row', gap: 14 },
   
   // Prep time
-  prepTimeContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  prepTimeContainer: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   prepTimeButton: {
-    width: 44, height: 44, borderRadius: 12, backgroundColor: '#f3f4f6',
+    width: 48, height: 48, borderRadius: 14, backgroundColor: '#FEF2F2',
     justifyContent: 'center', alignItems: 'center',
   },
+  prepTimeInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   prepTimeInput: {
-    width: 60, height: 44, backgroundColor: '#fff', borderRadius: 12,
-    borderWidth: 1, borderColor: '#e5e7eb', fontSize: 16, color: '#1c1d21',
+    width: 60, height: 48, backgroundColor: '#fff', borderRadius: 14,
+    borderWidth: 1.5, borderColor: '#E8E8E8', fontSize: 18, color: '#1C1C1C', fontWeight: '700',
   },
-  prepTimeLabel: { fontSize: 14, color: '#61636b' },
+  prepTimeUnit: { fontSize: 14, color: '#696969', marginLeft: 8, fontWeight: '600' },
   
   // Food type
-  foodTypeContainer: { flexDirection: 'row', gap: 10 },
+  foodTypeContainer: { flexDirection: 'row', gap: 12 },
   foodTypeButton: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: 14, borderRadius: 12, backgroundColor: '#fff',
-    borderWidth: 1.5, borderColor: '#e5e7eb',
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 16, borderRadius: 14, backgroundColor: '#fff',
+    borderWidth: 2, borderColor: '#E8E8E8',
   },
-  foodTypeIcon: { width: 16, height: 16, borderRadius: 4, borderWidth: 2, justifyContent: 'center', alignItems: 'center' },
-  foodTypeDot: { width: 8, height: 8, borderRadius: 4 },
-  foodTypeText: { fontSize: 14, fontWeight: '600', color: '#61636b' },
-  
+  foodTypeIcon: { width: 18, height: 18, borderRadius: 5, borderWidth: 2, justifyContent: 'center', alignItems: 'center' },
+  foodTypeDot: { width: 10, height: 10, borderRadius: 5 },
+  foodTypeText: { fontSize: 14, fontWeight: '700', color: '#696969' },
+
   // Switch
-  switchRow: { 
+  switchCard: { 
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb',
+    backgroundColor: '#fff', padding: 18, borderRadius: 16, borderWidth: 1.5, borderColor: '#E8E8E8',
   },
-  switchHint: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
+  switchInfo: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  switchIconContainer: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F0FDF4', justifyContent: 'center', alignItems: 'center' },
+  switchLabel: { fontSize: 15, fontWeight: '700', color: '#1C1C1C' },
+  switchHint: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
   
   // Footer
-  footer: { padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb' },
-  submitButton: { backgroundColor: '#e63946', height: 52, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  footer: { 
+    padding: 16, paddingBottom: Platform.OS === 'ios' ? 32 : 16,
+    backgroundColor: '#fff', borderTopWidth: 0,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 10,
+  },
+  submitButton: { 
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: ZOMATO_RED, height: 56, borderRadius: 16,
+    shadowColor: ZOMATO_RED, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
+  },
   submitButtonDisabled: { opacity: 0.7 },
-  submitButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  submitButtonText: { color: '#fff', fontSize: 17, fontWeight: '700' },
   
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '70%' },
+  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '75%' },
+  modalHandle: { width: 40, height: 4, backgroundColor: '#E8E8E8', borderRadius: 2, alignSelf: 'center', marginTop: 12 },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 20, borderBottomWidth: 1, borderBottomColor: '#e5e7eb',
+    paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
   },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#1c1d21' },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: '#1C1C1C' },
+  modalCloseButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
   modalList: { padding: 16 },
-  categoryOption: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
+  modalFooter: { padding: 16, borderTopWidth: 1, borderTopColor: '#F0F0F0' },
+  
+  categoryOption: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
   checkbox: {
-    width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#d1d5db',
+    width: 26, height: 26, borderRadius: 8, borderWidth: 2, borderColor: '#D1D5DB',
     justifyContent: 'center', alignItems: 'center',
   },
-  checkboxChecked: { backgroundColor: '#e63946', borderColor: '#e63946' },
-  categoryOptionText: { fontSize: 16, color: '#1c1d21' },
+  checkboxChecked: { backgroundColor: ZOMATO_RED, borderColor: ZOMATO_RED },
+  categoryOptionText: { fontSize: 16, color: '#1C1C1C', fontWeight: '500' },
+  
   unitOption: { 
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
+    paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F5F5F5',
   },
-  unitOptionSelected: { backgroundColor: '#fef2f2' },
-  unitOptionText: { fontSize: 16, color: '#1c1d21' },
-  unitOptionTextSelected: { color: '#e63946', fontWeight: '600' },
+  unitOptionSelected: { backgroundColor: '#FEF2F2' },
+  unitOptionText: { fontSize: 16, color: '#1C1C1C', fontWeight: '500' },
+  unitOptionTextSelected: { color: ZOMATO_RED, fontWeight: '700' },
+  
   modalDoneButton: { 
-    margin: 16, backgroundColor: '#e63946', height: 50, borderRadius: 12, 
-    justifyContent: 'center', alignItems: 'center' 
+    backgroundColor: ZOMATO_RED, height: 54, borderRadius: 14, justifyContent: 'center', alignItems: 'center',
+    shadowColor: ZOMATO_RED, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
-  modalDoneButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  emptyText: { textAlign: 'center', color: '#9ca3af', padding: 20 },
+  modalDoneButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  emptyText: { textAlign: 'center', color: '#9CA3AF', padding: 24, fontSize: 14 },
 });

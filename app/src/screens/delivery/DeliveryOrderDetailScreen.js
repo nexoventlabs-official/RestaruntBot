@@ -1,25 +1,35 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView,
-  TouchableOpacity, Linking
+  TouchableOpacity, Linking, Animated, Platform
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 
-const STATUS_COLORS = {
-  ready: '#10b981',
-  out_for_delivery: '#06b6d4',
-  delivered: '#22c55e',
-};
+// Delivery Theme Colors
+const DELIVERY_GREEN = '#267E3E';
+const DELIVERY_DARK_GREEN = '#1B5E2E';
 
-const STATUS_LABELS = {
-  ready: 'Ready for Pickup',
-  out_for_delivery: 'Out for Delivery',
-  delivered: 'Delivered',
+const STATUS_CONFIG = {
+  ready: { color: '#10B981', bg: '#D1FAE5', label: 'Ready for Pickup', icon: 'checkmark-circle' },
+  out_for_delivery: { color: '#06B6D4', bg: '#CFFAFE', label: 'Out for Delivery', icon: 'bicycle' },
+  delivered: { color: '#22C55E', bg: '#DCFCE7', label: 'Delivered', icon: 'checkmark-done-circle' },
 };
 
 export default function DeliveryOrderDetailScreen({ route, navigation }) {
   const { order } = route.params;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  
+  const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.ready;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
+    ]).start();
+  }, []);
 
   const openGoogleMaps = async () => {
     const address = order.deliveryAddress?.address || order.customer?.address;
@@ -29,7 +39,6 @@ export default function DeliveryOrderDetailScreen({ route, navigation }) {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        // Fallback without current location
         let url;
         if (lat && lng) {
           url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
@@ -50,7 +59,6 @@ export default function DeliveryOrderDetailScreen({ route, navigation }) {
       } else if (address) {
         url = `https://www.google.com/maps/dir/?api=1&origin=${currentLat},${currentLng}&destination=${encodeURIComponent(address)}&travelmode=driving`;
       }
-
       if (url) await Linking.openURL(url);
     } catch (error) {
       console.error('Error opening maps:', error);
@@ -59,165 +67,316 @@ export default function DeliveryOrderDetailScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#1c1d21" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Order #{order.orderId}</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      <ScrollView style={styles.content}>
-        <View style={styles.statusCard}>
-          <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[order.status] }]}>
-            <Text style={styles.statusText}>{STATUS_LABELS[order.status]}</Text>
-          </View>
-          {order.deliveredAt && (
-            <Text style={styles.deliveredTime}>
-              Delivered on {new Date(order.deliveredAt).toLocaleString('en-IN')}
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Customer Details</Text>
-          <View style={styles.card}>
-            <View style={styles.row}>
-              <Ionicons name="person-outline" size={20} color="#61636b" />
-              <Text style={styles.rowText}>{order.customer?.name || 'Customer'}</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.row}
-              onPress={() => Linking.openURL(`tel:${order.customer?.phone}`)}
-            >
-              <Ionicons name="call-outline" size={20} color="#2a9d8f" />
-              <Text style={[styles.rowText, styles.linkText]}>{order.customer?.phone}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Delivery Address</Text>
-          <TouchableOpacity style={styles.addressCard} onPress={openGoogleMaps}>
-            <View style={styles.addressContent}>
-              <Ionicons name="location-outline" size={24} color="#2a9d8f" />
-              <Text style={styles.addressText}>
-                {order.deliveryAddress?.address || order.customer?.address || 'N/A'}
-              </Text>
-            </View>
-            <View style={styles.navigateButton}>
-              <Ionicons name="navigate" size={20} color="#fff" />
-              <Text style={styles.navigateButtonText}>Navigate</Text>
-            </View>
+      {/* Premium Header */}
+      <Animated.View style={{ opacity: fadeAnim }}>
+        <LinearGradient
+          colors={[DELIVERY_GREEN, DELIVERY_DARK_GREEN]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}
+        >
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Order Items</Text>
-          <View style={styles.card}>
-            {order.items?.map((item, index) => (
-              <View key={index} style={[styles.itemRow, index > 0 && styles.itemBorder]}>
-                <View style={styles.itemInfo}>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  <Text style={styles.itemQty}>x{item.quantity}</Text>
-                </View>
-                <Text style={styles.itemPrice}>₹{item.price * item.quantity}</Text>
-              </View>
-            ))}
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalAmount}>₹{order.totalAmount}</Text>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Order #{order.orderId}</Text>
+            <View style={[styles.statusBadgeSmall, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+              <Ionicons name={statusConfig.icon} size={14} color="#fff" />
+              <Text style={styles.statusBadgeSmallText}>{statusConfig.label}</Text>
             </View>
           </View>
-        </View>
+          <View style={{ width: 44 }} />
+        </LinearGradient>
+      </Animated.View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Payment Info</Text>
-          <View style={styles.card}>
-            <View style={styles.row}>
-              <Text style={styles.label}>Method:</Text>
-              <Text style={styles.value}>
-                {order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'UPI (Prepaid)'}
-              </Text>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+          {/* Status Card */}
+          <View style={styles.statusCard}>
+            <View style={[styles.statusIconContainer, { backgroundColor: statusConfig.bg }]}>
+              <Ionicons name={statusConfig.icon} size={32} color={statusConfig.color} />
             </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Status:</Text>
-              <Text style={[styles.value, { color: order.paymentStatus === 'paid' ? '#22c55e' : '#f59e0b' }]}>
-                {order.paymentStatus?.toUpperCase()}
+            <Text style={[styles.statusText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
+            {order.deliveredAt && (
+              <Text style={styles.deliveredTime}>
+                Delivered on {new Date(order.deliveredAt).toLocaleString('en-IN')}
               </Text>
-            </View>
-            {order.actualPaymentMethod && (
-              <View style={styles.row}>
-                <Text style={styles.label}>Collected via:</Text>
-                <Text style={styles.value}>{order.actualPaymentMethod.toUpperCase()}</Text>
-              </View>
             )}
           </View>
-        </View>
 
-        {order.trackingUpdates?.length > 0 && (
+          {/* Customer Details */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Timeline</Text>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="person" size={18} color={DELIVERY_GREEN} />
+              <Text style={styles.sectionTitle}>Customer Details</Text>
+            </View>
             <View style={styles.card}>
-              {order.trackingUpdates.map((update, index) => (
-                <View key={index} style={styles.timelineItem}>
-                  <View style={styles.timelineDot} />
-                  <View style={styles.timelineContent}>
-                    <Text style={styles.timelineMessage}>{update.message}</Text>
-                    <Text style={styles.timelineTime}>
-                      {new Date(update.timestamp).toLocaleString('en-IN')}
-                    </Text>
-                  </View>
+              <View style={styles.customerRow}>
+                <View style={styles.customerAvatar}>
+                  <Ionicons name="person" size={24} color="#fff" />
                 </View>
-              ))}
+                <View style={styles.customerInfo}>
+                  <Text style={styles.customerName}>{order.customer?.name || 'Customer'}</Text>
+                  <TouchableOpacity
+                    style={styles.phoneButton}
+                    onPress={() => Linking.openURL(`tel:${order.customer?.phone}`)}
+                  >
+                    <Ionicons name="call" size={16} color={DELIVERY_GREEN} />
+                    <Text style={styles.phoneText}>{order.customer?.phone}</Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                  style={styles.callButton}
+                  onPress={() => Linking.openURL(`tel:${order.customer?.phone}`)}
+                >
+                  <Ionicons name="call" size={20} color="#fff" />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        )}
+
+          {/* Delivery Address */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="location" size={18} color={DELIVERY_GREEN} />
+              <Text style={styles.sectionTitle}>Delivery Address</Text>
+            </View>
+            <TouchableOpacity style={styles.addressCard} onPress={openGoogleMaps} activeOpacity={0.8}>
+              <View style={styles.addressContent}>
+                <View style={styles.addressIconContainer}>
+                  <Ionicons name="location" size={24} color={DELIVERY_GREEN} />
+                </View>
+                <Text style={styles.addressText}>
+                  {order.deliveryAddress?.address || order.customer?.address || 'N/A'}
+                </Text>
+              </View>
+              <LinearGradient
+                colors={[DELIVERY_GREEN, DELIVERY_DARK_GREEN]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.navigateButton}
+              >
+                <Ionicons name="navigate" size={20} color="#fff" />
+                <Text style={styles.navigateButtonText}>Navigate</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+
+          {/* Order Items */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="receipt" size={18} color={DELIVERY_GREEN} />
+              <Text style={styles.sectionTitle}>Order Items</Text>
+              <View style={styles.itemCountBadge}>
+                <Text style={styles.itemCountText}>{order.items?.length || 0}</Text>
+              </View>
+            </View>
+            <View style={styles.card}>
+              {order.items?.map((item, index) => (
+                <View key={index} style={[styles.itemRow, index > 0 && styles.itemBorder]}>
+                  <View style={styles.itemInfo}>
+                    <Text style={styles.itemName}>{item.name}</Text>
+                    <Text style={styles.itemQty}>Qty: {item.quantity}</Text>
+                  </View>
+                  <Text style={styles.itemPrice}>₹{item.price * item.quantity}</Text>
+                </View>
+              ))}
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Total Amount</Text>
+                <Text style={styles.totalAmount}>₹{order.totalAmount}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Payment Info */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="card" size={18} color={DELIVERY_GREEN} />
+              <Text style={styles.sectionTitle}>Payment Info</Text>
+            </View>
+            <View style={styles.card}>
+              <View style={styles.paymentRow}>
+                <Text style={styles.paymentLabel}>Method</Text>
+                <View style={styles.paymentMethodBadge}>
+                  <Ionicons 
+                    name={order.paymentMethod === 'cod' ? 'cash' : 'phone-portrait'} 
+                    size={16} 
+                    color={order.paymentMethod === 'cod' ? '#F59E0B' : '#8B5CF6'} 
+                  />
+                  <Text style={[styles.paymentMethodText, { color: order.paymentMethod === 'cod' ? '#F59E0B' : '#8B5CF6' }]}>
+                    {order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'UPI (Prepaid)'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.paymentRow}>
+                <Text style={styles.paymentLabel}>Status</Text>
+                <View style={[styles.paymentStatusBadge, { backgroundColor: order.paymentStatus === 'paid' ? '#DCFCE7' : '#FEF3C7' }]}>
+                  <Text style={[styles.paymentStatusText, { color: order.paymentStatus === 'paid' ? '#16A34A' : '#D97706' }]}>
+                    {order.paymentStatus?.toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+              {order.actualPaymentMethod && (
+                <View style={styles.paymentRow}>
+                  <Text style={styles.paymentLabel}>Collected via</Text>
+                  <Text style={styles.paymentValue}>{order.actualPaymentMethod.toUpperCase()}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Timeline */}
+          {order.trackingUpdates?.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="time" size={18} color={DELIVERY_GREEN} />
+                <Text style={styles.sectionTitle}>Timeline</Text>
+              </View>
+              <View style={styles.card}>
+                {order.trackingUpdates.map((update, index) => (
+                  <View key={index} style={styles.timelineItem}>
+                    <View style={styles.timelineLeft}>
+                      <View style={[styles.timelineDot, index === 0 && styles.timelineDotActive]} />
+                      {index < order.trackingUpdates.length - 1 && <View style={styles.timelineLine} />}
+                    </View>
+                    <View style={styles.timelineContent}>
+                      <Text style={styles.timelineMessage}>{update.message}</Text>
+                      <Text style={styles.timelineTime}>
+                        {new Date(update.timestamp).toLocaleString('en-IN')}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+        </Animated.View>
+        <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fb' },
+  container: { flex: 1, backgroundColor: '#F8F8F8' },
+  
+  // Header
   header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb',
+    paddingTop: Platform.OS === 'android' ? 44 : 12,
+    paddingBottom: 20,
+    paddingHorizontal: 16,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  title: { fontSize: 18, fontWeight: 'bold', color: '#1c1d21' },
+  backButton: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  headerCenter: { alignItems: 'center' },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
+  statusBadgeSmall: { 
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginTop: 6,
+  },
+  statusBadgeSmallText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   content: { flex: 1, padding: 16 },
-  statusCard: { backgroundColor: '#fff', borderRadius: 12, padding: 20, alignItems: 'center', marginBottom: 16 },
-  statusBadge: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },
-  statusText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  deliveredTime: { color: '#61636b', marginTop: 8 },
+  
+  // Status Card
+  statusCard: { 
+    backgroundColor: '#fff', borderRadius: 20, padding: 24, alignItems: 'center', marginBottom: 16,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 4,
+  },
+  statusIconContainer: { width: 72, height: 72, borderRadius: 36, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  statusText: { fontSize: 18, fontWeight: '800' },
+  deliveredTime: { color: '#696969', marginTop: 8, fontSize: 13 },
+  
+  // Section
   section: { marginBottom: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#1c1d21', marginBottom: 8 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
-  rowText: { fontSize: 14, color: '#1c1d21', flex: 1 },
-  linkText: { color: '#2a9d8f', textDecorationLine: 'underline' },
-  label: { fontSize: 14, color: '#61636b' },
-  value: { fontSize: 14, fontWeight: '600', color: '#1c1d21' },
-  addressCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16 },
-  addressContent: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
-  addressText: { flex: 1, fontSize: 14, color: '#1c1d21', lineHeight: 20 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1C1C1C' },
+  itemCountBadge: { 
+    backgroundColor: DELIVERY_GREEN, width: 24, height: 24, borderRadius: 12, 
+    justifyContent: 'center', alignItems: 'center', marginLeft: 'auto',
+  },
+  itemCountText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  
+  // Card
+  card: { 
+    backgroundColor: '#fff', borderRadius: 16, padding: 16,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
+  },
+
+  // Customer
+  customerRow: { flexDirection: 'row', alignItems: 'center' },
+  customerAvatar: { 
+    width: 52, height: 52, borderRadius: 26, backgroundColor: DELIVERY_GREEN,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  customerInfo: { flex: 1, marginLeft: 14 },
+  customerName: { fontSize: 16, fontWeight: '700', color: '#1C1C1C' },
+  phoneButton: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  phoneText: { fontSize: 14, color: DELIVERY_GREEN, fontWeight: '600' },
+  callButton: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: DELIVERY_GREEN,
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: DELIVERY_GREEN, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
+  },
+  
+  // Address
+  addressCard: { 
+    backgroundColor: '#fff', borderRadius: 16, padding: 16,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
+  },
+  addressContent: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
+  addressIconContainer: { 
+    width: 44, height: 44, borderRadius: 22, backgroundColor: '#E8F5E9',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  addressText: { flex: 1, fontSize: 14, color: '#1C1C1C', lineHeight: 22, fontWeight: '500' },
   navigateButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: '#2a9d8f', paddingVertical: 12, borderRadius: 8,
+    paddingVertical: 14, borderRadius: 14,
   },
-  navigateButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  itemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
-  itemBorder: { borderTopWidth: 1, borderTopColor: '#f3f4f6' },
+  navigateButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  
+  // Items
+  itemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
+  itemBorder: { borderTopWidth: 1, borderTopColor: '#F5F5F5' },
   itemInfo: { flex: 1 },
-  itemName: { fontSize: 14, color: '#1c1d21' },
-  itemQty: { fontSize: 12, color: '#61636b', marginTop: 2 },
-  itemPrice: { fontSize: 14, fontWeight: '600', color: '#1c1d21' },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 12, marginTop: 8 },
-  totalLabel: { fontSize: 16, fontWeight: '600', color: '#1c1d21' },
-  totalAmount: { fontSize: 18, fontWeight: 'bold', color: '#2a9d8f' },
-  timelineItem: { flexDirection: 'row', paddingVertical: 8 },
-  timelineDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#2a9d8f', marginTop: 4, marginRight: 12 },
-  timelineContent: { flex: 1 },
-  timelineMessage: { fontSize: 14, color: '#1c1d21' },
-  timelineTime: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
+  itemName: { fontSize: 15, fontWeight: '600', color: '#1C1C1C' },
+  itemQty: { fontSize: 13, color: '#696969', marginTop: 2 },
+  itemPrice: { fontSize: 15, fontWeight: '700', color: '#1C1C1C' },
+  totalRow: { 
+    flexDirection: 'row', justifyContent: 'space-between', 
+    borderTopWidth: 2, borderTopColor: '#F0F0F0', paddingTop: 14, marginTop: 8,
+  },
+  totalLabel: { fontSize: 16, fontWeight: '700', color: '#1C1C1C' },
+  totalAmount: { fontSize: 20, fontWeight: '800', color: DELIVERY_GREEN },
+
+  // Payment
+  paymentRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 },
+  paymentLabel: { fontSize: 14, color: '#696969', fontWeight: '500' },
+  paymentValue: { fontSize: 14, fontWeight: '700', color: '#1C1C1C' },
+  paymentMethodBadge: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  paymentMethodText: { fontSize: 14, fontWeight: '600' },
+  paymentStatusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  paymentStatusText: { fontSize: 12, fontWeight: '700' },
+  
+  // Timeline
+  timelineItem: { flexDirection: 'row', minHeight: 60 },
+  timelineLeft: { alignItems: 'center', width: 24 },
+  timelineDot: { 
+    width: 12, height: 12, borderRadius: 6, backgroundColor: '#D1D5DB', marginTop: 4,
+  },
+  timelineDotActive: { backgroundColor: DELIVERY_GREEN },
+  timelineLine: { 
+    width: 2, flex: 1, backgroundColor: '#E5E7EB', marginVertical: 4,
+  },
+  timelineContent: { flex: 1, paddingLeft: 12, paddingBottom: 16 },
+  timelineMessage: { fontSize: 14, fontWeight: '600', color: '#1C1C1C' },
+  timelineTime: { fontSize: 12, color: '#9CA3AF', marginTop: 4 },
 });

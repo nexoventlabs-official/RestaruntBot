@@ -41,9 +41,9 @@ export default function DeliveryTabs() {
           backgroundColor: '#fff',
           borderTopWidth: 1,
           borderTopColor: '#e5e7eb',
-          paddingBottom: 8,
+          paddingBottom: 24,
           paddingTop: 8,
-          height: 60,
+          height: 80,
         },
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;

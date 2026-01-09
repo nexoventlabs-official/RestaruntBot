@@ -1,23 +1,39 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, FlatList,
   RefreshControl, TouchableOpacity, Alert, ActivityIndicator, Linking,
-  Modal, Image
+  Modal, Image, Animated, Platform, StatusBar
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import api from '../../config/api';
+import { colors, spacing, radius, typography, shadows } from '../../theme';
 
-const STATUS_COLORS = {
-  preparing: '#f97316',
-  ready: '#10b981',
-  out_for_delivery: '#06b6d4',
+const DELIVERY_GREEN = '#267E3E';
+const DELIVERY_DARK_GREEN = '#1B5E2E';
+
+const ProgressSteps = ({ status }) => {
+  const steps = ['preparing', 'ready', 'out_for_delivery', 'delivered'];
+  const currentIndex = steps.indexOf(status);
+  return (
+    <View style={styles.progressContainer}>
+      {steps.map((step, index) => (
+        <React.Fragment key={step}>
+          <View style={[styles.progressDot, index <= currentIndex && styles.progressDotActive]}>
+            {index < currentIndex && <Ionicons name="checkmark" size={10} color="#fff" />}
+          </View>
+          {index < steps.length - 1 && <View style={[styles.progressLine, index < currentIndex && styles.progressLineActive]} />}
+        </React.Fragment>
+      ))}
+    </View>
+  );
 };
 
-const STATUS_LABELS = {
-  preparing: 'Preparing',
-  ready: 'Ready for Pickup',
-  out_for_delivery: 'Out for Delivery',
+const STATUS_CONFIG = {
+  preparing: { label: 'Preparing', color: '#8B5CF6', bg: '#EDE9FE' },
+  ready: { label: 'Ready', color: '#10B981', bg: '#D1FAE5' },
+  out_for_delivery: { label: 'Out for Delivery', color: '#06B6D4', bg: '#CFFAFE' },
 };
 
 export default function MyOrdersScreen({ navigation }) {
@@ -26,17 +42,18 @@ export default function MyOrdersScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
   const [qrModal, setQrModal] = useState({ visible: false, qrUrl: null, orderId: null, amount: 0 });
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+  }, []);
 
   const fetchOrders = async () => {
     try {
       const response = await api.get('/delivery/orders/my');
       setOrders(response.data);
-    } catch (error) {
-      console.error('Error fetching orders:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+    } catch (error) { console.error('Error fetching orders:', error); }
+    finally { setLoading(false); setRefreshing(false); }
   };
 
   useEffect(() => {
@@ -45,107 +62,49 @@ export default function MyOrdersScreen({ navigation }) {
     return unsubscribe;
   }, [navigation]);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchOrders();
-  }, []);
+  const onRefresh = useCallback(() => { setRefreshing(true); fetchOrders(); }, []);
 
   const openGoogleMaps = async (order) => {
     const address = order.deliveryAddress?.address || order.customer?.address;
     const lat = order.deliveryAddress?.latitude;
     const lng = order.deliveryAddress?.longitude;
-
     try {
-      // Get current location
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Location permission is required for navigation');
-        return;
-      }
-
+      if (status !== 'granted') { Alert.alert('Permission Denied', 'Location permission is required for navigation'); return; }
       const location = await Location.getCurrentPositionAsync({});
-      const currentLat = location.coords.latitude;
-      const currentLng = location.coords.longitude;
-
       let url;
-      if (lat && lng) {
-        // Use coordinates if available
-        url = `https://www.google.com/maps/dir/?api=1&origin=${currentLat},${currentLng}&destination=${lat},${lng}&travelmode=driving`;
-      } else if (address) {
-        // Use address as fallback
-        url = `https://www.google.com/maps/dir/?api=1&origin=${currentLat},${currentLng}&destination=${encodeURIComponent(address)}&travelmode=driving`;
-      } else {
-        Alert.alert('Error', 'No delivery address available');
-        return;
-      }
-
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-        Alert.alert('Error', 'Cannot open Google Maps');
-      }
-    } catch (error) {
-      console.error('Error opening maps:', error);
-      Alert.alert('Error', 'Failed to open navigation');
-    }
-  };
-
-  const startDelivery = async (orderId) => {
-    setActionLoading(orderId);
-    try {
-      await api.post(`/delivery/orders/${orderId}/out-for-delivery`);
-      Alert.alert('Success', 'Order marked as Out for Delivery');
-      fetchOrders();
-    } catch (error) {
-      Alert.alert('Error', error.response?.data?.error || 'Failed to update order');
-    } finally {
-      setActionLoading(null);
-    }
+      if (lat && lng) url = `https://www.google.com/maps/dir/?api=1&origin=${location.coords.latitude},${location.coords.longitude}&destination=${lat},${lng}&travelmode=driving`;
+      else if (address) url = `https://www.google.com/maps/dir/?api=1&origin=${location.coords.latitude},${location.coords.longitude}&destination=${encodeURIComponent(address)}&travelmode=driving`;
+      if (url) await Linking.openURL(url);
+    } catch (error) { console.error('Error opening maps:', error); }
   };
 
   const markReady = async (orderId) => {
     setActionLoading(orderId);
-    try {
-      await api.post(`/delivery/orders/${orderId}/mark-ready`);
-      Alert.alert('Success', 'Order marked as Ready');
-      fetchOrders();
-    } catch (error) {
-      Alert.alert('Error', error.response?.data?.error || 'Failed to mark order as ready');
-    } finally {
-      setActionLoading(null);
-    }
+    try { await api.post(`/delivery/orders/${orderId}/mark-ready`); Alert.alert('Success', 'Order marked as Ready'); fetchOrders(); }
+    catch (error) { Alert.alert('Error', error.response?.data?.error || 'Failed to mark order as ready'); }
+    finally { setActionLoading(null); }
+  };
+
+  const startDelivery = async (orderId) => {
+    setActionLoading(orderId);
+    try { await api.post(`/delivery/orders/${orderId}/out-for-delivery`); Alert.alert('Success', 'Order marked as Out for Delivery'); fetchOrders(); }
+    catch (error) { Alert.alert('Error', error.response?.data?.error || 'Failed to update order'); }
+    finally { setActionLoading(null); }
   };
 
   const markDelivered = async (order) => {
     if (order.paymentMethod === 'cod') {
-      Alert.alert(
-        'Payment Collection',
-        `Collect ₹${order.totalAmount} from customer.\n\nHow was the payment collected?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Cash',
-            onPress: () => completeDelivery(order.orderId, 'cash'),
-          },
-          {
-            text: 'UPI (Show QR)',
-            onPress: () => generateQRCode(order),
-          },
-        ]
-      );
+      Alert.alert('Collect Payment', `Amount: ₹${order.totalAmount}\n\nHow was payment collected?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cash', onPress: () => completeDelivery(order.orderId, 'cash') },
+        { text: 'UPI (QR)', onPress: () => generateQRCode(order) },
+      ]);
     } else {
-      Alert.alert(
-        'Confirm Delivery',
-        'Mark this order as delivered?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Confirm',
-            onPress: () => completeDelivery(order.orderId, null),
-          },
-        ]
-      );
+      Alert.alert('Confirm Delivery', 'Mark this order as delivered?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Confirm', onPress: () => completeDelivery(order.orderId, null) },
+      ]);
     }
   };
 
@@ -153,187 +112,164 @@ export default function MyOrdersScreen({ navigation }) {
     setActionLoading(order.orderId);
     try {
       const response = await api.post(`/delivery/orders/${order.orderId}/generate-qr`);
-      const { qrUrl, amount, orderId } = response.data;
-      
-      setQrModal({
-        visible: true,
-        qrUrl,
-        orderId,
-        amount,
-      });
-    } catch (error) {
-      Alert.alert('Error', error.response?.data?.error || 'Failed to generate QR code');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleManualUpiConfirm = () => {
-    const orderId = qrModal.orderId;
-    setQrModal({ visible: false, qrUrl: null, orderId: null, amount: 0 });
-    completeDelivery(orderId, 'upi');
+      setQrModal({ visible: true, qrUrl: response.data.qrUrl, orderId: response.data.orderId, amount: response.data.amount });
+    } catch (error) { Alert.alert('Error', error.response?.data?.error || 'Failed to generate QR code'); }
+    finally { setActionLoading(null); }
   };
 
   const completeDelivery = async (orderId, collectionMethod) => {
     setActionLoading(orderId);
-    try {
-      await api.post(`/delivery/orders/${orderId}/delivered`, { collectionMethod });
-      Alert.alert('Success', 'Order delivered successfully!');
-      fetchOrders();
-    } catch (error) {
-      Alert.alert('Error', error.response?.data?.error || 'Failed to complete delivery');
-    } finally {
-      setActionLoading(null);
-    }
+    try { await api.post(`/delivery/orders/${orderId}/delivered`, { collectionMethod }); Alert.alert('Success', 'Order delivered successfully!'); fetchOrders(); }
+    catch (error) { Alert.alert('Error', error.response?.data?.error || 'Failed to complete delivery'); }
+    finally { setActionLoading(null); }
   };
 
-  const renderOrder = ({ item }) => (
-    <View style={styles.orderCard}>
-      <View style={styles.orderHeader}>
-        <Text style={styles.orderId}>#{item.orderId}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[item.status] + '20' }]}>
-          <Text style={[styles.statusText, { color: STATUS_COLORS[item.status] }]}>
-            {STATUS_LABELS[item.status]}
-          </Text>
-        </View>
-      </View>
+  const renderOrder = ({ item }) => {
+    const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.preparing;
+    return (
+      <Animated.View style={{ opacity: fadeAnim }}>
+        <View style={styles.orderCard}>
+          <ProgressSteps status={item.status} />
+          
+          <View style={styles.orderHeader}>
+            <View>
+              <Text style={styles.orderId}>#{item.orderId}</Text>
+              <Text style={styles.orderTime}>{new Date(item.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</Text>
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
+              <Text style={[styles.statusText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
+            </View>
+          </View>
 
-      <View style={styles.orderInfo}>
-        <View style={styles.infoRow}>
-          <Ionicons name="person-outline" size={16} color="#61636b" />
-          <Text style={styles.infoText}>{item.customer?.name || 'Customer'}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="call-outline" size={16} color="#61636b" />
-          <TouchableOpacity onPress={() => Linking.openURL(`tel:${item.customer?.phone}`)}>
-            <Text style={[styles.infoText, styles.linkText]}>{item.customer?.phone}</Text>
-          </TouchableOpacity>
-        </View>
-        <TouchableOpacity style={styles.addressRow} onPress={() => openGoogleMaps(item)}>
-          <Ionicons name="navigate-outline" size={16} color="#2a9d8f" />
-          <Text style={[styles.infoText, styles.addressText]} numberOfLines={2}>
-            {item.deliveryAddress?.address || item.customer?.address || 'N/A'}
-          </Text>
-          <Ionicons name="open-outline" size={16} color="#2a9d8f" />
-        </TouchableOpacity>
-      </View>
+          <View style={styles.customerCard}>
+            <View style={styles.customerAvatar}><Ionicons name="person" size={18} color={DELIVERY_GREEN} /></View>
+            <View style={styles.customerInfo}>
+              <Text style={styles.customerName}>{item.customer?.name || 'Customer'}</Text>
+              <TouchableOpacity onPress={() => Linking.openURL(`tel:${item.customer?.phone}`)} style={styles.phoneButton}>
+                <Ionicons name="call" size={12} color={DELIVERY_GREEN} />
+                <Text style={styles.phoneText}>{item.customer?.phone}</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity style={styles.callButton} onPress={() => Linking.openURL(`tel:${item.customer?.phone}`)}>
+              <Ionicons name="call" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
 
-      <View style={styles.itemsSection}>
-        <Text style={styles.itemsTitle}>Items ({item.items?.length || 0})</Text>
-        {item.items?.slice(0, 3).map((orderItem, index) => (
-          <Text key={index} style={styles.itemText}>
-            • {orderItem.name} x{orderItem.quantity}
-          </Text>
-        ))}
-        {item.items?.length > 3 && (
-          <Text style={styles.moreItems}>+{item.items.length - 3} more items</Text>
-        )}
-      </View>
+          <TouchableOpacity style={styles.addressCard} onPress={() => openGoogleMaps(item)} activeOpacity={0.8}>
+            <View style={styles.addressIcon}><Ionicons name="location" size={18} color={DELIVERY_GREEN} /></View>
+            <Text style={styles.addressText} numberOfLines={2}>{item.deliveryAddress?.address || item.customer?.address || 'N/A'}</Text>
+            <View style={styles.navigateIcon}><Ionicons name="navigate" size={16} color={DELIVERY_GREEN} /></View>
+          </TouchableOpacity>
 
-      <View style={styles.orderFooter}>
-        <View>
-          <Text style={styles.amount}>₹{item.totalAmount}</Text>
-          <Text style={[styles.paymentMethod, item.paymentMethod === 'cod' && styles.codBadge]}>
-            {item.paymentMethod === 'cod' ? '💵 COD - Collect Cash' : '✅ Prepaid'}
-          </Text>
+          <View style={styles.itemsSection}>
+            <View style={styles.itemsHeader}>
+              <Ionicons name="receipt-outline" size={14} color={colors.light.text.secondary} />
+              <Text style={styles.itemsTitle}>{item.items?.length || 0} items</Text>
+            </View>
+            <View style={styles.itemsList}>
+              {item.items?.slice(0, 2).map((orderItem, idx) => (
+                <Text key={idx} style={styles.itemText}>{orderItem.name} × {orderItem.quantity}</Text>
+              ))}
+              {item.items?.length > 2 && <Text style={styles.moreItems}>+{item.items.length - 2} more</Text>}
+            </View>
+          </View>
+
+          <View style={styles.orderFooter}>
+            <View>
+              <Text style={styles.amount}>₹{item.totalAmount}</Text>
+              <View style={[styles.paymentBadge, item.paymentMethod === 'cod' ? styles.codBadge : styles.prepaidBadge]}>
+                <Ionicons name={item.paymentMethod === 'cod' ? 'cash-outline' : 'checkmark-circle'} size={12} color={item.paymentMethod === 'cod' ? '#D97706' : '#16A34A'} />
+                <Text style={[styles.paymentText, item.paymentMethod === 'cod' ? styles.codText : styles.prepaidText]}>{item.paymentMethod === 'cod' ? 'COD' : 'Prepaid'}</Text>
+              </View>
+            </View>
+            
+            <TouchableOpacity
+              style={[styles.actionButton, item.status === 'out_for_delivery' && styles.actionButtonSuccess]}
+              onPress={() => {
+                if (item.status === 'preparing') markReady(item.orderId);
+                else if (item.status === 'ready') startDelivery(item.orderId);
+                else markDelivered(item);
+              }}
+              disabled={actionLoading === item.orderId}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={actionLoading === item.orderId ? ['#9CA3AF', '#9CA3AF'] : item.status === 'out_for_delivery' ? ['#22C55E', '#16A34A'] : [DELIVERY_GREEN, DELIVERY_DARK_GREEN]}
+                style={styles.actionButtonGradient}
+              >
+                {actionLoading === item.orderId ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name={item.status === 'preparing' ? 'checkmark-done' : item.status === 'ready' ? 'bicycle' : 'checkmark-circle'} size={18} color="#fff" />
+                    <Text style={styles.actionButtonText}>
+                      {item.status === 'preparing' ? 'Mark Ready' : item.status === 'ready' ? 'Start Delivery' : 'Delivered'}
+                    </Text>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
         </View>
-        
-        {actionLoading === item.orderId ? (
-          <ActivityIndicator color="#2a9d8f" />
-        ) : item.status === 'preparing' ? (
-          <TouchableOpacity style={[styles.actionButton, styles.preparingButton]} onPress={() => markReady(item.orderId)}>
-            <Ionicons name="checkmark-done-outline" size={18} color="#fff" />
-            <Text style={styles.actionButtonText}>Mark Ready</Text>
-          </TouchableOpacity>
-        ) : item.status === 'ready' ? (
-          <TouchableOpacity style={styles.actionButton} onPress={() => startDelivery(item.orderId)}>
-            <Ionicons name="bicycle-outline" size={18} color="#fff" />
-            <Text style={styles.actionButtonText}>Start Delivery</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[styles.actionButton, styles.deliveredButton]}
-            onPress={() => markDelivered(item)}
-          >
-            <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
-            <Text style={styles.actionButtonText}>Delivered</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  );
+      </Animated.View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>My Orders</Text>
-        <Text style={styles.subtitle}>{orders.length} active orders</Text>
-      </View>
+      <StatusBar barStyle="light-content" backgroundColor={DELIVERY_GREEN} />
+      
+      <LinearGradient colors={[DELIVERY_GREEN, DELIVERY_DARK_GREEN]} style={styles.header}>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.title}>My Orders</Text>
+            <Text style={styles.subtitle}>{orders.length} active deliveries</Text>
+          </View>
+          <View style={styles.headerBadge}><Ionicons name="bicycle" size={20} color={DELIVERY_GREEN} /></View>
+        </View>
+      </LinearGradient>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#2a9d8f" style={{ flex: 1 }} />
+        <ActivityIndicator size="large" color={DELIVERY_GREEN} style={{ flex: 1 }} />
       ) : (
         <FlatList
           data={orders}
           renderItem={renderOrder}
           keyExtractor={(item) => item._id}
           contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2a9d8f']} />}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[DELIVERY_GREEN]} />}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Ionicons name="bicycle-outline" size={64} color="#d1d5db" />
-              <Text style={styles.emptyText}>No active orders</Text>
-              <Text style={styles.emptySubtext}>Orders assigned by admin will appear here</Text>
+              <View style={styles.emptyIconContainer}><Ionicons name="bicycle-outline" size={48} color={colors.light.text.tertiary} /></View>
+              <Text style={styles.emptyTitle}>No Active Orders</Text>
+              <Text style={styles.emptyText}>Orders assigned to you will appear here</Text>
             </View>
           }
         />
       )}
 
-      {/* QR Code Modal */}
-      <Modal
-        visible={qrModal.visible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setQrModal({ visible: false, qrUrl: null, orderId: null, amount: 0 })}
-      >
+      <Modal visible={qrModal.visible} animationType="slide" transparent={true} onRequestClose={() => setQrModal({ visible: false, qrUrl: null, orderId: null, amount: 0 })}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Collect Payment</Text>
               <TouchableOpacity onPress={() => setQrModal({ visible: false, qrUrl: null, orderId: null, amount: 0 })}>
-                <Ionicons name="close" size={28} color="#1c1d21" />
+                <Ionicons name="close-circle" size={32} color={colors.light.text.tertiary} />
               </TouchableOpacity>
             </View>
-
             <Text style={styles.modalOrderId}>Order #{qrModal.orderId}</Text>
             <Text style={styles.modalAmount}>₹{qrModal.amount}</Text>
-            <Text style={styles.codLabel}>Cash on Delivery</Text>
-
             <View style={styles.qrContainer}>
-              <Text style={styles.scanText}>Scan to pay ₹{qrModal.amount}</Text>
-              {qrModal.qrUrl && (
-                <Image
-                  source={{ uri: qrModal.qrUrl }}
-                  style={styles.qrImage}
-                  resizeMode="contain"
-                />
-              )}
+              {qrModal.qrUrl && <Image source={{ uri: qrModal.qrUrl }} style={styles.qrImage} resizeMode="contain" />}
+              <Text style={styles.scanText}>Ask customer to scan & pay</Text>
             </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.markDeliveredButton}
-                onPress={handleManualUpiConfirm}
-              >
+            <TouchableOpacity style={styles.modalButton} onPress={() => { setQrModal({ visible: false, qrUrl: null, orderId: null, amount: 0 }); completeDelivery(qrModal.orderId, 'upi'); }} activeOpacity={0.8}>
+              <LinearGradient colors={['#22C55E', '#16A34A']} style={styles.modalButtonGradient}>
                 <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                <Text style={styles.markDeliveredText}>Payment Received - Mark Delivered</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.backButton} onPress={() => setQrModal({ visible: false, qrUrl: null, orderId: null, amount: 0 })}>
-                <Ionicons name="arrow-back" size={20} color="#61636b" />
-                <Text style={styles.backButtonText}>Back to options</Text>
-              </TouchableOpacity>
-            </View>
+                <Text style={styles.modalButtonText}>Payment Received - Mark Delivered</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -342,98 +278,67 @@ export default function MyOrdersScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fb' },
-  header: { padding: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#1c1d21' },
-  subtitle: { fontSize: 14, color: '#61636b', marginTop: 4 },
-  listContent: { padding: 16 },
-  orderCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12 },
-  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  orderId: { fontSize: 16, fontWeight: 'bold', color: '#1c1d21' },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  statusText: { fontSize: 12, fontWeight: '600' },
-  orderInfo: { gap: 8, marginBottom: 12 },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  infoText: { fontSize: 14, color: '#61636b' },
-  linkText: { color: '#2a9d8f', textDecorationLine: 'underline' },
-  addressRow: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: '#e6f7f5', padding: 12, borderRadius: 8, marginTop: 4,
-  },
-  addressText: { flex: 1, color: '#2a9d8f', fontWeight: '500' },
-  itemsSection: { backgroundColor: '#f9fafb', padding: 12, borderRadius: 8, marginBottom: 12 },
-  itemsTitle: { fontSize: 14, fontWeight: '600', color: '#1c1d21', marginBottom: 8 },
-  itemText: { fontSize: 13, color: '#61636b', marginTop: 4 },
-  moreItems: { fontSize: 12, color: '#9ca3af', marginTop: 4, fontStyle: 'italic' },
-  orderFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingTop: 12 },
-  amount: { fontSize: 18, fontWeight: 'bold', color: '#1c1d21' },
-  paymentMethod: { fontSize: 12, color: '#61636b', marginTop: 2 },
-  codBadge: { color: '#f59e0b', fontWeight: '600' },
-  actionButton: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#2a9d8f', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 8,
-  },
-  preparingButton: { backgroundColor: '#f97316' },
-  deliveredButton: { backgroundColor: '#22c55e' },
-  actionButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  container: { flex: 1, backgroundColor: colors.light.background },
+  header: { paddingTop: Platform.OS === 'android' ? 50 : 16, paddingBottom: spacing.lg, paddingHorizontal: spacing.screenHorizontal, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  title: { fontSize: typography.display.small.fontSize, fontWeight: '700', color: '#fff' },
+  subtitle: { fontSize: typography.body.medium.fontSize, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+  headerBadge: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+  listContent: { padding: spacing.screenHorizontal, paddingBottom: 100 },
+  orderCard: { backgroundColor: colors.light.surface, borderRadius: radius.xl, padding: spacing.base, marginBottom: spacing.md, ...shadows.card },
+  progressContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
+  progressDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: colors.light.border, justifyContent: 'center', alignItems: 'center' },
+  progressDotActive: { backgroundColor: DELIVERY_GREEN },
+  progressLine: { flex: 1, height: 3, backgroundColor: colors.light.border, marginHorizontal: 4 },
+  progressLineActive: { backgroundColor: DELIVERY_GREEN },
+  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.md },
+  orderId: { fontSize: typography.headline.small.fontSize, fontWeight: '700', color: colors.light.text.primary },
+  orderTime: { fontSize: typography.body.small.fontSize, color: colors.light.text.tertiary, marginTop: 2 },
+  statusBadge: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: radius.full },
+  statusText: { fontSize: typography.label.medium.fontSize, fontWeight: '600' },
+  customerCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.light.surfaceSecondary, borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.sm },
+  customerAvatar: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center' },
+  customerInfo: { flex: 1, marginLeft: spacing.md },
+  customerName: { fontSize: typography.title.medium.fontSize, fontWeight: '600', color: colors.light.text.primary },
+  phoneButton: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  phoneText: { fontSize: typography.body.small.fontSize, color: DELIVERY_GREEN },
+  callButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: DELIVERY_GREEN, justifyContent: 'center', alignItems: 'center' },
+  addressCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.sm },
+  addressIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+  addressText: { flex: 1, fontSize: typography.body.medium.fontSize, color: DELIVERY_DARK_GREEN, marginHorizontal: spacing.md, lineHeight: 20 },
+  navigateIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+  itemsSection: { backgroundColor: colors.light.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
+  itemsHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.sm },
+  itemsTitle: { fontSize: typography.title.small.fontSize, fontWeight: '600', color: colors.light.text.secondary },
+  itemsList: { gap: 4 },
+  itemText: { fontSize: typography.body.small.fontSize, color: colors.light.text.primary },
+  moreItems: { fontSize: typography.body.small.fontSize, color: colors.light.text.tertiary, fontStyle: 'italic' },
+  orderFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.light.borderLight },
+  amount: { fontSize: typography.headline.medium.fontSize, fontWeight: '700', color: colors.light.text.primary },
+  paymentBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.sm, marginTop: spacing.xs },
+  codBadge: { backgroundColor: '#FEF3C7' },
+  prepaidBadge: { backgroundColor: '#DCFCE7' },
+  paymentText: { fontSize: typography.label.small.fontSize, fontWeight: '600' },
+  codText: { color: '#D97706' },
+  prepaidText: { color: '#16A34A' },
+  actionButton: { borderRadius: radius.lg, overflow: 'hidden' },
+  actionButtonSuccess: {},
+  actionButtonGradient: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  actionButtonText: { color: '#fff', fontSize: typography.title.medium.fontSize, fontWeight: '600' },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 },
-  emptyText: { fontSize: 16, color: '#9ca3af', marginTop: 16 },
-  emptySubtext: { fontSize: 14, color: '#d1d5db', marginTop: 4 },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    alignItems: 'center',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    marginBottom: 16,
-  },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1c1d21' },
-  modalOrderId: { fontSize: 14, color: '#61636b', marginBottom: 4 },
-  modalAmount: { fontSize: 32, fontWeight: 'bold', color: '#f97316', marginBottom: 4 },
-  codLabel: { fontSize: 14, color: '#61636b', marginBottom: 16 },
-  qrContainer: {
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  scanText: { fontSize: 14, color: '#61636b', marginBottom: 12 },
-  qrImage: { width: 200, height: 200 },
-  modalButtons: { width: '100%', gap: 12 },
-  markDeliveredButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#22c55e',
-    paddingVertical: 14,
-    borderRadius: 10,
-  },
-  markDeliveredText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 10,
-  },
-  backButtonText: { color: '#61636b', fontSize: 14 },
+  emptyIconContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: colors.light.surfaceSecondary, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.base },
+  emptyTitle: { fontSize: typography.headline.small.fontSize, fontWeight: '600', color: colors.light.text.secondary },
+  emptyText: { fontSize: typography.body.medium.fontSize, color: colors.light.text.tertiary, marginTop: spacing.xs },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: colors.light.surface, borderTopLeftRadius: radius.bottomSheet, borderTopRightRadius: radius.bottomSheet, padding: spacing.xl, paddingBottom: spacing['3xl'] },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
+  modalTitle: { fontSize: typography.headline.large.fontSize, fontWeight: '700', color: colors.light.text.primary },
+  modalOrderId: { fontSize: typography.body.medium.fontSize, color: colors.light.text.secondary, textAlign: 'center' },
+  modalAmount: { fontSize: 40, fontWeight: '700', color: DELIVERY_GREEN, textAlign: 'center', marginVertical: spacing.md },
+  qrContainer: { alignItems: 'center', backgroundColor: colors.light.surfaceSecondary, borderRadius: radius.xl, padding: spacing.lg, marginBottom: spacing.xl },
+  qrImage: { width: 200, height: 200, marginBottom: spacing.md },
+  scanText: { fontSize: typography.body.medium.fontSize, color: colors.light.text.secondary },
+  modalButton: { borderRadius: radius.lg, overflow: 'hidden' },
+  modalButtonGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.base },
+  modalButtonText: { color: '#fff', fontSize: typography.title.medium.fontSize, fontWeight: '600' },
 });

@@ -1,35 +1,193 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { 
+  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, 
+  Animated, Dimensions, StatusBar, Platform, Image 
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { colors, spacing, radius, typography, shadows } from '../theme';
+
+const { width, height } = Dimensions.get('window');
 
 export default function RoleSelectScreen({ navigation }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const adminCardAnim = useRef(new Animated.Value(0)).current;
+  const deliveryCardAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Staggered card animations
+    Animated.sequence([
+      Animated.delay(300),
+      Animated.spring(adminCardAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    Animated.sequence([
+      Animated.delay(450),
+      Animated.spring(deliveryCardAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const RoleCard = ({ 
+    title, 
+    subtitle, 
+    icon, 
+    gradientColors, 
+    onPress, 
+    animValue,
+    iconBg 
+  }) => (
+    <Animated.View style={{
+      opacity: animValue,
+      transform: [
+        { translateY: animValue.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) },
+        { scale: animValue.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) },
+      ],
+    }}>
+      <TouchableOpacity
+        style={styles.roleCard}
+        onPress={onPress}
+        activeOpacity={0.9}
+      >
+        <LinearGradient
+          colors={gradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.roleCardGradient}
+        >
+          <View style={styles.roleCardContent}>
+            <View style={[styles.roleIconContainer, { backgroundColor: iconBg }]}>
+              <Ionicons name={icon} size={32} color="#fff" />
+            </View>
+            <View style={styles.roleTextContainer}>
+              <Text style={styles.roleTitle}>{title}</Text>
+              <Text style={styles.roleSubtitle}>{subtitle}</Text>
+            </View>
+            <View style={styles.roleArrow}>
+              <Ionicons name="arrow-forward" size={24} color="rgba(255,255,255,0.8)" />
+            </View>
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Ionicons name="restaurant" size={80} color="#e63946" />
-        <Text style={styles.title}>FoodAdmin</Text>
-        <Text style={styles.subtitle}>Restaurant Management App</Text>
+      <StatusBar barStyle="dark-content" backgroundColor={colors.light.background} />
+      
+      {/* Background Pattern */}
+      <View style={styles.backgroundPattern}>
+        <View style={[styles.patternCircle, styles.patternCircle1]} />
+        <View style={[styles.patternCircle, styles.patternCircle2]} />
+        <View style={[styles.patternCircle, styles.patternCircle3]} />
       </View>
 
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={[styles.button, styles.adminButton]}
+      {/* Header Section */}
+      <Animated.View style={[
+        styles.header,
+        {
+          opacity: fadeAnim,
+          transform: [
+            { translateY: slideAnim },
+            { scale: scaleAnim },
+          ],
+        },
+      ]}>
+        {/* Logo */}
+        <View style={styles.logoContainer}>
+          <LinearGradient
+            colors={[colors.zomato.red, colors.zomato.darkRed]}
+            style={styles.logoGradient}
+          >
+            <Ionicons name="restaurant" size={48} color="#fff" />
+          </LinearGradient>
+        </View>
+        
+        <Text style={styles.appName}>FoodAdmin</Text>
+        <Text style={styles.tagline}>Restaurant Management Suite</Text>
+        
+        {/* Feature Pills */}
+        <View style={styles.featurePills}>
+          <View style={styles.featurePill}>
+            <Ionicons name="flash" size={12} color={colors.zomato.red} />
+            <Text style={styles.featurePillText}>Fast</Text>
+          </View>
+          <View style={styles.featurePill}>
+            <Ionicons name="shield-checkmark" size={12} color={colors.zomato.red} />
+            <Text style={styles.featurePillText}>Secure</Text>
+          </View>
+          <View style={styles.featurePill}>
+            <Ionicons name="analytics" size={12} color={colors.zomato.red} />
+            <Text style={styles.featurePillText}>Smart</Text>
+          </View>
+        </View>
+      </Animated.View>
+
+      {/* Role Selection Cards */}
+      <View style={styles.cardsContainer}>
+        <Text style={styles.selectRoleText}>Select your role</Text>
+        
+        <RoleCard
+          title="Admin Portal"
+          subtitle="Manage orders, menu, analytics & more"
+          icon="shield-checkmark"
+          gradientColors={[colors.zomato.red, colors.zomato.darkRed]}
+          iconBg="rgba(255,255,255,0.2)"
           onPress={() => navigation.navigate('AdminLogin')}
-        >
-          <Ionicons name="shield-checkmark" size={32} color="#fff" />
-          <Text style={styles.buttonText}>Admin Login</Text>
-          <Text style={styles.buttonSubtext}>Manage orders, menu & more</Text>
-        </TouchableOpacity>
+          animValue={adminCardAnim}
+        />
 
-        <TouchableOpacity
-          style={[styles.button, styles.deliveryButton]}
+        <RoleCard
+          title="Delivery Partner"
+          subtitle="Accept & deliver orders efficiently"
+          icon="bicycle"
+          gradientColors={['#267E3E', '#1B5E2E']}
+          iconBg="rgba(255,255,255,0.2)"
           onPress={() => navigation.navigate('DeliveryLogin')}
-        >
-          <Ionicons name="bicycle" size={32} color="#fff" />
-          <Text style={styles.buttonText}>Delivery Partner</Text>
-          <Text style={styles.buttonSubtext}>View & deliver orders</Text>
-        </TouchableOpacity>
+          animValue={deliveryCardAnim}
+        />
       </View>
+
+      {/* Footer */}
+      <Animated.View style={[styles.footer, { opacity: fadeAnim }]}>
+        <Text style={styles.footerText}>Powered by</Text>
+        <View style={styles.footerBrand}>
+          <View style={styles.footerDot} />
+          <Text style={styles.footerBrandText}>FoodAdmin Pro</Text>
+        </View>
+      </Animated.View>
     </SafeAreaView>
   );
 }
@@ -37,51 +195,159 @@ export default function RoleSelectScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fb',
+    backgroundColor: colors.light.background,
+  },
+  backgroundPattern: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  patternCircle: {
+    position: 'absolute',
+    borderRadius: 999,
+    backgroundColor: colors.zomato.red,
+    opacity: 0.03,
+  },
+  patternCircle1: {
+    width: width * 1.5,
+    height: width * 1.5,
+    top: -width * 0.5,
+    right: -width * 0.5,
+  },
+  patternCircle2: {
+    width: width,
+    height: width,
+    bottom: -width * 0.3,
+    left: -width * 0.3,
+  },
+  patternCircle3: {
+    width: width * 0.6,
+    height: width * 0.6,
+    top: height * 0.4,
+    right: -width * 0.2,
   },
   header: {
-    flex: 1,
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'android' ? 60 : 40,
+    paddingBottom: spacing.xl,
+  },
+  logoContainer: {
+    marginBottom: spacing.lg,
+    ...shadows.xl,
+  },
+  logoGradient: {
+    width: 100,
+    height: 100,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 60,
   },
-  title: {
+  appName: {
     fontSize: 36,
-    fontWeight: 'bold',
-    color: '#1c1d21',
-    marginTop: 16,
+    fontWeight: '800',
+    color: colors.light.text.primary,
+    letterSpacing: -1,
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#61636b',
-    marginTop: 8,
+  tagline: {
+    fontSize: typography.body.large.fontSize,
+    color: colors.light.text.secondary,
+    marginTop: spacing.xs,
   },
-  buttonContainer: {
+  featurePills: {
+    flexDirection: 'row',
+    marginTop: spacing.lg,
+    gap: spacing.sm,
+  },
+  featurePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+  },
+  featurePillText: {
+    fontSize: typography.label.small.fontSize,
+    fontWeight: '600',
+    color: colors.zomato.red,
+  },
+  cardsContainer: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.screenHorizontal,
     justifyContent: 'center',
-    gap: 16,
   },
-  button: {
-    padding: 24,
-    borderRadius: 16,
+  selectRoleText: {
+    fontSize: typography.title.medium.fontSize,
+    fontWeight: '600',
+    color: colors.light.text.secondary,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
+  },
+  roleCard: {
+    marginBottom: spacing.base,
+    borderRadius: radius.xl,
+    overflow: 'hidden',
+    ...shadows.lg,
+  },
+  roleCardGradient: {
+    padding: spacing.lg,
+  },
+  roleCardContent: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  adminButton: {
-    backgroundColor: '#e63946',
+  roleIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  deliveryButton: {
-    backgroundColor: '#2a9d8f',
+  roleTextContainer: {
+    flex: 1,
+    marginLeft: spacing.base,
   },
-  buttonText: {
+  roleTitle: {
+    fontSize: typography.headline.medium.fontSize,
+    fontWeight: '700',
     color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 12,
   },
-  buttonSubtext: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
+  roleSubtitle: {
+    fontSize: typography.body.small.fontSize,
+    color: 'rgba(255,255,255,0.85)',
     marginTop: 4,
+  },
+  roleArrow: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  footer: {
+    alignItems: 'center',
+    paddingBottom: spacing['2xl'],
+  },
+  footerText: {
+    fontSize: typography.label.small.fontSize,
+    color: colors.light.text.tertiary,
+  },
+  footerBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+  },
+  footerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.zomato.red,
+    marginRight: spacing.xs,
+  },
+  footerBrandText: {
+    fontSize: typography.label.medium.fontSize,
+    fontWeight: '600',
+    color: colors.light.text.secondary,
   },
 });

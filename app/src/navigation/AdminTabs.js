@@ -1,7 +1,7 @@
-import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { View, StyleSheet } from 'react-native';
 
 import AdminHomeScreen from '../screens/admin/AdminHomeScreen';
 import AdminOrdersScreen from '../screens/admin/AdminOrdersScreen';
@@ -14,6 +14,9 @@ import DeliveryFormScreen from '../screens/admin/DeliveryFormScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
+
+// Admin primary color
+const ADMIN_PRIMARY = '#e63946';
 
 function OrdersStack() {
   return (
@@ -47,15 +50,24 @@ export default function AdminTabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: '#e63946',
-        tabBarInactiveTintColor: '#61636b',
+        tabBarActiveTintColor: ADMIN_PRIMARY,
+        tabBarInactiveTintColor: '#9ca3af',
         tabBarStyle: {
           backgroundColor: '#fff',
-          borderTopWidth: 1,
-          borderTopColor: '#e5e7eb',
-          paddingBottom: 8,
-          paddingTop: 8,
-          height: 60,
+          borderTopWidth: 0,
+          paddingBottom: 24,
+          paddingTop: 12,
+          height: 80,
+          elevation: 20,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 12,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          marginTop: 4,
         },
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
@@ -64,7 +76,12 @@ export default function AdminTabs() {
           else if (route.name === 'Menu') iconName = focused ? 'restaurant' : 'restaurant-outline';
           else if (route.name === 'Reports') iconName = focused ? 'bar-chart' : 'bar-chart-outline';
           else if (route.name === 'Delivery') iconName = focused ? 'bicycle' : 'bicycle-outline';
-          return <Ionicons name={iconName} size={size} color={color} />;
+          
+          return (
+            <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
+              <Ionicons name={iconName} size={22} color={color} />
+            </View>
+          );
         },
       })}
     >
@@ -76,3 +93,16 @@ export default function AdminTabs() {
     </Tab.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  iconContainer: {
+    width: 40,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconContainerActive: {
+    backgroundColor: '#fef2f2',
+  },
+});
