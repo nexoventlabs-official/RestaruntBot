@@ -222,13 +222,15 @@ export default function AdminMenuScreen({ navigation }) {
   // Get paused category names
   const pausedCategoryNames = categories.filter(c => c.isPaused).map(c => c.name);
 
-  // Filter items - hide items from paused categories
+  // Helper function to check if item is from paused category
+  const isItemFromPausedCategory = (item) => {
+    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+    return itemCategories.every(cat => pausedCategoryNames.includes(cat));
+  };
+
+  // Filter items - show all items including paused category items
   const filteredItems = items.filter(item => {
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-    
-    // Check if ALL categories of this item are paused - if so, hide the item
-    const allCategoriesPaused = itemCategories.every(cat => pausedCategoryNames.includes(cat));
-    if (allCategoriesPaused) return false;
     
     const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       itemCategories.some(cat => cat?.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -246,64 +248,82 @@ export default function AdminMenuScreen({ navigation }) {
   const unavailableCount = items.filter(i => !i.available).length;
   const uniqueCategories = [...new Set(items.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))];
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.itemCard}
-      onPress={() => navigation.navigate('MenuItemForm', { item })}
-    >
-      <View style={styles.itemImageContainer}>
-        {item.image ? (
-          <Image source={{ uri: item.image }} style={styles.itemImage} />
-        ) : (
-          <View style={[styles.itemImage, styles.placeholderImage]}>
-            <Ionicons name="restaurant-outline" size={28} color="#d1d5db" />
-          </View>
-        )}
-        {item.foodType && item.foodType !== 'none' && (
-          <View style={[styles.foodTypeBadge, { 
-            borderColor: item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444' 
-          }]}>
-            <View style={[styles.foodTypeDot, { 
-              backgroundColor: item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444' 
-            }]} />
-          </View>
-        )}
-      </View>
-      
-      <View style={styles.itemInfo}>
-        <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.itemCategory} numberOfLines={1}>
-          {Array.isArray(item.category) ? item.category.join(', ') : item.category}
-        </Text>
-        {item.preparationTime > 0 && (
-          <View style={styles.prepTimeRow}>
-            <Ionicons name="time-outline" size={12} color="#9ca3af" />
-            <Text style={styles.prepTimeText}>{item.preparationTime} min</Text>
-          </View>
-        )}
-        <View style={styles.itemFooter}>
-          <Text style={styles.itemPrice}>₹{item.price}</Text>
-          <TouchableOpacity 
-            style={[styles.availabilityToggle, { backgroundColor: item.available ? '#dcfce7' : '#fee2e2' }]}
-            onPress={() => toggleAvailability(item)}
-            disabled={togglingId === item._id}
-          >
-            {togglingId === item._id ? (
-              <ActivityIndicator size="small" color={item.available ? '#22c55e' : '#ef4444'} />
-            ) : (
-              <Text style={[styles.availabilityText, { color: item.available ? '#22c55e' : '#ef4444' }]}>
-                {item.available ? 'Available' : 'Unavailable'}
-              </Text>
-            )}
-          </TouchableOpacity>
+  const renderItem = ({ item }) => {
+    const isPaused = isItemFromPausedCategory(item);
+    
+    return (
+      <TouchableOpacity
+        style={[styles.itemCard, isPaused && styles.itemCardPaused]}
+        onPress={() => navigation.navigate('MenuItemForm', { item })}
+      >
+        <View style={styles.itemImageContainer}>
+          {item.image ? (
+            <Image 
+              source={{ uri: item.image }} 
+              style={[styles.itemImage, isPaused && styles.itemImagePaused]} 
+            />
+          ) : (
+            <View style={[styles.itemImage, styles.placeholderImage, isPaused && styles.placeholderImagePaused]}>
+              <Ionicons name="restaurant-outline" size={28} color={isPaused ? '#9ca3af' : '#d1d5db'} />
+            </View>
+          )}
+          {isPaused && (
+            <View style={styles.pausedBadge}>
+              <Ionicons name="pause-circle" size={20} color="#f59e0b" />
+            </View>
+          )}
+          {item.foodType && item.foodType !== 'none' && (
+            <View style={[styles.foodTypeBadge, { 
+              borderColor: isPaused ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
+            }]}>
+              <View style={[styles.foodTypeDot, { 
+                backgroundColor: isPaused ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
+              }]} />
+            </View>
+          )}
         </View>
-      </View>
+        
+        <View style={styles.itemInfo}>
+          <Text style={[styles.itemName, isPaused && styles.textPaused]} numberOfLines={1}>{item.name}</Text>
+          <Text style={[styles.itemCategory, isPaused && styles.textPaused]} numberOfLines={1}>
+            {Array.isArray(item.category) ? item.category.join(', ') : item.category}
+          </Text>
+          {item.preparationTime > 0 && (
+            <View style={styles.prepTimeRow}>
+              <Ionicons name="time-outline" size={12} color="#9ca3af" />
+              <Text style={styles.prepTimeText}>{item.preparationTime} min</Text>
+            </View>
+          )}
+          <View style={styles.itemFooter}>
+            <Text style={[styles.itemPrice, isPaused && styles.pricePaused]}>₹{item.price}</Text>
+            {isPaused ? (
+              <View style={styles.pausedStatusBadge}>
+                <Text style={styles.pausedStatusText}>Category Paused</Text>
+              </View>
+            ) : (
+              <TouchableOpacity 
+                style={[styles.availabilityToggle, { backgroundColor: item.available ? '#dcfce7' : '#fee2e2' }]}
+                onPress={() => toggleAvailability(item)}
+                disabled={togglingId === item._id}
+              >
+                {togglingId === item._id ? (
+                  <ActivityIndicator size="small" color={item.available ? '#22c55e' : '#ef4444'} />
+                ) : (
+                  <Text style={[styles.availabilityText, { color: item.available ? '#22c55e' : '#ef4444' }]}>
+                    {item.available ? 'Available' : 'Unavailable'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
 
-      <TouchableOpacity style={styles.deleteButton} onPress={() => deleteItem(item)}>
-        <Ionicons name="trash-outline" size={18} color="#ef4444" />
+        <TouchableOpacity style={styles.deleteButton} onPress={() => deleteItem(item)}>
+          <Ionicons name="trash-outline" size={18} color="#ef4444" />
+        </TouchableOpacity>
       </TouchableOpacity>
-    </TouchableOpacity>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -651,9 +671,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row', backgroundColor: '#fff', borderRadius: 12, 
     padding: 10, marginBottom: 10, alignItems: 'center' 
   },
+  itemCardPaused: { 
+    backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#fef3c7' 
+  },
   itemImageContainer: { position: 'relative' },
   itemImage: { width: 70, height: 70, borderRadius: 10 },
+  itemImagePaused: { opacity: 0.5 },
   placeholderImage: { backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' },
+  placeholderImagePaused: { backgroundColor: '#e5e7eb' },
+  pausedBadge: { 
+    position: 'absolute', top: -6, right: -6, 
+    backgroundColor: '#fff', borderRadius: 12, padding: 2 
+  },
   foodTypeBadge: { 
     position: 'absolute', top: 4, left: 4,
     width: 16, height: 16, borderRadius: 4, borderWidth: 2, 
@@ -663,12 +692,19 @@ const styles = StyleSheet.create({
   itemInfo: { flex: 1, marginLeft: 12 },
   itemName: { fontSize: 15, fontWeight: '600', color: '#1c1d21' },
   itemCategory: { fontSize: 12, color: '#61636b', marginTop: 2 },
+  textPaused: { color: '#9ca3af' },
   prepTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   prepTimeText: { fontSize: 11, color: '#9ca3af' },
   itemFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
   itemPrice: { fontSize: 16, fontWeight: 'bold', color: '#e63946' },
+  pricePaused: { color: '#9ca3af' },
   availabilityToggle: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, minWidth: 80, alignItems: 'center' },
   availabilityText: { fontSize: 11, fontWeight: '600' },
+  pausedStatusBadge: { 
+    paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, 
+    backgroundColor: '#fef3c7' 
+  },
+  pausedStatusText: { fontSize: 10, fontWeight: '600', color: '#f59e0b' },
   deleteButton: { padding: 10 },
   
   // Empty
