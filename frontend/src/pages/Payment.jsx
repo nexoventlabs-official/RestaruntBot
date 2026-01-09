@@ -110,30 +110,15 @@ export default function Payment() {
     return `upi://pay?${params.toString()}`;
   };
 
-  // Open UPI app directly
+  // Open UPI app directly via Razorpay
   const openUPIApp = async (app) => {
     if (!order || !razorpayOrder) return;
     
     setSelectedApp(app.id);
     setPaymentLoading(true);
-
-    const upiUrl = generateUPIUrl();
     
-    if (upiUrl && app.id !== 'other') {
-      // Start checking for payment completion
-      setCheckingPayment(true);
-      
-      // Try to open UPI intent
-      window.location.href = upiUrl;
-      
-      // Show fallback after delay if app doesn't open
-      setTimeout(() => {
-        setPaymentLoading(false);
-      }, 3000);
-    } else {
-      // Fallback to Razorpay checkout for "Other UPI" or if no VPA
-      openRazorpayCheckout();
-    }
+    // Always use Razorpay checkout for proper payment tracking
+    openRazorpayCheckout();
   };
 
   // Razorpay checkout fallback
@@ -365,56 +350,43 @@ export default function Payment() {
         {/* UPI Apps Selection */}
         <div className="bg-white rounded-2xl shadow-xl p-6">
           <h2 className="text-lg font-semibold text-gray-800 mb-4 text-center">
-            {razorpayOrder?.merchantVpa ? 'Select UPI App to Pay' : 'Pay with UPI'}
+            Pay ₹{order?.totalAmount} with UPI
           </h2>
           
-          {razorpayOrder?.merchantVpa ? (
-            <div className="grid grid-cols-3 gap-4">
-              {UPI_APPS.map((app) => (
-                <button
-                  key={app.id}
-                  onClick={() => openUPIApp(app)}
-                  disabled={paymentLoading}
-                  className={`flex flex-col items-center p-4 rounded-xl border-2 transition-all ${
-                    selectedApp === app.id
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-gray-200 hover:border-orange-300 hover:bg-orange-50'
-                  } ${paymentLoading && selectedApp !== app.id ? 'opacity-50' : ''}`}
-                >
-                  <span className="text-3xl mb-2">{app.icon}</span>
-                  <span className="text-xs font-medium text-gray-700 text-center">{app.name}</span>
-                  {selectedApp === app.id && paymentLoading && (
-                    <div className="mt-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-orange-500 border-t-transparent"></div>
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-center text-gray-500 text-sm mb-4">
-              Click below to pay using any UPI app
-            </p>
-          )}
+          <div className="grid grid-cols-3 gap-4">
+            {UPI_APPS.map((app) => (
+              <button
+                key={app.id}
+                onClick={() => openUPIApp(app)}
+                disabled={paymentLoading}
+                className={`flex flex-col items-center p-4 rounded-xl border-2 transition-all ${
+                  selectedApp === app.id
+                    ? 'border-orange-500 bg-orange-50'
+                    : 'border-gray-200 hover:border-orange-300 hover:bg-orange-50'
+                } ${paymentLoading && selectedApp !== app.id ? 'opacity-50' : ''}`}
+              >
+                <span className="text-3xl mb-2">{app.icon}</span>
+                <span className="text-xs font-medium text-gray-700 text-center">{app.name}</span>
+                {selectedApp === app.id && paymentLoading && (
+                  <div className="mt-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-orange-500 border-t-transparent"></div>
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
 
-          {/* Pay Button */}
-          <button
-            onClick={() => openRazorpayCheckout()}
-            disabled={paymentLoading}
-            className="w-full mt-6 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {paymentLoading && selectedApp === 'checkout' ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                Processing...
-              </>
-            ) : (
-              <>
-                <span>💳</span>
-                Pay ₹{order?.totalAmount} via Razorpay
-              </>
-            )}
-          </button>
+          {/* Or pay with card/netbanking */}
+          <div className="mt-6 pt-4 border-t">
+            <p className="text-center text-xs text-gray-500 mb-3">Or pay with Card / Netbanking</p>
+            <button
+              onClick={() => { setSelectedApp('checkout'); openRazorpayCheckout(); }}
+              disabled={paymentLoading}
+              className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all disabled:opacity-50"
+            >
+              More Payment Options
+            </button>
+          </div>
 
           <p className="text-center text-xs text-gray-500 mt-4">
             🔒 Secure payment powered by Razorpay
