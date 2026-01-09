@@ -1,17 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { CheckCircle } from 'lucide-react';
 import api from '../api';
-
-// UPI App configurations with proper deep link schemes
-const UPI_APPS = [
-  { id: 'gpay', name: 'Google Pay', icon: '💳' },
-  { id: 'phonepe', name: 'PhonePe', icon: '💜' },
-  { id: 'paytm', name: 'Paytm', icon: '🔵' },
-  { id: 'bhim', name: 'BHIM UPI', icon: '🇮🇳' },
-  { id: 'cred', name: 'CRED', icon: '⚫' },
-  { id: 'other', name: 'Other UPI', icon: '📱' }
-];
 
 export default function Payment() {
   const { orderId } = useParams();
@@ -20,187 +10,12 @@ export default function Payment() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isPaid, setIsPaid] = useState(false);
-  const [paymentLoading, setPaymentLoading] = useState(false);
-  const [selectedApp, setSelectedApp] = useState(null);
   const [razorpayOrder, setRazorpayOrder] = useState(null);
-  const [checkingPayment, setCheckingPayment] = useState(false);
+  const [razorpayOpened, setRazorpayOpened] = useState(false);
 
-  useEffect(() => {
-    fetchOrder();
-  }, [orderId]);
-
-  // Poll for payment status after UPI app redirect
-  useEffect(() => {
-    let interval;
-    if (checkingPayment) {
-      interval = setInterval(async () => {
-        try {
-          const res = await api.get(`/public/order/${orderId}`);
-          if (res.data?.paymentStatus === 'paid') {
-            setCheckingPayment(false);
-            setIsPaid(true);
-            setOrder(res.data);
-            clearInterval(interval);
-          }
-        } catch (err) {
-          console.error('Payment check error:', err);
-        }
-      }, 3000); // Check every 3 seconds
-    }
-    return () => clearInterval(interval);
-  }, [checkingPayment, orderId]);
-
-  const fetchOrder = async () => {
-    try {
-      const res = await api.get(`/public/order/${orderId}`);
-      if (res.data) {
-        setOrder(res.data);
-        if (res.data.paymentStatus === 'paid') {
-          setIsPaid(true);
-        } else if (res.data.status === 'cancelled') {
-          setError('This order has been cancelled.');
-        } else {
-          await createRazorpayOrder(res.data);
-        }
-      } else {
-        setError('Order not found');
-      }
-    } catch (err) {
-      setError('Failed to load order details');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const createRazorpayOrder = async (orderData) => {
-    try {
-      const res = await api.post('/payment/create-upi-order', {
-        orderId: orderData.orderId,
-        amount: orderData.totalAmount
-      });
-      setRazorpayOrder(res.data);
-    } catch (err) {
-      console.error('Failed to create Razorpay order:', err);
-    }
-  };
-
-  // Generate UPI intent URL
-  const generateUPIUrl = () => {
-    if (!order || !razorpayOrder) return null;
-    
-    // Use merchant VPA from backend or fallback
-    const vpa = razorpayOrder.merchantVpa;
-    if (!vpa) return null;
-    
-    const merchantName = razorpayOrder.merchantName || 'Restaurant';
-    const amount = order.totalAmount.toFixed(2);
-    const txnRef = razorpayOrder.razorpayOrderId;
-    const txnNote = `Order ${order.orderId}`;
-    
-    // Build UPI URL with proper encoding
-    const params = new URLSearchParams();
-    params.append('pa', vpa);
-    params.append('pn', merchantName);
-    params.append('am', amount);
-    params.append('cu', 'INR');
-    params.append('tn', txnNote);
-    params.append('tr', txnRef);
-    
-    return `upi://pay?${params.toString()}`;
-  };
-
-  // Open UPI app directly via Razorpay
-  const openUPIApp = async (app) => {
-    if (!order || !razorpayOrder) return;
-    
-    setSelectedApp(app.id);
-    setPaymentLoading(true);
-    
-    // Always use Razorpay checkout for proper payment tracking
-    openRazorpayCheckout();
-  };
-
-  // Razorpay checkout with config
-  const openRazorpayCheckout = async () => {
-    try {
-      if (!window.Razorpay) {
-        await loadRazorpayScript();
-      }
-
-      const options = {
-        key: razorpayOrder.keyId,
-        amount: razorpayOrder.amount,
-        currency: 'INR',
-        name: razorpayOrder.merchantName || 'Restaurant Order',
-        description: `Order #${order.orderId}`,
-        order_id: razorpayOrder.razorpayOrderId,
-        prefill: {
-          contact: order.customer?.phone || ''
-        },
-        notes: {
-          orderId: order.orderId
-        },
-        theme: {
-          color: '#f97316'
-        },
-        // Add config ID if available from backend
-        ...(razorpayOrder.configId && { checkout_config_id: razorpayOrder.configId }),
-        handler: function(response) {
-          handlePaymentSuccess(response);
-        },
-        modal: {
-          ondismiss: function() {
-            setPaymentLoading(false);
-            setSelectedApp(null);
-            setCheckingPayment(false);
-          }
-        }
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', function(response) {
-        handlePaymentFailure(response.error);
-      });
-      rzp.open();
-    } catch (err) {
-      console.error('Payment error:', err);
-      setError('Failed to initiate payment. Please try again.');
-      setPaymentLoading(false);
-      setSelectedApp(null);
-    }
-  };
-
-  const handlePaymentSuccess = async (response) => {
-    try {
-      await api.post('/payment/verify-upi', {
-        orderId: order.orderId,
-        razorpay_payment_id: response.razorpay_payment_id,
-        razorpay_order_id: response.razorpay_order_id,
-        razorpay_signature: response.razorpay_signature
-      });
-      navigate(`/payment-success/${order.orderId}`);
-    } catch (err) {
-      console.error('Verification error:', err);
-      setError('Payment verification failed. Please contact support.');
-    } finally {
-      setPaymentLoading(false);
-      setSelectedApp(null);
-      setCheckingPayment(false);
-    }
-  };
-
-  const handlePaymentFailure = (error) => {
-    console.error('Payment failed:', error);
-    setError(`Payment failed: ${error.description || 'Please try again'}`);
-    setPaymentLoading(false);
-    setSelectedApp(null);
-    setCheckingPayment(false);
-  };
-
-  const loadRazorpayScript = () => {
+  const loadRazorpayScript = useCallback(() => {
     return new Promise((resolve, reject) => {
-      if (document.querySelector('script[src*="razorpay"]')) {
+      if (window.Razorpay) {
         resolve();
         return;
       }
@@ -210,14 +25,113 @@ export default function Payment() {
       script.onerror = reject;
       document.body.appendChild(script);
     });
-  };
+  }, []);
+
+  const openRazorpayCheckout = useCallback(async (orderData, razorpayData) => {
+    if (razorpayOpened) return;
+    
+    try {
+      await loadRazorpayScript();
+      setRazorpayOpened(true);
+
+      const options = {
+        key: razorpayData.keyId,
+        amount: razorpayData.amount,
+        currency: 'INR',
+        name: razorpayData.merchantName || 'Restaurant Order',
+        description: `Order #${orderData.orderId}`,
+        order_id: razorpayData.razorpayOrderId,
+        prefill: {
+          contact: orderData.customer?.phone || ''
+        },
+        notes: {
+          orderId: orderData.orderId
+        },
+        theme: {
+          color: '#f97316'
+        },
+        ...(razorpayData.configId && { checkout_config_id: razorpayData.configId }),
+        handler: async function(response) {
+          try {
+            await api.post('/payment/verify-upi', {
+              orderId: orderData.orderId,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature
+            });
+            navigate(`/payment-success/${orderData.orderId}`);
+          } catch (err) {
+            console.error('Verification error:', err);
+            setError('Payment verification failed. Please contact support.');
+            setRazorpayOpened(false);
+          }
+        },
+        modal: {
+          ondismiss: function() {
+            setRazorpayOpened(false);
+          }
+        }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function(response) {
+        console.error('Payment failed:', response.error);
+        setError(`Payment failed: ${response.error.description || 'Please try again'}`);
+        setRazorpayOpened(false);
+      });
+      rzp.open();
+    } catch (err) {
+      console.error('Payment error:', err);
+      setError('Failed to open payment. Please try again.');
+      setRazorpayOpened(false);
+    }
+  }, [razorpayOpened, loadRazorpayScript, navigate]);
+
+  useEffect(() => {
+    const fetchOrder = async () => {
+      try {
+        const res = await api.get(`/public/order/${orderId}`);
+        if (res.data) {
+          setOrder(res.data);
+          if (res.data.paymentStatus === 'paid') {
+            setIsPaid(true);
+          } else if (res.data.status === 'cancelled') {
+            setError('This order has been cancelled.');
+          } else {
+            // Create Razorpay order
+            const razorpayRes = await api.post('/payment/create-upi-order', {
+              orderId: res.data.orderId,
+              amount: res.data.totalAmount
+            });
+            setRazorpayOrder(razorpayRes.data);
+          }
+        } else {
+          setError('Order not found');
+        }
+      } catch (err) {
+        setError('Failed to load order details');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrder();
+  }, [orderId]);
+
+  // Auto-open Razorpay when ready
+  useEffect(() => {
+    if (order && razorpayOrder && !isPaid && !error && !razorpayOpened) {
+      openRazorpayCheckout(order, razorpayOrder);
+    }
+  }, [order, razorpayOrder, isPaid, error, razorpayOpened, openRazorpayCheckout]);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-orange-500 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading order details...</p>
+          <p className="text-gray-600">Loading payment...</p>
         </div>
       </div>
     );
@@ -231,7 +145,7 @@ export default function Payment() {
           <h1 className="text-xl font-bold text-gray-800 mb-2">Payment Issue</h1>
           <p className="text-gray-600 mb-6">{error}</p>
           <button
-            onClick={() => { setError(null); fetchOrder(); }}
+            onClick={() => { setError(null); setRazorpayOpened(false); window.location.reload(); }}
             className="px-6 py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition-colors"
           >
             Try Again
@@ -314,86 +228,26 @@ export default function Payment() {
     );
   }
 
+  // Fallback UI while Razorpay opens
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 p-4">
-      <div className="max-w-md mx-auto">
-        {/* Order Summary */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-          <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">Complete Payment</h1>
-            <p className="text-gray-500">Order #{order?.orderId}</p>
-          </div>
-          <div className="border-t border-b py-4 mb-4">
-            {order?.items?.map((item, idx) => (
-              <div key={idx} className="flex justify-between items-center py-2">
-                <div>
-                  <p className="font-medium text-gray-800">{item.name}</p>
-                  <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
-                </div>
-                <p className="font-semibold text-gray-800">₹{item.price * item.quantity}</p>
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-between items-center text-xl font-bold">
-            <span>Total Amount</span>
-            <span className="text-orange-600">₹{order?.totalAmount}</span>
-          </div>
-        </div>
-
-        {/* Checking Payment Status */}
-        {checkingPayment && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent mx-auto mb-3"></div>
-            <p className="text-blue-700 font-medium">Waiting for payment confirmation...</p>
-            <p className="text-blue-600 text-sm mt-1">Complete payment in your UPI app</p>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-orange-500 border-t-transparent mx-auto mb-4"></div>
+        <h1 className="text-xl font-bold text-gray-800 mb-2">Opening Payment</h1>
+        <p className="text-gray-500 mb-6">Order #{order?.orderId} • ₹{order?.totalAmount}</p>
+        
+        {order && razorpayOrder && (
+          <button
+            onClick={() => { setRazorpayOpened(false); openRazorpayCheckout(order, razorpayOrder); }}
+            className="w-full py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition-colors"
+          >
+            Pay ₹{order?.totalAmount} Now
+          </button>
         )}
-
-        {/* UPI Apps Selection */}
-        <div className="bg-white rounded-2xl shadow-xl p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4 text-center">
-            Pay ₹{order?.totalAmount} with UPI
-          </h2>
-          
-          <div className="grid grid-cols-3 gap-4">
-            {UPI_APPS.map((app) => (
-              <button
-                key={app.id}
-                onClick={() => openUPIApp(app)}
-                disabled={paymentLoading}
-                className={`flex flex-col items-center p-4 rounded-xl border-2 transition-all ${
-                  selectedApp === app.id
-                    ? 'border-orange-500 bg-orange-50'
-                    : 'border-gray-200 hover:border-orange-300 hover:bg-orange-50'
-                } ${paymentLoading && selectedApp !== app.id ? 'opacity-50' : ''}`}
-              >
-                <span className="text-3xl mb-2">{app.icon}</span>
-                <span className="text-xs font-medium text-gray-700 text-center">{app.name}</span>
-                {selectedApp === app.id && paymentLoading && (
-                  <div className="mt-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-orange-500 border-t-transparent"></div>
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {/* Or pay with card/netbanking */}
-          <div className="mt-6 pt-4 border-t">
-            <p className="text-center text-xs text-gray-500 mb-3">Or pay with Card / Netbanking</p>
-            <button
-              onClick={() => { setSelectedApp('checkout'); openRazorpayCheckout(); }}
-              disabled={paymentLoading}
-              className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all disabled:opacity-50"
-            >
-              More Payment Options
-            </button>
-          </div>
-
-          <p className="text-center text-xs text-gray-500 mt-4">
-            🔒 Secure payment powered by Razorpay
-          </p>
-        </div>
+        
+        <p className="text-center text-xs text-gray-400 mt-4">
+          🔒 Secure payment powered by Razorpay
+        </p>
       </div>
     </div>
   );
