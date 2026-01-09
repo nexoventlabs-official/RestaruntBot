@@ -653,11 +653,6 @@ export default function Menu() {
                           <span>{item.preparationTime} min</span>
                         </div>
                       )}
-                      {isPaused && (
-                        <div className="mb-3 px-2 py-1.5 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-700 text-center font-medium">
-                          Category Paused
-                        </div>
-                      )}
                       <div className="flex gap-2">
                         <button onClick={() => openModal(item)} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-dark-50 text-dark-700 rounded-xl text-sm font-medium hover:bg-dark-100 transition-colors">
                           <Edit className="w-4 h-4" /> Edit
