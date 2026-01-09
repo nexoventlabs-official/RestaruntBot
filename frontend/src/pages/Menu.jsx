@@ -400,6 +400,16 @@ export default function Menu() {
   };
 
   const categories = [...new Set(items.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))];
+  
+  // Get paused category names
+  const pausedCategoryNames = categoryList.filter(c => c.isPaused).map(c => c.name);
+  
+  // Helper function to check if item is from paused category
+  const isItemFromPausedCategory = (item) => {
+    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+    return itemCategories.every(cat => pausedCategoryNames.includes(cat));
+  };
+
   const filteredItems = items.filter(item => {
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
     const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -600,9 +610,11 @@ export default function Menu() {
                 </span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
-                {itemsInCategory.map(item => (
-                  <div key={item._id} className="bg-white rounded-2xl shadow-card overflow-hidden card-hover group">
-                    <div className="h-44 bg-dark-100 relative overflow-hidden">
+                {itemsInCategory.map(item => {
+                  const isPaused = isItemFromPausedCategory(item);
+                  return (
+                  <div key={item._id} className={`bg-white rounded-2xl shadow-card overflow-hidden card-hover group ${isPaused ? 'ring-2 ring-yellow-300 bg-gray-50' : ''}`}>
+                    <div className={`h-44 bg-dark-100 relative overflow-hidden ${isPaused ? 'grayscale opacity-60' : ''}`}>
                       {item.image ? (
                         <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                       ) : (
@@ -612,27 +624,38 @@ export default function Menu() {
                       )}
                       {item.foodType && (
                         <div className="absolute top-3 left-3">
-                          <span className={`w-5 h-5 rounded border-2 flex items-center justify-center ${item.foodType === 'veg' ? 'border-green-600 bg-white' : item.foodType === 'egg' ? 'border-yellow-500 bg-white' : 'border-red-600 bg-white'}`}>
-                            <span className={`w-2.5 h-2.5 rounded-full ${item.foodType === 'veg' ? 'bg-green-600' : item.foodType === 'egg' ? 'bg-yellow-500' : 'bg-red-600'}`}></span>
+                          <span className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isPaused ? 'border-gray-400 bg-white' : item.foodType === 'veg' ? 'border-green-600 bg-white' : item.foodType === 'egg' ? 'border-yellow-500 bg-white' : 'border-red-600 bg-white'}`}>
+                            <span className={`w-2.5 h-2.5 rounded-full ${isPaused ? 'bg-gray-400' : item.foodType === 'veg' ? 'bg-green-600' : item.foodType === 'egg' ? 'bg-yellow-500' : 'bg-red-600'}`}></span>
                           </span>
                         </div>
                       )}
-                      <button onClick={() => toggleAvailability(item)}
-                        className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${item.available ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
-                        {item.available ? 'Available' : 'Unavailable'}
-                      </button>
+                      {isPaused ? (
+                        <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-400 text-yellow-900 flex items-center gap-1">
+                          <Pause className="w-3 h-3" /> Paused
+                        </div>
+                      ) : (
+                        <button onClick={() => toggleAvailability(item)}
+                          className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${item.available ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+                          {item.available ? 'Available' : 'Unavailable'}
+                        </button>
+                      )}
                     </div>
                     <div className="p-4">
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <h3 className="font-semibold text-dark-900 line-clamp-1">{item.name}</h3>
-                        <span className="text-primary-600 font-bold whitespace-nowrap">₹{item.price}</span>
+                        <h3 className={`font-semibold line-clamp-1 ${isPaused ? 'text-gray-400' : 'text-dark-900'}`}>{item.name}</h3>
+                        <span className={`font-bold whitespace-nowrap ${isPaused ? 'text-gray-400' : 'text-primary-600'}`}>₹{item.price}</span>
                       </div>
-                      <p className="text-xs text-dark-400 mb-2">{item.quantity || 1} {item.unit || 'piece'}</p>
-                      {item.description && <p className="text-sm text-dark-500 line-clamp-2 mb-3">{item.description}</p>}
+                      <p className={`text-xs mb-2 ${isPaused ? 'text-gray-400' : 'text-dark-400'}`}>{item.quantity || 1} {item.unit || 'piece'}</p>
+                      {item.description && <p className={`text-sm line-clamp-2 mb-3 ${isPaused ? 'text-gray-400' : 'text-dark-500'}`}>{item.description}</p>}
                       {item.preparationTime && (
-                        <div className="flex items-center gap-1 text-xs text-dark-400 mb-3">
+                        <div className={`flex items-center gap-1 text-xs mb-3 ${isPaused ? 'text-gray-400' : 'text-dark-400'}`}>
                           <Clock className="w-3.5 h-3.5" />
                           <span>{item.preparationTime} min</span>
+                        </div>
+                      )}
+                      {isPaused && (
+                        <div className="mb-3 px-2 py-1.5 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-700 text-center font-medium">
+                          Category Paused
                         </div>
                       )}
                       <div className="flex gap-2">
@@ -645,7 +668,7 @@ export default function Menu() {
                       </div>
                     </div>
                   </div>
-                ))}
+                );})}
               </div>
             </div>
           );
