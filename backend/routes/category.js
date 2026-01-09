@@ -121,13 +121,6 @@ router.patch('/:id/toggle-pause', authMiddleware, async (req, res) => {
     category.isPaused = !category.isPaused;
     await category.save();
     
-    // Update all items in this category - set unavailable when paused, available when resumed
-    const categoryName = category.name;
-    await MenuItem.updateMany(
-      { category: categoryName },
-      { available: !category.isPaused }
-    );
-    
     // Emit event for real-time updates
     dataEvents.emit('menu');
     

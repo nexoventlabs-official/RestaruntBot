@@ -211,7 +211,6 @@ export default function AdminMenuScreen({ navigation }) {
       ));
       await api.patch(`/categories/${category._id}/toggle-pause`);
       fetchCategories();
-      fetchMenu(); // Refresh menu items to reflect availability changes
     } catch (error) {
       setCategories(prev => prev.map(c => 
         c._id === category._id ? { ...c, isPaused: category.isPaused } : c
@@ -220,9 +219,17 @@ export default function AdminMenuScreen({ navigation }) {
     }
   };
 
-  // Filter items
+  // Get paused category names
+  const pausedCategoryNames = categories.filter(c => c.isPaused).map(c => c.name);
+
+  // Filter items - hide items from paused categories
   const filteredItems = items.filter(item => {
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+    
+    // Check if ALL categories of this item are paused - if so, hide the item
+    const allCategoriesPaused = itemCategories.every(cat => pausedCategoryNames.includes(cat));
+    if (allCategoriesPaused) return false;
+    
     const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       itemCategories.some(cat => cat?.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCategory = selectedCategory === 'all' || itemCategories.includes(selectedCategory);
