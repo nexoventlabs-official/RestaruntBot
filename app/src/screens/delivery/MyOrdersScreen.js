@@ -25,7 +25,7 @@ export default function MyOrdersScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
-  const [qrModal, setQrModal] = useState({ visible: false, qrUrl: null, paymentUrl: null, orderId: null, amount: 0, paymentLinkId: null });
+  const [qrModal, setQrModal] = useState({ visible: false, qrUrl: null, paymentUrl: null, upiDeepLink: null, orderId: null, amount: 0, paymentLinkId: null });
   const [checkingPayment, setCheckingPayment] = useState(false);
 
   const fetchOrders = async () => {
@@ -154,12 +154,13 @@ export default function MyOrdersScreen({ navigation }) {
     setActionLoading(order.orderId);
     try {
       const response = await api.post(`/delivery/orders/${order.orderId}/generate-qr`);
-      const { qrUrl, paymentUrl, paymentLinkId, amount, orderId } = response.data;
+      const { qrUrl, paymentUrl, upiDeepLink, paymentLinkId, amount, orderId } = response.data;
       
       setQrModal({
         visible: true,
         qrUrl,
         paymentUrl,
+        upiDeepLink,
         orderId,
         amount,
         paymentLinkId,
@@ -182,7 +183,7 @@ export default function MyOrdersScreen({ navigation }) {
       
       if (response.data.status === 'paid') {
         Alert.alert('Success', 'Payment received! Order marked as delivered.');
-        setQrModal({ visible: false, qrUrl: null, paymentUrl: null, orderId: null, amount: 0, paymentLinkId: null });
+        setQrModal({ visible: false, qrUrl: null, paymentUrl: null, upiDeepLink: null, orderId: null, amount: 0, paymentLinkId: null });
         fetchOrders();
       } else {
         Alert.alert('Payment Pending', response.data.message || 'Payment not yet received. Please wait for customer to complete payment.');
@@ -204,12 +205,18 @@ export default function MyOrdersScreen({ navigation }) {
           text: 'Yes, Cash Received',
           onPress: () => {
             const orderId = qrModal.orderId;
-            setQrModal({ visible: false, qrUrl: null, paymentUrl: null, orderId: null, amount: 0, paymentLinkId: null });
+            setQrModal({ visible: false, qrUrl: null, paymentUrl: null, upiDeepLink: null, orderId: null, amount: 0, paymentLinkId: null });
             completeDelivery(orderId, 'cash');
           },
         },
       ]
     );
+  };
+
+  const handleManualUpiConfirm = () => {
+    const orderId = qrModal.orderId;
+    setQrModal({ visible: false, qrUrl: null, paymentUrl: null, upiDeepLink: null, orderId: null, amount: 0, paymentLinkId: null });
+    completeDelivery(orderId, 'upi');
   };
 
   const completeDelivery = async (orderId, collectionMethod) => {
@@ -337,7 +344,7 @@ export default function MyOrdersScreen({ navigation }) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Scan to Pay</Text>
+              <Text style={styles.modalTitle}>Collect Payment</Text>
               <TouchableOpacity onPress={() => setQrModal({ ...qrModal, visible: false })}>
                 <Ionicons name="close" size={28} color="#1c1d21" />
               </TouchableOpacity>
@@ -345,46 +352,47 @@ export default function MyOrdersScreen({ navigation }) {
 
             <Text style={styles.modalOrderId}>Order #{qrModal.orderId}</Text>
             <Text style={styles.modalAmount}>₹{qrModal.amount}</Text>
+            <Text style={styles.codLabel}>Cash on Delivery</Text>
 
-            {qrModal.qrUrl && (
-              <Image
-                source={{ uri: qrModal.qrUrl }}
-                style={styles.qrImage}
-                resizeMode="contain"
-              />
+            <View style={styles.qrContainer}>
+              <Text style={styles.scanText}>Scan to pay ₹{qrModal.amount}</Text>
+              {qrModal.qrUrl && (
+                <Image
+                  source={{ uri: qrModal.qrUrl }}
+                  style={styles.qrImage}
+                  resizeMode="contain"
+                />
+              )}
+            </View>
+
+            {/* Open UPI App Button */}
+            {qrModal.upiDeepLink && (
+              <TouchableOpacity
+                style={styles.upiAppButton}
+                onPress={() => Linking.openURL(qrModal.upiDeepLink)}
+              >
+                <Text style={styles.upiAppButtonText}>📱 Open UPI App</Text>
+              </TouchableOpacity>
             )}
 
-            <Text style={styles.qrInstructions}>
-              Ask customer to scan this QR code with any UPI app
-            </Text>
+            <Text style={styles.qrInstructions}>Or share payment link</Text>
+            <TouchableOpacity onPress={() => qrModal.paymentUrl && Linking.openURL(qrModal.paymentUrl)}>
+              <Text style={styles.paymentLink} numberOfLines={1}>{qrModal.paymentUrl}</Text>
+            </TouchableOpacity>
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.checkPaymentButton, checkingPayment && styles.buttonDisabled]}
-                onPress={checkPaymentStatus}
+                style={[styles.markDeliveredButton, checkingPayment && styles.buttonDisabled]}
+                onPress={handleManualUpiConfirm}
                 disabled={checkingPayment}
               >
-                {checkingPayment ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <>
-                    <Ionicons name="refresh" size={20} color="#fff" />
-                    <Text style={styles.checkPaymentText}>Check Payment</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.openLinkButton}
-                onPress={() => qrModal.paymentUrl && Linking.openURL(qrModal.paymentUrl)}
-              >
-                <Ionicons name="open-outline" size={20} color="#2a9d8f" />
-                <Text style={styles.openLinkText}>Open Payment Link</Text>
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                <Text style={styles.markDeliveredText}>Payment Received - Mark Delivered</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.cashButton} onPress={closeQrAndMarkCash}>
-                <Ionicons name="cash-outline" size={20} color="#f59e0b" />
-                <Text style={styles.cashButtonText}>Paid in Cash Instead</Text>
+                <Ionicons name="arrow-back" size={20} color="#61636b" />
+                <Text style={styles.backButtonText}>Back to options</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -457,39 +465,48 @@ const styles = StyleSheet.create({
   },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1c1d21' },
   modalOrderId: { fontSize: 14, color: '#61636b', marginBottom: 4 },
-  modalAmount: { fontSize: 32, fontWeight: 'bold', color: '#2a9d8f', marginBottom: 16 },
-  qrImage: { width: 250, height: 250, marginBottom: 16 },
-  qrInstructions: { fontSize: 14, color: '#61636b', textAlign: 'center', marginBottom: 20 },
+  modalAmount: { fontSize: 32, fontWeight: 'bold', color: '#f97316', marginBottom: 4 },
+  codLabel: { fontSize: 14, color: '#61636b', marginBottom: 16 },
+  qrContainer: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  scanText: { fontSize: 14, color: '#61636b', marginBottom: 12 },
+  qrImage: { width: 200, height: 200 },
+  upiAppButton: {
+    width: '100%',
+    backgroundColor: '#7c3aed',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  upiAppButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  qrInstructions: { fontSize: 12, color: '#9ca3af', marginBottom: 4 },
+  paymentLink: { fontSize: 12, color: '#3b82f6', textDecorationLine: 'underline', marginBottom: 20 },
   modalButtons: { width: '100%', gap: 12 },
-  checkPaymentButton: {
+  markDeliveredButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#2a9d8f',
+    backgroundColor: '#22c55e',
     paddingVertical: 14,
     borderRadius: 10,
   },
   buttonDisabled: { opacity: 0.7 },
-  checkPaymentText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  openLinkButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#e6f7f5',
-    paddingVertical: 14,
-    borderRadius: 10,
-  },
-  openLinkText: { color: '#2a9d8f', fontSize: 16, fontWeight: '600' },
+  markDeliveredText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   cashButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#fef3c7',
-    paddingVertical: 14,
-    borderRadius: 10,
+    paddingVertical: 10,
   },
-  cashButtonText: { color: '#f59e0b', fontSize: 16, fontWeight: '600' },
+  backButtonText: { color: '#61636b', fontSize: 14 },
 });
