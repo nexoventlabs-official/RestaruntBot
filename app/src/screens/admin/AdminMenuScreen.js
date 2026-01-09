@@ -231,49 +231,45 @@ export default function AdminMenuScreen({ navigation }) {
       return;
     }
 
+    // Get all categories that these items belong to (including current category)
+    const allRelatedCategoryNames = new Set();
+    itemsInCategory.forEach(item => {
+      const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+      itemCategories.forEach(cat => allRelatedCategoryNames.add(cat));
+    });
+
+    // Find category objects that need to be paused
+    const categoriesToPause = categories.filter(c => 
+      allRelatedCategoryNames.has(c.name) && !c.isPaused
+    );
+
     Alert.alert(
       'Complete Pause',
-      `This will pause the category "${category.name}" and all ${itemsInCategory.length} item(s) inside it. Continue?`,
+      categoriesToPause.length > 1 
+        ? `This will pause ${categoriesToPause.length} categories (${categoriesToPause.map(c => c.name).join(', ')}) to make all ${itemsInCategory.length} item(s) paused. Continue?`
+        : `This will pause the category "${category.name}" and all ${itemsInCategory.length} item(s) inside it. Continue?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Pause All',
           onPress: async () => {
             try {
-              // First pause the category if not already paused
-              if (!category.isPaused) {
-                setCategories(prev => prev.map(c => 
-                  c._id === category._id ? { ...c, isPaused: true } : c
-                ));
-                await api.patch(`/categories/${category._id}/toggle-pause`);
-              }
+              // Pause all related categories
+              const pausePromises = categoriesToPause.map(cat => 
+                api.patch(`/categories/${cat._id}/toggle-pause`)
+              );
               
-              // Then pause all items (set available: false)
-              const availableItems = itemsInCategory.filter(item => item.available);
-              if (availableItems.length > 0) {
-                const updatePromises = availableItems.map(item => {
-                  const tags = Array.isArray(item.tags) ? item.tags.join(', ') : (item.tags || '');
-                  return api.put(`/menu/${item._id}`, { ...item, available: false, tags });
-                });
-                
-                // Optimistic update
-                setItems(prev => prev.map(item => {
-                  const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-                  if (itemCategories.includes(category.name) && item.available) {
-                    return { ...item, available: false };
-                  }
-                  return item;
-                }));
-                
-                await Promise.all(updatePromises);
-              }
+              // Optimistic update for categories
+              setCategories(prev => prev.map(c => 
+                allRelatedCategoryNames.has(c.name) ? { ...c, isPaused: true } : c
+              ));
               
-              Alert.alert('Success', `Category and ${itemsInCategory.length} item(s) paused`);
-              fetchMenu();
+              await Promise.all(pausePromises);
+              
+              Alert.alert('Success', `${categoriesToPause.length} category(s) and ${itemsInCategory.length} item(s) paused`);
               fetchCategories();
             } catch (error) {
               Alert.alert('Error', 'Failed to complete pause');
-              fetchMenu();
               fetchCategories();
             }
           },
