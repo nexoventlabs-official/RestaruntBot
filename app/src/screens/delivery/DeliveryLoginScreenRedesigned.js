@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import {
-  View, Text, TextInput, StyleSheet, SafeAreaView, 
-  Alert, KeyboardAvoidingView, Platform, Pressable
+  View, Text, TextInput, StyleSheet, 
+  Alert, KeyboardAvoidingView, Platform, Pressable, StatusBar
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -67,7 +67,8 @@ export default function DeliveryLoginScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <LinearGradient
         colors={[colors.primary[50], colors.light.background]}
         style={StyleSheet.absoluteFill}
@@ -199,7 +200,7 @@ export default function DeliveryLoginScreen({ navigation }) {
           </Pressable>
         </Animated.View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -210,7 +211,8 @@ const styles = StyleSheet.create({
   },
   content: { 
     flex: 1, 
-    padding: spacing.screenHorizontal 
+    padding: spacing.screenHorizontal,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
   },
   backButton: { 
     width: 44,

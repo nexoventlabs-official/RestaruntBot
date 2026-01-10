@@ -32,6 +32,80 @@ const brevoMail = {
     }
   },
 
+  async sendDeliveryPartnerNotification(email, partnerName, orderDetails) {
+    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
+    sendSmtpEmail.subject = `🛵 New Order Assigned - ${orderDetails.orderId}`;
+    sendSmtpEmail.htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #267E3E 0%, #1B5E2E 100%); padding: 25px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">🛵 New Order Assigned!</h1>
+        </div>
+        
+        <div style="padding: 25px; background: #f8f9fb; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; color: #333;">Hi <strong>${partnerName}</strong>,</p>
+          <p style="color: #555;">A new order has been assigned to you. Please check your app for details.</p>
+          
+          <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #267E3E;">
+            <h3 style="color: #267E3E; margin-top: 0;">Order Details</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px 0; color: #666;">Order ID:</td>
+                <td style="padding: 8px 0; text-align: right;"><strong>${orderDetails.orderId}</strong></td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #666;">Customer:</td>
+                <td style="padding: 8px 0; text-align: right;"><strong>${orderDetails.customerName}</strong></td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #666;">Phone:</td>
+                <td style="padding: 8px 0; text-align: right;"><strong>${orderDetails.customerPhone}</strong></td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #666;">Amount:</td>
+                <td style="padding: 8px 0; text-align: right;"><strong style="color: #267E3E;">₹${orderDetails.totalAmount}</strong></td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #666;">Payment:</td>
+                <td style="padding: 8px 0; text-align: right;"><strong>${orderDetails.paymentMethod === 'cod' ? '💵 Cash on Delivery' : '💳 UPI (Prepaid)'}</strong></td>
+              </tr>
+            </table>
+          </div>
+          
+          <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
+            <h3 style="color: #333; margin-top: 0;">📍 Delivery Address</h3>
+            <p style="color: #555; margin: 0; line-height: 1.6;">${orderDetails.deliveryAddress}</p>
+          </div>
+          
+          <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
+            <h3 style="color: #333; margin-top: 0;">🍽️ Items (${orderDetails.items.length})</h3>
+            <ul style="margin: 0; padding-left: 20px; color: #555;">
+              ${orderDetails.items.map(i => `<li style="padding: 5px 0;">${i.name} × ${i.quantity}</li>`).join('')}
+            </ul>
+          </div>
+          
+          <div style="text-align: center; margin-top: 25px;">
+            <p style="color: #888; font-size: 14px;">Open your delivery app to accept and start the delivery.</p>
+          </div>
+        </div>
+        
+        <div style="padding: 15px; text-align: center; color: #888; font-size: 12px;">
+          <p>This is an automated notification. Please do not reply to this email.</p>
+        </div>
+      </div>
+    `;
+    sendSmtpEmail.sender = { name: process.env.BREVO_FROM_NAME || 'FoodAdmin', email: process.env.BREVO_FROM_EMAIL };
+    sendSmtpEmail.to = [{ email }];
+
+    try {
+      await apiInstance.sendTransacEmail(sendSmtpEmail);
+      console.log(`📧 Delivery notification email sent to ${email}`);
+      return true;
+    } catch (error) {
+      console.error('Brevo delivery notification email error:', error.message);
+      return false;
+    }
+  },
+
   async sendStatusUpdate(email, orderId, status, message) {
     const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
     sendSmtpEmail.subject = `Order ${orderId} - ${status}`;

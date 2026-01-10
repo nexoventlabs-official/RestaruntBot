@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, ScrollView, TextInput,
+  View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, Image, Alert, ActivityIndicator, Switch, Modal, FlatList,
-  Animated, Platform, KeyboardAvoidingView
+  Animated, Platform, KeyboardAvoidingView, StatusBar
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -153,7 +153,8 @@ export default function MenuItemFormScreen({ route, navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       {/* Premium Header */}
       <Animated.View style={{ opacity: fadeAnim }}>
         <LinearGradient
@@ -462,7 +463,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -472,7 +473,7 @@ const styles = StyleSheet.create({
   
   // Header
   header: {
-    paddingTop: Platform.OS === 'android' ? 44 : 12,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
     paddingBottom: 20,
     paddingHorizontal: 16,
     borderBottomLeftRadius: 28,

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, FlatList, ScrollView,
+  View, Text, StyleSheet, FlatList, ScrollView,
   RefreshControl, TouchableOpacity, Image, Alert, ActivityIndicator,
-  TextInput, Modal, Animated, Platform
+  TextInput, Modal, Animated, Platform, StatusBar
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,7 +25,7 @@ export default function AdminMenuScreen({ navigation }) {
   const [togglingId, setTogglingId] = useState(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
-  
+
   // Category modal
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [categoryForm, setCategoryForm] = useState({ name: '' });
@@ -167,7 +167,7 @@ export default function AdminMenuScreen({ navigation }) {
       const formData = new FormData();
       formData.append('name', categoryForm.name);
       formData.append('description', '');
-      
+
       if (categoryImage) {
         const filename = categoryImage.uri.split('/').pop();
         const match = /\.(\w+)$/.exec(filename);
@@ -224,13 +224,13 @@ export default function AdminMenuScreen({ navigation }) {
 
   const toggleCategoryPause = async (category) => {
     try {
-      setCategories(prev => prev.map(c => 
+      setCategories(prev => prev.map(c =>
         c._id === category._id ? { ...c, isPaused: !c.isPaused } : c
       ));
       await api.patch(`/categories/${category._id}/toggle-pause`);
       fetchCategories();
     } catch (error) {
-      setCategories(prev => prev.map(c => 
+      setCategories(prev => prev.map(c =>
         c._id === category._id ? { ...c, isPaused: category.isPaused } : c
       ));
       Alert.alert('Error', 'Failed to toggle pause status');
@@ -242,7 +242,7 @@ export default function AdminMenuScreen({ navigation }) {
       const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
       return itemCategories.includes(category.name);
     });
-    
+
     if (itemsInCategory.length === 0) {
       Alert.alert('Info', 'No items in this category');
       return;
@@ -254,7 +254,7 @@ export default function AdminMenuScreen({ navigation }) {
 
     Alert.alert(
       allPaused ? 'Resume All' : 'Complete Pause',
-      allPaused 
+      allPaused
         ? `This will resume ${pausedItems.length} item(s) in "${category.name}". Continue?`
         : `This will pause ${unpausedItems.length} item(s) in "${category.name}". Continue?`,
       [
@@ -263,9 +263,9 @@ export default function AdminMenuScreen({ navigation }) {
           text: allPaused ? 'Resume All' : 'Pause All',
           onPress: async () => {
             try {
-              await api.patch('/menu/bulk-pause', { 
-                categoryName: category.name, 
-                isPaused: !allPaused 
+              await api.patch('/menu/bulk-pause', {
+                categoryName: category.name,
+                isPaused: !allPaused
               });
               setItems(prev => prev.map(item => {
                 const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
@@ -274,7 +274,7 @@ export default function AdminMenuScreen({ navigation }) {
                 }
                 return item;
               }));
-              Alert.alert('Success', allPaused 
+              Alert.alert('Success', allPaused
                 ? `${pausedItems.length} item(s) resumed`
                 : `${unpausedItems.length} item(s) paused`
               );
@@ -304,8 +304,8 @@ export default function AdminMenuScreen({ navigation }) {
     const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       itemCategories.some(cat => cat?.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCategory = selectedCategory === 'all' || itemCategories.includes(selectedCategory);
-    const matchesStatus = statusFilter === 'all' || 
-      (statusFilter === 'available' && item.available) || 
+    const matchesStatus = statusFilter === 'all' ||
+      (statusFilter === 'available' && item.available) ||
       (statusFilter === 'unavailable' && !item.available);
     const matchesFoodType = foodTypeFilter === 'all' || item.foodType === foodTypeFilter;
     return matchesSearch && matchesCategory && matchesStatus && matchesFoodType;
@@ -319,7 +319,7 @@ export default function AdminMenuScreen({ navigation }) {
 
   const renderItem = ({ item, index }) => {
     const isPaused = isItemPaused(item);
-    
+
     return (
       <Animated.View style={{
         opacity: fadeAnim,
@@ -332,9 +332,9 @@ export default function AdminMenuScreen({ navigation }) {
         >
           <View style={styles.itemImageContainer}>
             {item.image ? (
-              <Image 
-                source={{ uri: item.image }} 
-                style={[styles.itemImage, isPaused && styles.itemImagePaused]} 
+              <Image
+                source={{ uri: item.image }}
+                style={[styles.itemImage, isPaused && styles.itemImagePaused]}
               />
             ) : (
               <View style={[styles.itemImage, styles.placeholderImage, isPaused && styles.placeholderImagePaused]}>
@@ -347,16 +347,16 @@ export default function AdminMenuScreen({ navigation }) {
               </View>
             )}
             {item.foodType && item.foodType !== 'none' && (
-              <View style={[styles.foodTypeBadge, { 
+              <View style={[styles.foodTypeBadge, {
                 borderColor: isPaused ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
               }]}>
-                <View style={[styles.foodTypeDot, { 
+                <View style={[styles.foodTypeDot, {
                   backgroundColor: isPaused ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
                 }]} />
               </View>
             )}
           </View>
-          
+
           <View style={styles.itemInfo}>
             <Text style={[styles.itemName, isPaused && styles.textPaused]} numberOfLines={1}>{item.name}</Text>
             <Text style={[styles.itemCategory, isPaused && styles.textPaused]} numberOfLines={1}>
@@ -375,7 +375,7 @@ export default function AdminMenuScreen({ navigation }) {
                   <Text style={styles.pausedStatusText}>Paused</Text>
                 </View>
               ) : (
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.availabilityToggle, { backgroundColor: item.available ? '#DCFCE7' : '#FEE2E2' }]}
                   onPress={() => toggleAvailability(item)}
                   disabled={togglingId === item._id}
@@ -401,7 +401,8 @@ export default function AdminMenuScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       {/* Premium Zomato Header */}
       <Animated.View style={{ opacity: fadeAnim }}>
         <LinearGradient
@@ -537,7 +538,7 @@ export default function AdminMenuScreen({ navigation }) {
                 return itemCategories.includes(cat.name);
               });
               const allItemsPaused = itemsInCat.length > 0 && itemsInCat.every(item => item.isPaused);
-              
+
               return (
                 <TouchableOpacity
                   key={cat._id}
@@ -565,7 +566,7 @@ export default function AdminMenuScreen({ navigation }) {
                     )}
                   </View>
                   <Text style={[
-                    styles.categoryChipText, 
+                    styles.categoryChipText,
                     selectedCategory === cat.name && styles.categoryChipTextActive,
                     cat.isPaused && styles.categoryChipTextPaused
                   ]}>{cat.name}</Text>
@@ -638,7 +639,7 @@ export default function AdminMenuScreen({ navigation }) {
                 <Ionicons name="close" size={24} color="#696969" />
               </TouchableOpacity>
             </View>
-            
+
             <View style={styles.modalBody}>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Category Name</Text>
@@ -650,7 +651,7 @@ export default function AdminMenuScreen({ navigation }) {
                   placeholderTextColor="#9ca3af"
                 />
               </View>
-              
+
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Category Image</Text>
                 <View style={styles.categoryImageSection}>
@@ -693,17 +694,17 @@ export default function AdminMenuScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F8F8' },
-  
+
   // Header
   header: {
-    paddingTop: Platform.OS === 'android' ? 44 : 12,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
     paddingBottom: 24,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 28,
@@ -717,8 +718,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
   subtitle: { fontSize: 14, color: 'rgba(255,255,255,0.85)', marginTop: 4, fontWeight: '500' },
   headerButtons: { flexDirection: 'row', gap: 12 },
-  headerButton: { 
-    width: 46, height: 46, borderRadius: 23, backgroundColor: '#fff', 
+  headerButton: {
+    width: 46, height: 46, borderRadius: 23, backgroundColor: '#fff',
     justifyContent: 'center', alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -726,7 +727,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
-  
+
   // Search
   searchContainer: { paddingHorizontal: 16, marginTop: -20 },
   searchInputWrapper: {
@@ -740,10 +741,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   searchInput: { flex: 1, fontSize: 15, color: '#1C1C1C', fontWeight: '500' },
-  
+
   // Stats
   statsContainer: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8, gap: 10 },
-  statCard: { 
+  statCard: {
     flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 14, alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -774,7 +775,7 @@ const styles = StyleSheet.create({
   filterDivider: { width: 1, height: 28, backgroundColor: '#E8E8E8', marginHorizontal: 4 },
   foodTypeIcon: { width: 16, height: 16, borderRadius: 4, borderWidth: 2, justifyContent: 'center', alignItems: 'center' },
   foodTypeIconDot: { width: 8, height: 8, borderRadius: 4 },
-  
+
   // Category Filter
   categoryFilterContainer: { backgroundColor: '#fff', paddingVertical: 14, marginTop: 4, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#F0F0F0' },
   categoryFilterList: { paddingHorizontal: 16, gap: 10 },
@@ -800,11 +801,11 @@ const styles = StyleSheet.create({
   // Loading
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 14, color: '#696969', fontWeight: '500' },
-  
+
   // List
   listContent: { padding: 16, paddingBottom: 100 },
-  itemCard: { 
-    flexDirection: 'row', backgroundColor: '#fff', borderRadius: 18, 
+  itemCard: {
+    flexDirection: 'row', backgroundColor: '#fff', borderRadius: 18,
     padding: 14, marginBottom: 12, alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
@@ -818,8 +819,8 @@ const styles = StyleSheet.create({
   itemImagePaused: { opacity: 0.6 },
   placeholderImage: { backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
   placeholderImagePaused: { backgroundColor: '#FEF3C7' },
-  pausedBadge: { 
-    position: 'absolute', top: -6, right: -6, 
+  pausedBadge: {
+    position: 'absolute', top: -6, right: -6,
     backgroundColor: '#fff', borderRadius: 12, padding: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -827,10 +828,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  foodTypeBadge: { 
+  foodTypeBadge: {
     position: 'absolute', top: 4, left: 4,
-    width: 18, height: 18, borderRadius: 5, borderWidth: 2, 
-    backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' 
+    width: 18, height: 18, borderRadius: 5, borderWidth: 2,
+    backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center'
   },
   foodTypeDot: { width: 8, height: 8, borderRadius: 4 },
   itemInfo: { flex: 1, marginLeft: 14 },
@@ -856,7 +857,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: '#1C1C1C', textAlign: 'center' },
   emptySubtitle: { fontSize: 14, color: '#696969', marginTop: 8, textAlign: 'center', lineHeight: 20 },
-  emptyButton: { 
+  emptyButton: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     marginTop: 24, backgroundColor: ZOMATO_RED, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14,
     shadowColor: ZOMATO_RED,
@@ -866,7 +867,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   emptyButtonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  
+
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28 },
@@ -885,7 +886,7 @@ const styles = StyleSheet.create({
     fontSize: 15, color: '#1C1C1C', borderWidth: 1.5, borderColor: '#E8E8E8', fontWeight: '500',
   },
   modalFooter: { padding: 24, paddingTop: 8 },
-  modalButton: { 
+  modalButton: {
     backgroundColor: ZOMATO_RED, height: 54, borderRadius: 16, justifyContent: 'center', alignItems: 'center',
     shadowColor: ZOMATO_RED,
     shadowOffset: { width: 0, height: 4 },
@@ -895,7 +896,7 @@ const styles = StyleSheet.create({
   },
   modalButtonDisabled: { opacity: 0.7 },
   modalButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  
+
   // Category Image
   categoryImageSection: { alignItems: 'center', gap: 14 },
   categoryImageContainer: { position: 'relative' },

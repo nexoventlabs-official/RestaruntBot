@@ -424,6 +424,34 @@ router.post('/status', async (req, res) => {
   }
 });
 
+// Update push notification token (Delivery boy)
+router.post('/push-token', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token' });
+  
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    if (decoded.role !== 'delivery') {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    
+    const { pushToken } = req.body;
+    
+    if (!pushToken) {
+      return res.status(400).json({ error: 'Push token is required' });
+    }
+    
+    await DeliveryBoy.findByIdAndUpdate(decoded.id, { pushToken });
+    
+    console.log(`📱 Push token updated for delivery partner ${decoded.id}`);
+    
+    res.json({ message: 'Push token updated' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ DELIVERY BOY ORDER ROUTES ============
 
 // Middleware to verify delivery boy token

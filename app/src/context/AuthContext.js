@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import api from '../config/api';
+import pushNotifications from '../services/pushNotifications';
 
 const AuthContext = createContext({});
 
@@ -31,6 +32,8 @@ export const AuthProvider = ({ children }) => {
             await api.get('/auth/verify');
           } else {
             await api.get('/delivery/verify');
+            // Re-register push token for delivery partner
+            registerPushToken();
           }
         } catch (error) {
           await logout();
@@ -40,6 +43,18 @@ export const AuthProvider = ({ children }) => {
       console.error('Error loading auth:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Register push notifications for delivery partner
+  const registerPushToken = async () => {
+    try {
+      const pushToken = await pushNotifications.registerForPushNotifications();
+      if (pushToken) {
+        await pushNotifications.updatePushToken(pushToken);
+      }
+    } catch (error) {
+      console.error('Error registering push token:', error);
     }
   };
 
@@ -66,6 +81,10 @@ export const AuthProvider = ({ children }) => {
     
     setUser(userData);
     setRole('delivery');
+    
+    // Register push notifications for delivery partner
+    registerPushToken();
+    
     return userData;
   };
 

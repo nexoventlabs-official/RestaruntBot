@@ -76,20 +76,20 @@ export default function AdminReportsScreen() {
 
   if (loading && !reportData) {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.zomato.red} />
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
         <LinearGradient colors={[colors.zomato.red, colors.zomato.darkRed]} style={styles.header}>
           <Text style={styles.title}>Reports</Text>
         </LinearGradient>
         <ActivityIndicator size="large" color={colors.zomato.red} style={{ flex: 1 }} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.zomato.red} />
-      
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
       <LinearGradient colors={[colors.zomato.red, colors.zomato.darkRed]} style={styles.header}>
         <Text style={styles.title}>Reports & Analytics</Text>
         <Text style={styles.subtitle}>Track your business performance</Text>
@@ -182,13 +182,13 @@ export default function AdminReportsScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.light.background },
-  header: { paddingTop: Platform.OS === 'android' ? 50 : 16, paddingBottom: spacing.lg, paddingHorizontal: spacing.screenHorizontal, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  header: { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60, paddingBottom: spacing.lg, paddingHorizontal: spacing.screenHorizontal, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   title: { fontSize: typography.display.small.fontSize, fontWeight: '700', color: '#fff' },
   subtitle: { fontSize: typography.body.medium.fontSize, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   tabsContainer: { backgroundColor: colors.light.surface, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.light.borderLight },

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  SafeAreaView, Alert, ActivityIndicator, KeyboardAvoidingView, 
+  SafeAreaView, Alert, ActivityIndicator, KeyboardAvoidingView,
   Platform, Animated, Dimensions, StatusBar
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,7 +18,7 @@ export default function AdminLoginScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
   const [focusedInput, setFocusedInput] = useState(null);
   const { loginAdmin } = useAuth();
-  
+
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -69,28 +69,28 @@ export default function AdminLoginScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.zomato.red} />
-      
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
       {/* Premium Header with Gradient */}
       <LinearGradient
         colors={[colors.zomato.red, colors.zomato.darkRed]}
         style={styles.headerGradient}
       >
         {/* Back Button */}
-        <TouchableOpacity 
-          style={styles.backButton} 
+        <TouchableOpacity
+          style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        
+
         {/* Logo Section */}
         <Animated.View style={[
           styles.logoSection,
-          { 
+          {
             opacity: fadeAnim,
-            transform: [{ scale: logoScale }] 
+            transform: [{ scale: logoScale }]
           }
         ]}>
           <View style={styles.logoCircle}>
@@ -105,8 +105,8 @@ export default function AdminLoginScreen({ navigation }) {
         <View style={styles.decorCircle2} />
       </LinearGradient>
 
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.content}
       >
         <Animated.View style={[
@@ -131,10 +131,10 @@ export default function AdminLoginScreen({ navigation }) {
               styles.inputIconContainer,
               focusedInput === 'username' && styles.inputIconContainerFocused
             ]}>
-              <Ionicons 
-                name="person-outline" 
-                size={20} 
-                color={focusedInput === 'username' ? colors.zomato.red : colors.light.text.tertiary} 
+              <Ionicons
+                name="person-outline"
+                size={20}
+                color={focusedInput === 'username' ? colors.zomato.red : colors.light.text.tertiary}
               />
             </View>
             <TextInput
@@ -159,10 +159,10 @@ export default function AdminLoginScreen({ navigation }) {
               styles.inputIconContainer,
               focusedInput === 'password' && styles.inputIconContainerFocused
             ]}>
-              <Ionicons 
-                name="lock-closed-outline" 
-                size={20} 
-                color={focusedInput === 'password' ? colors.zomato.red : colors.light.text.tertiary} 
+              <Ionicons
+                name="lock-closed-outline"
+                size={20}
+                color={focusedInput === 'password' ? colors.zomato.red : colors.light.text.tertiary}
               />
             </View>
             <TextInput
@@ -175,14 +175,14 @@ export default function AdminLoginScreen({ navigation }) {
               onFocus={() => setFocusedInput('password')}
               onBlur={() => setFocusedInput(null)}
             />
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.eyeButton}
               onPress={() => setShowPassword(!showPassword)}
             >
-              <Ionicons 
-                name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
-                size={20} 
-                color={colors.light.text.tertiary} 
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={colors.light.text.tertiary}
               />
             </TouchableOpacity>
           </View>
@@ -229,17 +229,17 @@ export default function AdminLoginScreen({ navigation }) {
           </View>
         </Animated.View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
+  container: {
+    flex: 1,
     backgroundColor: colors.light.background,
   },
   headerGradient: {
-    paddingTop: Platform.OS === 'android' ? 50 : 20,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
     paddingBottom: 50,
     paddingHorizontal: spacing.screenHorizontal,
     borderBottomLeftRadius: 32,
@@ -296,8 +296,8 @@ const styles = StyleSheet.create({
     bottom: -30,
     left: -30,
   },
-  content: { 
-    flex: 1, 
+  content: {
+    flex: 1,
     padding: spacing.screenHorizontal,
     marginTop: -spacing.lg,
   },
@@ -344,8 +344,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.lg - 2,
     borderBottomLeftRadius: radius.lg - 2,
   },
-  input: { 
-    flex: 1, 
+  input: {
+    flex: 1,
     fontSize: typography.body.large.fontSize,
     color: colors.light.text.primary,
     paddingVertical: spacing.base,
@@ -378,8 +378,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
-  loginButtonText: { 
-    color: '#fff', 
+  loginButtonText: {
+    color: '#fff',
     fontSize: typography.title.large.fontSize,
     fontWeight: '600',
   },

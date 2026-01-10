@@ -1,11 +1,11 @@
 import React, { useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, ScrollView,
-  TouchableOpacity, Linking, Animated, Platform
+  View, Text, StyleSheet, ScrollView,
+  TouchableOpacity, Linking, Animated, Platform, StatusBar
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
+import { colors, spacing, radius, typography, shadows } from '../../theme';
 
 // Delivery Theme Colors
 const DELIVERY_GREEN = '#267E3E';
@@ -21,7 +21,7 @@ export default function DeliveryOrderDetailScreen({ route, navigation }) {
   const { order } = route.params;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
-  
+
   const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.ready;
 
   useEffect(() => {
@@ -31,62 +31,48 @@ export default function DeliveryOrderDetailScreen({ route, navigation }) {
     ]).start();
   }, []);
 
-  const openGoogleMaps = async () => {
+  const openMapNavigation = () => {
     const address = order.deliveryAddress?.address || order.customer?.address;
     const lat = order.deliveryAddress?.latitude;
     const lng = order.deliveryAddress?.longitude;
 
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        let url;
-        if (lat && lng) {
-          url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-        } else if (address) {
-          url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
-        }
-        if (url) await Linking.openURL(url);
-        return;
-      }
-
-      const location = await Location.getCurrentPositionAsync({});
-      const currentLat = location.coords.latitude;
-      const currentLng = location.coords.longitude;
-
-      let url;
-      if (lat && lng) {
-        url = `https://www.google.com/maps/dir/?api=1&origin=${currentLat},${currentLng}&destination=${lat},${lng}&travelmode=driving`;
-      } else if (address) {
-        url = `https://www.google.com/maps/dir/?api=1&origin=${currentLat},${currentLng}&destination=${encodeURIComponent(address)}&travelmode=driving`;
-      }
-      if (url) await Linking.openURL(url);
-    } catch (error) {
-      console.error('Error opening maps:', error);
+    if (lat && lng) {
+      navigation.navigate('MapNavigation', {
+        destination: { latitude: lat, longitude: lng },
+        destinationAddress: address,
+        customerName: order.customer?.name,
+      });
+    } else if (address) {
+      // If no coordinates, open in external OSM
+      Linking.openURL(`https://www.openstreetmap.org/search?query=${encodeURIComponent(address)}`);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       {/* Premium Header */}
       <Animated.View style={{ opacity: fadeAnim }}>
-        <LinearGradient
-          colors={[DELIVERY_GREEN, DELIVERY_DARK_GREEN]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.header}
-        >
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Order #{order.orderId}</Text>
-            <View style={[styles.statusBadgeSmall, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-              <Ionicons name={statusConfig.icon} size={14} color="#fff" />
-              <Text style={styles.statusBadgeSmallText}>{statusConfig.label}</Text>
+        <View style={styles.headerBg}>
+          <LinearGradient
+            colors={[DELIVERY_GREEN + 'E6', DELIVERY_DARK_GREEN + 'F2']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.header}
+          >
+            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+            <View style={styles.headerCenter}>
+              <Text style={styles.headerTitle}>Order #{order.orderId}</Text>
+              <View style={[styles.statusBadgeSmall, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                <Ionicons name={statusConfig.icon} size={14} color="#fff" />
+                <Text style={styles.statusBadgeSmallText}>{statusConfig.label}</Text>
+              </View>
             </View>
-          </View>
-          <View style={{ width: 44 }} />
-        </LinearGradient>
+            <View style={{ width: 44 }} />
+          </LinearGradient>
+        </View>
       </Animated.View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -110,27 +96,29 @@ export default function DeliveryOrderDetailScreen({ route, navigation }) {
               <Ionicons name="person" size={18} color={DELIVERY_GREEN} />
               <Text style={styles.sectionTitle}>Customer Details</Text>
             </View>
-            <View style={styles.card}>
-              <View style={styles.customerRow}>
-                <View style={styles.customerAvatar}>
-                  <Ionicons name="person" size={24} color="#fff" />
-                </View>
-                <View style={styles.customerInfo}>
-                  <Text style={styles.customerName}>{order.customer?.name || 'Customer'}</Text>
+            <View style={styles.cardBg}>
+              <View style={styles.card}>
+                <View style={styles.customerRow}>
+                  <View style={styles.customerAvatar}>
+                    <Ionicons name="person" size={24} color="#fff" />
+                  </View>
+                  <View style={styles.customerInfo}>
+                    <Text style={styles.customerName}>{order.customer?.name || 'Customer'}</Text>
+                    <TouchableOpacity
+                      style={styles.phoneButton}
+                      onPress={() => Linking.openURL(`tel:${order.customer?.phone}`)}
+                    >
+                      <Ionicons name="call" size={16} color={DELIVERY_GREEN} />
+                      <Text style={styles.phoneText}>{order.customer?.phone}</Text>
+                    </TouchableOpacity>
+                  </View>
                   <TouchableOpacity
-                    style={styles.phoneButton}
+                    style={styles.callButton}
                     onPress={() => Linking.openURL(`tel:${order.customer?.phone}`)}
                   >
-                    <Ionicons name="call" size={16} color={DELIVERY_GREEN} />
-                    <Text style={styles.phoneText}>{order.customer?.phone}</Text>
+                    <Ionicons name="call" size={20} color="#fff" />
                   </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  style={styles.callButton}
-                  onPress={() => Linking.openURL(`tel:${order.customer?.phone}`)}
-                >
-                  <Ionicons name="call" size={20} color="#fff" />
-                </TouchableOpacity>
               </View>
             </View>
           </View>
@@ -141,25 +129,27 @@ export default function DeliveryOrderDetailScreen({ route, navigation }) {
               <Ionicons name="location" size={18} color={DELIVERY_GREEN} />
               <Text style={styles.sectionTitle}>Delivery Address</Text>
             </View>
-            <TouchableOpacity style={styles.addressCard} onPress={openGoogleMaps} activeOpacity={0.8}>
-              <View style={styles.addressContent}>
-                <View style={styles.addressIconContainer}>
-                  <Ionicons name="location" size={24} color={DELIVERY_GREEN} />
+            <View style={styles.cardBg}>
+              <TouchableOpacity style={styles.addressCard} onPress={openMapNavigation} activeOpacity={0.8}>
+                <View style={styles.addressContent}>
+                  <View style={styles.addressIconContainer}>
+                    <Ionicons name="location" size={24} color={DELIVERY_GREEN} />
+                  </View>
+                  <Text style={styles.addressText}>
+                    {order.deliveryAddress?.address || order.customer?.address || 'N/A'}
+                  </Text>
                 </View>
-                <Text style={styles.addressText}>
-                  {order.deliveryAddress?.address || order.customer?.address || 'N/A'}
-                </Text>
-              </View>
-              <LinearGradient
-                colors={[DELIVERY_GREEN, DELIVERY_DARK_GREEN]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.navigateButton}
-              >
-                <Ionicons name="navigate" size={20} color="#fff" />
-                <Text style={styles.navigateButtonText}>Navigate</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={[DELIVERY_GREEN, DELIVERY_DARK_GREEN]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.navigateButton}
+                >
+                  <Ionicons name="navigate" size={20} color="#fff" />
+                  <Text style={styles.navigateButtonText}>Navigate</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Order Items */}
@@ -171,19 +161,21 @@ export default function DeliveryOrderDetailScreen({ route, navigation }) {
                 <Text style={styles.itemCountText}>{order.items?.length || 0}</Text>
               </View>
             </View>
-            <View style={styles.card}>
-              {order.items?.map((item, index) => (
-                <View key={index} style={[styles.itemRow, index > 0 && styles.itemBorder]}>
-                  <View style={styles.itemInfo}>
-                    <Text style={styles.itemName}>{item.name}</Text>
-                    <Text style={styles.itemQty}>Qty: {item.quantity}</Text>
+            <View style={styles.cardBg}>
+              <View style={styles.card}>
+                {order.items?.map((item, index) => (
+                  <View key={index} style={[styles.itemRow, index > 0 && styles.itemBorder]}>
+                    <View style={styles.itemInfo}>
+                      <Text style={styles.itemName}>{item.name}</Text>
+                      <Text style={styles.itemQty}>Qty: {item.quantity}</Text>
+                    </View>
+                    <Text style={styles.itemPrice}>₹{item.price * item.quantity}</Text>
                   </View>
-                  <Text style={styles.itemPrice}>₹{item.price * item.quantity}</Text>
+                ))}
+                <View style={styles.totalRow}>
+                  <Text style={styles.totalLabel}>Total Amount</Text>
+                  <Text style={styles.totalAmount}>₹{order.totalAmount}</Text>
                 </View>
-              ))}
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Total Amount</Text>
-                <Text style={styles.totalAmount}>₹{order.totalAmount}</Text>
               </View>
             </View>
           </View>
@@ -194,34 +186,36 @@ export default function DeliveryOrderDetailScreen({ route, navigation }) {
               <Ionicons name="card" size={18} color={DELIVERY_GREEN} />
               <Text style={styles.sectionTitle}>Payment Info</Text>
             </View>
-            <View style={styles.card}>
-              <View style={styles.paymentRow}>
-                <Text style={styles.paymentLabel}>Method</Text>
-                <View style={styles.paymentMethodBadge}>
-                  <Ionicons 
-                    name={order.paymentMethod === 'cod' ? 'cash' : 'phone-portrait'} 
-                    size={16} 
-                    color={order.paymentMethod === 'cod' ? '#F59E0B' : '#8B5CF6'} 
-                  />
-                  <Text style={[styles.paymentMethodText, { color: order.paymentMethod === 'cod' ? '#F59E0B' : '#8B5CF6' }]}>
-                    {order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'UPI (Prepaid)'}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.paymentRow}>
-                <Text style={styles.paymentLabel}>Status</Text>
-                <View style={[styles.paymentStatusBadge, { backgroundColor: order.paymentStatus === 'paid' ? '#DCFCE7' : '#FEF3C7' }]}>
-                  <Text style={[styles.paymentStatusText, { color: order.paymentStatus === 'paid' ? '#16A34A' : '#D97706' }]}>
-                    {order.paymentStatus?.toUpperCase()}
-                  </Text>
-                </View>
-              </View>
-              {order.actualPaymentMethod && (
+            <View style={styles.cardBg}>
+              <View style={styles.card}>
                 <View style={styles.paymentRow}>
-                  <Text style={styles.paymentLabel}>Collected via</Text>
-                  <Text style={styles.paymentValue}>{order.actualPaymentMethod.toUpperCase()}</Text>
+                  <Text style={styles.paymentLabel}>Method</Text>
+                  <View style={styles.paymentMethodBadge}>
+                    <Ionicons
+                      name={order.paymentMethod === 'cod' ? 'cash' : 'phone-portrait'}
+                      size={16}
+                      color={order.paymentMethod === 'cod' ? '#F59E0B' : '#8B5CF6'}
+                    />
+                    <Text style={[styles.paymentMethodText, { color: order.paymentMethod === 'cod' ? '#F59E0B' : '#8B5CF6' }]}>
+                      {order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'UPI (Prepaid)'}
+                    </Text>
+                  </View>
                 </View>
-              )}
+                <View style={styles.paymentRow}>
+                  <Text style={styles.paymentLabel}>Status</Text>
+                  <View style={[styles.paymentStatusBadge, { backgroundColor: order.paymentStatus === 'paid' ? '#DCFCE7' : '#FEF3C7' }]}>
+                    <Text style={[styles.paymentStatusText, { color: order.paymentStatus === 'paid' ? '#16A34A' : '#D97706' }]}>
+                      {order.paymentStatus?.toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+                {order.actualPaymentMethod && (
+                  <View style={styles.paymentRow}>
+                    <Text style={styles.paymentLabel}>Collected via</Text>
+                    <Text style={styles.paymentValue}>{order.actualPaymentMethod.toUpperCase()}</Text>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
 
@@ -253,21 +247,20 @@ export default function DeliveryOrderDetailScreen({ route, navigation }) {
         </Animated.View>
         <View style={{ height: 40 }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F8F8' },
-  
+
   // Header
+  headerBg: { borderBottomLeftRadius: 28, borderBottomRightRadius: 28, overflow: 'hidden' },
   header: {
-    paddingTop: Platform.OS === 'android' ? 44 : 12,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
     paddingBottom: 20,
     paddingHorizontal: 16,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -278,41 +271,39 @@ const styles = StyleSheet.create({
   },
   headerCenter: { alignItems: 'center' },
   headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
-  statusBadgeSmall: { 
+  statusBadgeSmall: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginTop: 6,
   },
   statusBadgeSmallText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   content: { flex: 1, padding: 16 },
-  
+
   // Status Card
-  statusCard: { 
+  statusCard: {
     backgroundColor: '#fff', borderRadius: 20, padding: 24, alignItems: 'center', marginBottom: 16,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 4,
   },
   statusIconContainer: { width: 72, height: 72, borderRadius: 36, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
   statusText: { fontSize: 18, fontWeight: '800' },
   deliveredTime: { color: '#696969', marginTop: 8, fontSize: 13 },
-  
+
   // Section
   section: { marginBottom: 16 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1C1C1C' },
-  itemCountBadge: { 
-    backgroundColor: DELIVERY_GREEN, width: 24, height: 24, borderRadius: 12, 
+  itemCountBadge: {
+    backgroundColor: DELIVERY_GREEN, width: 24, height: 24, borderRadius: 12,
     justifyContent: 'center', alignItems: 'center', marginLeft: 'auto',
   },
   itemCountText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  
+
   // Card
-  card: { 
-    backgroundColor: '#fff', borderRadius: 16, padding: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
-  },
+  cardBg: { borderRadius: 16, overflow: 'hidden', ...shadows.card, backgroundColor: '#fff' },
+  card: { padding: 16, backgroundColor: colors.light.surface },
 
   // Customer
   customerRow: { flexDirection: 'row', alignItems: 'center' },
-  customerAvatar: { 
+  customerAvatar: {
     width: 52, height: 52, borderRadius: 26, backgroundColor: DELIVERY_GREEN,
     justifyContent: 'center', alignItems: 'center',
   },
@@ -325,14 +316,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
     shadowColor: DELIVERY_GREEN, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
-  
+
   // Address
-  addressCard: { 
-    backgroundColor: '#fff', borderRadius: 16, padding: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
-  },
+  addressCard: { padding: 16, backgroundColor: colors.light.surface },
   addressContent: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
-  addressIconContainer: { 
+  addressIconContainer: {
     width: 44, height: 44, borderRadius: 22, backgroundColor: '#E8F5E9',
     justifyContent: 'center', alignItems: 'center',
   },
@@ -342,7 +330,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14, borderRadius: 14,
   },
   navigateButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  
+
   // Items
   itemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
   itemBorder: { borderTopWidth: 1, borderTopColor: '#F5F5F5' },
@@ -350,8 +338,8 @@ const styles = StyleSheet.create({
   itemName: { fontSize: 15, fontWeight: '600', color: '#1C1C1C' },
   itemQty: { fontSize: 13, color: '#696969', marginTop: 2 },
   itemPrice: { fontSize: 15, fontWeight: '700', color: '#1C1C1C' },
-  totalRow: { 
-    flexDirection: 'row', justifyContent: 'space-between', 
+  totalRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
     borderTopWidth: 2, borderTopColor: '#F0F0F0', paddingTop: 14, marginTop: 8,
   },
   totalLabel: { fontSize: 16, fontWeight: '700', color: '#1C1C1C' },
@@ -365,15 +353,15 @@ const styles = StyleSheet.create({
   paymentMethodText: { fontSize: 14, fontWeight: '600' },
   paymentStatusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   paymentStatusText: { fontSize: 12, fontWeight: '700' },
-  
+
   // Timeline
   timelineItem: { flexDirection: 'row', minHeight: 60 },
   timelineLeft: { alignItems: 'center', width: 24 },
-  timelineDot: { 
+  timelineDot: {
     width: 12, height: 12, borderRadius: 6, backgroundColor: '#D1D5DB', marginTop: 4,
   },
   timelineDotActive: { backgroundColor: DELIVERY_GREEN },
-  timelineLine: { 
+  timelineLine: {
     width: 2, flex: 1, backgroundColor: '#E5E7EB', marginVertical: 4,
   },
   timelineContent: { flex: 1, paddingLeft: 12, paddingBottom: 16 },

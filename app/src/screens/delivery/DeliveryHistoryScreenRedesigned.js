@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, FlatList,
-  RefreshControl, TouchableOpacity, SectionList
+  View, Text, StyleSheet, FlatList,
+  RefreshControl, TouchableOpacity, SectionList, Platform, StatusBar
 } from 'react-native';
 import Animated, {
   FadeInDown,
@@ -196,7 +196,8 @@ export default function DeliveryHistoryScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
       {/* Header */}
       <Animated.View entering={FadeIn.duration(400)} style={styles.header}>
         <View>
@@ -252,7 +253,7 @@ export default function DeliveryHistoryScreen({ navigation }) {
           }
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -266,7 +267,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: spacing.screenHorizontal, 
-    paddingTop: spacing.md,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
     backgroundColor: colors.light.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.light.borderLight,

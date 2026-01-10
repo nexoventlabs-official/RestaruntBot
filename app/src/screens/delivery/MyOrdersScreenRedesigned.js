@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, FlatList,
+  View, Text, StyleSheet, FlatList,
   RefreshControl, TouchableOpacity, Alert, Linking,
-  Modal, Image, Pressable
+  Modal, Image, Pressable, Platform, StatusBar
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -13,7 +13,6 @@ import Animated, {
   SlideInUp,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import api from '../../config/api';
 import { Card } from '../../components/ui/Card';
@@ -228,33 +227,32 @@ export default function MyOrdersScreen({ navigation }) {
     fetchOrders();
   }, []);
 
-  const openGoogleMaps = async (order) => {
+  const openMapNavigation = (order) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const address = order.deliveryAddress?.address || order.customer?.address;
     const lat = order.deliveryAddress?.latitude;
     const lng = order.deliveryAddress?.longitude;
 
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Location permission is required for navigation');
-        return;
-      }
-
-      const location = await Location.getCurrentPositionAsync({});
-      const currentLat = location.coords.latitude;
-      const currentLng = location.coords.longitude;
-
-      let url;
-      if (lat && lng) {
-        url = `https://www.google.com/maps/dir/?api=1&origin=${currentLat},${currentLng}&destination=${lat},${lng}&travelmode=driving`;
-      } else if (address) {
-        url = `https://www.google.com/maps/dir/?api=1&origin=${currentLat},${currentLng}&destination=${encodeURIComponent(address)}&travelmode=driving`;
-      }
-
-      if (url) await Linking.openURL(url);
-    } catch (error) {
-      console.error('Error opening maps:', error);
+    if (lat && lng) {
+      navigation.navigate('MapNavigation', {
+        destination: { latitude: lat, longitude: lng },
+        destinationAddress: address,
+        customerName: order.customer?.name,
+      });
+    } else if (address) {
+      Alert.alert(
+        'No Coordinates',
+        'This address does not have GPS coordinates. Would you like to open in external maps?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Open Maps', 
+            onPress: () => Linking.openURL(`https://www.openstreetmap.org/search?query=${encodeURIComponent(address)}`)
+          },
+        ]
+      );
+    } else {
+      Alert.alert('Error', 'No delivery address available');
     }
   };
 
@@ -353,14 +351,15 @@ export default function MyOrdersScreen({ navigation }) {
     <OrderCard
       item={item}
       index={index}
-      onNavigate={openGoogleMaps}
+      onNavigate={openMapNavigation}
       onAction={handleAction}
       actionLoading={actionLoading}
     />
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
       {/* Header */}
       <Animated.View entering={FadeIn.duration(400)} style={styles.header}>
         <View>
@@ -450,7 +449,7 @@ export default function MyOrdersScreen({ navigation }) {
           </Animated.View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -465,7 +464,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: spacing.screenHorizontal, 
-    paddingTop: spacing.md,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
     backgroundColor: colors.light.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.light.borderLight,

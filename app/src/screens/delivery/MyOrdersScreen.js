@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, FlatList,
+  View, Text, StyleSheet, FlatList,
   RefreshControl, TouchableOpacity, Alert, ActivityIndicator, Linking,
   Modal, Image, Animated, Platform, StatusBar
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import api from '../../config/api';
 import { colors, spacing, radius, typography, shadows } from '../../theme';
 
@@ -64,19 +63,33 @@ export default function MyOrdersScreen({ navigation }) {
 
   const onRefresh = useCallback(() => { setRefreshing(true); fetchOrders(); }, []);
 
-  const openGoogleMaps = async (order) => {
+  const openMapNavigation = (order) => {
     const address = order.deliveryAddress?.address || order.customer?.address;
     const lat = order.deliveryAddress?.latitude;
     const lng = order.deliveryAddress?.longitude;
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') { Alert.alert('Permission Denied', 'Location permission is required for navigation'); return; }
-      const location = await Location.getCurrentPositionAsync({});
-      let url;
-      if (lat && lng) url = `https://www.google.com/maps/dir/?api=1&origin=${location.coords.latitude},${location.coords.longitude}&destination=${lat},${lng}&travelmode=driving`;
-      else if (address) url = `https://www.google.com/maps/dir/?api=1&origin=${location.coords.latitude},${location.coords.longitude}&destination=${encodeURIComponent(address)}&travelmode=driving`;
-      if (url) await Linking.openURL(url);
-    } catch (error) { console.error('Error opening maps:', error); }
+    
+    if (lat && lng) {
+      navigation.navigate('MapNavigation', {
+        destination: { latitude: lat, longitude: lng },
+        destinationAddress: address,
+        customerName: order.customer?.name,
+      });
+    } else if (address) {
+      // If no coordinates, show alert - geocoding would require additional API
+      Alert.alert(
+        'No Coordinates',
+        'This address does not have GPS coordinates. Would you like to open in external maps?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Open Maps', 
+            onPress: () => Linking.openURL(`https://www.openstreetmap.org/search?query=${encodeURIComponent(address)}`)
+          },
+        ]
+      );
+    } else {
+      Alert.alert('Error', 'No delivery address available');
+    }
   };
 
   const markReady = async (orderId) => {
@@ -130,7 +143,7 @@ export default function MyOrdersScreen({ navigation }) {
       <Animated.View style={{ opacity: fadeAnim }}>
         <View style={styles.orderCard}>
           <ProgressSteps status={item.status} />
-          
+
           <View style={styles.orderHeader}>
             <View>
               <Text style={styles.orderId}>#{item.orderId}</Text>
@@ -155,7 +168,7 @@ export default function MyOrdersScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.addressCard} onPress={() => openGoogleMaps(item)} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.addressCard} onPress={() => openMapNavigation(item)} activeOpacity={0.8}>
             <View style={styles.addressIcon}><Ionicons name="location" size={18} color={DELIVERY_GREEN} /></View>
             <Text style={styles.addressText} numberOfLines={2}>{item.deliveryAddress?.address || item.customer?.address || 'N/A'}</Text>
             <View style={styles.navigateIcon}><Ionicons name="navigate" size={16} color={DELIVERY_GREEN} /></View>
@@ -182,7 +195,7 @@ export default function MyOrdersScreen({ navigation }) {
                 <Text style={[styles.paymentText, item.paymentMethod === 'cod' ? styles.codText : styles.prepaidText]}>{item.paymentMethod === 'cod' ? 'COD' : 'Prepaid'}</Text>
               </View>
             </View>
-            
+
             <TouchableOpacity
               style={[styles.actionButton, item.status === 'out_for_delivery' && styles.actionButtonSuccess]}
               onPress={() => {
@@ -216,10 +229,10 @@ export default function MyOrdersScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={DELIVERY_GREEN} />
-      
-      <LinearGradient colors={[DELIVERY_GREEN, DELIVERY_DARK_GREEN]} style={styles.header}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
+      <LinearGradient colors={[DELIVERY_GREEN + 'E6', DELIVERY_DARK_GREEN + 'F2']} style={styles.header}>
         <View style={styles.headerContent}>
           <View>
             <Text style={styles.title}>My Orders</Text>
@@ -273,19 +286,31 @@ export default function MyOrdersScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.light.background },
-  header: { paddingTop: Platform.OS === 'android' ? 50 : 16, paddingBottom: spacing.lg, paddingHorizontal: spacing.screenHorizontal, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  header: {
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.screenHorizontal,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { fontSize: typography.display.small.fontSize, fontWeight: '700', color: '#fff' },
   subtitle: { fontSize: typography.body.medium.fontSize, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   headerBadge: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
-  listContent: { padding: spacing.screenHorizontal, paddingBottom: 100 },
-  orderCard: { backgroundColor: colors.light.surface, borderRadius: radius.xl, padding: spacing.base, marginBottom: spacing.md, ...shadows.card },
+  listContent: { padding: spacing.screenHorizontal, paddingBottom: 100, paddingTop: spacing.md },
+  orderCard: {
+    padding: spacing.base,
+    backgroundColor: colors.light.surface, // Solid background
+    borderRadius: radius.xl,
+    marginBottom: spacing.md,
+    ...shadows.card
+  },
   progressContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
   progressDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: colors.light.border, justifyContent: 'center', alignItems: 'center' },
   progressDotActive: { backgroundColor: DELIVERY_GREEN },

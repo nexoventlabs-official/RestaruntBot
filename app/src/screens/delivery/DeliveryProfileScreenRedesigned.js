@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, ScrollView,
-  TouchableOpacity, Image, TextInput, Alert, Pressable, Switch
+  View, Text, StyleSheet, ScrollView,
+  TouchableOpacity, Image, TextInput, Alert, Pressable, Switch, Platform, StatusBar
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -141,7 +141,8 @@ export default function DeliveryProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Profile Header */}
         <Animated.View entering={FadeIn.duration(500)}>
@@ -328,7 +329,7 @@ export default function DeliveryProfileScreen() {
           </Animated.View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -338,7 +339,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.light.background 
   },
   headerGradient: {
-    paddingTop: spacing['2xl'],
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
     paddingBottom: spacing['3xl'],
     paddingHorizontal: spacing.screenHorizontal,
     alignItems: 'center',

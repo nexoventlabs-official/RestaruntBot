@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, SectionList,
+  View, Text, StyleSheet, SectionList,
   RefreshControl, TouchableOpacity, Animated, Platform, StatusBar
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,42 +20,44 @@ const SummaryCard = ({ orders }) => {
   });
 
   return (
-    <LinearGradient colors={[DELIVERY_GREEN, DELIVERY_DARK_GREEN]} style={styles.summaryCard}>
-      <View style={styles.summaryHeader}>
-        <Text style={styles.summaryTitle}>This Week</Text>
-        <View style={styles.summaryBadge}>
-          <Ionicons name="trending-up" size={14} color="#22C55E" />
-          <Text style={styles.summaryBadgeText}>+12%</Text>
+    <View style={styles.summaryCardBg}>
+      <LinearGradient colors={[DELIVERY_GREEN + 'F2', DELIVERY_DARK_GREEN + 'F2']} style={styles.summaryCard}>
+        <View style={styles.summaryHeader}>
+          <Text style={styles.summaryTitle}>This Week</Text>
+          <View style={styles.summaryBadge}>
+            <Ionicons name="trending-up" size={14} color="#22C55E" />
+            <Text style={styles.summaryBadgeText}>+12%</Text>
+          </View>
         </View>
-      </View>
-      
-      <View style={styles.summaryStats}>
-        <View style={styles.summaryStat}>
-          <Text style={styles.summaryValue}>₹{totalEarnings.toLocaleString()}</Text>
-          <Text style={styles.summaryLabel}>Total Earned</Text>
-        </View>
-        <View style={styles.summaryDivider} />
-        <View style={styles.summaryStat}>
-          <Text style={styles.summaryValue}>{orders.length}</Text>
-          <Text style={styles.summaryLabel}>Deliveries</Text>
-        </View>
-        <View style={styles.summaryDivider} />
-        <View style={styles.summaryStat}>
-          <Text style={styles.summaryValue}>{todayOrders.length}</Text>
-          <Text style={styles.summaryLabel}>Today</Text>
-        </View>
-      </View>
 
-      <View style={styles.progressSection}>
-        <View style={styles.progressHeader}>
-          <Text style={styles.progressLabel}>Weekly Goal</Text>
-          <Text style={styles.progressValue}>80%</Text>
+        <View style={styles.summaryStats}>
+          <View style={styles.summaryStat}>
+            <Text style={styles.summaryValue}>₹{totalEarnings.toLocaleString()}</Text>
+            <Text style={styles.summaryLabel}>Total Earned</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryStat}>
+            <Text style={styles.summaryValue}>{orders.length}</Text>
+            <Text style={styles.summaryLabel}>Deliveries</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryStat}>
+            <Text style={styles.summaryValue}>{todayOrders.length}</Text>
+            <Text style={styles.summaryLabel}>Today</Text>
+          </View>
         </View>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: '80%' }]} />
+
+        <View style={styles.progressSection}>
+          <View style={styles.progressHeader}>
+            <Text style={styles.progressLabel}>Weekly Goal</Text>
+            <Text style={styles.progressValue}>80%</Text>
+          </View>
+          <View style={styles.progressBar}>
+            <View style={[styles.progressFill, { width: '80%' }]} />
+          </View>
         </View>
-      </View>
-    </LinearGradient>
+      </LinearGradient>
+    </View>
   );
 };
 
@@ -81,18 +83,18 @@ export default function DeliveryHistoryScreen({ navigation }) {
     try {
       const response = await api.get('/delivery/orders/history');
       setOrders(response.data);
-      
+
       const grouped = response.data.reduce((acc, order) => {
         const date = new Date(order.deliveredAt);
         const today = new Date();
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
-        
+
         let dateKey;
         if (date.toDateString() === today.toDateString()) dateKey = 'Today';
         else if (date.toDateString() === yesterday.toDateString()) dateKey = 'Yesterday';
         else dateKey = date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-        
+
         if (!acc[dateKey]) acc[dateKey] = [];
         acc[dateKey].push(order);
         return acc;
@@ -108,50 +110,56 @@ export default function DeliveryHistoryScreen({ navigation }) {
 
   const renderOrder = ({ item }) => (
     <Animated.View style={{ opacity: fadeAnim }}>
-      <TouchableOpacity style={styles.orderCard} onPress={() => navigation.navigate('DeliveryOrderDetail', { order: item })} activeOpacity={0.8}>
-        <View style={styles.orderHeader}>
-          <View style={styles.orderIdContainer}>
-            <View style={styles.checkIcon}><Ionicons name="checkmark" size={12} color="#fff" /></View>
-            <Text style={styles.orderId}>#{item.orderId}</Text>
-          </View>
-          <Text style={styles.orderAmount}>₹{item.totalAmount}</Text>
-        </View>
+      <TouchableOpacity onPress={() => navigation.navigate('DeliveryOrderDetail', { order: item })} activeOpacity={0.8}>
+        <View style={styles.orderCardBg}>
+          <View style={styles.orderCard}>
+            <View style={styles.orderHeader}>
+              <View style={styles.orderIdContainer}>
+                <View style={styles.checkIcon}><Ionicons name="checkmark" size={12} color="#fff" /></View>
+                <Text style={styles.orderId}>#{item.orderId}</Text>
+              </View>
+              <Text style={styles.orderAmount}>₹{item.totalAmount}</Text>
+            </View>
 
-        <View style={styles.orderDetails}>
-          <View style={styles.orderDetail}>
-            <Ionicons name="person-outline" size={14} color={colors.light.text.tertiary} />
-            <Text style={styles.orderDetailText}>{item.customer?.name || item.customer?.phone}</Text>
-          </View>
-          <View style={styles.orderDetail}>
-            <Ionicons name="location-outline" size={14} color={colors.light.text.tertiary} />
-            <Text style={styles.orderDetailText} numberOfLines={1}>{item.deliveryAddress?.address || item.customer?.address || 'N/A'}</Text>
-          </View>
-        </View>
+            <View style={styles.orderDetails}>
+              <View style={styles.orderDetail}>
+                <Ionicons name="person-outline" size={14} color={colors.light.text.tertiary} />
+                <Text style={styles.orderDetailText}>{item.customer?.name || item.customer?.phone}</Text>
+              </View>
+              <View style={styles.orderDetail}>
+                <Ionicons name="location-outline" size={14} color={colors.light.text.tertiary} />
+                <Text style={styles.orderDetailText} numberOfLines={1}>{item.deliveryAddress?.address || item.customer?.address || 'N/A'}</Text>
+              </View>
+            </View>
 
-        <View style={styles.orderFooter}>
-          <View style={styles.orderTime}>
-            <Ionicons name="time-outline" size={14} color={colors.light.text.tertiary} />
-            <Text style={styles.orderTimeText}>{item.deliveredAt ? new Date(item.deliveredAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</Text>
+            <View style={styles.orderFooter}>
+              <View style={styles.orderTime}>
+                <Ionicons name="time-outline" size={14} color={colors.light.text.tertiary} />
+                <Text style={styles.orderTimeText}>{item.deliveredAt ? new Date(item.deliveredAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</Text>
+              </View>
+              <View style={styles.itemsCount}><Text style={styles.itemsCountText}>{item.items?.length || 0} items</Text></View>
+            </View>
           </View>
-          <View style={styles.itemsCount}><Text style={styles.itemsCountText}>{item.items?.length || 0} items</Text></View>
         </View>
       </TouchableOpacity>
     </Animated.View>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={DELIVERY_GREEN} />
-      
-      <LinearGradient colors={[DELIVERY_GREEN, DELIVERY_DARK_GREEN]} style={styles.header}>
-        <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.title}>Delivery History</Text>
-            <Text style={styles.subtitle}>{orders.length} deliveries completed</Text>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
+      <View style={styles.headerBg}>
+        <LinearGradient colors={[DELIVERY_GREEN + 'E6', DELIVERY_DARK_GREEN + 'F2']} style={styles.header}>
+          <View style={styles.headerContent}>
+            <View>
+              <Text style={styles.title}>Delivery History</Text>
+              <Text style={styles.subtitle}>{orders.length} deliveries completed</Text>
+            </View>
+            <TouchableOpacity style={styles.filterButton}><Ionicons name="filter" size={20} color="#fff" /></TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.filterButton}><Ionicons name="filter" size={20} color="#fff" /></TouchableOpacity>
-        </View>
-      </LinearGradient>
+        </LinearGradient>
+      </View>
 
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -179,22 +187,24 @@ export default function DeliveryHistoryScreen({ navigation }) {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[DELIVERY_GREEN]} />}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.light.background },
-  header: { paddingTop: Platform.OS === 'android' ? 50 : 16, paddingBottom: spacing.lg, paddingHorizontal: spacing.screenHorizontal, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  headerBg: { borderBottomLeftRadius: 24, borderBottomRightRadius: 24, overflow: 'hidden' },
+  header: { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60, paddingBottom: spacing.lg, paddingHorizontal: spacing.screenHorizontal },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { fontSize: typography.display.small.fontSize, fontWeight: '700', color: '#fff' },
   subtitle: { fontSize: typography.body.medium.fontSize, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   filterButton: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
-  listContent: { padding: spacing.screenHorizontal, paddingBottom: 100 },
+  listContent: { padding: spacing.screenHorizontal, paddingBottom: 100, paddingTop: spacing.md },
   loadingContainer: { padding: spacing.screenHorizontal },
   skeletonSummary: { height: 180, backgroundColor: colors.light.border, borderRadius: radius.xl, marginBottom: spacing.lg },
   skeletonCard: { height: 120, backgroundColor: colors.light.border, borderRadius: radius.xl, marginBottom: spacing.md },
-  summaryCard: { borderRadius: radius.xl, padding: spacing.lg, marginBottom: spacing.lg },
+  summaryCardBg: { marginBottom: spacing.lg, borderRadius: radius.xl, overflow: 'hidden', ...shadows.md, backgroundColor: colors.light.surface },
+  summaryCard: { padding: spacing.lg },
   summaryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
   summaryTitle: { fontSize: typography.title.large.fontSize, fontWeight: '600', color: '#fff' },
   summaryBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.sm },
@@ -213,7 +223,8 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.md, marginBottom: spacing.sm },
   sectionDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: DELIVERY_GREEN, marginRight: spacing.sm },
   sectionTitle: { fontSize: typography.title.medium.fontSize, fontWeight: '600', color: colors.light.text.secondary },
-  orderCard: { backgroundColor: colors.light.surface, borderRadius: radius.xl, padding: spacing.base, marginBottom: spacing.md, ...shadows.card },
+  orderCardBg: { marginBottom: spacing.md, borderRadius: radius.xl, ...shadows.card, backgroundColor: colors.light.surface },
+  orderCard: { padding: spacing.base, borderRadius: radius.xl },
   orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
   orderIdContainer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   checkIcon: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#22C55E', justifyContent: 'center', alignItems: 'center' },

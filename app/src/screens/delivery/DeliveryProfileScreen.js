@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, ScrollView,
+  View, Text, StyleSheet, ScrollView,
   TouchableOpacity, Image, TextInput, Alert, ActivityIndicator, Animated, Platform, StatusBar
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -68,92 +68,101 @@ export default function DeliveryProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={DELIVERY_GREEN} />
-      
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <LinearGradient colors={[DELIVERY_GREEN, DELIVERY_DARK_GREEN]} style={styles.headerGradient}>
-          <Animated.View style={[styles.profileSection, { opacity: fadeAnim }]}>
-            <View style={styles.avatarContainer}>
-              {user?.photo ? (
-                <Image source={{ uri: user.photo }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                  <Ionicons name="person" size={44} color={DELIVERY_GREEN} />
-                </View>
-              )}
-              <TouchableOpacity style={styles.editAvatarButton}>
-                <Ionicons name="camera" size={14} color="#fff" />
-              </TouchableOpacity>
-            </View>
-            
-            <Text style={styles.userName}>{user?.name || 'Delivery Partner'}</Text>
-            
-            <View style={styles.ratingContainer}>
-              <Ionicons name="star" size={18} color="#FFD700" />
-              <Text style={styles.ratingText}>{user?.avgRating?.toFixed(1) || '0.0'}</Text>
-              <Text style={styles.ratingCount}>({user?.totalRatings || 0} ratings)</Text>
-            </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-            <View style={styles.statsRow}>
-              <StatsBadge value="245" label="Deliveries" />
-              <View style={styles.statsDivider} />
-              <StatsBadge value="₹24.5K" label="Earnings" />
-              <View style={styles.statsDivider} />
-              <StatsBadge value="98%" label="On-time" />
-            </View>
-          </Animated.View>
-        </LinearGradient>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <View style={styles.headerBg}>
+          <LinearGradient colors={[DELIVERY_GREEN + 'E6', DELIVERY_DARK_GREEN + 'F2']} style={styles.headerGradient}>
+            <Animated.View style={[styles.profileSection, { opacity: fadeAnim }]}>
+              <View style={styles.avatarContainer}>
+                {user?.photo ? (
+                  <Image source={{ uri: user.photo }} style={styles.avatar} />
+                ) : (
+                  <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                    <Ionicons name="person" size={44} color={DELIVERY_GREEN} />
+                  </View>
+                )}
+                <TouchableOpacity style={styles.editAvatarButton}>
+                  <Ionicons name="camera" size={14} color="#fff" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.userName}>{user?.name || 'Delivery Partner'}</Text>
+
+              <View style={styles.ratingContainer}>
+                <Ionicons name="star" size={18} color="#FFD700" />
+                <Text style={styles.ratingText}>{user?.avgRating?.toFixed(1) || '0.0'}</Text>
+                <Text style={styles.ratingCount}>({user?.totalRatings || 0} ratings)</Text>
+              </View>
+
+              <View style={styles.statsRow}>
+                <StatsBadge value="245" label="Deliveries" />
+                <View style={styles.statsDivider} />
+                <StatsBadge value="₹24.5K" label="Earnings" />
+                <View style={styles.statsDivider} />
+                <StatsBadge value="98%" label="On-time" />
+              </View>
+            </Animated.View>
+          </LinearGradient>
+        </View>
 
         <View style={styles.content}>
           <Text style={styles.sectionTitle}>Account</Text>
-          <View style={styles.menuCard}>
-            <MenuItem icon="mail-outline" label="Email" value={user?.email} showArrow={false} />
-            <View style={styles.menuDivider} />
-            <MenuItem icon="call-outline" label="Phone" value={user?.phone} showArrow={false} />
-            <View style={styles.menuDivider} />
-            <MenuItem icon="calendar-outline" label="Date of Birth" value={user?.dob ? new Date(user.dob).toLocaleDateString('en-IN') : 'Not set'} showArrow={false} />
+          <View style={styles.menuCardBg}>
+            <View style={styles.menuCard}>
+              <MenuItem icon="mail-outline" label="Email" value={user?.email} showArrow={false} />
+              <View style={styles.menuDivider} />
+              <MenuItem icon="call-outline" label="Phone" value={user?.phone} showArrow={false} />
+              <View style={styles.menuDivider} />
+              <MenuItem icon="calendar-outline" label="Date of Birth" value={user?.dob ? new Date(user.dob).toLocaleDateString('en-IN') : 'Not set'} showArrow={false} />
+            </View>
           </View>
 
           <Text style={styles.sectionTitle}>Settings</Text>
-          <View style={styles.menuCard}>
-            <MenuItem icon="key-outline" label="Change Password" onPress={() => setShowPasswordForm(!showPasswordForm)} />
-            
-            {showPasswordForm && (
-              <View style={styles.passwordForm}>
-                <TextInput style={styles.input} placeholder="Current Password" placeholderTextColor={colors.light.text.tertiary} value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry />
-                <TextInput style={styles.input} placeholder="New Password" placeholderTextColor={colors.light.text.tertiary} value={newPassword} onChangeText={setNewPassword} secureTextEntry />
-                <TextInput style={styles.input} placeholder="Confirm New Password" placeholderTextColor={colors.light.text.tertiary} value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry />
-                <TouchableOpacity style={styles.updateButton} onPress={handleChangePassword} disabled={loading} activeOpacity={0.8}>
-                  <LinearGradient colors={loading ? ['#9CA3AF', '#9CA3AF'] : [DELIVERY_GREEN, DELIVERY_DARK_GREEN]} style={styles.updateButtonGradient}>
-                    {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.updateButtonText}>Update Password</Text>}
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-            )}
-            
-            <View style={styles.menuDivider} />
-            <MenuItem icon="notifications-outline" label="Notifications" onPress={() => {}} />
-            <View style={styles.menuDivider} />
-            <MenuItem icon="document-text-outline" label="Documents" onPress={() => {}} />
-            <View style={styles.menuDivider} />
-            <MenuItem icon="help-circle-outline" label="Help & Support" onPress={() => {}} />
+          <View style={styles.menuCardBg}>
+            <View style={styles.menuCard}>
+              <MenuItem icon="key-outline" label="Change Password" onPress={() => setShowPasswordForm(!showPasswordForm)} />
+
+              {showPasswordForm && (
+                <View style={styles.passwordForm}>
+                  <TextInput style={styles.input} placeholder="Current Password" placeholderTextColor={colors.light.text.tertiary} value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry />
+                  <TextInput style={styles.input} placeholder="New Password" placeholderTextColor={colors.light.text.tertiary} value={newPassword} onChangeText={setNewPassword} secureTextEntry />
+                  <TextInput style={styles.input} placeholder="Confirm New Password" placeholderTextColor={colors.light.text.tertiary} value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry />
+                  <TouchableOpacity style={styles.updateButton} onPress={handleChangePassword} disabled={loading} activeOpacity={0.8}>
+                    <LinearGradient colors={loading ? ['#9CA3AF', '#9CA3AF'] : [DELIVERY_GREEN, DELIVERY_DARK_GREEN]} style={styles.updateButtonGradient}>
+                      {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.updateButtonText}>Update Password</Text>}
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <View style={styles.menuDivider} />
+              <MenuItem icon="notifications-outline" label="Notifications" onPress={() => { }} />
+              <View style={styles.menuDivider} />
+              <MenuItem icon="document-text-outline" label="Documents" onPress={() => { }} />
+              <View style={styles.menuDivider} />
+              <MenuItem icon="help-circle-outline" label="Help & Support" onPress={() => { }} />
+            </View>
           </View>
 
-          <View style={[styles.menuCard, styles.logoutCard]}>
-            <MenuItem icon="log-out-outline" label="Logout" onPress={handleLogout} showArrow={false} danger />
+          <View style={[styles.menuCardBg, styles.logoutCard]}>
+            <View style={styles.menuCard}>
+              <MenuItem icon="log-out-outline" label="Logout" onPress={handleLogout} showArrow={false} danger />
+            </View>
           </View>
 
           <Text style={styles.version}>Version 1.0.0</Text>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.light.background },
-  headerGradient: { paddingTop: Platform.OS === 'android' ? 50 : 20, paddingBottom: spacing['3xl'], paddingHorizontal: spacing.screenHorizontal, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
+  headerBg: { borderBottomLeftRadius: 32, borderBottomRightRadius: 32, overflow: 'hidden' },
+  headerGradient: { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60, paddingBottom: spacing['3xl'], paddingHorizontal: spacing.screenHorizontal },
   profileSection: { alignItems: 'center' },
   avatarContainer: { position: 'relative', marginBottom: spacing.md },
   avatar: { width: 100, height: 100, borderRadius: 30, borderWidth: 4, borderColor: 'rgba(255,255,255,0.3)' },
@@ -170,7 +179,8 @@ const styles = StyleSheet.create({
   statsDivider: { width: 1, height: 30, backgroundColor: 'rgba(255,255,255,0.2)' },
   content: { padding: spacing.screenHorizontal, marginTop: -spacing.lg },
   sectionTitle: { fontSize: typography.title.medium.fontSize, fontWeight: '600', color: colors.light.text.secondary, marginTop: spacing.lg, marginBottom: spacing.sm, marginLeft: spacing.xs },
-  menuCard: { backgroundColor: colors.light.surface, borderRadius: radius.xl, overflow: 'hidden', ...shadows.card },
+  menuCardBg: { borderRadius: radius.xl, ...shadows.card, backgroundColor: colors.light.surface, overflow: 'hidden' },
+  menuCard: { backgroundColor: colors.light.surface },
   menuItem: { flexDirection: 'row', alignItems: 'center', padding: spacing.base },
   menuIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center' },
   menuIconDanger: { backgroundColor: colors.error.light },

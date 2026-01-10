@@ -349,6 +349,7 @@ router.put('/:id/assign-delivery', authMiddleware, async (req, res) => {
   try {
     const { deliveryBoyId } = req.body;
     const DeliveryBoy = require('../models/DeliveryBoy');
+    const pushNotification = require('../services/pushNotification');
     
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ error: 'Order not found' });
@@ -369,6 +370,41 @@ router.put('/:id/assign-delivery', authMiddleware, async (req, res) => {
     });
     
     await order.save();
+    
+    // Prepare order details for notifications
+    const orderDetails = {
+      orderId: order.orderId,
+      customerName: order.customer?.name || 'Customer',
+      customerPhone: order.customer?.phone || '',
+      totalAmount: order.totalAmount,
+      paymentMethod: order.paymentMethod,
+      deliveryAddress: order.deliveryAddress?.address || order.customer?.address || 'N/A',
+      items: order.items || []
+    };
+    
+    // Send push notification to delivery partner
+    if (deliveryBoy.pushToken) {
+      try {
+        await pushNotification.sendNewOrderNotification(deliveryBoy.pushToken, orderDetails);
+        console.log(`📱 Push notification sent to ${deliveryBoy.name}`);
+      } catch (pushErr) {
+        console.error('Push notification error:', pushErr.message);
+      }
+    }
+    
+    // Send email notification to delivery partner
+    if (deliveryBoy.email) {
+      try {
+        await brevoMail.sendDeliveryPartnerNotification(
+          deliveryBoy.email,
+          deliveryBoy.name,
+          orderDetails
+        );
+        console.log(`📧 Email notification sent to ${deliveryBoy.email}`);
+      } catch (emailErr) {
+        console.error('Email notification error:', emailErr.message);
+      }
+    }
     
     // Update Google Sheets with delivery partner
     try {

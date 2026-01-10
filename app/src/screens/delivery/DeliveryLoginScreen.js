@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, TextInput, StyleSheet, SafeAreaView, 
+  View, Text, TextInput, StyleSheet,
   Alert, KeyboardAvoidingView, Platform, TouchableOpacity, Animated,
   Dimensions, StatusBar
 } from 'react-native';
@@ -21,7 +21,7 @@ export default function DeliveryLoginScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
   const [focusedInput, setFocusedInput] = useState(null);
   const { loginDelivery } = useAuth();
-  
+
   const passwordRef = useRef(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -51,15 +51,15 @@ export default function DeliveryLoginScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={DELIVERY_GREEN} />
-      
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
       {/* Premium Header */}
       <LinearGradient colors={[DELIVERY_GREEN, DELIVERY_DARK_GREEN]} style={styles.headerGradient}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        
+
         <Animated.View style={[styles.logoSection, { opacity: fadeAnim, transform: [{ scale: logoScale }] }]}>
           <View style={styles.logoCircle}>
             <Ionicons name="bicycle" size={44} color={DELIVERY_GREEN} />
@@ -181,14 +181,14 @@ export default function DeliveryLoginScreen({ navigation }) {
           </View>
         </Animated.View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.light.background },
   headerGradient: {
-    paddingTop: Platform.OS === 'android' ? 50 : 20,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
     paddingBottom: 40,
     paddingHorizontal: spacing.screenHorizontal,
     borderBottomLeftRadius: 32,

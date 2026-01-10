@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, ScrollView,
-  RefreshControl, TouchableOpacity, Image, Switch, Pressable
+  View, Text, StyleSheet, ScrollView,
+  RefreshControl, TouchableOpacity, Image, Switch, Pressable, Platform, StatusBar
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -172,7 +172,8 @@ export default function DeliveryHomeScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       {/* Header */}
       <Animated.View entering={FadeInDown.duration(500)}>
         <LinearGradient
@@ -376,7 +377,7 @@ export default function DeliveryHomeScreen({ navigation }) {
 
         <View style={{ height: 100 }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -387,7 +388,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.light.background 
   },
   header: {
-    paddingTop: spacing.md,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
     paddingBottom: spacing.xl,
     paddingHorizontal: spacing.screenHorizontal,
     borderBottomLeftRadius: radius['2xl'],

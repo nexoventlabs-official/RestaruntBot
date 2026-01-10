@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, FlatList,
-  RefreshControl, Alert, TouchableOpacity
+  View, Text, StyleSheet, FlatList,
+  RefreshControl, Alert, TouchableOpacity, Platform, StatusBar
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -229,7 +229,8 @@ export default function AvailableOrdersScreen({ navigation }) {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
       {/* Header */}
       <Animated.View entering={FadeIn.duration(400)} style={styles.header}>
         <View>
@@ -307,7 +308,7 @@ export default function AvailableOrdersScreen({ navigation }) {
           }
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -321,7 +322,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: spacing.screenHorizontal, 
-    paddingTop: spacing.md,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
     backgroundColor: colors.light.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.light.borderLight,

@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
-import { 
-  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, 
-  Animated, Dimensions, StatusBar, Platform, Image 
+import {
+  View, Text, TouchableOpacity, StyleSheet, SafeAreaView,
+  Animated, Dimensions, StatusBar, Platform, Image
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -59,14 +59,14 @@ export default function RoleSelectScreen({ navigation }) {
     ]).start();
   }, []);
 
-  const RoleCard = ({ 
-    title, 
-    subtitle, 
-    icon, 
-    gradientColors, 
-    onPress, 
+  const RoleCard = ({
+    title,
+    subtitle,
+    icon,
+    gradientColors,
+    onPress,
     animValue,
-    iconBg 
+    iconBg
   }) => (
     <Animated.View style={{
       opacity: animValue,
@@ -104,126 +104,114 @@ export default function RoleSelectScreen({ navigation }) {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.light.background} />
-      
-      {/* Background Pattern */}
-      <View style={styles.backgroundPattern}>
-        <View style={[styles.patternCircle, styles.patternCircle1]} />
-        <View style={[styles.patternCircle, styles.patternCircle2]} />
-        <View style={[styles.patternCircle, styles.patternCircle3]} />
-      </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Header Section */}
-      <Animated.View style={[
-        styles.header,
-        {
-          opacity: fadeAnim,
-          transform: [
-            { translateY: slideAnim },
-            { scale: scaleAnim },
-          ],
-        },
-      ]}>
-        {/* Logo */}
-        <View style={styles.logoContainer}>
-          <LinearGradient
-            colors={[colors.zomato.red, colors.zomato.darkRed]}
-            style={styles.logoGradient}
-          >
-            <Ionicons name="restaurant" size={48} color="#fff" />
-          </LinearGradient>
-        </View>
-        
-        <Text style={styles.appName}>FoodAdmin</Text>
-        <Text style={styles.tagline}>Restaurant Management Suite</Text>
-        
-        {/* Feature Pills */}
-        <View style={styles.featurePills}>
-          <View style={styles.featurePill}>
-            <Ionicons name="flash" size={12} color={colors.zomato.red} />
-            <Text style={styles.featurePillText}>Fast</Text>
+      {/* Background Image */}
+      <Image
+        source={require('../../assets/backgrounds/open.png')}
+        style={styles.backgroundImage}
+        resizeMode="cover"
+      />
+      <View style={styles.backgroundOverlay} />
+
+      <SafeAreaView style={styles.contentContainer}>
+
+        {/* Header Section */}
+        <Animated.View style={[
+          styles.header,
+          {
+            opacity: fadeAnim,
+            transform: [
+              { translateY: slideAnim },
+              { scale: scaleAnim },
+            ],
+          },
+        ]}>
+          {/* Logo */}
+          <View style={styles.logoContainer}>
+            <LinearGradient
+              colors={[colors.zomato.red, colors.zomato.darkRed]}
+              style={styles.logoGradient}
+            >
+              <Ionicons name="restaurant" size={48} color="#fff" />
+            </LinearGradient>
           </View>
-          <View style={styles.featurePill}>
-            <Ionicons name="shield-checkmark" size={12} color={colors.zomato.red} />
-            <Text style={styles.featurePillText}>Secure</Text>
+
+          <Text style={styles.appName}>FoodAdmin</Text>
+          <Text style={styles.tagline}>Restaurant Management Suite</Text>
+
+          {/* Feature Pills */}
+          <View style={styles.featurePills}>
+            <View style={styles.featurePill}>
+              <Ionicons name="flash" size={12} color="#fff" />
+              <Text style={styles.featurePillText}>Fast</Text>
+            </View>
+            <View style={styles.featurePill}>
+              <Ionicons name="shield-checkmark" size={12} color="#fff" />
+              <Text style={styles.featurePillText}>Secure</Text>
+            </View>
+            <View style={styles.featurePill}>
+              <Ionicons name="analytics" size={12} color="#fff" />
+              <Text style={styles.featurePillText}>Smart</Text>
+            </View>
           </View>
-          <View style={styles.featurePill}>
-            <Ionicons name="analytics" size={12} color={colors.zomato.red} />
-            <Text style={styles.featurePillText}>Smart</Text>
+        </Animated.View>
+
+        {/* Role Selection Cards */}
+        <View style={styles.cardsContainer}>
+          <Text style={styles.selectRoleText}>Select your role</Text>
+
+          <RoleCard
+            title="Admin Portal"
+            subtitle="Manage orders, menu, analytics & more"
+            icon="shield-checkmark"
+            gradientColors={[colors.zomato.red, colors.zomato.darkRed]}
+            iconBg="rgba(255,255,255,0.2)"
+            onPress={() => navigation.navigate('AdminLogin')}
+            animValue={adminCardAnim}
+          />
+
+          <RoleCard
+            title="Delivery Partner"
+            subtitle="Accept & deliver orders efficiently"
+            icon="bicycle"
+            gradientColors={['#267E3E', '#1B5E2E']}
+            iconBg="rgba(255,255,255,0.2)"
+            onPress={() => navigation.navigate('DeliveryLogin')}
+            animValue={deliveryCardAnim}
+          />
+        </View>
+
+        {/* Footer */}
+        <Animated.View style={[styles.footer, { opacity: fadeAnim }]}>
+          <Text style={styles.footerText}>Powered by</Text>
+          <View style={styles.footerBrand}>
+            <View style={styles.footerDot} />
+            <Text style={styles.footerBrandText}>FoodAdmin Pro</Text>
           </View>
-        </View>
-      </Animated.View>
-
-      {/* Role Selection Cards */}
-      <View style={styles.cardsContainer}>
-        <Text style={styles.selectRoleText}>Select your role</Text>
-        
-        <RoleCard
-          title="Admin Portal"
-          subtitle="Manage orders, menu, analytics & more"
-          icon="shield-checkmark"
-          gradientColors={[colors.zomato.red, colors.zomato.darkRed]}
-          iconBg="rgba(255,255,255,0.2)"
-          onPress={() => navigation.navigate('AdminLogin')}
-          animValue={adminCardAnim}
-        />
-
-        <RoleCard
-          title="Delivery Partner"
-          subtitle="Accept & deliver orders efficiently"
-          icon="bicycle"
-          gradientColors={['#267E3E', '#1B5E2E']}
-          iconBg="rgba(255,255,255,0.2)"
-          onPress={() => navigation.navigate('DeliveryLogin')}
-          animValue={deliveryCardAnim}
-        />
-      </View>
-
-      {/* Footer */}
-      <Animated.View style={[styles.footer, { opacity: fadeAnim }]}>
-        <Text style={styles.footerText}>Powered by</Text>
-        <View style={styles.footerBrand}>
-          <View style={styles.footerDot} />
-          <Text style={styles.footerBrandText}>FoodAdmin Pro</Text>
-        </View>
-      </Animated.View>
-    </SafeAreaView>
+        </Animated.View>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.light.background,
+    backgroundColor: '#000',
   },
-  backgroundPattern: {
+  backgroundImage: {
     ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
+    width: '100%',
+    height: '100%',
   },
-  patternCircle: {
-    position: 'absolute',
-    borderRadius: 999,
-    backgroundColor: colors.zomato.red,
-    opacity: 0.03,
+  backgroundOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
-  patternCircle1: {
-    width: width * 1.5,
-    height: width * 1.5,
-    top: -width * 0.5,
-    right: -width * 0.5,
-  },
-  patternCircle2: {
-    width: width,
-    height: width,
-    bottom: -width * 0.3,
-    left: -width * 0.3,
-  },
-  patternCircle3: {
-    width: width * 0.6,
-    height: width * 0.6,
-    top: height * 0.4,
-    right: -width * 0.2,
+  contentContainer: {
+    flex: 1,
   },
   header: {
     alignItems: 'center',
@@ -244,12 +232,12 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: 36,
     fontWeight: '800',
-    color: colors.light.text.primary,
+    color: '#fff',
     letterSpacing: -1,
   },
   tagline: {
     fontSize: typography.body.large.fontSize,
-    color: colors.light.text.secondary,
+    color: 'rgba(255,255,255,0.8)',
     marginTop: spacing.xs,
   },
   featurePills: {
@@ -261,7 +249,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.primary[50],
+    backgroundColor: 'rgba(255,255,255,0.15)',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.full,
@@ -269,7 +257,7 @@ const styles = StyleSheet.create({
   featurePillText: {
     fontSize: typography.label.small.fontSize,
     fontWeight: '600',
-    color: colors.zomato.red,
+    color: '#fff',
   },
   cardsContainer: {
     flex: 1,
@@ -279,7 +267,7 @@ const styles = StyleSheet.create({
   selectRoleText: {
     fontSize: typography.title.medium.fontSize,
     fontWeight: '600',
-    color: colors.light.text.secondary,
+    color: 'rgba(255,255,255,0.9)',
     marginBottom: spacing.lg,
     textAlign: 'center',
   },
@@ -331,7 +319,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: typography.label.small.fontSize,
-    color: colors.light.text.tertiary,
+    color: 'rgba(255,255,255,0.6)',
   },
   footerBrand: {
     flexDirection: 'row',
@@ -348,6 +336,6 @@ const styles = StyleSheet.create({
   footerBrandText: {
     fontSize: typography.label.medium.fontSize,
     fontWeight: '600',
-    color: colors.light.text.secondary,
+    color: 'rgba(255,255,255,0.8)',
   },
 });

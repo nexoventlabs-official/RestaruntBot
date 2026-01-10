@@ -8,6 +8,7 @@ import MyOrdersScreen from '../screens/delivery/MyOrdersScreen';
 import DeliveryHistoryScreen from '../screens/delivery/DeliveryHistoryScreen';
 import DeliveryProfileScreen from '../screens/delivery/DeliveryProfileScreen';
 import DeliveryOrderDetailScreen from '../screens/delivery/DeliveryOrderDetailScreen';
+import MapNavigationScreen from '../screens/delivery/MapNavigationScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -17,6 +18,7 @@ function MyOrdersStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MyOrdersList" component={MyOrdersScreen} />
       <Stack.Screen name="DeliveryOrderDetail" component={DeliveryOrderDetailScreen} />
+      <Stack.Screen name="MapNavigation" component={MapNavigationScreen} />
     </Stack.Navigator>
   );
 }
@@ -26,6 +28,7 @@ function HistoryStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="HistoryList" component={DeliveryHistoryScreen} />
       <Stack.Screen name="DeliveryOrderDetail" component={DeliveryOrderDetailScreen} />
+      <Stack.Screen name="MapNavigation" component={MapNavigationScreen} />
     </Stack.Navigator>
   );
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, FlatList,
+  View, Text, StyleSheet, FlatList,
   RefreshControl, TouchableOpacity, Alert, ActivityIndicator, Animated, Platform, StatusBar
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -41,15 +41,17 @@ export default function AvailableOrdersScreen({ navigation }) {
   const claimOrder = async (orderId) => {
     Alert.alert('Claim Order', 'Do you want to claim this order? It will be marked as Ready.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Claim', onPress: async () => {
-        setClaiming(orderId);
-        try {
-          await api.post(`/delivery/orders/${orderId}/claim`);
-          Alert.alert('Success', 'Order claimed successfully!');
-          fetchOrders();
-        } catch (error) { Alert.alert('Error', error.response?.data?.error || 'Failed to claim order'); }
-        finally { setClaiming(null); }
-      }},
+      {
+        text: 'Claim', onPress: async () => {
+          setClaiming(orderId);
+          try {
+            await api.post(`/delivery/orders/${orderId}/claim`);
+            Alert.alert('Success', 'Order claimed successfully!');
+            fetchOrders();
+          } catch (error) { Alert.alert('Error', error.response?.data?.error || 'Failed to claim order'); }
+          finally { setClaiming(null); }
+        }
+      },
     ]);
   };
 
@@ -105,7 +107,7 @@ export default function AvailableOrdersScreen({ navigation }) {
               </Text>
             </View>
           </View>
-          
+
           <TouchableOpacity
             style={[styles.claimButton, claiming === item.orderId && styles.claimButtonDisabled]}
             onPress={() => claimOrder(item.orderId)}
@@ -129,9 +131,9 @@ export default function AvailableOrdersScreen({ navigation }) {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={DELIVERY_GREEN} />
-      
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
       <LinearGradient colors={[DELIVERY_GREEN, DELIVERY_DARK_GREEN]} style={styles.header}>
         <View style={styles.headerContent}>
           <View>
@@ -165,13 +167,13 @@ export default function AvailableOrdersScreen({ navigation }) {
           }
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.light.background },
-  header: { paddingTop: Platform.OS === 'android' ? 50 : 16, paddingBottom: spacing.lg, paddingHorizontal: spacing.screenHorizontal, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  header: { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60, paddingBottom: spacing.lg, paddingHorizontal: spacing.screenHorizontal, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { fontSize: typography.display.small.fontSize, fontWeight: '700', color: '#fff' },
   subtitle: { fontSize: typography.body.medium.fontSize, color: 'rgba(255,255,255,0.8)', marginTop: 2 },

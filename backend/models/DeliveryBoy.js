@@ -16,6 +16,8 @@ const deliveryBoySchema = new mongoose.Schema({
   passwordChangedAt: { type: Date },
   // Token version - increment to invalidate all tokens
   tokenVersion: { type: Number, default: 0 },
+  // Push notification token for Expo
+  pushToken: { type: String, default: null },
   // Ratings from customers
   ratings: [{
     orderId: { type: String, required: true },
