@@ -17,28 +17,38 @@ function AppNavigator() {
   const navigationRef = useRef(null);
 
   useEffect(() => {
-    // Handle notification tap - navigate to appropriate screen
-    const responseSubscription = pushNotifications.addNotificationResponseListener(response => {
-      const data = response.notification.request.content.data;
-      
-      if (data?.type === 'new_order' && data?.screen) {
-        // Navigate to MyOrders screen when notification is tapped
-        if (navigationRef.current && role === 'delivery') {
-          navigationRef.current.navigate('DeliveryMain', {
-            screen: 'MyOrders',
-          });
-        }
-      }
-    });
+    let responseSubscription = null;
+    let receivedSubscription = null;
 
-    // Handle notification received while app is open
-    const receivedSubscription = pushNotifications.addNotificationReceivedListener(notification => {
-      console.log('📱 Notification received:', notification);
-    });
+    // Only set up listeners if push notifications are supported
+    if (pushNotifications.isSupported()) {
+      // Handle notification tap - navigate to appropriate screen
+      responseSubscription = pushNotifications.addNotificationResponseListener(response => {
+        const data = response.notification.request.content.data;
+        
+        if (data?.type === 'new_order' && data?.screen) {
+          // Navigate to MyOrders screen when notification is tapped
+          if (navigationRef.current && role === 'delivery') {
+            navigationRef.current.navigate('DeliveryMain', {
+              screen: 'MyOrders',
+            });
+          }
+        }
+      });
+
+      // Handle notification received while app is open
+      receivedSubscription = pushNotifications.addNotificationReceivedListener(notification => {
+        console.log('📱 Notification received:', notification);
+      });
+    }
 
     return () => {
-      pushNotifications.removeNotificationListener(responseSubscription);
-      pushNotifications.removeNotificationListener(receivedSubscription);
+      if (responseSubscription) {
+        pushNotifications.removeNotificationListener(responseSubscription);
+      }
+      if (receivedSubscription) {
+        pushNotifications.removeNotificationListener(receivedSubscription);
+      }
     };
   }, [role]);
 

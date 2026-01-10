@@ -1,7 +1,11 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import api from '../config/api';
+
+// Check if running in Expo Go
+const isExpoGo = Constants.appOwnership === 'expo';
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -18,6 +22,12 @@ export const pushNotifications = {
    * @returns {Promise<string|null>} Expo push token or null if failed
    */
   async registerForPushNotifications() {
+    // Push notifications don't work in Expo Go for SDK 53+
+    if (isExpoGo) {
+      console.log('⚠️ Push notifications are not supported in Expo Go. Use a development build.');
+      return null;
+    }
+
     let token = null;
 
     // Check if it's a physical device
@@ -43,8 +53,9 @@ export const pushNotifications = {
 
     // Get the Expo push token
     try {
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
       const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId: 'your-project-id', // Replace with your Expo project ID if needed
+        projectId: projectId,
       });
       token = tokenData.data;
       console.log('📱 Expo Push Token:', token);
@@ -97,6 +108,7 @@ export const pushNotifications = {
    * @returns {Object} Subscription object
    */
   addNotificationReceivedListener(callback) {
+    if (isExpoGo) return null;
     return Notifications.addNotificationReceivedListener(callback);
   },
 
@@ -106,6 +118,7 @@ export const pushNotifications = {
    * @returns {Object} Subscription object
    */
   addNotificationResponseListener(callback) {
+    if (isExpoGo) return null;
     return Notifications.addNotificationResponseReceivedListener(callback);
   },
 
@@ -114,13 +127,16 @@ export const pushNotifications = {
    * @param {Object} subscription - Subscription object to remove
    */
   removeNotificationListener(subscription) {
-    Notifications.removeNotificationSubscription(subscription);
+    if (subscription && subscription.remove) {
+      subscription.remove();
+    }
   },
 
   /**
    * Get badge count
    */
   async getBadgeCount() {
+    if (isExpoGo) return 0;
     return await Notifications.getBadgeCountAsync();
   },
 
@@ -129,6 +145,7 @@ export const pushNotifications = {
    * @param {number} count - Badge count
    */
   async setBadgeCount(count) {
+    if (isExpoGo) return;
     await Notifications.setBadgeCountAsync(count);
   },
 
@@ -136,8 +153,16 @@ export const pushNotifications = {
    * Clear all notifications
    */
   async clearAllNotifications() {
+    if (isExpoGo) return;
     await Notifications.dismissAllNotificationsAsync();
     await this.setBadgeCount(0);
+  },
+
+  /**
+   * Check if push notifications are supported
+   */
+  isSupported() {
+    return !isExpoGo && Device.isDevice;
   },
 };
 
