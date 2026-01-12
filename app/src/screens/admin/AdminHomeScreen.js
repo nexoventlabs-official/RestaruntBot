@@ -8,6 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
 import api, { API_BASE_URL } from '../../config/api';
 import { colors, spacing, radius, typography, shadows } from '../../theme';
 import { StatCard, ActionCard, InfoCard, MetricCard, Card } from '../../components/ui';
@@ -27,6 +28,7 @@ const IMAGES = {
 
 export default function AdminHomeScreen({ navigation }) {
   const { user, logout } = useAuth();
+  const { unreadCount, checkForUpdates } = useNotifications();
   const [stats, setStats] = useState(null);
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -91,6 +93,9 @@ export default function AdminHomeScreen({ navigation }) {
         ordersTrend: todayOrders.length >= yesterdayOrders.length ? 'up' : 'down',
       });
       setReportData(reportRes.data);
+      
+      // Check for notification updates
+      checkForUpdates();
     } catch (error) { console.error('Error fetching stats:', error); }
     finally { 
       if (!silent) {
@@ -175,11 +180,16 @@ export default function AdminHomeScreen({ navigation }) {
                 </View>
               </View>
               <View style={styles.headerActions}>
-                <TouchableOpacity style={styles.headerButton}>
+                <TouchableOpacity 
+                  style={styles.headerButton}
+                  onPress={() => navigation.navigate('Notifications')}
+                >
                   <Ionicons name="notifications-outline" size={22} color="#fff" />
-                  <View style={styles.notificationBadge}>
-                    <Text style={styles.notificationCount}>3</Text>
-                  </View>
+                  {unreadCount > 0 && (
+                    <View style={styles.notificationBadge}>
+                      <Text style={styles.notificationCount}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.headerButton} onPress={logout}>
                   <Ionicons name="log-out-outline" size={22} color="#fff" />

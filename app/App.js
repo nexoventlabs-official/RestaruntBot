@@ -4,6 +4,7 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { NotificationProvider } from './src/context/NotificationContext';
 import RoleSelectScreen from './src/screens/RoleSelectScreen';
 import AdminLoginScreen from './src/screens/admin/AdminLoginScreen';
 import DeliveryLoginScreen from './src/screens/delivery/DeliveryLoginScreen';
@@ -99,10 +100,12 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <NavigationContainer ref={navigationRef}>
-        <StatusBar style="light" />
-        <AppNavigator />
-      </NavigationContainer>
+      <NotificationProvider>
+        <NavigationContainer ref={navigationRef}>
+          <StatusBar style="light" />
+          <AppNavigator />
+        </NavigationContainer>
+      </NotificationProvider>
     </AuthProvider>
   );
 }
