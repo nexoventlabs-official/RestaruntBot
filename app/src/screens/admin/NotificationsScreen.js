@@ -8,7 +8,7 @@ import { useNotifications } from '../../context/NotificationContext';
 import { colors, spacing, radius, shadows } from '../../theme';
 
 export default function NotificationsScreen({ navigation }) {
-  const { notifications, markAllAsRead, markAsRead, clearAll } = useNotifications();
+  const { notifications, markAllAsRead, markAsRead, clearAll, resetTracking } = useNotifications();
 
   // Mark all as read when screen opens
   useEffect(() => {
@@ -77,11 +77,16 @@ export default function NotificationsScreen({ navigation }) {
           <Ionicons name="arrow-back" size={24} color={colors.light.text.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Notifications</Text>
-        {notifications.length > 0 && (
-          <TouchableOpacity style={styles.clearButton} onPress={clearAll}>
-            <Text style={styles.clearText}>Clear All</Text>
+        <View style={styles.headerActions}>
+          {notifications.length > 0 && (
+            <TouchableOpacity style={styles.clearButton} onPress={clearAll}>
+              <Text style={styles.clearText}>Clear</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.resetButton} onPress={resetTracking}>
+            <Ionicons name="refresh" size={20} color={colors.light.text.secondary} />
           </TouchableOpacity>
-        )}
+        </View>
       </View>
 
       {/* Notifications List */}
@@ -131,13 +136,26 @@ const styles = StyleSheet.create({
     marginLeft: spacing.md,
   },
   clearButton: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
   },
   clearText: {
     fontSize: 14,
     fontWeight: '600',
     color: colors.zomato.red,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  resetButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.light.surfaceSecondary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   listContent: {
     padding: spacing.md,

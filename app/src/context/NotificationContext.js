@@ -5,47 +5,57 @@ import api from '../config/api';
 const NotificationContext = createContext();
 
 const STORAGE_KEY = 'admin_notifications';
-const LAST_CHECK_KEY = 'admin_last_notification_check';
+const LAST_CHECK_KEY = 'admin_last_check_time';
+const SEEN_ORDERS_KEY = 'admin_seen_orders';
 
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [lastOrderIds, setLastOrderIds] = useState(new Set());
-  const [lastStatusMap, setLastStatusMap] = useState({});
+  const lastCheckTime = useRef(null);
+  const seenOrderStatuses = useRef({});
   const isInitialized = useRef(false);
 
-  // Load notifications from storage on mount
+  // Load data from storage on mount
   useEffect(() => {
-    loadNotifications();
+    loadData();
   }, []);
 
-  const loadNotifications = async () => {
+  const loadData = async () => {
     try {
-      const stored = await SecureStore.getItemAsync(STORAGE_KEY);
-      const lastCheck = await SecureStore.getItemAsync(LAST_CHECK_KEY);
+      const [storedNotifications, storedLastCheck, storedSeenOrders] = await Promise.all([
+        SecureStore.getItemAsync(STORAGE_KEY),
+        SecureStore.getItemAsync(LAST_CHECK_KEY),
+        SecureStore.getItemAsync(SEEN_ORDERS_KEY)
+      ]);
       
-      if (stored) {
-        const parsed = JSON.parse(stored);
+      if (storedNotifications) {
+        const parsed = JSON.parse(storedNotifications);
         setNotifications(parsed);
         setUnreadCount(parsed.filter(n => !n.read).length);
       }
       
-      if (lastCheck) {
-        const { orderIds, statusMap } = JSON.parse(lastCheck);
-        setLastOrderIds(new Set(orderIds || []));
-        setLastStatusMap(statusMap || {});
+      if (storedLastCheck) {
+        lastCheckTime.current = new Date(storedLastCheck);
+      } else {
+        // First time - set to now so we don't flood with old notifications
+        lastCheckTime.current = new Date();
+        await SecureStore.setItemAsync(LAST_CHECK_KEY, new Date().toISOString());
+      }
+      
+      if (storedSeenOrders) {
+        seenOrderStatuses.current = JSON.parse(storedSeenOrders);
       }
       
       isInitialized.current = true;
     } catch (error) {
-      console.error('Error loading notifications:', error);
+      console.error('Error loading notification data:', error);
+      lastCheckTime.current = new Date();
       isInitialized.current = true;
     }
   };
 
   const saveNotifications = async (newNotifications) => {
     try {
-      // Keep only last 30 notifications (SecureStore has size limits)
       const trimmed = newNotifications.slice(0, 30);
       await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(trimmed));
     } catch (error) {
@@ -53,21 +63,19 @@ export function NotificationProvider({ children }) {
     }
   };
 
-  const saveLastCheck = async (orderIds, statusMap) => {
+  const saveSeenOrders = async (seenOrders) => {
     try {
-      // Only keep last 50 order IDs to avoid storage limits
-      const limitedOrderIds = Array.from(orderIds).slice(0, 50);
-      const limitedStatusMap = {};
-      limitedOrderIds.forEach(id => {
-        if (statusMap[id]) limitedStatusMap[id] = statusMap[id];
-      });
-      
-      await SecureStore.setItemAsync(LAST_CHECK_KEY, JSON.stringify({
-        orderIds: limitedOrderIds,
-        statusMap: limitedStatusMap
-      }));
+      // Keep only recent orders (last 100)
+      const keys = Object.keys(seenOrders);
+      if (keys.length > 100) {
+        const trimmed = {};
+        keys.slice(-100).forEach(k => trimmed[k] = seenOrders[k]);
+        await SecureStore.setItemAsync(SEEN_ORDERS_KEY, JSON.stringify(trimmed));
+      } else {
+        await SecureStore.setItemAsync(SEEN_ORDERS_KEY, JSON.stringify(seenOrders));
+      }
     } catch (error) {
-      console.error('Error saving last check:', error);
+      console.error('Error saving seen orders:', error);
     }
   };
 
@@ -80,48 +88,50 @@ export function NotificationProvider({ children }) {
       const orders = response.data.orders || [];
       
       const newNotifications = [];
-      const currentOrderIds = new Set();
-      const currentStatusMap = {};
+      const now = new Date();
       
-      orders.forEach(order => {
-        currentOrderIds.add(order.orderId);
-        currentStatusMap[order.orderId] = order.status;
+      for (const order of orders) {
+        const orderCreatedAt = new Date(order.createdAt);
+        const previousStatus = seenOrderStatuses.current[order.orderId];
         
-        // Check for new orders (not in lastOrderIds)
-        if (!lastOrderIds.has(order.orderId) && lastOrderIds.size > 0) {
-          newNotifications.push({
-            id: `new_${order.orderId}_${Date.now()}`,
-            type: 'new_order',
-            title: 'New Order Received',
-            message: `Order #${order.orderId} - ₹${order.totalAmount}`,
-            orderId: order.orderId,
-            amount: order.totalAmount,
-            timestamp: new Date().toISOString(),
-            read: false,
-            icon: 'cart',
-            color: '#F59E0B'
-          });
+        // Check for NEW orders (created after last check and status is confirmed/pending)
+        if (!previousStatus && lastCheckTime.current) {
+          if (orderCreatedAt > lastCheckTime.current) {
+            // This is a genuinely new order
+            newNotifications.push({
+              id: `new_${order.orderId}_${Date.now()}`,
+              type: 'new_order',
+              title: 'New Order Received! 🎉',
+              message: `Order #${order.orderId} - ₹${order.totalAmount}`,
+              orderId: order.orderId,
+              amount: order.totalAmount,
+              timestamp: order.createdAt,
+              read: false,
+              icon: 'cart',
+              color: '#F59E0B'
+            });
+          }
         }
         
-        // Check for status changes
-        if (lastStatusMap[order.orderId] && lastStatusMap[order.orderId] !== order.status) {
+        // Check for STATUS CHANGES
+        if (previousStatus && previousStatus !== order.status) {
           if (order.status === 'delivered') {
             newNotifications.push({
               id: `delivered_${order.orderId}_${Date.now()}`,
               type: 'delivered',
-              title: 'Order Delivered',
-              message: `Order #${order.orderId} has been delivered`,
+              title: 'Order Delivered ✅',
+              message: `Order #${order.orderId} delivered successfully`,
               orderId: order.orderId,
               timestamp: new Date().toISOString(),
               read: false,
               icon: 'checkmark-circle',
               color: '#22C55E'
             });
-          } else if (order.status === 'cancelled') {
+          } else if (order.status === 'cancelled' || order.status === 'refunded') {
             newNotifications.push({
               id: `cancelled_${order.orderId}_${Date.now()}`,
               type: 'cancelled',
-              title: 'Order Cancelled',
+              title: 'Order Cancelled ❌',
               message: `Order #${order.orderId} has been cancelled`,
               orderId: order.orderId,
               timestamp: new Date().toISOString(),
@@ -131,15 +141,19 @@ export function NotificationProvider({ children }) {
             });
           }
         }
-      });
+        
+        // Update seen status
+        seenOrderStatuses.current[order.orderId] = order.status;
+      }
       
-      // Update state
-      setLastOrderIds(currentOrderIds);
-      setLastStatusMap(currentStatusMap);
-      saveLastCheck(currentOrderIds, currentStatusMap);
+      // Save the current check time and seen orders
+      lastCheckTime.current = now;
+      await SecureStore.setItemAsync(LAST_CHECK_KEY, now.toISOString());
+      await saveSeenOrders(seenOrderStatuses.current);
       
-      // Add new notifications
+      // Add new notifications if any
       if (newNotifications.length > 0) {
+        console.log('📱 New notifications:', newNotifications.length);
         setNotifications(prev => {
           const updated = [...newNotifications, ...prev];
           saveNotifications(updated);
@@ -150,7 +164,7 @@ export function NotificationProvider({ children }) {
     } catch (error) {
       console.error('Error checking for updates:', error);
     }
-  }, [lastOrderIds, lastStatusMap]);
+  }, []);
 
   // Mark all as read
   const markAllAsRead = useCallback(() => {
@@ -181,6 +195,17 @@ export function NotificationProvider({ children }) {
     await SecureStore.deleteItemAsync(STORAGE_KEY);
   }, []);
 
+  // Reset tracking (useful for testing)
+  const resetTracking = useCallback(async () => {
+    lastCheckTime.current = new Date();
+    seenOrderStatuses.current = {};
+    await SecureStore.deleteItemAsync(LAST_CHECK_KEY);
+    await SecureStore.deleteItemAsync(SEEN_ORDERS_KEY);
+    setNotifications([]);
+    setUnreadCount(0);
+    await SecureStore.deleteItemAsync(STORAGE_KEY);
+  }, []);
+
   return (
     <NotificationContext.Provider value={{
       notifications,
@@ -188,7 +213,8 @@ export function NotificationProvider({ children }) {
       checkForUpdates,
       markAllAsRead,
       markAsRead,
-      clearAll
+      clearAll,
+      resetTracking
     }}>
       {children}
     </NotificationContext.Provider>
