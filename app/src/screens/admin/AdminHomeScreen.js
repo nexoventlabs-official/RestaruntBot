@@ -18,18 +18,11 @@ const AUTO_REFRESH_INTERVAL = 10000; // 10 seconds
 // Pre-load image references outside component to prevent re-renders
 const IMAGES = {
   home: require('../../../assets/backgrounds/home.jpg'),
-  pendingCard: require('../../../assets/backgrounds/pendingcard.jpg'),
-  menuCard: require('../../../assets/backgrounds/menucard.jpg'),
-  deliveryCard: require('../../../assets/backgrounds/deliverycard.jpg'),
   button: require('../../../assets/backgrounds/button.png'),
   all: require('../../../assets/backgrounds/all.png'),
   veg: require('../../../assets/backgrounds/veg.png'),
   nonVeg: require('../../../assets/backgrounds/non-veg.png'),
   egg: require('../../../assets/backgrounds/egg.png'),
-  revenue: require('../../../assets/backgrounds/revenue.jpg'),
-  ordersRepo: require('../../../assets/backgrounds/ordersrepo.jpg'),
-  sold: require('../../../assets/backgrounds/sold.jpg'),
-  average: require('../../../assets/backgrounds/average.jpg'),
 };
 
 export default function AdminHomeScreen({ navigation }) {
