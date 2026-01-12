@@ -55,6 +55,7 @@ export default function AdminHomeScreen({ navigation }) {
       ]);
       const orders = ordersRes.data.orders || [];
       const menuItems = menuRes.data || [];
+      const report = reportRes.data || {};
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
 
@@ -67,7 +68,11 @@ export default function AdminHomeScreen({ navigation }) {
       const preparingOrders = orders.filter(o => o.status === 'preparing');
       const deliveryOrders = orders.filter(o => ['ready', 'out_for_delivery'].includes(o.status));
 
-      const todayRevenue = todayOrders.filter(o => o.paymentStatus === 'paid').reduce((sum, o) => sum + o.totalAmount, 0);
+      // Use report data for revenue (same as Today's Report section)
+      const todayRevenue = report.totalRevenue || 0;
+      const todayOrderCount = report.totalOrders || todayOrders.length;
+      
+      // Calculate yesterday's revenue for trend comparison
       const yesterdayRevenue = yesterdayOrders.filter(o => o.paymentStatus === 'paid').reduce((sum, o) => sum + o.totalAmount, 0);
 
       // Menu food type counts
@@ -76,7 +81,7 @@ export default function AdminHomeScreen({ navigation }) {
       const eggItems = menuItems.filter(i => i.foodType === 'egg').length;
 
       setStats({
-        todayOrders: todayOrders.length,
+        todayOrders: todayOrderCount,
         yesterdayOrders: yesterdayOrders.length,
         newOrders: newOrders.length,
         preparingOrders: preparingOrders.length,
@@ -90,9 +95,9 @@ export default function AdminHomeScreen({ navigation }) {
         todayRevenue,
         yesterdayRevenue,
         revenueTrend: todayRevenue >= yesterdayRevenue ? 'up' : 'down',
-        ordersTrend: todayOrders.length >= yesterdayOrders.length ? 'up' : 'down',
+        ordersTrend: todayOrderCount >= yesterdayOrders.length ? 'up' : 'down',
       });
-      setReportData(reportRes.data);
+      setReportData(report);
       
       // Check for notification updates
       checkForUpdates();
