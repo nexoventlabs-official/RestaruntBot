@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useDeliveryNotifications } from '../../context/DeliveryNotificationContext';
 import api from '../../config/api';
-import { StatCard, ActionCard, InfoCard } from '../../components/ui/Card';
+import { ActionCard, InfoCard } from '../../components/ui/Card';
 import { StatsCardSkeleton } from '../../components/ui/Skeleton';
 import { colors, spacing, radius, typography, shadows } from '../../theme';
 
@@ -193,24 +193,41 @@ export default function DeliveryHomeScreen({ navigation }) {
             <View style={styles.statsGrid}><StatsCardSkeleton /><StatsCardSkeleton /></View>
           ) : (
             <View style={styles.statsGrid}>
-              <StatCard
-                icon="checkmark-circle"
-                title="Delivered"
-                value={stats?.todayDelivered || 0}
-                color="#22C55E"
-                bgColor="#DCFCE7"
-                animated={true}
-                animationDelay={0}
-              />
-              <StatCard
-                icon="bicycle"
-                title="Active"
-                value={stats?.activeOrders || 0}
-                color="#F59E0B"
-                bgColor="#FEF3C7"
-                animated={true}
-                animationDelay={100}
-              />
+              <TouchableOpacity activeOpacity={0.8} style={styles.statCardWrapper}>
+                <LinearGradient
+                  colors={['#22C55E', '#16A34A']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.statCardGradient}
+                >
+                  <View style={styles.statCardDecor}>
+                    <Ionicons name="checkmark-circle" size={60} color="rgba(255,255,255,0.15)" />
+                  </View>
+                  <View style={styles.statCardIcon}>
+                    <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+                  </View>
+                  <Text style={styles.statCardValue}>{stats?.todayDelivered || 0}</Text>
+                  <Text style={styles.statCardLabel}>Delivered</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity activeOpacity={0.8} style={styles.statCardWrapper}>
+                <LinearGradient
+                  colors={['#F59E0B', '#D97706']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.statCardGradient}
+                >
+                  <View style={styles.statCardDecor}>
+                    <Ionicons name="bicycle" size={60} color="rgba(255,255,255,0.15)" />
+                  </View>
+                  <View style={styles.statCardIcon}>
+                    <Ionicons name="bicycle-outline" size={20} color="#fff" />
+                  </View>
+                  <Text style={styles.statCardValue}>{stats?.activeOrders || 0}</Text>
+                  <Text style={styles.statCardLabel}>Active</Text>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           )}
         </Animated.View>
@@ -230,24 +247,41 @@ export default function DeliveryHomeScreen({ navigation }) {
             <View style={styles.statsGrid}><StatsCardSkeleton /><StatsCardSkeleton /></View>
           ) : (
             <View style={styles.statsGrid}>
-              <StatCard
-                icon="trophy"
-                title="Total Deliveries"
-                value={stats?.totalDelivered || 0}
-                color="#8B5CF6"
-                bgColor="#EDE9FE"
-                animated={true}
-                animationDelay={200}
-              />
-              <StatCard
-                icon="star"
-                title="Rating"
-                value={user?.avgRating?.toFixed(1) || '0.0'}
-                color="#F59E0B"
-                bgColor="#FEF3C7"
-                animated={true}
-                animationDelay={300}
-              />
+              <TouchableOpacity activeOpacity={0.8} style={styles.statCardWrapper}>
+                <LinearGradient
+                  colors={['#8B5CF6', '#7C3AED']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.statCardGradient}
+                >
+                  <View style={styles.statCardDecor}>
+                    <Ionicons name="trophy" size={60} color="rgba(255,255,255,0.15)" />
+                  </View>
+                  <View style={styles.statCardIcon}>
+                    <Ionicons name="trophy-outline" size={20} color="#fff" />
+                  </View>
+                  <Text style={styles.statCardValue}>{stats?.totalDelivered || 0}</Text>
+                  <Text style={styles.statCardLabel}>Total Deliveries</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity activeOpacity={0.8} style={styles.statCardWrapper}>
+                <LinearGradient
+                  colors={['#EC4899', '#DB2777']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.statCardGradient}
+                >
+                  <View style={styles.statCardDecor}>
+                    <Ionicons name="star" size={60} color="rgba(255,255,255,0.15)" />
+                  </View>
+                  <View style={styles.statCardIcon}>
+                    <Ionicons name="star-outline" size={20} color="#fff" />
+                  </View>
+                  <Text style={styles.statCardValue}>{user?.avgRating?.toFixed(1) || '0.0'}</Text>
+                  <Text style={styles.statCardLabel}>Rating</Text>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           )}
         </Animated.View>
@@ -365,6 +399,44 @@ const styles = StyleSheet.create({
   switchContainer: { marginLeft: spacing.md },
   switch: { transform: [{ scaleX: 1.1 }, { scaleY: 1.1 }] },
   statsGrid: { flexDirection: 'row', gap: spacing.md },
+  statCardWrapper: { flex: 1 },
+  statCardGradient: {
+    flex: 1,
+    borderRadius: radius.xl,
+    padding: spacing.base,
+    minHeight: 140,
+    overflow: 'hidden',
+    position: 'relative',
+    ...shadows.md,
+  },
+  statCardDecor: {
+    position: 'absolute',
+    right: -10,
+    bottom: -10,
+  },
+  statCardIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  statCardValue: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: -1,
+  },
+  statCardLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 4,
+  },
   actionsContainer: { gap: spacing.sm },
   tipsContent: { gap: spacing.sm },
   tipItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
