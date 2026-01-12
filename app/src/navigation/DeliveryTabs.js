@@ -9,9 +9,19 @@ import DeliveryHistoryScreen from '../screens/delivery/DeliveryHistoryScreen';
 import DeliveryProfileScreen from '../screens/delivery/DeliveryProfileScreen';
 import DeliveryOrderDetailScreen from '../screens/delivery/DeliveryOrderDetailScreen';
 import MapNavigationScreen from '../screens/delivery/MapNavigationScreen';
+import DeliveryNotificationsScreen from '../screens/delivery/DeliveryNotificationsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
+
+function HomeStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="HomeMain" component={DeliveryHomeScreen} />
+      <Stack.Screen name="Notifications" component={DeliveryNotificationsScreen} />
+    </Stack.Navigator>
+  );
+}
 
 function MyOrdersStack() {
   return (
@@ -58,7 +68,7 @@ export default function DeliveryTabs() {
         },
       })}
     >
-      <Tab.Screen name="Home" component={DeliveryHomeScreen} />
+      <Tab.Screen name="Home" component={HomeStack} />
       <Tab.Screen name="MyOrders" component={MyOrdersStack} options={{ title: 'My Orders' }} />
       <Tab.Screen name="History" component={HistoryStack} />
       <Tab.Screen name="Profile" component={DeliveryProfileScreen} />
