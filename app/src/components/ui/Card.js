@@ -201,7 +201,7 @@ export const Card = ({
   return renderCard();
 };
 
-// Premium Stat Card with Icon
+// Premium Stat Card with Icon - 3D Design
 export const StatCard = React.memo(({
   icon,
   title,
@@ -219,6 +219,7 @@ export const StatCard = React.memo(({
   compact = false,
   backgroundStyle = 'default',
   backgroundImage = null,
+  gradientColors = null,
 }) => {
   // Use refs to track if initial animation has run
   const hasAnimated = useRef(false);
@@ -250,7 +251,6 @@ export const StatCard = React.memo(({
     }
   }, []);
 
-  const iconBgColor = bgColor || color + '15';
   const isCompact = compact || size === 'compact';
 
   const getTrendIcon = () => {
@@ -265,130 +265,64 @@ export const StatCard = React.memo(({
     return colors.light.text.tertiary;
   };
 
-  // Background decoration based on style
-  const renderBackgroundDecoration = () => {
-    switch (backgroundStyle) {
-      case 'circles':
-        return (
-          <>
-            <View style={[styles.bgDecoration, styles.bgCircle1, { backgroundColor: color + '18' }]} />
-            <View style={[styles.bgDecoration, styles.bgCircle2, { backgroundColor: color + '12' }]} />
-            <View style={[styles.bgDecoration, styles.bgCircle3, { backgroundColor: color + '0A' }]} />
-          </>
-        );
-      case 'waves':
-        return (
-          <>
-            <View style={[styles.bgDecoration, styles.bgWave1, { backgroundColor: color + '15' }]} />
-            <View style={[styles.bgDecoration, styles.bgWave2, { backgroundColor: color + '10' }]} />
-          </>
-        );
-      case 'dots':
-        return (
-          <View style={styles.bgDotsContainer}>
-            {[...Array(12)].map((_, i) => (
-              <View key={i} style={[styles.bgDot, { backgroundColor: color + '25' }]} />
-            ))}
-          </View>
-        );
-      case 'diagonal':
-        return (
-          <>
-            <View style={[styles.bgDecoration, styles.bgDiagonal1, { backgroundColor: color + '15' }]} />
-            <View style={[styles.bgDecoration, styles.bgDiagonal2, { backgroundColor: color + '10' }]} />
-            <View style={[styles.bgDecoration, styles.bgDiagonal3, { backgroundColor: color + '08' }]} />
-          </>
-        );
-      default:
-        return null;
-    }
+  // Default gradient colors based on the color prop
+  const getGradientColors = () => {
+    if (gradientColors) return gradientColors;
+    
+    // Create gradient from the color
+    const colorMap = {
+      '#22C55E': ['#22C55E', '#16A34A'], // Green
+      '#F59E0B': ['#F59E0B', '#D97706'], // Orange/Amber
+      '#8B5CF6': ['#8B5CF6', '#7C3AED'], // Purple
+      '#3B82F6': ['#3B82F6', '#2563EB'], // Blue
+      '#EF4444': ['#EF4444', '#DC2626'], // Red
+      '#EC4899': ['#EC4899', '#DB2777'], // Pink
+      '#06B6D4': ['#06B6D4', '#0891B2'], // Cyan
+      '#10B981': ['#10B981', '#059669'], // Emerald
+    };
+    
+    return colorMap[color] || [color, color + 'DD'];
   };
 
-  // Memoize the background image component to prevent re-renders
-  const backgroundImageComponent = useMemo(() => {
-    if (!backgroundImage) return null;
-    return (
-      <ImageBackground
-        source={backgroundImage}
-        style={[styles.statCardImageBg, isCompact && styles.statCardImageBgCompact]}
-        imageStyle={styles.statCardImageStyle}
-        fadeDuration={0}
-      >
-        <View style={[styles.statCardImageOverlay, isCompact && styles.statCardImageOverlayCompact]}>
-          <View style={[styles.statCardInner, isCompact && styles.statCardInnerCompact]}>
-            {!backgroundImage && renderBackgroundDecoration()}
-            <View style={[styles.statIconContainerGlass, isCompact && styles.statIconContainerGlassCompact]}>
-              <View style={styles.statIconGlassInner}>
-                <Ionicons name={icon} size={isCompact ? 20 : 22} color="#fff" />
-              </View>
-            </View>
-            <View style={[styles.statContent, isCompact && styles.statContentCompact]}>
-              <Text style={[styles.statValue, isCompact && styles.statValueCompact, styles.statValueWithBg]}>{value}</Text>
-              <Text style={[styles.statTitle, isCompact && styles.statTitleCompact, styles.statTitleWithBg]}>{title}</Text>
-              {subtitle && <Text style={[styles.statSubtitle, styles.statSubtitleWithBg]}>{subtitle}</Text>}
-            </View>
-            {trend && !isCompact && (
-              <View style={[styles.trendBadge, styles.trendBadgeGlass, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-                <Ionicons name={getTrendIcon()} size={12} color="#fff" />
-                {trendValue && <Text style={[styles.trendText, { color: '#fff' }]}>{trendValue}</Text>}
-              </View>
-            )}
-          </View>
-        </View>
-      </ImageBackground>
-    );
-  }, [backgroundImage, icon, isCompact]);
-
-  const cardInnerContent = (
-    <>
-      {!backgroundImage && renderBackgroundDecoration()}
-      {backgroundImage ? (
-        <View style={[styles.statIconContainerGlass, isCompact && styles.statIconContainerGlassCompact]}>
-          <View style={styles.statIconGlassInner}>
-            <Ionicons name={icon} size={isCompact ? 20 : 22} color="#fff" />
-          </View>
-        </View>
-      ) : (
-        <View style={[
-          styles.statIconContainer,
-          { backgroundColor: iconBgColor },
-          isCompact && styles.statIconCompact,
-          variant === 'outlined' && { borderWidth: 1.5, borderColor: color, backgroundColor: 'transparent' },
-        ]}>
-          <Ionicons name={icon} size={isCompact ? 18 : 24} color={color} />
-        </View>
-      )}
-      <View style={[styles.statContent, isCompact && styles.statContentCompact]}>
-        <Text style={[styles.statValue, isCompact && styles.statValueCompact, backgroundImage && styles.statValueWithBg]}>{value}</Text>
-        <Text style={[styles.statTitle, isCompact && styles.statTitleCompact, backgroundImage && styles.statTitleWithBg]}>{title}</Text>
-        {subtitle && <Text style={[styles.statSubtitle, backgroundImage && styles.statSubtitleWithBg]}>{subtitle}</Text>}
-      </View>
-      {trend && !isCompact && (
-        <View style={[styles.trendBadge, backgroundImage && styles.trendBadgeGlass, { backgroundColor: backgroundImage ? 'rgba(255,255,255,0.2)' : getTrendColor() + '15' }]}>
-          <Ionicons name={getTrendIcon()} size={12} color={backgroundImage ? '#fff' : getTrendColor()} />
-          {trendValue && <Text style={[styles.trendText, { color: backgroundImage ? '#fff' : getTrendColor() }]}>{trendValue}</Text>}
-        </View>
-      )}
-    </>
-  );
-
-  const cardContent = backgroundImage ? (
-    <ImageBackground
-      source={backgroundImage}
-      style={[styles.statCardImageBg, isCompact && styles.statCardImageBgCompact]}
-      imageStyle={styles.statCardImageStyle}
-      fadeDuration={0}
+  const cardContent = (
+    <LinearGradient
+      colors={getGradientColors()}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[styles.statCard3D, isCompact && styles.statCard3DCompact]}
     >
-      <View style={[styles.statCardImageOverlay, isCompact && styles.statCardImageOverlayCompact]}>
-        <View style={[styles.statCardInner, isCompact && styles.statCardInnerCompact]}>
-          {cardInnerContent}
-        </View>
+      {/* 3D Shadow Layer */}
+      <View style={styles.statCard3DShadowLayer} />
+      
+      {/* Decorative Elements */}
+      <View style={styles.statCard3DDecor}>
+        <Ionicons name={icon} size={60} color="rgba(255,255,255,0.12)" />
       </View>
-    </ImageBackground>
-  ) : (
-    <View style={[styles.statCardInner, isCompact && styles.statCardInnerCompact]}>
-      {cardInnerContent}
-    </View>
+      
+      {/* Shine Effect */}
+      <View style={styles.statCard3DShine} />
+      
+      {/* Content */}
+      <View style={styles.statCard3DContent}>
+        {/* Icon Container with Glass Effect */}
+        <View style={[styles.statIcon3D, isCompact && styles.statIcon3DCompact]}>
+          <Ionicons name={icon} size={isCompact ? 18 : 20} color="#fff" />
+        </View>
+        
+        {/* Value and Title */}
+        <Text style={[styles.statValue3D, isCompact && styles.statValue3DCompact]}>{value}</Text>
+        <Text style={[styles.statTitle3D, isCompact && styles.statTitle3DCompact]}>{title}</Text>
+        {subtitle && <Text style={styles.statSubtitle3D}>{subtitle}</Text>}
+      </View>
+      
+      {/* Trend Badge */}
+      {trend && !isCompact && (
+        <View style={styles.trendBadge3D}>
+          <Ionicons name={getTrendIcon()} size={12} color="#fff" />
+          {trendValue && <Text style={styles.trendText3D}>{trendValue}</Text>}
+        </View>
+      )}
+    </LinearGradient>
   );
 
   const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
@@ -397,12 +331,11 @@ export const StatCard = React.memo(({
     return (
       <AnimatedTouchable
         style={[
-          styles.statCard,
-          backgroundImage && styles.statCardWithImage,
+          styles.statCard3DWrapper,
           animated && { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
         ]}
         onPress={onPress}
-        activeOpacity={0.85}
+        activeOpacity={0.9}
       >
         {cardContent}
       </AnimatedTouchable>
@@ -412,8 +345,7 @@ export const StatCard = React.memo(({
   return (
     <Animated.View
       style={[
-        styles.statCard,
-        backgroundImage && styles.statCardWithImage,
+        styles.statCard3DWrapper,
         animated && { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
       ]}
     >
@@ -421,7 +353,7 @@ export const StatCard = React.memo(({
     </Animated.View>
   );
 }, (prevProps, nextProps) => {
-  // Custom comparison - only re-render if value changes, not image
+  // Custom comparison - only re-render if value changes
   return prevProps.value === nextProps.value && 
          prevProps.title === nextProps.title &&
          prevProps.trend === nextProps.trend;
@@ -650,7 +582,129 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // Stat Card
+  // Stat Card - 3D Design
+  statCard3DWrapper: {
+    flex: 1,
+    borderRadius: radius.xl + 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  statCard3D: {
+    flex: 1,
+    borderRadius: radius.xl + 4,
+    padding: spacing.base,
+    minHeight: 140,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  statCard3DCompact: {
+    minHeight: 120,
+    padding: spacing.md,
+  },
+  statCard3DShadowLayer: {
+    position: 'absolute',
+    bottom: -4,
+    left: 8,
+    right: 8,
+    height: 20,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    borderRadius: radius.xl,
+    transform: [{ scaleY: 0.3 }],
+  },
+  statCard3DDecor: {
+    position: 'absolute',
+    right: -10,
+    bottom: -10,
+    opacity: 1,
+  },
+  statCard3DShine: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderTopLeftRadius: radius.xl + 4,
+    borderTopRightRadius: radius.xl + 4,
+  },
+  statCard3DContent: {
+    flex: 1,
+    zIndex: 1,
+  },
+  statIcon3D: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  statIcon3DCompact: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    marginBottom: spacing.sm,
+  },
+  statValue3D: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: -1,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  statValue3DCompact: {
+    fontSize: 26,
+  },
+  statTitle3D: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 4,
+  },
+  statTitle3DCompact: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  statSubtitle3D: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 2,
+  },
+  trendBadge3D: {
+    position: 'absolute',
+    top: spacing.base,
+    right: spacing.base,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+    gap: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  trendText3D: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#fff',
+  },
+
+  // Legacy Stat Card (keeping for backward compatibility)
   statCard: {
     flex: 1,
     backgroundColor: colors.light.surface,
