@@ -3878,16 +3878,18 @@ const chatbot = {
   },
 
   async sendCancelOptions(phone) {
-    // Can cancel orders that are not delivered, cancelled, or refunded
+    // Can cancel only COD orders that are not delivered, cancelled, or refunded
+    // UPI/app payment orders cannot be cancelled by customer
     const orders = await Order.find({
       'customer.phone': phone,
-      status: { $in: ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery'] }
+      status: { $in: ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery'] },
+      paymentMethod: 'cod'  // Only COD orders can be cancelled
     }).sort({ createdAt: -1 }).limit(5);
 
     if (!orders.length) {
       const noOrdersImageUrl = await chatbotImagesService.getImageUrl('no_orders_found');
       await sendWithOptionalImage(phone, noOrdersImageUrl,
-        '❌ *No Orders to Cancel*\n\nNo cancellable orders found.',
+        '❌ *No Orders to Cancel*\n\nNo cancellable orders found.\n\n_Note: Only Cash on Delivery orders can be cancelled._',
         [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
       );
       return;

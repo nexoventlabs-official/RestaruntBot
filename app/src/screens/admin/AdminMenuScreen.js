@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, ScrollView,
   RefreshControl, TouchableOpacity, Image, Alert, ActivityIndicator,
-  TextInput, Modal, Animated, Platform, StatusBar
+  TextInput, Modal, Animated, Platform, StatusBar, ImageBackground
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +25,7 @@ export default function AdminMenuScreen({ navigation }) {
   const [togglingId, setTogglingId] = useState(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const shineAnim = useRef(new Animated.Value(-1)).current;
 
   // Category modal
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -48,6 +49,15 @@ export default function AdminMenuScreen({ navigation }) {
         useNativeDriver: true,
       }),
     ]).start();
+    
+    // Glass shine effect
+    setTimeout(() => {
+      Animated.timing(shineAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }).start();
+    }, 300);
   }, []);
 
   const fetchMenu = useCallback(async () => {
@@ -338,12 +348,7 @@ export default function AdminMenuScreen({ navigation }) {
               />
             ) : (
               <View style={[styles.itemImage, styles.placeholderImage, isPaused && styles.placeholderImagePaused]}>
-                <Ionicons name="restaurant-outline" size={28} color={isPaused ? '#9ca3af' : '#d1d5db'} />
-              </View>
-            )}
-            {isPaused && (
-              <View style={styles.pausedBadge}>
-                <Ionicons name="pause-circle" size={20} color="#f59e0b" />
+                <Ionicons name="restaurant-outline" size={32} color={isPaused ? '#9ca3af' : '#d1d5db'} />
               </View>
             )}
             {item.foodType && item.foodType !== 'none' && (
@@ -393,7 +398,7 @@ export default function AdminMenuScreen({ navigation }) {
           </View>
 
           <TouchableOpacity style={styles.deleteButton} onPress={() => deleteItem(item)}>
-            <Ionicons name="trash-outline" size={18} color="#ef4444" />
+            <Ionicons name="trash-outline" size={20} color={ZOMATO_RED} />
           </TouchableOpacity>
         </TouchableOpacity>
       </Animated.View>
@@ -405,27 +410,53 @@ export default function AdminMenuScreen({ navigation }) {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       {/* Premium Zomato Header */}
       <Animated.View style={{ opacity: fadeAnim }}>
-        <LinearGradient
-          colors={[ZOMATO_RED, ZOMATO_DARK_RED]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+        <ImageBackground
+          source={require('../../../assets/backgrounds/menu.jpg')}
           style={styles.header}
+          imageStyle={styles.headerBackgroundImage}
         >
-          <View style={styles.headerContent}>
-            <View>
-              <Text style={styles.title}>Menu</Text>
-              <Text style={styles.subtitle}>{totalItems} items • {uniqueCategories.length} categories</Text>
+          <View style={styles.headerOverlay}>
+            <View style={styles.headerContent}>
+              <View style={styles.headerLeft}>
+                <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+                  <Ionicons name="arrow-back" size={24} color="#fff" />
+                </TouchableOpacity>
+                <View>
+                  <Text style={styles.title}>Menu</Text>
+                  <Text style={styles.subtitle}>{totalItems} items • {uniqueCategories.length} categories</Text>
+                </View>
+              </View>
+              <View style={styles.headerButtons}>
+                <TouchableOpacity style={styles.headerButton} onPress={() => openCategoryModal()}>
+                  <Ionicons name="folder-outline" size={20} color={ZOMATO_RED} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.headerButton} onPress={() => navigation.navigate('MenuItemForm', {})}>
+                  <Ionicons name="add" size={24} color={ZOMATO_RED} />
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={styles.headerButtons}>
-              <TouchableOpacity style={styles.headerButton} onPress={() => openCategoryModal()}>
-                <Ionicons name="folder-outline" size={20} color={ZOMATO_RED} />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.headerButton} onPress={() => navigation.navigate('MenuItemForm', {})}>
-                <Ionicons name="add" size={24} color={ZOMATO_RED} />
-              </TouchableOpacity>
-            </View>
+            {/* Glass Shine Effect */}
+            <Animated.View
+              style={[
+                styles.glassShine,
+                {
+                  transform: [
+                    {
+                      translateX: shineAnim.interpolate({
+                        inputRange: [-1, 1],
+                        outputRange: [-200, 400],
+                      }),
+                    },
+                  ],
+                  opacity: shineAnim.interpolate({
+                    inputRange: [-1, 0, 0.5, 1],
+                    outputRange: [0, 0.6, 0.6, 0],
+                  }),
+                },
+              ]}
+            />
           </View>
-        </LinearGradient>
+        </ImageBackground>
       </Animated.View>
 
       {/* Premium Search Bar */}
@@ -449,22 +480,57 @@ export default function AdminMenuScreen({ navigation }) {
 
       {/* Stats Cards */}
       <View style={styles.statsContainer}>
-        <View style={[styles.statCard, styles.statCardTotal]}>
-          <Text style={styles.statValue}>{totalItems}</Text>
-          <Text style={styles.statLabel}>Total</Text>
-        </View>
-        <View style={[styles.statCard, styles.statCardCategories]}>
-          <Text style={styles.statValue}>{uniqueCategories.length}</Text>
-          <Text style={styles.statLabel}>Categories</Text>
-        </View>
-        <View style={[styles.statCard, styles.statCardAvailable]}>
-          <Text style={[styles.statValue, { color: '#16A34A' }]}>{availableCount}</Text>
-          <Text style={styles.statLabel}>In Stock</Text>
-        </View>
-        <View style={[styles.statCard, styles.statCardUnavailable]}>
-          <Text style={[styles.statValue, { color: '#DC2626' }]}>{unavailableCount}</Text>
-          <Text style={styles.statLabel}>Out</Text>
-        </View>
+        <LinearGradient
+          colors={['#3B82F6', '#2563EB']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.statCardGradient}
+        >
+          <View style={styles.statCardDecor}>
+            <Ionicons name="restaurant" size={40} color="rgba(255,255,255,0.15)" />
+          </View>
+          <Text style={styles.statValueWhite}>{totalItems}</Text>
+          <Text style={styles.statLabelWhite}>TOTAL</Text>
+        </LinearGradient>
+
+        <LinearGradient
+          colors={['#8B5CF6', '#7C3AED']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.statCardGradient}
+        >
+          <View style={styles.statCardDecor}>
+            <Ionicons name="folder" size={40} color="rgba(255,255,255,0.15)" />
+          </View>
+          <Text style={styles.statValueWhite}>{uniqueCategories.length}</Text>
+          <Text style={styles.statLabelWhite}>CATEGORIES</Text>
+        </LinearGradient>
+
+        <LinearGradient
+          colors={['#22C55E', '#16A34A']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.statCardGradient}
+        >
+          <View style={styles.statCardDecor}>
+            <Ionicons name="checkmark-circle" size={40} color="rgba(255,255,255,0.15)" />
+          </View>
+          <Text style={styles.statValueWhite}>{availableCount}</Text>
+          <Text style={styles.statLabelWhite}>IN STOCK</Text>
+        </LinearGradient>
+
+        <LinearGradient
+          colors={['#EF4444', '#DC2626']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.statCardGradient}
+        >
+          <View style={styles.statCardDecor}>
+            <Ionicons name="close-circle" size={40} color="rgba(255,255,255,0.15)" />
+          </View>
+          <Text style={styles.statValueWhite}>{unavailableCount}</Text>
+          <Text style={styles.statLabelWhite}>OUT</Text>
+        </LinearGradient>
       </View>
 
       {/* Filter Chips */}
@@ -524,13 +590,16 @@ export default function AdminMenuScreen({ navigation }) {
         <View style={styles.categoryFilterContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryFilterList}>
             <TouchableOpacity
-              style={[styles.categoryChip, selectedCategory === 'all' && styles.categoryChipActive]}
+              style={styles.categoryItem}
               onPress={() => setSelectedCategory('all')}
             >
-              <View style={[styles.categoryChipIcon, selectedCategory === 'all' && styles.categoryChipIconActive]}>
-                <Ionicons name="grid-outline" size={14} color={selectedCategory === 'all' ? '#fff' : ZOMATO_RED} />
+              <View style={[styles.categoryImageWrapper, selectedCategory === 'all' && styles.categoryImageWrapperActive]}>
+                <View style={styles.categoryAllIcon}>
+                  <Text style={styles.categoryAllText}>All</Text>
+                </View>
               </View>
-              <Text style={[styles.categoryChipText, selectedCategory === 'all' && styles.categoryChipTextActive]}>All</Text>
+              <Text style={[styles.categoryName, selectedCategory === 'all' && styles.categoryNameActive]}>All</Text>
+              {selectedCategory === 'all' && <View style={styles.categoryUnderline} />}
             </TouchableOpacity>
             {categories.map(cat => {
               const itemsInCat = items.filter(item => {
@@ -542,7 +611,7 @@ export default function AdminMenuScreen({ navigation }) {
               return (
                 <TouchableOpacity
                   key={cat._id}
-                  style={[styles.categoryChip, selectedCategory === cat.name && styles.categoryChipActive, cat.isPaused && styles.categoryChipPaused]}
+                  style={styles.categoryItem}
                   onPress={() => setSelectedCategory(cat.name)}
                   onLongPress={() => {
                     Alert.alert(
@@ -558,24 +627,33 @@ export default function AdminMenuScreen({ navigation }) {
                     );
                   }}
                 >
-                  <View style={[styles.categoryChipIcon, selectedCategory === cat.name && styles.categoryChipIconActive, cat.isPaused && styles.categoryChipIconPaused]}>
+                  <View style={[styles.categoryImageWrapper, selectedCategory === cat.name && styles.categoryImageWrapperActive, cat.isPaused && styles.categoryImageWrapperPaused]}>
                     {cat.image ? (
-                      <Image source={{ uri: cat.image }} style={styles.categoryChipImage} />
+                      <Image source={{ uri: cat.image }} style={styles.categoryImage} />
                     ) : (
-                      <Ionicons name="folder-outline" size={14} color={selectedCategory === cat.name ? '#fff' : (cat.isPaused ? '#f59e0b' : '#696969')} />
+                      <View style={styles.categoryPlaceholder}>
+                        <Ionicons name="restaurant-outline" size={24} color={cat.isPaused ? '#f59e0b' : '#9ca3af'} />
+                      </View>
+                    )}
+                    {cat.isPaused && (
+                      <View style={styles.categoryPausedOverlay}>
+                        <Ionicons name="pause-circle" size={16} color="#f59e0b" />
+                      </View>
                     )}
                   </View>
                   <Text style={[
-                    styles.categoryChipText,
-                    selectedCategory === cat.name && styles.categoryChipTextActive,
-                    cat.isPaused && styles.categoryChipTextPaused
-                  ]}>{cat.name}</Text>
-                  {cat.isPaused && <Ionicons name="pause-circle" size={14} color="#f59e0b" />}
+                    styles.categoryName,
+                    selectedCategory === cat.name && styles.categoryNameActive,
+                    cat.isPaused && styles.categoryNamePaused
+                  ]} numberOfLines={1}>{cat.name}</Text>
+                  {selectedCategory === cat.name && <View style={styles.categoryUnderline} />}
                 </TouchableOpacity>
               );
             })}
-            <TouchableOpacity style={styles.addCategoryChip} onPress={() => openCategoryModal()}>
-              <Ionicons name="add" size={20} color="#696969" />
+            <TouchableOpacity style={styles.categoryAddItem} onPress={() => openCategoryModal()}>
+              <View style={styles.categoryAddIcon}>
+                <Ionicons name="add" size={24} color="#9ca3af" />
+              </View>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -704,15 +782,53 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
-    paddingBottom: 24,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 35 : 75,
+    paddingBottom: 55,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
+    overflow: 'hidden',
+  },
+  headerBackgroundImage: {
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+  },
+  headerOverlay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    marginTop: -(Platform.OS === 'android' ? StatusBar.currentHeight + 35 : 75),
+    marginBottom: -55,
+    marginHorizontal: -20,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 35 : 75,
+    paddingBottom: 55,
+    paddingHorizontal: 20,
+    overflow: 'hidden',
+  },
+  glassShine: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: 100,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    transform: [{ skewX: '-20deg' }],
   },
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   title: { fontSize: 28, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
@@ -744,20 +860,23 @@ const styles = StyleSheet.create({
 
   // Stats
   statsContainer: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8, gap: 10 },
-  statCard: {
-    flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 14, alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+  statCardGradient: {
+    flex: 1, 
+    borderRadius: 16, 
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 90,
+    overflow: 'hidden',
   },
-  statCardTotal: { borderLeftWidth: 3, borderLeftColor: ZOMATO_RED },
-  statCardCategories: { borderLeftWidth: 3, borderLeftColor: '#8B5CF6' },
-  statCardAvailable: { borderLeftWidth: 3, borderLeftColor: '#22C55E' },
-  statCardUnavailable: { borderLeftWidth: 3, borderLeftColor: '#EF4444' },
-  statValue: { fontSize: 22, fontWeight: '800', color: '#1C1C1C' },
-  statLabel: { fontSize: 11, color: '#696969', marginTop: 2, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  statCardDecor: {
+    position: 'absolute',
+    right: -5,
+    bottom: -5,
+  },
+  statValueWhite: { fontSize: 24, fontWeight: '800', color: '#fff' },
+  statLabelWhite: { fontSize: 9, color: 'rgba(255,255,255,0.9)', marginTop: 4, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: 'center' },
 
   // Filters
   filtersContainer: { paddingVertical: 8 },
@@ -777,25 +896,97 @@ const styles = StyleSheet.create({
   foodTypeIconDot: { width: 8, height: 8, borderRadius: 4 },
 
   // Category Filter
-  categoryFilterContainer: { backgroundColor: '#fff', paddingVertical: 14, marginTop: 4, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#F0F0F0' },
-  categoryFilterList: { paddingHorizontal: 16, gap: 10 },
-  categoryChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 24,
+  categoryFilterContainer: { paddingVertical: 16, backgroundColor: '#fff' },
+  categoryFilterList: { paddingHorizontal: 16, gap: 20 },
+  categoryItem: {
+    alignItems: 'center',
+    width: 70,
+  },
+  categoryImageWrapper: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  categoryImageWrapperActive: {
+    borderColor: ZOMATO_RED,
+  },
+  categoryImageWrapperPaused: {
+    borderColor: '#f59e0b',
+    opacity: 0.7,
+  },
+  categoryImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 30,
+  },
+  categoryPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: '#F5F5F5',
   },
-  categoryChipActive: { backgroundColor: ZOMATO_RED },
-  categoryChipPaused: { backgroundColor: '#FEF3C7' },
-  categoryChipIcon: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-  categoryChipIconActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
-  categoryChipIconPaused: { backgroundColor: '#FEF3C7' },
-  categoryChipImage: { width: 28, height: 28, borderRadius: 14 },
-  categoryChipText: { fontSize: 13, color: '#696969', fontWeight: '600' },
-  categoryChipTextActive: { color: '#fff' },
-  categoryChipTextPaused: { color: '#D97706' },
-  addCategoryChip: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: '#F5F5F5',
-    justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderStyle: 'dashed', borderColor: '#D1D5DB',
+  categoryAllIcon: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 30,
+    backgroundColor: ZOMATO_RED,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categoryAllText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  categoryPausedOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+  },
+  categoryName: {
+    fontSize: 12,
+    color: '#696969',
+    fontWeight: '500',
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  categoryNameActive: {
+    color: ZOMATO_RED,
+    fontWeight: '600',
+  },
+  categoryNamePaused: {
+    color: '#D97706',
+  },
+  categoryUnderline: {
+    width: 20,
+    height: 2,
+    backgroundColor: ZOMATO_RED,
+    borderRadius: 1,
+    marginTop: 4,
+  },
+  categoryAddItem: {
+    alignItems: 'center',
+    width: 70,
+  },
+  categoryAddIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#D1D5DB',
   },
 
   // Loading
@@ -805,49 +996,44 @@ const styles = StyleSheet.create({
   // List
   listContent: { padding: 16, paddingBottom: 100 },
   itemCard: {
-    flexDirection: 'row', backgroundColor: '#fff', borderRadius: 18,
-    padding: 14, marginBottom: 12, alignItems: 'center',
+    flexDirection: 'row', 
+    backgroundColor: '#fff', 
+    borderRadius: 20,
+    padding: 16, 
+    marginBottom: 14, 
+    alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
   itemCardPaused: { backgroundColor: '#FEFCE8', borderWidth: 1, borderColor: '#FEF3C7' },
   itemImageContainer: { position: 'relative' },
-  itemImage: { width: 76, height: 76, borderRadius: 14 },
+  itemImage: { width: 90, height: 90, borderRadius: 16 },
   itemImagePaused: { opacity: 0.6 },
   placeholderImage: { backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
   placeholderImagePaused: { backgroundColor: '#FEF3C7' },
-  pausedBadge: {
-    position: 'absolute', top: -6, right: -6,
-    backgroundColor: '#fff', borderRadius: 12, padding: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
   foodTypeBadge: {
-    position: 'absolute', top: 4, left: 4,
-    width: 18, height: 18, borderRadius: 5, borderWidth: 2,
+    position: 'absolute', top: 6, left: 6,
+    width: 20, height: 20, borderRadius: 5, borderWidth: 2,
     backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center'
   },
-  foodTypeDot: { width: 8, height: 8, borderRadius: 4 },
-  itemInfo: { flex: 1, marginLeft: 14 },
-  itemName: { fontSize: 16, fontWeight: '700', color: '#1C1C1C' },
-  itemCategory: { fontSize: 12, color: '#696969', marginTop: 3, fontWeight: '500' },
+  foodTypeDot: { width: 10, height: 10, borderRadius: 5 },
+  itemInfo: { flex: 1, marginLeft: 16 },
+  itemName: { fontSize: 17, fontWeight: '700', color: '#1C1C1C' },
+  itemCategory: { fontSize: 13, color: '#696969', marginTop: 4, fontWeight: '500' },
   textPaused: { color: '#9CA3AF' },
-  prepTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  prepTimeText: { fontSize: 11, color: '#9CA3AF', fontWeight: '500' },
-  itemFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
-  itemPrice: { fontSize: 18, fontWeight: '800', color: ZOMATO_RED },
+  prepTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+  prepTimeText: { fontSize: 12, color: '#9CA3AF', fontWeight: '500' },
+  itemFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
+  itemPrice: { fontSize: 20, fontWeight: '800', color: ZOMATO_RED },
   pricePaused: { color: '#9CA3AF' },
-  availabilityToggle: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 12, minWidth: 70, alignItems: 'center' },
-  availabilityText: { fontSize: 11, fontWeight: '700' },
-  pausedStatusBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: '#FEF3C7' },
-  pausedStatusText: { fontSize: 10, fontWeight: '700', color: '#D97706' },
-  deleteButton: { padding: 12 },
+  availabilityToggle: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, minWidth: 80, alignItems: 'center' },
+  availabilityText: { fontSize: 12, fontWeight: '700' },
+  pausedStatusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: '#FEF3C7' },
+  pausedStatusText: { fontSize: 11, fontWeight: '700', color: '#D97706' },
+  deleteButton: { padding: 12, marginLeft: 4 },
 
   // Empty
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 60, paddingHorizontal: 40 },

@@ -162,39 +162,32 @@ export default function UserLayout() {
                   <Link
                     key={link.path}
                     to={link.path}
-                    className={`relative flex items-center gap-2 px-6 py-2 font-medium transition-all overflow-hidden ${
-                      isActive
-                        ? 'text-white'
-                        : scrolled
-                          ? 'text-gray-600 hover:text-white'
-                          : isHomePage
-                            ? 'text-gray-700 hover:text-white'
-                            : 'text-white/90 hover:text-white'
-                    } group`}
+                    className="relative flex items-center gap-2 px-6 py-2 font-medium transition-all overflow-hidden group"
                   >
-                    {/* Button background image - Active state (green) */}
-                    {isActive && (
-                      <img 
-                        src="/button.png" 
-                        alt="" 
-                        className="absolute inset-0 w-full h-full object-contain"
-                        style={{ filter: 'brightness(0) saturate(100%) invert(48%) sepia(52%) saturate(456%) hue-rotate(93deg) brightness(95%) contrast(91%)' }}
-                      />
-                    )}
-                    {/* Button background image - Hover state (orange) */}
-                    {!isActive && (
-                      <img 
-                        src="/button.png" 
-                        alt="" 
-                        className="absolute inset-0 w-full h-full object-contain transition-opacity duration-300 opacity-0 group-hover:opacity-100"
-                        style={{ filter: 'brightness(0) saturate(100%) invert(56%) sepia(79%) saturate(2476%) hue-rotate(360deg) brightness(103%) contrast(106%)' }}
-                      />
-                    )}
+                    {/* Button background image - only visible on hover */}
+                    <img 
+                      src="/button.png" 
+                      alt="" 
+                      className="absolute inset-0 w-full h-full object-contain transition-opacity duration-300 opacity-0 group-hover:opacity-100"
+                      style={{ 
+                        filter: isActive 
+                          ? 'brightness(0) saturate(100%) invert(48%) sepia(52%) saturate(456%) hue-rotate(93deg) brightness(95%) contrast(91%)' 
+                          : 'brightness(0) saturate(100%) invert(56%) sepia(79%) saturate(2476%) hue-rotate(360deg) brightness(103%) contrast(106%)' 
+                      }}
+                    />
                     {/* Moving shine effect */}
                     <div className="absolute inset-0 w-full h-full overflow-hidden rounded-full">
                       <div className="absolute top-0 -left-full w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12 group-hover:left-full transition-all duration-700 ease-in-out"></div>
                     </div>
-                    <span className="relative z-10 flex items-center gap-2">
+                    <span className={`relative z-10 flex items-center gap-2 transition-colors ${
+                      isActive
+                        ? 'text-white'
+                        : scrolled
+                          ? 'text-gray-600 group-hover:text-white'
+                          : isHomePage
+                            ? 'text-gray-700 group-hover:text-white'
+                            : 'text-white/90 group-hover:text-white'
+                    }`}>
                       <Icon className="w-4 h-4" />
                       {link.label}
                     </span>

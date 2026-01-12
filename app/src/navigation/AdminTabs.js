@@ -1,5 +1,6 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,6 +15,7 @@ import MenuItemFormScreen from '../screens/admin/MenuItemFormScreen';
 import DeliveryFormScreen from '../screens/admin/DeliveryFormScreen';
 import AdminOffersScreen from '../screens/admin/AdminOffersScreen';
 import OfferFormScreen from '../screens/admin/OfferFormScreen';
+import ReportDetailScreen from '../screens/admin/ReportDetailScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -21,6 +23,15 @@ const Stack = createNativeStackNavigator();
 // Admin primary colors
 const ADMIN_PRIMARY = '#E23744';
 const ADMIN_DARK = '#CB1A27';
+
+function HomeStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="HomeMain" component={AdminHomeScreen} />
+      <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
+    </Stack.Navigator>
+  );
+}
 
 function OrdersStack() {
   return (
@@ -78,6 +89,21 @@ const CenterTabButton = ({ children, onPress }) => (
 
 // Custom Tab Bar Component
 const CustomTabBar = ({ state, descriptors, navigation }) => {
+  // Check if we should hide the tab bar on detail screens
+  const currentRoute = state.routes[state.index];
+  const focusedRouteName = getFocusedRouteNameFromRoute(currentRoute);
+  
+  // Hide tab bar on Menu tab entirely and on specific detail screens
+  if (currentRoute.name === 'Menu') {
+    return null;
+  }
+  
+  // Hide tab bar on these screens
+  const hideOnScreens = ['ReportDetail', 'OrderDetail', 'OfferForm', 'DeliveryForm'];
+  if (hideOnScreens.includes(focusedRouteName)) {
+    return null;
+  }
+
   return (
     <View style={styles.tabBarWrapper}>
       <View style={styles.tabBarContainer}>
@@ -146,7 +172,7 @@ export default function AdminTabs() {
         headerShown: false,
       }}
     >
-      <Tab.Screen name="Home" component={AdminHomeScreen} />
+      <Tab.Screen name="Home" component={HomeStack} />
       <Tab.Screen name="Orders" component={OrdersStack} />
       <Tab.Screen name="Menu" component={MenuStack} />
       <Tab.Screen name="Offers" component={OffersStack} />

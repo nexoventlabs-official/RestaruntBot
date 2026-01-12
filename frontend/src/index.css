@@ -404,3 +404,36 @@ select option:checked {
 .scrollbar-dialog::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, #ff6b00 0%, #e65c00 100%);
 }
+
+
+/* Image preloading optimization */
+img {
+  content-visibility: auto;
+}
+
+/* Prevent image loading flicker */
+img[src] {
+  opacity: 1;
+  transition: opacity 0.2s ease-in-out;
+}
+
+img:not([src]), img[src=""] {
+  opacity: 0;
+}
+
+/* Eager loading for critical images */
+img.eager-load {
+  loading: eager;
+}
+
+/* Lazy loading placeholder */
+.img-placeholder {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

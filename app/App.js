@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -9,6 +10,7 @@ import DeliveryLoginScreen from './src/screens/delivery/DeliveryLoginScreen';
 import AdminTabs from './src/navigation/AdminTabs';
 import DeliveryTabs from './src/navigation/DeliveryTabs';
 import pushNotifications from './src/services/pushNotifications';
+import preloadImages from './src/utils/imagePreloader';
 
 const Stack = createNativeStackNavigator();
 
@@ -75,6 +77,25 @@ function AppNavigator() {
 
 export default function App() {
   const navigationRef = useRef(null);
+  const [imagesLoaded, setImagesLoaded] = useState(false);
+
+  useEffect(() => {
+    const loadAssets = async () => {
+      await preloadImages();
+      setImagesLoaded(true);
+    };
+    loadAssets();
+  }, []);
+
+  // Show loading screen while images are preloading
+  if (!imagesLoaded) {
+    return (
+      <View style={styles.loadingContainer}>
+        <StatusBar style="light" />
+        <ActivityIndicator size="large" color="#FF6B35" />
+      </View>
+    );
+  }
 
   return (
     <AuthProvider>
@@ -85,3 +106,12 @@ export default function App() {
     </AuthProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1a2e',
+  },
+});

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import axios from 'axios';
 import { Star, Plus, Minus, Heart, ShoppingCart, X, Clock, Package } from 'lucide-react';
+import { useCachedData } from '../hooks/useImagePreloader';
 
 const API_URL = 'https://restaruntbot.onrender.com/api/public';
 const SSE_URL = 'https://restaruntbot.onrender.com/api/events';
@@ -53,6 +54,9 @@ export default function UserMenuPage() {
   const [dialogQuantity, setDialogQuantity] = useState(1);
   const eventSourceRef = useRef(null);
 
+  // Get cached data from preloader
+  const cachedData = useCachedData();
+
   const context = useOutletContext();
   const { 
     cart, addToCart, updateQuantity, 
@@ -103,6 +107,15 @@ export default function UserMenuPage() {
 
   const loadData = async () => {
     try {
+      // Use cached data if available
+      if (cachedData.isLoaded && cachedData.categories && cachedData.menu) {
+        setCategories(cachedData.categories);
+        setItems(cachedData.menu);
+        setAllItems(cachedData.menu);
+        setLoading(false);
+        return;
+      }
+      
       const [catRes, itemRes] = await Promise.all([
         axios.get(`${API_URL}/categories`), 
         axios.get(`${API_URL}/menu`)

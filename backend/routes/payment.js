@@ -120,13 +120,13 @@ router.post('/verify-upi', async (req, res) => {
       if (confirmedImageUrl) {
         await whatsapp.sendImageWithButtons(order.customer.phone, confirmedImageUrl, confirmMsg, [
           { id: 'track_order', text: 'Track Order' },
-          { id: `cancel_${order.orderId}`, text: 'Cancel Order' },
+          { id: 'view_menu', text: 'Add More Items' },
           { id: 'help', text: 'Help' }
         ]);
       } else {
         await whatsapp.sendButtons(order.customer.phone, confirmMsg, [
           { id: 'track_order', text: 'Track Order' },
-          { id: `cancel_${order.orderId}`, text: 'Cancel Order' },
+          { id: 'view_menu', text: 'Add More Items' },
           { id: 'help', text: 'Help' }
         ]);
       }
@@ -402,13 +402,13 @@ router.get('/callback', async (req, res) => {
         if (confirmedImageUrl) {
           await whatsapp.sendImageWithButtons(order.customer.phone, confirmedImageUrl, confirmMsg, [
             { id: 'track_order', text: 'Track Order' },
-            { id: `cancel_${order.orderId}`, text: 'Cancel Order' },
+            { id: 'view_menu', text: 'Add More Items' },
             { id: 'help', text: 'Help' }
           ]);
         } else {
           await whatsapp.sendButtons(order.customer.phone, confirmMsg, [
             { id: 'track_order', text: 'Track Order' },
-            { id: `cancel_${order.orderId}`, text: 'Cancel Order' },
+            { id: 'view_menu', text: 'Add More Items' },
             { id: 'help', text: 'Help' }
           ]);
         }

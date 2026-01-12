@@ -7,6 +7,7 @@ import {
   ArrowRightIcon, TruckIcon, ClockIcon, CheckCircleIcon 
 } from '../components/Icons';
 import { Star, Heart, ShoppingCart, Plus, Minus } from 'lucide-react';
+import { useCachedData } from '../hooks/useImagePreloader';
 
 const API_URL = 'https://restaruntbot.onrender.com/api/public';
 
@@ -63,6 +64,9 @@ export default function Home() {
     addToWishlist, removeFromWishlist, isInWishlist, isInCart 
   } = context || {};
 
+  // Get cached data from preloader
+  const cachedData = useCachedData();
+
   useEffect(() => {
     loadTopItems();
     loadCategories();
@@ -110,13 +114,21 @@ export default function Home() {
 
   const loadTopItems = async () => {
     try {
-      const res = await axios.get(`${API_URL}/menu`);
-      const sorted = res.data
+      // Use cached data if available
+      let menuData;
+      if (cachedData.isLoaded && cachedData.menu) {
+        menuData = cachedData.menu;
+      } else {
+        const res = await axios.get(`${API_URL}/menu`);
+        menuData = res.data;
+      }
+      
+      const sorted = menuData
         .filter(item => item.isActive !== false)
         .sort((a, b) => (b.totalRatings || 0) - (a.totalRatings || 0))
         .slice(0, 4);
       setTopItems(sorted);
-      setMenuItems(res.data);
+      setMenuItems(menuData);
     } catch (err) {
       console.error('Error loading top items:', err);
     } finally {
@@ -126,8 +138,15 @@ export default function Home() {
 
   const loadCategories = async () => {
     try {
-      const res = await axios.get(`${API_URL}/categories`);
-      setCategories(res.data.filter(cat => cat.isActive && !cat.isPaused));
+      // Use cached data if available
+      let catData;
+      if (cachedData.isLoaded && cachedData.categories) {
+        catData = cachedData.categories;
+      } else {
+        const res = await axios.get(`${API_URL}/categories`);
+        catData = res.data;
+      }
+      setCategories(catData.filter(cat => cat.isActive && !cat.isPaused));
     } catch (err) {
       console.error('Error loading categories:', err);
     }

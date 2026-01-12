@@ -13,21 +13,10 @@ import api from '../../config/api';
 const ZOMATO_RED = '#E23744';
 const ZOMATO_DARK_RED = '#CB1A27';
 
-const DISCOUNT_TYPES = [
-  { value: 'none', label: 'None', icon: 'remove-circle-outline' },
-  { value: 'percentage', label: '%', icon: 'pricetag-outline' },
-  { value: 'fixed', label: '₹', icon: 'cash-outline' },
-];
-
 export default function OfferFormScreen({ route, navigation }) {
   const existingOffer = route.params?.offer;
   const isEditing = !!existingOffer;
 
-  const [title, setTitle] = useState(existingOffer?.title || '');
-  const [description, setDescription] = useState(existingOffer?.description || '');
-  const [code, setCode] = useState(existingOffer?.code || '');
-  const [discountType, setDiscountType] = useState(existingOffer?.discountType || 'none');
-  const [discountValue, setDiscountValue] = useState(existingOffer?.discountValue?.toString() || '');
   const [isActive, setIsActive] = useState(existingOffer?.isActive !== false);
   const [image, setImage] = useState(existingOffer?.image || null);
   const [newImage, setNewImage] = useState(null);
@@ -46,8 +35,7 @@ export default function OfferFormScreen({ route, navigation }) {
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [16, 9],
+      allowsEditing: false,
       quality: 0.8,
     });
     if (!result.canceled) {
@@ -65,11 +53,6 @@ export default function OfferFormScreen({ route, navigation }) {
     setLoading(true);
     try {
       const formData = new FormData();
-      formData.append('title', title);
-      formData.append('description', description);
-      formData.append('code', code);
-      formData.append('discountType', discountType);
-      formData.append('discountValue', discountValue || '0');
       formData.append('isActive', isActive.toString());
 
       if (newImage) {
@@ -147,96 +130,6 @@ export default function OfferFormScreen({ route, navigation }) {
             </TouchableOpacity>
 
             <View style={styles.form}>
-              {/* Title */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Offer Title</Text>
-                <TextInput 
-                  style={styles.input} 
-                  value={title} 
-                  onChangeText={setTitle} 
-                  placeholder="e.g., Weekend Special" 
-                  placeholderTextColor="#9CA3AF"
-                />
-              </View>
-
-              {/* Description */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Description</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  value={description}
-                  onChangeText={setDescription}
-                  placeholder="Describe your offer..."
-                  placeholderTextColor="#9CA3AF"
-                  multiline
-                  numberOfLines={3}
-                />
-              </View>
-
-              {/* Promo Code */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Promo Code</Text>
-                <View style={styles.codeInputWrapper}>
-                  <Ionicons name="ticket-outline" size={20} color="#9CA3AF" />
-                  <TextInput
-                    style={styles.codeInput}
-                    value={code}
-                    onChangeText={(text) => setCode(text.toUpperCase())}
-                    placeholder="e.g., SAVE20"
-                    placeholderTextColor="#9CA3AF"
-                    autoCapitalize="characters"
-                  />
-                  {code.length > 0 && (
-                    <View style={styles.codeBadge}>
-                      <Text style={styles.codeBadgeText}>{code}</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              {/* Discount Type */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Discount Type</Text>
-                <View style={styles.discountTypeContainer}>
-                  {DISCOUNT_TYPES.map((type) => (
-                    <TouchableOpacity
-                      key={type.value}
-                      style={[styles.discountTypeButton, discountType === type.value && styles.discountTypeButtonActive]}
-                      onPress={() => setDiscountType(type.value)}
-                    >
-                      <Ionicons 
-                        name={type.icon} 
-                        size={20} 
-                        color={discountType === type.value ? '#fff' : '#696969'} 
-                      />
-                      <Text style={[styles.discountTypeText, discountType === type.value && styles.discountTypeTextActive]}>
-                        {type.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Discount Value */}
-              {discountType !== 'none' && (
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Discount Value</Text>
-                  <View style={styles.discountValueWrapper}>
-                    <Text style={styles.discountSymbol}>
-                      {discountType === 'percentage' ? '%' : '₹'}
-                    </Text>
-                    <TextInput
-                      style={styles.discountValueInput}
-                      value={discountValue}
-                      onChangeText={setDiscountValue}
-                      placeholder="0"
-                      placeholderTextColor="#9CA3AF"
-                      keyboardType="numeric"
-                    />
-                  </View>
-                </View>
-              )}
-
               {/* Active Switch */}
               <View style={styles.switchCard}>
                 <View style={styles.switchInfo}>
@@ -307,10 +200,10 @@ const styles = StyleSheet.create({
   // Image
   imageContainer: { marginBottom: 24, borderRadius: 18, overflow: 'hidden' },
   image: { 
-    width: '100%', height: 190, borderRadius: 18,
+    width: '100%', aspectRatio: 16/9, borderRadius: 18, resizeMode: 'cover',
   },
   imagePlaceholder: {
-    width: '100%', height: 190, borderRadius: 18, backgroundColor: '#fff',
+    width: '100%', aspectRatio: 16/9, borderRadius: 18, backgroundColor: '#fff',
     justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#E8E8E8', borderStyle: 'dashed',
   },
   imagePlaceholderIcon: {

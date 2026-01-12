@@ -19,7 +19,8 @@ const orderSchema = new mongoose.Schema({
     quantity: Number,
     price: Number,
     unit: { type: String, default: 'piece' },
-    unitQty: { type: Number, default: 1 }
+    unitQty: { type: Number, default: 1 },
+    image: String
   }],
   totalAmount: { type: Number, required: true },
   status: {

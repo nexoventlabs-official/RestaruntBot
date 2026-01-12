@@ -22,10 +22,12 @@ import DeliveryLogin from './pages/DeliveryLogin';
 import DeliveryDashboard from './pages/DeliveryDashboard';
 import Offers from './pages/Offers';
 import api from './api';
+import { useImagePreloader } from './hooks/useImagePreloader';
 
 function App() {
   const [auth, setAuth] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { isPreloading, progress } = useImagePreloader();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -39,7 +41,7 @@ function App() {
     }
   }, []);
 
-  if (loading) {
+  if (loading || isPreloading) {
     return (
       <div className="flex items-center justify-center h-screen bg-[#f8f9fb]">
         <div className="flex flex-col items-center gap-4">
@@ -50,7 +52,17 @@ function App() {
           </div>
           <div className="text-center">
             <h2 className="text-xl font-bold text-dark-900">FoodAdmin</h2>
-            <p className="text-dark-400 text-sm mt-1">Loading...</p>
+            <p className="text-dark-400 text-sm mt-1">
+              {isPreloading ? `Loading images... ${progress}%` : 'Loading...'}
+            </p>
+            {isPreloading && (
+              <div className="w-48 h-1.5 bg-gray-200 rounded-full mt-3 overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-red-500 to-red-600 rounded-full transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { X } from 'lucide-react';
 
 const API_URL = 'https://restaruntbot.onrender.com/api/public';
 
 export default function OfferPopup() {
+  const navigate = useNavigate();
   const [offers, setOffers] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
@@ -71,6 +73,16 @@ export default function OfferPopup() {
     }
   };
 
+  const handleImageClick = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsVisible(false);
+      setOffers([]);
+      sessionStorage.setItem('hasSeenAllOffers', 'true');
+      navigate('/menu');
+    }, 300);
+  };
+
   if (offers.length === 0 || !isVisible) return null;
 
   const currentOffer = offers[currentIndex];
@@ -106,7 +118,10 @@ export default function OfferPopup() {
               <X className="w-5 h-5" />
             </button>
             {/* Scrollable image container */}
-            <div className="overflow-y-auto overflow-x-hidden rounded-2xl max-h-[85vh]">
+            <div 
+              className="overflow-y-auto overflow-x-hidden rounded-2xl max-h-[85vh] cursor-pointer"
+              onClick={handleImageClick}
+            >
               <img 
                 src={currentOffer.image} 
                 alt="Special Offer"

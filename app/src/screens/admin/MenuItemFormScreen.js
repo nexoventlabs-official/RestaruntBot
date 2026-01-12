@@ -212,6 +212,28 @@ export default function MenuItemFormScreen({ route, navigation }) {
                 />
               </View>
 
+              {/* Categories */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Category <Text style={styles.required}>*</Text></Text>
+                <TouchableOpacity style={styles.pickerButton} onPress={() => setShowCategoryPicker(true)}>
+                  <View style={styles.selectedTags}>
+                    {selectedCategories.length === 0 ? (
+                      <Text style={styles.pickerPlaceholder}>Select categories</Text>
+                    ) : (
+                      selectedCategories.map(cat => (
+                        <View key={cat} style={styles.selectedTag}>
+                          <Text style={styles.selectedTagText}>{cat}</Text>
+                          <TouchableOpacity onPress={() => toggleCategory(cat)}>
+                            <Ionicons name="close" size={14} color="#fff" />
+                          </TouchableOpacity>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                  <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+              </View>
+
               {/* Description with AI */}
               <View style={styles.inputGroup}>
                 <View style={styles.labelRow}>
@@ -254,29 +276,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
                 </View>
               </View>
 
-              {/* Categories */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Categories <Text style={styles.required}>*</Text></Text>
-                <TouchableOpacity style={styles.pickerButton} onPress={() => setShowCategoryPicker(true)}>
-                  <View style={styles.selectedTags}>
-                    {selectedCategories.length === 0 ? (
-                      <Text style={styles.pickerPlaceholder}>Select categories</Text>
-                    ) : (
-                      selectedCategories.map(cat => (
-                        <View key={cat} style={styles.selectedTag}>
-                          <Text style={styles.selectedTagText}>{cat}</Text>
-                          <TouchableOpacity onPress={() => toggleCategory(cat)}>
-                            <Ionicons name="close" size={14} color="#fff" />
-                          </TouchableOpacity>
-                        </View>
-                      ))
-                    )}
-                  </View>
-                  <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Unit & Quantity */}
+              {/* Quantity & Unit */}
               <View style={styles.rowInputs}>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
                   <Text style={styles.label}>Quantity</Text>
