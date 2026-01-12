@@ -82,8 +82,8 @@ export function DeliveryNotificationProvider({ children }) {
     if (!isInitialized.current) return;
     
     try {
-      // Get delivery partner's orders
-      const response = await api.get('/delivery/orders');
+      // Get delivery partner's assigned orders
+      const response = await api.get('/delivery/orders/my');
       const orders = response.data || [];
       
       const newNotifications = [];
@@ -149,7 +149,10 @@ export function DeliveryNotificationProvider({ children }) {
         setUnreadCount(prev => prev + newNotifications.length);
       }
     } catch (error) {
-      console.error('Error checking for delivery updates:', error);
+      // Silently handle errors - don't spam console
+      if (error.response?.status !== 404) {
+        console.error('Error checking for delivery updates:', error.message);
+      }
     }
   }, []);
 
