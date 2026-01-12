@@ -286,69 +286,6 @@ export default function DeliveryHomeScreen({ navigation }) {
           )}
         </Animated.View>
 
-        {/* Quick Actions */}
-        <Animated.View style={[styles.section, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleRow}>
-              <View style={[styles.sectionIconContainer, { backgroundColor: DELIVERY_GREEN + '15' }]}>
-                <Ionicons name="flash-outline" size={18} color={DELIVERY_GREEN} />
-              </View>
-              <Text style={styles.sectionTitle}>Quick Actions</Text>
-            </View>
-          </View>
-
-          <View style={styles.actionsContainer}>
-            <ActionCard
-              icon="bicycle"
-              title="My Active Orders"
-              subtitle={`${stats?.activeOrders || 0} orders in progress`}
-              color={DELIVERY_GREEN}
-              onPress={() => navigation.navigate('MyOrders')}
-            />
-            <ActionCard
-              icon="list"
-              title="Available Orders"
-              subtitle="Find new deliveries"
-              color="#F59E0B"
-              badge={isOnline ? 'LIVE' : null}
-              badgeColor="#22C55E"
-              onPress={() => navigation.navigate('AvailableOrders')}
-            />
-            <ActionCard
-              icon="time"
-              title="Delivery History"
-              subtitle="View past deliveries"
-              color="#3B82F6"
-              onPress={() => navigation.navigate('History')}
-            />
-          </View>
-        </Animated.View>
-
-        {/* Pro Tips Card */}
-        <Animated.View style={[styles.section, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <InfoCard
-            icon="bulb"
-            title="Pro Tips"
-            iconColor={DELIVERY_GREEN}
-            gradientColors={['#E8F5E9', '#F0FDF4']}
-          >
-            <View style={styles.tipsContent}>
-              <View style={styles.tipItem}>
-                <View style={[styles.tipDot, { backgroundColor: DELIVERY_GREEN }]} />
-                <Text style={styles.tipText}>Stay online during peak hours (12-2 PM, 7-10 PM)</Text>
-              </View>
-              <View style={styles.tipItem}>
-                <View style={[styles.tipDot, { backgroundColor: DELIVERY_GREEN }]} />
-                <Text style={styles.tipText}>Maintain high ratings for priority orders</Text>
-              </View>
-              <View style={styles.tipItem}>
-                <View style={[styles.tipDot, { backgroundColor: DELIVERY_GREEN }]} />
-                <Text style={styles.tipText}>Tap address to navigate via Google Maps</Text>
-              </View>
-            </View>
-          </InfoCard>
-        </Animated.View>
-
         <View style={{ height: 100 }} />
       </ScrollView>
     </View>
