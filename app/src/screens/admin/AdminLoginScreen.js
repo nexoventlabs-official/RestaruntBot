@@ -187,11 +187,6 @@ export default function AdminLoginScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Forgot Password */}
-          <TouchableOpacity style={styles.forgotPassword}>
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-          </TouchableOpacity>
-
           {/* Login Button */}
           <TouchableOpacity
             style={[styles.loginButton, loading && styles.loginButtonDisabled]}
@@ -354,19 +349,11 @@ const styles = StyleSheet.create({
   eyeButton: {
     padding: spacing.base,
   },
-  forgotPassword: {
-    alignSelf: 'flex-end',
-    marginBottom: spacing.lg,
-  },
-  forgotPasswordText: {
-    fontSize: typography.label.large.fontSize,
-    fontWeight: '600',
-    color: colors.zomato.red,
-  },
   loginButton: {
     borderRadius: radius.lg,
     overflow: 'hidden',
     ...shadows.md,
+    marginTop: spacing.lg,
   },
   loginButtonDisabled: {
     opacity: 0.7,
