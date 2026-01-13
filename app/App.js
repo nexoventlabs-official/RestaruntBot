@@ -69,6 +69,7 @@ function AppNavigator() {
         gestureEnabled: true,
         gestureDirection: 'horizontal',
         animation: 'slide_from_right',
+        fullScreenGestureEnabled: true, // iOS full screen swipe
       }}
     >
       {!user ? (
