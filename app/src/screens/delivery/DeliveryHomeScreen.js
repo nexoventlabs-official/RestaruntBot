@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  RefreshControl, TouchableOpacity, Image, Switch, Animated, Platform, StatusBar
+  RefreshControl, TouchableOpacity, Image, Switch, Animated, Platform, StatusBar, ImageBackground
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +14,9 @@ import { colors, spacing, radius, typography, shadows } from '../../theme';
 
 const DELIVERY_GREEN = '#267E3E';
 const DELIVERY_DARK_GREEN = '#1B5E2E';
+
+// Background image
+const DELIVERY_HOME_BG = require('../../../assets/backgrounds/deliveryhome.jpg');
 
 export default function DeliveryHomeScreen({ navigation }) {
   const { user, logout, setUser } = useAuth();
@@ -73,76 +76,77 @@ export default function DeliveryHomeScreen({ navigation }) {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Premium Header - Reverted to LinearGradient */}
+      {/* Premium Header with Background Image */}
       <Animated.View style={[styles.headerWrapper, { opacity: fadeAnim }]}>
-        <LinearGradient
-          colors={[DELIVERY_GREEN, DELIVERY_DARK_GREEN, '#154A24']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+        <ImageBackground
+          source={DELIVERY_HOME_BG}
           style={styles.header}
+          imageStyle={styles.headerBackgroundImage}
         >
-          <View style={styles.headerContent}>
-            <View style={styles.profileSection}>
-              {user?.photo ? (
-                <View style={styles.avatarContainer}>
-                  <Image source={{ uri: user.photo }} style={styles.avatar} />
-                  <View style={[styles.onlineIndicatorSmall, { backgroundColor: isOnline ? '#22C55E' : '#9CA3AF' }]} />
-                </View>
-              ) : (
-                <View style={styles.avatarContainer}>
-                  <LinearGradient colors={['#fff', '#f8f8f8']} style={styles.avatarGradient}>
-                    <Ionicons name="person" size={22} color={DELIVERY_GREEN} />
-                  </LinearGradient>
-                  <View style={[styles.onlineIndicatorSmall, { backgroundColor: isOnline ? '#22C55E' : '#9CA3AF' }]} />
-                </View>
-              )}
-              <View style={styles.profileInfo}>
-                <Text style={styles.greeting}>{getGreeting()}</Text>
-                <Text style={styles.name}>{user?.name || 'Partner'}</Text>
-              </View>
-            </View>
-            <View style={styles.headerActions}>
-              <TouchableOpacity 
-                style={styles.headerButton}
-                onPress={() => navigation.navigate('Notifications')}
-              >
-                <Ionicons name="notifications-outline" size={22} color="#fff" />
-                {unreadCount > 0 && (
-                  <View style={styles.notificationBadge}>
-                    <Text style={styles.notificationCount}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+          <View style={styles.headerOverlay}>
+            <View style={styles.headerContent}>
+              <View style={styles.profileSection}>
+                {user?.photo ? (
+                  <View style={styles.avatarContainer}>
+                    <Image source={{ uri: user.photo }} style={styles.avatar} />
+                    <View style={[styles.onlineIndicatorSmall, { backgroundColor: isOnline ? '#22C55E' : '#9CA3AF' }]} />
+                  </View>
+                ) : (
+                  <View style={styles.avatarContainer}>
+                    <LinearGradient colors={['#fff', '#f8f8f8']} style={styles.avatarGradient}>
+                      <Ionicons name="person" size={22} color={DELIVERY_GREEN} />
+                    </LinearGradient>
+                    <View style={[styles.onlineIndicatorSmall, { backgroundColor: isOnline ? '#22C55E' : '#9CA3AF' }]} />
                   </View>
                 )}
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.headerButton} onPress={logout}>
-                <Ionicons name="log-out-outline" size={22} color="#fff" />
-              </TouchableOpacity>
+                <View style={styles.profileInfo}>
+                  <Text style={styles.greeting}>{getGreeting()}</Text>
+                  <Text style={styles.name}>{user?.name || 'Partner'}</Text>
+                </View>
+              </View>
+              <View style={styles.headerActions}>
+                <TouchableOpacity 
+                  style={styles.headerButton}
+                  onPress={() => navigation.navigate('Notifications')}
+                >
+                  <Ionicons name="notifications-outline" size={22} color="#fff" />
+                  {unreadCount > 0 && (
+                    <View style={styles.notificationBadge}>
+                      <Text style={styles.notificationCount}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.headerButton} onPress={logout}>
+                  <Ionicons name="log-out-outline" size={22} color="#fff" />
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
 
-          {/* Rating & Earnings Card */}
-          <View style={styles.statsHeaderCard}>
-            <View style={styles.statsHeaderGlow} />
-            <View style={styles.statsHeaderItem}>
-              <View style={styles.statsHeaderIconContainer}>
-                <Ionicons name="star" size={18} color="#FFD700" />
+            {/* Rating & Earnings Card */}
+            <View style={styles.statsHeaderCard}>
+              <View style={styles.statsHeaderGlow} />
+              <View style={styles.statsHeaderItem}>
+                <View style={styles.statsHeaderIconContainer}>
+                  <Ionicons name="star" size={18} color="#FFD700" />
+                </View>
+                <View>
+                  <Text style={styles.statsHeaderValue}>{user?.avgRating?.toFixed(1) || '0.0'}</Text>
+                  <Text style={styles.statsHeaderLabel}>Rating</Text>
+                </View>
               </View>
-              <View>
-                <Text style={styles.statsHeaderValue}>{user?.avgRating?.toFixed(1) || '0.0'}</Text>
-                <Text style={styles.statsHeaderLabel}>Rating</Text>
-              </View>
-            </View>
-            <View style={styles.statsHeaderDivider} />
-            <View style={styles.statsHeaderItem}>
-              <View style={styles.statsHeaderIconContainer}>
-                <Ionicons name="bicycle" size={18} color="#22C55E" />
-              </View>
-              <View>
-                <Text style={styles.statsHeaderValue}>{stats?.totalDelivered || 0}</Text>
-                <Text style={styles.statsHeaderLabel}>Deliveries</Text>
+              <View style={styles.statsHeaderDivider} />
+              <View style={styles.statsHeaderItem}>
+                <View style={styles.statsHeaderIconContainer}>
+                  <Ionicons name="bicycle" size={18} color="#22C55E" />
+                </View>
+                <View>
+                  <Text style={styles.statsHeaderValue}>{stats?.totalDelivered || 0}</Text>
+                  <Text style={styles.statsHeaderLabel}>Deliveries</Text>
+                </View>
               </View>
             </View>
           </View>
-        </LinearGradient>
+        </ImageBackground>
       </Animated.View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}
@@ -297,6 +301,16 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.light.background },
   headerWrapper: { zIndex: 100, elevation: 100, borderBottomLeftRadius: 32, borderBottomRightRadius: 32, overflow: 'hidden' },
   header: { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60, paddingBottom: spacing.xl + 10, paddingHorizontal: spacing.screenHorizontal },
+  headerBackgroundImage: { borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
+  headerOverlay: { 
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    marginTop: -(Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60),
+    marginBottom: -(spacing.xl + 10),
+    marginHorizontal: -spacing.screenHorizontal,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
+    paddingBottom: spacing.xl + 10,
+    paddingHorizontal: spacing.screenHorizontal,
+  },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
   profileSection: { flexDirection: 'row', alignItems: 'center' },
   avatarContainer: { position: 'relative', width: 52, height: 52 },
