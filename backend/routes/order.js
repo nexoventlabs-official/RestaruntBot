@@ -104,7 +104,24 @@ router.get('/refunds/pending', authMiddleware, async (req, res) => {
 
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
+    const { id } = req.params;
+    let order;
+    
+    // Try to find by MongoDB _id first, then by orderId
+    if (id.match(/^[0-9a-fA-F]{24}$/)) {
+      // Looks like a MongoDB ObjectId
+      order = await Order.findById(id);
+    }
+    
+    // If not found or not a valid ObjectId, try finding by orderId
+    if (!order) {
+      order = await Order.findOne({ orderId: id });
+    }
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
     res.json(order);
   } catch (error) {
     res.status(500).json({ error: error.message });
