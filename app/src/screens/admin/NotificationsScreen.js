@@ -1,14 +1,17 @@
 import React, { useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Platform, StatusBar, SafeAreaView
+  Platform, StatusBar, SafeAreaView, Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNotifications } from '../../context/NotificationContext';
 import { colors, spacing, radius, shadows } from '../../theme';
 
+const ZOMATO_RED = '#E23744';
+
 export default function NotificationsScreen({ navigation }) {
-  const { notifications, markAllAsRead, markAsRead, clearAll, resetTracking } = useNotifications();
+  const { notifications, markAllAsRead, markAsRead, clearAll } = useNotifications();
 
   // Mark all as read when screen opens
   useEffect(() => {
@@ -36,58 +39,90 @@ export default function NotificationsScreen({ navigation }) {
     }
   };
 
-  const renderNotification = ({ item }) => (
+  const getNotificationGradient = (color, isRead) => {
+    if (!isRead) {
+      return ['#FFF5F5', '#FFFFFF'];
+    }
+    return ['#FFFFFF', '#FAFAFA'];
+  };
+
+  const renderNotification = ({ item, index }) => (
     <TouchableOpacity
       style={[styles.notificationItem, !item.read && styles.unreadItem]}
       onPress={() => handleNotificationPress(item)}
-      activeOpacity={0.7}
+      activeOpacity={0.8}
     >
-      <View style={[styles.iconContainer, { backgroundColor: `${item.color}15` }]}>
-        <Ionicons name={item.icon} size={24} color={item.color} />
-      </View>
-      <View style={styles.contentContainer}>
-        <View style={styles.headerRow}>
-          <Text style={styles.title}>{item.title}</Text>
-          {!item.read && <View style={styles.unreadDot} />}
+      <LinearGradient
+        colors={getNotificationGradient(item.color, item.read)}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.notificationGradient}
+      >
+        {!item.read && <View style={styles.unreadIndicator} />}
+        
+        <View style={styles.notificationContent}>
+          <View style={[styles.iconContainer, { backgroundColor: `${item.color}18` }]}>
+            <Ionicons name={item.icon} size={22} color={item.color} />
+          </View>
+          
+          <View style={styles.textContainer}>
+            <View style={styles.titleRow}>
+              <Text style={[styles.title, !item.read && styles.unreadTitle]} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Text style={styles.time}>{formatTime(item.timestamp)}</Text>
+            </View>
+            <Text style={styles.message} numberOfLines={2}>{item.message}</Text>
+          </View>
         </View>
-        <Text style={styles.message}>{item.message}</Text>
-        <Text style={styles.time}>{formatTime(item.timestamp)}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={20} color={colors.light.text.tertiary} />
+        
+        <View style={styles.arrowContainer}>
+          <Ionicons name="chevron-forward" size={18} color={colors.light.text.tertiary} />
+        </View>
+      </LinearGradient>
     </TouchableOpacity>
   );
 
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
-      <View style={styles.emptyIconContainer}>
-        <Ionicons name="notifications-off-outline" size={64} color={colors.light.text.tertiary} />
+      <View style={styles.emptyIconWrapper}>
+        <LinearGradient
+          colors={['#FFF0F0', '#FFE5E5']}
+          style={styles.emptyIconContainer}
+        >
+          <Ionicons name="notifications-outline" size={48} color={ZOMATO_RED} />
+        </LinearGradient>
       </View>
-      <Text style={styles.emptyTitle}>No Notifications</Text>
-      <Text style={styles.emptyMessage}>You're all caught up! New order updates will appear here.</Text>
+      <Text style={styles.emptyTitle}>All Caught Up!</Text>
+      <Text style={styles.emptyMessage}>No new notifications right now.{'\n'}We'll let you know when something arrives.</Text>
     </View>
   );
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.light.background} />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={colors.light.text.primary} />
+          <Ionicons name="arrow-back" size={22} color={colors.light.text.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Notifications</Text>
-        <View style={styles.headerActions}>
-          {notifications.length > 0 && (
-            <TouchableOpacity style={styles.clearButton} onPress={clearAll}>
-              <Text style={styles.clearText}>Clear</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity style={styles.resetButton} onPress={resetTracking}>
-            <Ionicons name="refresh" size={20} color={colors.light.text.secondary} />
+        {notifications.length > 0 && (
+          <TouchableOpacity style={styles.clearButton} onPress={clearAll}>
+            <Text style={styles.clearText}>Clear All</Text>
           </TouchableOpacity>
-        </View>
+        )}
       </View>
+
+      {/* Notification Count Badge */}
+      {notifications.length > 0 && (
+        <View style={styles.countBadge}>
+          <Text style={styles.countText}>
+            {notifications.filter(n => !n.read).length} unread
+          </Text>
+        </View>
+      )}
 
       {/* Notifications List */}
       <FlatList
@@ -100,6 +135,7 @@ export default function NotificationsScreen({ navigation }) {
         ]}
         ListEmptyComponent={renderEmpty}
         showsVerticalScrollIndicator={false}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
     </SafeAreaView>
   );
@@ -108,7 +144,7 @@ export default function NotificationsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.light.background,
+    backgroundColor: '#F8F9FA',
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   header: {
@@ -116,128 +152,172 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.light.border,
-    backgroundColor: colors.light.surface,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 0,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.light.surfaceSecondary,
+    backgroundColor: '#F5F5F5',
   },
   headerTitle: {
     flex: 1,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: colors.light.text.primary,
     marginLeft: spacing.md,
+    letterSpacing: -0.3,
   },
   clearButton: {
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+    backgroundColor: '#FFF0F0',
+    borderRadius: 20,
   },
   clearText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: colors.zomato.red,
+    color: ZOMATO_RED,
   },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  countBadge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: '#FFFFFF',
   },
-  resetButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.light.surfaceSecondary,
-    justifyContent: 'center',
-    alignItems: 'center',
+  countText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.light.text.tertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   listContent: {
     padding: spacing.md,
+    paddingTop: spacing.sm,
   },
   emptyListContent: {
     flex: 1,
     justifyContent: 'center',
   },
+  separator: {
+    height: 10,
+  },
   notificationItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.light.surface,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    ...shadows.sm,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
   },
   unreadItem: {
-    backgroundColor: '#FEF3F2',
-    borderLeftWidth: 3,
-    borderLeftColor: colors.zomato.red,
+    elevation: 4,
+    shadowOpacity: 0.1,
+  },
+  notificationGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    paddingVertical: 14,
+    position: 'relative',
+  },
+  unreadIndicator: {
+    position: 'absolute',
+    left: 0,
+    top: 12,
+    bottom: 12,
+    width: 3,
+    backgroundColor: ZOMATO_RED,
+    borderTopRightRadius: 2,
+    borderBottomRightRadius: 2,
+  },
+  notificationContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  contentContainer: {
+  textContainer: {
     flex: 1,
     marginLeft: spacing.md,
   },
-  headerRow: {
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
   title: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.light.text.primary,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.light.text.secondary,
+    marginRight: spacing.sm,
   },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.zomato.red,
-    marginLeft: spacing.sm,
+  unreadTitle: {
+    fontWeight: '700',
+    color: colors.light.text.primary,
   },
   message: {
     fontSize: 13,
     color: colors.light.text.secondary,
-    marginTop: 2,
+    lineHeight: 18,
   },
   time: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '500',
     color: colors.light.text.tertiary,
-    marginTop: 4,
+  },
+  arrowContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: spacing.sm,
   },
   emptyContainer: {
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
   },
+  emptyIconWrapper: {
+    marginBottom: spacing.lg,
+  },
   emptyIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: colors.light.surfaceSecondary,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.lg,
   },
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: colors.light.text.primary,
     marginBottom: spacing.sm,
+    letterSpacing: -0.3,
   },
   emptyMessage: {
     fontSize: 14,
     color: colors.light.text.secondary,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
   },
 });
