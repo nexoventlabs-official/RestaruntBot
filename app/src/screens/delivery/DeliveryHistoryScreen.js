@@ -46,16 +46,6 @@ const SummaryCard = ({ orders }) => {
             <Text style={styles.summaryLabel}>Today</Text>
           </View>
         </View>
-
-        <View style={styles.progressSection}>
-          <View style={styles.progressHeader}>
-            <Text style={styles.progressLabel}>Weekly Goal</Text>
-            <Text style={styles.progressValue}>80%</Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: '80%' }]} />
-          </View>
-        </View>
       </LinearGradient>
     </View>
   );
@@ -214,12 +204,6 @@ const styles = StyleSheet.create({
   summaryValue: { fontSize: typography.headline.medium.fontSize, fontWeight: '700', color: '#fff' },
   summaryLabel: { fontSize: typography.label.small.fontSize, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   summaryDivider: { width: 1, height: 30, backgroundColor: 'rgba(255,255,255,0.2)' },
-  progressSection: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: radius.md, padding: spacing.md },
-  progressHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm },
-  progressLabel: { fontSize: typography.label.medium.fontSize, color: 'rgba(255,255,255,0.8)' },
-  progressValue: { fontSize: typography.label.medium.fontSize, fontWeight: '600', color: '#fff' },
-  progressBar: { height: 6, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 3 },
-  progressFill: { height: '100%', backgroundColor: '#fff', borderRadius: 3 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.md, marginBottom: spacing.sm },
   sectionDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: DELIVERY_GREEN, marginRight: spacing.sm },
   sectionTitle: { fontSize: typography.title.medium.fontSize, fontWeight: '600', color: colors.light.text.secondary },
