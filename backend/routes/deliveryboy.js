@@ -539,6 +539,38 @@ router.get('/orders/history', verifyDeliveryToken, async (req, res) => {
   }
 });
 
+// Get order stats for delivery boy (must be before :orderId route)
+router.get('/orders/stats', verifyDeliveryToken, async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const [todayDelivered, totalDelivered, activeOrders] = await Promise.all([
+      Order.countDocuments({
+        assignedTo: req.deliveryBoy._id,
+        status: 'delivered',
+        deliveredAt: { $gte: today }
+      }),
+      Order.countDocuments({
+        assignedTo: req.deliveryBoy._id,
+        status: 'delivered'
+      }),
+      Order.countDocuments({
+        assignedTo: req.deliveryBoy._id,
+        status: { $in: ['ready', 'out_for_delivery'] }
+      })
+    ]);
+    
+    res.json({
+      todayDelivered,
+      totalDelivered,
+      activeOrders
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get single order by orderId (for delivery partner)
 router.get('/orders/:orderId', verifyDeliveryToken, async (req, res) => {
   try {
@@ -1026,38 +1058,6 @@ router.get('/orders/:orderId/check-payment', verifyDeliveryToken, async (req, re
     }
   } catch (error) {
     console.error('Check payment error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get order stats for delivery boy
-router.get('/orders/stats', verifyDeliveryToken, async (req, res) => {
-  try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const [todayDelivered, totalDelivered, activeOrders] = await Promise.all([
-      Order.countDocuments({
-        assignedTo: req.deliveryBoy._id,
-        status: 'delivered',
-        deliveredAt: { $gte: today }
-      }),
-      Order.countDocuments({
-        assignedTo: req.deliveryBoy._id,
-        status: 'delivered'
-      }),
-      Order.countDocuments({
-        assignedTo: req.deliveryBoy._id,
-        status: { $in: ['ready', 'out_for_delivery'] }
-      })
-    ]);
-    
-    res.json({
-      todayDelivered,
-      totalDelivered,
-      activeOrders
-    });
-  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
