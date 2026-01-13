@@ -101,9 +101,22 @@ router.post('/', auth, upload.single('photo'), async (req, res) => {
     const { name, email, phone, dob } = req.body;
     
     // Check if email already exists
-    const existing = await DeliveryBoy.findOne({ email });
-    if (existing) {
+    const existingEmail = await DeliveryBoy.findOne({ email: email.toLowerCase() });
+    if (existingEmail) {
       return res.status(400).json({ error: 'Email already registered' });
+    }
+    
+    // Check if phone already exists
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    const existingPhone = await DeliveryBoy.findOne({ 
+      $or: [
+        { phone: cleanPhone },
+        { phone: `+91${cleanPhone}` },
+        { phone: new RegExp(cleanPhone + '$') }
+      ]
+    });
+    if (existingPhone) {
+      return res.status(400).json({ error: 'Phone number already registered' });
     }
     
     // Generate password
@@ -277,12 +290,28 @@ router.post('/:id/reset-password', auth, async (req, res) => {
 
 // ============ DELIVERY BOY AUTH ROUTES (Public) ============
 
-// Delivery boy login
+// Delivery boy login (supports email or phone)
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     
-    const deliveryBoy = await DeliveryBoy.findOne({ email });
+    // Check if input is email or phone number
+    const isPhone = /^[0-9]{10}$/.test(email) || /^\+?[0-9]{10,13}$/.test(email);
+    
+    let deliveryBoy;
+    if (isPhone) {
+      // Clean phone number - remove +91 or any prefix, keep last 10 digits
+      const cleanPhone = email.replace(/\D/g, '').slice(-10);
+      deliveryBoy = await DeliveryBoy.findOne({ 
+        $or: [
+          { phone: cleanPhone },
+          { phone: `+91${cleanPhone}` },
+          { phone: new RegExp(cleanPhone + '$') }
+        ]
+      });
+    } else {
+      deliveryBoy = await DeliveryBoy.findOne({ email: email.toLowerCase() });
+    }
     
     if (!deliveryBoy) {
       return res.status(401).json({ error: 'Invalid credentials' });

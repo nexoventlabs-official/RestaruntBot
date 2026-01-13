@@ -97,14 +97,14 @@ export default function DeliveryLoginScreen({ navigation }) {
             <Text style={styles.welcomeSubtitle}>Sign in to start delivering</Text>
           </View>
 
-          {/* Email Input */}
+          {/* Email/Phone Input */}
           <View style={[styles.inputContainer, focusedInput === 'email' && styles.inputContainerFocused]}>
             <View style={[styles.inputIconContainer, focusedInput === 'email' && styles.inputIconContainerFocused]}>
-              <Ionicons name="mail-outline" size={20} color={focusedInput === 'email' ? DELIVERY_GREEN : colors.light.text.tertiary} />
+              <Ionicons name="person-outline" size={20} color={focusedInput === 'email' ? DELIVERY_GREEN : colors.light.text.tertiary} />
             </View>
             <TextInput
               style={styles.input}
-              placeholder="Email"
+              placeholder="Email or Phone Number"
               placeholderTextColor={colors.light.text.tertiary}
               value={email}
               onChangeText={setEmail}
@@ -140,11 +140,6 @@ export default function DeliveryLoginScreen({ navigation }) {
               <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.light.text.tertiary} />
             </TouchableOpacity>
           </View>
-
-          {/* Forgot Password */}
-          <TouchableOpacity style={styles.forgotPassword}>
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-          </TouchableOpacity>
 
           {/* Login Button */}
           <TouchableOpacity
@@ -241,9 +236,7 @@ const styles = StyleSheet.create({
   inputIconContainer: { width: 52, height: 56, justifyContent: 'center', alignItems: 'center' },
   inputIconContainerFocused: { backgroundColor: '#E8F5E9', borderTopLeftRadius: radius.lg - 2, borderBottomLeftRadius: radius.lg - 2 },
   input: { flex: 1, fontSize: typography.body.large.fontSize, color: colors.light.text.primary, paddingVertical: spacing.base, paddingRight: spacing.base },
-  forgotPassword: { alignSelf: 'flex-end', marginBottom: spacing.lg },
-  forgotPasswordText: { fontSize: typography.label.large.fontSize, fontWeight: '600', color: DELIVERY_GREEN },
-  loginButton: { borderRadius: radius.lg, overflow: 'hidden', ...shadows.md },
+  loginButton: { borderRadius: radius.lg, overflow: 'hidden', ...shadows.md, marginTop: spacing.lg },
   loginButtonDisabled: { opacity: 0.7 },
   loginButtonGradient: { flexDirection: 'row', height: 56, justifyContent: 'center', alignItems: 'center', gap: spacing.md },
   loginButtonText: { color: '#fff', fontSize: typography.title.large.fontSize, fontWeight: '600' },
