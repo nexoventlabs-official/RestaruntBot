@@ -118,14 +118,6 @@ export default function OrderDetailScreen({ route, navigation }) {
     return null;
   };
 
-  const nextStatus = getNextStatus();
-  const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
-  const sortedPartners = [...deliveryPartners].sort((a, b) => {
-    if (a.isOnline && !b.isOnline) return -1;
-    if (!a.isOnline && b.isOnline) return 1;
-    return a.name.localeCompare(b.name);
-  });
-
   const renderDeliveryPartner = ({ item }) => {
     const isAssigning = assigningPartnerId === item._id;
     return (
@@ -189,6 +181,15 @@ export default function OrderDetailScreen({ route, navigation }) {
       </View>
     );
   }
+
+  // These must be after the loading/error checks since they access order properties
+  const nextStatus = getNextStatus();
+  const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
+  const sortedPartners = [...deliveryPartners].sort((a, b) => {
+    if (a.isOnline && !b.isOnline) return -1;
+    if (!a.isOnline && b.isOnline) return 1;
+    return a.name.localeCompare(b.name);
+  });
 
   return (
     <View style={styles.container}>
