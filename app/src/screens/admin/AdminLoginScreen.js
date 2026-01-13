@@ -103,11 +103,29 @@ export default function AdminLoginScreen({ navigation }) {
             </View>
             <Text style={styles.headerTitle}>Admin Portal</Text>
             <Text style={styles.headerSubtitle}>Manage your restaurant with ease</Text>
-        </Animated.View>
+          </Animated.View>
 
-        {/* Decorative Elements */}
-        <View style={styles.decorCircle1} />
-        <View style={styles.decorCircle2} />
+          {/* Stats Preview */}
+          <View style={styles.statsPreview}>
+            <View style={styles.statItem}>
+              <Ionicons name="analytics" size={16} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.statText}>Real-time Analytics</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Ionicons name="notifications" size={16} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.statText}>Live Orders</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Ionicons name="settings" size={16} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.statText}>Full Control</Text>
+            </View>
+          </View>
+
+          {/* Decorative Elements */}
+          <View style={styles.decorCircle1} />
+          <View style={styles.decorCircle2} />
         </View>
       </ImageBackground>
 
@@ -285,6 +303,32 @@ const styles = StyleSheet.create({
     fontSize: typography.body.medium.fontSize,
     color: 'rgba(255,255,255,0.85)',
     marginTop: spacing.xs,
+  },
+  statsPreview: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: spacing.lg,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: radius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statText: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '500',
+  },
+  statDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    marginHorizontal: spacing.sm,
   },
   decorCircle1: {
     position: 'absolute',
