@@ -1,6 +1,8 @@
+import 'react-native-gesture-handler';
 import React, { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -61,7 +63,14 @@ function AppNavigator() {
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator 
+      screenOptions={{ 
+        headerShown: false,
+        gestureEnabled: true,
+        gestureDirection: 'horizontal',
+        animation: 'slide_from_right',
+      }}
+    >
       {!user ? (
         <>
           <Stack.Screen name="RoleSelect" component={RoleSelectScreen} />
@@ -100,16 +109,18 @@ export default function App() {
   }
 
   return (
-    <AuthProvider>
-      <NotificationProvider>
-        <DeliveryNotificationProvider>
-          <NavigationContainer ref={navigationRef}>
-            <StatusBar style="light" />
-            <AppNavigator />
-          </NavigationContainer>
-        </DeliveryNotificationProvider>
-      </NotificationProvider>
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <NotificationProvider>
+          <DeliveryNotificationProvider>
+            <NavigationContainer ref={navigationRef}>
+              <StatusBar style="light" />
+              <AppNavigator />
+            </NavigationContainer>
+          </DeliveryNotificationProvider>
+        </NotificationProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
 

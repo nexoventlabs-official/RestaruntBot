@@ -26,9 +26,17 @@ const Stack = createNativeStackNavigator();
 const ADMIN_PRIMARY = '#E23744';
 const ADMIN_DARK = '#CB1A27';
 
+// Shared stack screen options with gestures enabled
+const stackScreenOptions = {
+  headerShown: false,
+  gestureEnabled: true,
+  gestureDirection: 'horizontal',
+  animation: 'slide_from_right',
+};
+
 function HomeStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={stackScreenOptions}>
       <Stack.Screen name="HomeMain" component={AdminHomeScreen} />
       <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
@@ -38,7 +46,7 @@ function HomeStack() {
 
 function OrdersStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={stackScreenOptions}>
       <Stack.Screen name="OrdersList" component={AdminOrdersScreen} />
       <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
     </Stack.Navigator>
@@ -47,7 +55,7 @@ function OrdersStack() {
 
 function MenuStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={stackScreenOptions}>
       <Stack.Screen name="MenuList" component={AdminMenuScreen} />
       <Stack.Screen name="MenuItemForm" component={MenuItemFormScreen} />
     </Stack.Navigator>
@@ -56,7 +64,7 @@ function MenuStack() {
 
 function DeliveryStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={stackScreenOptions}>
       <Stack.Screen name="DeliveryList" component={AdminDeliveryScreen} />
       <Stack.Screen name="DeliveryForm" component={DeliveryFormScreen} />
     </Stack.Navigator>
@@ -65,7 +73,7 @@ function DeliveryStack() {
 
 function OffersStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={stackScreenOptions}>
       <Stack.Screen name="OffersList" component={AdminOffersScreen} />
       <Stack.Screen name="OfferForm" component={OfferFormScreen} />
     </Stack.Navigator>

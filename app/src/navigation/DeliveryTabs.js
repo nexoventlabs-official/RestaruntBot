@@ -17,9 +17,17 @@ import DeliveryHelpSupportScreen from '../screens/delivery/DeliveryHelpSupportSc
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+// Shared stack screen options with gestures enabled
+const stackScreenOptions = {
+  headerShown: false,
+  gestureEnabled: true,
+  gestureDirection: 'horizontal',
+  animation: 'slide_from_right',
+};
+
 function HomeStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={stackScreenOptions}>
       <Stack.Screen name="HomeMain" component={DeliveryHomeScreen} />
       <Stack.Screen name="Notifications" component={DeliveryNotificationsScreen} />
     </Stack.Navigator>
@@ -28,7 +36,7 @@ function HomeStack() {
 
 function MyOrdersStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={stackScreenOptions}>
       <Stack.Screen name="MyOrdersList" component={MyOrdersScreen} />
       <Stack.Screen name="DeliveryOrderDetail" component={DeliveryOrderDetailScreen} />
       <Stack.Screen name="MapNavigation" component={MapNavigationScreen} />
@@ -38,7 +46,7 @@ function MyOrdersStack() {
 
 function HistoryStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={stackScreenOptions}>
       <Stack.Screen name="HistoryList" component={DeliveryHistoryScreen} />
       <Stack.Screen name="DeliveryOrderDetail" component={DeliveryOrderDetailScreen} />
       <Stack.Screen name="MapNavigation" component={MapNavigationScreen} />
@@ -48,7 +56,7 @@ function HistoryStack() {
 
 function ProfileStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={stackScreenOptions}>
       <Stack.Screen name="ProfileMain" component={DeliveryProfileScreen} />
       <Stack.Screen name="Notifications" component={DeliveryNotificationsScreen} />
       <Stack.Screen name="HelpSupport" component={DeliveryHelpSupportScreen} />
