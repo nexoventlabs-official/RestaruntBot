@@ -17,6 +17,9 @@ const POLL_INTERVAL = 5000; // 5 seconds for real-time updates
 // Background image
 const MY_ORDERS_BG = require('../../../assets/backgrounds/deliverymyorders.jpg');
 
+// Success GIF
+const ORDER_COMPLETE_GIF = require('../../../assets/backgrounds/ordercomplete.gif');
+
 const ProgressSteps = ({ status, cancelledAtStep }) => {
   const steps = [
     { key: 'preparing', color: '#8B5CF6' },    // Purple
@@ -83,6 +86,7 @@ export default function MyOrdersScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
   const [qrModal, setQrModal] = useState({ visible: false, qrUrl: null, orderId: null, amount: 0 });
+  const [successModal, setSuccessModal] = useState({ visible: false, orderId: null });
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pollIntervalRef = useRef(null);
   const appState = useRef(AppState.currentState);
@@ -242,7 +246,11 @@ export default function MyOrdersScreen({ navigation }) {
 
   const completeDelivery = async (orderId, collectionMethod) => {
     setActionLoading(orderId);
-    try { await api.post(`/delivery/orders/${orderId}/delivered`, { collectionMethod }); Alert.alert('Success', 'Order delivered successfully!'); fetchOrders(); }
+    try { 
+      await api.post(`/delivery/orders/${orderId}/delivered`, { collectionMethod }); 
+      setSuccessModal({ visible: true, orderId });
+      fetchOrders(); 
+    }
     catch (error) { Alert.alert('Error', error.response?.data?.error || 'Failed to complete delivery'); }
     finally { setActionLoading(null); }
   };
@@ -432,6 +440,27 @@ export default function MyOrdersScreen({ navigation }) {
               <LinearGradient colors={['#22C55E', '#16A34A']} style={styles.modalButtonGradient}>
                 <Ionicons name="checkmark-circle" size={20} color="#fff" />
                 <Text style={styles.modalButtonText}>Payment Received - Mark Delivered</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Success Modal with GIF */}
+      <Modal visible={successModal.visible} animationType="fade" transparent={true} onRequestClose={() => setSuccessModal({ visible: false, orderId: null })}>
+        <View style={styles.successModalOverlay}>
+          <View style={styles.successModalContent}>
+            <Image source={ORDER_COMPLETE_GIF} style={styles.successGif} resizeMode="contain" />
+            <Text style={styles.successTitle}>Order Delivered! 🎉</Text>
+            <Text style={styles.successOrderId}>#{successModal.orderId}</Text>
+            <Text style={styles.successMessage}>Great job! The order has been delivered successfully.</Text>
+            <TouchableOpacity 
+              style={styles.successButton} 
+              onPress={() => setSuccessModal({ visible: false, orderId: null })}
+              activeOpacity={0.8}
+            >
+              <LinearGradient colors={[DELIVERY_GREEN, DELIVERY_DARK_GREEN]} style={styles.successButtonGradient}>
+                <Text style={styles.successButtonText}>Continue</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -749,4 +778,60 @@ const styles = StyleSheet.create({
   modalButton: { borderRadius: 14, overflow: 'hidden' },
   modalButtonGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: 16 },
   modalButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  
+  // Success Modal Styles
+  successModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  successModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: spacing.xl,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 340,
+  },
+  successGif: {
+    width: 180,
+    height: 180,
+    marginBottom: spacing.md,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: DELIVERY_GREEN,
+    marginBottom: spacing.xs,
+  },
+  successOrderId: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.light.text.secondary,
+    marginBottom: spacing.sm,
+  },
+  successMessage: {
+    fontSize: 14,
+    color: colors.light.text.tertiary,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+    lineHeight: 20,
+  },
+  successButton: {
+    width: '100%',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  successButtonGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  successButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
