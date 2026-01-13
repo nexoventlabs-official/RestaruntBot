@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, StyleSheet,
   Alert, KeyboardAvoidingView, Platform, TouchableOpacity, Animated,
-  Dimensions, StatusBar
+  Dimensions, StatusBar, ImageBackground
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,9 @@ import { colors, spacing, radius, typography, shadows } from '../../theme';
 const { width } = Dimensions.get('window');
 const DELIVERY_GREEN = '#267E3E';
 const DELIVERY_DARK_GREEN = '#1B5E2E';
+
+// Background image
+const DELIVERY_LOGIN_BG = require('../../../assets/backgrounds/deliverylogin.jpg');
 
 export default function DeliveryLoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -54,41 +57,47 @@ export default function DeliveryLoginScreen({ navigation }) {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Premium Header */}
-      <LinearGradient colors={[DELIVERY_GREEN, DELIVERY_DARK_GREEN]} style={styles.headerGradient}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
+      {/* Premium Header with Background Image */}
+      <ImageBackground
+        source={DELIVERY_LOGIN_BG}
+        style={styles.headerGradient}
+        imageStyle={styles.headerBackgroundImage}
+      >
+        <View style={styles.headerOverlay}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
 
-        <Animated.View style={[styles.logoSection, { opacity: fadeAnim, transform: [{ scale: logoScale }] }]}>
-          <View style={styles.logoCircle}>
-            <Ionicons name="bicycle" size={44} color={DELIVERY_GREEN} />
-          </View>
-          <Text style={styles.headerTitle}>Delivery Partner</Text>
-          <Text style={styles.headerSubtitle}>Start earning with every delivery</Text>
-        </Animated.View>
+          <Animated.View style={[styles.logoSection, { opacity: fadeAnim, transform: [{ scale: logoScale }] }]}>
+            <View style={styles.logoCircle}>
+              <Ionicons name="bicycle" size={44} color={DELIVERY_GREEN} />
+            </View>
+            <Text style={styles.headerTitle}>Delivery Partner</Text>
+            <Text style={styles.headerSubtitle}>Start earning with every delivery</Text>
+          </Animated.View>
 
-        {/* Stats Preview */}
-        <View style={styles.statsPreview}>
-          <View style={styles.statItem}>
-            <Ionicons name="flash" size={16} color="rgba(255,255,255,0.9)" />
-            <Text style={styles.statText}>Fast Payouts</Text>
+          {/* Stats Preview */}
+          <View style={styles.statsPreview}>
+            <View style={styles.statItem}>
+              <Ionicons name="flash" size={16} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.statText}>Fast Payouts</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Ionicons name="location" size={16} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.statText}>Flexible Hours</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Ionicons name="shield-checkmark" size={16} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.statText}>Insured</Text>
+            </View>
           </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Ionicons name="location" size={16} color="rgba(255,255,255,0.9)" />
-            <Text style={styles.statText}>Flexible Hours</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Ionicons name="shield-checkmark" size={16} color="rgba(255,255,255,0.9)" />
-            <Text style={styles.statText}>Insured</Text>
-          </View>
+
+          <View style={styles.decorCircle1} />
+          <View style={styles.decorCircle2} />
         </View>
-
-        <View style={styles.decorCircle1} />
-        <View style={styles.decorCircle2} />
-      </LinearGradient>
+      </ImageBackground>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.content}>
         <Animated.View style={[styles.formContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
@@ -183,12 +192,19 @@ export default function DeliveryLoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.light.background },
   headerGradient: {
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
-    paddingBottom: 40,
-    paddingHorizontal: spacing.screenHorizontal,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
     overflow: 'hidden',
+  },
+  headerBackgroundImage: {
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+  },
+  headerOverlay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
+    paddingBottom: 40,
+    paddingHorizontal: spacing.screenHorizontal,
   },
   backButton: {
     width: 44, height: 44, borderRadius: 14,

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   SafeAreaView, Alert, ActivityIndicator, KeyboardAvoidingView,
-  Platform, Animated, Dimensions, StatusBar
+  Platform, Animated, Dimensions, StatusBar, ImageBackground
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,9 @@ import { useAuth } from '../../context/AuthContext';
 import { colors, spacing, radius, typography, shadows } from '../../theme';
 
 const { width, height } = Dimensions.get('window');
+
+// Background image
+const ADMIN_LOGIN_BG = require('../../../assets/backgrounds/adminlogin.jpg');
 
 export default function AdminLoginScreen({ navigation }) {
   const [username, setUsername] = useState('');
@@ -72,38 +75,41 @@ export default function AdminLoginScreen({ navigation }) {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Premium Header with Gradient */}
-      <LinearGradient
-        colors={[colors.zomato.red, colors.zomato.darkRed]}
+      {/* Premium Header with Background Image */}
+      <ImageBackground
+        source={ADMIN_LOGIN_BG}
         style={styles.headerGradient}
+        imageStyle={styles.headerBackgroundImage}
       >
-        {/* Back Button */}
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
+        <View style={styles.headerOverlay}>
+          {/* Back Button */}
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
 
-        {/* Logo Section */}
-        <Animated.View style={[
-          styles.logoSection,
-          {
-            opacity: fadeAnim,
-            transform: [{ scale: logoScale }]
-          }
-        ]}>
-          <View style={styles.logoCircle}>
-            <Ionicons name="shield-checkmark" size={44} color={colors.zomato.red} />
-          </View>
-          <Text style={styles.headerTitle}>Admin Portal</Text>
-          <Text style={styles.headerSubtitle}>Manage your restaurant with ease</Text>
+          {/* Logo Section */}
+          <Animated.View style={[
+            styles.logoSection,
+            {
+              opacity: fadeAnim,
+              transform: [{ scale: logoScale }]
+            }
+          ]}>
+            <View style={styles.logoCircle}>
+              <Ionicons name="shield-checkmark" size={44} color={colors.zomato.red} />
+            </View>
+            <Text style={styles.headerTitle}>Admin Portal</Text>
+            <Text style={styles.headerSubtitle}>Manage your restaurant with ease</Text>
         </Animated.View>
 
         {/* Decorative Elements */}
         <View style={styles.decorCircle1} />
         <View style={styles.decorCircle2} />
-      </LinearGradient>
+        </View>
+      </ImageBackground>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -234,12 +240,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.light.background,
   },
   headerGradient: {
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
-    paddingBottom: 50,
-    paddingHorizontal: spacing.screenHorizontal,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
     overflow: 'hidden',
+  },
+  headerBackgroundImage: {
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+  },
+  headerOverlay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
+    paddingBottom: 50,
+    paddingHorizontal: spacing.screenHorizontal,
   },
   backButton: {
     width: 44,
