@@ -114,21 +114,50 @@ export default function DeliveryTabs() {
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeStack} />
+      <Tab.Screen 
+        name="Home" 
+        component={HomeStack}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('Home', { screen: 'HomeMain' });
+          },
+        })}
+      />
       <Tab.Screen 
         name="MyOrders" 
         component={MyOrdersStack} 
         options={{ title: 'My Orders' }}
-        listeners={{
-          tabPress: () => {
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('MyOrders', { screen: 'MyOrdersList' });
             if (newOrdersCount > 0) {
               clearNewOrdersCount();
             }
           },
-        }}
+        })}
       />
-      <Tab.Screen name="History" component={HistoryStack} />
-      <Tab.Screen name="Profile" component={ProfileStack} />
+      <Tab.Screen 
+        name="History" 
+        component={HistoryStack}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('History', { screen: 'HistoryList' });
+          },
+        })}
+      />
+      <Tab.Screen 
+        name="Profile" 
+        component={ProfileStack}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('Profile', { screen: 'ProfileMain' });
+          },
+        })}
+      />
     </Tab.Navigator>
   );
 }
