@@ -136,13 +136,20 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
 
             if (!event.defaultPrevented) {
               // Reset stack to first screen when tab is pressed
-              navigation.navigate(route.name, {
-                screen: route.name === 'Orders' ? 'OrdersList' : 
-                        route.name === 'Home' ? 'HomeMain' :
-                        route.name === 'Offers' ? 'OffersList' :
-                        route.name === 'Delivery' ? 'DeliveryList' :
-                        route.name === 'Menu' ? 'MenuList' : undefined
-              });
+              if (route.name === 'Menu') {
+                // Reset filters when Menu tab is clicked directly
+                navigation.navigate(route.name, {
+                  screen: 'MenuList',
+                  params: { foodTypeFilter: 'all', resetFilters: true }
+                });
+              } else {
+                navigation.navigate(route.name, {
+                  screen: route.name === 'Orders' ? 'OrdersList' : 
+                          route.name === 'Home' ? 'HomeMain' :
+                          route.name === 'Offers' ? 'OffersList' :
+                          route.name === 'Delivery' ? 'DeliveryList' : undefined
+                });
+              }
             }
             
             // Clear new orders count when Orders tab is pressed

@@ -50,12 +50,13 @@ export default function AdminHomeScreen({ navigation }) {
 
   const fetchStats = async (silent = false) => {
     try {
-      const [ordersRes, menuRes, deliveryRes, reportRes] = await Promise.all([
-        api.get('/orders?limit=100'), api.get('/menu'), api.get('/delivery'), api.get('/analytics/report?type=today'),
+      const [ordersRes, menuRes, deliveryRes, reportRes, dashboardRes] = await Promise.all([
+        api.get('/orders?limit=100'), api.get('/menu'), api.get('/delivery'), api.get('/analytics/report?type=today'), api.get('/analytics/dashboard'),
       ]);
       const orders = ordersRes.data.orders || [];
       const menuItems = menuRes.data || [];
       const report = reportRes.data || {};
+      const dashboard = dashboardRes.data || {};
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
 
@@ -68,9 +69,12 @@ export default function AdminHomeScreen({ navigation }) {
       const preparingOrders = orders.filter(o => o.status === 'preparing');
       const deliveryOrders = orders.filter(o => ['ready', 'out_for_delivery'].includes(o.status));
 
-      // Use report data for revenue (same as Today's Report section)
+      // Use report data for today's revenue (same as Today's Report section)
       const todayRevenue = report.totalRevenue || 0;
       const todayOrderCount = report.totalOrders || todayOrders.length;
+      
+      // Use dashboard data for total revenue (all-time, same as website)
+      const totalRevenue = dashboard.totalRevenue || 0;
       
       // Calculate yesterday's revenue for trend comparison
       const yesterdayRevenue = yesterdayOrders.filter(o => o.paymentStatus === 'paid').reduce((sum, o) => sum + o.totalAmount, 0);
@@ -93,6 +97,7 @@ export default function AdminHomeScreen({ navigation }) {
         activeDelivery: deliveryRes.data.filter(d => d.isOnline).length,
         totalDelivery: deliveryRes.data.length,
         todayRevenue,
+        totalRevenue,
         yesterdayRevenue,
         revenueTrend: todayRevenue >= yesterdayRevenue ? 'up' : 'down',
         ordersTrend: todayOrderCount >= yesterdayOrders.length ? 'up' : 'down',
@@ -258,6 +263,56 @@ export default function AdminHomeScreen({ navigation }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.zomato.red]} />}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* Total Revenue Card with Graph Animation */}
+        <Animated.View style={[styles.section, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+          <View style={styles.totalRevenueCard}>
+            {/* Animated Graph Background */}
+            <View style={styles.graphBackground}>
+              {[...Array(8)].map((_, i) => (
+                <Animated.View
+                  key={i}
+                  style={[
+                    styles.graphBar,
+                    {
+                      height: `${30 + Math.random() * 50}%`,
+                      left: `${i * 12.5}%`,
+                      opacity: 0.15 + (i * 0.05),
+                    },
+                  ]}
+                />
+              ))}
+              <View style={styles.graphLine} />
+            </View>
+            
+            {/* Content */}
+            <View style={styles.totalRevenueContent}>
+              <View style={styles.totalRevenueIconContainer}>
+                <LinearGradient
+                  colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']}
+                  style={styles.totalRevenueIconGradient}
+                >
+                  <Ionicons name="trending-up" size={24} color="#fff" />
+                </LinearGradient>
+              </View>
+              <View style={styles.totalRevenueInfo}>
+                <Text style={styles.totalRevenueLabel}>Total Revenue</Text>
+                <Text style={styles.totalRevenueValue}>₹{(stats?.totalRevenue || 0).toLocaleString('en-IN')}</Text>
+              </View>
+              <View style={styles.totalRevenueTrendContainer}>
+                {stats?.revenueTrend && (
+                  <View style={[styles.totalRevenueTrendBadge, { backgroundColor: stats.revenueTrend === 'up' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' }]}>
+                    <Ionicons
+                      name={stats.revenueTrend === 'up' ? 'arrow-up' : 'arrow-down'}
+                      size={14}
+                      color={stats.revenueTrend === 'up' ? '#22C55E' : '#EF4444'}
+                    />
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+        </Animated.View>
+
         {/* Order Status Section */}
         <Animated.View style={[styles.section, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           <View style={styles.sectionHeader}>
@@ -346,7 +401,7 @@ export default function AdminHomeScreen({ navigation }) {
           </View>
 
           <View style={styles.menuStatsRow}>
-            <TouchableOpacity style={styles.menuStatItem} onPress={() => navigation.navigate('Menu')}>
+            <TouchableOpacity style={styles.menuStatItem} onPress={() => navigation.navigate('Menu', { screen: 'MenuList', params: { foodTypeFilter: 'all' } })}>
               <View style={styles.menuStatImageContainer}>
                 <Image source={IMAGES.all} style={styles.menuStatImage} />
               </View>
@@ -357,7 +412,7 @@ export default function AdminHomeScreen({ navigation }) {
                 <Text style={styles.menuStatText}>All</Text>
               </View>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuStatItem} onPress={() => navigation.navigate('Menu')}>
+            <TouchableOpacity style={styles.menuStatItem} onPress={() => navigation.navigate('Menu', { screen: 'MenuList', params: { foodTypeFilter: 'veg' } })}>
               <View style={styles.menuStatImageContainer}>
                 <Image source={IMAGES.veg} style={styles.menuStatImage} />
               </View>
@@ -368,7 +423,7 @@ export default function AdminHomeScreen({ navigation }) {
                 <Text style={styles.menuStatText}>Veg</Text>
               </View>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuStatItem} onPress={() => navigation.navigate('Menu')}>
+            <TouchableOpacity style={styles.menuStatItem} onPress={() => navigation.navigate('Menu', { screen: 'MenuList', params: { foodTypeFilter: 'nonveg' } })}>
               <View style={styles.menuStatImageContainer}>
                 <Image source={IMAGES.nonVeg} style={styles.menuStatImage} />
               </View>
@@ -379,7 +434,7 @@ export default function AdminHomeScreen({ navigation }) {
                 <Text style={styles.menuStatText}>Non-Veg</Text>
               </View>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuStatItem} onPress={() => navigation.navigate('Menu')}>
+            <TouchableOpacity style={styles.menuStatItem} onPress={() => navigation.navigate('Menu', { screen: 'MenuList', params: { foodTypeFilter: 'egg' } })}>
               <View style={styles.menuStatImageContainer}>
                 <Image source={IMAGES.egg} style={styles.menuStatImage} />
               </View>
@@ -1185,6 +1240,82 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginRight: spacing.sm,
     backgroundColor: colors.light.surfaceSecondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Total Revenue Card with Graph Animation
+  totalRevenueCard: {
+    backgroundColor: '#6366F1',
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    overflow: 'hidden',
+    position: 'relative',
+    ...shadows.lg,
+  },
+  graphBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: spacing.md,
+  },
+  graphBar: {
+    position: 'absolute',
+    bottom: 0,
+    width: '10%',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+  },
+  graphLine: {
+    position: 'absolute',
+    bottom: '40%',
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  totalRevenueContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  totalRevenueIconContainer: {
+    marginRight: spacing.md,
+  },
+  totalRevenueIconGradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  totalRevenueInfo: {
+    flex: 1,
+  },
+  totalRevenueLabel: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  totalRevenueValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: -0.5,
+  },
+  totalRevenueTrendContainer: {
+    marginLeft: spacing.sm,
+  },
+  totalRevenueTrendBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },

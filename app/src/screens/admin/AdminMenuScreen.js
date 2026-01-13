@@ -13,7 +13,7 @@ import api from '../../config/api';
 const ZOMATO_RED = '#E23744';
 const ZOMATO_DARK_RED = '#CB1A27';
 
-export default function AdminMenuScreen({ navigation }) {
+export default function AdminMenuScreen({ navigation, route }) {
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,7 +21,7 @@ export default function AdminMenuScreen({ navigation }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [foodTypeFilter, setFoodTypeFilter] = useState('all');
+  const [foodTypeFilter, setFoodTypeFilter] = useState(route?.params?.foodTypeFilter || 'all');
   const [togglingId, setTogglingId] = useState(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
@@ -90,6 +90,19 @@ export default function AdminMenuScreen({ navigation }) {
     });
     return unsubscribe;
   }, [navigation, fetchMenu, fetchCategories]);
+
+  // Update food type filter when route params change
+  useEffect(() => {
+    if (route?.params?.resetFilters) {
+      // Reset all filters when coming from tab bar
+      setFoodTypeFilter('all');
+      setStatusFilter('all');
+      setSelectedCategory('all');
+      setSearchTerm('');
+    } else if (route?.params?.foodTypeFilter !== undefined) {
+      setFoodTypeFilter(route.params.foodTypeFilter);
+    }
+  }, [route?.params?.foodTypeFilter, route?.params?.resetFilters]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
