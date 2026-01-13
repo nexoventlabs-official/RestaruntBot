@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput, Modal, ScrollView,
-  RefreshControl, TouchableOpacity, ActivityIndicator, Animated, Platform, StatusBar, ImageBackground
+  RefreshControl, TouchableOpacity, ActivityIndicator, Animated, Platform, StatusBar, ImageBackground, AppState
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -107,6 +107,10 @@ export default function AdminOrdersScreen({ navigation }) {
   const [minAmount, setMinAmount] = useState('');
   const [maxAmount, setMaxAmount] = useState('');
   const [allOrders, setAllOrders] = useState([]); // Store all orders for counting
+  const pollIntervalRef = useRef(null);
+  const appState = useRef(AppState.currentState);
+
+  const POLL_INTERVAL = 5000; // 5 seconds for real-time updates
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
@@ -128,6 +132,47 @@ export default function AdminOrdersScreen({ navigation }) {
   }, []);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  
+  // Real-time polling for order updates
+  useEffect(() => {
+    const startPolling = () => {
+      if (pollIntervalRef.current) return;
+      pollIntervalRef.current = setInterval(() => {
+        fetchOrders();
+      }, POLL_INTERVAL);
+    };
+
+    const stopPolling = () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+
+    const handleAppStateChange = (nextAppState) => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        // App came to foreground - fetch immediately and restart polling
+        fetchOrders();
+        startPolling();
+      } else if (nextAppState.match(/inactive|background/)) {
+        // App went to background - stop polling
+        stopPolling();
+      }
+      appState.current = nextAppState;
+    };
+
+    // Start polling when component mounts
+    startPolling();
+    
+    // Listen for app state changes
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      stopPolling();
+      subscription?.remove();
+    };
+  }, [fetchOrders]);
+
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => fetchOrders());
     return unsubscribe;

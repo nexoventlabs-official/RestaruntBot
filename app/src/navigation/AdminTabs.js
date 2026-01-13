@@ -2,8 +2,9 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Platform, Text } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useNotifications } from '../context/NotificationContext';
 
 import AdminHomeScreen from '../screens/admin/AdminHomeScreen';
 import AdminOrdersScreen from '../screens/admin/AdminOrdersScreen';
@@ -91,6 +92,8 @@ const CenterTabButton = ({ children, onPress }) => (
 
 // Custom Tab Bar Component
 const CustomTabBar = ({ state, descriptors, navigation }) => {
+  const { newOrdersCount, clearNewOrdersCount } = useNotifications();
+  
   // Check if we should hide the tab bar on detail screens
   const currentRoute = state.routes[state.index];
   const focusedRouteName = getFocusedRouteNameFromRoute(currentRoute);
@@ -113,6 +116,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
           const { options } = descriptors[route.key];
           const isFocused = state.index === index;
           const isCenter = index === 2; // Menu is the center tab
+          const isOrders = route.name === 'Orders';
 
           const onPress = () => {
             const event = navigation.emit({
@@ -123,6 +127,11 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
 
             if (!isFocused && !event.defaultPrevented) {
               navigation.navigate(route.name);
+            }
+            
+            // Clear new orders count when Orders tab is pressed
+            if (isOrders && newOrdersCount > 0) {
+              clearNewOrdersCount();
             }
           };
 
@@ -154,6 +163,13 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                   size={22}
                   color={isFocused ? ADMIN_PRIMARY : '#9CA3AF'}
                 />
+                {isOrders && newOrdersCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                      {newOrdersCount > 99 ? '99+' : newOrdersCount}
+                    </Text>
+                  </View>
+                )}
               </View>
               <View style={[styles.labelContainer, isFocused && styles.labelContainerActive]}>
                 <View style={styles.labelDot} />
@@ -253,5 +269,24 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 16,
     elevation: 12,
+  },
+  badge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: ADMIN_PRIMARY,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
   },
 });

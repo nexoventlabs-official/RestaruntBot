@@ -505,9 +505,18 @@ router.get('/orders/available', verifyDeliveryToken, async (req, res) => {
 // Get my assigned orders (orders assigned to this delivery boy)
 router.get('/orders/my', verifyDeliveryToken, async (req, res) => {
   try {
+    // Include cancelled orders that were cancelled within last 1 hour
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    
     const orders = await Order.find({
       assignedTo: req.deliveryBoy._id,
-      status: { $in: ['preparing', 'ready', 'out_for_delivery'] }
+      $or: [
+        { status: { $in: ['preparing', 'ready', 'out_for_delivery'] } },
+        { 
+          status: 'cancelled',
+          statusUpdatedAt: { $gte: oneHourAgo }
+        }
+      ]
     }).sort({ assignedAt: -1 });
     
     res.json(orders);
@@ -516,15 +525,36 @@ router.get('/orders/my', verifyDeliveryToken, async (req, res) => {
   }
 });
 
-// Get delivery history (delivered orders by this delivery boy)
+// Get delivery history (delivered and cancelled orders by this delivery boy)
 router.get('/orders/history', verifyDeliveryToken, async (req, res) => {
   try {
     const orders = await Order.find({
       assignedTo: req.deliveryBoy._id,
-      status: 'delivered'
-    }).sort({ deliveredAt: -1 }).limit(50);
+      status: { $in: ['delivered', 'cancelled'] }
+    }).sort({ statusUpdatedAt: -1, deliveredAt: -1 }).limit(50);
     
     res.json(orders);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single order by orderId (for delivery partner)
+router.get('/orders/:orderId', verifyDeliveryToken, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    // Find order that is assigned to this delivery boy or was delivered by them
+    const order = await Order.findOne({
+      orderId,
+      assignedTo: req.deliveryBoy._id
+    });
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found or not assigned to you' });
+    }
+    
+    res.json(order);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

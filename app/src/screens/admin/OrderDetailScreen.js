@@ -23,8 +23,10 @@ const STATUS_CONFIG = {
 const STATUS_FLOW = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'];
 
 export default function OrderDetailScreen({ route, navigation }) {
-  const [order, setOrder] = useState(route.params.order);
-  const [loading, setLoading] = useState(false);
+  const { order: passedOrder, orderId } = route.params || {};
+  const [order, setOrder] = useState(passedOrder || null);
+  const [loading, setLoading] = useState(!passedOrder && !!orderId);
+  const [fetchError, setFetchError] = useState(null);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
   const [deliveryPartners, setDeliveryPartners] = useState([]);
   const [loadingPartners, setLoadingPartners] = useState(false);
@@ -32,12 +34,35 @@ export default function OrderDetailScreen({ route, navigation }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
+  // Fetch order if only orderId was passed
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 40, useNativeDriver: true }),
-    ]).start();
-  }, []);
+    if (!passedOrder && orderId) {
+      fetchOrder();
+    }
+  }, [orderId]);
+
+  const fetchOrder = async () => {
+    try {
+      setLoading(true);
+      setFetchError(null);
+      const response = await api.get(`/orders/${orderId}`);
+      setOrder(response.data);
+    } catch (err) {
+      console.error('Error fetching order:', err);
+      setFetchError('Failed to load order details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (order) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 40, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [order]);
 
   const fetchDeliveryPartners = async () => {
     setLoadingPartners(true);
@@ -136,6 +161,34 @@ export default function OrderDetailScreen({ route, navigation }) {
       </TouchableOpacity>
     );
   };
+
+  // Loading state
+  if (loading && !order) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.light.background} />
+        <ActivityIndicator size="large" color={colors.zomato.red} />
+        <Text style={{ marginTop: spacing.md, fontSize: 16, color: colors.light.text.secondary }}>Loading order details...</Text>
+      </View>
+    );
+  }
+
+  // Error state
+  if (fetchError || !order) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: spacing.xl }]}>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.light.background} />
+        <Ionicons name="alert-circle-outline" size={64} color={colors.light.text.tertiary} />
+        <Text style={{ marginTop: spacing.md, fontSize: 16, color: colors.light.text.secondary, textAlign: 'center' }}>{fetchError || 'Order not found'}</Text>
+        <TouchableOpacity 
+          style={{ marginTop: spacing.lg, backgroundColor: colors.zomato.red, paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderRadius: radius.lg }}
+          onPress={() => orderId ? fetchOrder() : navigation.goBack()}
+        >
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>{orderId ? 'Retry' : 'Go Back'}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

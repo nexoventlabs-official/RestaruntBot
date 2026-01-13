@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import { AppState } from 'react-native';
 import api from '../config/api';
 
 const DeliveryNotificationContext = createContext();
@@ -7,19 +8,73 @@ const DeliveryNotificationContext = createContext();
 const STORAGE_KEY = 'delivery_notifications';
 const LAST_CHECK_KEY = 'delivery_last_check_time';
 const SEEN_ORDERS_KEY = 'delivery_seen_orders';
+const POLL_INTERVAL = 5000; // 5 seconds for real-time updates
 
 export function DeliveryNotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [newOrdersCount, setNewOrdersCount] = useState(0);
   const lastCheckTime = useRef(null);
   const seenOrderStatuses = useRef({});
   const seenAssignedOrders = useRef(new Set());
   const isInitialized = useRef(false);
+  const pollIntervalRef = useRef(null);
+  const appState = useRef(AppState.currentState);
+
+  // Check if user is authenticated before making API calls
+  const isAuthenticated = async () => {
+    try {
+      const token = await SecureStore.getItemAsync('token');
+      const role = await SecureStore.getItemAsync('role');
+      return token && role === 'delivery';
+    } catch {
+      return false;
+    }
+  };
 
   // Load data from storage on mount
   useEffect(() => {
     loadData();
+    
+    // Start polling when component mounts (will check auth before API calls)
+    startPolling();
+    
+    // Handle app state changes
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    return () => {
+      stopPolling();
+      subscription?.remove();
+    };
   }, []);
+
+  const handleAppStateChange = (nextAppState) => {
+    if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+      // App came to foreground - check immediately and restart polling
+      checkForUpdates();
+      startPolling();
+    } else if (nextAppState.match(/inactive|background/)) {
+      // App went to background - stop polling
+      stopPolling();
+    }
+    appState.current = nextAppState;
+  };
+
+  const startPolling = () => {
+    if (pollIntervalRef.current) return;
+    pollIntervalRef.current = setInterval(() => {
+      if (isInitialized.current) {
+        checkForUpdates();
+      }
+    }, POLL_INTERVAL);
+  };
+
+  const stopPolling = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -81,6 +136,12 @@ export function DeliveryNotificationProvider({ children }) {
   const checkForUpdates = useCallback(async () => {
     if (!isInitialized.current) return;
     
+    // Skip if not authenticated as delivery user
+    const authenticated = await isAuthenticated();
+    if (!authenticated) {
+      return { hasNewOrders: false, orders: [] };
+    }
+    
     try {
       // Get delivery partner's assigned orders
       const response = await api.get('/delivery/orders/my');
@@ -88,6 +149,7 @@ export function DeliveryNotificationProvider({ children }) {
       
       const newNotifications = [];
       const now = new Date();
+      let newAssignments = 0;
       
       for (const order of orders) {
         const orderId = order.orderId;
@@ -96,6 +158,7 @@ export function DeliveryNotificationProvider({ children }) {
         
         // Check for NEW ASSIGNED orders (not seen before)
         if (!wasAssigned && order.status !== 'delivered' && order.status !== 'cancelled') {
+          newAssignments++;
           newNotifications.push({
             id: `assigned_${orderId}_${Date.now()}`,
             type: 'new_assignment',
@@ -147,12 +210,23 @@ export function DeliveryNotificationProvider({ children }) {
           return updated;
         });
         setUnreadCount(prev => prev + newNotifications.length);
+        
+        // Count cancelled orders for badge
+        const cancelledCount = newNotifications.filter(n => n.type === 'order_cancelled').length;
+        const totalBadgeCount = newAssignments + cancelledCount;
+        
+        if (totalBadgeCount > 0) {
+          setNewOrdersCount(prev => prev + totalBadgeCount);
+        }
       }
+      
+      return { hasNewOrders: newAssignments > 0, orders };
     } catch (error) {
       // Silently handle errors - don't spam console
       if (error.response?.status !== 404) {
         console.error('Error checking for delivery updates:', error.message);
       }
+      return { hasNewOrders: false, orders: [] };
     }
   }, []);
 
@@ -194,18 +268,26 @@ export function DeliveryNotificationProvider({ children }) {
     await SecureStore.deleteItemAsync(SEEN_ORDERS_KEY);
     setNotifications([]);
     setUnreadCount(0);
+    setNewOrdersCount(0);
     await SecureStore.deleteItemAsync(STORAGE_KEY);
+  }, []);
+
+  // Clear new orders count (called when MyOrders screen is viewed)
+  const clearNewOrdersCount = useCallback(() => {
+    setNewOrdersCount(0);
   }, []);
 
   return (
     <DeliveryNotificationContext.Provider value={{
       notifications,
       unreadCount,
+      newOrdersCount,
       checkForUpdates,
       markAllAsRead,
       markAsRead,
       clearAll,
-      resetTracking
+      resetTracking,
+      clearNewOrdersCount
     }}>
       {children}
     </DeliveryNotificationContext.Provider>

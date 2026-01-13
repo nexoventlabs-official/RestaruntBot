@@ -2,29 +2,70 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
   RefreshControl, TouchableOpacity, Alert, ActivityIndicator, Linking,
-  Modal, Image, Animated, Platform, StatusBar
+  Modal, Image, Animated, Platform, StatusBar, ImageBackground, AppState
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../config/api';
+import { useDeliveryNotifications } from '../../context/DeliveryNotificationContext';
 import { colors, spacing, radius, typography, shadows } from '../../theme';
 
 const DELIVERY_GREEN = '#267E3E';
 const DELIVERY_DARK_GREEN = '#1B5E2E';
+const POLL_INTERVAL = 5000; // 5 seconds for real-time updates
 
-const ProgressSteps = ({ status }) => {
-  const steps = ['preparing', 'ready', 'out_for_delivery', 'delivered'];
-  const currentIndex = steps.indexOf(status);
+// Background image
+const MY_ORDERS_BG = require('../../../assets/backgrounds/deliverymyorders.jpg');
+
+const ProgressSteps = ({ status, cancelledAtStep }) => {
+  const steps = [
+    { key: 'preparing', color: '#8B5CF6' },    // Purple
+    { key: 'ready', color: '#10B981' },         // Green
+    { key: 'out_for_delivery', color: '#06B6D4' }, // Cyan
+    { key: 'delivered', color: '#22C55E' },    // Success Green
+  ];
+  const isCancelled = status === 'cancelled';
+  const currentIndex = isCancelled ? cancelledAtStep : steps.findIndex(s => s.key === status);
+  
   return (
     <View style={styles.progressContainer}>
-      {steps.map((step, index) => (
-        <React.Fragment key={step}>
-          <View style={[styles.progressDot, index <= currentIndex && styles.progressDotActive]}>
-            {index < currentIndex && <Ionicons name="checkmark" size={10} color="#fff" />}
-          </View>
-          {index < steps.length - 1 && <View style={[styles.progressLine, index < currentIndex && styles.progressLineActive]} />}
-        </React.Fragment>
-      ))}
+      {steps.map((step, index) => {
+        const isCompleted = index < currentIndex;
+        const isCurrent = index === currentIndex;
+        const isActive = isCompleted || isCurrent;
+        
+        // For cancelled orders: completed steps stay their color, current step is red, future steps are gray
+        let dotColor;
+        if (isCancelled) {
+          if (isCompleted) {
+            dotColor = step.color;
+          } else if (isCurrent) {
+            dotColor = '#EF4444'; // Red for cancelled step
+          } else {
+            dotColor = colors.light.border;
+          }
+        } else {
+          dotColor = isActive ? step.color : colors.light.border;
+        }
+        
+        const lineColor = isCompleted ? steps[index].color : colors.light.border;
+        
+        return (
+          <React.Fragment key={step.key}>
+            <View style={[
+              styles.progressDot, 
+              { backgroundColor: isActive ? dotColor : 'transparent', borderColor: dotColor }
+            ]}>
+              {isCompleted && <Ionicons name="checkmark" size={12} color="#fff" />}
+              {isCurrent && !isCancelled && <View style={[styles.progressDotInner, { backgroundColor: '#fff' }]} />}
+              {isCurrent && isCancelled && <Ionicons name="close" size={12} color="#fff" />}
+            </View>
+            {index < steps.length - 1 && (
+              <View style={[styles.progressLine, { backgroundColor: lineColor }]} />
+            )}
+          </React.Fragment>
+        );
+      })}
     </View>
   );
 };
@@ -33,6 +74,7 @@ const STATUS_CONFIG = {
   preparing: { label: 'Preparing', color: '#8B5CF6', bg: '#EDE9FE' },
   ready: { label: 'Ready', color: '#10B981', bg: '#D1FAE5' },
   out_for_delivery: { label: 'Out for Delivery', color: '#06B6D4', bg: '#CFFAFE' },
+  cancelled: { label: 'Cancelled', color: '#EF4444', bg: '#FEE2E2' },
 };
 
 export default function MyOrdersScreen({ navigation }) {
@@ -42,26 +84,94 @@ export default function MyOrdersScreen({ navigation }) {
   const [actionLoading, setActionLoading] = useState(null);
   const [qrModal, setQrModal] = useState({ visible: false, qrUrl: null, orderId: null, amount: 0 });
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const pollIntervalRef = useRef(null);
+  const appState = useRef(AppState.currentState);
+  const { clearNewOrdersCount } = useDeliveryNotifications();
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   }, []);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (showLoading = false) => {
+    if (showLoading) setLoading(true);
     try {
       const response = await api.get('/delivery/orders/my');
-      setOrders(response.data);
+      const allOrders = response.data;
+      
+      // Filter cancelled orders - only show if cancelled within last 1 hour
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const filteredOrders = allOrders.filter(order => {
+        if (order.status === 'cancelled') {
+          const cancelledAt = new Date(order.statusUpdatedAt || order.updatedAt);
+          return cancelledAt > oneHourAgo;
+        }
+        return true;
+      });
+      
+      setOrders(filteredOrders);
     } catch (error) { console.error('Error fetching orders:', error); }
     finally { setLoading(false); setRefreshing(false); }
   };
 
-  useEffect(() => {
-    fetchOrders();
-    const unsubscribe = navigation.addListener('focus', fetchOrders);
-    return unsubscribe;
-  }, [navigation]);
+  // Start polling for real-time updates
+  const startPolling = useCallback(() => {
+    if (pollIntervalRef.current) return;
+    pollIntervalRef.current = setInterval(() => {
+      fetchOrders(false); // Silent refresh
+    }, POLL_INTERVAL);
+  }, []);
 
-  const onRefresh = useCallback(() => { setRefreshing(true); fetchOrders(); }, []);
+  const stopPolling = useCallback(() => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  }, []);
+
+  // Handle app state changes
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        // App came to foreground - fetch immediately and restart polling
+        fetchOrders(false);
+        startPolling();
+      } else if (nextAppState.match(/inactive|background/)) {
+        // App went to background - stop polling
+        stopPolling();
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription?.remove();
+    };
+  }, [startPolling, stopPolling]);
+
+  useEffect(() => {
+    fetchOrders(true);
+    startPolling();
+    
+    // Clear new orders badge when viewing this screen
+    clearNewOrdersCount();
+    
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchOrders(false);
+      startPolling();
+      clearNewOrdersCount();
+    });
+    
+    const blurUnsubscribe = navigation.addListener('blur', () => {
+      stopPolling();
+    });
+    
+    return () => {
+      unsubscribe();
+      blurUnsubscribe();
+      stopPolling();
+    };
+  }, [navigation, startPolling, stopPolling, clearNewOrdersCount]);
+
+  const onRefresh = useCallback(() => { setRefreshing(true); fetchOrders(false); }, []);
 
   const openMapNavigation = (order) => {
     const address = order.deliveryAddress?.address || order.customer?.address;
@@ -138,92 +248,130 @@ export default function MyOrdersScreen({ navigation }) {
   };
 
   const renderOrder = ({ item }) => {
+    const isCancelled = item.status === 'cancelled';
     const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.preparing;
+    
+    // Determine which step the order was cancelled at
+    const getCancelledAtStep = () => {
+      const lastStatus = item.trackingUpdates?.slice().reverse().find(u => u.status !== 'cancelled')?.status;
+      const stepMap = { preparing: 0, ready: 1, out_for_delivery: 2 };
+      return stepMap[lastStatus] ?? 0;
+    };
+    
     return (
       <Animated.View style={{ opacity: fadeAnim }}>
-        <View style={styles.orderCard}>
-          <ProgressSteps status={item.status} />
+        <TouchableOpacity 
+          style={[styles.orderCard, isCancelled && styles.orderCardCancelled]}
+          onPress={() => navigation.navigate('DeliveryOrderDetail', { order: item })}
+          activeOpacity={0.9}
+        >
+          {/* Progress Steps */}
+          <ProgressSteps status={item.status} cancelledAtStep={getCancelledAtStep()} />
 
+          {/* Order Header */}
           <View style={styles.orderHeader}>
             <View>
               <Text style={styles.orderId}>#{item.orderId}</Text>
-              <Text style={styles.orderTime}>{new Date(item.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</Text>
+              <Text style={styles.orderTime}>{new Date(item.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</Text>
             </View>
             <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
               <Text style={[styles.statusText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
             </View>
           </View>
 
-          <View style={styles.customerCard}>
-            <View style={styles.customerAvatar}><Ionicons name="person" size={18} color={DELIVERY_GREEN} /></View>
+          {/* Customer Info */}
+          <View style={[styles.customerCard, isCancelled && styles.customerCardCancelled]}>
+            <View style={[styles.customerAvatar, isCancelled && styles.customerAvatarCancelled]}>
+              <Ionicons name="person" size={20} color={isCancelled ? '#EF4444' : DELIVERY_GREEN} />
+            </View>
             <View style={styles.customerInfo}>
               <Text style={styles.customerName}>{item.customer?.name || 'Customer'}</Text>
-              <TouchableOpacity onPress={() => Linking.openURL(`tel:${item.customer?.phone}`)} style={styles.phoneButton}>
-                <Ionicons name="call" size={12} color={DELIVERY_GREEN} />
+              <View style={styles.phoneRow}>
+                <Ionicons name="call-outline" size={14} color={colors.light.text.tertiary} />
                 <Text style={styles.phoneText}>{item.customer?.phone}</Text>
-              </TouchableOpacity>
+              </View>
             </View>
-            <TouchableOpacity style={styles.callButton} onPress={() => Linking.openURL(`tel:${item.customer?.phone}`)}>
-              <Ionicons name="call" size={18} color="#fff" />
+            <TouchableOpacity 
+              style={[styles.callButton, isCancelled && styles.callButtonCancelled]} 
+              onPress={(e) => { e.stopPropagation(); Linking.openURL(`tel:${item.customer?.phone}`); }}
+            >
+              <Ionicons name="call" size={20} color="#fff" />
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.addressCard} onPress={() => openMapNavigation(item)} activeOpacity={0.8}>
-            <View style={styles.addressIcon}><Ionicons name="location" size={18} color={DELIVERY_GREEN} /></View>
-            <Text style={styles.addressText} numberOfLines={2}>{item.deliveryAddress?.address || item.customer?.address || 'N/A'}</Text>
-            <View style={styles.navigateIcon}><Ionicons name="navigate" size={16} color={DELIVERY_GREEN} /></View>
+          {/* Address */}
+          <TouchableOpacity 
+            style={[styles.addressCard, isCancelled && styles.addressCardCancelled]} 
+            onPress={(e) => { e.stopPropagation(); openMapNavigation(item); }} 
+            activeOpacity={0.8}
+          >
+            <View style={[styles.addressIcon, isCancelled && styles.addressIconCancelled]}>
+              <Ionicons name="location" size={20} color={isCancelled ? '#EF4444' : DELIVERY_GREEN} />
+            </View>
+            <Text style={[styles.addressText, isCancelled && styles.addressTextCancelled]} numberOfLines={2}>
+              {item.deliveryAddress?.address || item.customer?.address || 'N/A'}
+            </Text>
+            <View style={[styles.navigateIcon, isCancelled && styles.navigateIconCancelled]}>
+              <Ionicons name="navigate" size={18} color={isCancelled ? '#EF4444' : DELIVERY_GREEN} />
+            </View>
           </TouchableOpacity>
 
-          <View style={styles.itemsSection}>
-            <View style={styles.itemsHeader}>
-              <Ionicons name="receipt-outline" size={14} color={colors.light.text.secondary} />
-              <Text style={styles.itemsTitle}>{item.items?.length || 0} items</Text>
-            </View>
-            <View style={styles.itemsList}>
-              {item.items?.slice(0, 2).map((orderItem, idx) => (
-                <Text key={idx} style={styles.itemText}>{orderItem.name} × {orderItem.quantity}</Text>
-              ))}
-              {item.items?.length > 2 && <Text style={styles.moreItems}>+{item.items.length - 2} more</Text>}
-            </View>
-          </View>
-
+          {/* Footer: Price & Action */}
           <View style={styles.orderFooter}>
             <View>
-              <Text style={styles.amount}>₹{item.totalAmount}</Text>
+              <Text style={[styles.amount, isCancelled && styles.amountCancelled]}>₹{item.totalAmount}</Text>
               <View style={[styles.paymentBadge, item.paymentMethod === 'cod' ? styles.codBadge : styles.prepaidBadge]}>
-                <Ionicons name={item.paymentMethod === 'cod' ? 'cash-outline' : 'checkmark-circle'} size={12} color={item.paymentMethod === 'cod' ? '#D97706' : '#16A34A'} />
-                <Text style={[styles.paymentText, item.paymentMethod === 'cod' ? styles.codText : styles.prepaidText]}>{item.paymentMethod === 'cod' ? 'COD' : 'Prepaid'}</Text>
+                <Ionicons 
+                  name={item.paymentMethod === 'cod' ? 'cash-outline' : 'checkmark-circle'} 
+                  size={14} 
+                  color={item.paymentMethod === 'cod' ? '#D97706' : '#16A34A'} 
+                />
+                <Text style={[styles.paymentText, item.paymentMethod === 'cod' ? styles.codText : styles.prepaidText]}>
+                  {item.paymentMethod === 'cod' ? 'COD' : 'Prepaid'}
+                </Text>
               </View>
             </View>
 
-            <TouchableOpacity
-              style={[styles.actionButton, item.status === 'out_for_delivery' && styles.actionButtonSuccess]}
-              onPress={() => {
-                if (item.status === 'preparing') markReady(item.orderId);
-                else if (item.status === 'ready') startDelivery(item.orderId);
-                else markDelivered(item);
-              }}
-              disabled={actionLoading === item.orderId}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={actionLoading === item.orderId ? ['#9CA3AF', '#9CA3AF'] : item.status === 'out_for_delivery' ? ['#22C55E', '#16A34A'] : [DELIVERY_GREEN, DELIVERY_DARK_GREEN]}
-                style={styles.actionButtonGradient}
+            {isCancelled ? (
+              <View style={styles.cancelledBadge}>
+                <Ionicons name="close-circle" size={20} color="#EF4444" />
+                <Text style={styles.cancelledBadgeText}>Cancelled</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  if (item.status === 'preparing') markReady(item.orderId);
+                  else if (item.status === 'ready') startDelivery(item.orderId);
+                  else markDelivered(item);
+                }}
+                disabled={actionLoading === item.orderId}
+                activeOpacity={0.8}
               >
-                {actionLoading === item.orderId ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <>
-                    <Ionicons name={item.status === 'preparing' ? 'checkmark-done' : item.status === 'ready' ? 'bicycle' : 'checkmark-circle'} size={18} color="#fff" />
-                    <Text style={styles.actionButtonText}>
-                      {item.status === 'preparing' ? 'Mark Ready' : item.status === 'ready' ? 'Start Delivery' : 'Delivered'}
-                    </Text>
-                  </>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={actionLoading === item.orderId ? ['#9CA3AF', '#9CA3AF'] : item.status === 'out_for_delivery' ? ['#22C55E', '#16A34A'] : [DELIVERY_GREEN, DELIVERY_DARK_GREEN]}
+                  style={styles.actionButtonGradient}
+                >
+                  {actionLoading === item.orderId ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons 
+                        name={item.status === 'preparing' ? 'checkmark-done' : item.status === 'ready' ? 'bicycle' : 'checkmark-circle'} 
+                        size={18} 
+                        color="#fff" 
+                      />
+                      <Text style={styles.actionButtonText}>
+                        {item.status === 'preparing' ? 'Mark Ready' : item.status === 'ready' ? 'Start Delivery' : 'Delivered'}
+                      </Text>
+                    </>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
           </View>
-        </View>
+        </TouchableOpacity>
       </Animated.View>
     );
   };
@@ -232,15 +380,18 @@ export default function MyOrdersScreen({ navigation }) {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      <LinearGradient colors={[DELIVERY_GREEN + 'E6', DELIVERY_DARK_GREEN + 'F2']} style={styles.header}>
-        <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.title}>My Orders</Text>
-            <Text style={styles.subtitle}>{orders.length} active deliveries</Text>
+      <View style={styles.headerWrapper}>
+        <ImageBackground source={MY_ORDERS_BG} style={styles.header} imageStyle={styles.headerBackgroundImage}>
+          <View style={styles.headerOverlay}>
+            <View style={styles.headerContent}>
+              <View>
+                <Text style={styles.title}>My Orders</Text>
+                <Text style={styles.subtitle}>{orders.length} active deliveries</Text>
+              </View>
+            </View>
           </View>
-          <View style={styles.headerBadge}><Ionicons name="bicycle" size={20} color={DELIVERY_GREEN} /></View>
-        </View>
-      </LinearGradient>
+        </ImageBackground>
+      </View>
 
       {loading ? (
         <ActivityIndicator size="large" color={DELIVERY_GREEN} style={{ flex: 1 }} />
@@ -292,78 +443,310 @@ export default function MyOrdersScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.light.background },
+  headerWrapper: { zIndex: 100, elevation: 100, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, overflow: 'hidden' },
   header: {
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
-    paddingBottom: spacing.lg,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 35 : 75,
+    paddingBottom: 55,
     paddingHorizontal: spacing.screenHorizontal,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+  },
+  headerBackgroundImage: { borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+  headerOverlay: { 
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    marginTop: -(Platform.OS === 'android' ? StatusBar.currentHeight + 35 : 75),
+    marginBottom: -55,
+    marginHorizontal: -spacing.screenHorizontal,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 35 : 75,
+    paddingBottom: 55,
+    paddingHorizontal: spacing.screenHorizontal,
   },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontSize: typography.display.small.fontSize, fontWeight: '700', color: '#fff' },
-  subtitle: { fontSize: typography.body.medium.fontSize, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
-  headerBadge: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+  title: { fontSize: 28, fontWeight: '700', color: '#fff' },
+  subtitle: { fontSize: typography.body.large.fontSize, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
+  headerBadge: { width: 50, height: 50, borderRadius: 16, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
   listContent: { padding: spacing.screenHorizontal, paddingBottom: 100, paddingTop: spacing.md },
+  
+  // Order Card
   orderCard: {
-    padding: spacing.base,
-    backgroundColor: colors.light.surface, // Solid background
-    borderRadius: radius.xl,
+    backgroundColor: colors.light.surface,
+    borderRadius: 20,
+    padding: spacing.md,
     marginBottom: spacing.md,
-    ...shadows.card
+    ...shadows.card,
   },
-  progressContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
-  progressDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: colors.light.border, justifyContent: 'center', alignItems: 'center' },
-  progressDotActive: { backgroundColor: DELIVERY_GREEN },
-  progressLine: { flex: 1, height: 3, backgroundColor: colors.light.border, marginHorizontal: 4 },
-  progressLineActive: { backgroundColor: DELIVERY_GREEN },
-  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.md },
-  orderId: { fontSize: typography.headline.small.fontSize, fontWeight: '700', color: colors.light.text.primary },
-  orderTime: { fontSize: typography.body.small.fontSize, color: colors.light.text.tertiary, marginTop: 2 },
-  statusBadge: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: radius.full },
-  statusText: { fontSize: typography.label.medium.fontSize, fontWeight: '600' },
-  customerCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.light.surfaceSecondary, borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.sm },
-  customerAvatar: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center' },
-  customerInfo: { flex: 1, marginLeft: spacing.md },
-  customerName: { fontSize: typography.title.medium.fontSize, fontWeight: '600', color: colors.light.text.primary },
-  phoneButton: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  phoneText: { fontSize: typography.body.small.fontSize, color: DELIVERY_GREEN },
-  callButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: DELIVERY_GREEN, justifyContent: 'center', alignItems: 'center' },
-  addressCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.sm },
-  addressIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
-  addressText: { flex: 1, fontSize: typography.body.medium.fontSize, color: DELIVERY_DARK_GREEN, marginHorizontal: spacing.md, lineHeight: 20 },
-  navigateIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
-  itemsSection: { backgroundColor: colors.light.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
-  itemsHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.sm },
-  itemsTitle: { fontSize: typography.title.small.fontSize, fontWeight: '600', color: colors.light.text.secondary },
-  itemsList: { gap: 4 },
-  itemText: { fontSize: typography.body.small.fontSize, color: colors.light.text.primary },
-  moreItems: { fontSize: typography.body.small.fontSize, color: colors.light.text.tertiary, fontStyle: 'italic' },
-  orderFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.light.borderLight },
-  amount: { fontSize: typography.headline.medium.fontSize, fontWeight: '700', color: colors.light.text.primary },
-  paymentBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.sm, marginTop: spacing.xs },
+  orderCardCancelled: {
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+  },
+  
+  // Progress Steps
+  progressContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.xs,
+  },
+  progressDot: { 
+    width: 22, 
+    height: 22, 
+    borderRadius: 11, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    borderWidth: 2,
+  },
+  progressDotInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  progressLine: { 
+    flex: 1, 
+    height: 3, 
+    borderRadius: 2,
+    marginHorizontal: 4,
+  },
+  
+  // Order Header
+  orderHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'flex-start', 
+    marginBottom: spacing.md,
+  },
+  orderId: { 
+    fontSize: 18, 
+    fontWeight: '700', 
+    color: colors.light.text.primary,
+  },
+  orderTime: { 
+    fontSize: 13, 
+    color: colors.light.text.tertiary, 
+    marginTop: 2,
+  },
+  statusBadge: { 
+    paddingHorizontal: 14, 
+    paddingVertical: 6, 
+    borderRadius: 20,
+  },
+  statusText: { 
+    fontSize: 13, 
+    fontWeight: '600',
+  },
+  
+  // Customer Card
+  customerCard: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: colors.light.surfaceSecondary, 
+    borderRadius: 14, 
+    padding: spacing.md, 
+    marginBottom: spacing.sm,
+  },
+  customerCardCancelled: {
+    backgroundColor: '#FEE2E2',
+  },
+  customerAvatar: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 22, 
+    backgroundColor: '#E8F5E9', 
+    justifyContent: 'center', 
+    alignItems: 'center',
+  },
+  customerAvatarCancelled: {
+    backgroundColor: '#FECACA',
+  },
+  customerInfo: { 
+    flex: 1, 
+    marginLeft: spacing.md,
+  },
+  customerName: { 
+    fontSize: 16, 
+    fontWeight: '600', 
+    color: colors.light.text.primary,
+  },
+  phoneRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 4, 
+    marginTop: 4,
+  },
+  phoneText: { 
+    fontSize: 14, 
+    color: colors.light.text.tertiary,
+  },
+  callButton: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 14, 
+    backgroundColor: DELIVERY_GREEN, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    ...shadows.sm,
+  },
+  callButtonCancelled: {
+    backgroundColor: '#9CA3AF',
+  },
+  
+  // Address Card
+  addressCard: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#E8F5E9', 
+    borderRadius: 14, 
+    padding: spacing.md, 
+    marginBottom: spacing.md,
+  },
+  addressCardCancelled: {
+    backgroundColor: '#FEE2E2',
+  },
+  addressIcon: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 12, 
+    backgroundColor: '#fff', 
+    justifyContent: 'center', 
+    alignItems: 'center',
+  },
+  addressIconCancelled: {
+    backgroundColor: '#FECACA',
+  },
+  addressText: { 
+    flex: 1, 
+    fontSize: 14, 
+    color: DELIVERY_DARK_GREEN, 
+    marginHorizontal: spacing.md, 
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+  addressTextCancelled: {
+    color: '#991B1B',
+  },
+  navigateIcon: { 
+    width: 36, 
+    height: 36, 
+    borderRadius: 10, 
+    backgroundColor: '#fff', 
+    justifyContent: 'center', 
+    alignItems: 'center',
+  },
+  navigateIconCancelled: {
+    backgroundColor: '#FECACA',
+  },
+  
+  // Order Footer
+  orderFooter: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    paddingTop: spacing.md, 
+    borderTopWidth: 1, 
+    borderTopColor: colors.light.borderLight,
+  },
+  amount: { 
+    fontSize: 22, 
+    fontWeight: '700', 
+    color: colors.light.text.primary,
+  },
+  amountCancelled: {
+    textDecorationLine: 'line-through',
+    color: colors.light.text.tertiary,
+  },
+  paymentBadge: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 4, 
+    paddingHorizontal: 10, 
+    paddingVertical: 4, 
+    borderRadius: 8, 
+    marginTop: 4,
+  },
   codBadge: { backgroundColor: '#FEF3C7' },
   prepaidBadge: { backgroundColor: '#DCFCE7' },
-  paymentText: { fontSize: typography.label.small.fontSize, fontWeight: '600' },
+  paymentText: { 
+    fontSize: 13, 
+    fontWeight: '600',
+  },
   codText: { color: '#D97706' },
   prepaidText: { color: '#16A34A' },
-  actionButton: { borderRadius: radius.lg, overflow: 'hidden' },
-  actionButtonSuccess: {},
-  actionButtonGradient: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  actionButtonText: { color: '#fff', fontSize: typography.title.medium.fontSize, fontWeight: '600' },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 },
-  emptyIconContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: colors.light.surfaceSecondary, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.base },
-  emptyTitle: { fontSize: typography.headline.small.fontSize, fontWeight: '600', color: colors.light.text.secondary },
-  emptyText: { fontSize: typography.body.medium.fontSize, color: colors.light.text.tertiary, marginTop: spacing.xs },
+  
+  // Action Button
+  actionButton: { 
+    borderRadius: 14, 
+    overflow: 'hidden',
+    ...shadows.sm,
+  },
+  actionButtonGradient: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8, 
+    paddingHorizontal: 20, 
+    paddingVertical: 14,
+  },
+  actionButtonText: { 
+    color: '#fff', 
+    fontSize: 15, 
+    fontWeight: '600',
+  },
+  
+  // Cancelled Badge
+  cancelledBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  cancelledBadgeText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#EF4444',
+  },
+  
+  // Empty State
+  emptyContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    paddingTop: 100,
+  },
+  emptyIconContainer: { 
+    width: 80, 
+    height: 80, 
+    borderRadius: 40, 
+    backgroundColor: colors.light.surfaceSecondary, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginBottom: spacing.base,
+  },
+  emptyTitle: { 
+    fontSize: 18, 
+    fontWeight: '600', 
+    color: colors.light.text.secondary,
+  },
+  emptyText: { 
+    fontSize: 14, 
+    color: colors.light.text.tertiary, 
+    marginTop: spacing.xs,
+  },
+  
+  // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: colors.light.surface, borderTopLeftRadius: radius.bottomSheet, borderTopRightRadius: radius.bottomSheet, padding: spacing.xl, paddingBottom: spacing['3xl'] },
+  modalContent: { backgroundColor: colors.light.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: spacing.xl, paddingBottom: spacing['3xl'] },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
-  modalTitle: { fontSize: typography.headline.large.fontSize, fontWeight: '700', color: colors.light.text.primary },
-  modalOrderId: { fontSize: typography.body.medium.fontSize, color: colors.light.text.secondary, textAlign: 'center' },
+  modalTitle: { fontSize: 20, fontWeight: '700', color: colors.light.text.primary },
+  modalOrderId: { fontSize: 14, color: colors.light.text.secondary, textAlign: 'center' },
   modalAmount: { fontSize: 40, fontWeight: '700', color: DELIVERY_GREEN, textAlign: 'center', marginVertical: spacing.md },
-  qrContainer: { alignItems: 'center', backgroundColor: colors.light.surfaceSecondary, borderRadius: radius.xl, padding: spacing.lg, marginBottom: spacing.xl },
+  qrContainer: { alignItems: 'center', backgroundColor: colors.light.surfaceSecondary, borderRadius: 20, padding: spacing.lg, marginBottom: spacing.xl },
   qrImage: { width: 200, height: 200, marginBottom: spacing.md },
-  scanText: { fontSize: typography.body.medium.fontSize, color: colors.light.text.secondary },
-  modalButton: { borderRadius: radius.lg, overflow: 'hidden' },
-  modalButtonGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.base },
-  modalButtonText: { color: '#fff', fontSize: typography.title.medium.fontSize, fontWeight: '600' },
+  scanText: { fontSize: 14, color: colors.light.text.secondary },
+  modalButton: { borderRadius: 14, overflow: 'hidden' },
+  modalButtonGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: 16 },
+  modalButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });

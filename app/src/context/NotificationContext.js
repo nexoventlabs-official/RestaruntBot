@@ -11,6 +11,7 @@ const SEEN_ORDERS_KEY = 'admin_seen_orders';
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [newOrdersCount, setNewOrdersCount] = useState(0);
   const lastCheckTime = useRef(null);
   const seenOrderStatuses = useRef({});
   const isInitialized = useRef(false);
@@ -151,6 +152,9 @@ export function NotificationProvider({ children }) {
       await SecureStore.setItemAsync(LAST_CHECK_KEY, now.toISOString());
       await saveSeenOrders(seenOrderStatuses.current);
       
+      // Count new orders specifically
+      const newOrderCount = newNotifications.filter(n => n.type === 'new_order').length;
+      
       // Add new notifications if any
       if (newNotifications.length > 0) {
         console.log('📱 New notifications:', newNotifications.length);
@@ -160,6 +164,9 @@ export function NotificationProvider({ children }) {
           return updated;
         });
         setUnreadCount(prev => prev + newNotifications.length);
+        if (newOrderCount > 0) {
+          setNewOrdersCount(prev => prev + newOrderCount);
+        }
       }
     } catch (error) {
       console.error('Error checking for updates:', error);
@@ -203,18 +210,26 @@ export function NotificationProvider({ children }) {
     await SecureStore.deleteItemAsync(SEEN_ORDERS_KEY);
     setNotifications([]);
     setUnreadCount(0);
+    setNewOrdersCount(0);
     await SecureStore.deleteItemAsync(STORAGE_KEY);
+  }, []);
+
+  // Clear new orders count (called when Orders tab is viewed)
+  const clearNewOrdersCount = useCallback(() => {
+    setNewOrdersCount(0);
   }, []);
 
   return (
     <NotificationContext.Provider value={{
       notifications,
       unreadCount,
+      newOrdersCount,
       checkForUpdates,
       markAllAsRead,
       markAsRead,
       clearAll,
-      resetTracking
+      resetTracking,
+      clearNewOrdersCount
     }}>
       {children}
     </NotificationContext.Provider>

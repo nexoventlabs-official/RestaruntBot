@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  RefreshControl, TouchableOpacity, Image, Switch, Animated, Platform, StatusBar, ImageBackground
+  RefreshControl, TouchableOpacity, Image, Switch, Animated, Platform, StatusBar, ImageBackground, AppState
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,13 +14,14 @@ import { colors, spacing, radius, typography, shadows } from '../../theme';
 
 const DELIVERY_GREEN = '#267E3E';
 const DELIVERY_DARK_GREEN = '#1B5E2E';
+const POLL_INTERVAL = 10000; // 10 seconds for stats refresh
 
 // Background image
 const DELIVERY_HOME_BG = require('../../../assets/backgrounds/deliveryhome.jpg');
 
 export default function DeliveryHomeScreen({ navigation }) {
   const { user, logout, setUser } = useAuth();
-  const { unreadCount, checkForUpdates } = useDeliveryNotifications();
+  const { unreadCount, checkForUpdates, newOrdersCount } = useDeliveryNotifications();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -28,6 +29,8 @@ export default function DeliveryHomeScreen({ navigation }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pollIntervalRef = useRef(null);
+  const appState = useRef(AppState.currentState);
 
   useEffect(() => {
     Animated.parallel([
@@ -44,18 +47,68 @@ export default function DeliveryHomeScreen({ navigation }) {
     }
   }, [isOnline]);
 
-  const fetchStats = async () => {
+  const fetchStats = async (showLoading = false) => {
+    if (showLoading) setLoading(true);
     try {
       const response = await api.get('/delivery/orders/stats');
       setStats(response.data);
-      // Check for notification updates
-      checkForUpdates();
     } catch (error) { console.error('Error fetching stats:', error); }
     finally { setLoading(false); setRefreshing(false); }
   };
 
-  useEffect(() => { fetchStats(); }, []);
-  const onRefresh = useCallback(() => { setRefreshing(true); fetchStats(); }, []);
+  // Start polling for real-time stats updates
+  const startPolling = useCallback(() => {
+    if (pollIntervalRef.current) return;
+    pollIntervalRef.current = setInterval(() => {
+      fetchStats(false);
+    }, POLL_INTERVAL);
+  }, []);
+
+  const stopPolling = useCallback(() => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  }, []);
+
+  // Handle app state changes
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        fetchStats(false);
+        startPolling();
+      } else if (nextAppState.match(/inactive|background/)) {
+        stopPolling();
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription?.remove();
+    };
+  }, [startPolling, stopPolling]);
+
+  useEffect(() => { 
+    fetchStats(true);
+    startPolling();
+    
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchStats(false);
+      startPolling();
+    });
+    
+    const blurUnsubscribe = navigation.addListener('blur', () => {
+      stopPolling();
+    });
+    
+    return () => {
+      unsubscribe();
+      blurUnsubscribe();
+      stopPolling();
+    };
+  }, [navigation, startPolling, stopPolling]);
+  
+  const onRefresh = useCallback(() => { setRefreshing(true); fetchStats(false); checkForUpdates(); }, [checkForUpdates]);
 
   const toggleOnlineStatus = async (value) => {
     setIsOnline(value);

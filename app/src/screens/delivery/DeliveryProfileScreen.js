@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, Image, TextInput, Alert, ActivityIndicator, Animated, Platform, StatusBar
+  TouchableOpacity, Image, TextInput, Alert, ActivityIndicator, Animated, Platform, StatusBar, ImageBackground
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,9 @@ import { colors, spacing, radius, typography, shadows } from '../../theme';
 
 const DELIVERY_GREEN = '#267E3E';
 const DELIVERY_DARK_GREEN = '#1B5E2E';
+
+// Background image
+const PROFILE_BG = require('../../../assets/backgrounds/deliveryprofile.jpg');
 
 const MenuItem = ({ icon, label, value, onPress, showArrow = true, danger = false }) => (
   <TouchableOpacity style={styles.menuItem} onPress={onPress} disabled={!onPress} activeOpacity={onPress ? 0.7 : 1}>
@@ -32,7 +35,7 @@ const StatsBadge = ({ value, label }) => (
   </View>
 );
 
-export default function DeliveryProfileScreen() {
+export default function DeliveryProfileScreen({ navigation }) {
   const { user, logout } = useAuth();
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -72,39 +75,41 @@ export default function DeliveryProfileScreen() {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.headerBg}>
-          <LinearGradient colors={[DELIVERY_GREEN + 'E6', DELIVERY_DARK_GREEN + 'F2']} style={styles.headerGradient}>
-            <Animated.View style={[styles.profileSection, { opacity: fadeAnim }]}>
-              <View style={styles.avatarContainer}>
-                {user?.photo ? (
-                  <Image source={{ uri: user.photo }} style={styles.avatar} />
-                ) : (
-                  <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                    <Ionicons name="person" size={44} color={DELIVERY_GREEN} />
-                  </View>
-                )}
-                <TouchableOpacity style={styles.editAvatarButton}>
-                  <Ionicons name="camera" size={14} color="#fff" />
-                </TouchableOpacity>
-              </View>
+        <View style={styles.headerWrapper}>
+          <ImageBackground source={PROFILE_BG} style={styles.header} imageStyle={styles.headerBackgroundImage}>
+            <View style={styles.headerOverlay}>
+              <Animated.View style={[styles.profileSection, { opacity: fadeAnim }]}>
+                <View style={styles.avatarContainer}>
+                  {user?.photo ? (
+                    <Image source={{ uri: user.photo }} style={styles.avatar} />
+                  ) : (
+                    <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                      <Ionicons name="person" size={44} color={DELIVERY_GREEN} />
+                    </View>
+                  )}
+                  <TouchableOpacity style={styles.editAvatarButton}>
+                    <Ionicons name="camera" size={14} color="#fff" />
+                  </TouchableOpacity>
+                </View>
 
-              <Text style={styles.userName}>{user?.name || 'Delivery Partner'}</Text>
+                <Text style={styles.userName}>{user?.name || 'Delivery Partner'}</Text>
 
-              <View style={styles.ratingContainer}>
-                <Ionicons name="star" size={18} color="#FFD700" />
-                <Text style={styles.ratingText}>{user?.avgRating?.toFixed(1) || '0.0'}</Text>
-                <Text style={styles.ratingCount}>({user?.totalRatings || 0} ratings)</Text>
-              </View>
+                <View style={styles.ratingContainer}>
+                  <Ionicons name="star" size={18} color="#FFD700" />
+                  <Text style={styles.ratingText}>{user?.avgRating?.toFixed(1) || '0.0'}</Text>
+                  <Text style={styles.ratingCount}>({user?.totalRatings || 0} ratings)</Text>
+                </View>
 
-              <View style={styles.statsRow}>
-                <StatsBadge value="245" label="Deliveries" />
-                <View style={styles.statsDivider} />
-                <StatsBadge value="₹24.5K" label="Earnings" />
-                <View style={styles.statsDivider} />
-                <StatsBadge value="98%" label="On-time" />
-              </View>
-            </Animated.View>
-          </LinearGradient>
+                <View style={styles.statsRow}>
+                  <StatsBadge value="245" label="Deliveries" />
+                  <View style={styles.statsDivider} />
+                  <StatsBadge value="₹24.5K" label="Earnings" />
+                  <View style={styles.statsDivider} />
+                  <StatsBadge value="98%" label="On-time" />
+                </View>
+              </Animated.View>
+            </View>
+          </ImageBackground>
         </View>
 
         <View style={styles.content}>
@@ -138,11 +143,9 @@ export default function DeliveryProfileScreen() {
               )}
 
               <View style={styles.menuDivider} />
-              <MenuItem icon="notifications-outline" label="Notifications" onPress={() => { }} />
+              <MenuItem icon="notifications-outline" label="Notifications" onPress={() => navigation.navigate('Notifications')} />
               <View style={styles.menuDivider} />
-              <MenuItem icon="document-text-outline" label="Documents" onPress={() => { }} />
-              <View style={styles.menuDivider} />
-              <MenuItem icon="help-circle-outline" label="Help & Support" onPress={() => { }} />
+              <MenuItem icon="help-circle-outline" label="Help & Support" onPress={() => navigation.navigate('HelpSupport')} />
             </View>
           </View>
 
@@ -161,8 +164,18 @@ export default function DeliveryProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.light.background },
-  headerBg: { borderBottomLeftRadius: 32, borderBottomRightRadius: 32, overflow: 'hidden' },
-  headerGradient: { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60, paddingBottom: spacing['3xl'], paddingHorizontal: spacing.screenHorizontal },
+  headerWrapper: { borderBottomLeftRadius: 32, borderBottomRightRadius: 32, overflow: 'hidden' },
+  header: { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60, paddingBottom: spacing['3xl'], paddingHorizontal: spacing.screenHorizontal },
+  headerBackgroundImage: { borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
+  headerOverlay: { 
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    marginTop: -(Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60),
+    marginBottom: -spacing['3xl'],
+    marginHorizontal: -spacing.screenHorizontal,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
+    paddingBottom: spacing['3xl'],
+    paddingHorizontal: spacing.screenHorizontal,
+  },
   profileSection: { alignItems: 'center' },
   avatarContainer: { position: 'relative', marginBottom: spacing.md },
   avatar: { width: 100, height: 100, borderRadius: 30, borderWidth: 4, borderColor: 'rgba(255,255,255,0.3)' },
