@@ -4,6 +4,13 @@ import * as SecureStore from 'expo-secure-store';
 // Change this to your backend URL
 export const API_BASE_URL = 'https://restaruntbot.onrender.com';
 
+// Event emitter for auth events
+let authLogoutCallback = null;
+
+export const setAuthLogoutCallback = (callback) => {
+  authLogoutCallback = callback;
+};
+
 const api = axios.create({
   baseURL: `${API_BASE_URL}/api`,
   timeout: 30000,
@@ -29,9 +36,15 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
+      // Clear stored credentials
       await SecureStore.deleteItemAsync('token');
       await SecureStore.deleteItemAsync('user');
       await SecureStore.deleteItemAsync('role');
+      
+      // Trigger logout in AuthContext
+      if (authLogoutCallback) {
+        authLogoutCallback();
+      }
     }
     return Promise.reject(error);
   }

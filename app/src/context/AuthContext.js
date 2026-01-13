@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import api from '../config/api';
+import api, { setAuthLogoutCallback } from '../config/api';
 import pushNotifications from '../services/pushNotifications';
 
 const AuthContext = createContext({});
@@ -12,9 +12,22 @@ export const AuthProvider = ({ children }) => {
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadStoredAuth();
+  // Force logout function (called from API interceptor on 401)
+  const forceLogout = useCallback(() => {
+    console.log('🔒 Force logout triggered - session invalidated');
+    setUser(null);
+    setRole(null);
   }, []);
+
+  useEffect(() => {
+    // Register the logout callback with API interceptor
+    setAuthLogoutCallback(forceLogout);
+    loadStoredAuth();
+    
+    return () => {
+      setAuthLogoutCallback(null);
+    };
+  }, [forceLogout]);
 
   const loadStoredAuth = async () => {
     try {

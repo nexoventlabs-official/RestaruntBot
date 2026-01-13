@@ -191,7 +191,13 @@ router.put('/:id', auth, upload.single('photo'), async (req, res) => {
     if (phone) deliveryBoy.phone = phone;
     if (dob) deliveryBoy.dob = new Date(dob);
     if (typeof isActive === 'boolean' || isActive === 'true' || isActive === 'false') {
-      deliveryBoy.isActive = isActive === true || isActive === 'true';
+      const newIsActive = isActive === true || isActive === 'true';
+      // If deactivating, increment tokenVersion to invalidate all existing sessions
+      if (deliveryBoy.isActive && !newIsActive) {
+        deliveryBoy.tokenVersion = (deliveryBoy.tokenVersion || 0) + 1;
+        console.log(`🔒 Deactivated delivery partner ${deliveryBoy.name}, invalidating sessions`);
+      }
+      deliveryBoy.isActive = newIsActive;
     }
     
     // Upload new photo if provided
