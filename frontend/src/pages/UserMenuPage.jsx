@@ -585,12 +585,21 @@ export default function UserMenuPage() {
         </div>
 
         {/* Category Filter */}
-        <div className="mb-8 overflow-x-auto pb-4 scrollbar-hide">
-          <div className="flex gap-4 md:gap-6">
+        <div 
+          className="mb-8 overflow-x-auto pb-4 scrollbar-hide horizontal-scroll-container"
+          style={{ 
+            WebkitOverflowScrolling: 'touch',
+            scrollSnapType: 'x mandatory',
+            scrollBehavior: 'smooth',
+            overscrollBehaviorX: 'contain'
+          }}
+        >
+          <div className="flex gap-4 md:gap-6 px-1" style={{ minWidth: 'min-content' }}>
             {/* All Items */}
             <button 
               onClick={() => setSelectedCategory('all')} 
               className="flex-shrink-0 group"
+              style={{ scrollSnapAlign: 'start' }}
             >
               <div className="relative overflow-hidden w-36 md:w-44">
                 <div className={`${selectedCategory === 'all' ? 'bg-[#3f9065]' : 'bg-[#F5F1E8] group-hover:bg-[#3f9065]'} rounded-t-full rounded-b-3xl pt-6 pb-14 px-4 transition-all duration-300`}>
@@ -621,6 +630,7 @@ export default function UserMenuPage() {
                   key={cat._id} 
                   onClick={() => setSelectedCategory(cat.name)} 
                   className="flex-shrink-0 group"
+                  style={{ scrollSnapAlign: 'start' }}
                 >
                   <div className="relative overflow-hidden w-36 md:w-44">
                     <div className={`${selectedCategory === cat.name ? 'bg-[#3f9065]' : 'bg-[#F5F1E8] group-hover:bg-[#3f9065]'} rounded-t-full rounded-b-3xl pt-6 pb-14 px-4 transition-all duration-300`}>
