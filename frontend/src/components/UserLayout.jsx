@@ -10,7 +10,7 @@ import FloatingPizza from './FloatingPizza';
 import { Star, X, ShoppingCart, Heart, Clock, Package, Plus, Minus } from 'lucide-react';
 import { 
   HeartIcon, CartIcon, MenuIcon, CloseIcon, 
-  HomeIcon, FoodIcon, InfoIcon, PhoneIcon, SearchIcon 
+  HomeIcon, FoodIcon, InfoIcon, PhoneIcon, SearchIcon, WhatsAppIcon 
 } from './Icons';
 
 const WHATSAPP_NUMBER = '15551858897';
@@ -173,6 +173,24 @@ export default function UserLayout() {
     for (let i = 0; i < dialogQuantity; i++) {
       addToCart(selectedItem);
     }
+    closeItemDetail();
+    closeSearch();
+  };
+
+  const handleWhatsAppOrder = () => {
+    if (!selectedItem) return;
+    const item = selectedItem;
+    const foodTypeLabel = item.foodType === 'veg' ? '🥦 Veg' : 
+                          item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
+                          item.foodType === 'egg' ? '🥚 Egg' : '';
+    
+    let msg = `Hi! I'd like to order:\n\n`;
+    msg += `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n`;
+    msg += `📦 *Quantity:* ${dialogQuantity}\n`;
+    msg += `💰 *Price:* ₹${item.price} x ${dialogQuantity} = ₹${item.price * dialogQuantity}\n`;
+    msg += `\nPlease confirm my order. Thank you!`;
+    
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
     closeItemDetail();
     closeSearch();
   };
@@ -385,111 +403,151 @@ export default function UserLayout() {
       {selectedItem && (
         <div 
           className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          style={{ touchAction: 'none' }}
           onClick={closeItemDetail}
+          onTouchMove={(e) => e.preventDefault()}
         >
+          {/* Backdrop */}
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          
+          {/* Dialog - Horizontal on PC, Vertical on Mobile */}
           <div 
-            className="relative bg-white rounded-2xl w-full max-w-md max-h-[85vh] overflow-hidden shadow-2xl"
+            className="relative bg-white rounded-2xl sm:rounded-3xl w-full max-w-md lg:max-w-4xl max-h-[90vh] lg:max-h-[80vh] overflow-hidden shadow-2xl flex flex-col lg:flex-row"
+            style={{ overscrollBehavior: 'contain', touchAction: 'pan-y' }}
             onClick={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
           >
             {/* Close Button */}
             <button
               onClick={closeItemDetail}
-              className="absolute top-3 right-3 z-10 bg-white/90 hover:bg-white text-gray-700 p-2 rounded-full shadow-lg"
+              className="absolute top-3 right-3 z-10 bg-white/90 hover:bg-white text-gray-700 p-2 rounded-full shadow-lg transition-all hover:scale-110"
             >
               <X className="w-5 h-5" />
             </button>
 
-            {/* Image */}
-            <div className="relative h-48 bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center">
+            {/* Left Side - Image (PC) / Top (Mobile) */}
+            <div className="relative h-48 sm:h-56 lg:h-auto lg:w-[45%] bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center flex-shrink-0">
               {selectedItem.image ? (
-                <img src={selectedItem.image} alt={selectedItem.name} className="max-h-full max-w-full object-contain p-4" />
+                <img 
+                  src={selectedItem.image} 
+                  alt={selectedItem.name}
+                  className="max-h-full max-w-full object-contain p-6 lg:p-8"
+                />
               ) : (
-                <span className="text-6xl">🍽️</span>
+                <span className="text-7xl lg:text-8xl">🍽️</span>
               )}
+              
+              {/* Food Type Badge */}
               {selectedItem.foodType && (
-                <span className={`absolute top-3 left-3 px-2 py-1 rounded-full text-xs font-medium ${
-                  selectedItem.foodType === 'veg' ? 'bg-green-100 text-green-700' :
-                  selectedItem.foodType === 'nonveg' ? 'bg-red-100 text-red-700' :
-                  'bg-yellow-100 text-yellow-700'
+                <span className={`absolute top-3 left-3 px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1 ${
+                  selectedItem.foodType === 'veg' ? 'bg-green-100 text-green-700 border-2 border-green-500' :
+                  selectedItem.foodType === 'nonveg' ? 'bg-red-100 text-red-700 border-2 border-red-500' :
+                  'bg-yellow-100 text-yellow-700 border-2 border-yellow-500'
                 }`}>
-                  {selectedItem.foodType === 'veg' ? '🥦 Veg' : selectedItem.foodType === 'nonveg' ? '🍗 Non-Veg' : '🥚 Egg'}
+                  <span className={`w-2 h-2 rounded-full ${
+                    selectedItem.foodType === 'veg' ? 'bg-green-500' :
+                    selectedItem.foodType === 'nonveg' ? 'bg-red-500' :
+                    'bg-yellow-500'
+                  }`} />
+                  {selectedItem.foodType === 'veg' ? 'Veg' : selectedItem.foodType === 'nonveg' ? 'Non-Veg' : 'Egg'}
                 </span>
               )}
             </div>
 
-            {/* Details */}
-            <div className="p-5 overflow-y-auto max-h-[calc(85vh-12rem)]">
+            {/* Right Side - Details (PC) / Bottom (Mobile) */}
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 lg:p-8">
+              {/* Name & Price */}
               <div className="flex items-start justify-between gap-3 mb-3">
-                <h2 className="text-xl font-bold text-gray-900">{selectedItem.name}</h2>
-                <span className="text-xl font-bold text-orange-500">₹{selectedItem.price}</span>
+                <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{selectedItem.name}</h2>
+                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-orange-500 whitespace-nowrap">
+                  ₹{selectedItem.price}
+                </div>
               </div>
 
               {/* Rating */}
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-4">
                 <div className="flex">
-                  {[1,2,3,4,5].map(i => (
-                    <Star key={i} className={`w-4 h-4 ${i <= Math.round(selectedItem.avgRating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <Star 
+                      key={i} 
+                      className={`w-4 h-4 sm:w-5 sm:h-5 ${i <= Math.round(selectedItem.avgRating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} 
+                    />
                   ))}
                 </div>
-                <span className="text-sm text-gray-500">({selectedItem.totalRatings || 0} reviews)</span>
+                <span className="text-sm text-gray-500">
+                  {selectedItem.avgRating?.toFixed(1) || '0.0'} ({selectedItem.totalRatings || 0} reviews)
+                </span>
               </div>
 
+              {/* Description */}
               {selectedItem.description && (
-                <p className="text-gray-600 text-sm mb-4">{selectedItem.description}</p>
+                <p className="text-gray-600 text-sm sm:text-base lg:text-base mb-4 leading-relaxed">
+                  {selectedItem.description}
+                </p>
               )}
 
-              {/* Info */}
-              <div className="grid grid-cols-2 gap-3 mb-4">
+              {/* Details Grid */}
+              <div className="grid grid-cols-2 gap-3 mb-5">
                 <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
                   <Clock className="w-5 h-5 text-orange-500" />
                   <div>
                     <p className="text-xs text-gray-500">Prep Time</p>
-                    <p className="font-semibold text-sm">{selectedItem.preparationTime || 15} mins</p>
+                    <p className="font-semibold text-gray-900">{selectedItem.preparationTime || 15} mins</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
                   <Package className="w-5 h-5 text-orange-500" />
                   <div>
                     <p className="text-xs text-gray-500">Unit</p>
-                    <p className="font-semibold text-sm">{selectedItem.unitQty || 1} {selectedItem.unit || 'piece'}</p>
+                    <p className="font-semibold text-gray-900">{selectedItem.unitQty || 1} {selectedItem.unit || 'piece'}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Quantity */}
-              <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3 mb-4">
+              {/* Quantity Selector */}
+              <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3 mb-5">
                 <span className="font-medium text-gray-700">Quantity</span>
                 <div className="flex items-center gap-3">
                   <button 
                     onClick={() => setDialogQuantity(Math.max(1, dialogQuantity - 1))}
-                    className="w-8 h-8 bg-white border rounded-lg flex items-center justify-center hover:bg-gray-100"
+                    className="w-9 h-9 bg-white border border-gray-200 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
                   >
                     <Minus className="w-4 h-4" />
                   </button>
-                  <span className="w-6 text-center font-bold">{dialogQuantity}</span>
+                  <span className="w-8 text-center font-bold text-lg">{dialogQuantity}</span>
                   <button 
                     onClick={() => setDialogQuantity(dialogQuantity + 1)}
-                    className="w-8 h-8 bg-white border rounded-lg flex items-center justify-center hover:bg-gray-100"
+                    className="w-9 h-9 bg-white border border-gray-200 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              {/* Total & Add to Cart */}
-              <div className="flex items-center justify-between mb-4">
+              {/* Total Price */}
+              <div className="flex items-center justify-between mb-5 pb-4 border-b border-gray-100">
                 <span className="text-gray-600">Total</span>
-                <span className="text-2xl font-bold">₹{selectedItem.price * dialogQuantity}</span>
+                <span className="text-2xl font-bold text-gray-900">₹{selectedItem.price * dialogQuantity}</span>
               </div>
 
-              <button
-                onClick={handleAddToCartFromDialog}
-                className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-semibold transition-colors"
-              >
-                <ShoppingCart className="w-5 h-5" />
-                Add to Cart
-              </button>
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={handleWhatsAppOrder}
+                  className="flex-1 flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-xl font-semibold transition-colors"
+                >
+                  <WhatsAppIcon className="w-5 h-5" />
+                  <span>WhatsApp</span>
+                </button>
+
+                <button
+                  onClick={handleAddToCartFromDialog}
+                  className="flex-[2] flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white py-3 px-4 rounded-xl font-semibold transition-colors"
+                >
+                  <ShoppingCart className="w-5 h-5" />
+                  Add to Cart
+                </button>
+              </div>
             </div>
           </div>
         </div>
