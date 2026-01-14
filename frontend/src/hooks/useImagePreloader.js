@@ -44,9 +44,23 @@ export function useImagePreloader() {
       return;
     }
 
+    let timeoutId;
+    let isCancelled = false;
+
     const preloadAllImages = async () => {
       try {
         setProgress(10);
+        
+        // Set a timeout to prevent infinite loading (8 seconds max)
+        timeoutId = setTimeout(() => {
+          if (!cachedData.imagesLoaded) {
+            console.log('Preloading timeout - continuing without full preload');
+            cachedData.imagesLoaded = true;
+            setIsPreloading(false);
+            setProgress(100);
+            isCancelled = true;
+          }
+        }, 8000);
         
         // Fetch menu items, categories, and offers in parallel
         const [menuRes, categoriesRes, offersRes] = await Promise.all([
@@ -54,6 +68,8 @@ export function useImagePreloader() {
           axios.get(`${API_URL}/categories`).catch(() => ({ data: [] })),
           axios.get(`${API_URL}/offers`).catch(() => ({ data: [] }))
         ]);
+
+        if (isCancelled) return;
 
         // Store data in cache
         cachedData.menu = menuRes.data || [];
@@ -80,6 +96,7 @@ export function useImagePreloader() {
         let loaded = 0;
         
         for (let i = 0; i < allImages.length; i += batchSize) {
+          if (isCancelled) return;
           const batch = allImages.slice(i, i + batchSize);
           await preloadImages(batch);
           loaded += batch.length;
@@ -87,17 +104,25 @@ export function useImagePreloader() {
         }
 
         cachedData.imagesLoaded = true;
+        clearTimeout(timeoutId);
 
       } catch (error) {
         console.error('Error preloading images:', error);
         cachedData.imagesLoaded = true;
       } finally {
-        setIsPreloading(false);
-        setProgress(100);
+        if (!isCancelled) {
+          setIsPreloading(false);
+          setProgress(100);
+        }
       }
     };
 
     preloadAllImages();
+
+    return () => {
+      clearTimeout(timeoutId);
+      isCancelled = true;
+    };
   }, []);
 
   return { isPreloading, progress };
