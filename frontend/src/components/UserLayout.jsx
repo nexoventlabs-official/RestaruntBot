@@ -7,6 +7,7 @@ import CartSidebar from './CartSidebar';
 import WhatsAppFloat from './WhatsAppFloat';
 import OfferPopup from './OfferPopup';
 import FloatingPizza from './FloatingPizza';
+import { Star, X, ShoppingCart, Heart, Clock, Package, Plus, Minus } from 'lucide-react';
 import { 
   HeartIcon, CartIcon, MenuIcon, CloseIcon, 
   HomeIcon, FoodIcon, InfoIcon, PhoneIcon, SearchIcon 
@@ -30,6 +31,12 @@ export default function UserLayout() {
   const [scrolled, setScrolled] = useState(false);
   const [availableItems, setAvailableItems] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [dialogQuantity, setDialogQuantity] = useState(1);
+  const searchInputRef = useRef(null);
   const eventSourceRef = useRef(null);
   const lenisRef = useLenis();
 
@@ -120,6 +127,56 @@ export default function UserLayout() {
 
   const isHomePage = location.pathname === '/';
 
+  // Search functionality
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    if (query.trim() === '') {
+      setSearchResults([]);
+      return;
+    }
+    const filtered = availableItems.filter(item =>
+      item.name.toLowerCase().includes(query.toLowerCase()) ||
+      item.description?.toLowerCase().includes(query.toLowerCase()) ||
+      item.tags?.some(tag => tag.toLowerCase().includes(query.toLowerCase()))
+    );
+    setSearchResults(filtered.slice(0, 8));
+  };
+
+  const openSearch = () => {
+    setSearchOpen(true);
+    setSearchQuery('');
+    setSearchResults([]);
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => searchInputRef.current?.focus(), 100);
+  };
+
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    setSelectedItem(null);
+    document.body.style.overflow = '';
+  };
+
+  const openItemDetail = (item) => {
+    setSelectedItem(item);
+    setDialogQuantity(1);
+  };
+
+  const closeItemDetail = () => {
+    setSelectedItem(null);
+    setDialogQuantity(1);
+  };
+
+  const handleAddToCartFromDialog = () => {
+    if (!selectedItem) return;
+    for (let i = 0; i < dialogQuantity; i++) {
+      addToCart(selectedItem);
+    }
+    closeItemDetail();
+    closeSearch();
+  };
+
   return (
     <div className="min-h-screen bg-[#FAFAFA] flex flex-col overflow-x-hidden w-full max-w-full">
       {/* Offer Popup */}
@@ -195,7 +252,21 @@ export default function UserLayout() {
             </nav>
 
             {/* Right Icons */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 md:gap-2">
+              {/* Search */}
+              <button 
+                onClick={openSearch}
+                className={`relative p-2.5 rounded-full transition-all ${
+                  scrolled
+                    ? 'hover:bg-gray-100 text-gray-600'
+                    : isHomePage
+                      ? 'hover:bg-white/10 text-white'
+                      : 'hover:bg-white/10 text-white'
+                }`}
+              >
+                <SearchIcon className="w-6 h-6" />
+              </button>
+
               {/* Wishlist */}
               <button 
                 onClick={() => { setActiveTab('wishlist'); setSidebarOpen(true); }} 
@@ -239,6 +310,190 @@ export default function UserLayout() {
           </div>
         </div>
       </header>
+
+      {/* Search Modal */}
+      {searchOpen && (
+        <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm" onClick={closeSearch}>
+          <div 
+            className="bg-white w-full max-w-2xl mx-auto mt-4 md:mt-20 rounded-2xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Search Input */}
+            <div className="flex items-center gap-3 p-4 border-b border-gray-100">
+              <SearchIcon className="w-5 h-5 text-gray-400" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search for dishes..."
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                className="flex-1 text-lg outline-none bg-transparent"
+              />
+              <button onClick={closeSearch} className="p-2 hover:bg-gray-100 rounded-full">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Search Results */}
+            <div className="max-h-[60vh] overflow-y-auto">
+              {searchQuery && searchResults.length === 0 && (
+                <div className="p-8 text-center text-gray-500">
+                  <span className="text-4xl block mb-2">🔍</span>
+                  No items found for "{searchQuery}"
+                </div>
+              )}
+              {searchResults.map(item => (
+                <button
+                  key={item._id}
+                  onClick={() => openItemDetail(item)}
+                  className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors border-b border-gray-50"
+                >
+                  <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+                    {item.image ? (
+                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-2xl">🍽️</div>
+                    )}
+                  </div>
+                  <div className="flex-1 text-left">
+                    <h4 className="font-semibold text-gray-900">{item.name}</h4>
+                    <p className="text-sm text-gray-500 line-clamp-1">{item.description}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-orange-500 font-bold">₹{item.price}</span>
+                      {item.avgRating > 0 && (
+                        <span className="flex items-center gap-1 text-xs text-gray-500">
+                          <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
+                          {item.avgRating.toFixed(1)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
+              {!searchQuery && (
+                <div className="p-8 text-center text-gray-400">
+                  <span className="text-4xl block mb-2">🍔</span>
+                  Start typing to search dishes
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Item Detail Dialog */}
+      {selectedItem && (
+        <div 
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          onClick={closeItemDetail}
+        >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div 
+            className="relative bg-white rounded-2xl w-full max-w-md max-h-[85vh] overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              onClick={closeItemDetail}
+              className="absolute top-3 right-3 z-10 bg-white/90 hover:bg-white text-gray-700 p-2 rounded-full shadow-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Image */}
+            <div className="relative h-48 bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center">
+              {selectedItem.image ? (
+                <img src={selectedItem.image} alt={selectedItem.name} className="max-h-full max-w-full object-contain p-4" />
+              ) : (
+                <span className="text-6xl">🍽️</span>
+              )}
+              {selectedItem.foodType && (
+                <span className={`absolute top-3 left-3 px-2 py-1 rounded-full text-xs font-medium ${
+                  selectedItem.foodType === 'veg' ? 'bg-green-100 text-green-700' :
+                  selectedItem.foodType === 'nonveg' ? 'bg-red-100 text-red-700' :
+                  'bg-yellow-100 text-yellow-700'
+                }`}>
+                  {selectedItem.foodType === 'veg' ? '🥦 Veg' : selectedItem.foodType === 'nonveg' ? '🍗 Non-Veg' : '🥚 Egg'}
+                </span>
+              )}
+            </div>
+
+            {/* Details */}
+            <div className="p-5 overflow-y-auto max-h-[calc(85vh-12rem)]">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <h2 className="text-xl font-bold text-gray-900">{selectedItem.name}</h2>
+                <span className="text-xl font-bold text-orange-500">₹{selectedItem.price}</span>
+              </div>
+
+              {/* Rating */}
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex">
+                  {[1,2,3,4,5].map(i => (
+                    <Star key={i} className={`w-4 h-4 ${i <= Math.round(selectedItem.avgRating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                  ))}
+                </div>
+                <span className="text-sm text-gray-500">({selectedItem.totalRatings || 0} reviews)</span>
+              </div>
+
+              {selectedItem.description && (
+                <p className="text-gray-600 text-sm mb-4">{selectedItem.description}</p>
+              )}
+
+              {/* Info */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
+                  <Clock className="w-5 h-5 text-orange-500" />
+                  <div>
+                    <p className="text-xs text-gray-500">Prep Time</p>
+                    <p className="font-semibold text-sm">{selectedItem.preparationTime || 15} mins</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
+                  <Package className="w-5 h-5 text-orange-500" />
+                  <div>
+                    <p className="text-xs text-gray-500">Unit</p>
+                    <p className="font-semibold text-sm">{selectedItem.unitQty || 1} {selectedItem.unit || 'piece'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quantity */}
+              <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3 mb-4">
+                <span className="font-medium text-gray-700">Quantity</span>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setDialogQuantity(Math.max(1, dialogQuantity - 1))}
+                    className="w-8 h-8 bg-white border rounded-lg flex items-center justify-center hover:bg-gray-100"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="w-6 text-center font-bold">{dialogQuantity}</span>
+                  <button 
+                    onClick={() => setDialogQuantity(dialogQuantity + 1)}
+                    className="w-8 h-8 bg-white border rounded-lg flex items-center justify-center hover:bg-gray-100"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Total & Add to Cart */}
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-gray-600">Total</span>
+                <span className="text-2xl font-bold">₹{selectedItem.price * dialogQuantity}</span>
+              </div>
+
+              <button
+                onClick={handleAddToCartFromDialog}
+                className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-semibold transition-colors"
+              >
+                <ShoppingCart className="w-5 h-5" />
+                Add to Cart
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg safe-area-bottom">
