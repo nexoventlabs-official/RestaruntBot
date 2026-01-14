@@ -18,7 +18,7 @@ const WhatsAppIcon = ({ className }) => (
 // Food Type Badge Component
 const FoodTypeBadge = ({ type, size = 'md' }) => {
   const config = {
-    veg: { color: 'green', label: 'Veg', icon: '🥦' },
+    veg: { color: 'green', label: 'Veg', icon: '🌿' },
     nonveg: { color: 'red', label: 'Non-Veg', icon: '🍗' },
     egg: { color: 'yellow', label: 'Egg', icon: '🥚' }
   };
@@ -207,7 +207,7 @@ export default function UserMenuPage() {
     if (!isItemAvailable(item._id)) return;
     
     // Format food type
-    const foodTypeLabel = item.foodType === 'veg' ? '🥦 Veg' : 
+    const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : 
                           item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
                           item.foodType === 'egg' ? '🥚 Egg' : '';
     
@@ -269,7 +269,7 @@ export default function UserMenuPage() {
     if (!selectedItem) return;
     const item = selectedItem;
     
-    const foodTypeLabel = item.foodType === 'veg' ? '🥦 Veg' : 
+    const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : 
                           item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
                           item.foodType === 'egg' ? '🥚 Egg' : '';
     
@@ -496,7 +496,7 @@ export default function UserMenuPage() {
           currentBanner.align === 'right' ? 'text-right' : 'text-center'
         }`}>
           <span className="inline-block px-4 py-1.5 bg-[#3f9065] text-white text-sm font-medium rounded-full mb-4 tracking-wide uppercase">
-            {foodType === 'all' ? 'Explore' : foodType === 'veg' ? '🥦 Pure Veg' : foodType === 'nonveg' ? '🍗 Non-Veg' : '🥚 Egg Special'}
+            {foodType === 'all' ? 'Explore' : foodType === 'veg' ? '🌿 Pure Veg' : foodType === 'nonveg' ? '🍗 Non-Veg' : '🥚 Egg Special'}
           </span>
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 drop-shadow-lg">
             <span className="text-white">{currentBanner.title.split(' ')[0]}</span>{' '}

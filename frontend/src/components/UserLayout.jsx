@@ -180,7 +180,7 @@ export default function UserLayout() {
   const handleWhatsAppOrder = () => {
     if (!selectedItem) return;
     const item = selectedItem;
-    const foodTypeLabel = item.foodType === 'veg' ? '🥦 Veg' : 
+    const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : 
                           item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
                           item.foodType === 'egg' ? '🥚 Egg' : '';
     
