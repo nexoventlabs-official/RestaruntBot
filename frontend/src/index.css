@@ -405,6 +405,31 @@ select option:checked {
   background: linear-gradient(180deg, #ff6b00 0%, #e65c00 100%);
 }
 
+/* Custom scrollbar for cart sidebar */
+.scrollbar-cart {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f3f4f6;
+}
+
+.scrollbar-cart::-webkit-scrollbar {
+  display: block !important;
+  width: 6px;
+}
+
+.scrollbar-cart::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 10px;
+}
+
+.scrollbar-cart::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 10px;
+}
+
+.scrollbar-cart::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
 
 /* Image preloading optimization */
 img {

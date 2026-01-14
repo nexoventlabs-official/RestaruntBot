@@ -76,7 +76,7 @@ export default function CartSidebar({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4 scrollbar-cart" style={{ maxHeight: 'calc(100vh - 220px)' }}>
           {activeTab === 'cart' ? (
             cart.length === 0 ? (
               <div className="text-center py-12">
