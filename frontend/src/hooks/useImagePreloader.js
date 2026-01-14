@@ -47,26 +47,28 @@ export function useImagePreloader() {
     let timeoutId;
     let isCancelled = false;
 
+    // Force complete after 5 seconds no matter what
+    const forceComplete = () => {
+      if (!isCancelled) {
+        console.log('Preloading timeout - continuing without full preload');
+        cachedData.imagesLoaded = true;
+        isCancelled = true;
+        setIsPreloading(false);
+        setProgress(100);
+      }
+    };
+
+    timeoutId = setTimeout(forceComplete, 5000);
+
     const preloadAllImages = async () => {
       try {
         setProgress(10);
         
-        // Set a timeout to prevent infinite loading (8 seconds max)
-        timeoutId = setTimeout(() => {
-          if (!cachedData.imagesLoaded) {
-            console.log('Preloading timeout - continuing without full preload');
-            cachedData.imagesLoaded = true;
-            setIsPreloading(false);
-            setProgress(100);
-            isCancelled = true;
-          }
-        }, 8000);
-        
-        // Fetch menu items, categories, and offers in parallel
+        // Fetch menu items, categories, and offers in parallel with 4s timeout
         const [menuRes, categoriesRes, offersRes] = await Promise.all([
-          axios.get(`${API_URL}/menu`).catch(() => ({ data: [] })),
-          axios.get(`${API_URL}/categories`).catch(() => ({ data: [] })),
-          axios.get(`${API_URL}/offers`).catch(() => ({ data: [] }))
+          axios.get(`${API_URL}/menu`, { timeout: 4000 }).catch(() => ({ data: [] })),
+          axios.get(`${API_URL}/categories`, { timeout: 4000 }).catch(() => ({ data: [] })),
+          axios.get(`${API_URL}/offers`, { timeout: 4000 }).catch(() => ({ data: [] }))
         ]);
 
         if (isCancelled) return;
@@ -103,14 +105,17 @@ export function useImagePreloader() {
           setProgress(30 + Math.round((loaded / allImages.length) * 70));
         }
 
-        cachedData.imagesLoaded = true;
-        clearTimeout(timeoutId);
+        if (!isCancelled) {
+          cachedData.imagesLoaded = true;
+          clearTimeout(timeoutId);
+          setIsPreloading(false);
+          setProgress(100);
+        }
 
       } catch (error) {
         console.error('Error preloading images:', error);
-        cachedData.imagesLoaded = true;
-      } finally {
         if (!isCancelled) {
+          cachedData.imagesLoaded = true;
           setIsPreloading(false);
           setProgress(100);
         }
