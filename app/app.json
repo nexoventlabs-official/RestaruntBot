@@ -34,8 +34,7 @@
         "ACCESS_COARSE_LOCATION",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE"
-      ],
-      "googleServicesFile": "./google-services.json"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -48,7 +47,6 @@
         {
           "icon": "./assets/icon.png",
           "color": "#267E3E",
-          "sounds": ["./assets/notification.wav"],
           "defaultChannel": "default"
         }
       ]
