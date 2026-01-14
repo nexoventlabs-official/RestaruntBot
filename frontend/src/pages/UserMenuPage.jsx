@@ -728,6 +728,21 @@ export default function UserMenuPage() {
               <X className="w-5 h-5" />
             </button>
 
+            {/* Wishlist Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isInWishlist && isInWishlist(selectedItem._id)) {
+                  removeFromWishlist(selectedItem._id);
+                } else {
+                  addToWishlist(selectedItem);
+                }
+              }}
+              className="absolute top-3 right-14 z-10 bg-white/90 hover:bg-white p-2 rounded-full shadow-lg transition-all hover:scale-110"
+            >
+              <Heart className={`w-5 h-5 ${isInWishlist && isInWishlist(selectedItem._id) ? 'fill-red-500 text-red-500' : 'text-gray-700'}`} />
+            </button>
+
             {/* Left Side - Image (PC) / Top (Mobile) */}
             <div className="relative h-48 sm:h-56 lg:h-auto lg:w-[45%] bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center flex-shrink-0">
               {selectedItem.image ? (
