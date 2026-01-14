@@ -25,7 +25,6 @@ const navLinks = [
 
 export default function UserLayout() {
   const location = useLocation();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('cart');
   const [scrolled, setScrolled] = useState(false);
@@ -118,11 +117,6 @@ export default function UserLayout() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  // Close mobile menu on route change
-  useEffect(() => {
-    setMobileMenuOpen(false);
-  }, [location.pathname]);
 
   const isHomePage = location.pathname === '/';
 
@@ -240,56 +234,43 @@ export default function UserLayout() {
                 )}
               </button>
 
-              {/* Mobile Menu Button */}
-              <button 
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className={`md:hidden p-2.5 rounded-full transition-all ${
-                  scrolled
-                    ? 'hover:bg-gray-100 text-gray-600'
-                    : isHomePage
-                      ? 'hover:bg-white/10 text-white'
-                      : 'hover:bg-white/10 text-white'
-                }`}
-              >
-                {mobileMenuOpen ? <CloseIcon className="w-6 h-6" /> : <MenuIcon className="w-6 h-6" />}
-              </button>
+              {/* Mobile Menu Button - Hidden, using bottom nav instead */}
             </div>
-          </div>
-
-          {/* Mobile Navigation */}
-          <div className={`md:hidden overflow-hidden transition-all duration-300 ${
-            mobileMenuOpen ? 'max-h-64 pb-4' : 'max-h-0'
-          }`}>
-            <nav className={`flex flex-col gap-1 pt-2 border-t ${
-              scrolled || !isHomePage ? 'border-gray-100' : 'border-white/20'
-            }`}>
-              {navLinks.map(link => {
-                const Icon = link.icon;
-                const isActive = location.pathname === link.path;
-                return (
-                  <Link
-                    key={link.path}
-                    to={link.path}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${
-                      isActive
-                        ? 'bg-orange-500 text-white'
-                        : scrolled || !isHomePage
-                          ? 'text-gray-600 hover:bg-gray-100'
-                          : 'text-white/90 hover:bg-white/10'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    {link.label}
-                  </Link>
-                );
-              })}
-            </nav>
           </div>
         </div>
       </header>
 
+      {/* Mobile Bottom Navigation */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg safe-area-bottom">
+        <div className="flex items-center justify-around h-16">
+          {navLinks.map(link => {
+            const Icon = link.icon;
+            const isActive = location.pathname === link.path;
+            return (
+              <Link
+                key={link.path}
+                to={link.path}
+                className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
+                  isActive
+                    ? 'text-orange-500'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Icon className={`w-6 h-6 ${isActive ? 'scale-110' : ''} transition-transform`} />
+                <span className={`text-xs mt-1 font-medium ${isActive ? 'text-orange-500' : 'text-gray-500'}`}>
+                  {link.label}
+                </span>
+                {isActive && (
+                  <div className="absolute bottom-0 w-12 h-1 bg-orange-500 rounded-t-full" />
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+
       {/* Main Content */}
-      <main className="flex-1">
+      <main className="flex-1 pb-20 md:pb-0">
         <Outlet context={{ 
           cart, wishlist, cartTotal, cartCount,
           addToCart, removeFromCart, updateQuantity, clearCart,
