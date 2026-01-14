@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import axios from 'axios';
-import { Star, Plus, Minus, Heart, ShoppingCart, X, Clock, Package } from 'lucide-react';
+import { Star, Plus, Minus, Heart, ShoppingCart, X, Clock, Package, Search } from 'lucide-react';
 import { useCachedData } from '../hooks/useImagePreloader';
 
 const API_URL = 'https://restaruntbot.onrender.com/api/public';
@@ -52,6 +52,7 @@ export default function UserMenuPage() {
   const [bannerFading, setBannerFading] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [dialogQuantity, setDialogQuantity] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
   const eventSourceRef = useRef(null);
 
   // Get cached data from preloader
@@ -151,7 +152,19 @@ export default function UserMenuPage() {
 
   const availableItems = items.filter(item => {
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-    return itemCategories.some(cat => activeCategoryNames.includes(cat));
+    const isAvailable = itemCategories.some(cat => activeCategoryNames.includes(cat));
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch = 
+        item.name.toLowerCase().includes(query) ||
+        item.description?.toLowerCase().includes(query) ||
+        item.tags?.some(tag => tag.toLowerCase().includes(query));
+      return isAvailable && matchesSearch;
+    }
+    
+    return isAvailable;
   });
 
   // Get item count for a category from all items (not filtered)
@@ -659,6 +672,28 @@ export default function UserMenuPage() {
                 </button>
               );
             })}
+          </div>
+        </div>
+
+        {/* Search Bar */}
+        <div className="mb-8">
+          <div className="relative max-w-xl mx-auto">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search for dishes..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-12 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-full text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 rounded-full transition-colors"
+              >
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            )}
           </div>
         </div>
 
