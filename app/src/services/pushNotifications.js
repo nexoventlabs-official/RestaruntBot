@@ -1,18 +1,20 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { Platform } from 'react-native';
+import { Platform, AppState } from 'react-native';
 import Constants from 'expo-constants';
 import api from '../config/api';
 
 // Check if running in Expo Go
 const isExpoGo = Constants.appOwnership === 'expo';
 
-// Configure notification handler
+// Configure notification handler - THIS IS CRITICAL for showing notifications
+// when app is in foreground
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
+    priority: Notifications.AndroidNotificationPriority.MAX,
   }),
 });
 
@@ -42,7 +44,14 @@ export const pushNotifications = {
 
     // Request permissions if not granted
     if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
+      const { status } = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+          allowAnnouncements: true,
+        },
+      });
       finalStatus = status;
     }
 
@@ -64,23 +73,46 @@ export const pushNotifications = {
       return null;
     }
 
-    // Configure Android notification channel
+    // Configure Android notification channels
     if (Platform.OS === 'android') {
+      // Default channel
       await Notifications.setNotificationChannelAsync('default', {
         name: 'Default',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#267E3E',
         sound: 'default',
+        enableVibrate: true,
+        enableLights: true,
+        showBadge: true,
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       });
 
-      // Create a channel for new orders
+      // New orders channel - high priority
       await Notifications.setNotificationChannelAsync('new-orders', {
         name: 'New Orders',
+        description: 'Notifications for new order assignments',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 500, 250, 500],
         lightColor: '#267E3E',
         sound: 'default',
+        enableVibrate: true,
+        enableLights: true,
+        showBadge: true,
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        bypassDnd: true, // Bypass Do Not Disturb
+      });
+
+      // Order updates channel
+      await Notifications.setNotificationChannelAsync('order-updates', {
+        name: 'Order Updates',
+        description: 'Notifications for order status changes',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#267E3E',
+        sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
       });
     }
 
@@ -103,12 +135,12 @@ export const pushNotifications = {
   },
 
   /**
-   * Add notification received listener
+   * Add notification received listener (when app is in foreground)
    * @param {Function} callback - Callback function when notification is received
    * @returns {Object} Subscription object
    */
   addNotificationReceivedListener(callback) {
-    if (isExpoGo) return null;
+    if (isExpoGo) return { remove: () => {} };
     return Notifications.addNotificationReceivedListener(callback);
   },
 
@@ -118,7 +150,7 @@ export const pushNotifications = {
    * @returns {Object} Subscription object
    */
   addNotificationResponseListener(callback) {
-    if (isExpoGo) return null;
+    if (isExpoGo) return { remove: () => {} };
     return Notifications.addNotificationResponseReceivedListener(callback);
   },
 
@@ -163,6 +195,32 @@ export const pushNotifications = {
    */
   isSupported() {
     return !isExpoGo && Device.isDevice;
+  },
+
+  /**
+   * Schedule a local notification (for testing)
+   */
+  async scheduleLocalNotification(title, body, data = {}) {
+    if (isExpoGo) return null;
+    
+    return await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data,
+        sound: 'default',
+        priority: Notifications.AndroidNotificationPriority.MAX,
+      },
+      trigger: null, // Immediate
+    });
+  },
+
+  /**
+   * Get last notification response (for when app opens from notification)
+   */
+  async getLastNotificationResponse() {
+    if (isExpoGo) return null;
+    return await Notifications.getLastNotificationResponseAsync();
   },
 };
 

@@ -43,10 +43,12 @@ export const AuthProvider = ({ children }) => {
         try {
           if (storedRole === 'admin') {
             await api.get('/auth/verify');
+            // Register push token for admin
+            registerPushToken('admin');
           } else {
             await api.get('/delivery/verify');
             // Re-register push token for delivery partner
-            registerPushToken();
+            registerPushToken('delivery');
           }
         } catch (error) {
           await logout();
@@ -59,12 +61,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Register push notifications for delivery partner
-  const registerPushToken = async () => {
+  // Register push notifications
+  const registerPushToken = async (userRole) => {
     try {
       const pushToken = await pushNotifications.registerForPushNotifications();
       if (pushToken) {
-        await pushNotifications.updatePushToken(pushToken);
+        // Send to appropriate endpoint based on role
+        if (userRole === 'admin') {
+          await api.post('/auth/push-token', { pushToken });
+          console.log('📱 Admin push token registered');
+        } else {
+          await pushNotifications.updatePushToken(pushToken);
+          console.log('📱 Delivery push token registered');
+        }
       }
     } catch (error) {
       console.error('Error registering push token:', error);
@@ -81,6 +90,10 @@ export const AuthProvider = ({ children }) => {
     
     setUser(userData);
     setRole('admin');
+    
+    // Register push notifications for admin
+    registerPushToken('admin');
+    
     return userData;
   };
 
@@ -96,7 +109,7 @@ export const AuthProvider = ({ children }) => {
     setRole('delivery');
     
     // Register push notifications for delivery partner
-    registerPushToken();
+    registerPushToken('delivery');
     
     return userData;
   };

@@ -10,8 +10,9 @@ const pushNotification = {
    * @param {string} title - Notification title
    * @param {string} body - Notification body
    * @param {object} data - Additional data to send
+   * @param {string} channelId - Android notification channel
    */
-  async sendNotification(pushToken, title, body, data = {}) {
+  async sendNotification(pushToken, title, body, data = {}, channelId = 'default') {
     if (!Expo.isExpoPushToken(pushToken)) {
       console.error(`Push token ${pushToken} is not a valid Expo push token`);
       return false;
@@ -24,13 +25,29 @@ const pushNotification = {
       body,
       data,
       priority: 'high',
-      channelId: 'default',
+      channelId: channelId,
+      // Android specific
+      _displayInForeground: true,
+      // iOS specific
+      badge: 1,
+      mutableContent: true,
     };
 
     try {
-      const ticket = await expo.sendPushNotificationsAsync([message]);
-      console.log('📱 Push notification sent:', ticket);
-      return ticket;
+      const tickets = await expo.sendPushNotificationsAsync([message]);
+      console.log('📱 Push notification sent:', tickets);
+      
+      // Check for errors in tickets
+      for (const ticket of tickets) {
+        if (ticket.status === 'error') {
+          console.error(`Push notification error: ${ticket.message}`);
+          if (ticket.details && ticket.details.error) {
+            console.error(`Error code: ${ticket.details.error}`);
+          }
+        }
+      }
+      
+      return tickets;
     } catch (error) {
       console.error('Push notification error:', error.message);
       return false;
@@ -43,8 +60,9 @@ const pushNotification = {
    * @param {string} title - Notification title
    * @param {string} body - Notification body
    * @param {object} data - Additional data to send
+   * @param {string} channelId - Android notification channel
    */
-  async sendMultipleNotifications(pushTokens, title, body, data = {}) {
+  async sendMultipleNotifications(pushTokens, title, body, data = {}, channelId = 'default') {
     const messages = [];
     
     for (const pushToken of pushTokens) {
@@ -60,7 +78,9 @@ const pushNotification = {
         body,
         data,
         priority: 'high',
-        channelId: 'default',
+        channelId: channelId,
+        _displayInForeground: true,
+        badge: 1,
       });
     }
 
@@ -93,15 +113,74 @@ const pushNotification = {
    */
   async sendNewOrderNotification(pushToken, orderDetails) {
     const title = '🛵 New Order Assigned!';
-    const body = `Order #${orderDetails.orderId} - ₹${orderDetails.totalAmount}\n${orderDetails.customerName} • ${orderDetails.items.length} items`;
+    const body = `Order #${orderDetails.orderId} - ₹${orderDetails.totalAmount}\n📍 ${orderDetails.deliveryAddress || 'Delivery'}`;
     
     const data = {
       type: 'new_order',
       orderId: orderDetails.orderId,
       screen: 'MyOrders',
+      amount: orderDetails.totalAmount,
+      customerName: orderDetails.customerName,
     };
 
-    return this.sendNotification(pushToken, title, body, data);
+    // Use new-orders channel for high priority
+    return this.sendNotification(pushToken, title, body, data, 'new-orders');
+  },
+
+  /**
+   * Send order cancelled notification to delivery partner
+   * @param {string} pushToken - Delivery partner's push token
+   * @param {object} orderDetails - Order details
+   */
+  async sendOrderCancelledNotification(pushToken, orderDetails) {
+    const title = '❌ Order Cancelled';
+    const body = `Order #${orderDetails.orderId} has been cancelled`;
+    
+    const data = {
+      type: 'order_cancelled',
+      orderId: orderDetails.orderId,
+      screen: 'MyOrders',
+    };
+
+    return this.sendNotification(pushToken, title, body, data, 'order-updates');
+  },
+
+  /**
+   * Send notification to all active delivery partners
+   * @param {Array} deliveryPartners - Array of delivery partner objects with pushToken
+   * @param {string} title - Notification title
+   * @param {string} body - Notification body
+   * @param {object} data - Additional data
+   */
+  async notifyAllDeliveryPartners(deliveryPartners, title, body, data = {}) {
+    const tokens = deliveryPartners
+      .filter(dp => dp.pushToken && dp.isActive && dp.isOnline)
+      .map(dp => dp.pushToken);
+    
+    if (tokens.length === 0) {
+      console.log('No online delivery partners with push tokens');
+      return [];
+    }
+
+    return this.sendMultipleNotifications(tokens, title, body, data, 'new-orders');
+  },
+
+  /**
+   * Send new order notification to admin (for new customer orders)
+   * @param {string} pushToken - Admin's push token
+   * @param {object} orderDetails - Order details
+   */
+  async sendAdminNewOrderNotification(pushToken, orderDetails) {
+    const title = '🎉 New Order Received!';
+    const body = `Order #${orderDetails.orderId} - ₹${orderDetails.totalAmount}\n${orderDetails.customerName} • ${orderDetails.items?.length || 0} items`;
+    
+    const data = {
+      type: 'new_order',
+      orderId: orderDetails.orderId,
+      screen: 'Orders',
+    };
+
+    return this.sendNotification(pushToken, title, body, data, 'new-orders');
   },
 };
 

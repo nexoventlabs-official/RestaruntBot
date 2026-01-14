@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import { AppState } from 'react-native';
 import api from '../config/api';
+import pushNotifications from '../services/pushNotifications';
 
 const NotificationContext = createContext();
 
@@ -15,11 +17,23 @@ export function NotificationProvider({ children }) {
   const lastCheckTime = useRef(null);
   const seenOrderStatuses = useRef({});
   const isInitialized = useRef(false);
+  const appState = useRef(AppState.currentState);
 
   // Load data from storage on mount
   useEffect(() => {
     loadData();
+    
+    // Listen for app state changes to show notifications when app is in background
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    return () => {
+      subscription?.remove();
+    };
   }, []);
+
+  const handleAppStateChange = (nextAppState) => {
+    appState.current = nextAppState;
+  };
 
   const loadData = async () => {
     try {
@@ -80,6 +94,17 @@ export function NotificationProvider({ children }) {
     }
   };
 
+  // Show local push notification
+  const showLocalNotification = async (title, body, data = {}) => {
+    if (pushNotifications.isSupported()) {
+      try {
+        await pushNotifications.scheduleLocalNotification(title, body, data);
+      } catch (error) {
+        console.error('Error showing local notification:', error);
+      }
+    }
+  };
+
   // Check for new orders and status changes
   const checkForUpdates = useCallback(async () => {
     if (!isInitialized.current) return;
@@ -99,7 +124,7 @@ export function NotificationProvider({ children }) {
         if (!previousStatus && lastCheckTime.current) {
           if (orderCreatedAt > lastCheckTime.current) {
             // This is a genuinely new order
-            newNotifications.push({
+            const notification = {
               id: `new_${order.orderId}_${Date.now()}`,
               type: 'new_order',
               title: 'New Order Received! 🎉',
@@ -110,14 +135,22 @@ export function NotificationProvider({ children }) {
               read: false,
               icon: 'cart',
               color: '#F59E0B'
-            });
+            };
+            newNotifications.push(notification);
+            
+            // Show local push notification
+            showLocalNotification(
+              notification.title,
+              notification.message,
+              { type: 'new_order', orderId: order.orderId, screen: 'Orders' }
+            );
           }
         }
         
         // Check for STATUS CHANGES
         if (previousStatus && previousStatus !== order.status) {
           if (order.status === 'delivered') {
-            newNotifications.push({
+            const notification = {
               id: `delivered_${order.orderId}_${Date.now()}`,
               type: 'delivered',
               title: 'Order Delivered ✅',
@@ -127,9 +160,17 @@ export function NotificationProvider({ children }) {
               read: false,
               icon: 'checkmark-circle',
               color: '#22C55E'
-            });
+            };
+            newNotifications.push(notification);
+            
+            // Show local push notification
+            showLocalNotification(
+              notification.title,
+              notification.message,
+              { type: 'delivered', orderId: order.orderId }
+            );
           } else if (order.status === 'cancelled' || order.status === 'refunded') {
-            newNotifications.push({
+            const notification = {
               id: `cancelled_${order.orderId}_${Date.now()}`,
               type: 'cancelled',
               title: 'Order Cancelled ❌',
@@ -139,7 +180,15 @@ export function NotificationProvider({ children }) {
               read: false,
               icon: 'close-circle',
               color: '#EF4444'
-            });
+            };
+            newNotifications.push(notification);
+            
+            // Show local push notification
+            showLocalNotification(
+              notification.title,
+              notification.message,
+              { type: 'cancelled', orderId: order.orderId }
+            );
           }
         }
         
@@ -200,6 +249,7 @@ export function NotificationProvider({ children }) {
     setNotifications([]);
     setUnreadCount(0);
     await SecureStore.deleteItemAsync(STORAGE_KEY);
+    await pushNotifications.clearAllNotifications();
   }, []);
 
   // Reset tracking (useful for testing)
@@ -212,6 +262,7 @@ export function NotificationProvider({ children }) {
     setUnreadCount(0);
     setNewOrdersCount(0);
     await SecureStore.deleteItemAsync(STORAGE_KEY);
+    await pushNotifications.clearAllNotifications();
   }, []);
 
   // Clear new orders count (called when Orders tab is viewed)

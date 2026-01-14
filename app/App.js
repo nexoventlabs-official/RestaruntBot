@@ -1,7 +1,7 @@
 import 'react-native-gesture-handler';
 import React, { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, AppState } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -21,6 +21,7 @@ const Stack = createNativeStackNavigator();
 function AppNavigator() {
   const { user, role, loading } = useAuth();
   const navigationRef = useRef(null);
+  const appState = useRef(AppState.currentState);
 
   useEffect(() => {
     let responseSubscription = null;
@@ -31,6 +32,7 @@ function AppNavigator() {
       // Handle notification tap - navigate to appropriate screen
       responseSubscription = pushNotifications.addNotificationResponseListener(response => {
         const data = response.notification.request.content.data;
+        console.log('📱 Notification tapped:', data);
         
         if (data?.type === 'new_order' && data?.screen) {
           // Navigate to MyOrders screen when notification is tapped
@@ -42,11 +44,24 @@ function AppNavigator() {
         }
       });
 
-      // Handle notification received while app is open
+      // Handle notification received while app is open (foreground)
       receivedSubscription = pushNotifications.addNotificationReceivedListener(notification => {
-        console.log('📱 Notification received:', notification);
+        console.log('📱 Notification received in foreground:', notification.request.content);
+        // The notification will automatically show as a banner because of setNotificationHandler
       });
+
+      // Check if app was opened from a notification
+      checkInitialNotification();
     }
+
+    // Handle app state changes
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        // App came to foreground - check for any pending notifications
+        console.log('📱 App came to foreground');
+      }
+      appState.current = nextAppState;
+    });
 
     return () => {
       if (responseSubscription) {
@@ -55,8 +70,29 @@ function AppNavigator() {
       if (receivedSubscription) {
         pushNotifications.removeNotificationListener(receivedSubscription);
       }
+      subscription?.remove();
     };
   }, [role]);
+
+  // Check if app was opened from a notification tap
+  const checkInitialNotification = async () => {
+    const response = await pushNotifications.getLastNotificationResponse();
+    if (response) {
+      const data = response.notification.request.content.data;
+      console.log('📱 App opened from notification:', data);
+      
+      // Handle navigation based on notification data
+      if (data?.type === 'new_order' && data?.screen && role === 'delivery') {
+        setTimeout(() => {
+          if (navigationRef.current) {
+            navigationRef.current.navigate('DeliveryMain', {
+              screen: 'MyOrders',
+            });
+          }
+        }, 500);
+      }
+    }
+  };
 
   if (loading) {
     return null;
@@ -69,7 +105,7 @@ function AppNavigator() {
         gestureEnabled: true,
         gestureDirection: 'horizontal',
         animation: 'slide_from_right',
-        fullScreenGestureEnabled: true, // iOS full screen swipe
+        fullScreenGestureEnabled: true,
       }}
     >
       {!user ? (

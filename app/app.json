@@ -19,7 +19,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.foodadmin.mobile",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "We need your location to navigate to delivery addresses."
+        "NSLocationWhenInUseUsageDescription": "We need your location to navigate to delivery addresses.",
+        "UIBackgroundModes": ["remote-notification"]
       }
     },
     "android": {
@@ -30,15 +31,27 @@
       "package": "com.foodadmin.mobile",
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
-      ]
+        "ACCESS_COARSE_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-asset",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#267E3E",
+          "sounds": ["./assets/notification.wav"],
+          "defaultChannel": "default"
+        }
+      ]
     ],
     "extra": {
       "eas": {

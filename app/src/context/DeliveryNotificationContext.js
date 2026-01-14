@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import * as SecureStore from 'expo-secure-store';
 import { AppState } from 'react-native';
 import api from '../config/api';
+import pushNotifications from '../services/pushNotifications';
 
 const DeliveryNotificationContext = createContext();
 
@@ -132,6 +133,17 @@ export function DeliveryNotificationProvider({ children }) {
     }
   };
 
+  // Show local push notification
+  const showLocalNotification = async (title, body, data = {}) => {
+    if (pushNotifications.isSupported()) {
+      try {
+        await pushNotifications.scheduleLocalNotification(title, body, data);
+      } catch (error) {
+        console.error('Error showing local notification:', error);
+      }
+    }
+  };
+
   // Check for new assigned orders and status changes
   const checkForUpdates = useCallback(async () => {
     if (!isInitialized.current) return;
@@ -159,7 +171,7 @@ export function DeliveryNotificationProvider({ children }) {
         // Check for NEW ASSIGNED orders (not seen before)
         if (!wasAssigned && order.status !== 'delivered' && order.status !== 'cancelled') {
           newAssignments++;
-          newNotifications.push({
+          const notification = {
             id: `assigned_${orderId}_${Date.now()}`,
             type: 'new_assignment',
             title: 'New Order Assigned! 🚴',
@@ -171,14 +183,22 @@ export function DeliveryNotificationProvider({ children }) {
             read: false,
             icon: 'bicycle',
             color: '#F59E0B'
-          });
+          };
+          newNotifications.push(notification);
           seenAssignedOrders.current.add(orderId);
+          
+          // Show local push notification for new assignment
+          showLocalNotification(
+            notification.title,
+            `${notification.message}\n📍 ${notification.address || 'Delivery'}`,
+            { type: 'new_order', orderId: orderId, screen: 'MyOrders' }
+          );
         }
         
         // Check for STATUS CHANGES (cancelled by customer)
         if (previousStatus && previousStatus !== order.status) {
           if (order.status === 'cancelled' || order.status === 'refunded') {
-            newNotifications.push({
+            const notification = {
               id: `cancelled_${orderId}_${Date.now()}`,
               type: 'order_cancelled',
               title: 'Order Cancelled ❌',
@@ -188,7 +208,15 @@ export function DeliveryNotificationProvider({ children }) {
               read: false,
               icon: 'close-circle',
               color: '#EF4444'
-            });
+            };
+            newNotifications.push(notification);
+            
+            // Show local push notification for cancellation
+            showLocalNotification(
+              notification.title,
+              notification.message,
+              { type: 'order_cancelled', orderId: orderId, screen: 'MyOrders' }
+            );
           }
         }
         
@@ -257,6 +285,7 @@ export function DeliveryNotificationProvider({ children }) {
     setNotifications([]);
     setUnreadCount(0);
     await SecureStore.deleteItemAsync(STORAGE_KEY);
+    await pushNotifications.clearAllNotifications();
   }, []);
 
   // Reset tracking
@@ -270,6 +299,7 @@ export function DeliveryNotificationProvider({ children }) {
     setUnreadCount(0);
     setNewOrdersCount(0);
     await SecureStore.deleteItemAsync(STORAGE_KEY);
+    await pushNotifications.clearAllNotifications();
   }, []);
 
   // Clear new orders count (called when MyOrders screen is viewed)
