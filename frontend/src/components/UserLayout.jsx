@@ -238,7 +238,7 @@ export default function UserLayout() {
                       isActive
                         ? 'text-white'
                         : scrolled
-                          ? 'text-gray-600 group-hover:text-white'
+                          ? 'text-gray-900 group-hover:text-white'
                           : isHomePage
                             ? 'text-white group-hover:text-white'
                             : 'text-white/90 group-hover:text-white'
@@ -258,7 +258,7 @@ export default function UserLayout() {
                 onClick={openSearch}
                 className={`relative p-2.5 rounded-full transition-all ${
                   scrolled
-                    ? 'hover:bg-gray-100 text-gray-600'
+                    ? 'hover:bg-gray-100 text-gray-900'
                     : isHomePage
                       ? 'hover:bg-white/10 text-white'
                       : 'hover:bg-white/10 text-white'
@@ -272,7 +272,7 @@ export default function UserLayout() {
                 onClick={() => { setActiveTab('wishlist'); setSidebarOpen(true); }} 
                 className={`relative p-2.5 rounded-full transition-all ${
                   scrolled
-                    ? 'hover:bg-gray-100 text-gray-600'
+                    ? 'hover:bg-gray-100 text-gray-900'
                     : isHomePage
                       ? 'hover:bg-white/10 text-white'
                       : 'hover:bg-white/10 text-white'
@@ -291,7 +291,7 @@ export default function UserLayout() {
                 onClick={() => { setActiveTab('cart'); setSidebarOpen(true); }} 
                 className={`relative p-2.5 rounded-full transition-all ${
                   scrolled
-                    ? 'hover:bg-gray-100 text-gray-600'
+                    ? 'hover:bg-gray-100 text-gray-900'
                     : isHomePage
                       ? 'hover:bg-white/10 text-white'
                       : 'hover:bg-white/10 text-white'
