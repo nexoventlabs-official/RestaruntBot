@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 const CART_KEY = 'restaurant_cart';
 const WISHLIST_KEY = 'restaurant_wishlist';
@@ -36,6 +36,46 @@ export function useCart() {
   // Mark as initialized after first render
   useEffect(() => {
     isInitialized.current = true;
+  }, []);
+
+  // Sync cart and wishlist with latest menu data (update images, prices, names)
+  const syncWithMenuData = useCallback((menuItems) => {
+    if (!menuItems || menuItems.length === 0) return;
+
+    // Create a map for quick lookup
+    const menuMap = new Map(menuItems.map(item => [item._id, item]));
+
+    // Update cart items with latest data
+    setCart(prev => prev.map(cartItem => {
+      const latestItem = menuMap.get(cartItem._id);
+      if (latestItem) {
+        return {
+          ...cartItem,
+          name: latestItem.name,
+          price: latestItem.price,
+          image: latestItem.image,
+          unit: latestItem.unit || 'piece',
+          unitQty: latestItem.quantity || 1
+        };
+      }
+      return cartItem;
+    }));
+
+    // Update wishlist items with latest data
+    setWishlist(prev => prev.map(wishlistItem => {
+      const latestItem = menuMap.get(wishlistItem._id);
+      if (latestItem) {
+        return {
+          ...wishlistItem,
+          name: latestItem.name,
+          price: latestItem.price,
+          image: latestItem.image,
+          unit: latestItem.unit || 'piece',
+          unitQty: latestItem.quantity || 1
+        };
+      }
+      return wishlistItem;
+    }));
   }, []);
 
   const addToCart = (item, qty = 1) => {
@@ -83,6 +123,7 @@ export function useCart() {
   return {
     cart, wishlist, cartTotal, cartCount,
     addToCart, removeFromCart, updateQuantity, clearCart,
-    addToWishlist, removeFromWishlist, isInWishlist, isInCart
+    addToWishlist, removeFromWishlist, isInWishlist, isInCart,
+    syncWithMenuData
   };
 }

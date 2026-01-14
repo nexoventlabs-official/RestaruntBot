@@ -37,7 +37,8 @@ export default function UserLayout() {
   const { 
     cart, wishlist, cartTotal, cartCount, 
     addToCart, removeFromCart, updateQuantity, clearCart, 
-    addToWishlist, removeFromWishlist, isInWishlist, isInCart 
+    addToWishlist, removeFromWishlist, isInWishlist, isInCart,
+    syncWithMenuData
   } = useCart();
 
   // Scroll to top on route change with Lenis
@@ -69,6 +70,9 @@ export default function UserLayout() {
       });
       
       setAvailableItems(available);
+      
+      // Sync cart and wishlist with latest menu data (updates images, prices, names)
+      syncWithMenuData(itemRes.data);
     } catch (err) {
       console.error('Error loading available items:', err);
     }
