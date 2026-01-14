@@ -17,7 +17,7 @@ const CategoryCard = ({ cat, getCategoryItemCount }) => (
     to={`/menu?category=${encodeURIComponent(cat.name)}`}
     className="group flex-shrink-0 mx-2 sm:mx-3"
   >
-    <div className="relative overflow-hidden w-32 sm:w-36 md:w-44">
+    <div className="relative w-32 sm:w-36 md:w-44">
       <div className="bg-[#F5F1E8] group-hover:bg-[#3f9065] rounded-t-full rounded-b-3xl pt-4 sm:pt-6 pb-12 sm:pb-16 px-3 sm:px-4 transition-all duration-300 relative overflow-hidden">
         {/* Moving shine effect */}
         <div className="absolute inset-0 w-full h-full overflow-hidden rounded-t-full rounded-b-3xl z-20 pointer-events-none">
