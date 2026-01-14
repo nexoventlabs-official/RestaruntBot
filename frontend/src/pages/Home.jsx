@@ -318,10 +318,10 @@ export default function Home() {
         </div>
 
         {/* Step Scroll Container */}
-        <div className="relative overflow-hidden w-full">
+        <div className="relative overflow-hidden w-full pb-4">
           <div 
             ref={sliderRef}
-            className="flex transition-transform duration-700 ease-in-out"
+            className="flex transition-transform duration-700 ease-in-out pb-2"
             style={{ transform: `translateX(-${scrollPosition}px)` }}
           >
             {displayCategories.map((cat, index) => (
