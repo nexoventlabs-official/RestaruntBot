@@ -49,9 +49,9 @@ export default function CartSidebar({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <div className="fixed inset-0 z-50 flex justify-end" data-lenis-prevent>
       <div className="absolute inset-0 bg-black/50" onClick={onClose}></div>
-      <div className="relative w-full max-w-md bg-white h-full shadow-xl flex flex-col animate-slide-in">
+      <div className="relative w-full max-w-md bg-white h-full shadow-xl flex flex-col animate-slide-in" data-lenis-prevent>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex gap-2">
@@ -76,7 +76,11 @@ export default function CartSidebar({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 scrollbar-cart" style={{ maxHeight: 'calc(100vh - 220px)' }}>
+        <div 
+          className="flex-1 overflow-y-auto p-4 scrollbar-cart" 
+          style={{ maxHeight: 'calc(100vh - 220px)', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
+          data-lenis-prevent
+        >
           {activeTab === 'cart' ? (
             cart.length === 0 ? (
               <div className="text-center py-12">
