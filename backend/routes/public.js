@@ -339,7 +339,7 @@ router.post('/whatsapp-item/:itemId', async (req, res) => {
     }
     
     // Format food type label
-    const foodTypeLabel = item.foodType === 'veg' ? '🥦 Veg' : 
+    const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : 
                           item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
                           item.foodType === 'egg' ? '🥚 Egg' : '';
     

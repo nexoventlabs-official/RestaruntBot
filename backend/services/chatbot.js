@@ -1434,7 +1434,7 @@ const chatbot = {
     if (detected) {
       if (detected.type === 'veg') {
         filteredItems = menuItems.filter(item => item.foodType === 'veg');
-        foodTypeLabel = '🥦 Veg';
+        foodTypeLabel = '🌿 Veg';
       } else if (detected.type === 'egg') {
         filteredItems = menuItems.filter(item => item.foodType === 'egg');
         foodTypeLabel = '🥚 Egg';
@@ -1988,10 +1988,10 @@ const chatbot = {
           state.foodTypePreference = 'veg';
           const filteredItems = this.filterByFoodType(menuItems, 'veg');
           if (filteredItems.length > 0) {
-            await this.sendMenuCategoriesWithLabel(phone, filteredItems, '🥦 Veg Menu');
+            await this.sendMenuCategoriesWithLabel(phone, filteredItems, '🌿 Veg Menu');
             state.currentStep = 'select_category';
           } else {
-            await whatsapp.sendButtons(phone, '🥦 No veg items available right now.', [
+            await whatsapp.sendButtons(phone, '🌿 No veg items available right now.', [
               { id: 'view_menu', text: 'View All Menu' },
               { id: 'home', text: 'Main Menu' }
             ]);
@@ -2036,7 +2036,7 @@ const chatbot = {
         const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference);
         
         const foodTypeLabels = {
-          veg: '🥦 Veg Menu',
+          veg: '🌿 Veg Menu',
           nonveg: '🍗 Non-Veg Menu',
           both: '🍽️ All Menu'
         };
@@ -2633,7 +2633,7 @@ const chatbot = {
           
           if (detected.type === 'veg') {
             foodType = 'veg';
-            label = '🥦 Veg Menu';
+            label = '🌿 Veg Menu';
           } else if (detected.type === 'egg') {
             foodType = 'egg';
             label = '🥚 Egg Menu';
@@ -2649,7 +2649,7 @@ const chatbot = {
             // Show message that search didn't find exact match, showing menu instead
             const searchTerm = this.removeFoodTypeKeywords(msg.toLowerCase().trim());
             if (searchTerm.length >= 2) {
-              await whatsapp.sendMessage(phone, `🔍 No items found for "${searchTerm}". Here's our ${label.replace(/[🥦🥚🍗🍽️]\s*/, '')}:`);
+              await whatsapp.sendMessage(phone, `🔍 No items found for "${searchTerm}". Here's our ${label.replace(/[🌿🥚🍗🍽️]\s*/, '')}:`);
             }
             await this.sendMenuCategoriesWithLabel(phone, filteredItems, label);
             state.currentStep = 'select_category';
@@ -3026,7 +3026,7 @@ const chatbot = {
       return;
     }
 
-    const foodTypeLabel = item.foodType === 'veg' ? '🥦 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
+    const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
     
     // Rating display
     let ratingDisplay = '';
@@ -3062,7 +3062,7 @@ const chatbot = {
 
   // Send item details for order flow (with Add to Cart focus)
   async sendItemDetailsForOrder(phone, item) {
-    const foodTypeLabel = item.foodType === 'veg' ? '🥦 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
+    const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
     
     // Rating display
     let ratingDisplay = '';
