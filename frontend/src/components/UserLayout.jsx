@@ -151,7 +151,7 @@ export default function UserLayout() {
                 </svg>
               </div>
               <span className={`text-xl font-bold transition-colors ${
-                scrolled ? 'text-gray-900' : isHomePage ? 'text-gray-900' : 'text-white'
+                scrolled ? 'text-gray-900' : isHomePage ? 'text-white' : 'text-white'
               }`}>
                 FoodieSpot
               </span>
@@ -189,7 +189,7 @@ export default function UserLayout() {
                         : scrolled
                           ? 'text-gray-600 group-hover:text-white'
                           : isHomePage
-                            ? 'text-gray-700 group-hover:text-white'
+                            ? 'text-white group-hover:text-white'
                             : 'text-white/90 group-hover:text-white'
                     }`}>
                       <Icon className="w-4 h-4" />
@@ -209,7 +209,7 @@ export default function UserLayout() {
                   scrolled
                     ? 'hover:bg-gray-100 text-gray-600'
                     : isHomePage
-                      ? 'hover:bg-gray-900/10 text-gray-700'
+                      ? 'hover:bg-white/10 text-white'
                       : 'hover:bg-white/10 text-white'
                 }`}
               >
@@ -228,7 +228,7 @@ export default function UserLayout() {
                   scrolled
                     ? 'hover:bg-gray-100 text-gray-600'
                     : isHomePage
-                      ? 'hover:bg-gray-900/10 text-gray-700'
+                      ? 'hover:bg-white/10 text-white'
                       : 'hover:bg-white/10 text-white'
                 }`}
               >
@@ -247,7 +247,7 @@ export default function UserLayout() {
                   scrolled
                     ? 'hover:bg-gray-100 text-gray-600'
                     : isHomePage
-                      ? 'hover:bg-gray-900/10 text-gray-700'
+                      ? 'hover:bg-white/10 text-white'
                       : 'hover:bg-white/10 text-white'
                 }`}
               >
