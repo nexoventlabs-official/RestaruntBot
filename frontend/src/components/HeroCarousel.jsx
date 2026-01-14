@@ -88,22 +88,16 @@ export default function HeroCarousel() {
               {/* Book a Table Button - Green */}
               <Link 
                 to="/contact" 
-                className="relative flex items-center gap-2 px-8 py-3 font-semibold text-white group overflow-hidden"
+                className="relative flex items-center gap-2 px-8 py-3 font-semibold text-white overflow-hidden"
               >
                 <img 
                   src="/button.png" 
                   alt="" 
-                  className="absolute inset-0 w-full h-full object-contain transition-all duration-300 group-hover:opacity-0"
+                  className="absolute inset-0 w-full h-full object-contain"
                   style={{ filter: 'brightness(0) saturate(100%) invert(48%) sepia(52%) saturate(456%) hue-rotate(93deg) brightness(95%) contrast(91%)' }}
                 />
-                <img 
-                  src="/button.png" 
-                  alt="" 
-                  className="absolute inset-0 w-full h-full object-contain transition-all duration-300 opacity-0 group-hover:opacity-100"
-                  style={{ filter: 'brightness(0)' }}
-                />
                 {/* Moving shine effect */}
-                <div className="absolute inset-0 w-full h-full overflow-hidden rounded-full">
+                <div className="absolute inset-0 w-full h-full overflow-hidden rounded-full group">
                   <div className="absolute top-0 -left-full w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12 group-hover:left-full transition-all duration-700 ease-in-out"></div>
                 </div>
                 <span className="relative z-10">Book a Table</span>
@@ -111,22 +105,16 @@ export default function HeroCarousel() {
               {/* Menu Button - Red */}
               <Link 
                 to="/menu" 
-                className="relative flex items-center gap-2 px-8 py-3 font-semibold text-white group overflow-hidden"
+                className="relative flex items-center gap-2 px-8 py-3 font-semibold text-white overflow-hidden"
               >
                 <img 
                   src="/button.png" 
                   alt="" 
-                  className="absolute inset-0 w-full h-full object-contain transition-all duration-300 group-hover:opacity-0"
+                  className="absolute inset-0 w-full h-full object-contain"
                   style={{ filter: 'brightness(0) saturate(100%) invert(19%) sepia(97%) saturate(7043%) hue-rotate(359deg) brightness(101%) contrast(117%)' }}
                 />
-                <img 
-                  src="/button.png" 
-                  alt="" 
-                  className="absolute inset-0 w-full h-full object-contain transition-all duration-300 opacity-0 group-hover:opacity-100"
-                  style={{ filter: 'brightness(0)' }}
-                />
                 {/* Moving shine effect */}
-                <div className="absolute inset-0 w-full h-full overflow-hidden rounded-full">
+                <div className="absolute inset-0 w-full h-full overflow-hidden rounded-full group">
                   <div className="absolute top-0 -left-full w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12 group-hover:left-full transition-all duration-700 ease-in-out"></div>
                 </div>
                 <span className="relative z-10">Menu</span>
