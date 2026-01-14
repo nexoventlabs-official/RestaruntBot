@@ -70,6 +70,10 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
       buttonText, buttonLink 
     } = req.body;
     
+    // Get existing offer to check for old image
+    const existingOffer = await Offer.findById(req.params.id);
+    if (!existingOffer) return res.status(404).json({ error: 'Offer not found' });
+    
     const updateData = {
       title,
       description,
@@ -86,14 +90,31 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
     };
 
     if (req.file) {
+      // Delete old image from Cloudinary if it exists
+      if (existingOffer.image && existingOffer.image.includes('cloudinary.com')) {
+        try {
+          const publicId = existingOffer.image.split('/').slice(-2).join('/').split('.')[0];
+          await cloudinary.deleteImage(publicId);
+        } catch (e) {
+          console.log('Could not delete old offer image:', e.message);
+        }
+      }
       // Use uploadPreserveAspect to maintain original aspect ratio for offer cards
       updateData.image = await cloudinary.uploadPreserveAspect(req.file.buffer, 'offers');
-    } else if (req.body.image) {
+    } else if (req.body.image && req.body.image !== existingOffer.image) {
+      // If new URL provided and different from existing, delete old image
+      if (existingOffer.image && existingOffer.image.includes('cloudinary.com')) {
+        try {
+          const publicId = existingOffer.image.split('/').slice(-2).join('/').split('.')[0];
+          await cloudinary.deleteImage(publicId);
+        } catch (e) {
+          console.log('Could not delete old offer image:', e.message);
+        }
+      }
       updateData.image = req.body.image;
     }
 
     const offer = await Offer.findByIdAndUpdate(req.params.id, updateData, { new: true });
-    if (!offer) return res.status(404).json({ error: 'Offer not found' });
     
     res.json(offer);
   } catch (err) {
@@ -104,8 +125,21 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
 // Delete offer
 router.delete('/:id', auth, async (req, res) => {
   try {
-    const offer = await Offer.findByIdAndDelete(req.params.id);
+    // Get offer first to delete image from Cloudinary
+    const offer = await Offer.findById(req.params.id);
     if (!offer) return res.status(404).json({ error: 'Offer not found' });
+    
+    // Delete image from Cloudinary if it exists
+    if (offer.image && offer.image.includes('cloudinary.com')) {
+      try {
+        const publicId = offer.image.split('/').slice(-2).join('/').split('.')[0];
+        await cloudinary.deleteImage(publicId);
+      } catch (e) {
+        console.log('Could not delete offer image:', e.message);
+      }
+    }
+    
+    await Offer.findByIdAndDelete(req.params.id);
     res.json({ message: 'Offer deleted' });
   } catch (err) {
     res.status(500).json({ error: err.message });
