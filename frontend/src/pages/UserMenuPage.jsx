@@ -278,7 +278,7 @@ export default function UserMenuPage() {
       <div className="absolute -top-6 sm:-top-8 left-1/2 -translate-x-1/2 z-10 w-36 h-36 sm:w-44 sm:h-44 md:w-48 md:h-48">
         <div className="w-full h-full bg-gray-300 rounded-full animate-pulse"></div>
       </div>
-      <div className="bg-white rounded-2xl sm:rounded-3xl pt-16 sm:pt-20 md:pt-22 px-3 sm:px-4 md:px-5 pb-3 sm:pb-4 md:pb-5 shadow-[0_2px_15px_rgba(0,0,0,0.08)] border border-gray-100 animate-pulse">
+      <div className="bg-[rgb(245,241,232)] rounded-2xl sm:rounded-3xl pt-16 sm:pt-20 md:pt-22 px-3 sm:px-4 md:px-5 pb-3 sm:pb-4 md:pb-5 shadow-[0_2px_15px_rgba(0,0,0,0.08)] border border-gray-100 animate-pulse">
         <div className="flex justify-between mb-2">
           <div className="h-4 sm:h-5 w-20 sm:w-28 bg-gray-200 rounded"></div>
           <div className="h-4 sm:h-5 w-4 sm:w-5 bg-gray-200 rounded-full"></div>
@@ -392,7 +392,7 @@ export default function UserMenuPage() {
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-2xl sm:rounded-3xl pt-16 sm:pt-20 md:pt-22 px-3 sm:px-4 md:px-5 pb-3 sm:pb-4 md:pb-5 shadow-[0_2px_15px_rgba(0,0,0,0.08)] border border-gray-100 hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-shadow">
+        <div className="bg-[rgb(245,241,232)] rounded-2xl sm:rounded-3xl pt-16 sm:pt-20 md:pt-22 px-3 sm:px-4 md:px-5 pb-3 sm:pb-4 md:pb-5 shadow-[0_2px_15px_rgba(0,0,0,0.08)] border border-gray-100 hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-shadow">
           {/* Name & Wishlist */}
           <div className="flex items-center justify-between gap-1 sm:gap-2 mb-1">
             <h3 className="font-bold text-gray-900 uppercase text-xs sm:text-sm tracking-wide line-clamp-1">{item.name}</h3>
