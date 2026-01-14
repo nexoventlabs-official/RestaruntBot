@@ -39,6 +39,12 @@
     "plugins": [
       "expo-asset",
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "2261ed53-8283-4c24-b88a-f2958ab85ede"
+      }
+    },
+    "owner": "perivi"
   }
 }
