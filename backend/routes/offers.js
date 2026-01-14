@@ -93,8 +93,8 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
       // Delete old image from Cloudinary if it exists
       if (existingOffer.image && existingOffer.image.includes('cloudinary.com')) {
         try {
-          const publicId = existingOffer.image.split('/').slice(-2).join('/').split('.')[0];
-          await cloudinary.deleteImage(publicId);
+          const publicId = cloudinary.extractPublicId(existingOffer.image);
+          if (publicId) await cloudinary.deleteImage(publicId);
         } catch (e) {
           console.log('Could not delete old offer image:', e.message);
         }
@@ -105,8 +105,8 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
       // If new URL provided and different from existing, delete old image
       if (existingOffer.image && existingOffer.image.includes('cloudinary.com')) {
         try {
-          const publicId = existingOffer.image.split('/').slice(-2).join('/').split('.')[0];
-          await cloudinary.deleteImage(publicId);
+          const publicId = cloudinary.extractPublicId(existingOffer.image);
+          if (publicId) await cloudinary.deleteImage(publicId);
         } catch (e) {
           console.log('Could not delete old offer image:', e.message);
         }
@@ -132,8 +132,8 @@ router.delete('/:id', auth, async (req, res) => {
     // Delete image from Cloudinary if it exists
     if (offer.image && offer.image.includes('cloudinary.com')) {
       try {
-        const publicId = offer.image.split('/').slice(-2).join('/').split('.')[0];
-        await cloudinary.deleteImage(publicId);
+        const publicId = cloudinary.extractPublicId(offer.image);
+        if (publicId) await cloudinary.deleteImage(publicId);
       } catch (e) {
         console.log('Could not delete offer image:', e.message);
       }

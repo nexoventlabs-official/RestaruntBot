@@ -71,8 +71,8 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
     if (removeImage === 'true' || removeImage === true) {
       if (existingCategory?.image && existingCategory.image.includes('cloudinary.com')) {
         try {
-          const publicId = existingCategory.image.split('/').slice(-2).join('/').split('.')[0];
-          await cloudinaryService.deleteImage(publicId);
+          const publicId = cloudinaryService.extractPublicId(existingCategory.image);
+          if (publicId) await cloudinaryService.deleteImage(publicId);
         } catch (e) {
           console.log('Could not delete old image:', e.message);
         }
@@ -83,8 +83,8 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
     else if (req.file) {
       if (existingCategory?.image && existingCategory.image.includes('cloudinary.com')) {
         try {
-          const publicId = existingCategory.image.split('/').slice(-2).join('/').split('.')[0];
-          await cloudinaryService.deleteImage(publicId);
+          const publicId = cloudinaryService.extractPublicId(existingCategory.image);
+          if (publicId) await cloudinaryService.deleteImage(publicId);
         } catch (e) {
           console.log('Could not delete old image:', e.message);
         }
@@ -144,8 +144,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     // Delete category image from Cloudinary if exists
     if (category.image && category.image.includes('cloudinary.com')) {
       try {
-        const publicId = category.image.split('/').slice(-2).join('/').split('.')[0];
-        await cloudinaryService.deleteImage(publicId);
+        const publicId = cloudinaryService.extractPublicId(category.image);
+        if (publicId) await cloudinaryService.deleteImage(publicId);
       } catch (e) {
         console.log('Could not delete category image:', e.message);
       }
@@ -163,8 +163,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         // Also delete item image from Cloudinary
         if (item.image && item.image.includes('cloudinary.com')) {
           try {
-            const publicId = item.image.split('/').slice(-2).join('/').split('.')[0];
-            await cloudinaryService.deleteImage(publicId);
+            const publicId = cloudinaryService.extractPublicId(item.image);
+            if (publicId) await cloudinaryService.deleteImage(publicId);
           } catch (e) {
             console.log('Could not delete item image:', e.message);
           }

@@ -98,8 +98,8 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
       // Delete old image from Cloudinary if it exists
       if (existingItem?.image && existingItem.image.includes('cloudinary.com')) {
         try {
-          const publicId = existingItem.image.split('/').slice(-2).join('/').split('.')[0];
-          await cloudinaryService.deleteImage(publicId);
+          const publicId = cloudinaryService.extractPublicId(existingItem.image);
+          if (publicId) await cloudinaryService.deleteImage(publicId);
         } catch (e) {
           console.log('Could not delete old image:', e.message);
         }
@@ -111,8 +111,8 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
       // Delete old image from Cloudinary if it exists
       if (existingItem?.image && existingItem.image.includes('cloudinary.com')) {
         try {
-          const publicId = existingItem.image.split('/').slice(-2).join('/').split('.')[0];
-          await cloudinaryService.deleteImage(publicId);
+          const publicId = cloudinaryService.extractPublicId(existingItem.image);
+          if (publicId) await cloudinaryService.deleteImage(publicId);
         } catch (e) {
           console.log('Could not delete old image:', e.message);
         }
@@ -152,8 +152,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     const item = await MenuItem.findById(req.params.id);
     if (item?.image && item.image.includes('cloudinary.com')) {
       try {
-        const publicId = item.image.split('/').slice(-2).join('/').split('.')[0];
-        await cloudinaryService.deleteImage(publicId);
+        const publicId = cloudinaryService.extractPublicId(item.image);
+        if (publicId) await cloudinaryService.deleteImage(publicId);
       } catch (e) {
         console.log('Could not delete image:', e.message);
       }

@@ -160,11 +160,55 @@ const cloudinaryService = {
   async deleteImage(publicId) {
     try {
       const result = await cloudinary.uploader.destroy(publicId);
-      console.log('✅ Cloudinary delete:', result);
+      console.log('✅ Cloudinary delete:', publicId, result);
       return result;
     } catch (error) {
       console.error('❌ Cloudinary delete error:', error.message);
       throw error;
+    }
+  },
+
+  /**
+   * Extract public ID from Cloudinary URL
+   * @param {string} cloudinaryUrl - Full Cloudinary URL
+   * @returns {string|null} - Public ID or null if not a valid Cloudinary URL
+   */
+  extractPublicId(cloudinaryUrl) {
+    if (!cloudinaryUrl || !cloudinaryUrl.includes('cloudinary.com')) {
+      return null;
+    }
+    
+    try {
+      // URL format: https://res.cloudinary.com/{cloud_name}/image/upload/{version}/{folder}/{public_id}.{format}
+      // or with transformations: https://res.cloudinary.com/{cloud_name}/image/upload/{transformations}/{version}/{folder}/{public_id}.{format}
+      
+      const parts = cloudinaryUrl.split('/upload/');
+      if (parts.length !== 2) return null;
+      
+      let pathAfterUpload = parts[1];
+      
+      // Remove any transformation parameters (they start with letters like w_, h_, c_, etc.)
+      // and version (starts with v followed by numbers)
+      const segments = pathAfterUpload.split('/');
+      const cleanSegments = [];
+      
+      for (const segment of segments) {
+        // Skip transformation segments (contain underscore with transformation params)
+        if (/^[a-z]_/.test(segment) || /^[a-z]+,[a-z]/.test(segment)) continue;
+        // Skip version segment (v followed by numbers)
+        if (/^v\d+$/.test(segment)) continue;
+        cleanSegments.push(segment);
+      }
+      
+      // Join remaining segments and remove file extension
+      const fullPath = cleanSegments.join('/');
+      const publicId = fullPath.replace(/\.[^/.]+$/, ''); // Remove extension
+      
+      console.log('📍 Extracted publicId:', publicId, 'from URL:', cloudinaryUrl);
+      return publicId;
+    } catch (error) {
+      console.error('❌ Error extracting publicId:', error.message);
+      return null;
     }
   }
 };
