@@ -609,7 +609,7 @@ export default function UserMenuPage() {
                     </div>
                   </div>
                   <div className="text-center">
-                    <h3 className={`font-semibold text-sm md:text-base transition-colors duration-300 ${selectedCategory === 'all' ? 'text-white' : 'text-gray-900 group-hover:text-white'}`}>All Items</h3>
+                    <h3 className={`font-semibold text-sm md:text-base transition-colors duration-300 ${selectedCategory === 'all' ? 'text-yellow-400' : 'text-gray-900 group-hover:text-white'}`}>All Items</h3>
                     <p className={`text-xs mt-0.5 transition-colors duration-300 ${selectedCategory === 'all' ? 'text-white/80' : 'text-gray-400 group-hover:text-white/80'}`}>{getTotalItemsCount()} Items</p>
                   </div>
                 </div>
@@ -648,7 +648,7 @@ export default function UserMenuPage() {
                         )}
                       </div>
                       <div className="text-center">
-                        <h3 className={`font-semibold text-sm md:text-base transition-colors duration-300 line-clamp-1 ${selectedCategory === cat.name ? 'text-white' : 'text-gray-900 group-hover:text-white'}`}>{cat.name}</h3>
+                        <h3 className={`font-semibold text-sm md:text-base transition-colors duration-300 line-clamp-1 ${selectedCategory === cat.name ? 'text-yellow-400' : 'text-gray-900 group-hover:text-white'}`}>{cat.name}</h3>
                         <p className={`text-xs mt-0.5 transition-colors duration-300 ${selectedCategory === cat.name ? 'text-white/80' : 'text-gray-400 group-hover:text-white/80'}`}>{itemCount} Items</p>
                       </div>
                     </div>
