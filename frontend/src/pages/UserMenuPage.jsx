@@ -392,9 +392,20 @@ export default function UserMenuPage() {
         </div>
 
         {/* Card */}
-        <div className="bg-[rgb(245,241,232)] rounded-2xl sm:rounded-3xl pt-16 sm:pt-20 md:pt-22 px-3 sm:px-4 md:px-5 pb-3 sm:pb-4 md:pb-5 shadow-[0_2px_15px_rgba(0,0,0,0.08)] border border-gray-100 hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-shadow">
+        <div className="bg-[rgb(245,241,232)] rounded-2xl sm:rounded-3xl pt-16 sm:pt-20 md:pt-22 px-3 sm:px-4 md:px-5 pb-3 sm:pb-4 md:pb-5 shadow-[0_2px_15px_rgba(0,0,0,0.08)] border border-gray-100 hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-shadow relative">
+          {/* WhatsApp Button - Top Right */}
+          {available && (
+            <button 
+              onClick={(e) => handleWhatsAppOrder(item, e)} 
+              className="absolute top-2 right-2 sm:top-3 sm:right-3 w-7 h-7 sm:w-8 sm:h-8 bg-green-500 text-white rounded-full flex items-center justify-center hover:bg-green-600 transition-colors shadow-md z-10"
+              title="Order via WhatsApp"
+            >
+              <WhatsAppIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </button>
+          )}
+          
           {/* Name & Wishlist */}
-          <div className="flex items-center justify-between gap-1 sm:gap-2 mb-1">
+          <div className="flex items-center justify-between gap-1 sm:gap-2 mb-1 pr-8 sm:pr-10">
             <h3 className="font-bold text-gray-900 uppercase text-xs sm:text-sm tracking-wide line-clamp-1">{item.name}</h3>
             <button 
               onClick={(e) => handleToggleWishlist(item, e)} 
@@ -424,16 +435,6 @@ export default function UserMenuPage() {
               </span>
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
-              {/* WhatsApp Button */}
-              {available && (
-                <button 
-                  onClick={(e) => handleWhatsAppOrder(item, e)} 
-                  className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-green-500 text-white rounded-lg sm:rounded-xl flex items-center justify-center hover:bg-green-600 transition-colors shadow-md"
-                  title="Order via WhatsApp"
-                >
-                  <WhatsAppIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
-              )}
               {/* Cart Button */}
               {!available ? (
                 <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 bg-gray-300 text-gray-500 rounded-lg sm:rounded-xl flex items-center justify-center cursor-not-allowed">
