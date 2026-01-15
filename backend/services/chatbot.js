@@ -3863,11 +3863,11 @@ const chatbot = {
     
     order.trackingUpdates.forEach(u => {
       msg += `${statusEmoji[u.status] || '•'} ${u.message}\n`;
-      msg += `   ${new Date(u.timestamp).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}\n\n`;
+      msg += `   ${new Date(u.timestamp).toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}\n\n`;
     });
 
     if (order.estimatedDeliveryTime) {
-      msg += `⏰ *ETA:* ${new Date(order.estimatedDeliveryTime).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
+      msg += `⏰ *ETA:* ${new Date(order.estimatedDeliveryTime).toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}`;
     }
 
     const orderTrackingImageUrl = await chatbotImagesService.getImageUrl('order_tracking');
