@@ -1,22 +1,27 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Platform, StatusBar, SafeAreaView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import { useDeliveryNotifications } from '../../context/DeliveryNotificationContext';
 import { colors, spacing, radius, shadows } from '../../theme';
 
 const DELIVERY_GREEN = '#267E3E';
 
 export default function DeliveryNotificationsScreen({ navigation }) {
-  const { notifications, markAllAsRead, markAsRead, clearAll } = useDeliveryNotifications();
+  const { notifications, markAllAsRead, markAsRead, clearAll, checkForUpdates } = useDeliveryNotifications();
 
-  // Mark all as read when screen opens
-  useEffect(() => {
-    markAllAsRead();
-  }, []);
+  // Refresh notifications and mark all as read when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      // Check for updates to refresh notification data with latest order status
+      checkForUpdates();
+      markAllAsRead();
+    }, [checkForUpdates, markAllAsRead])
+  );
 
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);

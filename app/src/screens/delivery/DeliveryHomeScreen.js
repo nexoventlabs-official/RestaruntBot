@@ -20,7 +20,7 @@ const POLL_INTERVAL = 10000; // 10 seconds for stats refresh
 const DELIVERY_HOME_BG = require('../../../assets/backgrounds/deliveryhome.jpg');
 
 export default function DeliveryHomeScreen({ navigation }) {
-  const { user, logout, setUser } = useAuth();
+  const { user, logout, setUser, refreshUser } = useAuth();
   const { unreadCount, checkForUpdates, newOrdersCount } = useDeliveryNotifications();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -90,10 +90,12 @@ export default function DeliveryHomeScreen({ navigation }) {
 
   useEffect(() => { 
     fetchStats(true);
+    refreshUser(); // Refresh user data including rating
     startPolling();
     
     const unsubscribe = navigation.addListener('focus', () => {
       fetchStats(false);
+      refreshUser(); // Refresh user data when screen comes into focus
       startPolling();
     });
     
@@ -106,9 +108,9 @@ export default function DeliveryHomeScreen({ navigation }) {
       blurUnsubscribe();
       stopPolling();
     };
-  }, [navigation, startPolling, stopPolling]);
+  }, [navigation, startPolling, stopPolling, refreshUser]);
   
-  const onRefresh = useCallback(() => { setRefreshing(true); fetchStats(false); checkForUpdates(); }, [checkForUpdates]);
+  const onRefresh = useCallback(() => { setRefreshing(true); fetchStats(false); checkForUpdates(); refreshUser(); }, [checkForUpdates, refreshUser]);
 
   const toggleOnlineStatus = async (value) => {
     setIsOnline(value);

@@ -203,6 +203,16 @@ export function DeliveryNotificationProvider({ children }) {
       const historyOrders = (historyResponse.data || []).slice(0, 10); // Only check recent 10
       const allOrders = [...activeOrders, ...historyOrders];
       
+      // Build a map of current order statuses for quick lookup
+      const currentOrderStatusMap = {};
+      allOrders.forEach(order => {
+        currentOrderStatusMap[order.orderId] = {
+          status: order.status,
+          amount: order.totalAmount,
+          address: order.deliveryAddress?.address || ''
+        };
+      });
+      
       const newNotifications = [];
       const now = new Date();
       let newAssignments = 0;
@@ -294,14 +304,80 @@ export function DeliveryNotificationProvider({ children }) {
       await SecureStore.setItemAsync(LAST_CHECK_KEY, now.toISOString());
       await saveSeenOrders();
       
-      // Add new notifications if any
+      // Update existing notifications with current order status
+      // This ensures notification list always shows latest order info
+      setNotifications(prev => {
+        let hasUpdates = false;
+        const updatedNotifications = prev.map(notification => {
+          if (notification.orderId && currentOrderStatusMap[notification.orderId]) {
+            const currentOrder = currentOrderStatusMap[notification.orderId];
+            const currentStatus = currentOrder.status;
+            
+            // Update notification based on current order status
+            let updatedNotification = { ...notification };
+            
+            // If order is now cancelled but notification shows different status
+            if ((currentStatus === 'cancelled' || currentStatus === 'refunded') && 
+                notification.type !== 'order_cancelled') {
+              updatedNotification = {
+                ...notification,
+                type: 'order_cancelled',
+                title: 'Order Cancelled ❌',
+                message: `Order #${notification.orderId} was cancelled`,
+                icon: 'close-circle',
+                color: '#EF4444'
+              };
+              hasUpdates = true;
+            }
+            // If order is now delivered but notification shows different status
+            else if (currentStatus === 'delivered' && notification.type !== 'order_delivered') {
+              updatedNotification = {
+                ...notification,
+                type: 'order_delivered',
+                title: 'Order Delivered ✅',
+                message: `Order #${notification.orderId} - ₹${currentOrder.amount} delivered successfully!`,
+                icon: 'checkmark-circle',
+                color: '#22C55E'
+              };
+              hasUpdates = true;
+            }
+            // Update amount/address if changed for assignment notifications
+            else if (notification.type === 'new_assignment') {
+              if (notification.amount !== currentOrder.amount || 
+                  notification.address !== currentOrder.address) {
+                updatedNotification = {
+                  ...notification,
+                  amount: currentOrder.amount,
+                  address: currentOrder.address,
+                  message: `Order #${notification.orderId} - ₹${currentOrder.amount}`
+                };
+                hasUpdates = true;
+              }
+            }
+            
+            return updatedNotification;
+          }
+          return notification;
+        });
+        
+        // Only save if there were actual updates
+        if (hasUpdates) {
+          saveNotifications(updatedNotifications);
+        }
+        
+        // Add new notifications if any
+        if (newNotifications.length > 0) {
+          const finalNotifications = [...newNotifications, ...updatedNotifications];
+          saveNotifications(finalNotifications);
+          return finalNotifications;
+        }
+        
+        return hasUpdates ? updatedNotifications : prev;
+      });
+      
+      // Update unread count for new notifications
       if (newNotifications.length > 0) {
         console.log('📱 New delivery notifications:', newNotifications.length);
-        setNotifications(prev => {
-          const updated = [...newNotifications, ...prev];
-          saveNotifications(updated);
-          return updated;
-        });
         setUnreadCount(prev => prev + newNotifications.length);
         
         // Count cancelled orders for badge

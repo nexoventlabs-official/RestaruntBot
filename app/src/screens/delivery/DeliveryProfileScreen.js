@@ -36,7 +36,7 @@ const StatsBadge = ({ value, label }) => (
 );
 
 export default function DeliveryProfileScreen({ navigation }) {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -52,7 +52,15 @@ export default function DeliveryProfileScreen({ navigation }) {
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
     fetchProfileStats();
-  }, []);
+    refreshUser(); // Refresh user data including rating
+    
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchProfileStats();
+      refreshUser(); // Refresh user data when screen comes into focus
+    });
+    
+    return unsubscribe;
+  }, [navigation, refreshUser]);
 
   const fetchProfileStats = async () => {
     try {

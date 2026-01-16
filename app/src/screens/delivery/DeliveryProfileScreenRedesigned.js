@@ -74,8 +74,8 @@ const StatsBadge = ({ value, label }) => (
   </View>
 );
 
-export default function DeliveryProfileScreen() {
-  const { user, logout, setUser } = useAuth();
+export default function DeliveryProfileScreen({ navigation }) {
+  const { user, logout, setUser, refreshUser } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -88,10 +88,18 @@ export default function DeliveryProfileScreen() {
     joinedDate: null
   });
 
-  // Fetch profile stats on mount
+  // Fetch profile stats on mount and refresh user data
   useEffect(() => {
     fetchProfileStats();
-  }, []);
+    refreshUser(); // Refresh user data including rating
+    
+    const unsubscribe = navigation?.addListener?.('focus', () => {
+      fetchProfileStats();
+      refreshUser(); // Refresh user data when screen comes into focus
+    });
+    
+    return unsubscribe;
+  }, [navigation, refreshUser]);
 
   const fetchProfileStats = async () => {
     try {

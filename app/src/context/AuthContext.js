@@ -61,6 +61,37 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Refresh user data from server (to get updated rating, etc.)
+  const refreshUser = useCallback(async () => {
+    try {
+      const storedRole = await SecureStore.getItemAsync('role');
+      if (!storedRole) return null;
+      
+      let response;
+      if (storedRole === 'delivery') {
+        // Use verify endpoint which returns full user data including rating
+        response = await api.get('/delivery/verify');
+        if (response?.data?.user) {
+          const updatedUser = response.data.user;
+          setUser(updatedUser);
+          await SecureStore.setItemAsync('user', JSON.stringify(updatedUser));
+          return updatedUser;
+        }
+      } else if (storedRole === 'admin') {
+        response = await api.get('/auth/verify');
+        if (response?.data?.user) {
+          const updatedUser = response.data.user;
+          setUser(updatedUser);
+          await SecureStore.setItemAsync('user', JSON.stringify(updatedUser));
+          return updatedUser;
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+    }
+    return null;
+  }, []);
+
   // Register push notifications
   const registerPushToken = async (userRole) => {
     try {
@@ -156,7 +187,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, loading, loginAdmin, loginDelivery, logout, setUser }}>
+    <AuthContext.Provider value={{ user, role, loading, loginAdmin, loginDelivery, logout, setUser, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

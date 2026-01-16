@@ -1,22 +1,27 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Platform, StatusBar, SafeAreaView, Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import { useNotifications } from '../../context/NotificationContext';
 import { colors, spacing, radius, shadows } from '../../theme';
 
 const ZOMATO_RED = '#E23744';
 
 export default function NotificationsScreen({ navigation }) {
-  const { notifications, markAllAsRead, markAsRead, clearAll } = useNotifications();
+  const { notifications, markAllAsRead, markAsRead, clearAll, checkForUpdates } = useNotifications();
 
-  // Mark all as read when screen opens
-  useEffect(() => {
-    markAllAsRead();
-  }, []);
+  // Refresh notifications and mark all as read when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      // Check for updates to refresh notification data with latest order status
+      checkForUpdates();
+      markAllAsRead();
+    }, [checkForUpdates, markAllAsRead])
+  );
 
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);

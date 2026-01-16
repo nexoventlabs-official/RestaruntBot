@@ -127,7 +127,7 @@ const StatCard = ({ icon, title, value, color, prefix = '', suffix = '', delay =
 };
 
 export default function DeliveryHomeScreen({ navigation }) {
-  const { user, logout, setUser } = useAuth();
+  const { user, logout, setUser, refreshUser } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -147,13 +147,22 @@ export default function DeliveryHomeScreen({ navigation }) {
 
   useEffect(() => {
     fetchStats();
-  }, []);
+    refreshUser(); // Refresh user data including rating
+    
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchStats();
+      refreshUser(); // Refresh user data when screen comes into focus
+    });
+    
+    return unsubscribe;
+  }, [navigation, refreshUser]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     fetchStats();
-  }, []);
+    refreshUser(); // Refresh user data on pull to refresh
+  }, [refreshUser]);
 
   const toggleOnlineStatus = async (value) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
