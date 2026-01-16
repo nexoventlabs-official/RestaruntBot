@@ -117,9 +117,6 @@ export default function DeliveryProfileScreen({ navigation }) {
                       <Ionicons name="person" size={44} color={DELIVERY_GREEN} />
                     </View>
                   )}
-                  <TouchableOpacity style={styles.editAvatarButton}>
-                    <Ionicons name="camera" size={14} color="#fff" />
-                  </TouchableOpacity>
                 </View>
 
                 <Text style={styles.userName}>{user?.name || 'Delivery Partner'}</Text>
@@ -210,7 +207,7 @@ const styles = StyleSheet.create({
   avatarContainer: { position: 'relative', marginBottom: spacing.md },
   avatar: { width: 100, height: 100, borderRadius: 30, borderWidth: 4, borderColor: 'rgba(255,255,255,0.3)' },
   avatarPlaceholder: { backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
-  editAvatarButton: { position: 'absolute', bottom: 0, right: 0, width: 32, height: 32, borderRadius: 10, backgroundColor: DELIVERY_DARK_GREEN, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff' },
+
   userName: { fontSize: typography.headline.large.fontSize, fontWeight: '700', color: '#fff', marginBottom: spacing.sm },
   ratingContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
   ratingText: { fontSize: typography.title.large.fontSize, fontWeight: '700', color: '#fff', marginLeft: spacing.xs },

@@ -192,12 +192,6 @@ export default function DeliveryProfileScreen() {
                   <Ionicons name="person" size={48} color={colors.primary[400]} />
                 </View>
               )}
-              <TouchableOpacity 
-                style={styles.editAvatarButton}
-                onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-              >
-                <Ionicons name="camera" size={16} color="#fff" />
-              </TouchableOpacity>
             </View>
             
             <Text style={styles.userName}>{user?.name || 'Delivery Partner'}</Text>
@@ -396,19 +390,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center', 
     alignItems: 'center' 
   },
-  editAvatarButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primary[600],
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
+
   userName: { 
     fontSize: typography.headline.large.fontSize,
     fontWeight: '700',

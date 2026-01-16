@@ -138,7 +138,11 @@ export default function DeliveryHomeScreen({ navigation }) {
         >
           <View style={styles.headerOverlay}>
             <View style={styles.headerContent}>
-              <View style={styles.profileSection}>
+              <TouchableOpacity 
+                style={styles.profileSection}
+                onPress={() => navigation.navigate('Profile', { screen: 'ProfileMain' })}
+                activeOpacity={0.7}
+              >
                 {user?.photo ? (
                   <View style={styles.avatarContainer}>
                     <Image source={{ uri: user.photo }} style={styles.avatar} />
@@ -156,7 +160,7 @@ export default function DeliveryHomeScreen({ navigation }) {
                   <Text style={styles.greeting}>{getGreeting()}</Text>
                   <Text style={styles.name}>{user?.name || 'Partner'}</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
               <View style={styles.headerActions}>
                 <TouchableOpacity 
                   style={styles.headerButton}
