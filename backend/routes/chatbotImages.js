@@ -21,6 +21,18 @@ const upload = multer({
 // Default images configuration (no URLs - admin must upload)
 const defaultImages = [
   {
+    key: 'welcome',
+    name: 'Welcome Message',
+    description: 'Shown when customer sends Hi/Hello - Restaurant welcome image with Perivi Hotel branding',
+    imageUrl: ''
+  },
+  {
+    key: 'my_orders',
+    name: 'My Orders',
+    description: 'Shown when customer clicks My Orders button',
+    imageUrl: ''
+  },
+  {
     key: 'cart_cleared',
     name: 'Cart Cleared',
     description: 'Shown when customer clears their cart',

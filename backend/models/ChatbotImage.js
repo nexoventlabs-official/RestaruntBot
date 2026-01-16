@@ -6,6 +6,8 @@ const chatbotImageSchema = new mongoose.Schema({
     required: true,
     unique: true,
     enum: [
+      'welcome',
+      'my_orders',
       'cart_cleared',
       'added_to_cart', 
       'order_confirmed',
