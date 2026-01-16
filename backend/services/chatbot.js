@@ -3675,6 +3675,27 @@ const chatbot = {
     // Sync to Google Sheets
     googleSheets.addOrder(order).catch(err => console.error('Google Sheets sync error:', err));
 
+    // Send push notification to admin for new COD order
+    try {
+      const User = require('../models/User');
+      const pushNotification = require('./pushNotification');
+      
+      const admins = await User.find({ pushToken: { $ne: null } });
+      for (const admin of admins) {
+        if (admin.pushToken) {
+          await pushNotification.sendAdminNewOrderNotification(admin.pushToken, {
+            orderId,
+            totalAmount: total,
+            customerName: freshCustomer.name || 'Customer',
+            items
+          });
+        }
+      }
+      if (admins.length > 0) console.log(`📱 Admin push sent for COD order ${orderId}`);
+    } catch (pushErr) {
+      console.error('Admin push error:', pushErr.message);
+    }
+
     // Clear cart on the fresh customer and save
     freshCustomer.cart = [];
     freshCustomer.orderHistory = freshCustomer.orderHistory || [];
@@ -3900,6 +3921,27 @@ const chatbot = {
 
     // Sync to Google Sheets
     googleSheets.addOrder(order).catch(err => console.error('Google Sheets sync error:', err));
+
+    // Send push notification to admin for new UPI order
+    try {
+      const User = require('../models/User');
+      const pushNotification = require('./pushNotification');
+      
+      const admins = await User.find({ pushToken: { $ne: null } });
+      for (const admin of admins) {
+        if (admin.pushToken) {
+          await pushNotification.sendAdminNewOrderNotification(admin.pushToken, {
+            orderId,
+            totalAmount: total,
+            customerName: freshCustomer.name || 'Customer',
+            items
+          });
+        }
+      }
+      if (admins.length > 0) console.log(`📱 Admin push sent for UPI order ${orderId}`);
+    } catch (pushErr) {
+      console.error('Admin push error:', pushErr.message);
+    }
 
     // Clear cart on the fresh customer and save
     freshCustomer.cart = [];
