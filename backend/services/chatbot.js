@@ -2841,6 +2841,9 @@ const chatbot = {
       { id: 'open_website', text: '🌐 Website' }
     ], 'Perivi Hotel');
 
+    // Small delay to ensure correct message order in WhatsApp
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     // Step 2: Send "Explore more" with View Options list button
     await whatsapp.sendList(
       phone,
