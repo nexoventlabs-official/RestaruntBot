@@ -12,6 +12,7 @@ const deliveryBoySchema = new mongoose.Schema({
   age: { type: Number },
   isActive: { type: Boolean, default: true },
   isOnline: { type: Boolean, default: false },
+  lastActiveAt: { type: Date, default: null }, // Track last heartbeat for real-time status
   lastLogin: { type: Date },
   passwordChangedAt: { type: Date },
   // Token version - increment to invalidate all tokens

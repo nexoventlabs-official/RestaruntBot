@@ -10,6 +10,7 @@ const STORAGE_KEY = 'delivery_notifications';
 const LAST_CHECK_KEY = 'delivery_last_check_time';
 const SEEN_ORDERS_KEY = 'delivery_seen_orders';
 const POLL_INTERVAL = 5000; // 5 seconds for real-time updates
+const HEARTBEAT_INTERVAL = 30000; // 30 seconds for heartbeat
 
 export function DeliveryNotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
@@ -20,6 +21,7 @@ export function DeliveryNotificationProvider({ children }) {
   const seenAssignedOrders = useRef(new Set());
   const isInitialized = useRef(false);
   const pollIntervalRef = useRef(null);
+  const heartbeatIntervalRef = useRef(null);
   const appState = useRef(AppState.currentState);
 
   // Check if user is authenticated before making API calls
@@ -33,30 +35,50 @@ export function DeliveryNotificationProvider({ children }) {
     }
   };
 
+  // Send heartbeat to server to indicate app is open
+  const sendHeartbeat = async () => {
+    const authenticated = await isAuthenticated();
+    if (!authenticated) return;
+    
+    try {
+      await api.post('/delivery/heartbeat');
+    } catch (error) {
+      // Silently fail - don't spam console
+    }
+  };
+
   // Load data from storage on mount
   useEffect(() => {
     loadData();
     
     // Start polling when component mounts (will check auth before API calls)
     startPolling();
+    startHeartbeat();
+    
+    // Send initial heartbeat
+    sendHeartbeat();
     
     // Handle app state changes
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     
     return () => {
       stopPolling();
+      stopHeartbeat();
       subscription?.remove();
     };
   }, []);
 
-  const handleAppStateChange = (nextAppState) => {
+  const handleAppStateChange = async (nextAppState) => {
     if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-      // App came to foreground - check immediately and restart polling
+      // App came to foreground - send heartbeat, check updates, restart polling
+      sendHeartbeat();
       checkForUpdates();
       startPolling();
+      startHeartbeat();
     } else if (nextAppState.match(/inactive|background/)) {
-      // App went to background - stop polling
+      // App went to background - stop polling and heartbeat
       stopPolling();
+      stopHeartbeat();
     }
     appState.current = nextAppState;
   };
@@ -74,6 +96,22 @@ export function DeliveryNotificationProvider({ children }) {
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
+    }
+  };
+
+  const startHeartbeat = () => {
+    if (heartbeatIntervalRef.current) return;
+    heartbeatIntervalRef.current = setInterval(() => {
+      if (isInitialized.current) {
+        sendHeartbeat();
+      }
+    }, HEARTBEAT_INTERVAL);
+  };
+
+  const stopHeartbeat = () => {
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
     }
   };
 

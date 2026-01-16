@@ -85,11 +85,32 @@ const sendPasswordEmail = async (email, name, password) => {
 
 // ============ ADMIN ROUTES (Protected) ============
 
-// Get all delivery boys (Admin)
+// Get all delivery boys (Admin) - with real-time online status
 router.get('/', auth, async (req, res) => {
   try {
     const deliveryBoys = await DeliveryBoy.find().select('-password').sort({ createdAt: -1 });
-    res.json(deliveryBoys);
+    
+    // Calculate real-time online status based on lastActiveAt
+    // If lastActiveAt is within 2 minutes, consider online
+    const TWO_MINUTES = 2 * 60 * 1000; // 2 minutes in milliseconds
+    const now = new Date();
+    
+    const deliveryBoysWithStatus = deliveryBoys.map(boy => {
+      const boyObj = boy.toObject();
+      
+      // Check if lastActiveAt is within 2 minutes
+      if (boyObj.lastActiveAt) {
+        const timeSinceActive = now - new Date(boyObj.lastActiveAt);
+        boyObj.isOnline = timeSinceActive < TWO_MINUTES;
+      } else {
+        // No heartbeat received, mark as offline
+        boyObj.isOnline = false;
+      }
+      
+      return boyObj;
+    });
+    
+    res.json(deliveryBoysWithStatus);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -434,7 +455,7 @@ router.post('/change-password', async (req, res) => {
   }
 });
 
-// Update online status (Delivery boy)
+// Update online status (Delivery boy) - also used for logout
 router.post('/status', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'No token' });
@@ -448,12 +469,42 @@ router.post('/status', async (req, res) => {
     
     const { isOnline } = req.body;
     
-    await DeliveryBoy.findByIdAndUpdate(decoded.id, { isOnline });
+    // Update status and lastActiveAt
+    const updateData = { 
+      isOnline,
+      lastActiveAt: isOnline ? new Date() : null // Clear lastActiveAt on logout
+    };
+    
+    await DeliveryBoy.findByIdAndUpdate(decoded.id, updateData);
     
     // Emit event for real-time updates in admin panel
     dataEvents.emit('deliveryboys');
     
     res.json({ message: 'Status updated' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Heartbeat endpoint - delivery partner sends this every 30 seconds while app is open
+router.post('/heartbeat', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token' });
+  
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    if (decoded.role !== 'delivery') {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    
+    // Update lastActiveAt timestamp
+    await DeliveryBoy.findByIdAndUpdate(decoded.id, { 
+      lastActiveAt: new Date(),
+      isOnline: true 
+    });
+    
+    res.json({ message: 'Heartbeat received' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
