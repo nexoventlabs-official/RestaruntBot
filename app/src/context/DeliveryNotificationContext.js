@@ -155,15 +155,21 @@ export function DeliveryNotificationProvider({ children }) {
     }
     
     try {
-      // Get delivery partner's assigned orders
-      const response = await api.get('/delivery/orders/my');
-      const orders = response.data || [];
+      // Get delivery partner's assigned orders (active + recently cancelled)
+      const [myOrdersResponse, historyResponse] = await Promise.all([
+        api.get('/delivery/orders/my'),
+        api.get('/delivery/orders/history')
+      ]);
+      
+      const activeOrders = myOrdersResponse.data || [];
+      const historyOrders = (historyResponse.data || []).slice(0, 10); // Only check recent 10
+      const allOrders = [...activeOrders, ...historyOrders];
       
       const newNotifications = [];
       const now = new Date();
       let newAssignments = 0;
       
-      for (const order of orders) {
+      for (const order of allOrders) {
         const orderId = order.orderId;
         const previousStatus = seenOrderStatuses.current[orderId];
         const wasAssigned = seenAssignedOrders.current.has(orderId);
@@ -195,14 +201,14 @@ export function DeliveryNotificationProvider({ children }) {
           );
         }
         
-        // Check for STATUS CHANGES (cancelled by customer)
+        // Check for STATUS CHANGES (cancelled by customer or delivered)
         if (previousStatus && previousStatus !== order.status) {
           if (order.status === 'cancelled' || order.status === 'refunded') {
             const notification = {
               id: `cancelled_${orderId}_${Date.now()}`,
               type: 'order_cancelled',
               title: 'Order Cancelled ❌',
-              message: `Order #${orderId} was cancelled by customer`,
+              message: `Order #${orderId} was cancelled`,
               orderId: orderId,
               timestamp: new Date().toISOString(),
               read: false,
@@ -216,6 +222,27 @@ export function DeliveryNotificationProvider({ children }) {
               notification.title,
               notification.message,
               { type: 'order_cancelled', orderId: orderId, screen: 'MyOrders' }
+            );
+          } else if (order.status === 'delivered' && previousStatus === 'out_for_delivery') {
+            const notification = {
+              id: `delivered_${orderId}_${Date.now()}`,
+              type: 'order_delivered',
+              title: 'Order Delivered ✅',
+              message: `Order #${orderId} - ₹${order.totalAmount} delivered successfully!`,
+              orderId: orderId,
+              amount: order.totalAmount,
+              timestamp: new Date().toISOString(),
+              read: false,
+              icon: 'checkmark-circle',
+              color: '#22C55E'
+            };
+            newNotifications.push(notification);
+            
+            // Show local push notification for delivery
+            showLocalNotification(
+              notification.title,
+              notification.message,
+              { type: 'order_delivered', orderId: orderId, screen: 'History' }
             );
           }
         }
@@ -248,7 +275,7 @@ export function DeliveryNotificationProvider({ children }) {
         }
       }
       
-      return { hasNewOrders: newAssignments > 0, orders };
+      return { hasNewOrders: newAssignments > 0, orders: activeOrders };
     } catch (error) {
       // Silently handle errors - don't spam console
       if (error.response?.status !== 404) {

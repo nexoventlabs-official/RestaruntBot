@@ -195,6 +195,25 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
       order.paymentStatus = 'cancelled';
     }
     
+    // Send push notification to delivery partner if order is cancelled and was assigned
+    if (status === 'cancelled' && order.assignedTo) {
+      try {
+        const DeliveryBoy = require('../models/DeliveryBoy');
+        const pushNotification = require('../services/pushNotification');
+        
+        const deliveryBoy = await DeliveryBoy.findById(order.assignedTo);
+        if (deliveryBoy && deliveryBoy.pushToken) {
+          await pushNotification.sendOrderCancelledNotification(deliveryBoy.pushToken, {
+            orderId: order.orderId,
+            totalAmount: order.totalAmount
+          });
+          console.log(`📱 Cancelled notification sent to ${deliveryBoy.name}`);
+        }
+      } catch (pushErr) {
+        console.error('Push notification error for cancelled order:', pushErr.message);
+      }
+    }
+    
     // For paid UPI orders that are cancelled, mark refund as pending (wait for Razorpay)
     if (status === 'cancelled' && order.paymentStatus === 'paid' && order.razorpayPaymentId) {
       console.log('💰 Marking refund as pending for order:', order.orderId);
