@@ -171,7 +171,7 @@ const chatbot = {
     
     const cartPatterns = [
       // ========== ENGLISH - ALL VOICE MISTAKES ==========
-      // Cart variations (cart, card, cut, kart, cot, caught, cat, court)
+      // Cart variations (cart, card, cut, kart, cot, caught, cat, court, art, heart, part, curt, coat, cart)
       /\bmy cart\b/, /\bview cart\b/, /\bshow cart\b/, /\bsee cart\b/, /\bcheck cart\b/, /\bopen cart\b/,
       /\bmy card\b/, /\bview card\b/, /\bshow card\b/, /\bsee card\b/, /\bcheck card\b/, /\bopen card\b/,
       /\bmy cut\b/, /\bview cut\b/, /\bshow cut\b/, /\bsee cut\b/, /\bcheck cut\b/,
@@ -180,6 +180,25 @@ const chatbot = {
       /\bmy caught\b/, /\bview caught\b/, /\bshow caught\b/, /\bsee caught\b/,
       /\bmy cat\b/, /\bview cat\b/, /\bshow cat\b/, /\bsee cat\b/,
       /\bmy court\b/, /\bview court\b/, /\bshow court\b/, /\bsee court\b/,
+      // "art" - very common voice mistake for "cart" (view my art = view my cart)
+      /\bmy art\b/, /\bview art\b/, /\bshow art\b/, /\bsee art\b/, /\bcheck art\b/, /\bopen art\b/,
+      /\bview my art\b/, /\bshow my art\b/, /\bsee my art\b/, /\bcheck my art\b/,
+      // "heart" - voice mistake for "cart"
+      /\bmy heart\b/, /\bview heart\b/, /\bshow heart\b/, /\bsee heart\b/,
+      /\bview my heart\b/, /\bshow my heart\b/, /\bsee my heart\b/,
+      // "part" - voice mistake for "cart"
+      /\bmy part\b/, /\bview part\b/, /\bshow part\b/, /\bsee part\b/,
+      /\bview my part\b/, /\bshow my part\b/, /\bsee my part\b/,
+      // "curt" - voice mistake for "cart"
+      /\bmy curt\b/, /\bview curt\b/, /\bshow curt\b/, /\bsee curt\b/,
+      // "coat" - voice mistake for "cart"
+      /\bmy coat\b/, /\bview coat\b/, /\bshow coat\b/, /\bsee coat\b/,
+      // "cart" with extra letters (cartt, carrt, caart)
+      /\bmy cartt\b/, /\bview cartt\b/, /\bmy caart\b/, /\bview caart\b/,
+      // "got" - voice mistake for "cart" (view my got)
+      /\bview my got\b/, /\bshow my got\b/, /\bsee my got\b/,
+      // "guard" - voice mistake for "cart"
+      /\bmy guard\b/, /\bview guard\b/, /\bshow guard\b/, /\bview my guard\b/,
       // Items variations (but NOT "cancel my order" type patterns)
       /\bmy items\b/, /\bshow items\b/, /\bview items\b/, /\bsee items\b/, /\bcheck items\b/,
       /\bshow my items\b/, /\bview my items\b/, /\bsee my items\b/, /\bcheck my items\b/,
@@ -189,8 +208,23 @@ const chatbot = {
       // What's in cart
       /\bwhat'?s in my cart\b/, /\bwhats in cart\b/, /\bwhat'?s in cart\b/,
       /\bwhat'?s in my card\b/, /\bwhats in card\b/, /\bwhat in cart\b/, /\bwhat in card\b/,
+      /\bwhat'?s in my art\b/, /\bwhats in art\b/, /\bwhat in art\b/,
+      // "view" misheard as "you", "few", "v", "vew", "veiw", "viu"
+      /\byou cart\b/, /\byou my cart\b/, /\byou card\b/, /\byou my card\b/,
+      /\bfew cart\b/, /\bfew my cart\b/, /\bfew card\b/,
+      /\bvew cart\b/, /\bvew my cart\b/, /\bveiw cart\b/, /\bveiw my cart\b/,
+      /\bviu cart\b/, /\bviu my cart\b/, /\bvu cart\b/, /\bvu my cart\b/,
+      /\byou art\b/, /\byou my art\b/, /\bfew art\b/, /\bfew my art\b/,
+      /\bvew art\b/, /\bvew my art\b/, /\bveiw art\b/, /\bveiw my art\b/,
+      // "view cart" without space or with typos
+      /\bviewcart\b/, /\bviewcard\b/, /\bviewart\b/, /\bshowcart\b/, /\bshowcard\b/,
       // Standalone words (only match if short message)
-      /^cart$/, /^card$/, /^kart$/, /^items$/, /^basket$/,
+      /^cart$/, /^card$/, /^kart$/, /^items$/, /^basket$/, /^art$/,
+      // Short phrases that mean "view cart"
+      /^view cart$/, /^view my cart$/, /^show cart$/, /^show my cart$/,
+      /^view card$/, /^view my card$/, /^show card$/, /^show my card$/,
+      /^view art$/, /^view my art$/, /^show art$/, /^show my art$/,
+      /^my cart$/, /^my card$/, /^my art$/,
       
       // ========== HINDI ==========
       /\bcart me kya hai\b/, /\bcart dikhao\b/, /\bcart dekho\b/, /\bmera cart\b/, /\bcart dekhao\b/,
