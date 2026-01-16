@@ -10,6 +10,7 @@ const getGroq = () => {
 
 const groqAi = {
   // Transcribe audio using Groq's Whisper model
+  // Optimized for Indian food ordering context
   async transcribeAudio(audioBuffer, mimeType = 'audio/ogg') {
     try {
       const client = getGroq();
@@ -17,12 +18,13 @@ const groqAi = {
       // Create a File-like object from buffer
       const file = new File([audioBuffer], 'audio.ogg', { type: mimeType });
       
-      // Don't specify language - let Whisper auto-detect
-      // This supports Hindi, Tamil, English, and many other languages
+      // Use prompt to help Whisper understand food-related context
+      // This significantly improves accuracy for food names
       const transcription = await client.audio.transcriptions.create({
         file: file,
         model: 'whisper-large-v3',
-        response_format: 'text'
+        response_format: 'text',
+        prompt: 'Food ordering: dosa, idli, vada, sambar, rasam, biryani, pulao, curry, rice, roti, parotta, chapati, naan, paneer, chicken, mutton, fish, prawn, egg, masala, butter, ghee, curd, dal, fry, gravy, soup, juice, coffee, tea, lassi, buttermilk, payasam, halwa, gulab jamun, jalebi, pongal, upma, pesarattu, uttapam, appam, puttu, poori, bonda, bajji, pakora, manchurian, fried rice, noodles, gobi, aloo, palak, mushroom, tomato, onion, gongura, pulihora, curd rice, lemon rice, tamarind rice, coconut rice, veg, non-veg, spicy, mild, hot, cold, sweet, order, cart, menu, cancel, status, track, delivery, pickup, dine-in'
       });
       
       console.log('🎤 Transcription result:', transcription);
@@ -33,6 +35,79 @@ const groqAi = {
     }
   },
 
+  // Clean and normalize transcribed text for better food search
+  // Fixes common voice recognition mistakes for food items
+  normalizeTranscription(text) {
+    if (!text) return '';
+    
+    let normalized = text.toLowerCase().trim();
+    
+    // Common voice recognition mistakes for food items
+    const corrections = {
+      // Dosa variations
+      'dosha': 'dosa', 'dhosha': 'dosa', 'dhosa': 'dosa', 'dosai': 'dosa',
+      'those a': 'dosa', 'those are': 'dosa', 'dozer': 'dosa', 'closer': 'dosa',
+      'dossa': 'dosa', 'doza': 'dosa', 'tosa': 'dosa', 'rosa': 'dosa',
+      // Idli variations
+      'idly': 'idli', 'idle': 'idli', 'italy': 'idli', 'ideally': 'idli',
+      'idlee': 'idli', 'iddly': 'idli', 'iddli': 'idli', 'it lee': 'idli',
+      // Vada variations
+      'wada': 'vada', 'vadai': 'vada', 'vade': 'vada', 'water': 'vada',
+      'vader': 'vada', 'voda': 'vada', 'bada': 'vada', 'wadda': 'vada',
+      // Sambar variations
+      'sambhar': 'sambar', 'sambaar': 'sambar', 'samba': 'sambar',
+      'summer': 'sambar', 'somber': 'sambar', 'sambor': 'sambar',
+      // Biryani variations
+      'biriyani': 'biryani', 'briyani': 'biryani', 'biriani': 'biryani',
+      'birani': 'biryani', 'bryani': 'biryani', 'beriani': 'biryani',
+      // Rasam variations
+      'rasamu': 'rasam', 'rasa': 'rasam', 'rasum': 'rasam',
+      // Upma variations
+      'uppuma': 'upma', 'uppit': 'upma', 'uppma': 'upma', 'up ma': 'upma',
+      // Pongal variations
+      'pongali': 'pongal', 'pongala': 'pongal', 'pongol': 'pongal',
+      // Uttapam variations
+      'uttappam': 'uttapam', 'uthappam': 'uttapam', 'utappam': 'uttapam',
+      // Parotta variations
+      'paratha': 'parotta', 'parota': 'parotta', 'barotta': 'parotta',
+      // Chapati variations
+      'chapathi': 'chapati', 'chapatti': 'chapati', 'chappati': 'chapati',
+      // Poori variations
+      'puri': 'poori', 'puree': 'poori', 'pooree': 'poori',
+      // Paneer variations
+      'panir': 'paneer', 'panner': 'paneer', 'panier': 'paneer',
+      // Masala variations
+      'masalla': 'masala', 'marsala': 'masala', 'massala': 'masala',
+      // Chicken variations
+      'chiken': 'chicken', 'chikken': 'chicken', 'chickan': 'chicken',
+      // Mutton variations
+      'mutan': 'mutton', 'muton': 'mutton', 'matton': 'mutton',
+      // Curry variations
+      'curri': 'curry', 'kari': 'curry', 'karri': 'curry',
+      // Pulao/Pulav variations
+      'pulav': 'pulao', 'pilaf': 'pulao', 'pilau': 'pulao',
+      // Gongura variations
+      'gongora': 'gongura', 'gangura': 'gongura', 'gonguru': 'gongura',
+      // Pesarattu variations
+      'pesaratu': 'pesarattu', 'pesarat': 'pesarattu', 'pesarathu': 'pesarattu',
+      // Common phrases
+      'i want': '', 'i need': '', 'give me': '', 'get me': '',
+      'please': '', 'can i have': '', 'order': '', 'one': '1', 'two': '2',
+      'three': '3', 'four': '4', 'five': '5'
+    };
+    
+    // Apply corrections
+    for (const [wrong, correct] of Object.entries(corrections)) {
+      const regex = new RegExp(`\\b${wrong}\\b`, 'gi');
+      normalized = normalized.replace(regex, correct);
+    }
+    
+    // Clean up extra spaces
+    normalized = normalized.replace(/\s+/g, ' ').trim();
+    
+    return normalized;
+  },
+
   // Translate local language text to English for search
   // Returns multiple possible translations for better search matching
   async translateToEnglish(text) {
@@ -40,63 +115,57 @@ const groqAi = {
       // Check if text contains non-English characters (Indian languages)
       const hasNonEnglish = /[^\x00-\x7F]/.test(text);
       if (!hasNonEnglish) {
-        return { primary: text, variations: [text] };
+        // For English text, normalize and return
+        const normalized = this.normalizeTranscription(text);
+        return { primary: normalized || text, variations: [normalized || text] };
       }
 
       const client = getGroq();
       const completion = await client.chat.completions.create({
         messages: [{
           role: 'system',
-          content: `You are an expert Indian food translator. Translate food names from ANY Indian language to English.
+          content: `You are an expert Indian food translator. Translate food names from ANY Indian language (Telugu, Tamil, Hindi, Kannada, Malayalam) to English.
 
-IMPORTANT: Return multiple possible translations/variations separated by commas.
+CRITICAL: Many food items have the SAME name in English and regional languages. Keep these as-is:
+- dosa, idli, vada, biryani, sambar, rasam, upma, pongal, parotta, chapati, poori, naan, roti
+- paneer, dal, curry, fry, rice, pulao
 
 RULES:
-1. Give the most common English name first
-2. Include romanized regional name
-3. Include alternative spellings
-4. Include related terms that might be on a menu
-5. Return ONLY translations separated by commas, no explanations
+1. Return ONLY the food name in English, no explanations
+2. If the word is already a common food name, return it as-is
+3. For regional-specific names, provide English equivalent
 
 EXAMPLES:
-- చిత్రాన్నం → lemon rice, chitranna, chitrannam, nimbu rice
-- పులిహోర → tamarind rice, pulihora, pulihoura, puliyogare
-- கொங்கூரா சிக்கன் → gongura chicken, sorrel chicken, gongura kozhi
-- బిర్యానీ → biryani, biriyani, briyani
-- தயிர் சாதம் → curd rice, thayir sadam, dahi chawal, mosaru anna
-- పెసరట్టు → pesarattu, pesaratu, moong dal dosa, green gram dosa
-- சாம்பார் → sambar, sambhar, sambaar
-- ரசம் → rasam, rasamu, pepper water
-- இட்லி → idli, idly, idle
-- దోశ → dosa, dosai, dhosha
-- ఉప్మా → upma, uppuma, uppit, rava upma
-- పొంగల్ → pongal, ven pongal, khara pongal
-- వడ → vada, vadai, vade, medu vada
-- గొంగూర → gongura, gongura, sorrel leaves, pulicha keerai
-- మసాలా దోశ → masala dosa, masale dose, stuffed dosa
-- పనీర్ బట్టర్ మసాలా → paneer butter masala, paneer makhani, butter paneer
-- చికెన్ 65 → chicken 65, chicken sixtyfive
-- మటన్ బిర్యానీ → mutton biryani, goat biryani, lamb biryani`
+- దోశ/தோசை → dosa
+- ఇడ్లీ/இட்லி → idli  
+- బిర్యానీ/பிரியாணி → biryani
+- చిత్రాన్నం → lemon rice
+- పులిహోర → tamarind rice
+- గొంగూర చికెన్ → gongura chicken
+- మటన్ బిర్యానీ → mutton biryani`
         }, {
           role: 'user',
-          content: `Translate with variations: "${text}"`
+          content: `Translate: "${text}"`
         }],
         model: 'llama-3.1-8b-instant',
-        max_tokens: 150,
-        temperature: 0.2
+        max_tokens: 100,
+        temperature: 0.1
       });
       
       let response = completion.choices[0]?.message?.content?.trim() || text;
       
       // Clean up the response
       response = response.replace(/^["']|["']$/g, '').trim();
-      response = response.replace(/^(translation|english|answer|result|variations?)[\s:=→]+/i, '').trim();
+      response = response.replace(/^(translation|english|answer|result|variations?|the food item is|food item)[\s:=→]+/i, '').trim();
       
       // Parse variations (comma or slash separated)
       let variations = response.split(/[,\/]/).map(v => v.trim().toLowerCase()).filter(v => v.length > 0);
       
-      // Remove any non-English variations
-      variations = variations.filter(v => !/[^\x00-\x7F]/.test(v));
+      // Remove any non-English variations and normalize
+      variations = variations
+        .filter(v => !/[^\x00-\x7F]/.test(v))
+        .map(v => this.normalizeTranscription(v))
+        .filter(v => v.length > 0);
       
       // If no valid variations, return original
       if (variations.length === 0) {

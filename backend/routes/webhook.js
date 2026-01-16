@@ -181,12 +181,17 @@ router.post('/meta', async (req, res) => {
                   try {
                     // Download and transcribe the audio
                     const audioBuffer = await metaCloud.downloadMedia(audioId);
-                    const transcription = await groqAi.transcribeAudio(audioBuffer, message.audio?.mime_type || 'audio/ogg');
+                    let transcription = await groqAi.transcribeAudio(audioBuffer, message.audio?.mime_type || 'audio/ogg');
                     
                     if (transcription && transcription.trim()) {
-                      text = transcription.trim();
+                      // Normalize transcription to fix common voice recognition mistakes
+                      const rawTranscription = transcription.trim();
+                      transcription = groqAi.normalizeTranscription(rawTranscription);
+                      
+                      text = transcription;
                       messageType = 'text'; // Treat as text after transcription
-                      console.log('🎤 Voice transcribed:', text);
+                      console.log('🎤 Voice transcribed:', rawTranscription);
+                      console.log('🎤 Normalized to:', text);
                     } else {
                       // Transcription failed, send error message
                       await whatsapp.sendButtons(phone, 
