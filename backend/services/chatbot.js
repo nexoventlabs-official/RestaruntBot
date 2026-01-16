@@ -2879,27 +2879,8 @@ const chatbot = {
 
   // ============ ORDER FOOD MENU ============
   async sendOrderFoodMenu(phone) {
-    const browseMenuImageUrl = await chatbotImagesService.getImageUrl('browse_menu');
-    const orderFoodMessage = `🍽️ *Order Food*\n\n` +
-      `Ready to order? Browse our delicious menu!\n\n` +
-      `Or manage your existing orders below:`;
-    
-    await sendWithOptionalImage(phone, browseMenuImageUrl, orderFoodMessage, [
-      { id: 'view_cart', text: '🛒 My Cart' },
-      { id: 'track_order', text: '📍 Track Delivery' },
-      { id: 'cancel_order', text: '❌ Cancel Order' }
-    ], 'Perivi Hotel');
-
-    // Send browse menu options
-    await whatsapp.sendButtons(phone, 
-      '📋 *Browse Menu*\n\nSelect your preference:',
-      [
-        { id: 'food_veg', text: '🌿 Veg Only' },
-        { id: 'food_nonveg', text: '🍖 Non-Veg Only' },
-        { id: 'food_both', text: '📋 Show All' }
-      ],
-      'Fresh & Delicious!'
-    );
+    // Send only the browse menu options (same as sendFoodTypeSelection)
+    await this.sendFoodTypeSelection(phone);
   },
 
   // ============ MY ORDERS MENU ============
