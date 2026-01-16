@@ -27,6 +27,10 @@ const deliveryBoySchema = new mongoose.Schema({
   }],
   avgRating: { type: Number, default: 0 },
   totalRatings: { type: Number, default: 0 },
+  // Permanent stats (not affected by order cleanup)
+  totalDeliveries: { type: Number, default: 0 },
+  totalEarnings: { type: Number, default: 0 },
+  totalCancelled: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }
 });
 

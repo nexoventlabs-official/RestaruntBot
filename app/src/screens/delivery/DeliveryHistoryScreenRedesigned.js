@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  RefreshControl, TouchableOpacity, SectionList, Platform, StatusBar
+  RefreshControl, TouchableOpacity, SectionList, Platform, StatusBar, Modal
 } from 'react-native';
 import Animated, {
   FadeInDown,
@@ -16,15 +16,22 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { OrderCardSkeleton } from '../../components/ui/Skeleton';
 import { colors, spacing, radius, typography, shadows } from '../../theme';
 
-// Summary Card Component
-const SummaryCard = ({ orders }) => {
-  const totalEarnings = orders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
-  const todayOrders = orders.filter(order => {
-    const orderDate = new Date(order.deliveredAt);
-    const today = new Date();
-    return orderDate.toDateString() === today.toDateString();
-  });
+// Filter options
+const FILTER_OPTIONS = [
+  { key: 'week', label: 'This Week' },
+  { key: 'today', label: 'Today' },
+  { key: 'month', label: 'This Month' },
+  { key: 'all', label: 'All Time' },
+];
 
+// Get filter label for display
+const getFilterLabel = (filter) => {
+  const option = FILTER_OPTIONS.find(o => o.key === filter);
+  return option ? option.label : 'This Week';
+};
+
+// Summary Card Component
+const SummaryCard = ({ stats, filterLabel }) => {
   return (
     <Animated.View entering={FadeInDown.delay(100).duration(500)}>
       <LinearGradient
@@ -32,38 +39,29 @@ const SummaryCard = ({ orders }) => {
         style={styles.summaryCard}
       >
         <View style={styles.summaryHeader}>
-          <Text style={styles.summaryTitle}>This Week</Text>
-          <View style={styles.summaryBadge}>
-            <Ionicons name="trending-up" size={14} color={colors.success.main} />
-            <Text style={styles.summaryBadgeText}>+12%</Text>
-          </View>
+          <Text style={styles.summaryTitle}>{filterLabel}</Text>
+          {stats.delivered > 0 && (
+            <View style={styles.summaryBadge}>
+              <Ionicons name="checkmark-circle" size={14} color={colors.success.main} />
+              <Text style={styles.summaryBadgeText}>{stats.delivered} done</Text>
+            </View>
+          )}
         </View>
         
         <View style={styles.summaryStats}>
           <View style={styles.summaryStat}>
-            <Text style={styles.summaryValue}>₹{totalEarnings.toLocaleString()}</Text>
+            <Text style={styles.summaryValue}>₹{stats.earnings.toLocaleString()}</Text>
             <Text style={styles.summaryLabel}>Total Earned</Text>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryStat}>
-            <Text style={styles.summaryValue}>{orders.length}</Text>
-            <Text style={styles.summaryLabel}>Deliveries</Text>
+            <Text style={styles.summaryValue}>{stats.delivered}</Text>
+            <Text style={styles.summaryLabel}>Delivered</Text>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryStat}>
-            <Text style={styles.summaryValue}>{todayOrders.length}</Text>
-            <Text style={styles.summaryLabel}>Today</Text>
-          </View>
-        </View>
-
-        {/* Progress Bar */}
-        <View style={styles.progressSection}>
-          <View style={styles.progressHeader}>
-            <Text style={styles.progressLabel}>Weekly Goal</Text>
-            <Text style={styles.progressValue}>80%</Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: '80%' }]} />
+            <Text style={styles.summaryValue}>{stats.cancelled}</Text>
+            <Text style={styles.summaryLabel}>Cancelled</Text>
           </View>
         </View>
       </LinearGradient>
@@ -133,15 +131,21 @@ export default function DeliveryHistoryScreen({ navigation }) {
   const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState('week'); // 'today', 'week', 'month', 'all'
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [stats, setStats] = useState({ delivered: 0, cancelled: 0, earnings: 0 });
 
-  const fetchHistory = async () => {
+  const fetchHistory = async (selectedFilter = filter) => {
     try {
-      const response = await api.get('/delivery/orders/history');
-      setOrders(response.data);
+      const response = await api.get(`/delivery/orders/history/filtered?filter=${selectedFilter}`);
+      const { orders: fetchedOrders, stats: fetchedStats } = response.data;
+      
+      setOrders(fetchedOrders);
+      setStats(fetchedStats);
       
       // Group orders by date
-      const grouped = response.data.reduce((acc, order) => {
-        const date = new Date(order.deliveredAt);
+      const grouped = fetchedOrders.reduce((acc, order) => {
+        const date = new Date(order.deliveredAt || order.statusUpdatedAt);
         const today = new Date();
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
@@ -188,12 +192,60 @@ export default function DeliveryHistoryScreen({ navigation }) {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     fetchHistory();
-  }, []);
+  }, [filter]);
+
+  const handleFilterChange = (newFilter) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFilter(newFilter);
+    setShowFilterModal(false);
+    setLoading(true);
+    fetchHistory(newFilter);
+  };
 
   const handleOrderPress = (order) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     navigation.navigate('DeliveryOrderDetail', { order });
   };
+
+  // Filter Modal
+  const FilterModal = () => (
+    <Modal
+      visible={showFilterModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowFilterModal(false)}
+    >
+      <TouchableOpacity 
+        style={styles.modalOverlay} 
+        activeOpacity={1} 
+        onPress={() => setShowFilterModal(false)}
+      >
+        <View style={styles.filterModal}>
+          <Text style={styles.filterModalTitle}>Select Period</Text>
+          {FILTER_OPTIONS.map((option) => (
+            <TouchableOpacity
+              key={option.key}
+              style={[
+                styles.filterOption,
+                filter === option.key && styles.filterOptionActive
+              ]}
+              onPress={() => handleFilterChange(option.key)}
+            >
+              <Text style={[
+                styles.filterOptionText,
+                filter === option.key && styles.filterOptionTextActive
+              ]}>
+                {option.label}
+              </Text>
+              {filter === option.key && (
+                <Ionicons name="checkmark" size={20} color={colors.primary[400]} />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
 
   return (
     <View style={styles.container}>
@@ -202,15 +254,20 @@ export default function DeliveryHistoryScreen({ navigation }) {
       <Animated.View entering={FadeIn.duration(400)} style={styles.header}>
         <View>
           <Text style={styles.title}>Delivery History</Text>
-          <Text style={styles.subtitle}>{orders.length} deliveries completed</Text>
+          <Text style={styles.subtitle}>{stats.delivered} deliveries completed</Text>
         </View>
         <TouchableOpacity 
           style={styles.filterButton}
-          onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setShowFilterModal(true);
+          }}
         >
           <Ionicons name="filter" size={20} color={colors.primary[400]} />
         </TouchableOpacity>
       </Animated.View>
+
+      <FilterModal />
 
       {loading ? (
         <View style={styles.listContent}>
@@ -232,12 +289,12 @@ export default function DeliveryHistoryScreen({ navigation }) {
           renderSectionHeader={({ section: { title } }) => (
             <SectionHeader title={title} />
           )}
-          ListHeaderComponent={<SummaryCard orders={orders} />}
+          ListHeaderComponent={<SummaryCard stats={stats} filterLabel={getFilterLabel(filter)} />}
           ListEmptyComponent={
             <EmptyState
               icon="time-outline"
               title="No Delivery History"
-              subtitle="Completed deliveries will appear here"
+              subtitle={`No deliveries found for ${getFilterLabel(filter).toLowerCase()}`}
             />
           }
           contentContainerStyle={styles.listContent}
@@ -327,7 +384,6 @@ const styles = StyleSheet.create({
   summaryStats: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.lg,
   },
   summaryStat: {
     flex: 1,
@@ -473,5 +529,45 @@ const styles = StyleSheet.create({
     backgroundColor: colors.light.border,
     borderRadius: radius.card,
     marginBottom: spacing.lg,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  filterModal: {
+    backgroundColor: '#fff',
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    width: '80%',
+    maxWidth: 300,
+  },
+  filterModalTitle: {
+    fontSize: typography.title.large.fontSize,
+    fontWeight: '600',
+    color: colors.light.text.primary,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  filterOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.sm,
+  },
+  filterOptionActive: {
+    backgroundColor: colors.primary[50],
+  },
+  filterOptionText: {
+    fontSize: typography.body.large.fontSize,
+    color: colors.light.text.primary,
+  },
+  filterOptionTextActive: {
+    color: colors.primary[400],
+    fontWeight: '600',
   },
 });

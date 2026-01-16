@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, Image, TextInput, Alert, Pressable, Switch, Platform, StatusBar
@@ -82,6 +82,40 @@ export default function DeliveryProfileScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [profileStats, setProfileStats] = useState({
+    totalDeliveries: 0,
+    totalEarnings: 0,
+    joinedDate: null
+  });
+
+  // Fetch profile stats on mount
+  useEffect(() => {
+    fetchProfileStats();
+  }, []);
+
+  const fetchProfileStats = async () => {
+    try {
+      const response = await api.get('/delivery/profile/stats');
+      setProfileStats(response.data);
+    } catch (error) {
+      console.error('Error fetching profile stats:', error);
+    }
+  };
+
+  // Format earnings to K format
+  const formatEarnings = (amount) => {
+    if (amount >= 1000) {
+      return `₹${(amount / 1000).toFixed(1)}K`;
+    }
+    return `₹${amount}`;
+  };
+
+  // Format joined date
+  const formatJoinedDate = (date) => {
+    if (!date) return 'N/A';
+    const d = new Date(date);
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
 
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -180,11 +214,11 @@ export default function DeliveryProfileScreen() {
 
             {/* Stats Row */}
             <View style={styles.statsRow}>
-              <StatsBadge value="245" label="Deliveries" />
+              <StatsBadge value={profileStats.totalDeliveries.toString()} label="Deliveries" />
               <View style={styles.statsDivider} />
-              <StatsBadge value="₹24.5K" label="Earnings" />
+              <StatsBadge value={formatEarnings(profileStats.totalEarnings)} label="Earnings" />
               <View style={styles.statsDivider} />
-              <StatsBadge value="98%" label="On-time" />
+              <StatsBadge value={formatJoinedDate(profileStats.joinedDate || user?.createdAt)} label="Joined" />
             </View>
           </LinearGradient>
         </Animated.View>

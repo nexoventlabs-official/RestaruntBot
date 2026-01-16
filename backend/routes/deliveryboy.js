@@ -606,6 +606,81 @@ router.get('/orders/stats', verifyDeliveryToken, async (req, res) => {
   }
 });
 
+// Get profile stats for delivery boy (permanent stats not affected by order cleanup)
+router.get('/profile/stats', verifyDeliveryToken, async (req, res) => {
+  try {
+    const deliveryBoy = req.deliveryBoy;
+    
+    res.json({
+      totalDeliveries: deliveryBoy.totalDeliveries || 0,
+      totalEarnings: deliveryBoy.totalEarnings || 0,
+      totalCancelled: deliveryBoy.totalCancelled || 0,
+      joinedDate: deliveryBoy.createdAt,
+      avgRating: deliveryBoy.avgRating || 0,
+      totalRatings: deliveryBoy.totalRatings || 0
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get delivery history with filter (today, this week, this month, all time)
+router.get('/orders/history/filtered', verifyDeliveryToken, async (req, res) => {
+  try {
+    const { filter = 'week' } = req.query; // 'today', 'week', 'month', 'all'
+    
+    let dateFilter = {};
+    const now = new Date();
+    
+    if (filter === 'today') {
+      const startOfDay = new Date(now);
+      startOfDay.setHours(0, 0, 0, 0);
+      dateFilter = { deliveredAt: { $gte: startOfDay } };
+    } else if (filter === 'week') {
+      // Get Monday of current week
+      const dayOfWeek = now.getDay();
+      const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Sunday = 0
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - diffToMonday);
+      startOfWeek.setHours(0, 0, 0, 0);
+      // Get Sunday of current week
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+      dateFilter = { deliveredAt: { $gte: startOfWeek, $lte: endOfWeek } };
+    } else if (filter === 'month') {
+      // Get 1st of current month
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      // Get last day of current month
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      dateFilter = { deliveredAt: { $gte: startOfMonth, $lte: endOfMonth } };
+    }
+    // 'all' - no date filter
+    
+    const orders = await Order.find({
+      assignedTo: req.deliveryBoy._id,
+      status: { $in: ['delivered', 'cancelled'] },
+      ...dateFilter
+    }).sort({ deliveredAt: -1, statusUpdatedAt: -1 }).limit(100);
+    
+    // Calculate stats for the filtered period
+    const deliveredOrders = orders.filter(o => o.status === 'delivered');
+    const cancelledOrders = orders.filter(o => o.status === 'cancelled');
+    const totalEarnings = deliveredOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    
+    res.json({
+      orders,
+      stats: {
+        delivered: deliveredOrders.length,
+        cancelled: cancelledOrders.length,
+        earnings: totalEarnings
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get single order by orderId (for delivery partner)
 router.get('/orders/:orderId', verifyDeliveryToken, async (req, res) => {
   try {
@@ -911,6 +986,14 @@ router.post('/orders/:orderId/delivered', verifyDeliveryToken, async (req, res) 
         'Tap to review'
       );
     }
+    
+    // Update delivery partner's permanent stats
+    await DeliveryBoy.findByIdAndUpdate(req.deliveryBoy._id, {
+      $inc: {
+        totalDeliveries: 1,
+        totalEarnings: order.totalAmount || 0
+      }
+    });
     
     dataEvents.emit('orders');
     dataEvents.emit('dashboard');
