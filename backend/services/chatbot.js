@@ -2893,9 +2893,9 @@ const chatbot = {
       `Check your order status, track delivery, or cancel an order:`;
     
     await sendWithOptionalImage(phone, myOrdersImageUrl, myOrdersMessage, [
-      { id: 'order_status', text: '📋 Order Status' },
-      { id: 'track_order', text: '📍 Track Delivery' },
-      { id: 'cancel_order', text: '❌ Cancel Order' }
+      { id: 'order_status', text: 'Order Status' },
+      { id: 'track_order', text: 'Track Delivery' },
+      { id: 'cancel_order', text: 'Cancel Order' }
     ], 'Perivi Hotel');
   },
 
