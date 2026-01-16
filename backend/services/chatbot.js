@@ -913,27 +913,48 @@ const chatbot = {
     }
     
     const statusPatterns = [
-      // English
+      // English - singular and plural
       /\border status\b/, /\bcheck order\b/, /\border history\b/, /\bprevious order\b/,
       /\bpast order\b/, /\bshow order\b/, /\bview order\b/, /\border details\b/,
-      /\bmy orders\b/, /\bstatus\b/,
+      /\bmy orders\b/, /\bmy order\b/, /\bstatus\b/,
+      // Voice recognition variations for "my order" / "my orders"
+      /\bmai order\b/, /\bmai orders\b/, /\bmay order\b/, /\bmay orders\b/,
+      /\bmy oder\b/, /\bmy oders\b/, /\bmy orda\b/, /\bmy ordas\b/,
+      // "order" standalone and variations
+      /^order$/, /^orders$/, /^oder$/, /^oders$/, /^orda$/, /^ordas$/,
       // Hindi
+      /\bmera order\b/, /\bmere order\b/, /\bmere orders\b/, /\bmera orders\b/,
       /\border kya hua\b/, /\border status kya hai\b/, /\border ka status\b/,
-      /\bऑर्डर स्टेटस\b/, /\bऑर्डर क्या हुआ\b/, /\bस्टेटस\b/,
+      /\border dikhao\b/, /\border batao\b/, /\bमेरा ऑर्डर\b/, /\bमेरे ऑर्डर\b/,
+      /\bऑर्डर स्टेटस\b/, /\bऑर्डर क्या हुआ\b/, /\bस्टेटस\b/, /\bऑर्डर दिखाओ\b/,
       // Telugu
-      /\border status enti\b/, /\border em aindi\b/, /\bఆర్డర్ స్టేటస్\b/, /\bస్టేటస్\b/,
+      /\bnaa order\b/, /\bnaa orders\b/, /\border chupinchu\b/, /\border chudu\b/,
+      /\border status enti\b/, /\border em aindi\b/, /\bనా ఆర్డర్\b/, /\bఆర్డర్ చూపించు\b/,
+      /\bఆర్డర్ స్టేటస్\b/, /\bస్టేటస్\b/,
       // Tamil
-      /\border status enna\b/, /\border enna achu\b/, /\bஆர்டர் ஸ்டேட்டஸ்\b/, /\bஸ்டேட்டஸ்\b/,
+      /\ben order\b/, /\ben orders\b/, /\border kaattu\b/, /\border paaru\b/,
+      /\border status enna\b/, /\border enna achu\b/, /\bஎன் ஆர்டர்\b/, /\bஆர்டர் காட்டு\b/,
+      /\bஆர்டர் ஸ்டேட்டஸ்\b/, /\bஸ்டேட்டஸ்\b/,
       // Kannada
-      /\border status enu\b/, /\border enu aaytu\b/, /\bಆರ್ಡರ್ ಸ್ಟೇಟಸ್\b/, /\bಸ್ಟೇಟಸ್\b/,
+      /\bnanna order\b/, /\bnanna orders\b/, /\border toorisu\b/, /\border nodu\b/,
+      /\border status enu\b/, /\border enu aaytu\b/, /\bನನ್ನ ಆರ್ಡರ್\b/, /\bಆರ್ಡರ್ ತೋರಿಸು\b/,
+      /\bಆರ್ಡರ್ ಸ್ಟೇಟಸ್\b/, /\bಸ್ಟೇಟಸ್\b/,
       // Malayalam
-      /\border status enthaanu\b/, /\border entha\b/, /\bഓർഡർ സ്റ്റാറ്റസ്\b/, /\bസ്റ്റാറ്റസ്\b/,
+      /\bente order\b/, /\bente orders\b/, /\border kaanikkuka\b/, /\border kaanu\b/,
+      /\border status enthaanu\b/, /\border entha\b/, /\bഎന്റെ ഓർഡർ\b/, /\bഓർഡർ കാണിക്കുക\b/,
+      /\bഓർഡർ സ്റ്റാറ്റസ്\b/, /\bസ്റ്റാറ്റസ്\b/,
       // Bengali
-      /\border status ki\b/, /\border ki holo\b/, /\bঅর্ডার স্ট্যাটাস\b/, /\bস্ট্যাটাস\b/,
+      /\bamar order\b/, /\bamar orders\b/, /\border dekho\b/, /\border dekhao\b/,
+      /\border status ki\b/, /\border ki holo\b/, /\bআমার অর্ডার\b/, /\bঅর্ডার দেখো\b/,
+      /\bঅর্ডার স্ট্যাটাস\b/, /\bস্ট্যাটাস\b/,
       // Marathi
-      /\border status kay\b/, /\border kay jhala\b/, /\bऑर्डर स्टेटस\b/, /\bस्टेटस\b/,
+      /\bmaza order\b/, /\bmaza orders\b/, /\border dakhva\b/, /\border bagha\b/,
+      /\border status kay\b/, /\border kay jhala\b/, /\bमाझा ऑर्डर\b/, /\bऑर्डर दाखवा\b/,
+      /\bऑर्डर स्टेटस\b/, /\bस्टेटस\b/,
       // Gujarati
-      /\border status shu\b/, /\border shu thyu\b/, /\bઓર્ડર સ્ટેટસ\b/, /\bસ્ટેટસ\b/
+      /\bmaru order\b/, /\bmaru orders\b/, /\border batavo\b/, /\border juo\b/,
+      /\border status shu\b/, /\border shu thyu\b/, /\bમારું ઓર્ડર\b/, /\bઓર્ડર બતાવો\b/,
+      /\bઓર્ડર સ્ટેટસ\b/, /\bસ્ટેટસ\b/
     ];
     return statusPatterns.some(pattern => pattern.test(lowerText));
   },
