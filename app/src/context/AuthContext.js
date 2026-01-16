@@ -64,7 +64,31 @@ export const AuthProvider = ({ children }) => {
   // Register push notifications
   const registerPushToken = async (userRole) => {
     try {
-      const pushToken = await pushNotifications.registerForPushNotifications();
+      const { token: pushToken, permissionDenied } = await pushNotifications.registerForPushNotifications();
+      
+      if (permissionDenied) {
+        // Show alert to user about enabling notifications
+        const { Alert, Linking, Platform } = require('react-native');
+        Alert.alert(
+          'Enable Notifications',
+          'To receive order updates and important alerts, please enable notifications in your device settings.',
+          [
+            { text: 'Later', style: 'cancel' },
+            { 
+              text: 'Open Settings', 
+              onPress: () => {
+                if (Platform.OS === 'ios') {
+                  Linking.openURL('app-settings:');
+                } else {
+                  Linking.openSettings();
+                }
+              }
+            }
+          ]
+        );
+        return;
+      }
+      
       if (pushToken) {
         // Send to appropriate endpoint based on role
         if (userRole === 'admin') {

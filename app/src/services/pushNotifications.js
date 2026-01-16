@@ -21,13 +21,14 @@ Notifications.setNotificationHandler({
 export const pushNotifications = {
   /**
    * Register for push notifications and get the Expo push token
-   * @returns {Promise<string|null>} Expo push token or null if failed
+   * @param {boolean} showAlert - Whether to show alert if permission denied
+   * @returns {Promise<{token: string|null, permissionDenied: boolean}>}
    */
-  async registerForPushNotifications() {
+  async registerForPushNotifications(showAlert = false) {
     // Push notifications don't work in Expo Go for SDK 53+
     if (isExpoGo) {
       console.log('⚠️ Push notifications are not supported in Expo Go. Use a development build.');
-      return null;
+      return { token: null, permissionDenied: false };
     }
 
     let token = null;
@@ -35,7 +36,7 @@ export const pushNotifications = {
     // Check if it's a physical device
     if (!Device.isDevice) {
       console.log('Push notifications require a physical device');
-      return null;
+      return { token: null, permissionDenied: false };
     }
 
     // Check existing permissions
@@ -57,7 +58,7 @@ export const pushNotifications = {
 
     if (finalStatus !== 'granted') {
       console.log('Push notification permission not granted');
-      return null;
+      return { token: null, permissionDenied: true };
     }
 
     // Get the Expo push token
@@ -70,7 +71,7 @@ export const pushNotifications = {
       console.log('📱 Expo Push Token:', token);
     } catch (error) {
       console.error('Error getting push token:', error);
-      return null;
+      return { token: null, permissionDenied: false };
     }
 
     // Configure Android notification channels
@@ -116,7 +117,7 @@ export const pushNotifications = {
       });
     }
 
-    return token;
+    return { token, permissionDenied: false };
   },
 
   /**
