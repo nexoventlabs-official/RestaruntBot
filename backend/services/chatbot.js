@@ -3881,8 +3881,9 @@ const chatbot = {
 
     let msg = '📋 *Your Orders*\n\n';
     orders.forEach(o => {
+      const paymentLabel = o.paymentMethod === 'cod' ? '💵 COD' : '💳 Paid';
       msg += `${statusEmoji[o.status] || '•'} *${o.orderId}*\n`;
-      msg += `   ${statusLabel[o.status] || o.status.replace('_', ' ')} | ₹${o.totalAmount}\n`;
+      msg += `   ${statusLabel[o.status] || o.status.replace('_', ' ')} | ₹${o.totalAmount} | ${paymentLabel}\n`;
       msg += `   ${new Date(o.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}\n\n`;
     });
 
