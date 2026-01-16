@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, Image, Alert, ActivityIndicator, Switch, Animated, Platform,
-  KeyboardAvoidingView, StatusBar
+  KeyboardAvoidingView, StatusBar, Modal
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,14 +13,53 @@ import api from '../../config/api';
 const ZOMATO_RED = '#E23744';
 const ZOMATO_DARK_RED = '#CB1A27';
 
+// Generate arrays for date picker
+const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
+const MONTHS = [
+  { value: 1, label: 'January' },
+  { value: 2, label: 'February' },
+  { value: 3, label: 'March' },
+  { value: 4, label: 'April' },
+  { value: 5, label: 'May' },
+  { value: 6, label: 'June' },
+  { value: 7, label: 'July' },
+  { value: 8, label: 'August' },
+  { value: 9, label: 'September' },
+  { value: 10, label: 'October' },
+  { value: 11, label: 'November' },
+  { value: 12, label: 'December' },
+];
+const currentYear = new Date().getFullYear();
+const YEARS = Array.from({ length: 80 }, (_, i) => currentYear - 18 - i); // Start from 18 years ago
+
 export default function DeliveryFormScreen({ route, navigation }) {
   const existingDeliveryBoy = route.params?.deliveryBoy;
   const isEditing = !!existingDeliveryBoy;
 
+  // Parse existing DOB if editing
+  const parseExistingDob = () => {
+    if (existingDeliveryBoy?.dob) {
+      const date = new Date(existingDeliveryBoy.dob);
+      return {
+        day: date.getDate(),
+        month: date.getMonth() + 1,
+        year: date.getFullYear()
+      };
+    }
+    return { day: null, month: null, year: null };
+  };
+
+  const existingDob = parseExistingDob();
+
   const [name, setName] = useState(existingDeliveryBoy?.name || '');
   const [email, setEmail] = useState(existingDeliveryBoy?.email || '');
   const [phone, setPhone] = useState(existingDeliveryBoy?.phone || '');
-  const [dob, setDob] = useState(existingDeliveryBoy?.dob ? new Date(existingDeliveryBoy.dob).toISOString().split('T')[0] : '');
+  const [dobDay, setDobDay] = useState(existingDob.day);
+  const [dobMonth, setDobMonth] = useState(existingDob.month);
+  const [dobYear, setDobYear] = useState(existingDob.year);
+  const [showDayPicker, setShowDayPicker] = useState(false);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [showYearPicker, setShowYearPicker] = useState(false);
   const [isActive, setIsActive] = useState(existingDeliveryBoy?.isActive !== false);
   const [photo, setPhoto] = useState(existingDeliveryBoy?.photo || null);
   const [newPhoto, setNewPhoto] = useState(null);
@@ -36,6 +75,25 @@ export default function DeliveryFormScreen({ route, navigation }) {
     ]).start();
   }, []);
 
+  // Format DOB for display
+  const getFormattedDob = () => {
+    if (dobDay && dobMonth && dobYear) {
+      const monthName = MONTHS.find(m => m.value === dobMonth)?.label || '';
+      return `${dobDay} ${monthName.substring(0, 3)} ${dobYear}`;
+    }
+    return '';
+  };
+
+  // Get DOB in ISO format for API
+  const getDobForApi = () => {
+    if (dobDay && dobMonth && dobYear) {
+      const month = String(dobMonth).padStart(2, '0');
+      const day = String(dobDay).padStart(2, '0');
+      return `${dobYear}-${month}-${day}`;
+    }
+    return '';
+  };
+
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -50,7 +108,8 @@ export default function DeliveryFormScreen({ route, navigation }) {
   };
 
   const handleSubmit = async () => {
-    if (!name.trim() || !phone.trim() || !dob.trim()) {
+    const dob = getDobForApi();
+    if (!name.trim() || !phone.trim() || !dob) {
       Alert.alert('Error', 'Please fill in name, phone, and date of birth');
       return;
     }
@@ -195,18 +254,124 @@ export default function DeliveryFormScreen({ route, navigation }) {
               {/* Date of Birth */}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Date of Birth <Text style={styles.required}>*</Text></Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons name="calendar-outline" size={20} color="#9CA3AF" />
-                  <TextInput
-                    style={styles.input}
-                    value={dob}
-                    onChangeText={setDob}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#9CA3AF"
-                  />
+                <View style={styles.dobContainer}>
+                  {/* Day Picker */}
+                  <TouchableOpacity 
+                    style={styles.dobPicker} 
+                    onPress={() => setShowDayPicker(true)}
+                  >
+                    <Text style={[styles.dobPickerText, !dobDay && styles.dobPlaceholder]}>
+                      {dobDay || 'Day'}
+                    </Text>
+                    <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
+                  </TouchableOpacity>
+
+                  {/* Month Picker */}
+                  <TouchableOpacity 
+                    style={[styles.dobPicker, styles.dobPickerMonth]} 
+                    onPress={() => setShowMonthPicker(true)}
+                  >
+                    <Text style={[styles.dobPickerText, !dobMonth && styles.dobPlaceholder]}>
+                      {dobMonth ? MONTHS.find(m => m.value === dobMonth)?.label.substring(0, 3) : 'Month'}
+                    </Text>
+                    <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
+                  </TouchableOpacity>
+
+                  {/* Year Picker */}
+                  <TouchableOpacity 
+                    style={styles.dobPicker} 
+                    onPress={() => setShowYearPicker(true)}
+                  >
+                    <Text style={[styles.dobPickerText, !dobYear && styles.dobPlaceholder]}>
+                      {dobYear || 'Year'}
+                    </Text>
+                    <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
+                  </TouchableOpacity>
                 </View>
-                <Text style={styles.inputHint}>Format: 1990-01-15</Text>
+                {getFormattedDob() ? (
+                  <Text style={styles.dobDisplay}>
+                    <Ionicons name="calendar" size={12} color="#22C55E" /> {getFormattedDob()}
+                  </Text>
+                ) : null}
               </View>
+
+              {/* Day Picker Modal */}
+              <Modal visible={showDayPicker} transparent animationType="fade">
+                <TouchableOpacity 
+                  style={styles.modalOverlay} 
+                  activeOpacity={1} 
+                  onPress={() => setShowDayPicker(false)}
+                >
+                  <View style={styles.pickerModal}>
+                    <Text style={styles.pickerTitle}>Select Day</Text>
+                    <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                      {DAYS.map(day => (
+                        <TouchableOpacity
+                          key={day}
+                          style={[styles.pickerOption, dobDay === day && styles.pickerOptionActive]}
+                          onPress={() => { setDobDay(day); setShowDayPicker(false); }}
+                        >
+                          <Text style={[styles.pickerOptionText, dobDay === day && styles.pickerOptionTextActive]}>
+                            {day}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                </TouchableOpacity>
+              </Modal>
+
+              {/* Month Picker Modal */}
+              <Modal visible={showMonthPicker} transparent animationType="fade">
+                <TouchableOpacity 
+                  style={styles.modalOverlay} 
+                  activeOpacity={1} 
+                  onPress={() => setShowMonthPicker(false)}
+                >
+                  <View style={styles.pickerModal}>
+                    <Text style={styles.pickerTitle}>Select Month</Text>
+                    <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                      {MONTHS.map(month => (
+                        <TouchableOpacity
+                          key={month.value}
+                          style={[styles.pickerOption, dobMonth === month.value && styles.pickerOptionActive]}
+                          onPress={() => { setDobMonth(month.value); setShowMonthPicker(false); }}
+                        >
+                          <Text style={[styles.pickerOptionText, dobMonth === month.value && styles.pickerOptionTextActive]}>
+                            {month.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                </TouchableOpacity>
+              </Modal>
+
+              {/* Year Picker Modal */}
+              <Modal visible={showYearPicker} transparent animationType="fade">
+                <TouchableOpacity 
+                  style={styles.modalOverlay} 
+                  activeOpacity={1} 
+                  onPress={() => setShowYearPicker(false)}
+                >
+                  <View style={styles.pickerModal}>
+                    <Text style={styles.pickerTitle}>Select Year</Text>
+                    <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                      {YEARS.map(year => (
+                        <TouchableOpacity
+                          key={year}
+                          style={[styles.pickerOption, dobYear === year && styles.pickerOptionActive]}
+                          onPress={() => { setDobYear(year); setShowYearPicker(false); }}
+                        >
+                          <Text style={[styles.pickerOptionText, dobYear === year && styles.pickerOptionTextActive]}>
+                            {year}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                </TouchableOpacity>
+              </Modal>
 
               {/* Active Switch */}
               <View style={styles.switchCard}>
@@ -321,6 +486,83 @@ const styles = StyleSheet.create({
   inputDisabled: { backgroundColor: '#F5F5F5' },
   input: { flex: 1, fontSize: 15, color: '#1C1C1C', fontWeight: '500' },
   inputHint: { fontSize: 12, color: '#9CA3AF', marginTop: 4 },
+
+  // Date of Birth Picker
+  dobContainer: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  dobPicker: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 56,
+    borderWidth: 1.5,
+    borderColor: '#E8E8E8',
+  },
+  dobPickerMonth: {
+    flex: 1.5,
+  },
+  dobPickerText: {
+    fontSize: 15,
+    color: '#1C1C1C',
+    fontWeight: '500',
+  },
+  dobPlaceholder: {
+    color: '#9CA3AF',
+  },
+  dobDisplay: {
+    fontSize: 13,
+    color: '#22C55E',
+    marginTop: 8,
+    fontWeight: '500',
+  },
+  
+  // Picker Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pickerModal: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    width: '80%',
+    maxHeight: '60%',
+  },
+  pickerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1C1C1C',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  pickerScroll: {
+    maxHeight: 300,
+  },
+  pickerOption: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+  pickerOptionActive: {
+    backgroundColor: '#FEF2F2',
+  },
+  pickerOptionText: {
+    fontSize: 16,
+    color: '#1C1C1C',
+    textAlign: 'center',
+  },
+  pickerOptionTextActive: {
+    color: ZOMATO_RED,
+    fontWeight: '600',
+  },
 
   // Switch
   switchCard: { 
