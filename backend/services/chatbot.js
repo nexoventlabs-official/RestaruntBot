@@ -1359,7 +1359,9 @@ const chatbot = {
   },
 
   // Smart search - detects food type and searches by name/tag (async for AI translation)
-  // Improved: EXACT match returns single item, otherwise searches with variations
+  // Improved: EXACT match returns single item, otherwise searches ALL related items by tags
+  // Example: "masala dosa" → exact match OR all items with "masala" OR "dosa" tags
+  // Example: "dosa" → all items with "dosa" tag (not just exact title match)
   async smartSearch(text, menuItems) {
     // First translate regional language to English using AI (returns variations)
     const translationResult = await this.translateWithAI(text);
@@ -1415,7 +1417,7 @@ const chatbot = {
         });
         
         if (exactMatches.length > 0) {
-          console.log(`✅ Exact match found: "${searchTerm}" → ${exactMatches.length} item(s)`);
+          console.log(`✅ Exact name match found: "${searchTerm}" → ${exactMatches.length} item(s)`);
           return { 
             items: exactMatches, 
             foodType: detected, 
@@ -1424,6 +1426,78 @@ const chatbot = {
             exactMatch: true 
           };
         }
+      }
+      
+      // ========== CHECK FOR EXACT TAG MATCH (e.g., "dosa" matches all items with "dosa" tag) ==========
+      // Split search into individual keywords
+      const searchKeywords = primarySearchTerm.split(/\s+/).filter(k => k.length >= 2);
+      
+      // First try: Find items where ALL keywords match tags exactly
+      const allKeywordsTagMatches = menuItems.filter(item => {
+        if (!item.tags || item.tags.length === 0) return false;
+        const itemTagsLower = item.tags.map(t => t.toLowerCase().trim());
+        const itemTagsNorm = item.tags.map(t => normalizeForMatch(t));
+        
+        // Check if ALL search keywords match at least one tag
+        return searchKeywords.every(keyword => {
+          const kwLower = keyword.toLowerCase();
+          const kwNorm = normalizeForMatch(keyword);
+          return itemTagsLower.some(tag => tag === kwLower || tag.includes(kwLower) || kwLower.includes(tag)) ||
+                 itemTagsNorm.some(tagNorm => tagNorm === kwNorm || tagNorm.includes(kwNorm) || kwNorm.includes(tagNorm));
+        });
+      });
+      
+      if (allKeywordsTagMatches.length > 0) {
+        console.log(`✅ All keywords tag match: "${primarySearchTerm}" → ${allKeywordsTagMatches.length} item(s)`);
+        return { 
+          items: allKeywordsTagMatches, 
+          foodType: detected, 
+          searchTerm: primarySearchTerm, 
+          label: null,
+          exactMatch: true 
+        };
+      }
+      
+      // Second try: Find items where ANY keyword matches tags (e.g., "masala dosa" → items with "masala" OR "dosa" tags)
+      const anyKeywordTagMatches = new Map();
+      for (const keyword of searchKeywords) {
+        const kwLower = keyword.toLowerCase();
+        const kwNorm = normalizeForMatch(keyword);
+        
+        for (const item of menuItems) {
+          if (!item.tags || item.tags.length === 0) continue;
+          const itemTagsLower = item.tags.map(t => t.toLowerCase().trim());
+          const itemTagsNorm = item.tags.map(t => normalizeForMatch(t));
+          
+          // Check if this keyword matches any tag
+          const hasTagMatch = itemTagsLower.some(tag => tag === kwLower || tag.includes(kwLower) || kwLower.includes(tag)) ||
+                              itemTagsNorm.some(tagNorm => tagNorm === kwNorm || tagNorm.includes(kwNorm) || kwNorm.includes(tagNorm));
+          
+          if (hasTagMatch) {
+            const id = item._id.toString();
+            if (!anyKeywordTagMatches.has(id)) {
+              anyKeywordTagMatches.set(id, { item, matchCount: 0, matchedKeywords: [] });
+            }
+            anyKeywordTagMatches.get(id).matchCount++;
+            anyKeywordTagMatches.get(id).matchedKeywords.push(keyword);
+          }
+        }
+      }
+      
+      if (anyKeywordTagMatches.size > 0) {
+        // Sort by match count (items matching more keywords first)
+        const sortedMatches = Array.from(anyKeywordTagMatches.values())
+          .sort((a, b) => b.matchCount - a.matchCount)
+          .map(m => m.item);
+        
+        console.log(`✅ Any keyword tag match: "${primarySearchTerm}" → ${sortedMatches.length} item(s)`);
+        return { 
+          items: sortedMatches, 
+          foodType: detected, 
+          searchTerm: primarySearchTerm, 
+          label: null,
+          exactMatch: false 
+        };
       }
     }
     
