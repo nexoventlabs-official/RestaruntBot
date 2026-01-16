@@ -2176,6 +2176,16 @@ const chatbot = {
         await this.sendWebsiteLink(phone);
         state.currentStep = 'main_menu';
       }
+      // ========== ORDER FOOD BUTTON (from welcome message) ==========
+      else if (selection === 'order_food') {
+        await this.sendOrderFoodMenu(phone);
+        state.currentStep = 'select_food_type_order';
+      }
+      // ========== MY ORDERS BUTTON (from welcome message) ==========
+      else if (selection === 'my_orders') {
+        await this.sendMyOrdersMenu(phone);
+        state.currentStep = 'main_menu';
+      }
       // ========== TEXT-BASED ADD TO CART (e.g., "add biryani to cart") ==========
       else if (!selectedId && this.isAddToCartIntent(msg)) {
         const addIntent = this.isAddToCartIntent(msg);
@@ -2819,11 +2829,23 @@ const chatbot = {
 
   // ============ WELCOME & MAIN MENU ============
   async sendWelcome(phone) {
-    // Send list menu with View Options button instantly
+    // Step 1: Send restaurant image with welcome message and 3 quick reply buttons
+    const welcomeImageUrl = await chatbotImagesService.getImageUrl('welcome');
+    const welcomeMessage = `🏨 *Perivi Hotel*\n\n` +
+      `Welcome! 🙏\n\n` +
+      `We're delighted to serve you delicious food. How can we help you today?`;
+    
+    await sendWithOptionalImage(phone, welcomeImageUrl, welcomeMessage, [
+      { id: 'order_food', text: '🍽️ Order Food' },
+      { id: 'my_orders', text: '📦 My Orders' },
+      { id: 'open_website', text: '🌐 Website' }
+    ], 'Perivi Hotel');
+
+    // Step 2: Send "Explore more" with View Options list button
     await whatsapp.sendList(
       phone,
-      '🍽️ Welcome!',
-      'Welcome to our restaurant! How can we help you today?',
+      '✨ Explore More',
+      'Tap below to see all available options',
       'View Options',
       [
         {
@@ -2853,6 +2875,44 @@ const chatbot = {
       ],
       'Powered by AI'
     );
+  },
+
+  // ============ ORDER FOOD MENU ============
+  async sendOrderFoodMenu(phone) {
+    const browseMenuImageUrl = await chatbotImagesService.getImageUrl('browse_menu');
+    const orderFoodMessage = `🍽️ *Order Food*\n\n` +
+      `Ready to order? Browse our delicious menu!\n\n` +
+      `Or manage your existing orders below:`;
+    
+    await sendWithOptionalImage(phone, browseMenuImageUrl, orderFoodMessage, [
+      { id: 'view_cart', text: '🛒 My Cart' },
+      { id: 'track_order', text: '📍 Track Delivery' },
+      { id: 'cancel_order', text: '❌ Cancel Order' }
+    ], 'Perivi Hotel');
+
+    // Send browse menu options
+    await whatsapp.sendButtons(phone, 
+      '📋 *Browse Menu*\n\nSelect your preference:',
+      [
+        { id: 'food_veg', text: '🌿 Veg Only' },
+        { id: 'food_nonveg', text: '🍖 Non-Veg Only' },
+        { id: 'food_both', text: '📋 Show All' }
+      ],
+      'Fresh & Delicious!'
+    );
+  },
+
+  // ============ MY ORDERS MENU ============
+  async sendMyOrdersMenu(phone) {
+    const myOrdersImageUrl = await chatbotImagesService.getImageUrl('my_orders');
+    const myOrdersMessage = `📦 *My Orders*\n\n` +
+      `Check your order status, track delivery, or cancel an order:`;
+    
+    await sendWithOptionalImage(phone, myOrdersImageUrl, myOrdersMessage, [
+      { id: 'order_status', text: '📋 Order Status' },
+      { id: 'track_order', text: '📍 Track Delivery' },
+      { id: 'cancel_order', text: '❌ Cancel Order' }
+    ], 'Perivi Hotel');
   },
 
   // ============ MENU BROWSING ============
