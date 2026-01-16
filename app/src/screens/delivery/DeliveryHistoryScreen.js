@@ -31,26 +31,34 @@ const DATE_FILTERS = [
 const HISTORY_BG = require('../../../assets/backgrounds/deliveryhistory.jpg');
 const SUMMARY_BG = require('../../../assets/backgrounds/deliveryhistory1.jpg');
 
-const SummaryCard = ({ orders }) => {
+const SummaryCard = ({ orders, dateFilter }) => {
   const deliveredOrders = orders.filter(o => o.status === 'delivered');
   const cancelledOrders = orders.filter(o => o.status === 'cancelled');
   const totalEarnings = deliveredOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
-  const todayOrders = deliveredOrders.filter(order => {
-    const orderDate = new Date(order.deliveredAt);
-    const today = new Date();
-    return orderDate.toDateString() === today.toDateString();
-  });
+
+  // Get title based on date filter
+  const getTitle = () => {
+    switch (dateFilter) {
+      case 'today': return 'Today';
+      case 'week': return 'This Week';
+      case 'month': return 'This Month';
+      case 'all': return 'All Time';
+      default: return 'All Time';
+    }
+  };
 
   return (
     <View style={styles.summaryCardBg}>
       <ImageBackground source={SUMMARY_BG} style={styles.summaryCard} imageStyle={styles.summaryCardImage}>
         <View style={styles.summaryCardOverlay}>
           <View style={styles.summaryHeader}>
-            <Text style={styles.summaryTitle}>This Week</Text>
-            <View style={styles.summaryBadge}>
-              <Ionicons name="trending-up" size={14} color="#22C55E" />
-              <Text style={styles.summaryBadgeText}>+12%</Text>
-            </View>
+            <Text style={styles.summaryTitle}>{getTitle()}</Text>
+            {deliveredOrders.length > 0 && (
+              <View style={styles.summaryBadge}>
+                <Ionicons name="checkmark-circle" size={14} color="#22C55E" />
+                <Text style={styles.summaryBadgeText}>{deliveredOrders.length} done</Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.summaryStats}>
@@ -340,7 +348,7 @@ export default function DeliveryHistoryScreen({ navigation }) {
           keyExtractor={(item) => item._id}
           renderItem={renderOrder}
           renderSectionHeader={({ section: { title } }) => <SectionHeader title={title} />}
-          ListHeaderComponent={<SummaryCard orders={filteredOrders} />}
+          ListHeaderComponent={<SummaryCard orders={filteredOrders} dateFilter={dateFilter} />}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <View style={styles.emptyIconContainer}>
