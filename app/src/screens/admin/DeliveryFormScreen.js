@@ -30,7 +30,7 @@ const MONTHS = [
   { value: 12, label: 'December' },
 ];
 const currentYear = new Date().getFullYear();
-const YEARS = Array.from({ length: 80 }, (_, i) => currentYear - 18 - i); // Start from 18 years ago
+const YEARS = Array.from({ length: 80 }, (_, i) => currentYear - 16 - i); // Start from 16 years ago (minimum age 16)
 
 export default function DeliveryFormScreen({ route, navigation }) {
   const existingDeliveryBoy = route.params?.deliveryBoy;
