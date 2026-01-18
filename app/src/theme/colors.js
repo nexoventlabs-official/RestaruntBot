@@ -81,6 +81,7 @@ export const colors = {
     background: '#121212',
     surface: '#1E1E1E',
     surfaceElevated: '#2D2D2D',
+    surfaceSecondary: '#1A1A1A',
     border: '#3D3D3D',
     borderLight: '#2D2D2D',
     text: {
