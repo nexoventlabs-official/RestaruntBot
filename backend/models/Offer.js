@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const offerSchema = new mongoose.Schema({
   title: { type: String, default: '' },
   description: { type: String },
+  offerType: { type: String, default: '' }, // e.g., "1+1 Offer", "Buy 2 Get 1", "50% Off"
   image: { type: String, required: true },
   code: { type: String },
   discountType: { type: String, enum: ['percentage', 'fixed', 'none'], default: 'none' },

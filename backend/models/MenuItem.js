@@ -4,6 +4,7 @@ const menuItemSchema = new mongoose.Schema({
   name: { type: String, required: true },
   description: { type: String },
   price: { type: Number, required: true },
+  originalPrice: { type: Number }, // Original price before discount
   category: { type: [String], required: true },
   unit: { type: String, default: 'piece', enum: ['piece', 'kg', 'gram', 'liter', 'ml', 'plate', 'bowl', 'cup', 'slice', 'inch', 'full', 'half', 'small'] },
   quantity: { type: Number, default: 1 },
