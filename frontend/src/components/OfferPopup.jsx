@@ -191,22 +191,32 @@ export default function OfferPopup() {
 
   const currentOffer = offers[currentIndex];
 
-  // Helper function to get responsive image based on screen width
+  // Helper function to get responsive image based on screen width and device type
   const getResponsiveImage = (offer) => {
     if (!offer) return null;
     
     const width = window.innerWidth;
+    const height = window.innerHeight;
     let imageUrl;
     
-    // Mobile: < 768px
+    // More reliable tablet detection
+    const userAgent = navigator.userAgent.toLowerCase();
+    const isIOS = /ipad|iphone|ipod/.test(userAgent);
+    const isAndroidTablet = /android/.test(userAgent) && !/mobile/.test(userAgent);
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    
+    // Detect tablet: iPad or Android tablet, width between 768-1366px
+    const isTablet = (isIOS || isAndroidTablet || (isTouchDevice && width >= 768)) && width >= 768 && width <= 1366;
+    
+    // Mobile: < 768px (phones, small devices)
     if (width < 768) {
       imageUrl = offer.imageMobile || offer.imageTablet || offer.imageDesktop || offer.image;
     }
-    // Tablet: 768px - 1024px
-    else if (width < 1024) {
+    // Tablet: iPad, Android tablets (768px - 1366px)
+    else if (isTablet) {
       imageUrl = offer.imageTablet || offer.imageDesktop || offer.imageMobile || offer.image;
     }
-    // Desktop: >= 1024px
+    // Desktop: > 1366px OR (>= 1024px AND not touch device)
     else {
       imageUrl = offer.imageDesktop || offer.imageTablet || offer.imageMobile || offer.image;
     }
