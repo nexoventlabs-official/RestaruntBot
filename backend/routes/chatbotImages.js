@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const ChatbotImage = require('../models/ChatbotImage');
 const cloudinaryService = require('../services/cloudinary');
+const chatbotImagesService = require('../services/chatbotImages');
 const auth = require('../middleware/auth');
 const multer = require('multer');
 
@@ -306,6 +307,10 @@ router.put('/:key', auth, upload.single('image'), async (req, res) => {
       { upsert: true, new: true }
     );
 
+    // Clear cache so new image is used immediately
+    chatbotImagesService.clearCache();
+    console.log(`[Chatbot Images] Cache cleared after uploading ${key}`);
+
     res.json(chatbotImage);
   } catch (error) {
     console.error('Upload error:', error);
@@ -339,6 +344,10 @@ router.post('/:key/reset', auth, async (req, res) => {
       { ...defaultImg, cloudinaryPublicId: null },
       { upsert: true, new: true }
     );
+
+    // Clear cache so reset takes effect immediately
+    chatbotImagesService.clearCache();
+    console.log(`[Chatbot Images] Cache cleared after resetting ${key}`);
 
     res.json(chatbotImage);
   } catch (error) {
