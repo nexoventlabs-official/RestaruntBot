@@ -7,6 +7,14 @@ const multer = require('multer');
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Support multiple image uploads (mobile, tablet, desktop)
+const uploadMultiple = upload.fields([
+  { name: 'imageMobile', maxCount: 1 },
+  { name: 'imageTablet', maxCount: 1 },
+  { name: 'imageDesktop', maxCount: 1 },
+  { name: 'image', maxCount: 1 } // Legacy support
+]);
+
 // Get all offers (admin)
 router.get('/', auth, async (req, res) => {
   try {
@@ -18,7 +26,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 // Create offer
-router.post('/', auth, upload.single('image'), async (req, res) => {
+router.post('/', auth, uploadMultiple, async (req, res) => {
   try {
     const { 
       title, description, offerType, code, discountType, discountValue, 
@@ -26,23 +34,55 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
       buttonText, buttonLink 
     } = req.body;
     
-    let imageUrl = '';
-    if (req.file) {
-      // Use uploadPreserveAspect to maintain original aspect ratio for offer cards
-      imageUrl = await cloudinary.uploadPreserveAspect(req.file.buffer, 'offers');
-    } else if (req.body.image) {
-      imageUrl = req.body.image;
+    let imageMobileUrl = '';
+    let imageTabletUrl = '';
+    let imageDesktopUrl = '';
+    let legacyImageUrl = '';
+
+    // Upload mobile image
+    if (req.files?.imageMobile?.[0]) {
+      imageMobileUrl = await cloudinary.uploadPreserveAspect(req.files.imageMobile[0].buffer, 'offers/mobile');
+    } else if (req.body.imageMobile) {
+      imageMobileUrl = req.body.imageMobile;
     }
 
-    if (!imageUrl) {
-      return res.status(400).json({ error: 'Image is required' });
+    // Upload tablet image
+    if (req.files?.imageTablet?.[0]) {
+      imageTabletUrl = await cloudinary.uploadPreserveAspect(req.files.imageTablet[0].buffer, 'offers/tablet');
+    } else if (req.body.imageTablet) {
+      imageTabletUrl = req.body.imageTablet;
+    }
+
+    // Upload desktop image
+    if (req.files?.imageDesktop?.[0]) {
+      imageDesktopUrl = await cloudinary.uploadPreserveAspect(req.files.imageDesktop[0].buffer, 'offers/desktop');
+    } else if (req.body.imageDesktop) {
+      imageDesktopUrl = req.body.imageDesktop;
+    }
+
+    // Legacy image support (use desktop as fallback)
+    if (req.files?.image?.[0]) {
+      legacyImageUrl = await cloudinary.uploadPreserveAspect(req.files.image[0].buffer, 'offers');
+    } else if (req.body.image) {
+      legacyImageUrl = req.body.image;
+    } else {
+      // Use desktop image as legacy fallback
+      legacyImageUrl = imageDesktopUrl || imageTabletUrl || imageMobileUrl;
+    }
+
+    // At least one image is required
+    if (!imageMobileUrl && !imageTabletUrl && !imageDesktopUrl && !legacyImageUrl) {
+      return res.status(400).json({ error: 'At least one image is required' });
     }
 
     const offer = new Offer({
       title,
       description,
       offerType: offerType || '',
-      image: imageUrl,
+      image: legacyImageUrl || imageDesktopUrl || imageTabletUrl || imageMobileUrl, // Legacy field
+      imageMobile: imageMobileUrl,
+      imageTablet: imageTabletUrl,
+      imageDesktop: imageDesktopUrl,
       code,
       discountType: discountType || 'none',
       discountValue: parseFloat(discountValue) || 0,
@@ -63,7 +103,7 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
 });
 
 // Update offer
-router.put('/:id', auth, upload.single('image'), async (req, res) => {
+router.put('/:id', auth, uploadMultiple, async (req, res) => {
   try {
     const { 
       title, description, offerType, code, discountType, discountValue, 
@@ -71,7 +111,7 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
       buttonText, buttonLink 
     } = req.body;
     
-    // Get existing offer to check for old image
+    // Get existing offer to check for old images
     const existingOffer = await Offer.findById(req.params.id);
     if (!existingOffer) return res.status(404).json({ error: 'Offer not found' });
     
@@ -91,29 +131,58 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
       buttonLink
     };
 
-    if (req.file) {
-      // Delete old image from Cloudinary if it exists
-      if (existingOffer.image && existingOffer.image.includes('cloudinary.com')) {
+    // Helper function to delete old image
+    const deleteOldImage = async (imageUrl) => {
+      if (imageUrl && imageUrl.includes('cloudinary.com')) {
         try {
-          const publicId = cloudinary.extractPublicId(existingOffer.image);
+          const publicId = cloudinary.extractPublicId(imageUrl);
           if (publicId) await cloudinary.deleteImage(publicId);
         } catch (e) {
           console.log('Could not delete old offer image:', e.message);
         }
       }
-      // Use uploadPreserveAspect to maintain original aspect ratio for offer cards
-      updateData.image = await cloudinary.uploadPreserveAspect(req.file.buffer, 'offers');
+    };
+
+    // Handle mobile image
+    if (req.files?.imageMobile?.[0]) {
+      await deleteOldImage(existingOffer.imageMobile);
+      updateData.imageMobile = await cloudinary.uploadPreserveAspect(req.files.imageMobile[0].buffer, 'offers/mobile');
+    } else if (req.body.imageMobile && req.body.imageMobile !== existingOffer.imageMobile) {
+      await deleteOldImage(existingOffer.imageMobile);
+      updateData.imageMobile = req.body.imageMobile;
+    }
+
+    // Handle tablet image
+    if (req.files?.imageTablet?.[0]) {
+      await deleteOldImage(existingOffer.imageTablet);
+      updateData.imageTablet = await cloudinary.uploadPreserveAspect(req.files.imageTablet[0].buffer, 'offers/tablet');
+    } else if (req.body.imageTablet && req.body.imageTablet !== existingOffer.imageTablet) {
+      await deleteOldImage(existingOffer.imageTablet);
+      updateData.imageTablet = req.body.imageTablet;
+    }
+
+    // Handle desktop image
+    if (req.files?.imageDesktop?.[0]) {
+      await deleteOldImage(existingOffer.imageDesktop);
+      updateData.imageDesktop = await cloudinary.uploadPreserveAspect(req.files.imageDesktop[0].buffer, 'offers/desktop');
+    } else if (req.body.imageDesktop && req.body.imageDesktop !== existingOffer.imageDesktop) {
+      await deleteOldImage(existingOffer.imageDesktop);
+      updateData.imageDesktop = req.body.imageDesktop;
+    }
+
+    // Handle legacy image field
+    if (req.files?.image?.[0]) {
+      await deleteOldImage(existingOffer.image);
+      updateData.image = await cloudinary.uploadPreserveAspect(req.files.image[0].buffer, 'offers');
     } else if (req.body.image && req.body.image !== existingOffer.image) {
-      // If new URL provided and different from existing, delete old image
-      if (existingOffer.image && existingOffer.image.includes('cloudinary.com')) {
-        try {
-          const publicId = cloudinary.extractPublicId(existingOffer.image);
-          if (publicId) await cloudinary.deleteImage(publicId);
-        } catch (e) {
-          console.log('Could not delete old offer image:', e.message);
-        }
-      }
+      await deleteOldImage(existingOffer.image);
       updateData.image = req.body.image;
+    } else {
+      // Update legacy image to match desktop (or best available)
+      updateData.image = updateData.imageDesktop || existingOffer.imageDesktop || 
+                        updateData.imageTablet || existingOffer.imageTablet || 
+                        updateData.imageMobile || existingOffer.imageMobile ||
+                        existingOffer.image;
     }
 
     const offer = await Offer.findByIdAndUpdate(req.params.id, updateData, { new: true });
@@ -127,19 +196,29 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
 // Delete offer
 router.delete('/:id', auth, async (req, res) => {
   try {
-    // Get offer first to delete image from Cloudinary and remove from menu items
+    // Get offer first to delete images from Cloudinary and remove from menu items
     const offer = await Offer.findById(req.params.id);
     if (!offer) return res.status(404).json({ error: 'Offer not found' });
     
-    // Delete image from Cloudinary if it exists
-    if (offer.image && offer.image.includes('cloudinary.com')) {
-      try {
-        const publicId = cloudinary.extractPublicId(offer.image);
-        if (publicId) await cloudinary.deleteImage(publicId);
-      } catch (e) {
-        console.log('Could not delete offer image:', e.message);
+    // Helper function to delete image
+    const deleteImage = async (imageUrl) => {
+      if (imageUrl && imageUrl.includes('cloudinary.com')) {
+        try {
+          const publicId = cloudinary.extractPublicId(imageUrl);
+          if (publicId) await cloudinary.deleteImage(publicId);
+        } catch (e) {
+          console.log('Could not delete offer image:', e.message);
+        }
       }
-    }
+    };
+
+    // Delete all images from Cloudinary
+    await Promise.all([
+      deleteImage(offer.image),
+      deleteImage(offer.imageMobile),
+      deleteImage(offer.imageTablet),
+      deleteImage(offer.imageDesktop)
+    ]);
     
     // Remove this offer type from all menu items
     if (offer.offerType) {

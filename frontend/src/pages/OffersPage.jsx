@@ -287,17 +287,29 @@ export default function OffersPage() {
     closeItemDialog();
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-      </div>
-    );
-  }
-
   // Get current offer for header rotation
   const currentHeaderOffer = offers[currentOfferIndex];
   const currentBannerOffer = offers[currentBannerIndex];
+
+  // Helper function to get responsive image based on screen width
+  const getResponsiveImage = (offer) => {
+    if (!offer) return null;
+    
+    const width = window.innerWidth;
+    
+    // Mobile: < 768px
+    if (width < 768) {
+      return offer.imageMobile || offer.imageTablet || offer.imageDesktop || offer.image;
+    }
+    // Tablet: 768px - 1024px
+    else if (width < 1024) {
+      return offer.imageTablet || offer.imageDesktop || offer.imageMobile || offer.image;
+    }
+    // Desktop: >= 1024px
+    else {
+      return offer.imageDesktop || offer.imageTablet || offer.imageMobile || offer.image;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -305,8 +317,8 @@ export default function OffersPage() {
       <section 
         className="relative text-white pt-28 pb-16 bg-cover bg-center transition-all duration-1000 min-h-[350px] md:min-h-[400px]"
         style={{ 
-          backgroundImage: currentBannerOffer?.image 
-            ? `url('${currentBannerOffer.image}')` 
+          backgroundImage: currentBannerOffer 
+            ? `url('${getResponsiveImage(currentBannerOffer)}')` 
             : `url('/banner-delicious-tacos.jpg')`,
           backgroundPosition: 'center center',
           backgroundSize: 'cover'

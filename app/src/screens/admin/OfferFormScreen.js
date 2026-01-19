@@ -18,8 +18,16 @@ export default function OfferFormScreen({ route, navigation }) {
   const isEditing = !!existingOffer;
 
   const [offerType, setOfferType] = useState(existingOffer?.offerType || '');
-  const [image, setImage] = useState(existingOffer?.image || null);
-  const [newImage, setNewImage] = useState(null);
+  
+  // Three separate images for different screen sizes
+  const [imageMobile, setImageMobile] = useState(existingOffer?.imageMobile || null);
+  const [imageTablet, setImageTablet] = useState(existingOffer?.imageTablet || null);
+  const [imageDesktop, setImageDesktop] = useState(existingOffer?.imageDesktop || null);
+  
+  const [newImageMobile, setNewImageMobile] = useState(null);
+  const [newImageTablet, setNewImageTablet] = useState(null);
+  const [newImageDesktop, setNewImageDesktop] = useState(null);
+  
   const [loading, setLoading] = useState(false);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -32,7 +40,7 @@ export default function OfferFormScreen({ route, navigation }) {
     ]).start();
   }, []);
 
-  const pickImage = async () => {
+  const pickImage = async (imageType) => {
     try {
       // Request permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -41,18 +49,35 @@ export default function OfferFormScreen({ route, navigation }) {
         return;
       }
 
+      // Different aspect ratios for different screen sizes
+      const aspectRatios = {
+        mobile: [5, 1],   // 800x160px (5:1 ratio)
+        tablet: [5, 1],   // 1200x240px (5:1 ratio)
+        desktop: [5, 1]   // 1920x384px (5:1 ratio)
+      };
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         allowsMultipleSelection: false,
-        aspect: [5, 1], // Wide banner ratio (5:1)
-        quality: 0.9, // Higher quality for better preview
+        aspect: aspectRatios[imageType],
+        quality: 0.9,
         exif: false,
       });
       
       if (!result.canceled) {
-        setNewImage(result.assets[0]);
-        setImage(result.assets[0].uri);
+        const imageData = result.assets[0];
+        
+        if (imageType === 'mobile') {
+          setNewImageMobile(imageData);
+          setImageMobile(imageData.uri);
+        } else if (imageType === 'tablet') {
+          setNewImageTablet(imageData);
+          setImageTablet(imageData.uri);
+        } else if (imageType === 'desktop') {
+          setNewImageDesktop(imageData);
+          setImageDesktop(imageData.uri);
+        }
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -61,8 +86,9 @@ export default function OfferFormScreen({ route, navigation }) {
   };
 
   const handleSubmit = async () => {
-    if (!image && !newImage) {
-      Alert.alert('Error', 'Please add a banner image');
+    // At least one image is required
+    if (!imageMobile && !imageTablet && !imageDesktop && !newImageMobile && !newImageTablet && !newImageDesktop) {
+      Alert.alert('Error', 'Please add at least one banner image');
       return;
     }
 
@@ -74,14 +100,31 @@ export default function OfferFormScreen({ route, navigation }) {
     setLoading(true);
     try {
       const formData = new FormData();
-      formData.append('isActive', 'true'); // Always set to active when creating/editing
+      formData.append('isActive', 'true');
       formData.append('offerType', offerType.trim());
 
-      if (newImage) {
-        const filename = newImage.uri.split('/').pop();
+      // Add mobile image if new one selected
+      if (newImageMobile) {
+        const filename = newImageMobile.uri.split('/').pop();
         const match = /\.(\w+)$/.exec(filename);
         const type = match ? `image/${match[1]}` : 'image/jpeg';
-        formData.append('image', { uri: newImage.uri, name: filename, type });
+        formData.append('imageMobile', { uri: newImageMobile.uri, name: filename, type });
+      }
+
+      // Add tablet image if new one selected
+      if (newImageTablet) {
+        const filename = newImageTablet.uri.split('/').pop();
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        formData.append('imageTablet', { uri: newImageTablet.uri, name: filename, type });
+      }
+
+      // Add desktop image if new one selected
+      if (newImageDesktop) {
+        const filename = newImageDesktop.uri.split('/').pop();
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        formData.append('imageDesktop', { uri: newImageDesktop.uri, name: filename, type });
       }
 
       if (isEditing) {
@@ -101,6 +144,65 @@ export default function OfferFormScreen({ route, navigation }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const renderImageUpload = (imageType, image, title, subtitle, recommendedSize) => {
+    return (
+      <View style={styles.imageSection}>
+        <View style={styles.imageSectionHeader}>
+          <Ionicons 
+            name={imageType === 'mobile' ? 'phone-portrait' : imageType === 'tablet' ? 'tablet-portrait' : 'desktop'} 
+            size={20} 
+            color={ZOMATO_RED} 
+          />
+          <Text style={styles.imageSectionTitle}>{title}</Text>
+        </View>
+        <Text style={styles.imageSectionHint}>{subtitle}</Text>
+        <Text style={styles.imageSectionRecommended}>Recommended: {recommendedSize}</Text>
+        
+        <TouchableOpacity 
+          style={styles.imageContainer} 
+          onPress={() => pickImage(imageType)} 
+          activeOpacity={0.8}
+        >
+          {image ? (
+            <View style={styles.imagePreviewContainer}>
+              <Image source={{ uri: image }} style={styles.image} />
+              <View style={styles.cropGuidelinesOverlay}>
+                <View style={styles.cropGuideline} />
+                <View style={[styles.cropGuideline, styles.cropGuidelineVertical]} />
+              </View>
+            </View>
+          ) : (
+            <View style={styles.imagePlaceholder}>
+              <View style={styles.imagePlaceholderIcon}>
+                <Ionicons name="image-outline" size={36} color={ZOMATO_RED} />
+              </View>
+              <Text style={styles.imagePlaceholderText}>Add {title}</Text>
+              <Text style={styles.imagePlaceholderHint}>Wide banner (5:1 ratio)</Text>
+              <Text style={styles.imagePlaceholderHint}>Tap to crop & adjust</Text>
+            </View>
+          )}
+          {image && (
+            <View style={styles.imageOverlay}>
+              <View style={styles.changeImageButton}>
+                <Ionicons name="camera" size={18} color="#fff" />
+                <Text style={styles.changeImageText}>Change & Crop</Text>
+              </View>
+            </View>
+          )}
+        </TouchableOpacity>
+        
+        {image && (
+          <View style={styles.previewInfo}>
+            <Ionicons name="information-circle" size={16} color="#9CA3AF" />
+            <Text style={styles.previewInfoText}>
+              This banner will be shown on {imageType} devices
+            </Text>
+          </View>
+        )}
+      </View>
+    );
   };
 
   return (
@@ -128,56 +230,23 @@ export default function OfferFormScreen({ route, navigation }) {
       >
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-            {/* Banner Image */}
-            <View style={styles.imageSection}>
-              <View style={styles.imageSectionHeader}>
-                <Ionicons name="image" size={20} color={ZOMATO_RED} />
-                <Text style={styles.imageSectionTitle}>Banner Image</Text>
-              </View>
-              <Text style={styles.imageSectionHint}>
-                Wide banner format (5:1 ratio) • Tap to crop & adjust
+            
+            {/* Info Banner */}
+            <View style={styles.infoBanner}>
+              <Ionicons name="information-circle" size={20} color={ZOMATO_RED} />
+              <Text style={styles.infoBannerText}>
+                Upload separate images for mobile, tablet, and desktop for optimal display on all devices
               </Text>
-              
-              <TouchableOpacity style={styles.imageContainer} onPress={pickImage} activeOpacity={0.8}>
-                {image ? (
-                  <View style={styles.imagePreviewContainer}>
-                    <Image source={{ uri: image }} style={styles.image} />
-                    {/* Crop Guidelines Overlay */}
-                    <View style={styles.cropGuidelinesOverlay}>
-                      <View style={styles.cropGuideline} />
-                      <View style={[styles.cropGuideline, styles.cropGuidelineVertical]} />
-                    </View>
-                  </View>
-                ) : (
-                  <View style={styles.imagePlaceholder}>
-                    <View style={styles.imagePlaceholderIcon}>
-                      <Ionicons name="image-outline" size={36} color={ZOMATO_RED} />
-                    </View>
-                    <Text style={styles.imagePlaceholderText}>Add Banner Image</Text>
-                    <Text style={styles.imagePlaceholderHint}>Wide banner format (5:1 ratio)</Text>
-                    <Text style={styles.imagePlaceholderHint}>Tap to crop & adjust</Text>
-                  </View>
-                )}
-                {image && (
-                  <View style={styles.imageOverlay}>
-                    <View style={styles.changeImageButton}>
-                      <Ionicons name="camera" size={18} color="#fff" />
-                      <Text style={styles.changeImageText}>Change & Crop</Text>
-                    </View>
-                  </View>
-                )}
-              </TouchableOpacity>
-              
-              {/* Preview Info */}
-              {image && (
-                <View style={styles.previewInfo}>
-                  <Ionicons name="information-circle" size={16} color="#9CA3AF" />
-                  <Text style={styles.previewInfoText}>
-                    This is how your banner will appear on the website
-                  </Text>
-                </View>
-              )}
             </View>
+
+            {/* Mobile Image */}
+            {renderImageUpload('mobile', imageMobile, 'Mobile View', 'For smartphones and small screens', '800x160px')}
+
+            {/* Tablet Image */}
+            {renderImageUpload('tablet', imageTablet, 'Tablet View', 'For tablets and medium screens', '1200x240px')}
+
+            {/* Desktop Image */}
+            {renderImageUpload('desktop', imageDesktop, 'Desktop View', 'For laptops and large screens', '1920x384px')}
 
             <View style={styles.form}>
               {/* Offer Type */}
@@ -241,11 +310,32 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
   content: { flex: 1, padding: 16 },
   
+  // Info Banner
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#FEF2F2',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+  },
+  infoBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#991B1B',
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  
   // Image Section
   imageSection: { marginBottom: 24 },
   imageSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   imageSectionTitle: { fontSize: 16, fontWeight: '700', color: '#1C1C1C' },
-  imageSectionHint: { fontSize: 13, color: '#9CA3AF', marginBottom: 12 },
+  imageSectionHint: { fontSize: 13, color: '#9CA3AF', marginBottom: 2 },
+  imageSectionRecommended: { fontSize: 12, color: ZOMATO_RED, marginBottom: 12, fontWeight: '600' },
   
   // Image
   imageContainer: { 
@@ -294,7 +384,7 @@ const styles = StyleSheet.create({
   },
   imagePlaceholder: {
     width: '100%', 
-    aspectRatio: 5/1, // Maintain 5:1 ratio across all devices
+    aspectRatio: 5/1,
     borderRadius: 18, 
     backgroundColor: '#fff',
     justifyContent: 'center', 
@@ -343,40 +433,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 18, height: 54,
     borderWidth: 1.5, borderColor: '#E8E8E8', fontSize: 15, color: '#1C1C1C', fontWeight: '500',
   },
-  textArea: { height: 100, textAlignVertical: 'top', paddingTop: 16 },
-
-  // Code Input
-  codeInputWrapper: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 16, height: 54,
-    borderWidth: 1.5, borderColor: '#E8E8E8',
-  },
-  codeInput: { flex: 1, fontSize: 15, color: '#1C1C1C', fontWeight: '600', letterSpacing: 1 },
-  codeBadge: {
-    backgroundColor: '#FEF2F2', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
-    borderWidth: 1, borderColor: ZOMATO_RED, borderStyle: 'dashed',
-  },
-  codeBadgeText: { color: ZOMATO_RED, fontSize: 12, fontWeight: '800', letterSpacing: 1 },
-  
-  // Discount Type
-  discountTypeContainer: { flexDirection: 'row', gap: 12 },
-  discountTypeButton: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    paddingVertical: 16, borderRadius: 14, backgroundColor: '#fff',
-    borderWidth: 2, borderColor: '#E8E8E8',
-  },
-  discountTypeButtonActive: { backgroundColor: ZOMATO_RED, borderColor: ZOMATO_RED },
-  discountTypeText: { fontSize: 15, fontWeight: '700', color: '#696969' },
-  discountTypeTextActive: { color: '#fff' },
-  
-  // Discount Value
-  discountValueWrapper: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 18, height: 54,
-    borderWidth: 1.5, borderColor: '#E8E8E8',
-  },
-  discountSymbol: { fontSize: 22, fontWeight: '800', color: ZOMATO_RED, marginRight: 8 },
-  discountValueInput: { flex: 1, fontSize: 20, color: '#1C1C1C', fontWeight: '700' },
   
   // Footer
   footer: { 

@@ -191,6 +191,26 @@ export default function OfferPopup() {
 
   const currentOffer = offers[currentIndex];
 
+  // Helper function to get responsive image based on screen width
+  const getResponsiveImage = (offer) => {
+    if (!offer) return null;
+    
+    const width = window.innerWidth;
+    
+    // Mobile: < 768px
+    if (width < 768) {
+      return offer.imageMobile || offer.imageTablet || offer.imageDesktop || offer.image;
+    }
+    // Tablet: 768px - 1024px
+    else if (width < 1024) {
+      return offer.imageTablet || offer.imageDesktop || offer.imageMobile || offer.image;
+    }
+    // Desktop: >= 1024px
+    else {
+      return offer.imageDesktop || offer.imageTablet || offer.imageMobile || offer.image;
+    }
+  };
+
   return (
     <div 
       className={`fixed inset-0 z-[100] flex items-center justify-center p-8 transition-all duration-300 ${
@@ -239,7 +259,7 @@ export default function OfferPopup() {
               }}
             >
               <img 
-                src={currentOffer.image} 
+                src={getResponsiveImage(currentOffer)} 
                 alt="Special Offer"
                 style={{ maxWidth: '90vw', maxHeight: '85vh', width: 'auto', height: 'auto' }}
                 className="block"
