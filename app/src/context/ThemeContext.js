@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { LayoutAnimation, Platform, UIManager, useColorScheme } from 'react-native';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useColorScheme } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import { colors, typography, spacing, radius, shadows, animations } from '../theme';
+import { colors } from '../theme/colors';
 
 const ThemeContext = createContext();
 
@@ -9,12 +9,6 @@ export const ThemeProvider = ({ children }) => {
   const systemScheme = useColorScheme();
   const [isDark, setIsDark] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
-
-  useEffect(() => {
-    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-      UIManager.setLayoutAnimationEnabledExperimental(true);
-    }
-  }, []);
 
   useEffect(() => {
     loadTheme();
@@ -28,22 +22,16 @@ export const ThemeProvider = ({ children }) => {
       } else {
         setIsDark(systemScheme === 'dark');
       }
-    } catch {
+    } catch (error) {
       setIsDark(systemScheme === 'dark');
     } finally {
       setIsLoaded(true);
     }
   };
 
-  const animateThemeChange = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-  };
-
   const toggleTheme = async () => {
     const newValue = !isDark;
-    animateThemeChange();
     setIsDark(newValue);
-
     try {
       await SecureStore.setItemAsync('theme', newValue ? 'dark' : 'light');
     } catch (error) {
@@ -53,9 +41,7 @@ export const ThemeProvider = ({ children }) => {
 
   const setTheme = async (mode) => {
     const newValue = mode === 'dark';
-    animateThemeChange();
     setIsDark(newValue);
-
     try {
       await SecureStore.setItemAsync('theme', mode);
     } catch (error) {
@@ -63,33 +49,22 @@ export const ThemeProvider = ({ children }) => {
     }
   };
 
-  const theme = useMemo(
-    () => ({
-      isDark,
-      mode: isDark ? 'dark' : 'light',
-      colors: isDark ? colors.dark : colors.light,
-      palette: colors,
-      typography,
-      spacing,
-      radius,
-      shadows,
-      animations,
-    }),
-    [isDark]
-  );
+  const theme = {
+    isDark,
+    colors: isDark ? colors.dark : colors.light,
+    primary: colors.primary,
+    status: colors.status,
+    success: colors.success,
+    warning: colors.warning,
+    error: colors.error,
+    info: colors.info,
+  };
 
-  const value = useMemo(
-    () => ({
-      theme,
-      isDark,
-      toggleTheme,
-      setTheme,
-      isLoaded,
-    }),
-    [theme, isDark, isLoaded]
+  return (
+    <ThemeContext.Provider value={{ theme, isDark, toggleTheme, setTheme, isLoaded }}>
+      {children}
+    </ThemeContext.Provider>
   );
-
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 };
 
 export const useTheme = () => {
