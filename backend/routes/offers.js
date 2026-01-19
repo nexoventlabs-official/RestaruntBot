@@ -21,7 +21,7 @@ router.get('/', auth, async (req, res) => {
 router.post('/', auth, upload.single('image'), async (req, res) => {
   try {
     const { 
-      title, description, code, discountType, discountValue, 
+      title, description, offerType, code, discountType, discountValue, 
       minOrderAmount, validFrom, validUntil, isActive, showAsPopup,
       buttonText, buttonLink 
     } = req.body;
@@ -41,6 +41,7 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
     const offer = new Offer({
       title,
       description,
+      offerType: offerType || '',
       image: imageUrl,
       code,
       discountType: discountType || 'none',
@@ -65,7 +66,7 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
 router.put('/:id', auth, upload.single('image'), async (req, res) => {
   try {
     const { 
-      title, description, code, discountType, discountValue, 
+      title, description, offerType, code, discountType, discountValue, 
       minOrderAmount, validFrom, validUntil, isActive, showAsPopup,
       buttonText, buttonLink 
     } = req.body;
@@ -77,6 +78,7 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
     const updateData = {
       title,
       description,
+      offerType: offerType || '',
       code,
       discountType: discountType || 'none',
       discountValue: parseFloat(discountValue) || 0,
