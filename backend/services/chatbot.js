@@ -7,6 +7,7 @@ const razorpayService = require('./razorpay');
 const googleSheets = require('./googleSheets');
 const groqAi = require('./groqAi');
 const chatbotImagesService = require('./chatbotImages');
+const whatsappBroadcast = require('./whatsappBroadcast');
 const axios = require('axios');
 
 const generateOrderId = () => 'ORD' + Date.now().toString(36).toUpperCase();
@@ -1889,6 +1890,11 @@ const chatbot = {
       customer.name = senderName;
       await customer.save();
     }
+
+    // Save WhatsApp contact for broadcast (non-blocking)
+    whatsappBroadcast.addContact(phone, customer.name || senderName, new Date()).catch(err => {
+      console.error('[Chatbot] Failed to save WhatsApp contact:', err.message);
+    });
 
     // Get paused categories to filter them out from chatbot
     const pausedCategories = await Category.find({ isPaused: true }).select('name');

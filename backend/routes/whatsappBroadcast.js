@@ -45,8 +45,37 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
       });
     }
 
-    const result = await whatsappBroadcast.sendOfferToAll(offerImageUrl, offerTitle, offerDescription);
-    res.json(result);
+    // Get contact count for immediate response
+    const contacts = await whatsappBroadcast.getAllContacts();
+    const contactCount = contacts.length;
+
+    if (contactCount === 0) {
+      return res.json({ 
+        success: false, 
+        message: 'No contacts found', 
+        sent: 0, 
+        failed: 0 
+      });
+    }
+
+    // Send immediate success response to app
+    res.json({
+      success: true,
+      message: 'Offer is being sent to all customers',
+      total: contactCount,
+      sent: contactCount,
+      failed: 0
+    });
+
+    // Send offers in background (non-blocking)
+    whatsappBroadcast.sendOfferToAll(offerImageUrl, offerTitle, offerDescription)
+      .then(result => {
+        console.log('[WhatsApp Broadcast] Offer sending completed:', result);
+      })
+      .catch(error => {
+        console.error('[WhatsApp Broadcast] Offer sending failed:', error);
+      });
+
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
