@@ -35,6 +35,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
   const [unit, setUnit] = useState(existingItem?.unit || 'piece');
   const [quantity, setQuantity] = useState(existingItem?.quantity?.toString() || '1');
   const [foodType, setFoodType] = useState(existingItem?.foodType || 'veg');
+  const [offerType, setOfferType] = useState(existingItem?.offerType || '');
   const [available, setAvailable] = useState(existingItem?.available !== false);
   const [preparationTime, setPreparationTime] = useState(existingItem?.preparationTime?.toString() || '15');
   const [tags, setTags] = useState(existingItem?.tags?.join(', ') || '');
@@ -44,8 +45,10 @@ export default function MenuItemFormScreen({ route, navigation }) {
   const [aiLoading, setAiLoading] = useState(false);
   
   const [categories, setCategories] = useState([]);
+  const [offers, setOffers] = useState([]);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showUnitPicker, setShowUnitPicker] = useState(false);
+  const [showOfferPicker, setShowOfferPicker] = useState(false);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -60,10 +63,17 @@ export default function MenuItemFormScreen({ route, navigation }) {
 
   const fetchCategories = async () => {
     try {
-      const response = await api.get('/categories');
-      setCategories(response.data || []);
+      const [catResponse, offerResponse] = await Promise.all([
+        api.get('/categories'),
+        api.get('/offers')
+      ]);
+      setCategories(catResponse.data || []);
+      // Filter offers that have offerType
+      const activeOffers = offerResponse.data?.filter(o => o.isActive && o.offerType && o.offerType.trim() !== '') || [];
+      console.log('Fetched offers:', activeOffers); // Debug log
+      setOffers(activeOffers);
     } catch (error) {
-      console.error('Error fetching categories:', error);
+      console.error('Error fetching data:', error);
     }
   };
 
@@ -128,6 +138,9 @@ export default function MenuItemFormScreen({ route, navigation }) {
       formData.append('unit', unit);
       formData.append('quantity', quantity);
       formData.append('foodType', foodType);
+      if (offerType && offerType.trim()) {
+        formData.append('offerType', offerType);
+      }
       formData.append('available', available.toString());
       formData.append('preparationTime', preparationTime);
       formData.append('tags', tags);
@@ -377,6 +390,26 @@ export default function MenuItemFormScreen({ route, navigation }) {
                 </View>
               </View>
 
+              {/* Offer Type */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Offer Type (Optional)</Text>
+                <TouchableOpacity style={styles.pickerButton} onPress={() => setShowOfferPicker(true)}>
+                  <Text style={offerType ? styles.pickerValue : styles.pickerPlaceholder}>
+                    {offerType || 'Select offer type'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+                {offerType && (
+                  <TouchableOpacity 
+                    style={styles.clearOfferButton}
+                    onPress={() => setOfferType('')}
+                  >
+                    <Ionicons name="close-circle" size={16} color="#EF4444" />
+                    <Text style={styles.clearOfferText}>Clear selection</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
               {/* Tags */}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Tags</Text>
@@ -489,6 +522,49 @@ export default function MenuItemFormScreen({ route, navigation }) {
                   {unit === item && <Ionicons name="checkmark-circle" size={22} color={ZOMATO_RED} />}
                 </TouchableOpacity>
               )}
+              contentContainerStyle={styles.modalList}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Offer Type Picker Modal */}
+      <Modal visible={showOfferPicker} animationType="slide" transparent={true} onRequestClose={() => setShowOfferPicker(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Offer Type</Text>
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowOfferPicker(false)}>
+                <Ionicons name="close" size={24} color="#696969" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={offers}
+              keyExtractor={(item) => item._id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.unitOption, offerType === item.offerType && styles.unitOptionSelected]}
+                  onPress={() => { setOfferType(item.offerType); setShowOfferPicker(false); }}
+                >
+                  <View style={styles.offerOptionContent}>
+                    {item.image && (
+                      <Image source={{ uri: item.image }} style={styles.offerOptionImage} />
+                    )}
+                    <Text style={[styles.unitOptionText, offerType === item.offerType && styles.unitOptionTextSelected]}>
+                      {item.offerType}
+                    </Text>
+                  </View>
+                  {offerType === item.offerType && <Ionicons name="checkmark-circle" size={22} color={ZOMATO_RED} />}
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <View style={styles.emptyOfferContainer}>
+                  <Ionicons name="pricetag-outline" size={48} color="#9CA3AF" />
+                  <Text style={styles.emptyText}>No offers available</Text>
+                  <Text style={styles.emptySubText}>Add offers with offer types from Offers screen first</Text>
+                </View>
+              }
               contentContainerStyle={styles.modalList}
             />
           </View>
@@ -669,6 +745,14 @@ const styles = StyleSheet.create({
   },
   modalDoneButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   emptyText: { textAlign: 'center', color: '#9CA3AF', padding: 24, fontSize: 14 },
+  emptySubText: { textAlign: 'center', color: '#D1D5DB', fontSize: 12, marginTop: 4 },
+  
+  // Offer Type
+  clearOfferButton: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  clearOfferText: { fontSize: 12, color: '#EF4444', fontWeight: '600' },
+  offerOptionContent: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  offerOptionImage: { width: 50, height: 28, borderRadius: 6, resizeMode: 'cover' },
+  emptyOfferContainer: { alignItems: 'center', paddingVertical: 40 },
   
   // Discount badge
   discountBadge: {

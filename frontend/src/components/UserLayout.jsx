@@ -5,6 +5,7 @@ import { useCart } from '../hooks/useCart';
 import { useLenis } from './SmoothScrollProvider';
 import CartSidebar from './CartSidebar';
 import WhatsAppFloat from './WhatsAppFloat';
+import OffersFloat from './OffersFloat';
 import OfferPopup from './OfferPopup';
 import FloatingPizza from './FloatingPizza';
 import { Star, X, ShoppingCart, Heart, Clock, Package, Plus, Minus } from 'lucide-react';
@@ -716,6 +717,9 @@ export default function UserLayout() {
 
       {/* WhatsApp Float */}
       <WhatsAppFloat />
+
+      {/* Offers Float */}
+      <OffersFloat />
 
       {/* Floating Pizza Scroll Indicator */}
       <FloatingPizza />

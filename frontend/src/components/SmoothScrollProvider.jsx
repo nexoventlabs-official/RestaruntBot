@@ -23,20 +23,33 @@ export default function SmoothScrollProvider({ children }) {
       return 1 - Math.pow(1 - t, 4);
     };
 
-    // Initialize Lenis with optimized settings for smooth scrolling
+    // Initialize Lenis with optimized settings for faster scrolling
     const lenis = new Lenis({
-      duration: 1.4, // Slightly longer duration for smoother feel
+      duration: 0.8, // Faster scroll duration for snappier feel
       easing: smoothEasing,
       orientation: 'vertical',
       gestureOrientation: 'vertical',
       smoothWheel: true,
-      wheelMultiplier: 0.8, // Reduced for smoother wheel scrolling
-      touchMultiplier: 1.5, // Balanced touch sensitivity
+      wheelMultiplier: 1.5, // Increased for faster wheel scrolling
+      touchMultiplier: 2, // Faster touch sensitivity
       infinite: false,
       autoResize: true,
-      lerp: 0.08, // Lower lerp value = smoother interpolation (prevents sudden stops)
+      lerp: 0.15, // Higher lerp value = faster interpolation
       syncTouch: true, // Sync touch events for consistent behavior
-      syncTouchLerp: 0.06, // Even smoother touch scrolling
+      syncTouchLerp: 0.12, // Faster touch scrolling
+      touchInertiaMultiplier: 35, // Better touch inertia on mobile
+      prevent: (node) => {
+        // Don't prevent on horizontal scroll containers - let them handle their own scroll
+        // Only prevent if explicitly marked and not a horizontal scroller
+        if (node.hasAttribute('data-lenis-prevent')) {
+          const hasHorizontalScroll = node.classList.contains('overflow-x-auto') || 
+                                      getComputedStyle(node).overflowX === 'auto' ||
+                                      getComputedStyle(node).overflowX === 'scroll';
+          // Don't prevent Lenis on horizontal scrollers - they need vertical scroll to work
+          return false;
+        }
+        return false;
+      }
     });
 
     lenisRef.current = lenis;

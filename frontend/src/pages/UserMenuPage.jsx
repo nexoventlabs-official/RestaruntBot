@@ -614,9 +614,37 @@ export default function UserMenuPage() {
           style={{ 
             WebkitOverflowScrolling: 'touch',
             overscrollBehaviorX: 'contain',
-            touchAction: 'pan-x'
+            overscrollBehaviorY: 'auto',
+            touchAction: 'pan-x pan-y',
+            position: 'relative',
+            zIndex: 10
           }}
           data-lenis-prevent
+          onTouchStart={(e) => {
+            const container = e.currentTarget;
+            container.startX = container.scrollLeft;
+            container.startY = window.scrollY;
+          }}
+          onTouchMove={(e) => {
+            const container = e.currentTarget;
+            const touch = e.touches[0];
+            const deltaX = Math.abs(touch.clientX - (container.touchStartX || touch.clientX));
+            const deltaY = Math.abs(touch.clientY - (container.touchStartY || touch.clientY));
+            
+            // If horizontal movement is greater, allow horizontal scroll
+            // Otherwise, allow vertical page scroll
+            if (deltaX > deltaY) {
+              e.stopPropagation();
+            }
+            
+            container.touchStartX = touch.clientX;
+            container.touchStartY = touch.clientY;
+          }}
+          onWheel={(e) => {
+            e.stopPropagation();
+            const container = e.currentTarget;
+            container.scrollLeft += e.deltaY;
+          }}
         >
           <div className="flex gap-4 md:gap-6 px-1 pb-2" style={{ minWidth: 'min-content' }}>
             {/* All Items */}

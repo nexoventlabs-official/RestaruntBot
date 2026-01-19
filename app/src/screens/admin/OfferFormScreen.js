@@ -51,13 +51,16 @@ export default function OfferFormScreen({ route, navigation }) {
       return;
     }
 
+    if (!offerType || !offerType.trim()) {
+      Alert.alert('Error', 'Please enter an offer type');
+      return;
+    }
+
     setLoading(true);
     try {
       const formData = new FormData();
       formData.append('isActive', isActive.toString());
-      if (offerType && offerType.trim()) {
-        formData.append('offerType', offerType.trim());
-      }
+      formData.append('offerType', offerType.trim());
 
       if (newImage) {
         const filename = newImage.uri.split('/').pop();
@@ -136,7 +139,7 @@ export default function OfferFormScreen({ route, navigation }) {
             <View style={styles.form}>
               {/* Offer Type */}
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Offer Type</Text>
+                <Text style={styles.label}>Offer Type <Text style={styles.required}>*</Text></Text>
                 <Text style={styles.hint}>e.g., "1+1 Offer", "Buy 2 Get 1", "50% Off"</Text>
                 <TextInput
                   style={styles.input}
@@ -240,6 +243,7 @@ const styles = StyleSheet.create({
   form: { gap: 20 },
   inputGroup: { gap: 8 },
   label: { fontSize: 14, fontWeight: '700', color: '#1C1C1C' },
+  required: { color: ZOMATO_RED },
   hint: { fontSize: 12, color: '#9CA3AF', marginTop: -4, marginBottom: 4 },
   input: {
     backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 18, height: 54,

@@ -39,7 +39,7 @@ router.get('/categories', async (req, res) => {
 
 router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
   try {
-    const { name, description, price, originalPrice, category, unit, quantity, foodType, available, preparationTime, tags, image } = req.body;
+    const { name, description, price, originalPrice, category, unit, quantity, foodType, offerType, available, preparationTime, tags, image } = req.body;
     const parseTags = (t) => Array.isArray(t) ? t : (typeof t === 'string' ? t.split(',').map(s => s.trim()).filter(Boolean) : []);
     const parseCategory = (c) => {
       if (Array.isArray(c)) return c;
@@ -61,6 +61,7 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
       unit: unit || 'piece',
       quantity: parseFloat(quantity) || 1,
       foodType: foodType || 'none',
+      offerType: offerType || '',
       available: available !== false && available !== 'false',
       preparationTime: parseInt(preparationTime) || 15,
       tags: parseTags(tags),
@@ -86,7 +87,7 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
 
 router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
   try {
-    const { name, description, price, originalPrice, category, unit, quantity, foodType, available, preparationTime, tags, image, removeImage } = req.body;
+    const { name, description, price, originalPrice, category, unit, quantity, foodType, offerType, available, preparationTime, tags, image, removeImage } = req.body;
     const parseTags = (t) => Array.isArray(t) ? t : (typeof t === 'string' ? t.split(',').map(s => s.trim()).filter(Boolean) : []);
     const parseCategory = (c) => {
       if (Array.isArray(c)) return c;
@@ -136,6 +137,7 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
       unit: unit || 'piece',
       quantity: parseFloat(quantity) || 1,
       foodType: foodType || 'none',
+      offerType: offerType || '',
       available: available !== false && available !== 'false',
       preparationTime: parseInt(preparationTime) || 15,
       tags: parseTags(tags),
