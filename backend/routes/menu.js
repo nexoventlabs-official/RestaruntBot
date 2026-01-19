@@ -48,6 +48,13 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
       }
       return [];
     };
+    const parseOfferType = (o) => {
+      if (Array.isArray(o)) return o;
+      if (typeof o === 'string') {
+        try { return JSON.parse(o); } catch { return o ? [o] : []; }
+      }
+      return [];
+    };
     
     let imageUrl = image || null;
     
@@ -61,7 +68,7 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
       unit: unit || 'piece',
       quantity: parseFloat(quantity) || 1,
       foodType: foodType || 'none',
-      offerType: offerType || '',
+      offerType: parseOfferType(offerType),
       available: available !== false && available !== 'false',
       preparationTime: parseInt(preparationTime) || 15,
       tags: parseTags(tags),
@@ -93,6 +100,13 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
       if (Array.isArray(c)) return c;
       if (typeof c === 'string') {
         try { return JSON.parse(c); } catch { return [c]; }
+      }
+      return [];
+    };
+    const parseOfferType = (o) => {
+      if (Array.isArray(o)) return o;
+      if (typeof o === 'string') {
+        try { return JSON.parse(o); } catch { return o ? [o] : []; }
       }
       return [];
     };
@@ -137,7 +151,7 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
       unit: unit || 'piece',
       quantity: parseFloat(quantity) || 1,
       foodType: foodType || 'none',
-      offerType: offerType || '',
+      offerType: parseOfferType(offerType),
       available: available !== false && available !== 'false',
       preparationTime: parseInt(preparationTime) || 15,
       tags: parseTags(tags),

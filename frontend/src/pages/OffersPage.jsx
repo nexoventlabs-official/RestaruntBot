@@ -83,8 +83,9 @@ export default function OffersPage() {
     // Apply discount filter
     const matchesDiscount = !filter || filter.value === 'all' || (discount >= filter.min && discount <= filter.max);
     
-    // Apply offer type filter
-    const matchesOfferType = !selectedOfferType || item.offerType === selectedOfferType;
+    // Apply offer type filter - check if item has the selected offer type in its array
+    const itemOfferTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
+    const matchesOfferType = !selectedOfferType || itemOfferTypes.includes(selectedOfferType);
     
     return matchesDiscount && matchesOfferType;
   });

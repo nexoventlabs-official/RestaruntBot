@@ -35,7 +35,9 @@ export default function MenuItemFormScreen({ route, navigation }) {
   const [unit, setUnit] = useState(existingItem?.unit || 'piece');
   const [quantity, setQuantity] = useState(existingItem?.quantity?.toString() || '1');
   const [foodType, setFoodType] = useState(existingItem?.foodType || 'veg');
-  const [offerType, setOfferType] = useState(existingItem?.offerType || '');
+  const [selectedOfferTypes, setSelectedOfferTypes] = useState(
+    Array.isArray(existingItem?.offerType) ? existingItem.offerType : (existingItem?.offerType ? [existingItem.offerType] : [])
+  );
   const [available, setAvailable] = useState(existingItem?.available !== false);
   const [preparationTime, setPreparationTime] = useState(existingItem?.preparationTime?.toString() || '15');
   const [tags, setTags] = useState(existingItem?.tags?.join(', ') || '');
@@ -119,6 +121,14 @@ export default function MenuItemFormScreen({ route, navigation }) {
     }
   };
 
+  const toggleOfferType = (offerTypeValue) => {
+    if (selectedOfferTypes.includes(offerTypeValue)) {
+      setSelectedOfferTypes(selectedOfferTypes.filter(o => o !== offerTypeValue));
+    } else {
+      setSelectedOfferTypes([...selectedOfferTypes, offerTypeValue]);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!name.trim() || !price.trim() || selectedCategories.length === 0) {
       Alert.alert('Error', 'Please fill in name, price, and select at least one category');
@@ -138,8 +148,8 @@ export default function MenuItemFormScreen({ route, navigation }) {
       formData.append('unit', unit);
       formData.append('quantity', quantity);
       formData.append('foodType', foodType);
-      if (offerType && offerType.trim()) {
-        formData.append('offerType', offerType);
+      if (selectedOfferTypes && selectedOfferTypes.length > 0) {
+        formData.append('offerType', JSON.stringify(selectedOfferTypes));
       }
       formData.append('available', available.toString());
       formData.append('preparationTime', preparationTime);
@@ -391,23 +401,26 @@ export default function MenuItemFormScreen({ route, navigation }) {
               </View>
 
               {/* Offer Type */}
+              {/* Offer Type */}
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Offer Type (Optional)</Text>
+                <Text style={styles.label}>Offer Types (Optional)</Text>
                 <TouchableOpacity style={styles.pickerButton} onPress={() => setShowOfferPicker(true)}>
-                  <Text style={offerType ? styles.pickerValue : styles.pickerPlaceholder}>
-                    {offerType || 'Select offer type'}
-                  </Text>
+                  <View style={styles.selectedTags}>
+                    {selectedOfferTypes.length === 0 ? (
+                      <Text style={styles.pickerPlaceholder}>Select offer types</Text>
+                    ) : (
+                      selectedOfferTypes.map(offerType => (
+                        <View key={offerType} style={styles.selectedTag}>
+                          <Text style={styles.selectedTagText}>{offerType}</Text>
+                          <TouchableOpacity onPress={() => toggleOfferType(offerType)}>
+                            <Ionicons name="close" size={14} color="#fff" />
+                          </TouchableOpacity>
+                        </View>
+                      ))
+                    )}
+                  </View>
                   <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
                 </TouchableOpacity>
-                {offerType && (
-                  <TouchableOpacity 
-                    style={styles.clearOfferButton}
-                    onPress={() => setOfferType('')}
-                  >
-                    <Ionicons name="close-circle" size={16} color="#EF4444" />
-                    <Text style={styles.clearOfferText}>Clear selection</Text>
-                  </TouchableOpacity>
-                )}
               </View>
 
               {/* Tags */}
@@ -534,7 +547,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
           <View style={styles.modalContent}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Offer Type</Text>
+              <Text style={styles.modalTitle}>Select Offer Types</Text>
               <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowOfferPicker(false)}>
                 <Ionicons name="close" size={24} color="#696969" />
               </TouchableOpacity>
@@ -544,18 +557,20 @@ export default function MenuItemFormScreen({ route, navigation }) {
               keyExtractor={(item) => item._id}
               renderItem={({ item }) => (
                 <TouchableOpacity
-                  style={[styles.unitOption, offerType === item.offerType && styles.unitOptionSelected]}
-                  onPress={() => { setOfferType(item.offerType); setShowOfferPicker(false); }}
+                  style={styles.categoryOption}
+                  onPress={() => toggleOfferType(item.offerType)}
                 >
+                  <View style={[styles.checkbox, selectedOfferTypes.includes(item.offerType) && styles.checkboxChecked]}>
+                    {selectedOfferTypes.includes(item.offerType) && <Ionicons name="checkmark" size={16} color="#fff" />}
+                  </View>
                   <View style={styles.offerOptionContent}>
                     {item.image && (
                       <Image source={{ uri: item.image }} style={styles.offerOptionImage} />
                     )}
-                    <Text style={[styles.unitOptionText, offerType === item.offerType && styles.unitOptionTextSelected]}>
+                    <Text style={styles.categoryOptionText}>
                       {item.offerType}
                     </Text>
                   </View>
-                  {offerType === item.offerType && <Ionicons name="checkmark-circle" size={22} color={ZOMATO_RED} />}
                 </TouchableOpacity>
               )}
               ListEmptyComponent={
@@ -567,6 +582,11 @@ export default function MenuItemFormScreen({ route, navigation }) {
               }
               contentContainerStyle={styles.modalList}
             />
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.modalDoneButton} onPress={() => setShowOfferPicker(false)}>
+                <Text style={styles.modalDoneButtonText}>Done ({selectedOfferTypes.length} selected)</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>

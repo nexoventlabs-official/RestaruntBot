@@ -9,7 +9,7 @@ const menuItemSchema = new mongoose.Schema({
   unit: { type: String, default: 'piece', enum: ['piece', 'kg', 'gram', 'liter', 'ml', 'plate', 'bowl', 'cup', 'slice', 'inch', 'full', 'half', 'small'] },
   quantity: { type: Number, default: 1 },
   foodType: { type: String, default: 'none', enum: ['veg', 'nonveg', 'egg', 'none'] },
-  offerType: { type: String, default: '' }, // Links to offer type from Offers
+  offerType: { type: [String], default: [] }, // Links to offer types from Offers (can have multiple)
   image: { type: String },
   available: { type: Boolean, default: true },
   isPaused: { type: Boolean, default: false },
