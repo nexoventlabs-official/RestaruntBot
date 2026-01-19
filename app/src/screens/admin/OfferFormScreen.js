@@ -18,6 +18,7 @@ export default function OfferFormScreen({ route, navigation }) {
   const isEditing = !!existingOffer;
 
   const [isActive, setIsActive] = useState(existingOffer?.isActive !== false);
+  const [offerType, setOfferType] = useState(existingOffer?.offerType || '');
   const [image, setImage] = useState(existingOffer?.image || null);
   const [newImage, setNewImage] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -54,6 +55,9 @@ export default function OfferFormScreen({ route, navigation }) {
     try {
       const formData = new FormData();
       formData.append('isActive', isActive.toString());
+      if (offerType && offerType.trim()) {
+        formData.append('offerType', offerType.trim());
+      }
 
       if (newImage) {
         const filename = newImage.uri.split('/').pop();
@@ -130,6 +134,19 @@ export default function OfferFormScreen({ route, navigation }) {
             </TouchableOpacity>
 
             <View style={styles.form}>
+              {/* Offer Type */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Offer Type</Text>
+                <Text style={styles.hint}>e.g., "1+1 Offer", "Buy 2 Get 1", "50% Off"</Text>
+                <TextInput
+                  style={styles.input}
+                  value={offerType}
+                  onChangeText={setOfferType}
+                  placeholder="Enter offer type"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+
               {/* Active Switch */}
               <View style={styles.switchCard}>
                 <View style={styles.switchInfo}>
@@ -223,6 +240,7 @@ const styles = StyleSheet.create({
   form: { gap: 20 },
   inputGroup: { gap: 8 },
   label: { fontSize: 14, fontWeight: '700', color: '#1C1C1C' },
+  hint: { fontSize: 12, color: '#9CA3AF', marginTop: -4, marginBottom: 4 },
   input: {
     backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 18, height: 54,
     borderWidth: 1.5, borderColor: '#E8E8E8', fontSize: 15, color: '#1C1C1C', fontWeight: '500',

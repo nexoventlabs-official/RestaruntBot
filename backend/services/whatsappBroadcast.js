@@ -67,7 +67,7 @@ const whatsappBroadcast = {
   },
 
   // Send offer image to all WhatsApp contacts
-  async sendOfferToAll(offerImageUrl, offerTitle, offerDescription) {
+  async sendOfferToAll(offerImageUrl, offerTitle, offerDescription, offerType) {
     try {
       const contacts = await this.getAllContacts();
       
@@ -81,6 +81,9 @@ const whatsappBroadcast = {
 
       // Build message
       let message = `🎉 *New Offer!*\n\n`;
+      if (offerType) {
+        message += `🏷️ *${offerType}*\n\n`;
+      }
       if (offerTitle) {
         message += `*${offerTitle}*\n\n`;
       }

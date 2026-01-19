@@ -28,6 +28,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
   const [name, setName] = useState(existingItem?.name || '');
   const [description, setDescription] = useState(existingItem?.description || '');
   const [price, setPrice] = useState(existingItem?.price?.toString() || '');
+  const [originalPrice, setOriginalPrice] = useState(existingItem?.originalPrice?.toString() || '');
   const [selectedCategories, setSelectedCategories] = useState(
     Array.isArray(existingItem?.category) ? existingItem.category : (existingItem?.category ? [existingItem.category] : [])
   );
@@ -120,6 +121,9 @@ export default function MenuItemFormScreen({ route, navigation }) {
       formData.append('name', name);
       formData.append('description', description);
       formData.append('price', price);
+      if (originalPrice && originalPrice.trim()) {
+        formData.append('originalPrice', originalPrice);
+      }
       formData.append('category', JSON.stringify(selectedCategories));
       formData.append('unit', unit);
       formData.append('quantity', quantity);
@@ -260,21 +264,48 @@ export default function MenuItemFormScreen({ route, navigation }) {
                 />
               </View>
 
-              {/* Price */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Price <Text style={styles.required}>*</Text></Text>
-                <View style={styles.priceInputContainer}>
-                  <Text style={styles.currencySymbol}>₹</Text>
-                  <TextInput
-                    style={styles.priceInput}
-                    value={price}
-                    onChangeText={setPrice}
-                    placeholder="0"
-                    placeholderTextColor="#9CA3AF"
-                    keyboardType="numeric"
-                  />
+              {/* Price & Original Price */}
+              <View style={styles.rowInputs}>
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Sale Price <Text style={styles.required}>*</Text></Text>
+                  <View style={styles.priceInputContainer}>
+                    <Text style={styles.currencySymbol}>₹</Text>
+                    <TextInput
+                      style={styles.priceInput}
+                      value={price}
+                      onChangeText={setPrice}
+                      placeholder="0"
+                      placeholderTextColor="#9CA3AF"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Original Price</Text>
+                  <View style={styles.priceInputContainer}>
+                    <Text style={styles.currencySymbol}>₹</Text>
+                    <TextInput
+                      style={styles.priceInput}
+                      value={originalPrice}
+                      onChangeText={setOriginalPrice}
+                      placeholder="0"
+                      placeholderTextColor="#9CA3AF"
+                      keyboardType="numeric"
+                    />
+                  </View>
                 </View>
               </View>
+
+              {/* Show discount percentage if original price is set */}
+              {originalPrice && parseFloat(originalPrice) > parseFloat(price) && (
+                <View style={styles.discountBadge}>
+                  <Ionicons name="pricetag" size={16} color="#22C55E" />
+                  <Text style={styles.discountText}>
+                    {Math.round(((parseFloat(originalPrice) - parseFloat(price)) / parseFloat(originalPrice)) * 100)}% OFF
+                  </Text>
+                </View>
+              )}
 
               {/* Quantity & Unit */}
               <View style={styles.rowInputs}>
@@ -638,4 +669,23 @@ const styles = StyleSheet.create({
   },
   modalDoneButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   emptyText: { textAlign: 'center', color: '#9CA3AF', padding: 24, fontSize: 14 },
+  
+  // Discount badge
+  discountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginTop: -8,
+    marginBottom: 8,
+  },
+  discountText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#22C55E',
+  },
 });

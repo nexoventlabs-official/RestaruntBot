@@ -36,7 +36,7 @@ router.post('/sync', authMiddleware, async (req, res) => {
 // Send offer to all WhatsApp contacts
 router.post('/send-offer', authMiddleware, async (req, res) => {
   try {
-    const { offerImageUrl, offerTitle, offerDescription } = req.body;
+    const { offerImageUrl, offerTitle, offerDescription, offerType } = req.body;
     
     if (!offerImageUrl && !offerTitle && !offerDescription) {
       return res.status(400).json({ 
@@ -68,7 +68,7 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
     });
 
     // Send offers in background (non-blocking)
-    whatsappBroadcast.sendOfferToAll(offerImageUrl, offerTitle, offerDescription)
+    whatsappBroadcast.sendOfferToAll(offerImageUrl, offerTitle, offerDescription, offerType)
       .then(result => {
         console.log('[WhatsApp Broadcast] Offer sending completed:', result);
       })

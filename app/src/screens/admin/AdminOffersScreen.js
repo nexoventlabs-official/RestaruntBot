@@ -71,7 +71,8 @@ export default function AdminOffersScreen({ navigation }) {
               const response = await api.post('/whatsapp-broadcast/send-offer', {
                 offerImageUrl: offer.image,
                 offerTitle: offer.title,
-                offerDescription: offer.description
+                offerDescription: offer.description,
+                offerType: offer.offerType
               });
 
               if (response.data.success) {
