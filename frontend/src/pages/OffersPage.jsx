@@ -13,22 +13,11 @@ const WhatsAppIcon = ({ className }) => (
   </svg>
 );
 
-const DISCOUNT_FILTERS = [
-  { label: 'All Offers', value: 'all', min: 0, max: 100 },
-  { label: '0-10% OFF', value: '0-10', min: 0, max: 10 },
-  { label: '10-20% OFF', value: '10-20', min: 10, max: 20 },
-  { label: '20-30% OFF', value: '20-30', min: 20, max: 30 },
-  { label: '30-40% OFF', value: '30-40', min: 30, max: 40 },
-  { label: '40-50% OFF', value: '40-50', min: 40, max: 50 },
-  { label: '50%+ OFF', value: '50+', min: 50, max: 100 },
-];
-
 export default function OffersPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState([]);
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedFilter, setSelectedFilter] = useState(searchParams.get('filter') || 'all');
   const [selectedOfferType, setSelectedOfferType] = useState(searchParams.get('offerType') || '');
 
   // Get cart functions from UserLayout context
@@ -44,12 +33,11 @@ export default function OffersPage() {
   }, []);
 
   useEffect(() => {
-    // Update URL when filters change
+    // Update URL when offer type changes
     const params = {};
-    if (selectedFilter !== 'all') params.filter = selectedFilter;
     if (selectedOfferType) params.offerType = selectedOfferType;
     setSearchParams(params);
-  }, [selectedFilter, selectedOfferType, setSearchParams]);
+  }, [selectedOfferType, setSearchParams]);
 
   const loadData = async () => {
     try {
@@ -75,27 +63,16 @@ export default function OffersPage() {
   // Filter items with discounts
   const itemsWithDiscounts = items.filter(item => getDiscountPercentage(item) > 0);
 
-  // Apply discount filter
-  const filteredItems = itemsWithDiscounts.filter(item => {
-    const discount = getDiscountPercentage(item);
-    const filter = DISCOUNT_FILTERS.find(f => f.value === selectedFilter);
-    
-    // Apply discount filter
-    const matchesDiscount = !filter || filter.value === 'all' || (discount >= filter.min && discount <= filter.max);
-    
-    // Apply offer type filter - check if item has the selected offer type in its array
-    const itemOfferTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
-    const matchesOfferType = !selectedOfferType || itemOfferTypes.includes(selectedOfferType);
-    
-    return matchesDiscount && matchesOfferType;
-  });
+  // Apply offer type filter
+  const filteredItems = selectedOfferType 
+    ? itemsWithDiscounts.filter(item => {
+        const itemOfferTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
+        return itemOfferTypes.includes(selectedOfferType);
+      })
+    : itemsWithDiscounts;
 
   // Get unique offer types from offers
   const offerTypes = [...new Set(offers.map(o => o.offerType).filter(Boolean))];
-
-  const handleFilterChange = (filterValue) => {
-    setSelectedFilter(filterValue);
-  };
 
   const handleOfferTypeChange = (offerType) => {
     setSelectedOfferType(offerType === selectedOfferType ? '' : offerType);
@@ -209,31 +186,16 @@ export default function OffersPage() {
           </div>
         )}
 
-        {/* Discount Filters */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            {DISCOUNT_FILTERS.map(filter => (
-              <button
-                key={filter.value}
-                onClick={() => handleFilterChange(filter.value)}
-                className={`px-4 py-2 rounded-full whitespace-nowrap font-medium transition-colors ${
-                  selectedFilter === filter.value
-                    ? 'bg-orange-500 text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Items Grid - Same style as Menu Page */}
         {filteredItems.length === 0 ? (
           <div className="text-center py-12">
             <Tag className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No offers found</h3>
-            <p className="text-gray-600">Try selecting a different filter</p>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              {selectedOfferType ? 'No items found for this offer' : 'No offers available'}
+            </h3>
+            <p className="text-gray-600">
+              {selectedOfferType ? 'Try selecting a different offer type' : 'Check back later for amazing deals!'}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
