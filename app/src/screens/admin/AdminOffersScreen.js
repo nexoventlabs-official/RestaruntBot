@@ -239,14 +239,14 @@ const styles = StyleSheet.create({
   },
   offerImage: { 
     width: '100%', 
-    aspectRatio: 5/1, // Maintain 5:1 ratio across all devices
+    aspectRatio: 21/9, // Updated to 21:9 ratio for better display
     resizeMode: 'cover' 
   },
   offerImagePlaceholder: { 
     backgroundColor: colors.light.surfaceSecondary, 
     justifyContent: 'center', 
     alignItems: 'center',
-    aspectRatio: 5/1 // Maintain 5:1 ratio across all devices
+    aspectRatio: 21/9 // Updated to 21:9 ratio for better display
   },
   offerTypeBadge: { 
     position: 'absolute', 

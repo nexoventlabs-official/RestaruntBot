@@ -196,19 +196,28 @@ export default function OfferPopup() {
     if (!offer) return null;
     
     const width = window.innerWidth;
+    let imageUrl;
     
     // Mobile: < 768px
     if (width < 768) {
-      return offer.imageMobile || offer.imageTablet || offer.imageDesktop || offer.image;
+      imageUrl = offer.imageMobile || offer.imageTablet || offer.imageDesktop || offer.image;
     }
     // Tablet: 768px - 1024px
     else if (width < 1024) {
-      return offer.imageTablet || offer.imageDesktop || offer.imageMobile || offer.image;
+      imageUrl = offer.imageTablet || offer.imageDesktop || offer.imageMobile || offer.image;
     }
     // Desktop: >= 1024px
     else {
-      return offer.imageDesktop || offer.imageTablet || offer.imageMobile || offer.image;
+      imageUrl = offer.imageDesktop || offer.imageTablet || offer.imageMobile || offer.image;
     }
+    
+    // Add cache-busting timestamp to force refresh
+    if (imageUrl) {
+      const separator = imageUrl.includes('?') ? '&' : '?';
+      return `${imageUrl}${separator}t=${offer.updatedAt || Date.now()}`;
+    }
+    
+    return imageUrl;
   };
 
   return (

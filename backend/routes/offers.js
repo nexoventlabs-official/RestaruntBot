@@ -96,6 +96,11 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     });
 
     await offer.save();
+    
+    // Emit SSE event to notify clients to refresh (cache-busting)
+    const eventEmitter = require('../services/eventEmitter');
+    eventEmitter.emit('dataUpdate', { type: 'offers' });
+    
     res.status(201).json(offer);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -186,6 +191,10 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
     }
 
     const offer = await Offer.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    
+    // Emit SSE event to notify clients to refresh (cache-busting)
+    const eventEmitter = require('../services/eventEmitter');
+    eventEmitter.emit('dataUpdate', { type: 'offers' });
     
     res.json(offer);
   } catch (err) {

@@ -51,9 +51,9 @@ export default function OfferFormScreen({ route, navigation }) {
 
       // Different aspect ratios for different screen sizes
       const aspectRatios = {
-        mobile: [5, 1],   // 800x160px (5:1 ratio)
-        tablet: [5, 1],   // 1200x240px (5:1 ratio)
-        desktop: [5, 1]   // 1920x384px (5:1 ratio)
+        mobile: [16, 9],   // 800x450px (16:9 ratio) - Standard landscape for mobile
+        tablet: [21, 9],   // 1200x514px (21:9 ratio) - Ultra-wide for tablet
+        desktop: [21, 9]   // 1920x823px (21:9 ratio) - Ultra-wide for desktop
       };
 
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -347,13 +347,13 @@ export default function OfferFormScreen({ route, navigation }) {
             </View>
 
             {/* Mobile Image */}
-            {renderImageUpload('mobile', imageMobile, 'Mobile View', 'For smartphones and small screens', '800x160px')}
+            {renderImageUpload('mobile', imageMobile, 'Mobile View', 'For smartphones and small screens', '800x450px (16:9)')}
 
             {/* Tablet Image */}
-            {renderImageUpload('tablet', imageTablet, 'Tablet View', 'For tablets and medium screens', '1200x240px')}
+            {renderImageUpload('tablet', imageTablet, 'Tablet View', 'For tablets and medium screens', '1200x514px (21:9)')}
 
             {/* Desktop Image */}
-            {renderImageUpload('desktop', imageDesktop, 'Desktop View', 'For laptops and large screens', '1920x384px')}
+            {renderImageUpload('desktop', imageDesktop, 'Desktop View', 'For laptops and large screens', '1920x823px (21:9)')}
 
             <View style={styles.form}>
               {/* Offer Type */}
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
   // Mobile Frame (iPhone style)
   mobileFrame: {
     width: 180,
-    height: 360,
+    height: 320,
     backgroundColor: '#1F2937',
     borderRadius: 28,
     padding: 4,
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
   // Tablet Frame (iPad style)
   tabletFrame: {
     width: 280,
-    height: 200,
+    height: 120,
     backgroundColor: '#1F2937',
     borderRadius: 20,
     padding: 8,
@@ -525,7 +525,7 @@ const styles = StyleSheet.create({
   desktopFrame: {
     width: '100%',
     maxWidth: 320,
-    aspectRatio: 16/10,
+    height: 137,
     backgroundColor: '#1F2937',
     borderRadius: 12,
     padding: 6,
@@ -584,16 +584,16 @@ const styles = StyleSheet.create({
   },
   mockBannerImage: {
     width: '100%',
-    height: 120,
-  },
-  mockBannerImageMobile: {
-    height: 80,
-  },
-  mockBannerImageTablet: {
     height: 100,
   },
+  mockBannerImageMobile: {
+    height: 100,
+  },
+  mockBannerImageTablet: {
+    height: 60,
+  },
   mockBannerImageDesktop: {
-    height: 120,
+    height: 80,
   },
   
   // Mock Offer Badge
