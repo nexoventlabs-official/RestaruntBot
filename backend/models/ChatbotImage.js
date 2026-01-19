@@ -30,7 +30,9 @@ const chatbotImageSchema = new mongoose.Schema({
       'help_support',
       'view_cart',
       'select_quantity',
-      'open_website'
+      'open_website',
+      'cart_expiry_warning',
+      'cart_items_removed'
     ]
   },
   name: {

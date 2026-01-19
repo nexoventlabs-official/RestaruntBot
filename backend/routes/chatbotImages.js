@@ -169,6 +169,18 @@ const defaultImages = [
     name: 'Open Website',
     description: 'Shown when user selects Open Website option with CTA button',
     imageUrl: ''
+  },
+  {
+    key: 'cart_expiry_warning',
+    name: 'Cart Expiry Warning',
+    description: 'Shown when cart items will expire in 10 minutes due to inactivity',
+    imageUrl: ''
+  },
+  {
+    key: 'cart_items_removed',
+    name: 'Cart Items Removed',
+    description: 'Shown when cart items are removed after 30 minutes of inactivity',
+    imageUrl: ''
   }
 ];
 
