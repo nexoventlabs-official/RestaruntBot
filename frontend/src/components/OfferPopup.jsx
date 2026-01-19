@@ -79,7 +79,12 @@ export default function OfferPopup() {
       setIsVisible(false);
       setOffers([]);
       sessionStorage.setItem('hasSeenAllOffers', 'true');
-      navigate('/menu');
+      // Redirect to offers page with filter if offerType exists
+      if (currentOffer.offerType) {
+        navigate(`/offers?offerType=${encodeURIComponent(currentOffer.offerType)}`);
+      } else {
+        navigate('/offers');
+      }
     }, 300);
   };
 

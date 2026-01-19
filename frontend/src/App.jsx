@@ -10,6 +10,7 @@ import Layout from './components/Layout';
 import UserLayout from './components/UserLayout';
 import Home from './pages/Home';
 import UserMenuPage from './pages/UserMenuPage';
+import OffersPage from './pages/OffersPage';
 import About from './pages/About';
 import Contact from './pages/Contact';
 import Review from './pages/Review';
@@ -76,6 +77,7 @@ function App() {
         <Route element={<UserLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/menu" element={<UserMenuPage />} />
+          <Route path="/offers" element={<OffersPage />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
         </Route>

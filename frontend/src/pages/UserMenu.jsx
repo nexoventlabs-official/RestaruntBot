@@ -175,7 +175,20 @@ export default function UserMenu() {
           <button onClick={(e) => handleToggleWishlist(item, e)} className="absolute top-3 right-3 p-2 bg-white/90 rounded-full shadow-md hover:bg-white transition-colors"><Heart className={`w-4 h-4 ${isInWishlist(item._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} /></button>
         </div>
         <div className="p-4">
-          <div className="flex items-start justify-between gap-2 mb-1"><h3 className="font-semibold text-gray-900 line-clamp-1">{item.name}</h3><span className="text-orange-600 font-bold whitespace-nowrap">₹{item.price}</span></div>
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <h3 className="font-semibold text-gray-900 line-clamp-1">{item.name}</h3>
+            <div className="flex flex-col items-end">
+              {item.originalPrice && item.originalPrice > item.price && (
+                <span className="text-xs text-gray-400 line-through">₹{item.originalPrice}</span>
+              )}
+              <span className="text-orange-600 font-bold whitespace-nowrap">₹{item.price}</span>
+            </div>
+          </div>
+          {item.originalPrice && item.originalPrice > item.price && (
+            <div className="inline-flex items-center gap-1 bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-semibold mb-2">
+              {Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100)}% OFF
+            </div>
+          )}
           <p className="text-xs text-gray-400 mb-2">{item.quantity || 1} {item.unit || 'piece'}</p>
           {item.description && <p className="text-sm text-gray-500 line-clamp-2 mb-3">{item.description}</p>}
           <div className="flex items-center justify-between text-xs text-gray-400 mb-3">

@@ -439,14 +439,28 @@ export default function UserMenuPage() {
             <p className="text-xs sm:text-sm text-gray-500 line-clamp-2 mb-2 sm:mb-4 min-h-[32px] sm:min-h-[40px]">{item.description}</p>
           )}
 
-          {/* Price & Action Buttons */}
-          <div className="flex items-center justify-between">
-            <div className="relative">
-              <img src="/button.png" alt="" className="h-6 sm:h-7 md:h-8 w-auto" style={{ filter: 'brightness(0) saturate(100%) invert(19%) sepia(97%) saturate(7043%) hue-rotate(359deg) brightness(101%) contrast(117%)' }} />
-              <span className="absolute inset-0 flex items-center justify-center text-white font-bold text-[10px] sm:text-xs md:text-sm">
-                ₹{item.price}
-              </span>
+          {/* Price & Discount Badge */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex flex-col">
+              {item.originalPrice && item.originalPrice > item.price && (
+                <span className="text-[10px] sm:text-xs text-gray-400 line-through">₹{item.originalPrice}</span>
+              )}
+              <div className="relative">
+                <img src="/button.png" alt="" className="h-6 sm:h-7 md:h-8 w-auto" style={{ filter: 'brightness(0) saturate(100%) invert(19%) sepia(97%) saturate(7043%) hue-rotate(359deg) brightness(101%) contrast(117%)' }} />
+                <span className="absolute inset-0 flex items-center justify-center text-white font-bold text-[10px] sm:text-xs md:text-sm">
+                  ₹{item.price}
+                </span>
+              </div>
             </div>
+            {item.originalPrice && item.originalPrice > item.price && (
+              <div className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] sm:text-xs font-semibold">
+                {Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100)}% OFF
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-1 sm:gap-2">
               {/* Cart Button */}
               {!available ? (
@@ -803,8 +817,18 @@ export default function UserMenuPage() {
               {/* Name & Price */}
               <div className="flex items-start justify-between gap-3 mb-3">
                 <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{selectedItem.name}</h2>
-                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-orange-500 whitespace-nowrap">
-                  ₹{selectedItem.price}
+                <div className="flex flex-col items-end">
+                  {selectedItem.originalPrice && selectedItem.originalPrice > selectedItem.price && (
+                    <>
+                      <span className="text-sm sm:text-base text-gray-400 line-through">₹{selectedItem.originalPrice}</span>
+                      <div className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-semibold mb-1">
+                        {Math.round(((selectedItem.originalPrice - selectedItem.price) / selectedItem.originalPrice) * 100)}% OFF
+                      </div>
+                    </>
+                  )}
+                  <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-orange-500 whitespace-nowrap">
+                    ₹{selectedItem.price}
+                  </div>
                 </div>
               </div>
 
