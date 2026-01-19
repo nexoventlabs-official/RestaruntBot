@@ -2,6 +2,7 @@ const Customer = require('../models/Customer');
 const MenuItem = require('../models/MenuItem');
 const cron = require('node-cron');
 const whatsapp = require('./whatsapp');
+const chatbotImagesService = require('./chatbotImages');
 
 // Track which customers have been warned (to avoid duplicate warnings)
 const warnedCustomers = new Set();
@@ -44,9 +45,22 @@ const sendExpiryWarnings = async () => {
         
         message += '\n💡 *Tip:* Add more quantity or proceed to checkout to keep these items!';
         
-        // Send warning message
+        // Send warning message with action buttons and image
         try {
-          await whatsapp.sendMessage(customer.phone, message);
+          const cartExpiryImageUrl = await chatbotImagesService.getImageUrl('cart_expiry_warning');
+          
+          const buttons = [
+            { id: 'review_pay', text: 'Review & Pay' },
+            { id: 'view_cart', text: 'View Cart' },
+            { id: 'clear_cart', text: 'Clear Cart' }
+          ];
+          
+          if (cartExpiryImageUrl) {
+            await whatsapp.sendImageWithButtons(customer.phone, cartExpiryImageUrl, message, buttons);
+          } else {
+            await whatsapp.sendButtons(customer.phone, message, buttons);
+          }
+          
           warnedCustomers.add(warningKey);
           console.log(`[Cart Warning] Sent expiry warning to ${customer.phone} for ${expiringItems.length} items`);
         } catch (error) {
@@ -109,7 +123,20 @@ const cleanupExpiredCartItems = async () => {
           message += '\n💡 You can add them again anytime!';
           
           try {
-            await whatsapp.sendMessage(customer.phone, message);
+            const cartRemovedImageUrl = await chatbotImagesService.getImageUrl('cart_items_removed');
+            
+            const buttons = [
+              { id: 'view_menu', text: 'Menu' },
+              { id: 'view_cart', text: 'View Cart' },
+              { id: 'open_website', text: 'Website' }
+            ];
+            
+            if (cartRemovedImageUrl) {
+              await whatsapp.sendImageWithButtons(customer.phone, cartRemovedImageUrl, message, buttons);
+            } else {
+              await whatsapp.sendButtons(customer.phone, message, buttons);
+            }
+            
             console.log(`[Cart Cleanup] Notified ${customer.phone} about ${itemsToRemove.length} removed items`);
             
             // Remove from warned set since items are now cleared
