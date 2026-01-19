@@ -127,7 +127,7 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
 // Delete offer
 router.delete('/:id', auth, async (req, res) => {
   try {
-    // Get offer first to delete image from Cloudinary
+    // Get offer first to delete image from Cloudinary and remove from menu items
     const offer = await Offer.findById(req.params.id);
     if (!offer) return res.status(404).json({ error: 'Offer not found' });
     
@@ -141,8 +141,24 @@ router.delete('/:id', auth, async (req, res) => {
       }
     }
     
+    // Remove this offer type from all menu items
+    if (offer.offerType) {
+      const MenuItem = require('../models/MenuItem');
+      await MenuItem.updateMany(
+        { offerType: offer.offerType },
+        { $pull: { offerType: offer.offerType } }
+      );
+      console.log(`Removed offer type "${offer.offerType}" from all menu items`);
+    }
+    
     await Offer.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Offer deleted' });
+    
+    // Emit SSE event to notify clients
+    const eventEmitter = require('../services/eventEmitter');
+    eventEmitter.emit('dataUpdate', { type: 'menu' });
+    eventEmitter.emit('dataUpdate', { type: 'offers' });
+    
+    res.json({ message: 'Offer deleted and removed from all items' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -154,8 +170,28 @@ router.patch('/:id/toggle', auth, async (req, res) => {
     const offer = await Offer.findById(req.params.id);
     if (!offer) return res.status(404).json({ error: 'Offer not found' });
     
+    const wasActive = offer.isActive;
     offer.isActive = !offer.isActive;
     await offer.save();
+    
+    // If offer is being deactivated, remove it from all menu items
+    if (wasActive && !offer.isActive && offer.offerType) {
+      const MenuItem = require('../models/MenuItem');
+      await MenuItem.updateMany(
+        { offerType: offer.offerType },
+        { $pull: { offerType: offer.offerType } }
+      );
+      console.log(`Removed inactive offer type "${offer.offerType}" from all menu items`);
+      
+      // Emit SSE event to notify clients
+      const eventEmitter = require('../services/eventEmitter');
+      eventEmitter.emit('dataUpdate', { type: 'menu' });
+    }
+    
+    // Emit SSE event to notify clients
+    const eventEmitter = require('../services/eventEmitter');
+    eventEmitter.emit('dataUpdate', { type: 'offers' });
+    
     res.json(offer);
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -11,6 +11,12 @@ export default function OfferPopup() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
+  const [isPaused, setIsPaused] = useState(false);
+
+  // Minimum swipe distance (in px)
+  const minSwipeDistance = 50;
 
   useEffect(() => {
     const hasSeenOffers = sessionStorage.getItem('hasSeenAllOffers');
@@ -18,6 +24,27 @@ export default function OfferPopup() {
       loadPopupOffers();
     }
   }, []);
+
+  // Auto-rotate offers every 3 seconds
+  useEffect(() => {
+    if (offers.length <= 1 || !isVisible || isPaused) return;
+    
+    const interval = setInterval(() => {
+      setIsClosing(true);
+      setTimeout(() => {
+        setCurrentIndex(prev => {
+          // Loop back to first offer when reaching the end
+          if (prev >= offers.length - 1) {
+            return 0;
+          }
+          return prev + 1;
+        });
+        setIsClosing(false);
+      }, 200);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [offers.length, isVisible, currentIndex, isPaused]);
 
   const loadPopupOffers = async () => {
     try {
@@ -35,42 +62,45 @@ export default function OfferPopup() {
   };
 
   const handleClose = () => {
-    // If there are more offers, show the next one
-    if (currentIndex < offers.length - 1) {
-      setIsClosing(true);
-      setTimeout(() => {
-        setCurrentIndex(prev => prev + 1);
-        setIsClosing(false);
-      }, 300);
-    } else {
-      // All offers seen, close popup
-      setIsClosing(true);
-      setTimeout(() => {
-        setIsVisible(false);
-        setOffers([]);
-        sessionStorage.setItem('hasSeenAllOffers', 'true');
-      }, 300);
-    }
+    // Close popup and mark as seen
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsVisible(false);
+      setOffers([]);
+      sessionStorage.setItem('hasSeenAllOffers', 'true');
+    }, 300);
   };
 
   const handlePrev = () => {
-    if (currentIndex > 0) {
-      setIsClosing(true);
-      setTimeout(() => {
-        setCurrentIndex(prev => prev - 1);
-        setIsClosing(false);
-      }, 200);
-    }
+    setIsClosing(true);
+    setTimeout(() => {
+      setCurrentIndex(prev => {
+        // Loop to last offer if at first offer
+        if (prev <= 0) {
+          return offers.length - 1;
+        }
+        return prev - 1;
+      });
+      setIsClosing(false);
+    }, 200);
+    setIsPaused(true);
+    setTimeout(() => setIsPaused(false), 2000);
   };
 
   const handleNext = () => {
-    if (currentIndex < offers.length - 1) {
-      setIsClosing(true);
-      setTimeout(() => {
-        setCurrentIndex(prev => prev + 1);
-        setIsClosing(false);
-      }, 200);
-    }
+    setIsClosing(true);
+    setTimeout(() => {
+      setCurrentIndex(prev => {
+        // Loop to first offer if at last offer
+        if (prev >= offers.length - 1) {
+          return 0;
+        }
+        return prev + 1;
+      });
+      setIsClosing(false);
+    }, 200);
+    setIsPaused(true);
+    setTimeout(() => setIsPaused(false), 2000);
   };
 
   const handleImageClick = () => {
@@ -88,6 +118,75 @@ export default function OfferPopup() {
     }, 300);
   };
 
+  // Touch handlers for swipe
+  const onTouchStart = (e) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+    setIsPaused(true); // Pause auto-rotation when user touches
+  };
+
+  const onTouchMove = (e) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) {
+      setIsPaused(false);
+      return;
+    }
+    
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+    
+    if (isLeftSwipe) {
+      handleNext();
+    } else if (isRightSwipe) {
+      handlePrev();
+    }
+    
+    // Resume auto-rotation after 2 seconds of inactivity
+    setTimeout(() => setIsPaused(false), 2000);
+  };
+
+  // Mouse handlers for desktop swipe
+  const [mouseStart, setMouseStart] = useState(null);
+  const [mouseEnd, setMouseEnd] = useState(null);
+
+  const onMouseDown = (e) => {
+    setMouseEnd(null);
+    setMouseStart(e.clientX);
+    setIsPaused(true);
+  };
+
+  const onMouseMove = (e) => {
+    if (mouseStart !== null) {
+      setMouseEnd(e.clientX);
+    }
+  };
+
+  const onMouseUp = () => {
+    if (!mouseStart || !mouseEnd) {
+      setIsPaused(false);
+      setMouseStart(null);
+      return;
+    }
+    
+    const distance = mouseStart - mouseEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+    
+    if (isLeftSwipe) {
+      handleNext();
+    } else if (isRightSwipe) {
+      handlePrev();
+    }
+    
+    setMouseStart(null);
+    setMouseEnd(null);
+    setTimeout(() => setIsPaused(false), 2000);
+  };
+
   if (offers.length === 0 || !isVisible) return null;
 
   const currentOffer = offers[currentIndex];
@@ -101,7 +200,6 @@ export default function OfferPopup() {
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={handleClose}
       />
       
       {/* Popup Container */}
@@ -122,10 +220,23 @@ export default function OfferPopup() {
             >
               <X className="w-5 h-5" />
             </button>
-            {/* Scrollable image container */}
+            {/* Scrollable image container with swipe support */}
             <div 
-              className="overflow-y-auto overflow-x-hidden rounded-2xl max-h-[85vh] cursor-pointer"
+              className="overflow-y-auto overflow-x-hidden rounded-2xl max-h-[85vh] cursor-pointer select-none"
               onClick={handleImageClick}
+              onTouchStart={onTouchStart}
+              onTouchMove={onTouchMove}
+              onTouchEnd={onTouchEnd}
+              onMouseDown={onMouseDown}
+              onMouseMove={onMouseMove}
+              onMouseUp={onMouseUp}
+              onMouseLeave={() => {
+                if (mouseStart !== null) {
+                  setMouseStart(null);
+                  setMouseEnd(null);
+                  setIsPaused(false);
+                }
+              }}
             >
               <img 
                 src={currentOffer.image} 
@@ -163,9 +274,16 @@ export default function OfferPopup() {
 
         {/* Counter */}
         {offers.length > 1 && (
-          <p className="text-center text-white/80 text-sm mt-2">
-            {currentIndex + 1} of {offers.length} offers
-          </p>
+          <div className="flex items-center gap-3 mt-2">
+            <p className="text-center text-white/80 text-sm">
+              {currentIndex + 1} of {offers.length} offers
+            </p>
+            {isPaused && (
+              <span className="text-yellow-400 text-xs bg-black/30 px-2 py-1 rounded-full">
+                Paused
+              </span>
+            )}
+          </div>
         )}
       </div>
     </div>

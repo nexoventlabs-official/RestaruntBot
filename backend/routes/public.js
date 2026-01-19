@@ -74,7 +74,22 @@ router.get('/menu', async (req, res) => {
     if (foodType && foodType !== 'all') query.foodType = foodType;
     
     const items = await MenuItem.find(query).select('-ratings').sort({ name: 1 });
-    res.json(items);
+    
+    // Get all active offer types
+    const activeOffers = await Offer.find({ isActive: true }).select('offerType');
+    const activeOfferTypes = activeOffers.map(o => o.offerType).filter(Boolean);
+    
+    // Filter items to only show active offer types
+    const filteredItems = items.map(item => {
+      const itemObj = item.toObject();
+      if (itemObj.offerType && itemObj.offerType.length > 0) {
+        // Only keep offer types that are active
+        itemObj.offerType = itemObj.offerType.filter(ot => activeOfferTypes.includes(ot));
+      }
+      return itemObj;
+    });
+    
+    res.json(filteredItems);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

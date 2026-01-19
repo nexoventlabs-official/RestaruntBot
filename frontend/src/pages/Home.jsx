@@ -6,7 +6,7 @@ import AnimatedSection, { ParallaxSection, TextReveal } from '../components/Anim
 import { 
   ArrowRightIcon, TruckIcon, ClockIcon, CheckCircleIcon 
 } from '../components/Icons';
-import { Star, Heart, ShoppingCart, Plus, Minus } from 'lucide-react';
+import { Star, Heart, ShoppingCart, Plus, Minus, X, Clock, Package, Tag } from 'lucide-react';
 import { useCachedData } from '../hooks/useImagePreloader';
 
 const API_URL = 'https://restaruntbot.onrender.com/api/public';
@@ -58,6 +58,8 @@ export default function Home() {
   const [displayCategories, setDisplayCategories] = useState([]);
   const [scrollPosition, setScrollPosition] = useState(0);
   const sliderRef = useRef(null);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [dialogQuantity, setDialogQuantity] = useState(1);
   const context = useOutletContext();
   const { 
     cart, addToCart, updateQuantity, 
@@ -171,6 +173,60 @@ export default function Home() {
     addToCart(item);
   };
 
+  // Open item detail dialog
+  const openItemDialog = (item) => {
+    setSelectedItem(item);
+    setDialogQuantity(cart?.find(c => c._id === item._id)?.quantity || 1);
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+    if (window.lenis) window.lenis.stop();
+  };
+
+  // Close item detail dialog
+  const closeItemDialog = () => {
+    setSelectedItem(null);
+    setDialogQuantity(1);
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
+    if (window.lenis) window.lenis.start();
+  };
+
+  // Add to cart from dialog
+  const handleDialogAddToCart = () => {
+    if (!selectedItem || !addToCart) return;
+    for (let i = 0; i < dialogQuantity; i++) {
+      addToCart(selectedItem);
+    }
+    closeItemDialog();
+  };
+
+  // WhatsApp order from dialog with quantity
+  const handleDialogWhatsApp = () => {
+    if (!selectedItem) return;
+    const item = selectedItem;
+    const WHATSAPP_NUMBER = '15551858897';
+    
+    const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : 
+                          item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
+                          item.foodType === 'egg' ? '🥚 Egg' : '';
+    
+    let msg = `Hi! I'd like to order:\n\n`;
+    msg += `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n`;
+    msg += `📦 *Quantity:* ${dialogQuantity}\n`;
+    msg += `💰 *Price:* ₹${item.price} x ${dialogQuantity} = ₹${item.price * dialogQuantity}\n`;
+    msg += `\nPlease confirm my order. Thank you!`;
+    
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
+    closeItemDialog();
+  };
+
+  // WhatsApp Icon Component
+  const WhatsAppIcon = ({ className }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    </svg>
+  );
+
   const ItemSkeleton = () => (
     <div className="relative pt-16 sm:pt-20 md:pt-28">
       <div className="absolute -top-4 sm:-top-6 md:-top-8 left-1/2 -translate-x-1/2 z-10 w-32 h-32 sm:w-40 sm:h-40 md:w-56 md:h-56">
@@ -214,7 +270,11 @@ export default function Home() {
     };
 
     return (
-      <div key={item._id} className="group relative pt-16 sm:pt-20 md:pt-28">
+      <div 
+        key={item._id} 
+        className="group relative pt-16 sm:pt-20 md:pt-28 cursor-pointer"
+        onClick={() => openItemDialog(item)}
+      >
         {/* Floating Image */}
         <div className="absolute -top-4 sm:-top-6 md:-top-8 left-1/2 -translate-x-1/2 z-10 w-32 h-32 sm:w-40 sm:h-40 md:w-56 md:h-56 flex items-center justify-center">
           {item.image ? (
@@ -623,6 +683,209 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Item Detail Dialog */}
+      {selectedItem && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{ touchAction: 'none' }}
+          onClick={closeItemDialog}
+          onTouchMove={(e) => e.preventDefault()}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          
+          {/* Dialog */}
+          <div 
+            className="relative bg-white rounded-2xl sm:rounded-3xl w-full max-w-md lg:max-w-5xl max-h-[95vh] lg:h-[85vh] overflow-hidden shadow-2xl flex flex-col lg:flex-row"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              onClick={closeItemDialog}
+              className="absolute top-3 right-3 z-10 bg-white/90 hover:bg-white text-gray-700 p-2 rounded-full shadow-lg transition-all hover:scale-110"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Left Side - Image */}
+            <div className="relative h-48 sm:h-56 lg:h-auto lg:w-[45%] bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center flex-shrink-0">
+              {selectedItem.image ? (
+                <img 
+                  src={selectedItem.image} 
+                  alt={selectedItem.name}
+                  className="max-h-full max-w-full object-contain p-6 lg:p-8"
+                />
+              ) : (
+                <span className="text-7xl lg:text-8xl">🍽️</span>
+              )}
+              
+              {/* Food Type Badge */}
+              {selectedItem.foodType && selectedItem.foodType !== 'none' && (
+                <div className="absolute top-3 left-3">
+                  <span className={`inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-full font-medium border-2 ${
+                    selectedItem.foodType === 'veg' ? 'border-green-500 text-green-600 bg-green-50' :
+                    selectedItem.foodType === 'nonveg' ? 'border-red-500 text-red-600 bg-red-50' :
+                    'border-yellow-500 text-yellow-600 bg-yellow-50'
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${
+                      selectedItem.foodType === 'veg' ? 'bg-green-500' :
+                      selectedItem.foodType === 'nonveg' ? 'bg-red-500' :
+                      'bg-yellow-500'
+                    }`} />
+                    {selectedItem.foodType === 'veg' ? 'Veg' : selectedItem.foodType === 'nonveg' ? 'Non-Veg' : 'Egg'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Right Side - Details */}
+            <div 
+              className="flex-1 overflow-y-auto scrollbar-dialog p-5 sm:p-6 lg:p-8" 
+              style={{ 
+                maxHeight: 'calc(95vh - 100px)',
+                overscrollBehavior: 'contain',
+                WebkitOverflowScrolling: 'touch'
+              }}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+              onWheel={(e) => e.stopPropagation()}
+            >
+              {/* Name & Wishlist */}
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 flex-1">{selectedItem.name}</h2>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isInWishlist && isInWishlist(selectedItem._id)) {
+                      removeFromWishlist(selectedItem._id);
+                    } else {
+                      addToWishlist(selectedItem);
+                    }
+                  }}
+                  className="p-2 hover:scale-110 transition-transform flex-shrink-0 bg-gray-50 rounded-full"
+                >
+                  <Heart className={`w-6 h-6 ${isInWishlist && isInWishlist(selectedItem._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
+                </button>
+              </div>
+
+              {/* Price */}
+              <div className="flex items-center gap-3 mb-3 flex-wrap">
+                {/* Sale Price - Large and prominent */}
+                <div className="text-3xl sm:text-4xl lg:text-5xl font-bold text-orange-500">
+                  ₹{selectedItem.price}
+                </div>
+                
+                {/* Original Price & Discount Badge - Only if there's a discount */}
+                {selectedItem.originalPrice && selectedItem.originalPrice > selectedItem.price && (
+                  <>
+                    <span className="text-lg sm:text-xl text-gray-400 line-through">₹{selectedItem.originalPrice}</span>
+                    <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold">
+                      {Math.round(((selectedItem.originalPrice - selectedItem.price) / selectedItem.originalPrice) * 100)}% OFF
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Offer Type Tags */}
+              {selectedItem.offerType && (Array.isArray(selectedItem.offerType) ? selectedItem.offerType : [selectedItem.offerType]).length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {(Array.isArray(selectedItem.offerType) ? selectedItem.offerType : [selectedItem.offerType]).map((offerType, index) => (
+                    <span key={index} className="inline-flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-semibold">
+                      <Tag className="w-4 h-4" />
+                      {offerType}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Rating */}
+              <div className="flex items-center gap-2 mb-4">
+                <div className="flex">
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <Star 
+                      key={i} 
+                      className={`w-4 h-4 sm:w-5 sm:h-5 ${i <= Math.round(selectedItem.avgRating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} 
+                    />
+                  ))}
+                </div>
+                <span className="text-sm text-gray-500">
+                  {selectedItem.avgRating?.toFixed(1) || '0.0'} ({selectedItem.totalRatings || 0} reviews)
+                </span>
+              </div>
+
+              {/* Description */}
+              {selectedItem.description && (
+                <p className="text-gray-600 text-sm sm:text-base mb-4 leading-relaxed">
+                  {selectedItem.description}
+                </p>
+              )}
+
+              {/* Details Grid */}
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
+                  <Clock className="w-5 h-5 text-orange-500" />
+                  <div>
+                    <p className="text-xs text-gray-500">Prep Time</p>
+                    <p className="font-semibold text-gray-900">{selectedItem.preparationTime || 15} mins</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
+                  <Package className="w-5 h-5 text-orange-500" />
+                  <div>
+                    <p className="text-xs text-gray-500">Unit</p>
+                    <p className="font-semibold text-gray-900">{selectedItem.unitQty || 1} {selectedItem.unit || 'piece'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quantity Selector */}
+              <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3 mb-5">
+                <span className="font-medium text-gray-700">Quantity</span>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setDialogQuantity(Math.max(1, dialogQuantity - 1))}
+                    className="w-9 h-9 bg-white border border-gray-200 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="w-8 text-center font-bold text-lg">{dialogQuantity}</span>
+                  <button 
+                    onClick={() => setDialogQuantity(dialogQuantity + 1)}
+                    className="w-9 h-9 bg-white border border-gray-200 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Total Price */}
+              <div className="flex items-center justify-between mb-5 pb-4 border-b border-gray-100">
+                <span className="text-gray-600">Total</span>
+                <span className="text-2xl font-bold text-gray-900">₹{selectedItem.price * dialogQuantity}</span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={handleDialogWhatsApp}
+                  className="flex-1 flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-xl font-semibold transition-colors"
+                >
+                  <WhatsAppIcon className="w-5 h-5" />
+                  <span>WhatsApp</span>
+                </button>
+                <button
+                  onClick={handleDialogAddToCart}
+                  className="flex-[2] flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white py-3 px-4 rounded-xl font-semibold transition-colors"
+                >
+                  <ShoppingCart className="w-5 h-5" />
+                  Add to Cart
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

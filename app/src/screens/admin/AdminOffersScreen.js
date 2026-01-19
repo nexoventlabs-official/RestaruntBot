@@ -94,7 +94,11 @@ export default function AdminOffersScreen({ navigation }) {
 
   const renderOffer = ({ item }) => (
     <Animated.View style={{ opacity: fadeAnim }}>
-      <View style={styles.offerCard}>
+      <TouchableOpacity 
+        style={styles.offerCard}
+        onPress={() => navigation.navigate('OfferForm', { offer: item })}
+        activeOpacity={0.7}
+      >
         <View style={styles.offerImageContainer}>
           {item.image ? (
             <Image source={{ uri: item.image }} style={styles.offerImage} resizeMode="cover" />
@@ -103,32 +107,45 @@ export default function AdminOffersScreen({ navigation }) {
               <Ionicons name="pricetag-outline" size={32} color={colors.light.text.tertiary} />
             </View>
           )}
+          
+          {/* Offer Type Badge Overlay */}
+          {item.offerType && (
+            <View style={styles.offerTypeBadge}>
+              <Text style={styles.offerTypeText}>{item.offerType}</Text>
+            </View>
+          )}
+          
+          {/* Status Badge */}
+          <View style={[styles.statusBadge, { backgroundColor: item.isActive ? '#22C55E' : '#EF4444' }]}>
+            <Text style={styles.statusBadgeText}>{item.isActive ? 'Active' : 'Inactive'}</Text>
+          </View>
+          
+          {/* Edit Icon Overlay */}
+          <View style={styles.editIconOverlay}>
+            <Ionicons name="create-outline" size={20} color="#fff" />
+          </View>
         </View>
         
         <View style={styles.offerActions}>
-          <View style={styles.toggleContainer}>
-            <Switch
-              value={item.isActive}
-              onValueChange={() => toggleActive(item)}
-              trackColor={{ false: '#FEE2E2', true: '#BBF7D0' }}
-              thumbColor={item.isActive ? '#22C55E' : '#EF4444'}
-            />
-            <Text style={[styles.toggleLabel, { color: item.isActive ? '#22C55E' : '#EF4444' }]}>
-              {item.isActive ? 'Active' : 'Inactive'}
-            </Text>
-          </View>
-          
           <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.whatsappButton} onPress={() => sendToWhatsApp(item)}>
+            <TouchableOpacity 
+              style={styles.whatsappButton} 
+              onPress={(e) => { e.stopPropagation(); sendToWhatsApp(item); }}
+            >
               <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+              <Text style={styles.actionButtonText}>Send</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.deleteButton} onPress={() => deleteOffer(item)}>
+            <TouchableOpacity 
+              style={styles.deleteButton} 
+              onPress={(e) => { e.stopPropagation(); deleteOffer(item); }}
+            >
               <Ionicons name="trash-outline" size={18} color="#EF4444" />
+              <Text style={styles.actionButtonText}>Delete</Text>
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     </Animated.View>
   );
 
@@ -205,16 +222,99 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: typography.body.medium.fontSize, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   addButton: { width: 48, height: 48, borderRadius: 16, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', ...shadows.md },
   listContent: { padding: spacing.screenHorizontal, paddingBottom: 100 },
-  offerCard: { backgroundColor: colors.light.surface, borderRadius: radius.xl, overflow: 'hidden', marginBottom: spacing.md, ...shadows.card },
-  offerImageContainer: { width: '100%' },
-  offerImage: { width: '100%', aspectRatio: 16/9 },
-  offerImagePlaceholder: { backgroundColor: colors.light.surfaceSecondary, justifyContent: 'center', alignItems: 'center' },
-  offerActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.md },
-  toggleContainer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  toggleLabel: { fontSize: typography.label.medium.fontSize, fontWeight: '600' },
+  offerCard: { 
+    backgroundColor: colors.light.surface, 
+    borderRadius: radius.xl, 
+    overflow: 'hidden', 
+    marginBottom: spacing.md, 
+    ...shadows.card,
+    maxWidth: 600, // Limit width on tablets/PC
+    alignSelf: 'center',
+    width: '100%'
+  },
+  offerImageContainer: { 
+    width: '100%', 
+    backgroundColor: '#f3f4f6', 
+    position: 'relative' 
+  },
+  offerImage: { 
+    width: '100%', 
+    aspectRatio: 5/1, // Maintain 5:1 ratio across all devices
+    resizeMode: 'cover' 
+  },
+  offerImagePlaceholder: { 
+    backgroundColor: colors.light.surfaceSecondary, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    aspectRatio: 5/1 // Maintain 5:1 ratio across all devices
+  },
+  offerTypeBadge: { 
+    position: 'absolute', 
+    bottom: 12, 
+    left: 12, 
+    backgroundColor: 'rgba(0, 0, 0, 0.7)', 
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
+    borderRadius: 8,
+    backdropFilter: 'blur(10px)'
+  },
+  offerTypeText: { 
+    color: '#fff', 
+    fontSize: 13, 
+    fontWeight: '700',
+    letterSpacing: 0.5
+  },
+  editIconOverlay: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backdropFilter: 'blur(10px)'
+  },
+  offerActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', padding: spacing.md },
   actionButtons: { flexDirection: 'row', gap: spacing.sm },
-  whatsappButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#D1FAE5', justifyContent: 'center', alignItems: 'center' },
-  deleteButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#FEE2E2', justifyContent: 'center', alignItems: 'center' },
+  whatsappButton: { 
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10, 
+    backgroundColor: '#D1FAE5', 
+  },
+  deleteButton: { 
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10, 
+    backgroundColor: '#FEE2E2', 
+  },
+  actionButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  statusBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  statusBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 },
   emptyIconContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: colors.light.surfaceSecondary, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.base },
   emptyTitle: { fontSize: typography.headline.small.fontSize, fontWeight: '600', color: colors.light.text.secondary },

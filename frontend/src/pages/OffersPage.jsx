@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useOutletContext } from 'react-router-dom';
 import axios from 'axios';
-import { Tag, ShoppingCart, Plus, Minus, Heart, Star } from 'lucide-react';
+import { Tag, ShoppingCart, Plus, Minus, Heart, Star, X, Clock, Package } from 'lucide-react';
 
 const API_URL = 'https://restaruntbot.onrender.com/api/public';
 const WHATSAPP_NUMBER = '15551858897';
@@ -19,6 +19,12 @@ export default function OffersPage() {
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedOfferType, setSelectedOfferType] = useState(searchParams.get('offerType') || '');
+  const [currentOfferIndex, setCurrentOfferIndex] = useState(0);
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+  const eventSourceRef = useRef(null);
+  const itemsGridRef = useRef(null);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [dialogQuantity, setDialogQuantity] = useState(1);
 
   // Get cart functions from UserLayout context
   const context = useOutletContext();
@@ -30,7 +36,44 @@ export default function OffersPage() {
 
   useEffect(() => {
     loadData();
+    setupSSE();
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    };
   }, []);
+
+  // When offers are loaded, check if we need to show a specific offer from URL
+  useEffect(() => {
+    if (offers.length > 0 && selectedOfferType) {
+      // Find the index of the offer that matches the selected offer type
+      const offerIndex = offers.findIndex(o => o.offerType === selectedOfferType);
+      if (offerIndex !== -1) {
+        // Synchronize both indices immediately
+        setCurrentOfferIndex(offerIndex);
+        setCurrentBannerIndex(offerIndex);
+      }
+    }
+  }, [offers, selectedOfferType]);
+
+  // Auto-rotate header offer type every 3 seconds (only if no specific offer selected)
+  useEffect(() => {
+    if (offers.length === 0 || selectedOfferType) return;
+    const interval = setInterval(() => {
+      setCurrentOfferIndex((prev) => {
+        const newIndex = (prev + 1) % offers.length;
+        // Synchronize banner with header
+        setCurrentBannerIndex(newIndex);
+        return newIndex;
+      });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [offers.length, selectedOfferType]);
+
+  // Remove the separate banner rotation - it's now synchronized with header
+  // Auto-rotate banner images every 5 seconds (only if no specific offer selected)
+  // This is removed to keep banner and header in sync
 
   useEffect(() => {
     // Update URL when offer type changes
@@ -38,6 +81,31 @@ export default function OffersPage() {
     if (selectedOfferType) params.offerType = selectedOfferType;
     setSearchParams(params);
   }, [selectedOfferType, setSearchParams]);
+
+  const setupSSE = () => {
+    try {
+      const SSE_URL = 'https://restaruntbot.onrender.com/api/events';
+      eventSourceRef.current = new EventSource(SSE_URL);
+      eventSourceRef.current.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'menu' || data.type === 'offers') {
+            loadData();
+          }
+        } catch (e) {
+          console.error('SSE parse error:', e);
+        }
+      };
+      eventSourceRef.current.onerror = () => {
+        setTimeout(() => {
+          if (eventSourceRef.current) eventSourceRef.current.close();
+          setupSSE();
+        }, 5000);
+      };
+    } catch (e) {
+      console.error('SSE setup error:', e);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -60,22 +128,68 @@ export default function OffersPage() {
     return Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100);
   };
 
-  // Filter items with discounts
-  const itemsWithDiscounts = items.filter(item => getDiscountPercentage(item) > 0);
+  // Filter items that have at least one offer type
+  const itemsWithOfferTypes = items.filter(item => {
+    const itemOfferTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
+    return itemOfferTypes.length > 0;
+  });
 
   // Apply offer type filter
   const filteredItems = selectedOfferType 
-    ? itemsWithDiscounts.filter(item => {
+    ? itemsWithOfferTypes.filter(item => {
         const itemOfferTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
         return itemOfferTypes.includes(selectedOfferType);
       })
-    : itemsWithDiscounts;
+    : itemsWithOfferTypes; // Show all items with offer types when no specific offer selected
 
   // Get unique offer types from offers
   const offerTypes = [...new Set(offers.map(o => o.offerType).filter(Boolean))];
 
   const handleOfferTypeChange = (offerType) => {
     setSelectedOfferType(offerType === selectedOfferType ? '' : offerType);
+    
+    // Smooth scroll to items grid
+    setTimeout(() => {
+      if (itemsGridRef.current) {
+        const yOffset = -100; // Offset from top (adjust as needed)
+        const element = itemsGridRef.current;
+        const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+        
+        window.scrollTo({ top: y, behavior: 'smooth' });
+      }
+    }, 100);
+  };
+
+  const handlePrevOffer = () => {
+    if (offers.length === 0) return;
+    const newIndex = currentOfferIndex <= 0 ? offers.length - 1 : currentOfferIndex - 1;
+    
+    // Synchronize both banner and header offer
+    setCurrentOfferIndex(newIndex);
+    setCurrentBannerIndex(newIndex);
+    
+    // Update selected offer type and URL
+    const offer = offers[newIndex];
+    if (offer?.offerType) {
+      setSelectedOfferType(offer.offerType);
+      setSearchParams({ offerType: offer.offerType });
+    }
+  };
+
+  const handleNextOffer = () => {
+    if (offers.length === 0) return;
+    const newIndex = currentOfferIndex >= offers.length - 1 ? 0 : currentOfferIndex + 1;
+    
+    // Synchronize both banner and header offer
+    setCurrentOfferIndex(newIndex);
+    setCurrentBannerIndex(newIndex);
+    
+    // Update selected offer type and URL
+    const offer = offers[newIndex];
+    if (offer?.offerType) {
+      setSelectedOfferType(offer.offerType);
+      setSearchParams({ offerType: offer.offerType });
+    }
   };
 
   const handleAddToCart = (item) => {
@@ -127,6 +241,52 @@ export default function OffersPage() {
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
+  // Open item detail dialog
+  const openItemDialog = (item) => {
+    setSelectedItem(item);
+    setDialogQuantity(cart?.find(c => c._id === item._id)?.quantity || 1);
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+    if (window.lenis) window.lenis.stop();
+  };
+
+  // Close item detail dialog
+  const closeItemDialog = () => {
+    setSelectedItem(null);
+    setDialogQuantity(1);
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
+    if (window.lenis) window.lenis.start();
+  };
+
+  // Add to cart from dialog
+  const handleDialogAddToCart = () => {
+    if (!selectedItem || !addToCart) return;
+    for (let i = 0; i < dialogQuantity; i++) {
+      addToCart(selectedItem);
+    }
+    closeItemDialog();
+  };
+
+  // WhatsApp order from dialog with quantity
+  const handleDialogWhatsApp = () => {
+    if (!selectedItem) return;
+    const item = selectedItem;
+    
+    const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : 
+                          item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
+                          item.foodType === 'egg' ? '🥚 Egg' : '';
+    
+    let msg = `Hi! I'd like to order:\n\n`;
+    msg += `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n`;
+    msg += `📦 *Quantity:* ${dialogQuantity}\n`;
+    msg += `💰 *Price:* ₹${item.price} x ${dialogQuantity} = ₹${item.price * dialogQuantity}\n`;
+    msg += `\nPlease confirm my order. Thank you!`;
+    
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
+    closeItemDialog();
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -135,60 +295,113 @@ export default function OffersPage() {
     );
   }
 
+  // Get current offer for header rotation
+  const currentHeaderOffer = offers[currentOfferIndex];
+  const currentBannerOffer = offers[currentBannerIndex];
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Hero Banner */}
+      {/* Hero Banner with Auto-Rotating Background */}
       <section 
-        className="relative text-white pt-28 pb-16 bg-cover bg-center"
-        style={{ backgroundImage: `url('/banner-delicious-tacos.jpg')` }}
+        className="relative text-white pt-28 pb-16 bg-cover bg-center transition-all duration-1000 min-h-[350px] md:min-h-[400px]"
+        style={{ 
+          backgroundImage: currentBannerOffer?.image 
+            ? `url('${currentBannerOffer.image}')` 
+            : `url('/banner-delicious-tacos.jpg')`,
+          backgroundPosition: 'center center',
+          backgroundSize: 'cover'
+        }}
       >
-        <div className="absolute inset-0 bg-gradient-to-r from-orange-600/90 to-red-600/90"></div>
+        {/* Dark overlay for better text visibility */}
+        <div className="absolute inset-0 bg-black/40"></div>
+        
+        {/* Left Navigation Area - Invisible */}
+        {offers.length > 1 && (
+          <button
+            onClick={handlePrevOffer}
+            className="absolute left-0 top-0 bottom-0 w-1/4 md:w-1/6 z-10 cursor-pointer"
+            aria-label="Previous offer"
+          />
+        )}
+
+        {/* Right Navigation Area - Invisible */}
+        {offers.length > 1 && (
+          <button
+            onClick={handleNextOffer}
+            className="absolute right-0 top-0 bottom-0 w-1/4 md:w-1/6 z-10 cursor-pointer"
+            aria-label="Next offer"
+          />
+        )}
+
         <div className="relative max-w-6xl mx-auto px-4 text-center">
-          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full mb-4">
-            <Tag className="w-5 h-5" />
-            <span className="font-semibold">Limited Time Offers</span>
+          {/* Auto-rotating offer type badge */}
+          <div className="inline-flex items-center gap-2 bg-black/50 backdrop-blur-sm px-6 py-2.5 rounded-full mb-6 transition-all duration-500 shadow-lg">
+            <Tag className="w-5 h-5 animate-pulse" />
+            <span className="font-bold text-lg tracking-wide text-white drop-shadow-lg">
+              {currentHeaderOffer?.offerType || 'Limited Time Offers'}
+            </span>
           </div>
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 drop-shadow-lg">
-            Special <span className="text-yellow-300">Offers</span>
+          
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
+            Special <span className="text-yellow-300 drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">Offers</span>
           </h1>
-          <p className="text-lg md:text-xl text-white/90 font-light drop-shadow-md max-w-2xl mx-auto">
-            Grab amazing deals on your favorite items! Save up to 50% OFF
+          
+          {/* Dynamic subtitle based on current offer */}
+          <p className="text-lg md:text-xl text-white font-light drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] max-w-2xl mx-auto mb-8 transition-all duration-500">
+            {currentHeaderOffer?.description || 'Browse all items with special offers'}
           </p>
+
+          {/* Get Offer Button */}
+          {currentHeaderOffer && (
+            <button
+              onClick={() => {
+                handleOfferTypeChange(currentHeaderOffer.offerType);
+                // Ensure indices are synchronized
+                setCurrentBannerIndex(currentOfferIndex);
+                // Update URL to reflect the selected offer
+                setSearchParams({ offerType: currentHeaderOffer.offerType });
+              }}
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-gray-900 font-bold px-8 py-4 rounded-full shadow-2xl hover:shadow-3xl transform hover:scale-105 transition-all duration-300"
+            >
+              <Tag className="w-5 h-5" />
+              <span>Get This Offer</span>
+            </button>
+          )}
+
+          {/* Offer indicators */}
+          {offers.length > 1 && (
+            <div className="flex justify-center gap-2 mt-8">
+              {offers.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    // Synchronize both indices
+                    setCurrentOfferIndex(index);
+                    setCurrentBannerIndex(index);
+                    // Update to show that offer's items
+                    const offer = offers[index];
+                    if (offer?.offerType) {
+                      setSelectedOfferType(offer.offerType);
+                      setSearchParams({ offerType: offer.offerType });
+                    }
+                  }}
+                  className={`h-2 rounded-full transition-all duration-300 ${
+                    index === currentOfferIndex 
+                      ? 'w-8 bg-yellow-400' 
+                      : 'w-2 bg-white/50 hover:bg-white/80'
+                  }`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
 
-        {/* Offer Type Banners */}
-        {offerTypes.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Browse by Offer Type</h2>
-            <div className="grid grid-cols-2 gap-4">
-              {offers.map(offer => offer.offerType && (
-                <button
-                  key={offer._id}
-                  onClick={() => handleOfferTypeChange(offer.offerType)}
-                  className={`relative rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all ${
-                    selectedOfferType === offer.offerType ? 'ring-4 ring-orange-500' : ''
-                  }`}
-                >
-                  <img
-                    src={offer.image}
-                    alt={offer.offerType}
-                    className="w-full aspect-video object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex items-end p-3">
-                    <span className="text-white font-bold text-sm">{offer.offerType}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Items Grid - Same style as Menu Page */}
         {filteredItems.length === 0 ? (
-          <div className="text-center py-12">
+          <div className="text-center py-12" ref={itemsGridRef}>
             <Tag className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">
               {selectedOfferType ? 'No items found for this offer' : 'No offers available'}
@@ -198,7 +411,7 @@ export default function OffersPage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6" ref={itemsGridRef}>
             {filteredItems.map(item => {
               const inCart = isInCart ? isInCart(item._id) : false;
               const cartItem = cart?.find(c => c._id === item._id);
@@ -220,7 +433,11 @@ export default function OffersPage() {
               };
 
               return (
-                <div key={item._id} className="group relative bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300">
+                <div 
+                  key={item._id} 
+                  className="group relative bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 flex flex-col cursor-pointer"
+                  onClick={() => openItemDialog(item)}
+                >
                   {/* Image Container */}
                   <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100">
                     {item.image ? (
@@ -235,10 +452,12 @@ export default function OffersPage() {
                       </div>
                     )}
                     
-                    {/* Discount Badge - Top Left */}
-                    <div className="absolute top-3 left-3 bg-gradient-to-r from-green-500 to-green-600 text-white px-3 py-1.5 rounded-full text-sm font-bold shadow-lg">
-                      {discount}% OFF
-                    </div>
+                    {/* Discount Badge - Top Left (only show if there's a discount) */}
+                    {discount > 0 && (
+                      <div className="absolute top-3 left-3 bg-gradient-to-r from-green-500 to-green-600 text-white px-3 py-1.5 rounded-full text-sm font-bold shadow-lg">
+                        {discount}% OFF
+                      </div>
+                    )}
                     
                     {/* Food Type Badge - Top Right */}
                     {item.foodType && item.foodType !== 'none' && (
@@ -269,10 +488,10 @@ export default function OffersPage() {
                   </div>
 
                   {/* Content */}
-                  <div className="p-4">
+                  <div className="p-4 flex flex-col flex-grow">
                     {/* Name & Wishlist */}
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <h3 className="font-bold text-gray-900 text-base line-clamp-2 flex-1">{item.name}</h3>
+                      <h3 className="font-bold text-gray-900 text-base line-clamp-2 flex-1 min-h-[48px]">{item.name}</h3>
                       <button 
                         onClick={(e) => { e.stopPropagation(); handleToggleWishlist(item); }} 
                         className="p-1.5 hover:scale-110 transition-transform flex-shrink-0 bg-gray-50 rounded-full"
@@ -281,22 +500,40 @@ export default function OffersPage() {
                       </button>
                     </div>
 
+                    {/* Offer Type Tags - Fixed height container */}
+                    <div className="min-h-[28px] mb-2">
+                      {item.offerType && (Array.isArray(item.offerType) ? item.offerType : [item.offerType]).length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {(Array.isArray(item.offerType) ? item.offerType : [item.offerType]).map((offerType, index) => (
+                            <span key={index} className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-semibold">
+                              <Tag className="w-3 h-3" />
+                              {offerType}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     {/* Rating */}
                     <div className="flex items-center gap-1 mb-3">
                       <div className="flex">{renderStars()}</div>
                       <span className="text-xs text-gray-500 font-medium">({totalRatings})</span>
                     </div>
 
-                    {/* Description */}
-                    {item.description && (
-                      <p className="text-sm text-gray-600 line-clamp-2 mb-3 min-h-[40px]">{item.description}</p>
-                    )}
+                    {/* Description - Fixed height */}
+                    <p className="text-sm text-gray-600 line-clamp-2 mb-3 h-[40px]">
+                      {item.description || '\u00A0'}
+                    </p>
+
+                    {/* Spacer to push price and button to bottom */}
+                    <div className="flex-grow"></div>
 
                     {/* Price Section */}
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
                         <span className="text-2xl font-bold text-orange-600">₹{item.price}</span>
-                        <span className="text-sm text-gray-400 line-through">₹{item.originalPrice}</span>
+                        {item.originalPrice && item.originalPrice > item.price && (
+                          <span className="text-sm text-gray-400 line-through">₹{item.originalPrice}</span>
+                        )}
                       </div>
                     </div>
 
@@ -329,6 +566,213 @@ export default function OffersPage() {
           </div>
         )}
       </div>
+
+      {/* Item Detail Dialog */}
+      {selectedItem && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{ touchAction: 'none' }}
+          onClick={closeItemDialog}
+          onTouchMove={(e) => e.preventDefault()}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          
+          {/* Dialog - Horizontal on PC, Vertical on Mobile */}
+          <div 
+            className="relative bg-white rounded-2xl sm:rounded-3xl w-full max-w-md lg:max-w-5xl max-h-[95vh] lg:h-[85vh] overflow-hidden shadow-2xl flex flex-col lg:flex-row"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              onClick={closeItemDialog}
+              className="absolute top-3 right-3 z-10 bg-white/90 hover:bg-white text-gray-700 p-2 rounded-full shadow-lg transition-all hover:scale-110"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Left Side - Image (PC) / Top (Mobile) */}
+            <div className="relative h-48 sm:h-56 lg:h-auto lg:w-[45%] bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center flex-shrink-0">
+              {selectedItem.image ? (
+                <img 
+                  src={selectedItem.image} 
+                  alt={selectedItem.name}
+                  className="max-h-full max-w-full object-contain p-6 lg:p-8"
+                />
+              ) : (
+                <span className="text-7xl lg:text-8xl">🍽️</span>
+              )}
+              
+              {/* Food Type Badge */}
+              {selectedItem.foodType && selectedItem.foodType !== 'none' && (
+                <div className="absolute top-3 left-3">
+                  <span className={`inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-full font-medium border-2 ${
+                    selectedItem.foodType === 'veg' ? 'border-green-500 text-green-600 bg-green-50' :
+                    selectedItem.foodType === 'nonveg' ? 'border-red-500 text-red-600 bg-red-50' :
+                    'border-yellow-500 text-yellow-600 bg-yellow-50'
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${
+                      selectedItem.foodType === 'veg' ? 'bg-green-500' :
+                      selectedItem.foodType === 'nonveg' ? 'bg-red-500' :
+                      'bg-yellow-500'
+                    }`} />
+                    {selectedItem.foodType === 'veg' ? 'Veg' : selectedItem.foodType === 'nonveg' ? 'Non-Veg' : 'Egg'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Right Side - Details (PC) / Bottom (Mobile) */}
+            <div 
+              className="flex-1 overflow-y-auto scrollbar-dialog p-5 sm:p-6 lg:p-8" 
+              style={{ 
+                maxHeight: 'calc(95vh - 100px)',
+                overscrollBehavior: 'contain',
+                WebkitOverflowScrolling: 'touch'
+              }}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+              onWheel={(e) => e.stopPropagation()}
+            >
+              {/* Name & Wishlist */}
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 flex-1">{selectedItem.name}</h2>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isInWishlist && isInWishlist(selectedItem._id)) {
+                      removeFromWishlist(selectedItem._id);
+                    } else {
+                      addToWishlist(selectedItem);
+                    }
+                  }}
+                  className="p-2 hover:scale-110 transition-transform flex-shrink-0 bg-gray-50 rounded-full"
+                >
+                  <Heart className={`w-6 h-6 ${isInWishlist && isInWishlist(selectedItem._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
+                </button>
+              </div>
+
+              {/* Price */}
+              <div className="flex items-center gap-3 mb-3 flex-wrap">
+                {/* Sale Price - Large and prominent */}
+                <div className="text-3xl sm:text-4xl lg:text-5xl font-bold text-orange-500">
+                  ₹{selectedItem.price}
+                </div>
+                
+                {/* Original Price & Discount Badge - Only if there's a discount */}
+                {selectedItem.originalPrice && selectedItem.originalPrice > selectedItem.price && (
+                  <>
+                    <span className="text-lg sm:text-xl text-gray-400 line-through">₹{selectedItem.originalPrice}</span>
+                    <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold">
+                      {Math.round(((selectedItem.originalPrice - selectedItem.price) / selectedItem.originalPrice) * 100)}% OFF
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Offer Type Tags */}
+              {selectedItem.offerType && (Array.isArray(selectedItem.offerType) ? selectedItem.offerType : [selectedItem.offerType]).length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {(Array.isArray(selectedItem.offerType) ? selectedItem.offerType : [selectedItem.offerType]).map((offerType, index) => (
+                    <span key={index} className="inline-flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-semibold">
+                      <Tag className="w-4 h-4" />
+                      {offerType}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Rating */}
+              <div className="flex items-center gap-2 mb-4">
+                <div className="flex">
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <Star 
+                      key={i} 
+                      className={`w-4 h-4 sm:w-5 sm:h-5 ${i <= Math.round(selectedItem.avgRating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} 
+                    />
+                  ))}
+                </div>
+                <span className="text-sm text-gray-500">
+                  {selectedItem.avgRating?.toFixed(1) || '0.0'} ({selectedItem.totalRatings || 0} reviews)
+                </span>
+              </div>
+
+              {/* Description */}
+              {selectedItem.description && (
+                <p className="text-gray-600 text-sm sm:text-base lg:text-base mb-4 leading-relaxed">
+                  {selectedItem.description}
+                </p>
+              )}
+
+              {/* Details Grid */}
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                {/* Preparation Time */}
+                <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
+                  <Clock className="w-5 h-5 text-orange-500" />
+                  <div>
+                    <p className="text-xs text-gray-500">Prep Time</p>
+                    <p className="font-semibold text-gray-900">{selectedItem.preparationTime || 15} mins</p>
+                  </div>
+                </div>
+
+                {/* Unit */}
+                <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
+                  <Package className="w-5 h-5 text-orange-500" />
+                  <div>
+                    <p className="text-xs text-gray-500">Unit</p>
+                    <p className="font-semibold text-gray-900">{selectedItem.unitQty || 1} {selectedItem.unit || 'piece'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quantity Selector */}
+              <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3 mb-5">
+                <span className="font-medium text-gray-700">Quantity</span>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setDialogQuantity(Math.max(1, dialogQuantity - 1))}
+                    className="w-9 h-9 bg-white border border-gray-200 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="w-8 text-center font-bold text-lg">{dialogQuantity}</span>
+                  <button 
+                    onClick={() => setDialogQuantity(dialogQuantity + 1)}
+                    className="w-9 h-9 bg-white border border-gray-200 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Total Price */}
+              <div className="flex items-center justify-between mb-5 pb-4 border-b border-gray-100">
+                <span className="text-gray-600">Total</span>
+                <span className="text-2xl font-bold text-gray-900">₹{selectedItem.price * dialogQuantity}</span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={handleDialogWhatsApp}
+                  className="flex-1 flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-xl font-semibold transition-colors"
+                >
+                  <WhatsAppIcon className="w-5 h-5" />
+                  <span>WhatsApp</span>
+                </button>
+
+                <button
+                  onClick={handleDialogAddToCart}
+                  className="flex-[2] flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white py-3 px-4 rounded-xl font-semibold transition-colors"
+                >
+                  <ShoppingCart className="w-5 h-5" />
+                  Add to Cart
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

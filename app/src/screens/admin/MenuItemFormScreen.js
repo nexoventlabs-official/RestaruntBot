@@ -61,7 +61,14 @@ export default function MenuItemFormScreen({ route, navigation }) {
       Animated.timing(slideAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
     ]).start();
     fetchCategories();
-  }, []);
+    
+    // Add listener to refresh when screen comes into focus
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchCategories();
+    });
+    
+    return unsubscribe;
+  }, [navigation]);
 
   const fetchCategories = async () => {
     try {
@@ -74,6 +81,10 @@ export default function MenuItemFormScreen({ route, navigation }) {
       const activeOffers = offerResponse.data?.filter(o => o.isActive && o.offerType && o.offerType.trim() !== '') || [];
       console.log('Fetched offers:', activeOffers); // Debug log
       setOffers(activeOffers);
+      
+      // Remove any selected offer types that are no longer available
+      const availableOfferTypes = activeOffers.map(o => o.offerType);
+      setSelectedOfferTypes(prev => prev.filter(ot => availableOfferTypes.includes(ot)));
     } catch (error) {
       console.error('Error fetching data:', error);
     }

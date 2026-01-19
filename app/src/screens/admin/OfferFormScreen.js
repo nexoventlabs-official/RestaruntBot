@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
-  TouchableOpacity, Image, Alert, ActivityIndicator, Switch, Animated, Platform,
+  TouchableOpacity, Image, Alert, ActivityIndicator, Animated, Platform,
   KeyboardAvoidingView, StatusBar
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,7 +17,6 @@ export default function OfferFormScreen({ route, navigation }) {
   const existingOffer = route.params?.offer;
   const isEditing = !!existingOffer;
 
-  const [isActive, setIsActive] = useState(existingOffer?.isActive !== false);
   const [offerType, setOfferType] = useState(existingOffer?.offerType || '');
   const [image, setImage] = useState(existingOffer?.image || null);
   const [newImage, setNewImage] = useState(null);
@@ -34,14 +33,30 @@ export default function OfferFormScreen({ route, navigation }) {
   }, []);
 
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: false,
-      quality: 0.8,
-    });
-    if (!result.canceled) {
-      setNewImage(result.assets[0]);
-      setImage(result.assets[0].uri);
+    try {
+      // Request permissions
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your photo library to upload images.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        allowsMultipleSelection: false,
+        aspect: [5, 1], // Wide banner ratio (5:1)
+        quality: 0.9, // Higher quality for better preview
+        exif: false,
+      });
+      
+      if (!result.canceled) {
+        setNewImage(result.assets[0]);
+        setImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
 
@@ -59,7 +74,7 @@ export default function OfferFormScreen({ route, navigation }) {
     setLoading(true);
     try {
       const formData = new FormData();
-      formData.append('isActive', isActive.toString());
+      formData.append('isActive', 'true'); // Always set to active when creating/editing
       formData.append('offerType', offerType.trim());
 
       if (newImage) {
@@ -114,27 +129,55 @@ export default function OfferFormScreen({ route, navigation }) {
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
             {/* Banner Image */}
-            <TouchableOpacity style={styles.imageContainer} onPress={pickImage} activeOpacity={0.8}>
-              {image ? (
-                <Image source={{ uri: image }} style={styles.image} />
-              ) : (
-                <View style={styles.imagePlaceholder}>
-                  <View style={styles.imagePlaceholderIcon}>
-                    <Ionicons name="image-outline" size={36} color={ZOMATO_RED} />
+            <View style={styles.imageSection}>
+              <View style={styles.imageSectionHeader}>
+                <Ionicons name="image" size={20} color={ZOMATO_RED} />
+                <Text style={styles.imageSectionTitle}>Banner Image</Text>
+              </View>
+              <Text style={styles.imageSectionHint}>
+                Wide banner format (5:1 ratio) • Tap to crop & adjust
+              </Text>
+              
+              <TouchableOpacity style={styles.imageContainer} onPress={pickImage} activeOpacity={0.8}>
+                {image ? (
+                  <View style={styles.imagePreviewContainer}>
+                    <Image source={{ uri: image }} style={styles.image} />
+                    {/* Crop Guidelines Overlay */}
+                    <View style={styles.cropGuidelinesOverlay}>
+                      <View style={styles.cropGuideline} />
+                      <View style={[styles.cropGuideline, styles.cropGuidelineVertical]} />
+                    </View>
                   </View>
-                  <Text style={styles.imagePlaceholderText}>Add Banner Image</Text>
-                  <Text style={styles.imagePlaceholderHint}>Recommended: 16:9 ratio</Text>
-                </View>
-              )}
+                ) : (
+                  <View style={styles.imagePlaceholder}>
+                    <View style={styles.imagePlaceholderIcon}>
+                      <Ionicons name="image-outline" size={36} color={ZOMATO_RED} />
+                    </View>
+                    <Text style={styles.imagePlaceholderText}>Add Banner Image</Text>
+                    <Text style={styles.imagePlaceholderHint}>Wide banner format (5:1 ratio)</Text>
+                    <Text style={styles.imagePlaceholderHint}>Tap to crop & adjust</Text>
+                  </View>
+                )}
+                {image && (
+                  <View style={styles.imageOverlay}>
+                    <View style={styles.changeImageButton}>
+                      <Ionicons name="camera" size={18} color="#fff" />
+                      <Text style={styles.changeImageText}>Change & Crop</Text>
+                    </View>
+                  </View>
+                )}
+              </TouchableOpacity>
+              
+              {/* Preview Info */}
               {image && (
-                <View style={styles.imageOverlay}>
-                  <View style={styles.changeImageButton}>
-                    <Ionicons name="camera" size={18} color="#fff" />
-                    <Text style={styles.changeImageText}>Change</Text>
-                  </View>
+                <View style={styles.previewInfo}>
+                  <Ionicons name="information-circle" size={16} color="#9CA3AF" />
+                  <Text style={styles.previewInfoText}>
+                    This is how your banner will appear on the website
+                  </Text>
                 </View>
               )}
-            </TouchableOpacity>
+            </View>
 
             <View style={styles.form}>
               {/* Offer Type */}
@@ -147,25 +190,6 @@ export default function OfferFormScreen({ route, navigation }) {
                   onChangeText={setOfferType}
                   placeholder="Enter offer type"
                   placeholderTextColor="#9CA3AF"
-                />
-              </View>
-
-              {/* Active Switch */}
-              <View style={styles.switchCard}>
-                <View style={styles.switchInfo}>
-                  <View style={[styles.switchIconContainer, { backgroundColor: isActive ? '#DCFCE7' : '#FEE2E2' }]}>
-                    <Ionicons name={isActive ? 'megaphone' : 'megaphone-outline'} size={22} color={isActive ? '#22C55E' : '#EF4444'} />
-                  </View>
-                  <View>
-                    <Text style={styles.switchLabel}>Offer Status</Text>
-                    <Text style={styles.switchHint}>{isActive ? 'Visible to customers' : 'Hidden from customers'}</Text>
-                  </View>
-                </View>
-                <Switch
-                  value={isActive}
-                  onValueChange={setIsActive}
-                  trackColor={{ false: '#FEE2E2', true: '#BBF7D0' }}
-                  thumbColor={isActive ? '#22C55E' : '#EF4444'}
                 />
               </View>
             </View>
@@ -217,14 +241,67 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
   content: { flex: 1, padding: 16 },
   
+  // Image Section
+  imageSection: { marginBottom: 24 },
+  imageSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  imageSectionTitle: { fontSize: 16, fontWeight: '700', color: '#1C1C1C' },
+  imageSectionHint: { fontSize: 13, color: '#9CA3AF', marginBottom: 12 },
+  
   // Image
-  imageContainer: { marginBottom: 24, borderRadius: 18, overflow: 'hidden' },
+  imageContainer: { 
+    marginBottom: 12, 
+    borderRadius: 18, 
+    overflow: 'hidden', 
+    backgroundColor: '#f3f4f6',
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  imagePreviewContainer: { position: 'relative' },
   image: { 
-    width: '100%', aspectRatio: 16/9, borderRadius: 18, resizeMode: 'cover',
+    width: '100%', 
+    aspectRatio: 5/1,
+    borderRadius: 18, 
+    resizeMode: 'cover',
+  },
+  cropGuidelinesOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    pointerEvents: 'none',
+  },
+  cropGuideline: {
+    position: 'absolute',
+    width: '100%',
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    top: '50%',
+  },
+  cropGuidelineVertical: {
+    width: 1,
+    height: '100%',
+    left: '50%',
+    top: 0,
   },
   imagePlaceholder: {
-    width: '100%', aspectRatio: 16/9, borderRadius: 18, backgroundColor: '#fff',
-    justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#E8E8E8', borderStyle: 'dashed',
+    width: '100%', 
+    aspectRatio: 5/1, // Maintain 5:1 ratio across all devices
+    borderRadius: 18, 
+    backgroundColor: '#fff',
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    borderWidth: 2, 
+    borderColor: '#E8E8E8', 
+    borderStyle: 'dashed',
   },
   imagePlaceholderIcon: {
     width: 64, height: 64, borderRadius: 32, backgroundColor: '#FEF2F2',
@@ -238,6 +315,23 @@ const styles = StyleSheet.create({
   },
   changeImageButton: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   changeImageText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  
+  // Preview Info
+  previewInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F3F4F6',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  previewInfoText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#6B7280',
+    lineHeight: 16,
+  },
   
   // Form
   form: { gap: 20 },
@@ -283,16 +377,6 @@ const styles = StyleSheet.create({
   },
   discountSymbol: { fontSize: 22, fontWeight: '800', color: ZOMATO_RED, marginRight: 8 },
   discountValueInput: { flex: 1, fontSize: 20, color: '#1C1C1C', fontWeight: '700' },
-  
-  // Switch
-  switchCard: { 
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: '#fff', padding: 18, borderRadius: 16, borderWidth: 1.5, borderColor: '#E8E8E8',
-  },
-  switchInfo: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  switchIconContainer: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
-  switchLabel: { fontSize: 15, fontWeight: '700', color: '#1C1C1C' },
-  switchHint: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
   
   // Footer
   footer: { 

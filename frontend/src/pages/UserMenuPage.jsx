@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import axios from 'axios';
-import { Star, Plus, Minus, Heart, ShoppingCart, X, Clock, Package, Search } from 'lucide-react';
+import { Star, Plus, Minus, Heart, ShoppingCart, X, Clock, Package, Search, Tag } from 'lucide-react';
 import { useCachedData } from '../hooks/useImagePreloader';
 
 const API_URL = 'https://restaruntbot.onrender.com/api/public';
@@ -382,11 +382,11 @@ export default function UserMenuPage() {
     return (
       <div 
         key={item._id} 
-        className={`group relative bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 ${!available ? 'opacity-60' : ''}`}
+        className={`group relative bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 flex flex-col ${!available ? 'opacity-60' : ''}`}
         onClick={() => available && openItemDialog(item)}
       >
         {/* Image Container */}
-        <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100">
+        <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 flex-shrink-0">
           {item.image ? (
             <img 
               src={item.image} 
@@ -432,11 +432,11 @@ export default function UserMenuPage() {
           )}
         </div>
 
-        {/* Content */}
-        <div className="p-4">
+        {/* Content - Flex grow to fill space */}
+        <div className="p-4 flex flex-col flex-grow">
           {/* Name & Wishlist */}
           <div className="flex items-start justify-between gap-2 mb-2">
-            <h3 className="font-bold text-gray-900 text-base line-clamp-2 flex-1">{item.name}</h3>
+            <h3 className="font-bold text-gray-900 text-base line-clamp-2 flex-1 min-h-[48px]">{item.name}</h3>
             <button 
               onClick={(e) => handleToggleWishlist(item, e)} 
               className="p-1.5 hover:scale-110 transition-transform flex-shrink-0 bg-gray-50 rounded-full"
@@ -445,16 +445,33 @@ export default function UserMenuPage() {
             </button>
           </div>
 
+          {/* Offer Type Tags - Fixed height container */}
+          <div className="min-h-[28px] mb-2">
+            {item.offerType && (Array.isArray(item.offerType) ? item.offerType : [item.offerType]).length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {(Array.isArray(item.offerType) ? item.offerType : [item.offerType]).map((offerType, index) => (
+                  <span key={index} className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-semibold">
+                    <Tag className="w-3 h-3" />
+                    {offerType}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Rating */}
           <div className="flex items-center gap-1 mb-3">
             <div className="flex">{renderStars()}</div>
             <span className="text-xs text-gray-500 font-medium">({totalRatings})</span>
           </div>
 
-          {/* Description */}
-          {item.description && (
-            <p className="text-sm text-gray-600 line-clamp-2 mb-3 min-h-[40px]">{item.description}</p>
-          )}
+          {/* Description - Fixed height */}
+          <p className="text-sm text-gray-600 line-clamp-2 mb-3 h-[40px]">
+            {item.description || '\u00A0'}
+          </p>
+
+          {/* Spacer to push price and button to bottom */}
+          <div className="flex-grow"></div>
 
           {/* Price Section */}
           <div className="flex items-center justify-between mb-4">
@@ -788,11 +805,8 @@ export default function UserMenuPage() {
           
           {/* Dialog - Horizontal on PC, Vertical on Mobile */}
           <div 
-            className="relative bg-white rounded-2xl sm:rounded-3xl w-full max-w-md lg:max-w-4xl max-h-[90vh] lg:max-h-[80vh] overflow-hidden shadow-2xl flex flex-col lg:flex-row"
-            style={{ overscrollBehavior: 'contain', touchAction: 'pan-y' }}
-            data-lenis-prevent
+            className="relative bg-white rounded-2xl sm:rounded-3xl w-full max-w-md lg:max-w-5xl max-h-[95vh] lg:h-[85vh] overflow-hidden shadow-2xl flex flex-col lg:flex-row"
             onClick={(e) => e.stopPropagation()}
-            onTouchMove={(e) => e.stopPropagation()}
           >
             {/* Close Button */}
             <button
@@ -800,21 +814,6 @@ export default function UserMenuPage() {
               className="absolute top-3 right-3 z-10 bg-white/90 hover:bg-white text-gray-700 p-2 rounded-full shadow-lg transition-all hover:scale-110"
             >
               <X className="w-5 h-5" />
-            </button>
-
-            {/* Wishlist Button */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isInWishlist && isInWishlist(selectedItem._id)) {
-                  removeFromWishlist(selectedItem._id);
-                } else {
-                  addToWishlist(selectedItem);
-                }
-              }}
-              className="absolute top-3 right-14 z-10 bg-white/90 hover:bg-white p-2 rounded-full shadow-lg transition-all hover:scale-110"
-            >
-              <Heart className={`w-5 h-5 ${isInWishlist && isInWishlist(selectedItem._id) ? 'fill-red-500 text-red-500' : 'text-gray-700'}`} />
             </button>
 
             {/* Left Side - Image (PC) / Top (Mobile) */}
@@ -838,24 +837,64 @@ export default function UserMenuPage() {
             </div>
 
             {/* Right Side - Details (PC) / Bottom (Mobile) */}
-            <div className="flex-1 overflow-y-auto scrollbar-dialog p-5 sm:p-6 lg:p-8">
-              {/* Name & Price */}
+            <div 
+              className="flex-1 overflow-y-auto scrollbar-dialog p-5 sm:p-6 lg:p-8" 
+              style={{ 
+                maxHeight: 'calc(95vh - 100px)',
+                overscrollBehavior: 'contain',
+                WebkitOverflowScrolling: 'touch'
+              }}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+              onWheel={(e) => e.stopPropagation()}
+            >
+              {/* Name & Wishlist */}
               <div className="flex items-start justify-between gap-3 mb-3">
-                <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{selectedItem.name}</h2>
-                <div className="flex flex-col items-end">
-                  {selectedItem.originalPrice && selectedItem.originalPrice > selectedItem.price && (
-                    <>
-                      <span className="text-sm sm:text-base text-gray-400 line-through">₹{selectedItem.originalPrice}</span>
-                      <div className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-semibold mb-1">
-                        {Math.round(((selectedItem.originalPrice - selectedItem.price) / selectedItem.originalPrice) * 100)}% OFF
-                      </div>
-                    </>
-                  )}
-                  <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-orange-500 whitespace-nowrap">
-                    ₹{selectedItem.price}
-                  </div>
-                </div>
+                <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 flex-1">{selectedItem.name}</h2>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isInWishlist && isInWishlist(selectedItem._id)) {
+                      removeFromWishlist(selectedItem._id);
+                    } else {
+                      addToWishlist(selectedItem);
+                    }
+                  }}
+                  className="p-2 hover:scale-110 transition-transform flex-shrink-0 bg-gray-50 rounded-full"
+                >
+                  <Heart className={`w-6 h-6 ${isInWishlist && isInWishlist(selectedItem._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
+                </button>
               </div>
+
+              {/* Price */}
+              <div className="flex items-center gap-3 mb-3 flex-wrap">
+                {/* Sale Price - Large and prominent */}
+                <div className="text-3xl sm:text-4xl lg:text-5xl font-bold text-orange-500">
+                  ₹{selectedItem.price}
+                </div>
+                
+                {/* Original Price & Discount Badge - Only if there's a discount */}
+                {selectedItem.originalPrice && selectedItem.originalPrice > selectedItem.price && (
+                  <>
+                    <span className="text-lg sm:text-xl text-gray-400 line-through">₹{selectedItem.originalPrice}</span>
+                    <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold">
+                      {Math.round(((selectedItem.originalPrice - selectedItem.price) / selectedItem.originalPrice) * 100)}% OFF
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Offer Type Tags */}
+              {selectedItem.offerType && (Array.isArray(selectedItem.offerType) ? selectedItem.offerType : [selectedItem.offerType]).length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {(Array.isArray(selectedItem.offerType) ? selectedItem.offerType : [selectedItem.offerType]).map((offerType, index) => (
+                    <span key={index} className="inline-flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-semibold">
+                      <Tag className="w-4 h-4" />
+                      {offerType}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               {/* Rating */}
               <div className="flex items-center gap-2 mb-4">
