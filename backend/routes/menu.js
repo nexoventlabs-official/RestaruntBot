@@ -39,7 +39,7 @@ router.get('/categories', async (req, res) => {
 
 router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
   try {
-    const { name, description, price, category, unit, quantity, foodType, available, preparationTime, tags, image } = req.body;
+    const { name, description, price, originalPrice, category, unit, quantity, foodType, available, preparationTime, tags, image } = req.body;
     const parseTags = (t) => Array.isArray(t) ? t : (typeof t === 'string' ? t.split(',').map(s => s.trim()).filter(Boolean) : []);
     const parseCategory = (c) => {
       if (Array.isArray(c)) return c;
@@ -56,7 +56,7 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
       imageUrl = await cloudinaryService.uploadFromBuffer(req.file.buffer, 'restaurant-bot/menu-items');
     }
     
-    const item = new MenuItem({
+    const itemData = {
       name, description, price: parseFloat(price), category: parseCategory(category),
       unit: unit || 'piece',
       quantity: parseFloat(quantity) || 1,
@@ -65,7 +65,14 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
       preparationTime: parseInt(preparationTime) || 15,
       tags: parseTags(tags),
       image: imageUrl
-    });
+    };
+    
+    // Add originalPrice if provided
+    if (originalPrice && originalPrice.trim()) {
+      itemData.originalPrice = parseFloat(originalPrice);
+    }
+    
+    const item = new MenuItem(itemData);
     await item.save();
     
     // Emit event for real-time updates
@@ -79,7 +86,7 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
 
 router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
   try {
-    const { name, description, price, category, unit, quantity, foodType, available, preparationTime, tags, image, removeImage } = req.body;
+    const { name, description, price, originalPrice, category, unit, quantity, foodType, available, preparationTime, tags, image, removeImage } = req.body;
     const parseTags = (t) => Array.isArray(t) ? t : (typeof t === 'string' ? t.split(',').map(s => s.trim()).filter(Boolean) : []);
     const parseCategory = (c) => {
       if (Array.isArray(c)) return c;
@@ -134,6 +141,13 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
       tags: parseTags(tags),
       image: imageUrl
     };
+    
+    // Add originalPrice if provided, otherwise remove it
+    if (originalPrice && originalPrice.trim()) {
+      update.originalPrice = parseFloat(originalPrice);
+    } else {
+      update.originalPrice = null;
+    }
     
     const item = await MenuItem.findByIdAndUpdate(req.params.id, update, { new: true });
     

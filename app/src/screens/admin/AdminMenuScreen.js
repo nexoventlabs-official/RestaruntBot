@@ -364,6 +364,14 @@ export default function AdminMenuScreen({ navigation, route }) {
                 <Ionicons name="restaurant-outline" size={32} color={isPaused ? '#9ca3af' : '#d1d5db'} />
               </View>
             )}
+            {/* Discount Badge */}
+            {item.originalPrice && item.originalPrice > item.price && (
+              <View style={styles.discountBadge}>
+                <Text style={styles.discountText}>
+                  {Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100)}% OFF
+                </Text>
+              </View>
+            )}
             {item.foodType && item.foodType !== 'none' && (
               <View style={[styles.foodTypeBadge, {
                 borderColor: isPaused ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
@@ -1033,6 +1041,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center'
   },
   foodTypeDot: { width: 10, height: 10, borderRadius: 5 },
+  discountBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: '#22C55E',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  discountText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   itemInfo: { flex: 1, marginLeft: 16 },
   itemName: { fontSize: 17, fontWeight: '700', color: '#1C1C1C' },
   itemCategory: { fontSize: 13, color: '#696969', marginTop: 4, fontWeight: '500' },
