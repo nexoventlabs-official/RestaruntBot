@@ -57,23 +57,14 @@ export default function OffersPage() {
     }
   }, [offers, selectedOfferType]);
 
-  // Auto-rotate header offer type every 3 seconds (only if no specific offer selected)
+  // Auto-rotate banner images every 5 seconds (only if no specific offer selected)
   useEffect(() => {
     if (offers.length === 0 || selectedOfferType) return;
     const interval = setInterval(() => {
-      setCurrentOfferIndex((prev) => {
-        const newIndex = (prev + 1) % offers.length;
-        // Synchronize banner with header
-        setCurrentBannerIndex(newIndex);
-        return newIndex;
-      });
-    }, 3000);
+      setCurrentBannerIndex((prev) => (prev + 1) % offers.length);
+    }, 5000);
     return () => clearInterval(interval);
   }, [offers.length, selectedOfferType]);
-
-  // Remove the separate banner rotation - it's now synchronized with header
-  // Auto-rotate banner images every 5 seconds (only if no specific offer selected)
-  // This is removed to keep banner and header in sync
 
   useEffect(() => {
     // Update URL when offer type changes
@@ -162,34 +153,18 @@ export default function OffersPage() {
 
   const handlePrevOffer = () => {
     if (offers.length === 0) return;
-    const newIndex = currentOfferIndex <= 0 ? offers.length - 1 : currentOfferIndex - 1;
+    const newIndex = currentBannerIndex <= 0 ? offers.length - 1 : currentBannerIndex - 1;
     
-    // Synchronize both banner and header offer
-    setCurrentOfferIndex(newIndex);
+    // Only update banner index, don't change selected offer type or items
     setCurrentBannerIndex(newIndex);
-    
-    // Update selected offer type and URL
-    const offer = offers[newIndex];
-    if (offer?.offerType) {
-      setSelectedOfferType(offer.offerType);
-      setSearchParams({ offerType: offer.offerType });
-    }
   };
 
   const handleNextOffer = () => {
     if (offers.length === 0) return;
-    const newIndex = currentOfferIndex >= offers.length - 1 ? 0 : currentOfferIndex + 1;
+    const newIndex = currentBannerIndex >= offers.length - 1 ? 0 : currentBannerIndex + 1;
     
-    // Synchronize both banner and header offer
-    setCurrentOfferIndex(newIndex);
+    // Only update banner index, don't change selected offer type or items
     setCurrentBannerIndex(newIndex);
-    
-    // Update selected offer type and URL
-    const offer = offers[newIndex];
-    if (offer?.offerType) {
-      setSelectedOfferType(offer.offerType);
-      setSearchParams({ offerType: offer.offerType });
-    }
   };
 
   const handleAddToCart = (item) => {
@@ -331,37 +306,80 @@ export default function OffersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Hero Banner - Clean clickable image without overlays */}
-      <section 
-        className="relative cursor-pointer transition-all duration-1000 bg-gray-900 overflow-hidden"
-        onClick={() => {
-          if (currentHeaderOffer?.offerType) {
-            handleOfferTypeChange(currentHeaderOffer.offerType);
-          }
-        }}
-      >
-        {/* Full Image Display - No Cropping */}
-        {currentBannerOffer ? (
-          <img 
-            src={getResponsiveImage(currentBannerOffer)}
-            alt={currentBannerOffer.offerType || 'Special Offer'}
-            className="w-full h-auto object-contain transition-opacity duration-1000"
-            style={{ maxHeight: '600px', minHeight: '250px' }}
-          />
-        ) : (
-          <img 
-            src="/banner-delicious-tacos.jpg"
-            alt="Special Offers"
-            className="w-full h-auto object-contain"
-            style={{ maxHeight: '600px', minHeight: '250px' }}
-          />
-        )}
+    <>
+      {/* Loading State */}
+      {loading ? (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-center">
+            <div className="relative w-20 h-20 mx-auto mb-6">
+              {/* Spinning loader */}
+              <div className="absolute inset-0 border-4 border-orange-200 rounded-full"></div>
+              <div className="absolute inset-0 border-4 border-orange-500 rounded-full border-t-transparent animate-spin"></div>
+              {/* Icon in center */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Tag className="w-8 h-8 text-orange-500" />
+              </div>
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">Loading Offers...</h3>
+            <p className="text-gray-600">Please wait while we fetch the best deals for you</p>
+          </div>
+        </div>
+      ) : offers.length === 0 ? (
+        /* No Offers Available State - Full screen without header */
+        <div className="fixed inset-0 flex items-center justify-center bg-gray-50 px-4 z-50">
+          <div className="text-center max-w-md">
+            <div className="relative w-24 h-24 mx-auto mb-6">
+              <div className="absolute inset-0 bg-orange-100 rounded-full flex items-center justify-center">
+                <Tag className="w-12 h-12 text-orange-400" />
+              </div>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">No Offers Available</h2>
+            <p className="text-gray-600 text-base sm:text-lg mb-6">
+              We don't have any special offers at the moment. Check back soon for amazing deals!
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <a 
+                href="/menu" 
+                className="px-6 py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition-colors inline-flex items-center justify-center gap-2"
+              >
+                Browse Menu
+              </a>
+              <a 
+                href="/" 
+                className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-300 transition-colors inline-flex items-center justify-center gap-2"
+              >
+                Go Home
+              </a>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="min-h-screen bg-gray-50">
+          {/* Hero Banner - Clean clickable image without overlays */}
+          <section 
+            className="relative transition-all duration-1000 bg-gray-900 overflow-hidden"
+          >
+            {/* Full Image Display - No Cropping */}
+            {currentBannerOffer ? (
+              <img 
+                src={getResponsiveImage(currentBannerOffer)}
+                alt={currentBannerOffer.offerType || 'Special Offer'}
+                className="w-full h-auto object-contain transition-opacity duration-1000"
+                style={{ maxHeight: '600px', minHeight: '250px' }}
+              />
+            ) : (
+              <div className="w-full bg-gray-200 flex items-center justify-center" style={{ minHeight: '250px' }}>
+                <div className="text-center text-gray-500">
+                  <Tag className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                  <p className="text-lg font-medium">No offers available</p>
+                </div>
+              </div>
+            )}
         
-        {/* Navigation and dots overlays */}
+        {/* Navigation and click areas overlays */}
         <div className="absolute inset-0 pointer-events-none">
           <div className="relative w-full h-full pointer-events-auto">
-            {/* Left Navigation Area - Invisible */}
+            {/* Left Navigation Area - Click to go previous */}
             {offers.length > 1 && (
               <button
                 onClick={(e) => {
@@ -373,7 +391,32 @@ export default function OffersPage() {
               />
             )}
 
-            {/* Right Navigation Area - Invisible */}
+            {/* Center Area - Click to show offers */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                // Show items for the currently displayed banner
+                if (currentBannerOffer?.offerType) {
+                  setCurrentOfferIndex(currentBannerIndex);
+                  setSelectedOfferType(currentBannerOffer.offerType);
+                  setSearchParams({ offerType: currentBannerOffer.offerType });
+                  
+                  // Smooth scroll to items grid
+                  setTimeout(() => {
+                    if (itemsGridRef.current) {
+                      const yOffset = -100;
+                      const element = itemsGridRef.current;
+                      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+                      window.scrollTo({ top: y, behavior: 'smooth' });
+                    }
+                  }, 100);
+                }
+              }}
+              className="absolute left-1/4 md:left-1/6 right-1/4 md:right-1/6 top-0 bottom-0 z-10 cursor-pointer"
+              aria-label="View offers"
+            />
+
+            {/* Right Navigation Area - Click to go next */}
             {offers.length > 1 && (
               <button
                 onClick={(e) => {
@@ -393,16 +436,11 @@ export default function OffersPage() {
                     key={index}
                     onClick={(e) => {
                       e.stopPropagation();
-                      setCurrentOfferIndex(index);
+                      // Only update banner index, don't change items
                       setCurrentBannerIndex(index);
-                      const offer = offers[index];
-                      if (offer?.offerType) {
-                        setSelectedOfferType(offer.offerType);
-                        setSearchParams({ offerType: offer.offerType });
-                      }
                     }}
                     className={`h-2 rounded-full transition-all duration-300 ${
-                      index === currentOfferIndex 
+                      index === currentBannerIndex 
                         ? 'w-8 bg-white' 
                         : 'w-2 bg-white/50 hover:bg-white/80'
                     }`}
@@ -790,6 +828,8 @@ export default function OffersPage() {
           </div>
         </div>
       )}
-    </div>
+        </div>
+      )}
+    </>
   );
 }
