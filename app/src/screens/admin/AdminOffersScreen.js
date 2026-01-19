@@ -101,7 +101,11 @@ export default function AdminOffersScreen({ navigation }) {
       >
         <View style={styles.offerImageContainer}>
           {item.image ? (
-            <Image source={{ uri: item.image }} style={styles.offerImage} resizeMode="cover" />
+            <Image 
+              source={{ uri: `${item.image}?t=${item.updatedAt || Date.now()}` }} 
+              style={styles.offerImage} 
+              resizeMode="contain" 
+            />
           ) : (
             <View style={[styles.offerImage, styles.offerImagePlaceholder]}>
               <Ionicons name="pricetag-outline" size={32} color={colors.light.text.tertiary} />
@@ -235,18 +239,22 @@ const styles = StyleSheet.create({
   offerImageContainer: { 
     width: '100%', 
     backgroundColor: '#f3f4f6', 
-    position: 'relative' 
+    position: 'relative',
+    minHeight: 150, // Minimum height, will expand based on image
   },
   offerImage: { 
     width: '100%', 
-    aspectRatio: 21/9, // Updated to 21:9 ratio for better display
-    resizeMode: 'cover' 
+    height: undefined, // Let image determine height
+    aspectRatio: undefined, // Remove fixed aspect ratio
+    minHeight: 150,
+    resizeMode: 'contain' // Show full image without cropping
   },
   offerImagePlaceholder: { 
     backgroundColor: colors.light.surfaceSecondary, 
     justifyContent: 'center', 
     alignItems: 'center',
-    aspectRatio: 21/9 // Updated to 21:9 ratio for better display
+    minHeight: 150,
+    aspectRatio: 16/9 // Default for placeholder only
   },
   offerTypeBadge: { 
     position: 'absolute', 

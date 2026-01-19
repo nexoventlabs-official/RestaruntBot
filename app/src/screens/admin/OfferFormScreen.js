@@ -49,18 +49,38 @@ export default function OfferFormScreen({ route, navigation }) {
         return;
       }
 
-      // Different aspect ratios for different screen sizes
-      const aspectRatios = {
-        mobile: [16, 9],   // 800x450px (16:9 ratio) - Standard landscape for mobile
-        tablet: [21, 9],   // 1200x514px (21:9 ratio) - Ultra-wide for tablet
-        desktop: [21, 9]   // 1920x823px (21:9 ratio) - Ultra-wide for desktop
-      };
+      // Ask user to choose aspect ratio
+      Alert.alert(
+        'Choose Aspect Ratio',
+        'Select the aspect ratio for your banner image (based on your Canva template)',
+        [
+          {
+            text: '16:9 (Landscape)',
+            onPress: () => pickImageWithRatio(imageType, [16, 9])
+          },
+          {
+            text: '4:3 (Standard)',
+            onPress: () => pickImageWithRatio(imageType, [4, 3])
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    }
+  };
 
+  const pickImageWithRatio = async (imageType, aspectRatio) => {
+    try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         allowsMultipleSelection: false,
-        aspect: aspectRatios[imageType],
+        aspect: aspectRatio,
         quality: 0.9,
         exif: false,
       });
@@ -342,18 +362,18 @@ export default function OfferFormScreen({ route, navigation }) {
             <View style={styles.infoBanner}>
               <Ionicons name="information-circle" size={20} color={ZOMATO_RED} />
               <Text style={styles.infoBannerText}>
-                Upload separate images for mobile, tablet, and desktop for optimal display on all devices
+                Upload images in 16:9 or 4:3 ratio (Canva templates). Choose ratio when uploading.
               </Text>
             </View>
 
             {/* Mobile Image */}
-            {renderImageUpload('mobile', imageMobile, 'Mobile View', 'For smartphones and small screens', '800x450px (16:9)')}
+            {renderImageUpload('mobile', imageMobile, 'Mobile View', 'For smartphones and small screens', '16:9 or 4:3 ratio')}
 
             {/* Tablet Image */}
-            {renderImageUpload('tablet', imageTablet, 'Tablet View', 'For tablets and medium screens', '1200x514px (21:9)')}
+            {renderImageUpload('tablet', imageTablet, 'Tablet View', 'For tablets and medium screens', '16:9 or 4:3 ratio')}
 
             {/* Desktop Image */}
-            {renderImageUpload('desktop', imageDesktop, 'Desktop View', 'For laptops and large screens', '1920x823px (21:9)')}
+            {renderImageUpload('desktop', imageDesktop, 'Desktop View', 'For laptops and large screens', '16:9 or 4:3 ratio')}
 
             <View style={styles.form}>
               {/* Offer Type */}

@@ -322,24 +322,30 @@ export default function OffersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Hero Banner with Auto-Rotating Background */}
+      {/* Hero Banner - Clean clickable image without overlays */}
       <section 
-        className="relative text-white pt-28 pb-16 bg-cover bg-center transition-all duration-1000 min-h-[350px] md:min-h-[400px]"
+        className="relative cursor-pointer transition-all duration-1000"
         style={{ 
           backgroundImage: currentBannerOffer 
             ? `url('${getResponsiveImage(currentBannerOffer)}')` 
             : `url('/banner-delicious-tacos.jpg')`,
           backgroundPosition: 'center center',
-          backgroundSize: 'cover'
+          backgroundSize: 'cover',
+          minHeight: '350px'
+        }}
+        onClick={() => {
+          if (currentHeaderOffer?.offerType) {
+            handleOfferTypeChange(currentHeaderOffer.offerType);
+          }
         }}
       >
-        {/* Dark overlay for better text visibility */}
-        <div className="absolute inset-0 bg-black/40"></div>
-        
         {/* Left Navigation Area - Invisible */}
         {offers.length > 1 && (
           <button
-            onClick={handlePrevOffer}
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePrevOffer();
+            }}
             className="absolute left-0 top-0 bottom-0 w-1/4 md:w-1/6 z-10 cursor-pointer"
             aria-label="Previous offer"
           />
@@ -348,74 +354,40 @@ export default function OffersPage() {
         {/* Right Navigation Area - Invisible */}
         {offers.length > 1 && (
           <button
-            onClick={handleNextOffer}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleNextOffer();
+            }}
             className="absolute right-0 top-0 bottom-0 w-1/4 md:w-1/6 z-10 cursor-pointer"
             aria-label="Next offer"
           />
         )}
 
-        <div className="relative max-w-6xl mx-auto px-4 text-center">
-          {/* Auto-rotating offer type badge */}
-          <div className="inline-flex items-center gap-2 bg-black/50 backdrop-blur-sm px-6 py-2.5 rounded-full mb-6 transition-all duration-500 shadow-lg">
-            <Tag className="w-5 h-5 animate-pulse" />
-            <span className="font-bold text-lg tracking-wide text-white drop-shadow-lg">
-              {currentHeaderOffer?.offerType || 'Limited Time Offers'}
-            </span>
+        {/* Offer indicators - Only navigation dots */}
+        {offers.length > 1 && (
+          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex justify-center gap-2 z-20">
+            {offers.map((_, index) => (
+              <button
+                key={index}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentOfferIndex(index);
+                  setCurrentBannerIndex(index);
+                  const offer = offers[index];
+                  if (offer?.offerType) {
+                    setSelectedOfferType(offer.offerType);
+                    setSearchParams({ offerType: offer.offerType });
+                  }
+                }}
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  index === currentOfferIndex 
+                    ? 'w-8 bg-white' 
+                    : 'w-2 bg-white/50 hover:bg-white/80'
+                }`}
+              />
+            ))}
           </div>
-          
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
-            Special <span className="text-yellow-300 drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">Offers</span>
-          </h1>
-          
-          {/* Dynamic subtitle based on current offer */}
-          <p className="text-lg md:text-xl text-white font-light drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] max-w-2xl mx-auto mb-8 transition-all duration-500">
-            {currentHeaderOffer?.description || 'Browse all items with special offers'}
-          </p>
-
-          {/* Get Offer Button */}
-          {currentHeaderOffer && (
-            <button
-              onClick={() => {
-                handleOfferTypeChange(currentHeaderOffer.offerType);
-                // Ensure indices are synchronized
-                setCurrentBannerIndex(currentOfferIndex);
-                // Update URL to reflect the selected offer
-                setSearchParams({ offerType: currentHeaderOffer.offerType });
-              }}
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-gray-900 font-bold px-8 py-4 rounded-full shadow-2xl hover:shadow-3xl transform hover:scale-105 transition-all duration-300"
-            >
-              <Tag className="w-5 h-5" />
-              <span>Get This Offer</span>
-            </button>
-          )}
-
-          {/* Offer indicators */}
-          {offers.length > 1 && (
-            <div className="flex justify-center gap-2 mt-8">
-              {offers.map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => {
-                    // Synchronize both indices
-                    setCurrentOfferIndex(index);
-                    setCurrentBannerIndex(index);
-                    // Update to show that offer's items
-                    const offer = offers[index];
-                    if (offer?.offerType) {
-                      setSelectedOfferType(offer.offerType);
-                      setSearchParams({ offerType: offer.offerType });
-                    }
-                  }}
-                  className={`h-2 rounded-full transition-all duration-300 ${
-                    index === currentOfferIndex 
-                      ? 'w-8 bg-yellow-400' 
-                      : 'w-2 bg-white/50 hover:bg-white/80'
-                  }`}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+        )}
       </section>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
