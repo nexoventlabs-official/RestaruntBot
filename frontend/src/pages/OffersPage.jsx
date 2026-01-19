@@ -324,70 +324,84 @@ export default function OffersPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Hero Banner - Clean clickable image without overlays */}
       <section 
-        className="relative cursor-pointer transition-all duration-1000"
-        style={{ 
-          backgroundImage: currentBannerOffer 
-            ? `url('${getResponsiveImage(currentBannerOffer)}')` 
-            : `url('/banner-delicious-tacos.jpg')`,
-          backgroundPosition: 'center center',
-          backgroundSize: 'cover',
-          minHeight: '350px'
-        }}
+        className="relative cursor-pointer transition-all duration-1000 bg-gray-900 overflow-hidden"
         onClick={() => {
           if (currentHeaderOffer?.offerType) {
             handleOfferTypeChange(currentHeaderOffer.offerType);
           }
         }}
       >
-        {/* Left Navigation Area - Invisible */}
-        {offers.length > 1 && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handlePrevOffer();
-            }}
-            className="absolute left-0 top-0 bottom-0 w-1/4 md:w-1/6 z-10 cursor-pointer"
-            aria-label="Previous offer"
+        {/* Full Image Display - No Cropping */}
+        {currentBannerOffer ? (
+          <img 
+            src={getResponsiveImage(currentBannerOffer)}
+            alt={currentBannerOffer.offerType || 'Special Offer'}
+            className="w-full h-auto object-contain transition-opacity duration-1000"
+            style={{ maxHeight: '600px', minHeight: '250px' }}
+          />
+        ) : (
+          <img 
+            src="/banner-delicious-tacos.jpg"
+            alt="Special Offers"
+            className="w-full h-auto object-contain"
+            style={{ maxHeight: '600px', minHeight: '250px' }}
           />
         )}
-
-        {/* Right Navigation Area - Invisible */}
-        {offers.length > 1 && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleNextOffer();
-            }}
-            className="absolute right-0 top-0 bottom-0 w-1/4 md:w-1/6 z-10 cursor-pointer"
-            aria-label="Next offer"
-          />
-        )}
-
-        {/* Offer indicators - Only navigation dots */}
-        {offers.length > 1 && (
-          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex justify-center gap-2 z-20">
-            {offers.map((_, index) => (
+        
+        {/* Navigation and dots overlays */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="relative w-full h-full pointer-events-auto">
+            {/* Left Navigation Area - Invisible */}
+            {offers.length > 1 && (
               <button
-                key={index}
                 onClick={(e) => {
                   e.stopPropagation();
-                  setCurrentOfferIndex(index);
-                  setCurrentBannerIndex(index);
-                  const offer = offers[index];
-                  if (offer?.offerType) {
-                    setSelectedOfferType(offer.offerType);
-                    setSearchParams({ offerType: offer.offerType });
-                  }
+                  handlePrevOffer();
                 }}
-                className={`h-2 rounded-full transition-all duration-300 ${
-                  index === currentOfferIndex 
-                    ? 'w-8 bg-white' 
-                    : 'w-2 bg-white/50 hover:bg-white/80'
-                }`}
+                className="absolute left-0 top-0 bottom-0 w-1/4 md:w-1/6 z-10 cursor-pointer"
+                aria-label="Previous offer"
               />
-            ))}
+            )}
+
+            {/* Right Navigation Area - Invisible */}
+            {offers.length > 1 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleNextOffer();
+                }}
+                className="absolute right-0 top-0 bottom-0 w-1/4 md:w-1/6 z-10 cursor-pointer"
+                aria-label="Next offer"
+              />
+            )}
+
+            {/* Offer indicators - Only navigation dots */}
+            {offers.length > 1 && (
+              <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex justify-center gap-2 z-20">
+                {offers.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCurrentOfferIndex(index);
+                      setCurrentBannerIndex(index);
+                      const offer = offers[index];
+                      if (offer?.offerType) {
+                        setSelectedOfferType(offer.offerType);
+                        setSearchParams({ offerType: offer.offerType });
+                      }
+                    }}
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      index === currentOfferIndex 
+                        ? 'w-8 bg-white' 
+                        : 'w-2 bg-white/50 hover:bg-white/80'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </section>
 
       <div className="max-w-7xl mx-auto px-4 py-8">

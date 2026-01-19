@@ -49,25 +49,38 @@ export default function OfferFormScreen({ route, navigation }) {
         return;
       }
 
-      // Ask user to choose aspect ratio
-      Alert.alert(
-        'Choose Aspect Ratio',
-        'Select the aspect ratio for your banner image (based on your Canva template)',
-        [
-          {
-            text: '16:9 (Landscape)',
-            onPress: () => pickImageWithRatio(imageType, [16, 9])
-          },
-          {
-            text: '4:3 (Standard)',
-            onPress: () => pickImageWithRatio(imageType, [4, 3])
-          },
-          {
-            text: 'Cancel',
-            style: 'cancel'
-          }
-        ]
-      );
+      // Default aspect ratios for each device type (no user prompt)
+      const defaultRatios = {
+        mobile: [4, 3],    // 4:3 (Instagram Post) - Default for mobile
+        tablet: [16, 9],   // 16:9 (Landscape) - Default for tablet
+        desktop: [3, 1]    // 3:1 (Twitter Header) - Default for desktop
+      };
+
+      const aspectRatio = defaultRatios[imageType];
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        allowsMultipleSelection: false,
+        aspect: aspectRatio,
+        quality: 0.9,
+        exif: false,
+      });
+      
+      if (!result.canceled) {
+        const imageData = result.assets[0];
+        
+        if (imageType === 'mobile') {
+          setNewImageMobile(imageData);
+          setImageMobile(imageData.uri);
+        } else if (imageType === 'tablet') {
+          setNewImageTablet(imageData);
+          setImageTablet(imageData.uri);
+        } else if (imageType === 'desktop') {
+          setNewImageDesktop(imageData);
+          setImageDesktop(imageData.uri);
+        }
+      }
     } catch (error) {
       console.error('Error picking image:', error);
       Alert.alert('Error', 'Failed to pick image. Please try again.');
@@ -362,18 +375,18 @@ export default function OfferFormScreen({ route, navigation }) {
             <View style={styles.infoBanner}>
               <Ionicons name="information-circle" size={20} color={ZOMATO_RED} />
               <Text style={styles.infoBannerText}>
-                Upload images in 16:9 or 4:3 ratio (Canva templates). Choose ratio when uploading.
+                Default ratios: Mobile 4:3, Tablet 16:9, Desktop 3:1 (Twitter Header). Full image displays without cropping.
               </Text>
             </View>
 
             {/* Mobile Image */}
-            {renderImageUpload('mobile', imageMobile, 'Mobile View', 'For smartphones and small screens', '16:9 or 4:3 ratio')}
+            {renderImageUpload('mobile', imageMobile, 'Mobile View', 'For smartphones and small screens', '4:3 (Instagram Post)')}
 
             {/* Tablet Image */}
-            {renderImageUpload('tablet', imageTablet, 'Tablet View', 'For tablets and medium screens', '16:9 or 4:3 ratio')}
+            {renderImageUpload('tablet', imageTablet, 'Tablet View', 'For tablets and medium screens', '16:9 (Landscape)')}
 
             {/* Desktop Image */}
-            {renderImageUpload('desktop', imageDesktop, 'Desktop View', 'For laptops and large screens', '16:9 or 4:3 ratio')}
+            {renderImageUpload('desktop', imageDesktop, 'Desktop View', 'For laptops and large screens', '3:1 (Twitter Header)')}
 
             <View style={styles.form}>
               {/* Offer Type */}
