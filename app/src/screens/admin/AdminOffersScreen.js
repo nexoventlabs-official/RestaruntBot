@@ -56,6 +56,41 @@ export default function AdminOffersScreen({ navigation }) {
     ]);
   };
 
+  const sendToWhatsApp = async (offer) => {
+    Alert.alert(
+      'Send to WhatsApp',
+      'Send this offer to all customers who have ordered via WhatsApp?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send',
+          onPress: async () => {
+            try {
+              Alert.alert('Sending...', 'Please wait while we send the offer to all customers.');
+              
+              const response = await api.post('/whatsapp-broadcast/send-offer', {
+                offerImageUrl: offer.image,
+                offerTitle: offer.title,
+                offerDescription: offer.description
+              });
+
+              if (response.data.success) {
+                Alert.alert(
+                  'Success!',
+                  `Offer sent to ${response.data.sent} customers!\n${response.data.failed > 0 ? `Failed: ${response.data.failed}` : ''}`
+                );
+              } else {
+                Alert.alert('Error', response.data.error || 'Failed to send offer');
+              }
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.error || 'Failed to send offer to WhatsApp');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const renderOffer = ({ item }) => (
     <Animated.View style={{ opacity: fadeAnim }}>
       <View style={styles.offerCard}>
@@ -82,9 +117,15 @@ export default function AdminOffersScreen({ navigation }) {
             </Text>
           </View>
           
-          <TouchableOpacity style={styles.deleteButton} onPress={() => deleteOffer(item)}>
-            <Ionicons name="trash-outline" size={18} color="#EF4444" />
-          </TouchableOpacity>
+          <View style={styles.actionButtons}>
+            <TouchableOpacity style={styles.whatsappButton} onPress={() => sendToWhatsApp(item)}>
+              <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.deleteButton} onPress={() => deleteOffer(item)}>
+              <Ionicons name="trash-outline" size={18} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Animated.View>
@@ -171,6 +212,7 @@ const styles = StyleSheet.create({
   toggleContainer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   toggleLabel: { fontSize: typography.label.medium.fontSize, fontWeight: '600' },
   actionButtons: { flexDirection: 'row', gap: spacing.sm },
+  whatsappButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#D1FAE5', justifyContent: 'center', alignItems: 'center' },
   deleteButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#FEE2E2', justifyContent: 'center', alignItems: 'center' },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 },
   emptyIconContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: colors.light.surfaceSecondary, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.base },

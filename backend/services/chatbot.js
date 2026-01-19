@@ -3648,6 +3648,10 @@ const chatbot = {
     });
     await order.save();
 
+    // Add to WhatsApp broadcast contacts
+    const whatsappBroadcast = require('./whatsappBroadcast');
+    await whatsappBroadcast.addContact(freshCustomer.phone, freshCustomer.name, new Date());
+
     // Mark customer as having ordered (for accurate customer count)
     if (!freshCustomer.hasOrdered) {
       freshCustomer.hasOrdered = true;
@@ -3894,6 +3898,10 @@ const chatbot = {
       trackingUpdates: [{ status: 'pending', message: 'Order created, awaiting payment' }]
     });
     await order.save();
+
+    // Add to WhatsApp broadcast contacts
+    const whatsappBroadcast = require('./whatsappBroadcast');
+    await whatsappBroadcast.addContact(freshCustomer.phone, freshCustomer.name, new Date());
 
     // Mark customer as having ordered (for accurate customer count)
     if (!freshCustomer.hasOrdered) {
