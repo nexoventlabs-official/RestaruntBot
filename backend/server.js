@@ -22,6 +22,7 @@ const offersRoutes = require('./routes/offers');
 const orderScheduler = require('./services/orderScheduler');
 const dailyCleanup = require('./services/dailyCleanup');
 const orderCleanup = require('./services/orderCleanup');
+const cartCleanup = require('./services/cartCleanup');
 
 const app = express();
 
@@ -52,6 +53,7 @@ mongoose.connect(process.env.MONGODB_URI)
     orderScheduler.start();
     dailyCleanup.start();
     orderCleanup.start();
+    cartCleanup.startCartCleanupScheduler();
   })
   .catch(err => console.error('MongoDB connection error:', err));
 

@@ -18,7 +18,8 @@ const customerSchema = new mongoose.Schema({
   },
   cart: [{
     menuItem: { type: mongoose.Schema.Types.ObjectId, ref: 'MenuItem' },
-    quantity: Number
+    quantity: Number,
+    addedAt: { type: Date, default: Date.now }
   }],
   conversationState: {
     currentStep: { type: String, default: 'welcome' },

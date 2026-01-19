@@ -1981,8 +1981,9 @@ const chatbot = {
             
             if (existingIndex >= 0) {
               customer.cart[existingIndex].quantity += cartItem.quantity;
+              customer.cart[existingIndex].addedAt = new Date(); // Update timestamp when quantity changes
             } else {
-              customer.cart.push({ menuItem: menuItem._id, quantity: cartItem.quantity });
+              customer.cart.push({ menuItem: menuItem._id, quantity: cartItem.quantity, addedAt: new Date() });
             }
             addedCount++;
             console.log(`✅ Added to cart: ${menuItem.name} x${cartItem.quantity}`);
@@ -2239,8 +2240,9 @@ const chatbot = {
           const existingIndex = customer.cart.findIndex(c => c.menuItem?.toString() === item._id.toString());
           if (existingIndex >= 0) {
             customer.cart[existingIndex].quantity += 1;
+            customer.cart[existingIndex].addedAt = new Date(); // Update timestamp when quantity changes
           } else {
-            customer.cart.push({ menuItem: item._id, quantity: 1 });
+            customer.cart.push({ menuItem: item._id, quantity: 1, addedAt: new Date() });
           }
           await customer.save();
           await this.sendAddedToCart(phone, item, 1, customer.cart);
@@ -2276,10 +2278,11 @@ const chatbot = {
             if (existingIndex >= 0) {
               // Item already in cart, increment quantity
               customer.cart[existingIndex].quantity += 1;
+              customer.cart[existingIndex].addedAt = new Date(); // Update timestamp when quantity changes
             } else {
               // Add new item to cart
               if (!customer.cart) customer.cart = [];
-              customer.cart.push({ menuItem: item._id, quantity: 1 });
+              customer.cart.push({ menuItem: item._id, quantity: 1, addedAt: new Date() });
             }
             await customer.save();
             console.log(`✅ Added ${item.name} to cart before checkout`);
@@ -2601,8 +2604,9 @@ const chatbot = {
           const existingIndex = customer.cart.findIndex(c => c.menuItem?.toString() === item._id.toString());
           if (existingIndex >= 0) {
             customer.cart[existingIndex].quantity += qty;
+            customer.cart[existingIndex].addedAt = new Date(); // Update timestamp when quantity changes
           } else {
-            customer.cart.push({ menuItem: item._id, quantity: qty });
+            customer.cart.push({ menuItem: item._id, quantity: qty, addedAt: new Date() });
           }
           // Save cart immediately to persist the change
           await customer.save();
