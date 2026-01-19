@@ -80,7 +80,7 @@ const whatsappBroadcast = {
       const failedContacts = [];
 
       // Build message
-      let message = `🎉 *Special Offer!*\n\n`;
+      let message = `🎉 *New Offer!*\n\n`;
       if (offerTitle) {
         message += `*${offerTitle}*\n\n`;
       }
@@ -89,15 +89,32 @@ const whatsappBroadcast = {
       }
       message += `Order now and enjoy this amazing deal! 🍽️`;
 
+      const websiteUrl = 'https://restarunt-bot.vercel.app';
+
       console.log(`[WhatsApp Broadcast] Sending offer to ${contacts.length} contacts...`);
 
       // Send to each contact with delay to avoid rate limiting
       for (const contact of contacts) {
         try {
           if (offerImageUrl) {
-            await whatsapp.sendImage(contact.phone, offerImageUrl, message);
+            // Send image with CTA button to website in original ratio
+            await whatsapp.sendImageWithCtaUrlOriginal(
+              contact.phone, 
+              offerImageUrl, 
+              message, 
+              'View Offer', 
+              websiteUrl,
+              'Tap to order now!'
+            );
           } else {
-            await whatsapp.sendMessage(contact.phone, message);
+            // Send text message with CTA button
+            await whatsapp.sendCtaUrl(
+              contact.phone, 
+              message, 
+              'View Offer', 
+              websiteUrl,
+              'Tap to order now!'
+            );
           }
           sent++;
           console.log(`[WhatsApp Broadcast] Sent to ${contact.phone}`);

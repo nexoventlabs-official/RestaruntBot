@@ -40,6 +40,10 @@ const whatsapp = {
 
   async sendImageWithCtaUrl(phone, imageUrl, message, buttonText, url, footer = '') {
     return metaCloud.sendImageWithCtaUrl(phone, imageUrl, message, buttonText, url, footer);
+  },
+
+  async sendImageWithCtaUrlOriginal(phone, imageUrl, message, buttonText, url, footer = '') {
+    return metaCloud.sendImageWithCtaUrlOriginal(phone, imageUrl, message, buttonText, url, footer);
   }
 };
 
