@@ -61,7 +61,8 @@ export default function UserMenuPage() {
   const context = useOutletContext();
   const { 
     cart, addToCart, updateQuantity, 
-    addToWishlist, removeFromWishlist, isInWishlist, isInCart 
+    addToWishlist, removeFromWishlist, isInWishlist, isInCart,
+    setSidebarOpen, setActiveTab
   } = context || {};
 
   useEffect(() => { 
@@ -381,117 +382,113 @@ export default function UserMenuPage() {
     return (
       <div 
         key={item._id} 
-        className={`group relative pt-20 sm:pt-24 cursor-pointer ${!available ? 'opacity-60' : ''}`}
+        className={`group relative bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 ${!available ? 'opacity-60' : ''}`}
         onClick={() => available && openItemDialog(item)}
       >
-        {/* Floating Image */}
-        <div className="absolute -top-6 sm:-top-8 left-1/2 -translate-x-1/2 z-10 w-36 h-36 sm:w-44 sm:h-44 md:w-48 md:h-48 flex items-center justify-center">
+        {/* Image Container */}
+        <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100">
           {item.image ? (
             <img 
               src={item.image} 
               alt={item.name} 
-              className={`max-h-full max-w-full object-contain group-hover:scale-110 transition-transform duration-300 drop-shadow-xl ${!available ? 'grayscale' : ''}`} 
+              className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ${!available ? 'grayscale' : ''}`} 
             />
           ) : (
-            <div className="w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 bg-gradient-to-br from-orange-100 to-orange-200 rounded-full flex items-center justify-center">
-              <span className="text-4xl sm:text-5xl md:text-6xl">🍽️</span>
+            <div className="w-full h-full flex items-center justify-center">
+              <span className="text-7xl">🍽️</span>
             </div>
           )}
+          
+          {/* Discount Badge - Top Left */}
+          {item.originalPrice && item.originalPrice > item.price && (
+            <div className="absolute top-3 left-3 bg-gradient-to-r from-green-500 to-green-600 text-white px-3 py-1.5 rounded-full text-sm font-bold shadow-lg">
+              {Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100)}% OFF
+            </div>
+          )}
+          
+          {/* Food Type Badge - Top Right */}
+          {item.foodType && item.foodType !== 'none' && (
+            <div className="absolute top-3 right-3">
+              <FoodTypeBadge type={item.foodType} size="md" />
+            </div>
+          )}
+          
+          {/* Unavailable Overlay */}
           {!available && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="bg-red-500 text-white px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium">Unavailable</span>
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+              <span className="bg-red-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">Unavailable</span>
             </div>
           )}
-        </div>
-
-        {/* Card */}
-        <div className="bg-[rgb(245,241,232)] rounded-2xl sm:rounded-3xl pt-16 sm:pt-20 md:pt-22 px-3 sm:px-4 md:px-5 pb-3 sm:pb-4 md:pb-5 shadow-[0_2px_15px_rgba(0,0,0,0.08)] border border-gray-100 hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-shadow relative">
-          {/* WhatsApp Button - Top Right */}
+          
+          {/* WhatsApp Button - Bottom Right on Image */}
           {available && (
             <button 
               onClick={(e) => handleWhatsAppOrder(item, e)} 
-              className="absolute top-2 right-2 sm:top-3 sm:right-3 w-7 h-7 sm:w-8 sm:h-8 bg-green-500 text-white rounded-full flex items-center justify-center hover:bg-green-600 transition-colors shadow-md z-10"
+              className="absolute bottom-3 right-3 w-10 h-10 bg-green-500 text-white rounded-full flex items-center justify-center hover:bg-green-600 transition-all hover:scale-110 shadow-lg z-10"
               title="Order via WhatsApp"
             >
-              <WhatsAppIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <WhatsAppIcon className="w-5 h-5" />
             </button>
           )}
-          
+        </div>
+
+        {/* Content */}
+        <div className="p-4">
           {/* Name & Wishlist */}
-          <div className="flex items-center justify-between gap-1 sm:gap-2 mb-1 pr-8 sm:pr-10">
-            <h3 className="font-bold text-gray-900 uppercase text-xs sm:text-sm tracking-wide line-clamp-1">{item.name}</h3>
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <h3 className="font-bold text-gray-900 text-base line-clamp-2 flex-1">{item.name}</h3>
             <button 
               onClick={(e) => handleToggleWishlist(item, e)} 
-              className="p-0.5 sm:p-1 hover:scale-110 transition-transform flex-shrink-0"
+              className="p-1.5 hover:scale-110 transition-transform flex-shrink-0 bg-gray-50 rounded-full"
             >
-              <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${isInWishlist && isInWishlist(item._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
+              <Heart className={`w-5 h-5 ${isInWishlist && isInWishlist(item._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
             </button>
           </div>
 
           {/* Rating */}
-          <div className="flex items-center gap-0.5 sm:gap-1 mb-2 sm:mb-3">
+          <div className="flex items-center gap-1 mb-3">
             <div className="flex">{renderStars()}</div>
-            <span className="text-[10px] sm:text-xs text-gray-500">({totalRatings})</span>
+            <span className="text-xs text-gray-500 font-medium">({totalRatings})</span>
           </div>
 
           {/* Description */}
           {item.description && (
-            <p className="text-xs sm:text-sm text-gray-500 line-clamp-2 mb-2 sm:mb-4 min-h-[32px] sm:min-h-[40px]">{item.description}</p>
+            <p className="text-sm text-gray-600 line-clamp-2 mb-3 min-h-[40px]">{item.description}</p>
           )}
 
-          {/* Price & Discount Badge */}
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex flex-col">
+          {/* Price Section */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-bold text-orange-600">₹{item.price}</span>
               {item.originalPrice && item.originalPrice > item.price && (
-                <span className="text-[10px] sm:text-xs text-gray-400 line-through">₹{item.originalPrice}</span>
+                <span className="text-sm text-gray-400 line-through">₹{item.originalPrice}</span>
               )}
-              <div className="relative">
-                <img src="/button.png" alt="" className="h-6 sm:h-7 md:h-8 w-auto" style={{ filter: 'brightness(0) saturate(100%) invert(19%) sepia(97%) saturate(7043%) hue-rotate(359deg) brightness(101%) contrast(117%)' }} />
-                <span className="absolute inset-0 flex items-center justify-center text-white font-bold text-[10px] sm:text-xs md:text-sm">
-                  ₹{item.price}
-                </span>
-              </div>
             </div>
-            {item.originalPrice && item.originalPrice > item.price && (
-              <div className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] sm:text-xs font-semibold">
-                {Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100)}% OFF
-              </div>
-            )}
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1 sm:gap-2">
-              {/* Cart Button */}
-              {!available ? (
-                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 bg-gray-300 text-gray-500 rounded-lg sm:rounded-xl flex items-center justify-center cursor-not-allowed">
-                  <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
-                </div>
-              ) : inCart ? (
-                <div className="flex items-center gap-0.5 sm:gap-1 bg-green-600 rounded-lg sm:rounded-xl px-1.5 sm:px-2 py-1 sm:py-1.5">
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); updateQuantity(item._id, cartItem.quantity - 1); }} 
-                    className="p-0.5 sm:p-1 text-white hover:bg-green-700 rounded"
-                  >
-                    <Minus className="w-3 h-3 sm:w-4 sm:h-4" />
-                  </button>
-                  <span className="w-4 sm:w-6 text-center font-semibold text-white text-xs sm:text-sm">{cartItem?.quantity || 0}</span>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); addToCart(item); }} 
-                    className="p-0.5 sm:p-1 text-white hover:bg-green-700 rounded"
-                  >
-                    <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
-                  </button>
-                </div>
-              ) : (
-                <button 
-                  onClick={(e) => handleAddToCart(item, e)} 
-                  className="w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 bg-orange-500 text-white rounded-lg sm:rounded-xl flex items-center justify-center hover:bg-orange-600 transition-colors shadow-md"
-                >
-                  <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
-              )}
-            </div>
+          <div className="flex items-center gap-2">
+            {!available ? (
+              <button className="flex-1 py-3 bg-gray-200 text-gray-500 rounded-xl font-semibold cursor-not-allowed">
+                Out of Stock
+              </button>
+            ) : inCart ? (
+              <button 
+                onClick={(e) => { e.stopPropagation(); setSidebarOpen(true); setActiveTab('cart'); }} 
+                className="flex-1 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold hover:from-green-600 hover:to-green-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+              >
+                <ShoppingCart className="w-5 h-5" />
+                View Cart ({cartItem?.quantity})
+              </button>
+            ) : (
+              <button 
+                onClick={(e) => handleAddToCart(item, e)} 
+                className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+              >
+                <ShoppingCart className="w-5 h-5" />
+                Add to Cart
+              </button>
+            )}
           </div>
         </div>
       </div>
