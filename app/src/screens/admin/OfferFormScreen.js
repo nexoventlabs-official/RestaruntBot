@@ -147,11 +147,40 @@ export default function OfferFormScreen({ route, navigation }) {
   };
 
   const renderImageUpload = (imageType, image, title, subtitle, recommendedSize) => {
+    // Device frame styles based on type
+    const getDeviceFrameStyle = () => {
+      switch(imageType) {
+        case 'mobile':
+          return {
+            container: styles.mobileFrame,
+            screen: styles.mobileScreen,
+            label: 'Mobile Preview',
+            icon: 'phone-portrait'
+          };
+        case 'tablet':
+          return {
+            container: styles.tabletFrame,
+            screen: styles.tabletScreen,
+            label: 'Tablet Preview',
+            icon: 'tablet-landscape'
+          };
+        case 'desktop':
+          return {
+            container: styles.desktopFrame,
+            screen: styles.desktopScreen,
+            label: 'Desktop Preview',
+            icon: 'desktop'
+          };
+      }
+    };
+
+    const deviceFrame = getDeviceFrameStyle();
+
     return (
       <View style={styles.imageSection}>
         <View style={styles.imageSectionHeader}>
           <Ionicons 
-            name={imageType === 'mobile' ? 'phone-portrait' : imageType === 'tablet' ? 'tablet-portrait' : 'desktop'} 
+            name={deviceFrame.icon} 
             size={20} 
             color={ZOMATO_RED} 
           />
@@ -160,44 +189,60 @@ export default function OfferFormScreen({ route, navigation }) {
         <Text style={styles.imageSectionHint}>{subtitle}</Text>
         <Text style={styles.imageSectionRecommended}>Recommended: {recommendedSize}</Text>
         
+        {/* Device Preview Frame */}
+        {image && (
+          <View style={styles.devicePreviewContainer}>
+            <Text style={styles.devicePreviewLabel}>{deviceFrame.label}</Text>
+            <View style={deviceFrame.container}>
+              {/* Device Screen */}
+              <View style={deviceFrame.screen}>
+                <Image source={{ uri: image }} style={styles.devicePreviewImage} resizeMode="cover" />
+                {/* Mock UI Elements */}
+                <View style={styles.mockStatusBar}>
+                  <View style={styles.mockTime}>
+                    <Text style={styles.mockTimeText}>9:41</Text>
+                  </View>
+                  <View style={styles.mockIcons}>
+                    <Ionicons name="wifi" size={10} color="#fff" />
+                    <Ionicons name="battery-full" size={10} color="#fff" />
+                  </View>
+                </View>
+              </View>
+              {/* Device Frame Border */}
+              {imageType === 'mobile' && (
+                <>
+                  <View style={styles.mobileNotch} />
+                  <View style={styles.mobileHomeIndicator} />
+                </>
+              )}
+            </View>
+          </View>
+        )}
+        
+        {/* Upload Button */}
         <TouchableOpacity 
-          style={styles.imageContainer} 
+          style={styles.uploadButton} 
           onPress={() => pickImage(imageType)} 
           activeOpacity={0.8}
         >
           {image ? (
-            <View style={styles.imagePreviewContainer}>
-              <Image source={{ uri: image }} style={styles.image} />
-              <View style={styles.cropGuidelinesOverlay}>
-                <View style={styles.cropGuideline} />
-                <View style={[styles.cropGuideline, styles.cropGuidelineVertical]} />
-              </View>
-            </View>
+            <>
+              <Ionicons name="camera" size={20} color={ZOMATO_RED} />
+              <Text style={styles.uploadButtonText}>Change & Crop Image</Text>
+            </>
           ) : (
-            <View style={styles.imagePlaceholder}>
-              <View style={styles.imagePlaceholderIcon}>
-                <Ionicons name="image-outline" size={36} color={ZOMATO_RED} />
-              </View>
-              <Text style={styles.imagePlaceholderText}>Add {title}</Text>
-              <Text style={styles.imagePlaceholderHint}>Wide banner (5:1 ratio)</Text>
-              <Text style={styles.imagePlaceholderHint}>Tap to crop & adjust</Text>
-            </View>
-          )}
-          {image && (
-            <View style={styles.imageOverlay}>
-              <View style={styles.changeImageButton}>
-                <Ionicons name="camera" size={18} color="#fff" />
-                <Text style={styles.changeImageText}>Change & Crop</Text>
-              </View>
-            </View>
+            <>
+              <Ionicons name="cloud-upload-outline" size={20} color={ZOMATO_RED} />
+              <Text style={styles.uploadButtonText}>Upload {title}</Text>
+            </>
           )}
         </TouchableOpacity>
         
         {image && (
           <View style={styles.previewInfo}>
-            <Ionicons name="information-circle" size={16} color="#9CA3AF" />
-            <Text style={styles.previewInfoText}>
-              This banner will be shown on {imageType} devices
+            <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
+            <Text style={styles.previewInfoTextSuccess}>
+              Image uploaded • Will display on {imageType} devices
             </Text>
           </View>
         )}
@@ -335,76 +380,159 @@ const styles = StyleSheet.create({
   imageSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   imageSectionTitle: { fontSize: 16, fontWeight: '700', color: '#1C1C1C' },
   imageSectionHint: { fontSize: 13, color: '#9CA3AF', marginBottom: 2 },
-  imageSectionRecommended: { fontSize: 12, color: ZOMATO_RED, marginBottom: 12, fontWeight: '600' },
+  imageSectionRecommended: { fontSize: 12, color: ZOMATO_RED, marginBottom: 16, fontWeight: '600' },
   
-  // Image
-  imageContainer: { 
-    marginBottom: 12, 
-    borderRadius: 18, 
-    overflow: 'hidden', 
-    backgroundColor: '#f3f4f6',
-    width: '100%',
-    maxWidth: 600,
-    alignSelf: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+  // Device Preview Frames
+  devicePreviewContainer: {
+    marginBottom: 16,
+    alignItems: 'center',
   },
-  imagePreviewContainer: { position: 'relative' },
-  image: { 
-    width: '100%', 
-    aspectRatio: 5/1,
-    borderRadius: 18, 
+  devicePreviewLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  
+  // Mobile Frame (iPhone style)
+  mobileFrame: {
+    width: 180,
+    height: 360,
+    backgroundColor: '#1F2937',
+    borderRadius: 28,
+    padding: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  mobileScreen: {
+    flex: 1,
+    backgroundColor: '#000',
+    borderRadius: 24,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  mobileNotch: {
+    position: 'absolute',
+    top: 8,
+    left: '50%',
+    marginLeft: -40,
+    width: 80,
+    height: 20,
+    backgroundColor: '#1F2937',
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+  },
+  mobileHomeIndicator: {
+    position: 'absolute',
+    bottom: 8,
+    left: '50%',
+    marginLeft: -30,
+    width: 60,
+    height: 4,
+    backgroundColor: '#4B5563',
+    borderRadius: 2,
+  },
+  
+  // Tablet Frame (iPad style)
+  tabletFrame: {
+    width: 280,
+    height: 200,
+    backgroundColor: '#1F2937',
+    borderRadius: 20,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  tabletScreen: {
+    flex: 1,
+    backgroundColor: '#000',
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  
+  // Desktop Frame (MacBook style)
+  desktopFrame: {
+    width: '100%',
+    maxWidth: 320,
+    aspectRatio: 16/10,
+    backgroundColor: '#1F2937',
+    borderRadius: 12,
+    padding: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  desktopScreen: {
+    flex: 1,
+    backgroundColor: '#000',
+    borderRadius: 6,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  
+  // Device Preview Image
+  devicePreviewImage: {
+    width: '100%',
+    height: '100%',
     resizeMode: 'cover',
   },
-  cropGuidelinesOverlay: {
+  
+  // Mock UI Elements
+  mockStatusBar: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
-    justifyContent: 'center',
+    height: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    pointerEvents: 'none',
+    paddingHorizontal: 12,
   },
-  cropGuideline: {
-    position: 'absolute',
-    width: '100%',
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    top: '50%',
+  mockTime: {
+    flex: 1,
   },
-  cropGuidelineVertical: {
-    width: 1,
-    height: '100%',
-    left: '50%',
-    top: 0,
+  mockTimeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
   },
-  imagePlaceholder: {
-    width: '100%', 
-    aspectRatio: 5/1,
-    borderRadius: 18, 
+  mockIcons: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  
+  // Upload Button
+  uploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     backgroundColor: '#fff',
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    borderWidth: 2, 
-    borderColor: '#E8E8E8', 
-    borderStyle: 'dashed',
+    borderWidth: 2,
+    borderColor: ZOMATO_RED,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginBottom: 12,
   },
-  imagePlaceholderIcon: {
-    width: 64, height: 64, borderRadius: 32, backgroundColor: '#FEF2F2',
-    justifyContent: 'center', alignItems: 'center', marginBottom: 12,
+  uploadButtonText: {
+    color: ZOMATO_RED,
+    fontSize: 15,
+    fontWeight: '700',
   },
-  imagePlaceholderText: { color: '#1C1C1C', fontSize: 15, fontWeight: '600' },
-  imagePlaceholderHint: { color: '#9CA3AF', fontSize: 12, marginTop: 4 },
-  imageOverlay: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)', padding: 12, alignItems: 'center',
-  },
-  changeImageButton: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  changeImageText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   
   // Preview Info
   previewInfo: {
@@ -414,13 +542,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     padding: 12,
     borderRadius: 12,
-    marginBottom: 12,
   },
   previewInfoText: {
     flex: 1,
     fontSize: 12,
     color: '#6B7280',
     lineHeight: 16,
+  },
+  previewInfoTextSuccess: {
+    flex: 1,
+    fontSize: 12,
+    color: '#059669',
+    lineHeight: 16,
+    fontWeight: '500',
   },
   
   // Form
