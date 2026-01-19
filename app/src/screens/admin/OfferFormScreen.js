@@ -155,21 +155,27 @@ export default function OfferFormScreen({ route, navigation }) {
             container: styles.mobileFrame,
             screen: styles.mobileScreen,
             label: 'Mobile Preview',
-            icon: 'phone-portrait'
+            icon: 'phone-portrait',
+            showHeader: true,
+            showButton: true
           };
         case 'tablet':
           return {
             container: styles.tabletFrame,
             screen: styles.tabletScreen,
             label: 'Tablet Preview',
-            icon: 'tablet-landscape'
+            icon: 'tablet-landscape',
+            showHeader: true,
+            showButton: true
           };
         case 'desktop':
           return {
             container: styles.desktopFrame,
             screen: styles.desktopScreen,
             label: 'Desktop Preview',
-            icon: 'desktop'
+            icon: 'desktop',
+            showHeader: true,
+            showButton: true
           };
       }
     };
@@ -196,8 +202,64 @@ export default function OfferFormScreen({ route, navigation }) {
             <View style={deviceFrame.container}>
               {/* Device Screen */}
               <View style={deviceFrame.screen}>
-                <Image source={{ uri: image }} style={styles.devicePreviewImage} resizeMode="cover" />
-                {/* Mock UI Elements */}
+                <ScrollView 
+                  style={styles.deviceScrollView}
+                  showsVerticalScrollIndicator={false}
+                  bounces={false}
+                >
+                  {/* Mock Website Header */}
+                  <View style={styles.mockWebsiteHeader}>
+                    <View style={styles.mockLogo}>
+                      <Ionicons name="restaurant" size={imageType === 'mobile' ? 12 : 14} color="#fff" />
+                      <Text style={[styles.mockLogoText, imageType === 'mobile' && styles.mockLogoTextSmall]}>
+                        FoodieSpot
+                      </Text>
+                    </View>
+                    <View style={styles.mockHeaderIcons}>
+                      <Ionicons name="search" size={imageType === 'mobile' ? 12 : 14} color="#fff" />
+                      <Ionicons name="heart" size={imageType === 'mobile' ? 12 : 14} color="#fff" />
+                      <Ionicons name="cart" size={imageType === 'mobile' ? 12 : 14} color="#fff" />
+                    </View>
+                  </View>
+                  
+                  {/* Offer Banner Image */}
+                  <View style={styles.mockBannerContainer}>
+                    <Image 
+                      source={{ uri: image }} 
+                      style={[
+                        styles.mockBannerImage,
+                        imageType === 'mobile' && styles.mockBannerImageMobile,
+                        imageType === 'tablet' && styles.mockBannerImageTablet,
+                        imageType === 'desktop' && styles.mockBannerImageDesktop
+                      ]} 
+                      resizeMode="cover" 
+                    />
+                    
+                    {/* Mock Offer Badge */}
+                    <View style={[styles.mockOfferBadge, imageType === 'mobile' && styles.mockOfferBadgeSmall]}>
+                      <Ionicons name="pricetag" size={imageType === 'mobile' ? 8 : 10} color="#fff" />
+                      <Text style={[styles.mockOfferBadgeText, imageType === 'mobile' && styles.mockOfferBadgeTextSmall]}>
+                        Special Offers
+                      </Text>
+                    </View>
+                    
+                    {/* Mock Get This Offer Button */}
+                    <View style={[styles.mockGetOfferButton, imageType === 'mobile' && styles.mockGetOfferButtonSmall]}>
+                      <Ionicons name="pricetag" size={imageType === 'mobile' ? 10 : 12} color="#1F2937" />
+                      <Text style={[styles.mockGetOfferButtonText, imageType === 'mobile' && styles.mockGetOfferButtonTextSmall]}>
+                        Get This Offer
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  {/* Mock Content Below */}
+                  <View style={styles.mockContentBelow}>
+                    <View style={styles.mockContentPlaceholder} />
+                    <View style={styles.mockContentPlaceholder} />
+                  </View>
+                </ScrollView>
+                
+                {/* Device Status Bar */}
                 <View style={styles.mockStatusBar}>
                   <View style={styles.mockTime}>
                     <Text style={styles.mockTimeText}>9:41</Text>
@@ -482,10 +544,132 @@ const styles = StyleSheet.create({
   },
   
   // Device Preview Image
-  devicePreviewImage: {
+  deviceScrollView: {
+    flex: 1,
+  },
+  
+  // Mock Website Header
+  mockWebsiteHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: '#1F2937',
+    borderBottomWidth: 1,
+    borderBottomColor: '#374151',
+  },
+  mockLogo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  mockLogoText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  mockLogoTextSmall: {
+    fontSize: 9,
+  },
+  mockHeaderIcons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  
+  // Mock Banner Container
+  mockBannerContainer: {
+    position: 'relative',
+    backgroundColor: '#000',
+  },
+  mockBannerImage: {
     width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
+    height: 120,
+  },
+  mockBannerImageMobile: {
+    height: 80,
+  },
+  mockBannerImageTablet: {
+    height: 100,
+  },
+  mockBannerImageDesktop: {
+    height: 120,
+  },
+  
+  // Mock Offer Badge
+  mockOfferBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  mockOfferBadgeSmall: {
+    top: 6,
+    left: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  mockOfferBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  mockOfferBadgeTextSmall: {
+    fontSize: 7,
+  },
+  
+  // Mock Get Offer Button
+  mockGetOfferButton: {
+    position: 'absolute',
+    bottom: 12,
+    left: '50%',
+    marginLeft: -50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FCD34D',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  mockGetOfferButtonSmall: {
+    bottom: 8,
+    marginLeft: -40,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  mockGetOfferButtonText: {
+    color: '#1F2937',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  mockGetOfferButtonTextSmall: {
+    fontSize: 7,
+  },
+  
+  // Mock Content Below
+  mockContentBelow: {
+    padding: 8,
+    backgroundColor: '#F9FAFB',
+    gap: 6,
+  },
+  mockContentPlaceholder: {
+    height: 20,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 4,
   },
   
   // Mock UI Elements
