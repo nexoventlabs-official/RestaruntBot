@@ -12,7 +12,6 @@ export default function AdminOffersScreen({ navigation }) {
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false); // For delete/toggle actions
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const shineAnim = useRef(new Animated.Value(-1)).current;
 
@@ -42,43 +41,17 @@ export default function AdminOffersScreen({ navigation }) {
 
   const toggleActive = async (offer) => {
     try {
-      setActionLoading(true);
       await api.patch(`/offers/${offer._id}/toggle`);
       setOffers(offers.map(o => o._id === offer._id ? { ...o, isActive: !o.isActive } : o));
-    } catch (error) { 
-      Alert.alert('Error', 'Failed to update offer'); 
-    } finally {
-      setActionLoading(false);
-    }
+    } catch (error) { Alert.alert('Error', 'Failed to update offer'); }
   };
 
   const deleteOffer = (offer) => {
-    Alert.alert('Delete Offer', `Are you sure you want to delete "${offer.offerType}"?`, [
+    Alert.alert('Delete Offer', `Are you sure you want to delete "${offer.title}"?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
-        try { 
-          setActionLoading(true);
-          
-          // Delete the offer
-          await api.delete(`/offers/${offer._id}`);
-          
-          // Remove offer type from all menu items
-          try {
-            await api.post('/menu/remove-offer-type', {
-              offerType: offer.offerType
-            });
-          } catch (error) {
-            console.error('Error removing offer type from items:', error);
-          }
-          
-          setOffers(offers.filter(o => o._id !== offer._id));
-          Alert.alert('Success', 'Offer deleted and removed from all items');
-        }
-        catch (error) { 
-          Alert.alert('Error', 'Failed to delete offer'); 
-        } finally {
-          setActionLoading(false);
-        }
+        try { await api.delete(`/offers/${offer._id}`); setOffers(offers.filter(o => o._id !== offer._id)); }
+        catch (error) { Alert.alert('Error', 'Failed to delete offer'); }
       }},
     ]);
   };
@@ -238,16 +211,6 @@ export default function AdminOffersScreen({ navigation }) {
           }
         />
       )}
-
-      {/* Action Loading Overlay */}
-      {actionLoading && (
-        <View style={styles.loadingOverlay}>
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.zomato.red} />
-            <Text style={styles.loadingText}>Processing...</Text>
-          </View>
-        </View>
-      )}
     </View>
   );
 }
@@ -367,29 +330,4 @@ const styles = StyleSheet.create({
   emptyButton: { marginTop: spacing.lg, borderRadius: radius.lg, overflow: 'hidden' },
   emptyButtonGradient: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.xl, paddingVertical: spacing.md },
   emptyButtonText: { color: '#fff', fontWeight: '600', fontSize: typography.title.medium.fontSize },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 9999,
-  },
-  loadingContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    minWidth: 150,
-    ...shadows.lg,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.light.text.primary,
-  },
 });

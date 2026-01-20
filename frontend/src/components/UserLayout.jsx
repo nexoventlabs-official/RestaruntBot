@@ -724,8 +724,18 @@ export default function UserLayout() {
       {/* Floating Pizza Scroll Indicator */}
       <FloatingPizza />
 
-      {/* Floating Cart Button - Mobile (Hidden - using header cart icon instead) */}
-      {/* Removed to prevent overlap with bottom navigation bar */}
+      {/* Floating Cart Button - Mobile */}
+      {cartCount > 0 && (
+        <button 
+          onClick={() => { setActiveTab('cart'); setSidebarOpen(true); }} 
+          className="fixed bottom-6 right-6 bg-orange-500 text-white px-5 py-3 rounded-full shadow-lg flex items-center gap-2 hover:bg-orange-600 transition-all md:hidden z-40 hover:scale-105"
+        >
+          <CartIcon className="w-5 h-5" />
+          <span className="font-semibold">{cartCount}</span>
+          <span className="w-px h-4 bg-white/30" />
+          <span className="font-bold">₹{cartTotal}</span>
+        </button>
+      )}
 
       {/* Cart Sidebar */}
       <CartSidebar 

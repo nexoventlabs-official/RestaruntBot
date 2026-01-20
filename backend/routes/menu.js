@@ -241,49 +241,4 @@ router.patch('/bulk-pause', authMiddleware, async (req, res) => {
   }
 });
 
-// Remove offer type from all menu items
-router.post('/remove-offer-type', authMiddleware, async (req, res) => {
-  try {
-    const { offerType } = req.body;
-    
-    if (!offerType) {
-      return res.status(400).json({ error: 'Offer type is required' });
-    }
-
-    // Find all items that have this offer type
-    const items = await MenuItem.find({
-      offerType: offerType
-    });
-
-    // Update each item to remove the offer type
-    const updatePromises = items.map(async (item) => {
-      const currentOfferTypes = Array.isArray(item.offerType) 
-        ? item.offerType 
-        : (item.offerType ? [item.offerType] : []);
-      
-      const updatedOfferTypes = currentOfferTypes.filter(type => type !== offerType);
-      
-      return MenuItem.findByIdAndUpdate(
-        item._id,
-        { offerType: updatedOfferTypes },
-        { new: true }
-      );
-    });
-
-    await Promise.all(updatePromises);
-
-    // Emit event for real-time updates
-    dataEvents.emitMenuUpdate();
-
-    res.json({ 
-      success: true, 
-      message: `Removed "${offerType}" from ${items.length} items`,
-      itemsUpdated: items.length
-    });
-  } catch (error) {
-    console.error('Error removing offer type:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 module.exports = router;
