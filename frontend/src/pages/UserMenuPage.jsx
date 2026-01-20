@@ -385,8 +385,8 @@ export default function UserMenuPage() {
         className={`group relative bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 ease-out flex sm:flex-col ${!available ? 'opacity-60' : ''}`}
         onClick={() => available && openItemDialog(item)}
       >
-        {/* Image Container - Horizontal on mobile, square on larger screens */}
-        <div className="relative w-36 sm:w-full h-36 sm:h-48 md:h-56 lg:h-64 flex-shrink-0 overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 p-2">
+        {/* Image Container - Full height on mobile, square on larger screens */}
+        <div className="relative w-36 sm:w-full h-full sm:h-48 md:h-56 lg:h-64 flex-shrink-0 overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 p-2">
           {item.image ? (
             <img 
               src={item.image} 
@@ -399,7 +399,7 @@ export default function UserMenuPage() {
             </div>
           )}
           
-          {/* Food Type Icon - Top Left First */}
+          {/* Food Type Icon - Top Left */}
           {item.foodType && item.foodType !== 'none' && (
             <div className={`absolute top-3 left-3 w-6 h-6 border-2 rounded flex items-center justify-center z-20 ${
               item.foodType === 'veg' ? 'border-green-600 bg-white' :
@@ -412,6 +412,17 @@ export default function UserMenuPage() {
                 'bg-yellow-600'
               }`} />
             </div>
+          )}
+          
+          {/* WhatsApp Button - Bottom Right on Image */}
+          {available && (
+            <button 
+              onClick={(e) => handleWhatsAppOrder(item, e)} 
+              className="absolute bottom-3 right-3 w-10 h-10 bg-green-500 text-white rounded-full flex items-center justify-center hover:bg-green-600 transition-all hover:scale-110 shadow-lg z-20"
+              title="Order via WhatsApp"
+            >
+              <WhatsAppIcon className="w-5 h-5" />
+            </button>
           )}
           
           {/* Unavailable Overlay */}
@@ -441,68 +452,57 @@ export default function UserMenuPage() {
             <span className="text-xs text-gray-500 font-medium">({totalRatings})</span>
           </div>
 
-          {/* Price Section */}
-          <div className="flex items-center gap-2 mb-3 flex-wrap">
+          {/* Price Section with more spacing */}
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
             <span className="text-xl sm:text-2xl font-bold text-orange-600">
               ₹{item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}
             </span>
             {item.offerPrice && item.offerPrice < item.price && (
               <>
                 <span className="text-sm text-gray-400 line-through">₹{item.price}</span>
-                <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-0.5 rounded-full text-xs font-bold shadow-md">
+                <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2.5 py-1 rounded-full text-xs font-bold shadow-md">
                   {Math.round(((item.price - item.offerPrice) / item.price) * 100)}% OFF
                 </span>
               </>
             )}
           </div>
 
-          {/* Quantity and Preparation Time - Side by Side */}
-          <div className="flex items-center gap-4 mb-3 text-sm text-gray-600">
-            <div className="flex items-center gap-1">
-              <Package className="w-4 h-4 text-gray-500" />
-              <span className="font-medium whitespace-nowrap">{item.unitQty || 1} {item.unit || 'piece'}</span>
+          {/* Quantity and Preparation Time - Side by Side with Cart Icon */}
+          <div className="flex items-center justify-between text-sm text-gray-600">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1">
+                <Package className="w-4 h-4 text-gray-500" />
+                <span className="font-medium whitespace-nowrap">{item.unitQty || 1} {item.unit || 'piece'}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Clock className="w-4 h-4 text-gray-500" />
+                <span className="font-medium whitespace-nowrap">{item.preparationTime || 15} mins</span>
+              </div>
             </div>
-            <div className="flex items-center gap-1">
-              <Clock className="w-4 h-4 text-gray-500" />
-              <span className="font-medium whitespace-nowrap">{item.preparationTime || 15} mins</span>
-            </div>
-          </div>
 
-          {/* Spacer to push button to bottom */}
-          <div className="flex-grow"></div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2">
-            {/* WhatsApp Button */}
-            {available && (
-              <button 
-                onClick={(e) => handleWhatsAppOrder(item, e)} 
-                className="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center hover:bg-green-600 transition-all hover:scale-110 shadow-md flex-shrink-0"
-                title="Order via WhatsApp"
-              >
-                <WhatsAppIcon className="w-5 h-5" />
-              </button>
-            )}
-            
+            {/* Cart Button - Icon Only */}
             {!available ? (
-              <button className="flex-1 py-2.5 bg-gray-200 text-gray-500 rounded-xl font-semibold cursor-not-allowed text-sm">
-                Out of Stock
+              <button className="w-10 h-10 bg-gray-200 text-gray-500 rounded-xl cursor-not-allowed flex items-center justify-center" disabled>
+                <ShoppingCart className="w-5 h-5" />
               </button>
             ) : inCart ? (
               <button 
                 onClick={(e) => { e.stopPropagation(); setSidebarOpen(true); setActiveTab('cart'); }} 
-                className="flex-1 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold hover:from-green-600 hover:to-green-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 text-sm"
+                className="w-10 h-10 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl flex items-center justify-center hover:from-green-600 hover:to-green-700 transition-all shadow-md hover:shadow-lg relative flex-shrink-0"
+                title="View Cart"
               >
-                <ShoppingCart className="w-4 h-4" />
-                View Cart ({cartItem?.quantity})
+                <ShoppingCart className="w-5 h-5" />
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-white text-green-600 rounded-full text-xs font-bold flex items-center justify-center">
+                  {cartItem?.quantity}
+                </span>
               </button>
             ) : (
               <button 
                 onClick={(e) => handleAddToCart(item, e)} 
-                className="flex-1 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 text-sm"
+                className="w-10 h-10 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl flex items-center justify-center hover:from-orange-600 hover:to-orange-700 transition-all shadow-md hover:shadow-lg flex-shrink-0"
+                title="Add to Cart"
               >
-                <ShoppingCart className="w-4 h-4" />
-                Add to Cart
+                <ShoppingCart className="w-5 h-5" />
               </button>
             )}
           </div>
@@ -794,7 +794,7 @@ export default function UserMenuPage() {
       {/* Item Detail Dialog */}
       {selectedItem && (
         <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center"
           style={{ touchAction: 'none' }}
           onClick={closeItemDialog}
           onTouchMove={(e) => e.preventDefault()}
@@ -804,7 +804,7 @@ export default function UserMenuPage() {
           
           {/* Dialog - Horizontal on PC, Vertical on Mobile */}
           <div 
-            className="relative bg-white rounded-2xl sm:rounded-3xl w-full max-w-md lg:max-w-5xl max-h-[95vh] lg:h-[85vh] overflow-hidden shadow-2xl flex flex-col lg:flex-row"
+            className="relative bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md lg:max-w-5xl max-h-[90vh] sm:max-h-[95vh] lg:h-[85vh] overflow-hidden shadow-2xl flex flex-col lg:flex-row"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close Button */}
@@ -816,15 +816,15 @@ export default function UserMenuPage() {
             </button>
 
             {/* Left Side - Image (PC) / Top (Mobile) */}
-            <div className="relative h-48 sm:h-56 lg:h-auto lg:w-[45%] bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center flex-shrink-0">
+            <div className="relative h-40 sm:h-56 lg:h-auto lg:w-[45%] bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center flex-shrink-0">
               {selectedItem.image ? (
                 <img 
                   src={selectedItem.image} 
                   alt={selectedItem.name}
-                  className="max-h-full max-w-full object-contain p-6 lg:p-8"
+                  className="max-h-full max-w-full object-contain p-4 sm:p-6 lg:p-8"
                 />
               ) : (
-                <span className="text-7xl lg:text-8xl">🍽️</span>
+                <span className="text-6xl sm:text-7xl lg:text-8xl">🍽️</span>
               )}
               
               {/* Food Type Badge */}
@@ -835,13 +835,12 @@ export default function UserMenuPage() {
               )}
             </div>
 
-            {/* Right Side - Details (PC) / Bottom (Mobile) */}
+            {/* Right Side - Details (PC) / Bottom (Mobile) - Scrollable */}
             <div 
-              className="flex-1 overflow-y-auto scrollbar-dialog p-5 sm:p-6 lg:p-8" 
+              className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8" 
               style={{ 
-                maxHeight: 'calc(95vh - 100px)',
-                overscrollBehavior: 'contain',
-                WebkitOverflowScrolling: 'touch'
+                WebkitOverflowScrolling: 'touch',
+                overscrollBehavior: 'contain'
               }}
               onTouchStart={(e) => e.stopPropagation()}
               onTouchMove={(e) => e.stopPropagation()}
