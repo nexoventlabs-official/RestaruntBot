@@ -92,7 +92,7 @@ const whatsappBroadcast = {
       }
       message += `Order now and enjoy this amazing deal! 🍽️`;
 
-      const websiteUrl = 'https://restarunt-bot.vercel.app';
+      const websiteUrl = 'https://restarunt-bot.vercel.app/offers';
 
       console.log(`[WhatsApp Broadcast] Sending offer to ${contacts.length} contacts...`);
 
