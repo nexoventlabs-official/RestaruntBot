@@ -784,11 +784,7 @@ export default function AdminMenuScreen({ navigation, route }) {
                   </TouchableOpacity>
                 </View>
 
-                <ScrollView 
-                  style={styles.modalBody}
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                >
+                <View style={styles.modalBody}>
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Category Name</Text>
                     <TextInput
@@ -824,8 +820,7 @@ export default function AdminMenuScreen({ navigation, route }) {
                       )}
                     </View>
                   </View>
-                  <View style={{ height: 20 }} />
-                </ScrollView>
+                </View>
 
                 <View style={styles.modalFooter}>
                   <TouchableOpacity
@@ -1152,7 +1147,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', 
     borderTopLeftRadius: 28, 
     borderTopRightRadius: 28,
-    maxHeight: '90%',
   },
   modalHandle: { width: 40, height: 4, backgroundColor: '#E8E8E8', borderRadius: 2, alignSelf: 'center', marginTop: 12 },
   modalHeader: {
@@ -1163,9 +1157,9 @@ const styles = StyleSheet.create({
   modalCloseButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
   modalBody: { 
     paddingHorizontal: 24, 
-    paddingBottom: 16, 
+    paddingTop: 8,
+    paddingBottom: 24, 
     gap: 20,
-    maxHeight: 400,
   },
   inputGroup: { gap: 10 },
   inputLabel: { fontSize: 14, fontWeight: '700', color: '#1C1C1C' },
@@ -1173,7 +1167,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F8F8', borderRadius: 14, paddingHorizontal: 18, height: 54,
     fontSize: 15, color: '#1C1C1C', borderWidth: 1.5, borderColor: '#E8E8E8', fontWeight: '500',
   },
-  modalFooter: { padding: 24, paddingTop: 8 },
+  modalFooter: { 
+    padding: 24, 
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+  },
   modalButton: {
     backgroundColor: ZOMATO_RED, height: 54, borderRadius: 16, justifyContent: 'center', alignItems: 'center',
     shadowColor: ZOMATO_RED,
