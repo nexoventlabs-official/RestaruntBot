@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   View, Text, StyleSheet, FlatList, ScrollView,
   RefreshControl, TouchableOpacity, Image, Alert, ActivityIndicator,
-  TextInput, Modal, Animated, Platform, StatusBar, ImageBackground
+  TextInput, Modal, Animated, Platform, StatusBar, ImageBackground, KeyboardAvoidingView
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -765,69 +765,85 @@ export default function AdminMenuScreen({ navigation, route }) {
         transparent={true}
         onRequestClose={() => setShowCategoryModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{editingCategory ? 'Edit Category' : 'New Category'}</Text>
-              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowCategoryModal(false)}>
-                <Ionicons name="close" size={24} color="#696969" />
-              </TouchableOpacity>
-            </View>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity 
+            style={styles.modalOverlay} 
+            activeOpacity={1} 
+            onPress={() => setShowCategoryModal(false)}
+          >
+            <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHandle} />
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>{editingCategory ? 'Edit Category' : 'New Category'}</Text>
+                  <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowCategoryModal(false)}>
+                    <Ionicons name="close" size={24} color="#696969" />
+                  </TouchableOpacity>
+                </View>
 
-            <View style={styles.modalBody}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Category Name</Text>
-                <TextInput
-                  style={styles.modalInput}
-                  value={categoryForm.name}
-                  onChangeText={(text) => setCategoryForm({ ...categoryForm, name: text })}
-                  placeholder="e.g., Main Course"
-                  placeholderTextColor="#9ca3af"
-                />
-              </View>
+                <ScrollView 
+                  style={styles.modalBody}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Category Name</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      value={categoryForm.name}
+                      onChangeText={(text) => setCategoryForm({ ...categoryForm, name: text })}
+                      placeholder="e.g., Main Course"
+                      placeholderTextColor="#9ca3af"
+                    />
+                  </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Category Image</Text>
-                <View style={styles.categoryImageSection}>
-                  {categoryImagePreview ? (
-                    <View style={styles.categoryImageContainer}>
-                      <Image source={{ uri: categoryImagePreview }} style={styles.categoryImagePreview} />
-                      <TouchableOpacity style={styles.removeCategoryImageButton} onPress={removeCategoryImage}>
-                        <Ionicons name="close-circle" size={28} color="#ef4444" />
-                      </TouchableOpacity>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Category Image</Text>
+                    <View style={styles.categoryImageSection}>
+                      {categoryImagePreview ? (
+                        <View style={styles.categoryImageContainer}>
+                          <Image source={{ uri: categoryImagePreview }} style={styles.categoryImagePreview} />
+                          <TouchableOpacity style={styles.removeCategoryImageButton} onPress={removeCategoryImage}>
+                            <Ionicons name="close-circle" size={28} color="#ef4444" />
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity style={styles.categoryImagePlaceholder} onPress={pickCategoryImage}>
+                          <Ionicons name="camera-outline" size={32} color="#9ca3af" />
+                          <Text style={styles.categoryImagePlaceholderText}>Add Image</Text>
+                        </TouchableOpacity>
+                      )}
+                      {categoryImagePreview && (
+                        <TouchableOpacity style={styles.changeCategoryImageButton} onPress={pickCategoryImage}>
+                          <Ionicons name="image-outline" size={18} color="#696969" />
+                          <Text style={styles.changeCategoryImageText}>Change</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
-                  ) : (
-                    <TouchableOpacity style={styles.categoryImagePlaceholder} onPress={pickCategoryImage}>
-                      <Ionicons name="camera-outline" size={32} color="#9ca3af" />
-                      <Text style={styles.categoryImagePlaceholderText}>Add Image</Text>
-                    </TouchableOpacity>
-                  )}
-                  {categoryImagePreview && (
-                    <TouchableOpacity style={styles.changeCategoryImageButton} onPress={pickCategoryImage}>
-                      <Ionicons name="image-outline" size={18} color="#696969" />
-                      <Text style={styles.changeCategoryImageText}>Change</Text>
-                    </TouchableOpacity>
-                  )}
+                  </View>
+                  <View style={{ height: 20 }} />
+                </ScrollView>
+
+                <View style={styles.modalFooter}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, savingCategory && styles.modalButtonDisabled]}
+                    onPress={saveCategory}
+                    disabled={savingCategory}
+                  >
+                    {savingCategory ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.modalButtonText}>{editingCategory ? 'Update Category' : 'Add Category'}</Text>
+                    )}
+                  </TouchableOpacity>
                 </View>
               </View>
-            </View>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={[styles.modalButton, savingCategory && styles.modalButtonDisabled]}
-                onPress={saveCategory}
-                disabled={savingCategory}
-              >
-                {savingCategory ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.modalButtonText}>{editingCategory ? 'Update Category' : 'Add Category'}</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1132,7 +1148,12 @@ const styles = StyleSheet.create({
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28 },
+  modalContent: { 
+    backgroundColor: '#fff', 
+    borderTopLeftRadius: 28, 
+    borderTopRightRadius: 28,
+    maxHeight: '90%',
+  },
   modalHandle: { width: 40, height: 4, backgroundColor: '#E8E8E8', borderRadius: 2, alignSelf: 'center', marginTop: 12 },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -1140,7 +1161,12 @@ const styles = StyleSheet.create({
   },
   modalTitle: { fontSize: 20, fontWeight: '800', color: '#1C1C1C' },
   modalCloseButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
-  modalBody: { paddingHorizontal: 24, paddingBottom: 16, gap: 20 },
+  modalBody: { 
+    paddingHorizontal: 24, 
+    paddingBottom: 16, 
+    gap: 20,
+    maxHeight: 400,
+  },
   inputGroup: { gap: 10 },
   inputLabel: { fontSize: 14, fontWeight: '700', color: '#1C1C1C' },
   modalInput: {
