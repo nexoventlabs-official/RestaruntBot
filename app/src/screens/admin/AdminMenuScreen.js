@@ -34,6 +34,7 @@ export default function AdminMenuScreen({ navigation, route }) {
   const [savingCategory, setSavingCategory] = useState(false);
   const [categoryImage, setCategoryImage] = useState(null);
   const [categoryImagePreview, setCategoryImagePreview] = useState('');
+  const [deletingCategoryId, setDeletingCategoryId] = useState(null);
 
   useEffect(() => {
     Animated.parallel([
@@ -236,6 +237,7 @@ export default function AdminMenuScreen({ navigation, route }) {
           style: 'destructive',
           onPress: async () => {
             try {
+              setDeletingCategoryId(category._id);
               await api.delete(`/categories/${category._id}`);
               fetchCategories();
               if (selectedCategory === category.name) {
@@ -243,6 +245,8 @@ export default function AdminMenuScreen({ navigation, route }) {
               }
             } catch (error) {
               Alert.alert('Error', 'Failed to delete category');
+            } finally {
+              setDeletingCategoryId(null);
             }
           },
         },
@@ -664,6 +668,7 @@ export default function AdminMenuScreen({ navigation, route }) {
                 return itemCategories.includes(cat.name);
               });
               const allItemsPaused = itemsInCat.length > 0 && itemsInCat.every(item => item.isPaused);
+              const isDeleting = deletingCategoryId === cat._id;
 
               return (
                 <TouchableOpacity
@@ -683,25 +688,32 @@ export default function AdminMenuScreen({ navigation, route }) {
                       ]
                     );
                   }}
+                  disabled={isDeleting}
                 >
                   <View style={[styles.categoryImageWrapper, selectedCategory === cat.name && styles.categoryImageWrapperActive, cat.isPaused && styles.categoryImageWrapperPaused]}>
                     {cat.image ? (
-                      <Image source={{ uri: cat.image }} style={styles.categoryImage} />
+                      <Image source={{ uri: cat.image }} style={[styles.categoryImage, isDeleting && styles.categoryImageDeleting]} />
                     ) : (
-                      <View style={styles.categoryPlaceholder}>
+                      <View style={[styles.categoryPlaceholder, isDeleting && styles.categoryImageDeleting]}>
                         <Ionicons name="restaurant-outline" size={24} color={cat.isPaused ? '#f59e0b' : '#9ca3af'} />
                       </View>
                     )}
-                    {cat.isPaused && (
+                    {cat.isPaused && !isDeleting && (
                       <View style={styles.categoryPausedOverlay}>
                         <Ionicons name="pause-circle" size={16} color="#f59e0b" />
+                      </View>
+                    )}
+                    {isDeleting && (
+                      <View style={styles.categoryDeletingOverlay}>
+                        <ActivityIndicator size="small" color="#fff" />
                       </View>
                     )}
                   </View>
                   <Text style={[
                     styles.categoryName,
                     selectedCategory === cat.name && styles.categoryNameActive,
-                    cat.isPaused && styles.categoryNamePaused
+                    cat.isPaused && styles.categoryNamePaused,
+                    isDeleting && styles.categoryNameDeleting
                   ]} numberOfLines={1}>{cat.name}</Text>
                   {selectedCategory === cat.name && <View style={styles.categoryUnderline} />}
                 </TouchableOpacity>
@@ -1020,6 +1032,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 10,
   },
+  categoryDeletingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categoryImageDeleting: {
+    opacity: 0.5,
+  },
   categoryName: {
     fontSize: 12,
     color: '#696969',
@@ -1033,6 +1059,9 @@ const styles = StyleSheet.create({
   },
   categoryNamePaused: {
     color: '#D97706',
+  },
+  categoryNameDeleting: {
+    opacity: 0.5,
   },
   categoryUnderline: {
     width: 20,
