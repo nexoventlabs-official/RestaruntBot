@@ -746,17 +746,17 @@ export default function OffersPage() {
 
               {/* Price */}
               <div className="flex items-center gap-3 mb-3 flex-wrap">
-                {/* Sale Price - Large and prominent */}
+                {/* Current Price - Large and prominent */}
                 <div className="text-3xl sm:text-4xl lg:text-5xl font-bold text-orange-500">
-                  ₹{selectedItem.price}
+                  ₹{selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price ? selectedItem.offerPrice : selectedItem.price}
                 </div>
                 
                 {/* Original Price & Discount Badge - Only if there's a discount */}
-                {selectedItem.originalPrice && selectedItem.originalPrice > selectedItem.price && (
+                {selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price && (
                   <>
-                    <span className="text-lg sm:text-xl text-gray-400 line-through">₹{selectedItem.originalPrice}</span>
+                    <span className="text-lg sm:text-xl text-gray-400 line-through">₹{selectedItem.price}</span>
                     <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold">
-                      {Math.round(((selectedItem.originalPrice - selectedItem.price) / selectedItem.originalPrice) * 100)}% OFF
+                      {Math.round(((selectedItem.price - selectedItem.offerPrice) / selectedItem.price) * 100)}% OFF
                     </div>
                   </>
                 )}
