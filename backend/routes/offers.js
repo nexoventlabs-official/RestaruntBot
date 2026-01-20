@@ -136,7 +136,6 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
           });
         }
       }
-      console.log(`Applied ${discountPercent}% discount to ${parsedAppliedItems.length} items`);
     }
     
     // Emit SSE event to notify clients to refresh (cache-busting)
@@ -295,7 +294,6 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
           });
         }
       }
-      console.log(`Updated ${discountPercent}% discount for ${parsedAppliedItems.length} items`);
     }
     
     // Emit SSE event to notify clients to refresh (cache-busting)
@@ -361,7 +359,6 @@ router.delete('/:id', auth, async (req, res) => {
         }
       }
       
-      console.log(`Removed offer type "${offer.offerType}" and offer prices from ${itemsWithOffer.length} menu items`);
     }
     
     await Offer.findByIdAndDelete(req.params.id);
@@ -394,7 +391,6 @@ router.patch('/:id/toggle', auth, async (req, res) => {
         { offerType: offer.offerType },
         { $pull: { offerType: offer.offerType } }
       );
-      console.log(`Removed inactive offer type "${offer.offerType}" from all menu items`);
       
       // Emit SSE event to notify clients
       const eventEmitter = require('../services/eventEmitter');

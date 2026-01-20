@@ -60,8 +60,6 @@ export default function OfferFormScreen({ route, navigation }) {
         api.get('/categories'),
         api.get('/menu')
       ]);
-      console.log('Categories fetched:', catResponse.data?.length);
-      console.log('Menu items fetched:', itemsResponse.data?.length);
       setCategories(catResponse.data || []);
       setMenuItems(itemsResponse.data || []);
     } catch (error) {
@@ -79,7 +77,6 @@ export default function OfferFormScreen({ route, navigation }) {
   };
 
   const toggleItem = (itemId) => {
-    console.log('Toggling item:', itemId, 'Currently selected:', selectedItems.includes(itemId));
     if (selectedItems.includes(itemId)) {
       setSelectedItems(selectedItems.filter(id => id !== itemId));
     } else {
@@ -107,11 +104,9 @@ export default function OfferFormScreen({ route, navigation }) {
   };
 
   const getItemsByCategory = (categoryName) => {
-    const items = menuItems.filter(item => 
+    return menuItems.filter(item => 
       Array.isArray(item.category) ? item.category.includes(categoryName) : item.category === categoryName
     );
-    console.log(`Items in category "${categoryName}":`, items.length);
-    return items;
   };
 
   const pickImage = async () => {
@@ -356,10 +351,7 @@ export default function OfferFormScreen({ route, navigation }) {
                   
                   <TouchableOpacity 
                     style={styles.selectItemsButton}
-                    onPress={() => {
-                      console.log('Opening modal. Categories:', categories.length, 'Items:', menuItems.length);
-                      setShowCategoryModal(true);
-                    }}
+                    onPress={() => setShowCategoryModal(true)}
                     activeOpacity={0.8}
                   >
                     <Ionicons name="list" size={20} color={ZOMATO_RED} />
@@ -419,8 +411,6 @@ export default function OfferFormScreen({ route, navigation }) {
             
             <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
               {(() => {
-                console.log('Rendering modal. Categories:', categories.length, 'Items:', menuItems.length, 'Expanded:', expandedCategory);
-                
                 if (categories.length === 0) {
                   return (
                     <View style={styles.emptyState}>
@@ -446,10 +436,8 @@ export default function OfferFormScreen({ route, navigation }) {
                   const allItemsSelected = categoryItems.length > 0 && categoryItems.every(item => selectedItems.includes(item._id));
                   
                   if (categoryItems.length === 0) {
-                    return null; // Skip categories with no items
+                    return null;
                   }
-                  
-                  console.log(`Rendering category: ${category.name}, Items: ${categoryItems.length}, Expanded: ${expandedCategory === category.name}`);
                   
                   return (
                     <View key={category._id} style={styles.categorySection}>
