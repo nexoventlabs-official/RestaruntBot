@@ -119,53 +119,57 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       appliedCategories: parsedAppliedCategories
     });
     
-    // Apply offer to selected items and categories
-    const MenuItem = require('../models/MenuItem');
-    
-    // Collect all item IDs (from both direct selection and categories)
-    let allItemIds = [...parsedAppliedItems];
-    
-    // Add items from selected categories
-    if (parsedAppliedCategories.length > 0) {
-      console.log('Finding items in categories:', parsedAppliedCategories);
-      const categoryItems = await MenuItem.find({
-        category: { $in: parsedAppliedCategories }
-      });
-      console.log('Found category items:', categoryItems.length);
-      const categoryItemIds = categoryItems.map(item => item._id.toString());
-      allItemIds = [...new Set([...allItemIds, ...categoryItemIds])];
-    }
-    
-    console.log('Total items to apply offer:', allItemIds.length);
-    
-    // Apply offer to all collected items
-    for (const itemId of allItemIds) {
-      const item = await MenuItem.findById(itemId);
-      if (item) {
-        // Add offer type to item's offerType array
-        const offerTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
-        if (!offerTypes.includes(offerType)) {
-          offerTypes.push(offerType);
-        }
-        
-        const updateFields = { offerType: offerTypes };
-        
-        // If percentage is provided, calculate and apply discount
-        if (percentage) {
-          const discountPercent = parseFloat(percentage);
-          const offerPrice = Math.round(item.price * (1 - discountPercent / 100));
-          updateFields.offerPrice = offerPrice;
-          console.log(`Applying to ${item.name}: ${item.price} -> ${offerPrice} (${discountPercent}% OFF)`);
-        } else {
-          console.log(`Adding offer type to ${item.name}: ${offerType}`);
-        }
-        
-        // Update item
-        await MenuItem.findByIdAndUpdate(itemId, updateFields);
+    // Apply offer to selected items and categories (if any items/categories are selected)
+    if (parsedAppliedItems.length > 0 || parsedAppliedCategories.length > 0) {
+      const MenuItem = require('../models/MenuItem');
+      
+      // Collect all item IDs (from both direct selection and categories)
+      let allItemIds = [...parsedAppliedItems];
+      
+      // Add items from selected categories
+      if (parsedAppliedCategories.length > 0) {
+        console.log('Finding items in categories:', parsedAppliedCategories);
+        const categoryItems = await MenuItem.find({
+          category: { $in: parsedAppliedCategories }
+        });
+        console.log('Found category items:', categoryItems.length);
+        const categoryItemIds = categoryItems.map(item => item._id.toString());
+        allItemIds = [...new Set([...allItemIds, ...categoryItemIds])];
       }
+      
+      console.log('Total items to apply offer:', allItemIds.length);
+      
+      // Apply offer to all collected items
+      for (const itemId of allItemIds) {
+        const item = await MenuItem.findById(itemId);
+        if (item) {
+          // Add offer type to item's offerType array
+          const offerTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
+          if (!offerTypes.includes(offerType)) {
+            offerTypes.push(offerType);
+          }
+          
+          const updateFields = { offerType: offerTypes };
+          
+          // If percentage is provided, calculate and apply discount
+          if (percentage) {
+            const discountPercent = parseFloat(percentage);
+            const offerPrice = Math.round(item.price * (1 - discountPercent / 100));
+            updateFields.offerPrice = offerPrice;
+            console.log(`Applying to ${item.name}: ${item.price} -> ${offerPrice} (${discountPercent}% OFF)`);
+          } else {
+            console.log(`Adding offer type to ${item.name}: ${offerType}`);
+          }
+          
+          // Update item
+          await MenuItem.findByIdAndUpdate(itemId, updateFields);
+        }
+      }
+      
+      console.log('Offer application completed');
+    } else {
+      console.log('No items or categories selected for this offer');
     }
-    
-    console.log('Offer application completed');
     
     // Emit SSE event to notify clients to refresh (cache-busting)
     const eventEmitter = require('../services/eventEmitter');
@@ -279,76 +283,113 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
 
     const offer = await Offer.findByIdAndUpdate(req.params.id, updateData, { new: true });
     
-    // Apply offer to selected items and categories
-    const MenuItem = require('../models/MenuItem');
-    
-    // Collect all item IDs (from both direct selection and categories)
-    let allItemIds = [...parsedAppliedItems];
-    
-    // Add items from selected categories
-    if (parsedAppliedCategories.length > 0) {
-      const categoryItems = await MenuItem.find({
-        category: { $in: parsedAppliedCategories }
-      });
-      const categoryItemIds = categoryItems.map(item => item._id.toString());
-      allItemIds = [...new Set([...allItemIds, ...categoryItemIds])];
-    }
-    
-    // First, remove this offer from items that are no longer selected
-    const previousItems = existingOffer.appliedItems || [];
-    const previousCategories = existingOffer.appliedCategories || [];
-    
-    // Get previous category items
-    let previousCategoryItemIds = [];
-    if (previousCategories.length > 0) {
-      const prevCategoryItems = await MenuItem.find({
-        category: { $in: previousCategories }
-      });
-      previousCategoryItemIds = prevCategoryItems.map(item => item._id.toString());
-    }
-    
-    const allPreviousItemIds = [...new Set([...previousItems.map(id => id.toString()), ...previousCategoryItemIds])];
-    const removedItems = allPreviousItemIds.filter(id => !allItemIds.includes(id));
-    
-    for (const itemId of removedItems) {
-      const item = await MenuItem.findById(itemId);
-      if (item) {
-        const offerTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
-        const updatedOfferTypes = offerTypes.filter(ot => ot !== offerType);
-        
-        if (updatedOfferTypes.length === 0) {
-          await MenuItem.findByIdAndUpdate(itemId, {
-            $unset: { offerPrice: 1 },
-            offerType: []
-          });
-        } else {
-          await MenuItem.findByIdAndUpdate(itemId, {
-            offerType: updatedOfferTypes
-          });
+    // Apply offer to selected items and categories (if any items/categories are selected)
+    if (parsedAppliedItems.length > 0 || parsedAppliedCategories.length > 0) {
+      const MenuItem = require('../models/MenuItem');
+      
+      // Collect all item IDs (from both direct selection and categories)
+      let allItemIds = [...parsedAppliedItems];
+      
+      // Add items from selected categories
+      if (parsedAppliedCategories.length > 0) {
+        const categoryItems = await MenuItem.find({
+          category: { $in: parsedAppliedCategories }
+        });
+        const categoryItemIds = categoryItems.map(item => item._id.toString());
+        allItemIds = [...new Set([...allItemIds, ...categoryItemIds])];
+      }
+      
+      // First, remove this offer from items that are no longer selected
+      const previousItems = existingOffer.appliedItems || [];
+      const previousCategories = existingOffer.appliedCategories || [];
+      
+      // Get previous category items
+      let previousCategoryItemIds = [];
+      if (previousCategories.length > 0) {
+        const prevCategoryItems = await MenuItem.find({
+          category: { $in: previousCategories }
+        });
+        previousCategoryItemIds = prevCategoryItems.map(item => item._id.toString());
+      }
+      
+      const allPreviousItemIds = [...new Set([...previousItems.map(id => id.toString()), ...previousCategoryItemIds])];
+      const removedItems = allPreviousItemIds.filter(id => !allItemIds.includes(id));
+      
+      for (const itemId of removedItems) {
+        const item = await MenuItem.findById(itemId);
+        if (item) {
+          const offerTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
+          const updatedOfferTypes = offerTypes.filter(ot => ot !== offerType);
+          
+          if (updatedOfferTypes.length === 0) {
+            await MenuItem.findByIdAndUpdate(itemId, {
+              $unset: { offerPrice: 1 },
+              offerType: []
+            });
+          } else {
+            await MenuItem.findByIdAndUpdate(itemId, {
+              offerType: updatedOfferTypes
+            });
+          }
         }
       }
-    }
-    
-    // Then, apply offer to newly selected items
-    for (const itemId of allItemIds) {
-      const item = await MenuItem.findById(itemId);
-      if (item) {
-        // Add offer type to item's offerType array
-        const offerTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
-        if (!offerTypes.includes(offerType)) {
-          offerTypes.push(offerType);
+      
+      // Then, apply offer to newly selected items
+      for (const itemId of allItemIds) {
+        const item = await MenuItem.findById(itemId);
+        if (item) {
+          // Add offer type to item's offerType array
+          const offerTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
+          if (!offerTypes.includes(offerType)) {
+            offerTypes.push(offerType);
+          }
+          
+          const updateFields = { offerType: offerTypes };
+          
+          // If percentage is provided, calculate and apply discount
+          if (percentage) {
+            const discountPercent = parseFloat(percentage);
+            const offerPrice = Math.round(item.price * (1 - discountPercent / 100));
+            updateFields.offerPrice = offerPrice;
+          }
+          
+          await MenuItem.findByIdAndUpdate(itemId, updateFields);
         }
-        
-        const updateFields = { offerType: offerTypes };
-        
-        // If percentage is provided, calculate and apply discount
-        if (percentage) {
-          const discountPercent = parseFloat(percentage);
-          const offerPrice = Math.round(item.price * (1 - discountPercent / 100));
-          updateFields.offerPrice = offerPrice;
+      }
+    } else {
+      // If no items/categories selected, remove this offer from all items
+      const MenuItem = require('../models/MenuItem');
+      const previousItems = existingOffer.appliedItems || [];
+      const previousCategories = existingOffer.appliedCategories || [];
+      
+      // Get previous category items
+      let previousCategoryItemIds = [];
+      if (previousCategories.length > 0) {
+        const prevCategoryItems = await MenuItem.find({
+          category: { $in: previousCategories }
+        });
+        previousCategoryItemIds = prevCategoryItems.map(item => item._id.toString());
+      }
+      
+      const allPreviousItemIds = [...new Set([...previousItems.map(id => id.toString()), ...previousCategoryItemIds])];
+      
+      for (const itemId of allPreviousItemIds) {
+        const item = await MenuItem.findById(itemId);
+        if (item) {
+          const offerTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
+          const updatedOfferTypes = offerTypes.filter(ot => ot !== offerType);
+          
+          if (updatedOfferTypes.length === 0) {
+            await MenuItem.findByIdAndUpdate(itemId, {
+              $unset: { offerPrice: 1 },
+              offerType: []
+            });
+          } else {
+            await MenuItem.findByIdAndUpdate(itemId, {
+              offerType: updatedOfferTypes
+            });
+          }
         }
-        
-        await MenuItem.findByIdAndUpdate(itemId, updateFields);
       }
     }
     
