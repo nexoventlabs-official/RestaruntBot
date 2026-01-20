@@ -270,31 +270,8 @@ export default function OffersPage() {
   const getResponsiveImage = (offer) => {
     if (!offer) return null;
     
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    let imageUrl;
-    
-    // More reliable tablet detection
-    const userAgent = navigator.userAgent.toLowerCase();
-    const isIOS = /ipad|iphone|ipod/.test(userAgent);
-    const isAndroidTablet = /android/.test(userAgent) && !/mobile/.test(userAgent);
-    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    
-    // Detect tablet: iPad or Android tablet, width between 768-1366px
-    const isTablet = (isIOS || isAndroidTablet || (isTouchDevice && width >= 768)) && width >= 768 && width <= 1366;
-    
-    // Mobile: < 768px (phones, small devices)
-    if (width < 768) {
-      imageUrl = offer.imageMobile || offer.imageTablet || offer.imageDesktop || offer.image;
-    }
-    // Tablet: iPad, Android tablets (768px - 1366px)
-    else if (isTablet) {
-      imageUrl = offer.imageTablet || offer.imageDesktop || offer.imageMobile || offer.image;
-    }
-    // Desktop: > 1366px OR (>= 1024px AND not touch device)
-    else {
-      imageUrl = offer.imageDesktop || offer.imageTablet || offer.imageMobile || offer.image;
-    }
+    // Use single universal image (16:9 ratio)
+    const imageUrl = offer.image;
     
     // Add cache-busting timestamp to force refresh
     if (imageUrl) {
@@ -355,17 +332,21 @@ export default function OffersPage() {
         </div>
       ) : (
         <div className="min-h-screen bg-gray-50">
-          {/* Hero Banner - Clean clickable image without overlays */}
+          {/* Hero Banner - Full width on desktop, no gaps */}
           <section 
-            className="relative transition-all duration-1000 bg-gray-900 overflow-hidden"
+            className="relative transition-all duration-1000 bg-gray-900 overflow-hidden w-full"
           >
-            {/* Full Image Display - No Cropping */}
+            {/* Full Image Display - Cover on desktop, contain on mobile/tablet */}
             {currentBannerOffer ? (
               <img 
                 src={getResponsiveImage(currentBannerOffer)}
                 alt={currentBannerOffer.offerType || 'Special Offer'}
-                className="w-full h-auto object-contain transition-opacity duration-1000"
-                style={{ maxHeight: '600px', minHeight: '250px' }}
+                className="w-full h-auto object-contain md:object-cover transition-opacity duration-1000"
+                style={{ 
+                  maxHeight: '600px', 
+                  minHeight: '250px',
+                  objectPosition: 'center'
+                }}
               />
             ) : (
               <div className="w-full bg-gray-200 flex items-center justify-center" style={{ minHeight: '250px' }}>
