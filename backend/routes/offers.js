@@ -431,7 +431,7 @@ router.delete('/:id', auth, async (req, res) => {
       deleteImage(offer.imageDesktop)
     ]);
     
-    // Remove this offer type from all menu items and clear offer prices
+    // Remove this offer type from all menu items and recalculate offer prices
     if (offer.offerType) {
       const MenuItem = require('../models/MenuItem');
       
@@ -449,10 +449,33 @@ router.delete('/:id', auth, async (req, res) => {
             offerType: []
           });
         } else {
-          // Still has other offers, just remove this one
-          await MenuItem.findByIdAndUpdate(item._id, {
-            offerType: updatedOfferTypes
+          // Still has other offers, recalculate offerPrice based on remaining offers
+          const remainingOffers = await Offer.find({ 
+            offerType: { $in: updatedOfferTypes },
+            isActive: true 
           });
+          
+          // Find the best discount from remaining offers
+          let bestDiscount = 0;
+          for (const remainingOffer of remainingOffers) {
+            if (remainingOffer.percentage && remainingOffer.percentage > bestDiscount) {
+              bestDiscount = remainingOffer.percentage;
+            }
+          }
+          
+          const updateFields = { offerType: updatedOfferTypes };
+          if (bestDiscount > 0) {
+            updateFields.offerPrice = Math.round(item.price * (1 - bestDiscount / 100));
+          } else {
+            // No percentage-based offers remain, remove offerPrice
+            await MenuItem.findByIdAndUpdate(item._id, {
+              $unset: { offerPrice: 1 },
+              offerType: updatedOfferTypes
+            });
+            continue;
+          }
+          
+          await MenuItem.findByIdAndUpdate(item._id, updateFields);
         }
       }
       
@@ -481,13 +504,74 @@ router.patch('/:id/toggle', auth, async (req, res) => {
     offer.isActive = !offer.isActive;
     await offer.save();
     
-    // If offer is being deactivated, remove it from all menu items
+    // If offer is being deactivated, recalculate prices for affected items
     if (wasActive && !offer.isActive && offer.offerType) {
       const MenuItem = require('../models/MenuItem');
-      await MenuItem.updateMany(
-        { offerType: offer.offerType },
-        { $pull: { offerType: offer.offerType } }
-      );
+      const itemsWithOffer = await MenuItem.find({ offerType: offer.offerType });
+      
+      for (const item of itemsWithOffer) {
+        const offerTypes = Array.isArray(item.offerType) ? item.offerType : [item.offerType];
+        
+        // Get remaining active offers for this item
+        const remainingOffers = await Offer.find({ 
+          offerType: { $in: offerTypes },
+          isActive: true,
+          _id: { $ne: offer._id } // Exclude the deactivated offer
+        });
+        
+        // Find the best discount from remaining active offers
+        let bestDiscount = 0;
+        for (const remainingOffer of remainingOffers) {
+          if (remainingOffer.percentage && remainingOffer.percentage > bestDiscount) {
+            bestDiscount = remainingOffer.percentage;
+          }
+        }
+        
+        if (bestDiscount > 0) {
+          await MenuItem.findByIdAndUpdate(item._id, {
+            offerPrice: Math.round(item.price * (1 - bestDiscount / 100))
+          });
+        } else {
+          // No active percentage-based offers remain, remove offerPrice
+          await MenuItem.findByIdAndUpdate(item._id, {
+            $unset: { offerPrice: 1 }
+          });
+        }
+      }
+      
+      // Emit SSE event to notify clients
+      const eventEmitter = require('../services/eventEmitter');
+      eventEmitter.emit('dataUpdate', { type: 'menu' });
+    }
+    
+    // If offer is being activated, apply it to items
+    if (!wasActive && offer.isActive && offer.offerType && offer.percentage) {
+      const MenuItem = require('../models/MenuItem');
+      const itemsWithOffer = await MenuItem.find({ offerType: offer.offerType });
+      
+      for (const item of itemsWithOffer) {
+        const offerTypes = Array.isArray(item.offerType) ? item.offerType : [item.offerType];
+        
+        // Get all active offers for this item
+        const activeOffers = await Offer.find({ 
+          offerType: { $in: offerTypes },
+          isActive: true
+        });
+        
+        // Find the best discount
+        let bestDiscount = 0;
+        for (const activeOffer of activeOffers) {
+          if (activeOffer.percentage && activeOffer.percentage > bestDiscount) {
+            bestDiscount = activeOffer.percentage;
+          }
+        }
+        
+        if (bestDiscount > 0) {
+          await MenuItem.findByIdAndUpdate(item._id, {
+            offerPrice: Math.round(item.price * (1 - bestDiscount / 100))
+          });
+        }
+      }
       
       // Emit SSE event to notify clients
       const eventEmitter = require('../services/eventEmitter');

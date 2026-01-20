@@ -361,35 +361,52 @@ export default function MenuItemFormScreen({ route, navigation }) {
               </View>
 
               {/* Applied Offers (Read-only) */}
-              {existingItem?.offerType && (Array.isArray(existingItem.offerType) ? existingItem.offerType.length > 0 : existingItem.offerType) && (
-                <View style={styles.appliedOffersSection}>
-                  <View style={styles.appliedOffersHeader}>
-                    <Ionicons name="pricetag" size={20} color="#22C55E" />
-                    <Text style={styles.appliedOffersTitle}>Applied Offers</Text>
-                  </View>
-                  <Text style={styles.appliedOffersHint}>These offers are applied from the Offers page</Text>
-                  <View style={styles.appliedOffersList}>
-                    {(Array.isArray(existingItem.offerType) ? existingItem.offerType : [existingItem.offerType]).map((offerType, index) => (
-                      <View key={index} style={styles.appliedOfferTag}>
-                        <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
-                        <Text style={styles.appliedOfferTagText}>{offerType}</Text>
-                      </View>
-                    ))}
-                  </View>
-                  {existingItem?.offerPrice && (
-                    <View style={styles.offerPriceInfo}>
-                      <Text style={styles.offerPriceLabel}>Offer Price:</Text>
-                      <Text style={styles.offerPriceValue}>₹{existingItem.offerPrice}</Text>
-                      <View style={styles.discountBadge}>
-                        <Ionicons name="trending-down" size={14} color="#22C55E" />
-                        <Text style={styles.discountText}>
-                          {Math.round(((existingItem.price - existingItem.offerPrice) / existingItem.price) * 100)}% OFF
-                        </Text>
-                      </View>
+              {existingItem?.offerType && (Array.isArray(existingItem.offerType) ? existingItem.offerType.length > 0 : existingItem.offerType) && (() => {
+                // Filter to only show offers that still exist
+                const itemOfferTypes = Array.isArray(existingItem.offerType) ? existingItem.offerType : [existingItem.offerType];
+                const validOfferTypes = itemOfferTypes.filter(offerType => 
+                  offers.some(offer => offer.offerType === offerType)
+                );
+                
+                // Only show section if there are valid offers
+                if (validOfferTypes.length === 0) return null;
+                
+                return (
+                  <View style={styles.appliedOffersSection}>
+                    <View style={styles.appliedOffersHeader}>
+                      <Ionicons name="pricetag" size={20} color="#22C55E" />
+                      <Text style={styles.appliedOffersTitle}>Applied Offers</Text>
                     </View>
-                  )}
-                </View>
-              )}
+                    <Text style={styles.appliedOffersHint}>These offers are applied from the Offers page</Text>
+                    <View style={styles.appliedOffersList}>
+                      {validOfferTypes.map((offerType, index) => {
+                        const offer = offers.find(o => o.offerType === offerType);
+                        return (
+                          <View key={index} style={styles.appliedOfferTag}>
+                            <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
+                            <Text style={styles.appliedOfferTagText}>{offerType}</Text>
+                            {offer?.percentage && (
+                              <Text style={styles.appliedOfferPercentage}> ({offer.percentage}% OFF)</Text>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                    {existingItem?.offerPrice && (
+                      <View style={styles.offerPriceInfo}>
+                        <Text style={styles.offerPriceLabel}>Offer Price:</Text>
+                        <Text style={styles.offerPriceValue}>₹{existingItem.offerPrice}</Text>
+                        <View style={styles.discountBadge}>
+                          <Ionicons name="trending-down" size={14} color="#22C55E" />
+                          <Text style={styles.discountText}>
+                            {Math.round(((existingItem.price - existingItem.offerPrice) / existingItem.price) * 100)}% OFF
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                );
+              })()}
 
               {/* Tags */}
               <View style={styles.inputGroup}>
@@ -678,6 +695,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#059669',
+  },
+  appliedOfferPercentage: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#10B981',
   },
   offerPriceInfo: {
     flexDirection: 'row',
