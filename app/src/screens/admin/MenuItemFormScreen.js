@@ -28,16 +28,12 @@ export default function MenuItemFormScreen({ route, navigation }) {
   const [name, setName] = useState(existingItem?.name || '');
   const [description, setDescription] = useState(existingItem?.description || '');
   const [price, setPrice] = useState(existingItem?.price?.toString() || '');
-  const [originalPrice, setOriginalPrice] = useState(existingItem?.originalPrice?.toString() || '');
   const [selectedCategories, setSelectedCategories] = useState(
     Array.isArray(existingItem?.category) ? existingItem.category : (existingItem?.category ? [existingItem.category] : [])
   );
   const [unit, setUnit] = useState(existingItem?.unit || 'piece');
   const [quantity, setQuantity] = useState(existingItem?.quantity?.toString() || '1');
   const [foodType, setFoodType] = useState(existingItem?.foodType || 'veg');
-  const [selectedOfferTypes, setSelectedOfferTypes] = useState(
-    Array.isArray(existingItem?.offerType) ? existingItem.offerType : (existingItem?.offerType ? [existingItem.offerType] : [])
-  );
   const [available, setAvailable] = useState(existingItem?.available !== false);
   const [preparationTime, setPreparationTime] = useState(existingItem?.preparationTime?.toString() || '15');
   const [tags, setTags] = useState(existingItem?.tags?.join(', ') || '');
@@ -50,7 +46,6 @@ export default function MenuItemFormScreen({ route, navigation }) {
   const [offers, setOffers] = useState([]);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showUnitPicker, setShowUnitPicker] = useState(false);
-  const [showOfferPicker, setShowOfferPicker] = useState(false);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -79,12 +74,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
       setCategories(catResponse.data || []);
       // Filter offers that have offerType
       const activeOffers = offerResponse.data?.filter(o => o.isActive && o.offerType && o.offerType.trim() !== '') || [];
-      console.log('Fetched offers:', activeOffers); // Debug log
       setOffers(activeOffers);
-      
-      // Remove any selected offer types that are no longer available
-      const availableOfferTypes = activeOffers.map(o => o.offerType);
-      setSelectedOfferTypes(prev => prev.filter(ot => availableOfferTypes.includes(ot)));
     } catch (error) {
       console.error('Error fetching data:', error);
     }
@@ -132,14 +122,6 @@ export default function MenuItemFormScreen({ route, navigation }) {
     }
   };
 
-  const toggleOfferType = (offerTypeValue) => {
-    if (selectedOfferTypes.includes(offerTypeValue)) {
-      setSelectedOfferTypes(selectedOfferTypes.filter(o => o !== offerTypeValue));
-    } else {
-      setSelectedOfferTypes([...selectedOfferTypes, offerTypeValue]);
-    }
-  };
-
   const handleSubmit = async () => {
     if (!name.trim() || !price.trim() || selectedCategories.length === 0) {
       Alert.alert('Error', 'Please fill in name, price, and select at least one category');
@@ -152,16 +134,10 @@ export default function MenuItemFormScreen({ route, navigation }) {
       formData.append('name', name);
       formData.append('description', description);
       formData.append('price', price);
-      if (originalPrice && originalPrice.trim()) {
-        formData.append('originalPrice', originalPrice);
-      }
       formData.append('category', JSON.stringify(selectedCategories));
       formData.append('unit', unit);
       formData.append('quantity', quantity);
       formData.append('foodType', foodType);
-      if (selectedOfferTypes && selectedOfferTypes.length > 0) {
-        formData.append('offerType', JSON.stringify(selectedOfferTypes));
-      }
       formData.append('available', available.toString());
       formData.append('preparationTime', preparationTime);
       formData.append('tags', tags);
@@ -298,48 +274,21 @@ export default function MenuItemFormScreen({ route, navigation }) {
                 />
               </View>
 
-              {/* Price & Original Price */}
-              <View style={styles.rowInputs}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>Sale Price <Text style={styles.required}>*</Text></Text>
-                  <View style={styles.priceInputContainer}>
-                    <Text style={styles.currencySymbol}>₹</Text>
-                    <TextInput
-                      style={styles.priceInput}
-                      value={price}
-                      onChangeText={setPrice}
-                      placeholder="0"
-                      placeholderTextColor="#9CA3AF"
-                      keyboardType="numeric"
-                    />
-                  </View>
-                </View>
-
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>Original Price</Text>
-                  <View style={styles.priceInputContainer}>
-                    <Text style={styles.currencySymbol}>₹</Text>
-                    <TextInput
-                      style={styles.priceInput}
-                      value={originalPrice}
-                      onChangeText={setOriginalPrice}
-                      placeholder="0"
-                      placeholderTextColor="#9CA3AF"
-                      keyboardType="numeric"
-                    />
-                  </View>
+              {/* Price */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Price <Text style={styles.required}>*</Text></Text>
+                <View style={styles.priceInputContainer}>
+                  <Text style={styles.currencySymbol}>₹</Text>
+                  <TextInput
+                    style={styles.priceInput}
+                    value={price}
+                    onChangeText={setPrice}
+                    placeholder="0"
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="numeric"
+                  />
                 </View>
               </View>
-
-              {/* Show discount percentage if original price is set */}
-              {originalPrice && parseFloat(originalPrice) > parseFloat(price) && (
-                <View style={styles.discountBadge}>
-                  <Ionicons name="pricetag" size={16} color="#22C55E" />
-                  <Text style={styles.discountText}>
-                    {Math.round(((parseFloat(originalPrice) - parseFloat(price)) / parseFloat(originalPrice)) * 100)}% OFF
-                  </Text>
-                </View>
-              )}
 
               {/* Quantity & Unit */}
               <View style={styles.rowInputs}>
@@ -411,28 +360,36 @@ export default function MenuItemFormScreen({ route, navigation }) {
                 </View>
               </View>
 
-              {/* Offer Type */}
-              {/* Offer Type */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Offer Types (Optional)</Text>
-                <TouchableOpacity style={styles.pickerButton} onPress={() => setShowOfferPicker(true)}>
-                  <View style={styles.selectedTags}>
-                    {selectedOfferTypes.length === 0 ? (
-                      <Text style={styles.pickerPlaceholder}>Select offer types</Text>
-                    ) : (
-                      selectedOfferTypes.map(offerType => (
-                        <View key={offerType} style={styles.selectedTag}>
-                          <Text style={styles.selectedTagText}>{offerType}</Text>
-                          <TouchableOpacity onPress={() => toggleOfferType(offerType)}>
-                            <Ionicons name="close" size={14} color="#fff" />
-                          </TouchableOpacity>
-                        </View>
-                      ))
-                    )}
+              {/* Applied Offers (Read-only) */}
+              {existingItem?.offerType && (Array.isArray(existingItem.offerType) ? existingItem.offerType.length > 0 : existingItem.offerType) && (
+                <View style={styles.appliedOffersSection}>
+                  <View style={styles.appliedOffersHeader}>
+                    <Ionicons name="pricetag" size={20} color="#22C55E" />
+                    <Text style={styles.appliedOffersTitle}>Applied Offers</Text>
                   </View>
-                  <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
-                </TouchableOpacity>
-              </View>
+                  <Text style={styles.appliedOffersHint}>These offers are applied from the Offers page</Text>
+                  <View style={styles.appliedOffersList}>
+                    {(Array.isArray(existingItem.offerType) ? existingItem.offerType : [existingItem.offerType]).map((offerType, index) => (
+                      <View key={index} style={styles.appliedOfferTag}>
+                        <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
+                        <Text style={styles.appliedOfferTagText}>{offerType}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  {existingItem?.offerPrice && (
+                    <View style={styles.offerPriceInfo}>
+                      <Text style={styles.offerPriceLabel}>Offer Price:</Text>
+                      <Text style={styles.offerPriceValue}>₹{existingItem.offerPrice}</Text>
+                      <View style={styles.discountBadge}>
+                        <Ionicons name="trending-down" size={14} color="#22C55E" />
+                        <Text style={styles.discountText}>
+                          {Math.round(((existingItem.price - existingItem.offerPrice) / existingItem.price) * 100)}% OFF
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
 
               {/* Tags */}
               <View style={styles.inputGroup}>
@@ -548,56 +505,6 @@ export default function MenuItemFormScreen({ route, navigation }) {
               )}
               contentContainerStyle={styles.modalList}
             />
-          </View>
-        </View>
-      </Modal>
-
-      {/* Offer Type Picker Modal */}
-      <Modal visible={showOfferPicker} animationType="slide" transparent={true} onRequestClose={() => setShowOfferPicker(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Offer Types</Text>
-              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowOfferPicker(false)}>
-                <Ionicons name="close" size={24} color="#696969" />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={offers}
-              keyExtractor={(item) => item._id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.categoryOption}
-                  onPress={() => toggleOfferType(item.offerType)}
-                >
-                  <View style={[styles.checkbox, selectedOfferTypes.includes(item.offerType) && styles.checkboxChecked]}>
-                    {selectedOfferTypes.includes(item.offerType) && <Ionicons name="checkmark" size={16} color="#fff" />}
-                  </View>
-                  <View style={styles.offerOptionContent}>
-                    {item.image && (
-                      <Image source={{ uri: item.image }} style={styles.offerOptionImage} />
-                    )}
-                    <Text style={styles.categoryOptionText}>
-                      {item.offerType}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <View style={styles.emptyOfferContainer}>
-                  <Ionicons name="pricetag-outline" size={48} color="#9CA3AF" />
-                  <Text style={styles.emptyText}>No offers available</Text>
-                  <Text style={styles.emptySubText}>Add offers with offer types from Offers screen first</Text>
-                </View>
-              }
-              contentContainerStyle={styles.modalList}
-            />
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.modalDoneButton} onPress={() => setShowOfferPicker(false)}>
-                <Text style={styles.modalDoneButtonText}>Done ({selectedOfferTypes.length} selected)</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
       </Modal>
@@ -726,6 +633,87 @@ const styles = StyleSheet.create({
   switchIconContainer: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F0FDF4', justifyContent: 'center', alignItems: 'center' },
   switchLabel: { fontSize: 15, fontWeight: '700', color: '#1C1C1C' },
   switchHint: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+  
+  // Applied Offers Section
+  appliedOffersSection: {
+    backgroundColor: '#F0FDF4',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#BBF7D0',
+    gap: 12,
+  },
+  appliedOffersHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  appliedOffersTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1C1C1C',
+  },
+  appliedOffersHint: {
+    fontSize: 12,
+    color: '#059669',
+    marginTop: -4,
+  },
+  appliedOffersList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  appliedOfferTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  appliedOfferTagText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#059669',
+  },
+  offerPriceInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  offerPriceLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  offerPriceValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#22C55E',
+  },
+  discountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginLeft: 'auto',
+  },
+  discountText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#22C55E',
+  },
   
   // Footer
   footer: { 

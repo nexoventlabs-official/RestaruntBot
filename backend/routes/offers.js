@@ -31,7 +31,7 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     const { 
       title, description, offerType, code, discountType, discountValue, 
       minOrderAmount, validFrom, validUntil, isActive, showAsPopup,
-      buttonText, buttonLink 
+      buttonText, buttonLink, percentage, appliedItems, appliedCategories
     } = req.body;
     
     let imageMobileUrl = '';
@@ -75,10 +75,25 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       return res.status(400).json({ error: 'At least one image is required' });
     }
 
+    // Parse appliedItems and appliedCategories if they're JSON strings
+    let parsedAppliedItems = [];
+    let parsedAppliedCategories = [];
+    
+    if (appliedItems) {
+      parsedAppliedItems = typeof appliedItems === 'string' ? JSON.parse(appliedItems) : appliedItems;
+    }
+    
+    if (appliedCategories) {
+      parsedAppliedCategories = typeof appliedCategories === 'string' ? JSON.parse(appliedCategories) : appliedCategories;
+    }
+
     const offer = new Offer({
       title,
       description,
       offerType: offerType || '',
+      percentage: percentage ? parseFloat(percentage) : null,
+      appliedItems: parsedAppliedItems,
+      appliedCategories: parsedAppliedCategories,
       image: legacyImageUrl || imageDesktopUrl || imageTabletUrl || imageMobileUrl, // Legacy field
       imageMobile: imageMobileUrl,
       imageTablet: imageTabletUrl,
@@ -97,12 +112,41 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
 
     await offer.save();
     
+    // Apply discount to selected items if percentage is provided
+    if (percentage && parsedAppliedItems.length > 0) {
+      const MenuItem = require('../models/MenuItem');
+      const discountPercent = parseFloat(percentage);
+      
+      for (const itemId of parsedAppliedItems) {
+        const item = await MenuItem.findById(itemId);
+        if (item) {
+          // Calculate offer price
+          const offerPrice = Math.round(item.price * (1 - discountPercent / 100));
+          
+          // Add offer type to item's offerType array
+          const offerTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
+          if (!offerTypes.includes(offerType)) {
+            offerTypes.push(offerType);
+          }
+          
+          // Update item
+          await MenuItem.findByIdAndUpdate(itemId, {
+            offerPrice: offerPrice,
+            offerType: offerTypes
+          });
+        }
+      }
+      console.log(`Applied ${discountPercent}% discount to ${parsedAppliedItems.length} items`);
+    }
+    
     // Emit SSE event to notify clients to refresh (cache-busting)
     const eventEmitter = require('../services/eventEmitter');
     eventEmitter.emit('dataUpdate', { type: 'offers' });
+    eventEmitter.emit('dataUpdate', { type: 'menu' });
     
     res.status(201).json(offer);
   } catch (err) {
+    console.error('Error creating offer:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -229,14 +273,32 @@ router.delete('/:id', auth, async (req, res) => {
       deleteImage(offer.imageDesktop)
     ]);
     
-    // Remove this offer type from all menu items
+    // Remove this offer type from all menu items and clear offer prices
     if (offer.offerType) {
       const MenuItem = require('../models/MenuItem');
-      await MenuItem.updateMany(
-        { offerType: offer.offerType },
-        { $pull: { offerType: offer.offerType } }
-      );
-      console.log(`Removed offer type "${offer.offerType}" from all menu items`);
+      
+      // Get all items that have this offer type
+      const itemsWithOffer = await MenuItem.find({ offerType: offer.offerType });
+      
+      for (const item of itemsWithOffer) {
+        const offerTypes = Array.isArray(item.offerType) ? item.offerType : [item.offerType];
+        const updatedOfferTypes = offerTypes.filter(ot => ot !== offer.offerType);
+        
+        // If no more offers, remove offerPrice
+        if (updatedOfferTypes.length === 0) {
+          await MenuItem.findByIdAndUpdate(item._id, {
+            $unset: { offerPrice: 1 },
+            offerType: []
+          });
+        } else {
+          // Still has other offers, just remove this one
+          await MenuItem.findByIdAndUpdate(item._id, {
+            offerType: updatedOfferTypes
+          });
+        }
+      }
+      
+      console.log(`Removed offer type "${offer.offerType}" and offer prices from ${itemsWithOffer.length} menu items`);
     }
     
     await Offer.findByIdAndDelete(req.params.id);

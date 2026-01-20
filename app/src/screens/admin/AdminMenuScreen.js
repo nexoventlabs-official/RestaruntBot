@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, ScrollView,
   RefreshControl, TouchableOpacity, Image, Alert, ActivityIndicator,
@@ -84,12 +84,15 @@ export default function AdminMenuScreen({ navigation, route }) {
   useEffect(() => {
     fetchMenu();
     fetchCategories();
+  }, []);
+
+  useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       fetchMenu();
       fetchCategories();
     });
     return unsubscribe;
-  }, [navigation, fetchMenu, fetchCategories]);
+  }, [navigation]);
 
   // Update food type filter when route params change
   useEffect(() => {
@@ -106,9 +109,8 @@ export default function AdminMenuScreen({ navigation, route }) {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchMenu();
-    fetchCategories();
-  }, [fetchMenu, fetchCategories]);
+    Promise.all([fetchMenu(), fetchCategories()]);
+  }, []);
 
   const toggleAvailability = async (item) => {
     setTogglingId(item._id);
@@ -312,35 +314,43 @@ export default function AdminMenuScreen({ navigation, route }) {
     );
   };
 
-  // Get paused category names
-  const pausedCategoryNames = categories.filter(c => c.isPaused).map(c => c.name);
+  // Get paused category names - memoized
+  const pausedCategoryNames = useMemo(() => 
+    categories.filter(c => c.isPaused).map(c => c.name),
+    [categories]
+  );
 
-  const isItemPaused = (item) => {
+  const isItemPaused = useCallback((item) => {
     if (item.isPaused) return true;
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
     return itemCategories.every(cat => pausedCategoryNames.includes(cat));
-  };
+  }, [pausedCategoryNames]);
 
-  // Filter items
-  const filteredItems = items.filter(item => {
-    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-    const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      itemCategories.some(cat => cat?.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesCategory = selectedCategory === 'all' || itemCategories.includes(selectedCategory);
-    const matchesStatus = statusFilter === 'all' ||
-      (statusFilter === 'available' && item.available) ||
-      (statusFilter === 'unavailable' && !item.available);
-    const matchesFoodType = foodTypeFilter === 'all' || item.foodType === foodTypeFilter;
-    return matchesSearch && matchesCategory && matchesStatus && matchesFoodType;
-  });
+  // Filter items - memoized
+  const filteredItems = useMemo(() => {
+    return items.filter(item => {
+      const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+      const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        itemCategories.some(cat => cat?.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesCategory = selectedCategory === 'all' || itemCategories.includes(selectedCategory);
+      const matchesStatus = statusFilter === 'all' ||
+        (statusFilter === 'available' && item.available) ||
+        (statusFilter === 'unavailable' && !item.available);
+      const matchesFoodType = foodTypeFilter === 'all' || item.foodType === foodTypeFilter;
+      return matchesSearch && matchesCategory && matchesStatus && matchesFoodType;
+    });
+  }, [items, searchTerm, selectedCategory, statusFilter, foodTypeFilter]);
 
-  // Stats
-  const totalItems = items.length;
-  const availableCount = items.filter(i => i.available).length;
-  const unavailableCount = items.filter(i => !i.available).length;
-  const uniqueCategories = [...new Set(items.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))];
+  // Stats - memoized
+  const stats = useMemo(() => {
+    const totalItems = items.length;
+    const availableCount = items.filter(i => i.available).length;
+    const unavailableCount = items.filter(i => !i.available).length;
+    const uniqueCategories = [...new Set(items.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))];
+    return { totalItems, availableCount, unavailableCount, uniqueCategories };
+  }, [items]);
 
-  const renderItem = ({ item, index }) => {
+  const renderItem = useCallback(({ item, index }) => {
     const isPaused = isItemPaused(item);
 
     return (
@@ -424,7 +434,9 @@ export default function AdminMenuScreen({ navigation, route }) {
         </TouchableOpacity>
       </Animated.View>
     );
-  };
+  }, [fadeAnim, scaleAnim, isItemPaused, navigation, togglingId]);
+
+  const keyExtractor = useCallback((item) => item._id, []);
 
   return (
     <View style={styles.container}>
@@ -444,7 +456,7 @@ export default function AdminMenuScreen({ navigation, route }) {
                 </TouchableOpacity>
                 <View>
                   <Text style={styles.title}>Menu</Text>
-                  <Text style={styles.subtitle}>{totalItems} items • {uniqueCategories.length} categories</Text>
+                  <Text style={styles.subtitle}>{stats.totalItems} items • {stats.uniqueCategories.length} categories</Text>
                 </View>
               </View>
               <View style={styles.headerButtons}>
@@ -510,7 +522,7 @@ export default function AdminMenuScreen({ navigation, route }) {
           <View style={styles.statCardDecor}>
             <Ionicons name="restaurant" size={40} color="rgba(255,255,255,0.15)" />
           </View>
-          <Text style={styles.statValueWhite}>{totalItems}</Text>
+          <Text style={styles.statValueWhite}>{stats.totalItems}</Text>
           <Text style={styles.statLabelWhite}>TOTAL</Text>
         </LinearGradient>
 
@@ -523,7 +535,7 @@ export default function AdminMenuScreen({ navigation, route }) {
           <View style={styles.statCardDecor}>
             <Ionicons name="folder" size={40} color="rgba(255,255,255,0.15)" />
           </View>
-          <Text style={styles.statValueWhite}>{uniqueCategories.length}</Text>
+          <Text style={styles.statValueWhite}>{stats.uniqueCategories.length}</Text>
           <Text style={styles.statLabelWhite}>CATEGORIES</Text>
         </LinearGradient>
 
@@ -536,7 +548,7 @@ export default function AdminMenuScreen({ navigation, route }) {
           <View style={styles.statCardDecor}>
             <Ionicons name="checkmark-circle" size={40} color="rgba(255,255,255,0.15)" />
           </View>
-          <Text style={styles.statValueWhite}>{availableCount}</Text>
+          <Text style={styles.statValueWhite}>{stats.availableCount}</Text>
           <Text style={styles.statLabelWhite}>IN STOCK</Text>
         </LinearGradient>
 
@@ -549,7 +561,7 @@ export default function AdminMenuScreen({ navigation, route }) {
           <View style={styles.statCardDecor}>
             <Ionicons name="close-circle" size={40} color="rgba(255,255,255,0.15)" />
           </View>
-          <Text style={styles.statValueWhite}>{unavailableCount}</Text>
+          <Text style={styles.statValueWhite}>{stats.unavailableCount}</Text>
           <Text style={styles.statLabelWhite}>OUT</Text>
         </LinearGradient>
       </View>
@@ -689,7 +701,7 @@ export default function AdminMenuScreen({ navigation, route }) {
         <FlatList
           data={filteredItems}
           renderItem={renderItem}
-          keyExtractor={(item) => item._id}
+          keyExtractor={keyExtractor}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[ZOMATO_RED]} tintColor={ZOMATO_RED} />}
           showsVerticalScrollIndicator={false}

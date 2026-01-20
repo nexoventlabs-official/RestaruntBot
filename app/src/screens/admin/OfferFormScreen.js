@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, Image, Alert, ActivityIndicator, Animated, Platform,
-  KeyboardAvoidingView, StatusBar
+  KeyboardAvoidingView, StatusBar, Modal, FlatList
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,15 +18,19 @@ export default function OfferFormScreen({ route, navigation }) {
   const isEditing = !!existingOffer;
 
   const [offerType, setOfferType] = useState(existingOffer?.offerType || '');
+  const [percentage, setPercentage] = useState(existingOffer?.percentage?.toString() || '');
   
-  // Three separate images for different screen sizes
-  const [imageMobile, setImageMobile] = useState(existingOffer?.imageMobile || null);
-  const [imageTablet, setImageTablet] = useState(existingOffer?.imageTablet || null);
-  const [imageDesktop, setImageDesktop] = useState(existingOffer?.imageDesktop || null);
+  // Single universal image for all devices
+  const [image, setImage] = useState(existingOffer?.imageMobile || existingOffer?.imageTablet || existingOffer?.imageDesktop || null);
+  const [newImage, setNewImage] = useState(null);
   
-  const [newImageMobile, setNewImageMobile] = useState(null);
-  const [newImageTablet, setNewImageTablet] = useState(null);
-  const [newImageDesktop, setNewImageDesktop] = useState(null);
+  // Categories and Items
+  const [categories, setCategories] = useState([]);
+  const [menuItems, setMenuItems] = useState([]);
+  const [selectedCategories, setSelectedCategories] = useState(existingOffer?.appliedCategories || []);
+  const [selectedItems, setSelectedItems] = useState(existingOffer?.appliedItems || []);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [expandedCategory, setExpandedCategory] = useState(null);
   
   const [loading, setLoading] = useState(false);
   
@@ -38,9 +42,77 @@ export default function OfferFormScreen({ route, navigation }) {
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
     ]).start();
+    fetchCategoriesAndItems();
   }, []);
 
-  const pickImage = async (imageType) => {
+  // Auto-expand first category when modal opens
+  useEffect(() => {
+    if (showCategoryModal && categories.length > 0 && !expandedCategory) {
+      setExpandedCategory(categories[0].name);
+    }
+  }, [showCategoryModal, categories]);
+
+  const fetchCategoriesAndItems = async () => {
+    try {
+      const [catResponse, itemsResponse] = await Promise.all([
+        api.get('/categories'),
+        api.get('/menu')
+      ]);
+      console.log('Categories fetched:', catResponse.data?.length);
+      console.log('Menu items fetched:', itemsResponse.data?.length);
+      setCategories(catResponse.data || []);
+      setMenuItems(itemsResponse.data || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      Alert.alert('Error', 'Failed to load categories and items');
+    }
+  };
+
+  const toggleCategory = (categoryName) => {
+    if (selectedCategories.includes(categoryName)) {
+      setSelectedCategories(selectedCategories.filter(c => c !== categoryName));
+    } else {
+      setSelectedCategories([...selectedCategories, categoryName]);
+    }
+  };
+
+  const toggleItem = (itemId) => {
+    console.log('Toggling item:', itemId, 'Currently selected:', selectedItems.includes(itemId));
+    if (selectedItems.includes(itemId)) {
+      setSelectedItems(selectedItems.filter(id => id !== itemId));
+    } else {
+      setSelectedItems([...selectedItems, itemId]);
+    }
+  };
+
+  const selectAllItemsInCategory = (categoryName) => {
+    const categoryItems = menuItems.filter(item => 
+      Array.isArray(item.category) ? item.category.includes(categoryName) : item.category === categoryName
+    );
+    const categoryItemIds = categoryItems.map(item => item._id);
+    
+    // Check if all items in this category are already selected
+    const allSelected = categoryItemIds.every(id => selectedItems.includes(id));
+    
+    if (allSelected) {
+      // Deselect all items in this category
+      setSelectedItems(selectedItems.filter(id => !categoryItemIds.includes(id)));
+    } else {
+      // Select all items in this category
+      const newSelectedItems = [...new Set([...selectedItems, ...categoryItemIds])];
+      setSelectedItems(newSelectedItems);
+    }
+  };
+
+  const getItemsByCategory = (categoryName) => {
+    const items = menuItems.filter(item => 
+      Array.isArray(item.category) ? item.category.includes(categoryName) : item.category === categoryName
+    );
+    console.log(`Items in category "${categoryName}":`, items.length);
+    return items;
+  };
+
+  const pickImage = async () => {
     try {
       // Request permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -49,14 +121,8 @@ export default function OfferFormScreen({ route, navigation }) {
         return;
       }
 
-      // Default aspect ratios for each device type (no user prompt)
-      const defaultRatios = {
-        mobile: [4, 3],    // 4:3 (Instagram Post) - Default for mobile
-        tablet: [16, 9],   // 16:9 (Landscape) - Default for tablet
-        desktop: [3, 1]    // 3:1 (Twitter Header) - Default for desktop
-      };
-
-      const aspectRatio = defaultRatios[imageType];
+      // Universal aspect ratio 19:6 for all devices
+      const aspectRatio = [19, 6];
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -69,48 +135,8 @@ export default function OfferFormScreen({ route, navigation }) {
       
       if (!result.canceled) {
         const imageData = result.assets[0];
-        
-        if (imageType === 'mobile') {
-          setNewImageMobile(imageData);
-          setImageMobile(imageData.uri);
-        } else if (imageType === 'tablet') {
-          setNewImageTablet(imageData);
-          setImageTablet(imageData.uri);
-        } else if (imageType === 'desktop') {
-          setNewImageDesktop(imageData);
-          setImageDesktop(imageData.uri);
-        }
-      }
-    } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
-    }
-  };
-
-  const pickImageWithRatio = async (imageType, aspectRatio) => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        allowsMultipleSelection: false,
-        aspect: aspectRatio,
-        quality: 0.9,
-        exif: false,
-      });
-      
-      if (!result.canceled) {
-        const imageData = result.assets[0];
-        
-        if (imageType === 'mobile') {
-          setNewImageMobile(imageData);
-          setImageMobile(imageData.uri);
-        } else if (imageType === 'tablet') {
-          setNewImageTablet(imageData);
-          setImageTablet(imageData.uri);
-        } else if (imageType === 'desktop') {
-          setNewImageDesktop(imageData);
-          setImageDesktop(imageData.uri);
-        }
+        setNewImage(imageData);
+        setImage(imageData.uri);
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -119,9 +145,9 @@ export default function OfferFormScreen({ route, navigation }) {
   };
 
   const handleSubmit = async () => {
-    // At least one image is required
-    if (!imageMobile && !imageTablet && !imageDesktop && !newImageMobile && !newImageTablet && !newImageDesktop) {
-      Alert.alert('Error', 'Please add at least one banner image');
+    // Image is required
+    if (!image && !newImage) {
+      Alert.alert('Error', 'Please add a banner image');
       return;
     }
 
@@ -130,205 +156,107 @@ export default function OfferFormScreen({ route, navigation }) {
       return;
     }
 
+    // If percentage is provided, validate it
+    if (percentage && (isNaN(percentage) || parseFloat(percentage) <= 0 || parseFloat(percentage) > 100)) {
+      Alert.alert('Error', 'Please enter a valid percentage between 1 and 100');
+      return;
+    }
+
     setLoading(true);
     try {
       const formData = new FormData();
       formData.append('isActive', 'true');
       formData.append('offerType', offerType.trim());
-
-      // Add mobile image if new one selected
-      if (newImageMobile) {
-        const filename = newImageMobile.uri.split('/').pop();
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : 'image/jpeg';
-        formData.append('imageMobile', { uri: newImageMobile.uri, name: filename, type });
+      
+      if (percentage && percentage.trim()) {
+        formData.append('percentage', percentage);
+      }
+      
+      if (selectedItems.length > 0) {
+        formData.append('appliedItems', JSON.stringify(selectedItems));
+      }
+      
+      if (selectedCategories.length > 0) {
+        formData.append('appliedCategories', JSON.stringify(selectedCategories));
       }
 
-      // Add tablet image if new one selected
-      if (newImageTablet) {
-        const filename = newImageTablet.uri.split('/').pop();
+      // Add the universal image for all three device types
+      if (newImage) {
+        const filename = newImage.uri.split('/').pop();
         const match = /\.(\w+)$/.exec(filename);
         const type = match ? `image/${match[1]}` : 'image/jpeg';
-        formData.append('imageTablet', { uri: newImageTablet.uri, name: filename, type });
-      }
-
-      // Add desktop image if new one selected
-      if (newImageDesktop) {
-        const filename = newImageDesktop.uri.split('/').pop();
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : 'image/jpeg';
-        formData.append('imageDesktop', { uri: newImageDesktop.uri, name: filename, type });
+        
+        // Send same image for all device types
+        formData.append('imageMobile', { uri: newImage.uri, name: filename, type });
+        formData.append('imageTablet', { uri: newImage.uri, name: filename, type });
+        formData.append('imageDesktop', { uri: newImage.uri, name: filename, type });
       }
 
       if (isEditing) {
         await api.put(`/offers/${existingOffer._id}`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
-        Alert.alert('Success', 'Offer updated');
+        Alert.alert('Success', 'Offer updated successfully', [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
       } else {
         await api.post('/offers', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
-        Alert.alert('Success', 'Offer created');
+        Alert.alert('Success', 'Offer created successfully', [
+          { text: 'OK' }
+        ]);
+        // Don't navigate back - keep the form with data
       }
-      navigation.goBack();
     } catch (error) {
+      console.error('Error saving offer:', error);
       Alert.alert('Error', error.response?.data?.error || 'Failed to save offer');
     } finally {
       setLoading(false);
     }
   };
 
-  const renderImageUpload = (imageType, image, title, subtitle, recommendedSize) => {
-    // Device frame styles based on type
-    const getDeviceFrameStyle = () => {
-      switch(imageType) {
-        case 'mobile':
-          return {
-            container: styles.mobileFrame,
-            screen: styles.mobileScreen,
-            label: 'Mobile Preview',
-            icon: 'phone-portrait',
-            showHeader: true,
-            showButton: true
-          };
-        case 'tablet':
-          return {
-            container: styles.tabletFrame,
-            screen: styles.tabletScreen,
-            label: 'Tablet Preview',
-            icon: 'tablet-landscape',
-            showHeader: true,
-            showButton: true
-          };
-        case 'desktop':
-          return {
-            container: styles.desktopFrame,
-            screen: styles.desktopScreen,
-            label: 'Desktop Preview',
-            icon: 'desktop',
-            showHeader: true,
-            showButton: true
-          };
-      }
-    };
-
-    const deviceFrame = getDeviceFrameStyle();
+  const renderImageUpload = () => {
 
     return (
       <View style={styles.imageSection}>
         <View style={styles.imageSectionHeader}>
           <Ionicons 
-            name={deviceFrame.icon} 
+            name="images" 
             size={20} 
             color={ZOMATO_RED} 
           />
-          <Text style={styles.imageSectionTitle}>{title}</Text>
+          <Text style={styles.imageSectionTitle}>Offer Banner</Text>
         </View>
-        <Text style={styles.imageSectionHint}>{subtitle}</Text>
-        <Text style={styles.imageSectionRecommended}>Recommended: {recommendedSize}</Text>
+        <Text style={styles.imageSectionHint}>Universal image for all devices (Mobile, Tablet, Desktop, iPad)</Text>
+        <Text style={styles.imageSectionRecommended}>Recommended: 19:6 Aspect Ratio</Text>
         
-        {/* Device Preview Frame */}
+        {/* Image Preview */}
         {image && (
-          <View style={styles.devicePreviewContainer}>
-            <Text style={styles.devicePreviewLabel}>{deviceFrame.label}</Text>
-            <View style={deviceFrame.container}>
-              {/* Device Screen */}
-              <View style={deviceFrame.screen}>
-                <ScrollView 
-                  style={styles.deviceScrollView}
-                  showsVerticalScrollIndicator={false}
-                  bounces={false}
-                >
-                  {/* Mock Website Header */}
-                  <View style={styles.mockWebsiteHeader}>
-                    <View style={styles.mockLogo}>
-                      <Ionicons name="restaurant" size={imageType === 'mobile' ? 12 : 14} color="#fff" />
-                      <Text style={[styles.mockLogoText, imageType === 'mobile' && styles.mockLogoTextSmall]}>
-                        FoodieSpot
-                      </Text>
-                    </View>
-                    <View style={styles.mockHeaderIcons}>
-                      <Ionicons name="search" size={imageType === 'mobile' ? 12 : 14} color="#fff" />
-                      <Ionicons name="heart" size={imageType === 'mobile' ? 12 : 14} color="#fff" />
-                      <Ionicons name="cart" size={imageType === 'mobile' ? 12 : 14} color="#fff" />
-                    </View>
-                  </View>
-                  
-                  {/* Offer Banner Image */}
-                  <View style={styles.mockBannerContainer}>
-                    <Image 
-                      source={{ uri: image }} 
-                      style={[
-                        styles.mockBannerImage,
-                        imageType === 'mobile' && styles.mockBannerImageMobile,
-                        imageType === 'tablet' && styles.mockBannerImageTablet,
-                        imageType === 'desktop' && styles.mockBannerImageDesktop
-                      ]} 
-                      resizeMode="cover" 
-                    />
-                    
-                    {/* Mock Offer Badge */}
-                    <View style={[styles.mockOfferBadge, imageType === 'mobile' && styles.mockOfferBadgeSmall]}>
-                      <Ionicons name="pricetag" size={imageType === 'mobile' ? 8 : 10} color="#fff" />
-                      <Text style={[styles.mockOfferBadgeText, imageType === 'mobile' && styles.mockOfferBadgeTextSmall]}>
-                        Special Offers
-                      </Text>
-                    </View>
-                    
-                    {/* Mock Get This Offer Button */}
-                    <View style={[styles.mockGetOfferButton, imageType === 'mobile' && styles.mockGetOfferButtonSmall]}>
-                      <Ionicons name="pricetag" size={imageType === 'mobile' ? 10 : 12} color="#1F2937" />
-                      <Text style={[styles.mockGetOfferButtonText, imageType === 'mobile' && styles.mockGetOfferButtonTextSmall]}>
-                        Get This Offer
-                      </Text>
-                    </View>
-                  </View>
-                  
-                  {/* Mock Content Below */}
-                  <View style={styles.mockContentBelow}>
-                    <View style={styles.mockContentPlaceholder} />
-                    <View style={styles.mockContentPlaceholder} />
-                  </View>
-                </ScrollView>
-                
-                {/* Device Status Bar */}
-                <View style={styles.mockStatusBar}>
-                  <View style={styles.mockTime}>
-                    <Text style={styles.mockTimeText}>9:41</Text>
-                  </View>
-                  <View style={styles.mockIcons}>
-                    <Ionicons name="wifi" size={10} color="#fff" />
-                    <Ionicons name="battery-full" size={10} color="#fff" />
-                  </View>
-                </View>
-              </View>
-              {/* Device Frame Border */}
-              {imageType === 'mobile' && (
-                <>
-                  <View style={styles.mobileNotch} />
-                  <View style={styles.mobileHomeIndicator} />
-                </>
-              )}
-            </View>
+          <View style={styles.imagePreviewContainer}>
+            <Image 
+              source={{ uri: image }} 
+              style={styles.imagePreview} 
+              resizeMode="cover" 
+            />
           </View>
         )}
         
         {/* Upload Button */}
         <TouchableOpacity 
           style={styles.uploadButton} 
-          onPress={() => pickImage(imageType)} 
+          onPress={pickImage} 
           activeOpacity={0.8}
         >
           {image ? (
             <>
               <Ionicons name="camera" size={20} color={ZOMATO_RED} />
-              <Text style={styles.uploadButtonText}>Change & Crop Image</Text>
+              <Text style={styles.uploadButtonText}>Change & Crop Image (19:6)</Text>
             </>
           ) : (
             <>
               <Ionicons name="cloud-upload-outline" size={20} color={ZOMATO_RED} />
-              <Text style={styles.uploadButtonText}>Upload {title}</Text>
+              <Text style={styles.uploadButtonText}>Upload Banner Image</Text>
             </>
           )}
         </TouchableOpacity>
@@ -337,7 +265,7 @@ export default function OfferFormScreen({ route, navigation }) {
           <View style={styles.previewInfo}>
             <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
             <Text style={styles.previewInfoTextSuccess}>
-              Image uploaded • Will display on {imageType} devices
+              Image uploaded • Will display on all devices
             </Text>
           </View>
         )}
@@ -375,18 +303,12 @@ export default function OfferFormScreen({ route, navigation }) {
             <View style={styles.infoBanner}>
               <Ionicons name="information-circle" size={20} color={ZOMATO_RED} />
               <Text style={styles.infoBannerText}>
-                Default ratios: Mobile 4:3, Tablet 16:9, Desktop 3:1 (Twitter Header). Full image displays without cropping.
+                Upload one image with 19:6 aspect ratio. It will work perfectly on all devices - mobile, tablet, desktop, and iPad.
               </Text>
             </View>
 
-            {/* Mobile Image */}
-            {renderImageUpload('mobile', imageMobile, 'Mobile View', 'For smartphones and small screens', '4:3 (Instagram Post)')}
-
-            {/* Tablet Image */}
-            {renderImageUpload('tablet', imageTablet, 'Tablet View', 'For tablets and medium screens', '16:9 (Landscape)')}
-
-            {/* Desktop Image */}
-            {renderImageUpload('desktop', imageDesktop, 'Desktop View', 'For laptops and large screens', '3:1 (Twitter Header)')}
+            {/* Single Universal Image Upload */}
+            {renderImageUpload()}
 
             <View style={styles.form}>
               {/* Offer Type */}
@@ -401,6 +323,62 @@ export default function OfferFormScreen({ route, navigation }) {
                   placeholderTextColor="#9CA3AF"
                 />
               </View>
+
+              {/* Percentage (Optional) */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Discount Percentage (Optional)</Text>
+                <Text style={styles.hint}>Leave empty if not applicable</Text>
+                <View style={styles.percentageInputContainer}>
+                  <TextInput
+                    style={styles.percentageInput}
+                    value={percentage}
+                    onChangeText={setPercentage}
+                    placeholder="0"
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="numeric"
+                  />
+                  <Text style={styles.percentageSymbol}>%</Text>
+                </View>
+              </View>
+
+              {/* Apply to Items Section */}
+              {percentage && percentage.trim() && (
+                <View style={styles.applySection}>
+                  <View style={styles.applySectionHeader}>
+                    <Ionicons name="pricetag" size={20} color={ZOMATO_RED} />
+                    <Text style={styles.applySectionTitle}>Apply Discount To</Text>
+                  </View>
+                  <Text style={styles.applySectionHint}>
+                    Select categories and items to apply {percentage}% discount
+                  </Text>
+                  
+                  <TouchableOpacity 
+                    style={styles.selectItemsButton}
+                    onPress={() => {
+                      console.log('Opening modal. Categories:', categories.length, 'Items:', menuItems.length);
+                      setShowCategoryModal(true);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="list" size={20} color={ZOMATO_RED} />
+                    <Text style={styles.selectItemsButtonText}>
+                      {selectedItems.length > 0 
+                        ? `${selectedItems.length} item(s) selected` 
+                        : 'Select Items'}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+                  </TouchableOpacity>
+
+                  {selectedItems.length > 0 && (
+                    <View style={styles.selectedItemsInfo}>
+                      <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
+                      <Text style={styles.selectedItemsInfoText}>
+                        {percentage}% discount will be applied to {selectedItems.length} item(s)
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
           </Animated.View>
           <View style={{ height: 120 }} />
@@ -424,6 +402,119 @@ export default function OfferFormScreen({ route, navigation }) {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Category & Items Selection Modal */}
+      <Modal visible={showCategoryModal} animationType="slide" transparent={true} onRequestClose={() => setShowCategoryModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Items</Text>
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowCategoryModal(false)}>
+                <Ionicons name="close" size={24} color="#696969" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+              {(() => {
+                console.log('Rendering modal. Categories:', categories.length, 'Items:', menuItems.length, 'Expanded:', expandedCategory);
+                
+                if (categories.length === 0) {
+                  return (
+                    <View style={styles.emptyState}>
+                      <Ionicons name="folder-open-outline" size={48} color="#9CA3AF" />
+                      <Text style={styles.emptyStateText}>No categories found</Text>
+                      <Text style={styles.emptyStateHint}>Add categories from Menu screen first</Text>
+                    </View>
+                  );
+                }
+                
+                if (menuItems.length === 0) {
+                  return (
+                    <View style={styles.emptyState}>
+                      <Ionicons name="fast-food-outline" size={48} color="#9CA3AF" />
+                      <Text style={styles.emptyStateText}>No menu items found</Text>
+                      <Text style={styles.emptyStateHint}>Add menu items from Menu screen first</Text>
+                    </View>
+                  );
+                }
+                
+                return categories.map((category) => {
+                  const categoryItems = getItemsByCategory(category.name);
+                  const allItemsSelected = categoryItems.length > 0 && categoryItems.every(item => selectedItems.includes(item._id));
+                  
+                  if (categoryItems.length === 0) {
+                    return null; // Skip categories with no items
+                  }
+                  
+                  console.log(`Rendering category: ${category.name}, Items: ${categoryItems.length}, Expanded: ${expandedCategory === category.name}`);
+                  
+                  return (
+                    <View key={category._id} style={styles.categorySection}>
+                      <TouchableOpacity 
+                        style={styles.categoryHeader}
+                        onPress={() => setExpandedCategory(expandedCategory === category.name ? null : category.name)}
+                      >
+                        <View style={styles.categoryHeaderLeft}>
+                          <TouchableOpacity 
+                            style={[styles.checkbox, allItemsSelected && styles.checkboxChecked]}
+                            onPress={() => selectAllItemsInCategory(category.name)}
+                          >
+                            {allItemsSelected && <Ionicons name="checkmark" size={16} color="#fff" />}
+                          </TouchableOpacity>
+                          <Text style={styles.categoryName}>{category.name}</Text>
+                          <View style={styles.categoryBadge}>
+                            <Text style={styles.categoryBadgeText}>{categoryItems.length}</Text>
+                          </View>
+                        </View>
+                        <Ionicons 
+                          name={expandedCategory === category.name ? "chevron-up" : "chevron-down"} 
+                          size={20} 
+                          color="#9CA3AF" 
+                        />
+                      </TouchableOpacity>
+                      
+                      {expandedCategory === category.name && (
+                        <View style={styles.itemsList}>
+                          {categoryItems.map((item) => (
+                            <TouchableOpacity 
+                              key={item._id}
+                              style={styles.itemRow}
+                              onPress={() => toggleItem(item._id)}
+                            >
+                              <View style={[styles.checkbox, selectedItems.includes(item._id) && styles.checkboxChecked]}>
+                                {selectedItems.includes(item._id) && <Ionicons name="checkmark" size={16} color="#fff" />}
+                              </View>
+                              {item.image && (
+                                <Image source={{ uri: item.image }} style={styles.itemImage} />
+                              )}
+                              <View style={styles.itemInfo}>
+                                <Text style={styles.itemName}>{item.name}</Text>
+                                <Text style={styles.itemPrice}>₹{item.price}</Text>
+                              </View>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  );
+                });
+              })()}
+            </ScrollView>
+            
+            <View style={styles.modalFooter}>
+              <TouchableOpacity 
+                style={styles.modalDoneButton} 
+                onPress={() => setShowCategoryModal(false)}
+              >
+                <Text style={styles.modalDoneButtonText}>
+                  Done ({selectedItems.length} selected)
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -477,6 +568,21 @@ const styles = StyleSheet.create({
   imageSectionHint: { fontSize: 13, color: '#9CA3AF', marginBottom: 2 },
   imageSectionRecommended: { fontSize: 12, color: ZOMATO_RED, marginBottom: 16, fontWeight: '600' },
   
+  // Image Preview
+  imagePreviewContainer: {
+    marginBottom: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    height: 200, // Fixed height for better visibility
+  },
+  imagePreview: {
+    width: '100%',
+    height: '100%',
+  },
+  
   // Device Preview Frames
   devicePreviewContainer: {
     marginBottom: 16,
@@ -489,246 +595,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textTransform: 'uppercase',
     letterSpacing: 1,
-  },
-  
-  // Mobile Frame (iPhone style)
-  mobileFrame: {
-    width: 180,
-    height: 320,
-    backgroundColor: '#1F2937',
-    borderRadius: 28,
-    padding: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  mobileScreen: {
-    flex: 1,
-    backgroundColor: '#000',
-    borderRadius: 24,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  mobileNotch: {
-    position: 'absolute',
-    top: 8,
-    left: '50%',
-    marginLeft: -40,
-    width: 80,
-    height: 20,
-    backgroundColor: '#1F2937',
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-  },
-  mobileHomeIndicator: {
-    position: 'absolute',
-    bottom: 8,
-    left: '50%',
-    marginLeft: -30,
-    width: 60,
-    height: 4,
-    backgroundColor: '#4B5563',
-    borderRadius: 2,
-  },
-  
-  // Tablet Frame (iPad style)
-  tabletFrame: {
-    width: 280,
-    height: 120,
-    backgroundColor: '#1F2937',
-    borderRadius: 20,
-    padding: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  tabletScreen: {
-    flex: 1,
-    backgroundColor: '#000',
-    borderRadius: 12,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  
-  // Desktop Frame (MacBook style)
-  desktopFrame: {
-    width: '100%',
-    maxWidth: 320,
-    height: 137,
-    backgroundColor: '#1F2937',
-    borderRadius: 12,
-    padding: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  desktopScreen: {
-    flex: 1,
-    backgroundColor: '#000',
-    borderRadius: 6,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  
-  // Device Preview Image
-  deviceScrollView: {
-    flex: 1,
-  },
-  
-  // Mock Website Header
-  mockWebsiteHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    backgroundColor: '#1F2937',
-    borderBottomWidth: 1,
-    borderBottomColor: '#374151',
-  },
-  mockLogo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  mockLogoText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  mockLogoTextSmall: {
-    fontSize: 9,
-  },
-  mockHeaderIcons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  
-  // Mock Banner Container
-  mockBannerContainer: {
-    position: 'relative',
-    backgroundColor: '#000',
-  },
-  mockBannerImage: {
-    width: '100%',
-    height: 100,
-  },
-  mockBannerImageMobile: {
-    height: 100,
-  },
-  mockBannerImageTablet: {
-    height: 60,
-  },
-  mockBannerImageDesktop: {
-    height: 80,
-  },
-  
-  // Mock Offer Badge
-  mockOfferBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  mockOfferBadgeSmall: {
-    top: 6,
-    left: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  mockOfferBadgeText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  mockOfferBadgeTextSmall: {
-    fontSize: 7,
-  },
-  
-  // Mock Get Offer Button
-  mockGetOfferButton: {
-    position: 'absolute',
-    bottom: 12,
-    left: '50%',
-    marginLeft: -50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FCD34D',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  mockGetOfferButtonSmall: {
-    bottom: 8,
-    marginLeft: -40,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  mockGetOfferButtonText: {
-    color: '#1F2937',
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  mockGetOfferButtonTextSmall: {
-    fontSize: 7,
-  },
-  
-  // Mock Content Below
-  mockContentBelow: {
-    padding: 8,
-    backgroundColor: '#F9FAFB',
-    gap: 6,
-  },
-  mockContentPlaceholder: {
-    height: 20,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 4,
-  },
-  
-  // Mock UI Elements
-  mockStatusBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-  },
-  mockTime: {
-    flex: 1,
-  },
-  mockTimeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  mockIcons: {
-    flexDirection: 'row',
-    gap: 4,
   },
   
   // Upload Button
@@ -783,6 +649,237 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 18, height: 54,
     borderWidth: 1.5, borderColor: '#E8E8E8', fontSize: 15, color: '#1C1C1C', fontWeight: '500',
+  },
+  
+  // Percentage Input
+  percentageInputContainer: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 14,
+    borderWidth: 1.5, borderColor: '#E8E8E8', paddingHorizontal: 18, height: 54,
+  },
+  percentageInput: { flex: 1, fontSize: 18, color: '#1C1C1C', fontWeight: '600' },
+  percentageSymbol: { fontSize: 20, fontWeight: '700', color: ZOMATO_RED, marginLeft: 8 },
+  
+  // Apply Section
+  applySection: {
+    backgroundColor: '#FEF2F2',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    gap: 12,
+  },
+  applySectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  applySectionTitle: { fontSize: 16, fontWeight: '700', color: '#1C1C1C' },
+  applySectionHint: { fontSize: 13, color: '#991B1B', lineHeight: 18 },
+  
+  selectItemsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#E8E8E8',
+  },
+  selectItemsButtonText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1C1C1C',
+    marginLeft: 12,
+  },
+  
+  selectedItemsInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F0FDF4',
+    padding: 12,
+    borderRadius: 12,
+  },
+  selectedItemsInfoText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#059669',
+    fontWeight: '500',
+  },
+  
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '80%',
+    paddingBottom: Platform.OS === 'ios' ? 32 : 16,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1C1C1C',
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalScrollView: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  
+  // Empty State
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+    gap: 12,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  emptyStateHint: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+  },
+  
+  // Category Section
+  categorySection: {
+    marginVertical: 8,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+  },
+  categoryHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  categoryName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1C1C1C',
+    flex: 1,
+  },
+  categoryBadge: {
+    backgroundColor: ZOMATO_RED,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  categoryBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  
+  // Items List
+  itemsList: {
+    padding: 12,
+    gap: 8,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    gap: 12,
+  },
+  itemImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: '#E5E7EB',
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1C1C1C',
+    marginBottom: 4,
+  },
+  itemPrice: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: ZOMATO_RED,
+  },
+  
+  // Checkbox
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  checkboxChecked: {
+    backgroundColor: ZOMATO_RED,
+    borderColor: ZOMATO_RED,
+  },
+  
+  // Modal Footer
+  modalFooter: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  modalDoneButton: {
+    backgroundColor: ZOMATO_RED,
+    height: 52,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalDoneButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
   },
   
   // Footer

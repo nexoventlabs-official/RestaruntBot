@@ -104,7 +104,7 @@ export default function AdminOffersScreen({ navigation }) {
             <Image 
               source={{ uri: `${item.image}?t=${item.updatedAt || Date.now()}` }} 
               style={styles.offerImage} 
-              resizeMode="contain" 
+              resizeMode="cover" 
             />
           ) : (
             <View style={[styles.offerImage, styles.offerImagePlaceholder]}>
@@ -193,6 +193,7 @@ export default function AdminOffersScreen({ navigation }) {
           renderItem={renderOffer}
           keyExtractor={(item) => item._id}
           contentContainerStyle={styles.listContent}
+          style={styles.flatList}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.zomato.red]} />}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
@@ -217,44 +218,42 @@ export default function AdminOffersScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.light.background },
-  header: { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 35 : 75, paddingBottom: 55, paddingHorizontal: spacing.screenHorizontal, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, overflow: 'hidden' },
+  flatList: { flex: 1 },
+  header: { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 35 : 75, paddingBottom: 55, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, overflow: 'hidden' },
   headerBackgroundImage: { borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
-  headerOverlay: { backgroundColor: 'rgba(0, 0, 0, 0.4)', marginTop: -(Platform.OS === 'android' ? StatusBar.currentHeight + 35 : 75), marginBottom: -55, marginHorizontal: -spacing.screenHorizontal, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 35 : 75, paddingBottom: 55, paddingHorizontal: spacing.screenHorizontal, overflow: 'hidden' },
+  headerOverlay: { backgroundColor: 'rgba(0, 0, 0, 0.4)', marginTop: -(Platform.OS === 'android' ? StatusBar.currentHeight + 35 : 75), marginBottom: -55, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 35 : 75, paddingBottom: 55, paddingHorizontal: spacing.screenHorizontal, overflow: 'hidden' },
   glassShine: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: 100, backgroundColor: 'rgba(255, 255, 255, 0.3)', transform: [{ skewX: '-20deg' }] },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { fontSize: typography.display.small.fontSize, fontWeight: '700', color: '#fff' },
   subtitle: { fontSize: typography.body.medium.fontSize, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   addButton: { width: 48, height: 48, borderRadius: 16, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', ...shadows.md },
-  listContent: { padding: spacing.screenHorizontal, paddingBottom: 100 },
+  listContent: { paddingVertical: spacing.md, paddingBottom: 100 },
   offerCard: { 
     backgroundColor: colors.light.surface, 
-    borderRadius: radius.xl, 
+    borderRadius: 0,
     overflow: 'hidden', 
     marginBottom: spacing.md, 
     ...shadows.card,
-    maxWidth: 600, // Limit width on tablets/PC
-    alignSelf: 'center',
-    width: '100%'
+    width: '100%',
   },
   offerImageContainer: { 
     width: '100%', 
     backgroundColor: '#f3f4f6', 
     position: 'relative',
-    minHeight: 150, // Minimum height, will expand based on image
+    aspectRatio: 16 / 9,
+    marginHorizontal: 0,
   },
   offerImage: { 
     width: '100%', 
-    height: undefined, // Let image determine height
-    aspectRatio: undefined, // Remove fixed aspect ratio
-    minHeight: 150,
-    resizeMode: 'contain' // Show full image without cropping
+    height: '100%',
+    aspectRatio: 16 / 9,
+    resizeMode: 'cover'
   },
   offerImagePlaceholder: { 
     backgroundColor: colors.light.surfaceSecondary, 
     justifyContent: 'center', 
     alignItems: 'center',
-    minHeight: 150,
-    aspectRatio: 16/9 // Default for placeholder only
+    aspectRatio: 16 / 9
   },
   offerTypeBadge: { 
     position: 'absolute', 
