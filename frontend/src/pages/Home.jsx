@@ -284,20 +284,6 @@ export default function Home() {
                 alt={item.name} 
                 className="max-h-full max-w-full object-contain group-hover:scale-110 transition-transform duration-300 drop-shadow-xl" 
               />
-              {/* Discount Badge */}
-              {item.offerPrice && item.offerPrice < item.price && (
-                <div className="absolute -top-2 -left-2 bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-1 rounded-full text-xs font-bold shadow-lg z-20">
-                  {Math.round(((item.price - item.offerPrice) / item.price) * 100)}% OFF
-                </div>
-              )}
-              {/* Offer Type Badge */}
-              {item.offerType && (Array.isArray(item.offerType) ? item.offerType : [item.offerType]).length > 0 && (
-                <div className={`absolute -left-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white px-2 py-1 rounded-full text-[10px] font-bold shadow-lg z-20 ${
-                  item.offerPrice && item.offerPrice < item.price ? 'top-8' : '-top-2'
-                }`}>
-                  🎉 {(Array.isArray(item.offerType) ? item.offerType : [item.offerType])[0]}
-                </div>
-              )}
             </div>
           ) : (
             <div className="w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 bg-gradient-to-br from-orange-100 to-orange-200 rounded-full flex items-center justify-center">
@@ -330,42 +316,21 @@ export default function Home() {
             <p className="text-xs sm:text-sm text-gray-500 line-clamp-2 mb-2 sm:mb-4 min-h-[32px] sm:min-h-[40px]">{item.description}</p>
           )}
 
-          {/* Price & Cart Button */}
-          <div className="flex items-center justify-between">
-            <div className="flex flex-col gap-1">
-              <div className="relative">
-                <img src="/button.png" alt="" className="h-6 sm:h-7 md:h-8 w-auto" style={{ filter: 'brightness(0) saturate(100%) invert(19%) sepia(97%) saturate(7043%) hue-rotate(359deg) brightness(101%) contrast(117%)' }} />
-                <span className="absolute inset-0 flex items-center justify-center text-white font-bold text-xs sm:text-sm">
-                  ₹{item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}
-                </span>
-              </div>
-              {item.offerPrice && item.offerPrice < item.price && (
-                <span className="text-[10px] text-gray-400 line-through">₹{item.price}</span>
-              )}
+          {/* Price Only */}
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <img src="/button.png" alt="" className="h-6 sm:h-7 md:h-8 w-auto" style={{ filter: 'brightness(0) saturate(100%) invert(19%) sepia(97%) saturate(7043%) hue-rotate(359deg) brightness(101%) contrast(117%)' }} />
+              <span className="absolute inset-0 flex items-center justify-center text-white font-bold text-xs sm:text-sm">
+                ₹{item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}
+              </span>
             </div>
-            {inCart ? (
-              <div className="flex items-center gap-0.5 sm:gap-1 bg-green-600 rounded-lg sm:rounded-xl px-1.5 sm:px-2 py-1 sm:py-1.5">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); updateQuantity(item._id, cartItem.quantity - 1); }} 
-                  className="p-0.5 sm:p-1 text-white hover:bg-green-700 rounded"
-                >
-                  <Minus className="w-3 h-3 sm:w-4 sm:h-4" />
-                </button>
-                <span className="w-4 sm:w-6 text-center font-semibold text-white text-xs sm:text-sm">{cartItem?.quantity || 0}</span>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); addToCart(item); }} 
-                  className="p-0.5 sm:p-1 text-white hover:bg-green-700 rounded"
-                >
-                  <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
-                </button>
-              </div>
-            ) : (
-              <button 
-                onClick={(e) => handleAddToCart(item, e)} 
-                className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-green-600 text-white rounded-lg sm:rounded-xl flex items-center justify-center hover:bg-green-700 transition-colors shadow-md"
-              >
-                <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
+            {item.offerPrice && item.offerPrice < item.price && (
+              <>
+                <span className="text-[10px] sm:text-xs text-gray-400 line-through">₹{item.price}</span>
+                <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold shadow-md">
+                  {Math.round(((item.price - item.offerPrice) / item.price) * 100)}% OFF
+                </span>
+              </>
             )}
           </div>
         </div>

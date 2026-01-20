@@ -146,7 +146,7 @@ export default function OffersPage() {
   const offerTypes = [...new Set(offers.map(o => o.offerType).filter(Boolean))];
 
   const handleOfferTypeChange = (offerType) => {
-    setSelectedOfferType(offerType === selectedOfferType ? '' : offerType);
+    setSelectedOfferType(offerType);
     
     // Smooth scroll to items grid
     setTimeout(() => {
@@ -164,32 +164,18 @@ export default function OffersPage() {
     if (offers.length === 0) return;
     const newIndex = currentOfferIndex <= 0 ? offers.length - 1 : currentOfferIndex - 1;
     
-    // Synchronize both banner and header offer
+    // Only synchronize banner indices, don't filter items
     setCurrentOfferIndex(newIndex);
     setCurrentBannerIndex(newIndex);
-    
-    // Update selected offer type and URL
-    const offer = offers[newIndex];
-    if (offer?.offerType) {
-      setSelectedOfferType(offer.offerType);
-      setSearchParams({ offerType: offer.offerType });
-    }
   };
 
   const handleNextOffer = () => {
     if (offers.length === 0) return;
     const newIndex = currentOfferIndex >= offers.length - 1 ? 0 : currentOfferIndex + 1;
     
-    // Synchronize both banner and header offer
+    // Only synchronize banner indices, don't filter items
     setCurrentOfferIndex(newIndex);
     setCurrentBannerIndex(newIndex);
-    
-    // Update selected offer type and URL
-    const offer = offers[newIndex];
-    if (offer?.offerType) {
-      setSelectedOfferType(offer.offerType);
-      setSearchParams({ offerType: offer.offerType });
-    }
   };
 
   const handleAddToCart = (item) => {
@@ -474,7 +460,7 @@ export default function OffersPage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6" ref={itemsGridRef}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" ref={itemsGridRef}>
             {filteredItems.map(item => {
               const inCart = isInCart ? isInCart(item._id) : false;
               const cartItem = cart?.find(c => c._id === item._id);
@@ -498,63 +484,44 @@ export default function OffersPage() {
               return (
                 <div 
                   key={item._id} 
-                  className="group relative bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 flex flex-col cursor-pointer"
+                  className="group relative bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 ease-out flex sm:flex-col cursor-pointer"
                   onClick={() => openItemDialog(item)}
                 >
-                  {/* Image Container */}
-                  <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100">
+                  {/* Image Container - Horizontal on mobile, square on larger screens */}
+                  <div className="relative w-36 sm:w-full h-36 sm:h-48 md:h-56 lg:h-64 flex-shrink-0 overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 p-2">
                     {item.image ? (
                       <img 
                         src={item.image} 
                         alt={item.name} 
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                        className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-700 ease-out" 
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <span className="text-7xl">🍽️</span>
+                        <span className="text-5xl sm:text-6xl md:text-7xl">🍽️</span>
                       </div>
                     )}
                     
-                    {/* Discount Badge - Top Left (only show if there's a discount) */}
-                    {discount > 0 && (
-                      <div className="absolute top-3 left-3 bg-gradient-to-r from-green-500 to-green-600 text-white px-3 py-1.5 rounded-full text-sm font-bold shadow-lg">
-                        {discount}% OFF
-                      </div>
-                    )}
-                    
-                    {/* Food Type Badge - Top Right */}
+                    {/* Food Type Icon - Top Left First */}
                     {item.foodType && item.foodType !== 'none' && (
-                      <div className="absolute top-3 right-3">
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full font-medium border-2 ${
-                          item.foodType === 'veg' ? 'border-green-500 text-green-600 bg-green-50' :
-                          item.foodType === 'nonveg' ? 'border-red-500 text-red-600 bg-red-50' :
-                          'border-yellow-500 text-yellow-600 bg-yellow-50'
-                        }`}>
-                          <span className={`w-2 h-2 rounded-full ${
-                            item.foodType === 'veg' ? 'bg-green-500' :
-                            item.foodType === 'nonveg' ? 'bg-red-500' :
-                            'bg-yellow-500'
-                          }`} />
-                          {item.foodType === 'veg' ? 'Veg' : item.foodType === 'nonveg' ? 'Non-Veg' : 'Egg'}
-                        </span>
+                      <div className={`absolute top-3 left-3 w-6 h-6 border-2 rounded flex items-center justify-center z-20 ${
+                        item.foodType === 'veg' ? 'border-green-600 bg-white' :
+                        item.foodType === 'nonveg' ? 'border-red-600 bg-white' :
+                        'border-yellow-600 bg-white'
+                      }`}>
+                        <span className={`w-3 h-3 rounded-full ${
+                          item.foodType === 'veg' ? 'bg-green-600' :
+                          item.foodType === 'nonveg' ? 'bg-red-600' :
+                          'bg-yellow-600'
+                        }`} />
                       </div>
                     )}
-                    
-                    {/* WhatsApp Button - Bottom Right on Image */}
-                    <button 
-                      onClick={(e) => handleWhatsAppOrder(item, e)} 
-                      className="absolute bottom-3 right-3 w-10 h-10 bg-green-500 text-white rounded-full flex items-center justify-center hover:bg-green-600 transition-all hover:scale-110 shadow-lg z-10"
-                      title="Order via WhatsApp"
-                    >
-                      <WhatsAppIcon className="w-5 h-5" />
-                    </button>
                   </div>
 
-                  {/* Content */}
-                  <div className="p-4 flex flex-col flex-grow">
+                  {/* Content - Flex grow to fill space */}
+                  <div className="p-4 flex flex-col flex-grow min-w-0">
                     {/* Name & Wishlist */}
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <h3 className="font-bold text-gray-900 text-base line-clamp-2 flex-1 min-h-[48px]">{item.name}</h3>
+                      <h3 className="font-bold text-gray-900 text-base sm:text-lg line-clamp-1 sm:line-clamp-2 flex-1 sm:min-h-[3rem]">{item.name}</h3>
                       <button 
                         onClick={(e) => { e.stopPropagation(); handleToggleWishlist(item); }} 
                         className="p-1.5 hover:scale-110 transition-transform flex-shrink-0 bg-gray-50 rounded-full"
@@ -563,64 +530,68 @@ export default function OffersPage() {
                       </button>
                     </div>
 
-                    {/* Offer Type Tags - Fixed height container */}
-                    <div className="min-h-[28px] mb-2">
-                      {item.offerType && (Array.isArray(item.offerType) ? item.offerType : [item.offerType]).length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {(Array.isArray(item.offerType) ? item.offerType : [item.offerType]).map((offerType, index) => (
-                            <span key={index} className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-semibold">
-                              <Tag className="w-3 h-3" />
-                              {offerType}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
                     {/* Rating */}
                     <div className="flex items-center gap-1 mb-3">
                       <div className="flex">{renderStars()}</div>
                       <span className="text-xs text-gray-500 font-medium">({totalRatings})</span>
                     </div>
 
-                    {/* Description - Fixed height */}
-                    <p className="text-sm text-gray-600 line-clamp-2 mb-3 h-[40px]">
-                      {item.description || '\u00A0'}
-                    </p>
-
-                    {/* Spacer to push price and button to bottom */}
-                    <div className="flex-grow"></div>
-
                     {/* Price Section */}
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-2xl font-bold text-orange-600">
-                          ₹{item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}
-                        </span>
-                        {item.offerPrice && item.offerPrice < item.price && (
+                    <div className="flex items-center gap-2 mb-3 flex-wrap">
+                      <span className="text-xl sm:text-2xl font-bold text-orange-600">
+                        ₹{item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}
+                      </span>
+                      {item.offerPrice && item.offerPrice < item.price && (
+                        <>
                           <span className="text-sm text-gray-400 line-through">₹{item.price}</span>
-                        )}
+                          <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-0.5 rounded-full text-xs font-bold shadow-md">
+                            {discount}% OFF
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Quantity and Preparation Time - Side by Side */}
+                    <div className="flex items-center gap-4 mb-3 text-sm text-gray-600">
+                      <div className="flex items-center gap-1">
+                        <Package className="w-4 h-4 text-gray-500" />
+                        <span className="font-medium whitespace-nowrap">{item.unitQty || 1} {item.unit || 'piece'}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-4 h-4 text-gray-500" />
+                        <span className="font-medium whitespace-nowrap">{item.preparationTime || 15} mins</span>
                       </div>
                     </div>
 
+                    {/* Spacer to push button to bottom */}
+                    <div className="flex-grow"></div>
+
                     {/* Action Buttons */}
                     <div className="flex items-center gap-2">
+                      {/* WhatsApp Button */}
+                      <button 
+                        onClick={(e) => handleWhatsAppOrder(item, e)} 
+                        className="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center hover:bg-green-600 transition-all hover:scale-110 shadow-md flex-shrink-0"
+                        title="Order via WhatsApp"
+                      >
+                        <WhatsAppIcon className="w-5 h-5" />
+                      </button>
+                      
                       {inCart ? (
                         <button 
                           onClick={(e) => { e.stopPropagation(); setSidebarOpen(true); setActiveTab('cart'); }} 
-                          className="flex-1 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold hover:from-green-600 hover:to-green-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                          className="flex-1 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold hover:from-green-600 hover:to-green-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 text-sm"
                         >
-                          <ShoppingCart className="w-5 h-5" />
-                          <span className="hidden sm:inline">View Cart ({cartItem?.quantity})</span>
-                          <span className="sm:hidden">Cart ({cartItem?.quantity})</span>
+                          <ShoppingCart className="w-4 h-4" />
+                          View Cart ({cartItem?.quantity})
                         </button>
                       ) : (
                         <button 
                           onClick={(e) => { e.stopPropagation(); handleAddToCart(item); }} 
-                          className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                          className="flex-1 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 text-sm"
                         >
-                          <ShoppingCart className="w-5 h-5" />
-                          <span className="hidden sm:inline">Add to Cart</span>
-                          <span className="sm:hidden">Add</span>
+                          <ShoppingCart className="w-4 h-4" />
+                          Add to Cart
                         </button>
                       )}
                     </div>
