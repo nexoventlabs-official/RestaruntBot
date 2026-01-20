@@ -29,25 +29,39 @@ function AppNavigator() {
 
     // Only set up listeners if push notifications are supported
     if (pushNotifications.isSupported()) {
-      // Handle notification tap - navigate to appropriate screen
+      // Handle notification tap - navigate to Notifications screen
       responseSubscription = pushNotifications.addNotificationResponseListener(response => {
         const data = response.notification.request.content.data;
         console.log('📱 Notification tapped:', data);
         
-        if (data?.type === 'new_order' && data?.screen) {
-          // Navigate to MyOrders screen when notification is tapped
-          if (navigationRef.current && role === 'delivery') {
+        // Navigate to Notifications screen based on user role
+        if (navigationRef.current) {
+          if (role === 'delivery') {
+            // Navigate to Home tab, then to Notifications screen
             navigationRef.current.navigate('DeliveryMain', {
-              screen: 'MyOrders',
+              screen: 'Home',
+              params: {
+                screen: 'Notifications',
+              },
+            });
+          } else if (role === 'admin') {
+            // Navigate to Home tab, then to Notifications screen
+            navigationRef.current.navigate('AdminMain', {
+              screen: 'Home',
+              params: {
+                screen: 'Notifications',
+              },
             });
           }
         }
       });
 
       // Handle notification received while app is open (foreground)
+      // When user taps the banner, it will trigger responseSubscription above
       receivedSubscription = pushNotifications.addNotificationReceivedListener(notification => {
         console.log('📱 Notification received in foreground:', notification.request.content);
         // The notification will automatically show as a banner because of setNotificationHandler
+        // User can tap the banner to navigate to Notifications screen
       });
 
       // Check if app was opened from a notification
@@ -81,16 +95,28 @@ function AppNavigator() {
       const data = response.notification.request.content.data;
       console.log('📱 App opened from notification:', data);
       
-      // Handle navigation based on notification data
-      if (data?.type === 'new_order' && data?.screen && role === 'delivery') {
-        setTimeout(() => {
-          if (navigationRef.current) {
+      // Navigate to Notifications screen based on user role
+      setTimeout(() => {
+        if (navigationRef.current) {
+          if (role === 'delivery') {
+            // Navigate to Home tab, then to Notifications screen
             navigationRef.current.navigate('DeliveryMain', {
-              screen: 'MyOrders',
+              screen: 'Home',
+              params: {
+                screen: 'Notifications',
+              },
+            });
+          } else if (role === 'admin') {
+            // Navigate to Home tab, then to Notifications screen
+            navigationRef.current.navigate('AdminMain', {
+              screen: 'Home',
+              params: {
+                screen: 'Notifications',
+              },
             });
           }
-        }, 500);
-      }
+        }
+      }, 500);
     }
   };
 
