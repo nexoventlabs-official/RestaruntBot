@@ -77,7 +77,12 @@ const formatPriceWithOffer = (item) => {
 // Helper to format offer types
 const formatOfferTypes = (item) => {
   if (item.offerType && Array.isArray(item.offerType) && item.offerType.length > 0) {
-    return `\n🎉 *Offers:* ${item.offerType.join(', ')}`;
+    // Join all offer types with comma and space
+    const offersList = item.offerType.join(', ');
+    return `\n🎉 *Offers:* ${offersList}`;
+  } else if (item.offerType && typeof item.offerType === 'string' && item.offerType.trim()) {
+    // Handle single offer type as string
+    return `\n🎉 *Offers:* ${item.offerType}`;
   }
   return '';
 };
