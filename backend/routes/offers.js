@@ -157,17 +157,32 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
     const { 
       title, description, offerType, code, discountType, discountValue, 
       minOrderAmount, validFrom, validUntil, isActive, showAsPopup,
-      buttonText, buttonLink 
+      buttonText, buttonLink, percentage, appliedItems, appliedCategories
     } = req.body;
     
     // Get existing offer to check for old images
     const existingOffer = await Offer.findById(req.params.id);
     if (!existingOffer) return res.status(404).json({ error: 'Offer not found' });
     
+    // Parse appliedItems and appliedCategories if they're JSON strings
+    let parsedAppliedItems = [];
+    let parsedAppliedCategories = [];
+    
+    if (appliedItems) {
+      parsedAppliedItems = typeof appliedItems === 'string' ? JSON.parse(appliedItems) : appliedItems;
+    }
+    
+    if (appliedCategories) {
+      parsedAppliedCategories = typeof appliedCategories === 'string' ? JSON.parse(appliedCategories) : appliedCategories;
+    }
+    
     const updateData = {
       title,
       description,
       offerType: offerType || '',
+      percentage: percentage ? parseFloat(percentage) : null,
+      appliedItems: parsedAppliedItems,
+      appliedCategories: parsedAppliedCategories,
       code,
       discountType: discountType || 'none',
       discountValue: parseFloat(discountValue) || 0,
@@ -236,9 +251,57 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
 
     const offer = await Offer.findByIdAndUpdate(req.params.id, updateData, { new: true });
     
+    // Apply discount to selected items if percentage is provided
+    if (percentage && parsedAppliedItems.length > 0) {
+      const MenuItem = require('../models/MenuItem');
+      const discountPercent = parseFloat(percentage);
+      
+      // First, remove this offer from items that are no longer selected
+      const previousItems = existingOffer.appliedItems || [];
+      const removedItems = previousItems.filter(id => !parsedAppliedItems.includes(id.toString()));
+      
+      for (const itemId of removedItems) {
+        const item = await MenuItem.findById(itemId);
+        if (item) {
+          const offerTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
+          const updatedOfferTypes = offerTypes.filter(ot => ot !== offerType);
+          
+          if (updatedOfferTypes.length === 0) {
+            await MenuItem.findByIdAndUpdate(itemId, {
+              $unset: { offerPrice: 1 },
+              offerType: []
+            });
+          } else {
+            await MenuItem.findByIdAndUpdate(itemId, {
+              offerType: updatedOfferTypes
+            });
+          }
+        }
+      }
+      
+      // Then, apply discount to newly selected items
+      for (const itemId of parsedAppliedItems) {
+        const item = await MenuItem.findById(itemId);
+        if (item) {
+          const offerPrice = Math.round(item.price * (1 - discountPercent / 100));
+          const offerTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
+          if (!offerTypes.includes(offerType)) {
+            offerTypes.push(offerType);
+          }
+          
+          await MenuItem.findByIdAndUpdate(itemId, {
+            offerPrice: offerPrice,
+            offerType: offerTypes
+          });
+        }
+      }
+      console.log(`Updated ${discountPercent}% discount for ${parsedAppliedItems.length} items`);
+    }
+    
     // Emit SSE event to notify clients to refresh (cache-busting)
     const eventEmitter = require('../services/eventEmitter');
     eventEmitter.emit('dataUpdate', { type: 'offers' });
+    eventEmitter.emit('dataUpdate', { type: 'menu' });
     
     res.json(offer);
   } catch (err) {

@@ -18,7 +18,9 @@ export default function OfferFormScreen({ route, navigation }) {
   const isEditing = !!existingOffer;
 
   const [offerType, setOfferType] = useState(existingOffer?.offerType || '');
-  const [percentage, setPercentage] = useState(existingOffer?.percentage?.toString() || '');
+  const [percentage, setPercentage] = useState(
+    existingOffer?.percentage != null ? existingOffer.percentage.toString() : ''
+  );
   
   // Single universal image for all devices
   const [image, setImage] = useState(existingOffer?.imageMobile || existingOffer?.imageTablet || existingOffer?.imageDesktop || null);
