@@ -245,6 +245,70 @@ select option:checked {
   scroll-snap-align: start;
 }
 
+/* Enhanced smooth scrolling for mobile and tablet horizontal containers */
+@media (max-width: 1023px) {
+  .scrollbar-hide {
+    /* Ultra-smooth momentum scrolling for iOS */
+    -webkit-overflow-scrolling: touch;
+    /* Smooth scroll behavior */
+    scroll-behavior: smooth;
+    /* Contain overscroll to prevent page bounce */
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: auto;
+    /* Enable GPU acceleration */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    /* Smooth transitions */
+    transition: scroll-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Smooth snap scrolling for category filters */
+  .scrollbar-hide.snap-scroll {
+    scroll-snap-type: x proximity;
+    scroll-padding: 0 1rem;
+  }
+
+  .scrollbar-hide.snap-scroll > * {
+    scroll-snap-align: center;
+    scroll-snap-stop: normal;
+  }
+
+  /* Prevent vertical scroll interference during horizontal scroll */
+  .scrollbar-hide[data-lenis-prevent] {
+    touch-action: pan-x pan-y;
+    -webkit-touch-callout: none;
+  }
+}
+
+/* Tablet-specific optimizations (768px - 1023px) */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .scrollbar-hide {
+    /* Slightly faster scroll for tablets */
+    scroll-behavior: smooth;
+    scroll-snap-type: x proximity;
+  }
+  
+  .scrollbar-hide > * {
+    scroll-snap-align: start;
+  }
+}
+
+/* Mobile-specific optimizations (< 768px) */
+@media (max-width: 767px) {
+  .scrollbar-hide {
+    /* Extra smooth momentum for mobile */
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    /* Tighter snap for smaller screens */
+    scroll-snap-type: x mandatory;
+    scroll-padding: 0 0.5rem;
+  }
+  
+  .scrollbar-hide > * {
+    scroll-snap-align: center;
+  }
+}
+
 /* Slide-in animation for sidebar */
 @keyframes slideIn {
   from {
