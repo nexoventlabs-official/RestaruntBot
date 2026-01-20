@@ -327,19 +327,20 @@ export default function OfferFormScreen({ route, navigation }) {
         
         {/* Upload Button */}
         <TouchableOpacity 
-          style={styles.uploadButton} 
+          style={[styles.uploadButton, image && styles.uploadButtonWithImage]} 
           onPress={pickImage} 
           activeOpacity={0.8}
         >
           {image ? (
             <>
-              <Ionicons name="camera" size={20} color={ZOMATO_RED} />
-              <Text style={styles.uploadButtonText}>Change & Crop Image (19:6)</Text>
+              <Ionicons name="camera" size={22} color="#fff" />
+              <Text style={styles.uploadButtonTextWhite}>Change Image</Text>
             </>
           ) : (
             <>
-              <Ionicons name="cloud-upload-outline" size={20} color={ZOMATO_RED} />
+              <Ionicons name="cloud-upload-outline" size={24} color={ZOMATO_RED} />
               <Text style={styles.uploadButtonText}>Upload Banner Image</Text>
+              <Text style={styles.uploadButtonHint}>19:6 aspect ratio</Text>
             </>
           )}
         </TouchableOpacity>
@@ -381,14 +382,6 @@ export default function OfferFormScreen({ route, navigation }) {
       >
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-            
-            {/* Info Banner */}
-            <View style={styles.infoBanner}>
-              <Ionicons name="information-circle" size={20} color={ZOMATO_RED} />
-              <Text style={styles.infoBannerText}>
-                Upload one image with 19:6 aspect ratio. It will work perfectly on all devices - mobile, tablet, desktop, and iPad.
-              </Text>
-            </View>
 
             {/* Single Universal Image Upload */}
             {renderImageUpload()}
@@ -701,26 +694,6 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
   content: { flex: 1, padding: 16 },
   
-  // Info Banner
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#FEF2F2',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-  },
-  infoBannerText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#991B1B',
-    lineHeight: 18,
-    fontWeight: '500',
-  },
-  
   // Image Section
   imageSection: { marginBottom: 24 },
   imageSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
@@ -759,22 +732,41 @@ const styles = StyleSheet.create({
   
   // Upload Button
   uploadButton: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#fff',
+    backgroundColor: '#FFF5F5',
     borderWidth: 2,
     borderColor: ZOMATO_RED,
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderStyle: 'dashed',
+    borderRadius: 16,
+    paddingVertical: 24,
     paddingHorizontal: 20,
     marginBottom: 12,
   },
+  uploadButtonWithImage: {
+    flexDirection: 'row',
+    backgroundColor: ZOMATO_RED,
+    borderStyle: 'solid',
+    paddingVertical: 14,
+    gap: 10,
+  },
   uploadButtonText: {
     color: ZOMATO_RED,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  uploadButtonTextWhite: {
+    color: '#fff',
     fontSize: 15,
     fontWeight: '700',
+  },
+  uploadButtonHint: {
+    color: '#9CA3AF',
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: -4,
   },
   
   // Preview Info
