@@ -112,12 +112,25 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
 
     await offer.save();
     
-    // Apply discount to selected items if percentage is provided
-    if (percentage && parsedAppliedItems.length > 0) {
+    // Apply discount to selected items and categories if percentage is provided
+    if (percentage) {
       const MenuItem = require('../models/MenuItem');
       const discountPercent = parseFloat(percentage);
       
-      for (const itemId of parsedAppliedItems) {
+      // Collect all item IDs (from both direct selection and categories)
+      let allItemIds = [...parsedAppliedItems];
+      
+      // Add items from selected categories
+      if (parsedAppliedCategories.length > 0) {
+        const categoryItems = await MenuItem.find({
+          category: { $in: parsedAppliedCategories }
+        });
+        const categoryItemIds = categoryItems.map(item => item._id.toString());
+        allItemIds = [...new Set([...allItemIds, ...categoryItemIds])];
+      }
+      
+      // Apply discount to all collected items
+      for (const itemId of allItemIds) {
         const item = await MenuItem.findById(itemId);
         if (item) {
           // Calculate offer price
@@ -250,14 +263,38 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
 
     const offer = await Offer.findByIdAndUpdate(req.params.id, updateData, { new: true });
     
-    // Apply discount to selected items if percentage is provided
-    if (percentage && parsedAppliedItems.length > 0) {
+    // Apply discount to selected items and categories if percentage is provided
+    if (percentage) {
       const MenuItem = require('../models/MenuItem');
       const discountPercent = parseFloat(percentage);
       
+      // Collect all item IDs (from both direct selection and categories)
+      let allItemIds = [...parsedAppliedItems];
+      
+      // Add items from selected categories
+      if (parsedAppliedCategories.length > 0) {
+        const categoryItems = await MenuItem.find({
+          category: { $in: parsedAppliedCategories }
+        });
+        const categoryItemIds = categoryItems.map(item => item._id.toString());
+        allItemIds = [...new Set([...allItemIds, ...categoryItemIds])];
+      }
+      
       // First, remove this offer from items that are no longer selected
       const previousItems = existingOffer.appliedItems || [];
-      const removedItems = previousItems.filter(id => !parsedAppliedItems.includes(id.toString()));
+      const previousCategories = existingOffer.appliedCategories || [];
+      
+      // Get previous category items
+      let previousCategoryItemIds = [];
+      if (previousCategories.length > 0) {
+        const prevCategoryItems = await MenuItem.find({
+          category: { $in: previousCategories }
+        });
+        previousCategoryItemIds = prevCategoryItems.map(item => item._id.toString());
+      }
+      
+      const allPreviousItemIds = [...new Set([...previousItems.map(id => id.toString()), ...previousCategoryItemIds])];
+      const removedItems = allPreviousItemIds.filter(id => !allItemIds.includes(id));
       
       for (const itemId of removedItems) {
         const item = await MenuItem.findById(itemId);
@@ -279,7 +316,7 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
       }
       
       // Then, apply discount to newly selected items
-      for (const itemId of parsedAppliedItems) {
+      for (const itemId of allItemIds) {
         const item = await MenuItem.findById(itemId);
         if (item) {
           const offerPrice = Math.round(item.price * (1 - discountPercent / 100));

@@ -30,9 +30,14 @@ export default function OfferFormScreen({ route, navigation }) {
   const [categories, setCategories] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
   const [selectedCategories, setSelectedCategories] = useState(existingOffer?.appliedCategories || []);
-  const [selectedItems, setSelectedItems] = useState(existingOffer?.appliedItems || []);
+  const [selectedItems, setSelectedItems] = useState(
+    Array.isArray(existingOffer?.appliedItems) 
+      ? existingOffer.appliedItems.map(item => typeof item === 'string' ? item : item._id)
+      : []
+  );
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState(null);
+  const [loadingData, setLoadingData] = useState(true);
   
   const [loading, setLoading] = useState(false);
   
@@ -50,21 +55,32 @@ export default function OfferFormScreen({ route, navigation }) {
   // Auto-expand first category when modal opens
   useEffect(() => {
     if (showCategoryModal && categories.length > 0 && !expandedCategory) {
+      console.log('Auto-expanding first category:', categories[0].name);
       setExpandedCategory(categories[0].name);
     }
   }, [showCategoryModal, categories]);
 
+  useEffect(() => {
+    console.log('Categories state updated:', categories.length, 'categories');
+    console.log('Menu items state updated:', menuItems.length, 'items');
+  }, [categories, menuItems]);
+
   const fetchCategoriesAndItems = async () => {
     try {
+      setLoadingData(true);
       const [catResponse, itemsResponse] = await Promise.all([
         api.get('/categories'),
         api.get('/menu')
       ]);
+      console.log('Categories fetched:', catResponse.data);
+      console.log('Menu items fetched:', itemsResponse.data);
       setCategories(catResponse.data || []);
       setMenuItems(itemsResponse.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       Alert.alert('Error', 'Failed to load categories and items');
+    } finally {
+      setLoadingData(false);
     }
   };
 
@@ -338,41 +354,43 @@ export default function OfferFormScreen({ route, navigation }) {
                 </View>
               </View>
 
-              {/* Apply to Items Section */}
-              {percentage && percentage.trim() && (
-                <View style={styles.applySection}>
-                  <View style={styles.applySectionHeader}>
-                    <Ionicons name="pricetag" size={20} color={ZOMATO_RED} />
-                    <Text style={styles.applySectionTitle}>Apply Discount To</Text>
-                  </View>
-                  <Text style={styles.applySectionHint}>
-                    Select categories and items to apply {percentage}% discount
-                  </Text>
-                  
-                  <TouchableOpacity 
-                    style={styles.selectItemsButton}
-                    onPress={() => setShowCategoryModal(true)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="list" size={20} color={ZOMATO_RED} />
-                    <Text style={styles.selectItemsButtonText}>
-                      {selectedItems.length > 0 
-                        ? `${selectedItems.length} item(s) selected` 
-                        : 'Select Items'}
-                    </Text>
-                    <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-                  </TouchableOpacity>
-
-                  {selectedItems.length > 0 && (
-                    <View style={styles.selectedItemsInfo}>
-                      <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
-                      <Text style={styles.selectedItemsInfoText}>
-                        {percentage}% discount will be applied to {selectedItems.length} item(s)
-                      </Text>
-                    </View>
-                  )}
+              {/* Apply to Items Section - Always show */}
+              <View style={styles.applySection}>
+                <View style={styles.applySectionHeader}>
+                  <Ionicons name="pricetag" size={20} color={ZOMATO_RED} />
+                  <Text style={styles.applySectionTitle}>Apply Offer To</Text>
                 </View>
-              )}
+                <Text style={styles.applySectionHint}>
+                  {percentage && percentage.trim() 
+                    ? `Select categories and items to apply ${percentage}% discount`
+                    : 'Select categories and items for this offer'}
+                </Text>
+                
+                <TouchableOpacity 
+                  style={styles.selectItemsButton}
+                  onPress={() => setShowCategoryModal(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="list" size={20} color={ZOMATO_RED} />
+                  <Text style={styles.selectItemsButtonText}>
+                    {selectedItems.length > 0 || selectedCategories.length > 0
+                      ? `${selectedCategories.length} category(ies), ${selectedItems.length} item(s) selected` 
+                      : 'Select Categories & Items'}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+
+                {(selectedItems.length > 0 || selectedCategories.length > 0) && (
+                  <View style={styles.selectedItemsInfo}>
+                    <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
+                    <Text style={styles.selectedItemsInfoText}>
+                      {percentage && percentage.trim()
+                        ? `${percentage}% discount will be applied to ${selectedCategories.length} category(ies) and ${selectedItems.length} item(s)`
+                        : `Offer will apply to ${selectedCategories.length} category(ies) and ${selectedItems.length} item(s)`}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
           </Animated.View>
           <View style={{ height: 120 }} />
@@ -403,93 +421,108 @@ export default function OfferFormScreen({ route, navigation }) {
           <View style={styles.modalContent}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Items</Text>
+              <View>
+                <Text style={styles.modalTitle}>Select Categories & Items</Text>
+                <Text style={styles.modalSubtitle}>
+                  {categories.length} total categories • {menuItems.length} total items
+                </Text>
+                <Text style={styles.modalSubtitle}>
+                  {selectedCategories.length} categories, {selectedItems.length} items selected
+                </Text>
+              </View>
               <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowCategoryModal(false)}>
                 <Ionicons name="close" size={24} color="#696969" />
               </TouchableOpacity>
             </View>
             
             <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
-              {(() => {
-                if (categories.length === 0) {
-                  return (
-                    <View style={styles.emptyState}>
-                      <Ionicons name="folder-open-outline" size={48} color="#9CA3AF" />
-                      <Text style={styles.emptyStateText}>No categories found</Text>
-                      <Text style={styles.emptyStateHint}>Add categories from Menu screen first</Text>
-                    </View>
-                  );
-                }
-                
-                if (menuItems.length === 0) {
-                  return (
-                    <View style={styles.emptyState}>
-                      <Ionicons name="fast-food-outline" size={48} color="#9CA3AF" />
-                      <Text style={styles.emptyStateText}>No menu items found</Text>
-                      <Text style={styles.emptyStateHint}>Add menu items from Menu screen first</Text>
-                    </View>
-                  );
-                }
-                
-                return categories.map((category) => {
-                  const categoryItems = getItemsByCategory(category.name);
-                  const allItemsSelected = categoryItems.length > 0 && categoryItems.every(item => selectedItems.includes(item._id));
-                  
-                  if (categoryItems.length === 0) {
-                    return null;
-                  }
-                  
-                  return (
-                    <View key={category._id} style={styles.categorySection}>
-                      <TouchableOpacity 
-                        style={styles.categoryHeader}
-                        onPress={() => setExpandedCategory(expandedCategory === category.name ? null : category.name)}
-                      >
-                        <View style={styles.categoryHeaderLeft}>
-                          <TouchableOpacity 
-                            style={[styles.checkbox, allItemsSelected && styles.checkboxChecked]}
-                            onPress={() => selectAllItemsInCategory(category.name)}
-                          >
-                            {allItemsSelected && <Ionicons name="checkmark" size={16} color="#fff" />}
-                          </TouchableOpacity>
-                          <Text style={styles.categoryName}>{category.name}</Text>
-                          <View style={styles.categoryBadge}>
-                            <Text style={styles.categoryBadgeText}>{categoryItems.length}</Text>
-                          </View>
-                        </View>
-                        <Ionicons 
-                          name={expandedCategory === category.name ? "chevron-up" : "chevron-down"} 
-                          size={20} 
-                          color="#9CA3AF" 
-                        />
-                      </TouchableOpacity>
-                      
-                      {expandedCategory === category.name && (
-                        <View style={styles.itemsList}>
-                          {categoryItems.map((item) => (
+              {loadingData ? (
+                <View style={styles.emptyState}>
+                  <ActivityIndicator size="large" color={ZOMATO_RED} />
+                  <Text style={styles.emptyStateText}>Loading...</Text>
+                </View>
+              ) : categories.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="folder-open-outline" size={48} color="#9CA3AF" />
+                  <Text style={styles.emptyStateText}>No categories found</Text>
+                  <Text style={styles.emptyStateHint}>Add categories from Menu screen first</Text>
+                </View>
+              ) : menuItems.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="fast-food-outline" size={48} color="#9CA3AF" />
+                  <Text style={styles.emptyStateText}>No menu items found</Text>
+                  <Text style={styles.emptyStateHint}>Add menu items from Menu screen first</Text>
+                </View>
+              ) : (
+                <>
+                  {categories.map((category) => {
+                    const categoryItems = getItemsByCategory(category.name);
+                    const allItemsSelected = categoryItems.length > 0 && categoryItems.every(item => selectedItems.includes(item._id));
+                    
+                    console.log(`Category: ${category.name}, Items count: ${categoryItems.length}`);
+                    
+                    return (
+                      <View key={category._id} style={styles.categorySection}>
+                        <TouchableOpacity 
+                          style={styles.categoryHeader}
+                          onPress={() => setExpandedCategory(expandedCategory === category.name ? null : category.name)}
+                        >
+                          <View style={styles.categoryHeaderLeft}>
                             <TouchableOpacity 
-                              key={item._id}
-                              style={styles.itemRow}
-                              onPress={() => toggleItem(item._id)}
+                              style={[styles.checkbox, allItemsSelected && styles.checkboxChecked]}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                selectAllItemsInCategory(category.name);
+                              }}
+                              disabled={categoryItems.length === 0}
                             >
-                              <View style={[styles.checkbox, selectedItems.includes(item._id) && styles.checkboxChecked]}>
-                                {selectedItems.includes(item._id) && <Ionicons name="checkmark" size={16} color="#fff" />}
-                              </View>
-                              {item.image && (
-                                <Image source={{ uri: item.image }} style={styles.itemImage} />
-                              )}
-                              <View style={styles.itemInfo}>
-                                <Text style={styles.itemName}>{item.name}</Text>
-                                <Text style={styles.itemPrice}>₹{item.price}</Text>
-                              </View>
+                              {allItemsSelected && <Ionicons name="checkmark" size={16} color="#fff" />}
                             </TouchableOpacity>
-                          ))}
-                        </View>
-                      )}
-                    </View>
-                  );
-                });
-              })()}
+                            <Text style={styles.categoryName}>{category.name}</Text>
+                            <View style={styles.categoryBadge}>
+                              <Text style={styles.categoryBadgeText}>{categoryItems.length}</Text>
+                            </View>
+                          </View>
+                          <Ionicons 
+                            name={expandedCategory === category.name ? "chevron-up" : "chevron-down"} 
+                            size={20} 
+                            color="#9CA3AF" 
+                          />
+                        </TouchableOpacity>
+                        
+                        {expandedCategory === category.name && (
+                          <View style={styles.itemsList}>
+                            {categoryItems.length === 0 ? (
+                              <View style={styles.emptyCategory}>
+                                <Text style={styles.emptyCategoryText}>No items in this category</Text>
+                              </View>
+                            ) : (
+                              categoryItems.map((item) => (
+                                <TouchableOpacity 
+                                  key={item._id}
+                                  style={styles.itemRow}
+                                  onPress={() => toggleItem(item._id)}
+                                >
+                                  <View style={[styles.checkbox, selectedItems.includes(item._id) && styles.checkboxChecked]}>
+                                    {selectedItems.includes(item._id) && <Ionicons name="checkmark" size={16} color="#fff" />}
+                                  </View>
+                                  {item.image && (
+                                    <Image source={{ uri: item.image }} style={styles.itemImage} />
+                                  )}
+                                  <View style={styles.itemInfo}>
+                                    <Text style={styles.itemName}>{item.name}</Text>
+                                    <Text style={styles.itemPrice}>₹{item.price}</Text>
+                                  </View>
+                                </TouchableOpacity>
+                              ))
+                            )}
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                </>
+              )}
             </ScrollView>
             
             <View style={styles.modalFooter}>
@@ -498,7 +531,7 @@ export default function OfferFormScreen({ route, navigation }) {
                 onPress={() => setShowCategoryModal(false)}
               >
                 <Text style={styles.modalDoneButtonText}>
-                  Done ({selectedItems.length} selected)
+                  Done ({selectedCategories.length} categories, {selectedItems.length} items)
                 </Text>
               </TouchableOpacity>
             </View>
@@ -705,8 +738,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '80%',
+    height: '80%',
     paddingBottom: Platform.OS === 'ios' ? 32 : 16,
+    display: 'flex',
+    flexDirection: 'column',
   },
   modalHandle: {
     width: 40,
@@ -731,6 +766,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1C1C1C',
   },
+  modalSubtitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
   modalCloseButton: {
     width: 32,
     height: 32,
@@ -742,6 +783,7 @@ const styles = StyleSheet.create({
   modalScrollView: {
     flex: 1,
     paddingHorizontal: 20,
+    paddingTop: 12,
   },
   
   // Empty State
@@ -806,6 +848,15 @@ const styles = StyleSheet.create({
   itemsList: {
     padding: 12,
     gap: 8,
+  },
+  emptyCategory: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  emptyCategoryText: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
   },
   itemRow: {
     flexDirection: 'row',
