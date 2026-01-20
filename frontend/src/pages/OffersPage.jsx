@@ -370,29 +370,37 @@ export default function OffersPage() {
       ) : (
         // Normal Content with Offers
         <>
-          {/* Hero Banner - Clean clickable image without overlays */}
+          {/* Hero Banner - Full width on desktop, landscape style */}
           <section 
-            className="relative cursor-pointer transition-all duration-1000 bg-gray-900 overflow-hidden"
+            className="relative cursor-pointer transition-all duration-1000 bg-gray-900 overflow-hidden w-full"
             onClick={() => {
               if (currentHeaderOffer?.offerType) {
                 handleOfferTypeChange(currentHeaderOffer.offerType);
               }
             }}
           >
-            {/* Full Image Display - No Cropping */}
+            {/* Full Image Display - Cover on desktop for landscape effect */}
             {currentBannerOffer ? (
               <img 
                 src={getResponsiveImage(currentBannerOffer)}
                 alt={currentBannerOffer.offerType || 'Special Offer'}
-                className="w-full h-auto object-contain transition-opacity duration-1000"
-                style={{ maxHeight: '600px', minHeight: '250px' }}
+                className="w-full h-auto object-contain md:object-cover transition-opacity duration-1000"
+                style={{ 
+                  maxHeight: '600px', 
+                  minHeight: '250px',
+                  height: window.innerWidth >= 1024 ? '500px' : 'auto'
+                }}
               />
             ) : (
               <img 
                 src="/banner-delicious-tacos.jpg"
                 alt="Special Offers"
-                className="w-full h-auto object-contain"
-                style={{ maxHeight: '600px', minHeight: '250px' }}
+                className="w-full h-auto object-contain md:object-cover"
+                style={{ 
+                  maxHeight: '600px', 
+                  minHeight: '250px',
+                  height: window.innerWidth >= 1024 ? '500px' : 'auto'
+                }}
               />
             )}
         
