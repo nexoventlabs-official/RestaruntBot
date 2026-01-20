@@ -359,7 +359,11 @@ export default function AdminMenuScreen({ navigation, route }) {
         transform: [{ scale: scaleAnim }],
       }}>
         <TouchableOpacity
-          style={[styles.itemCard, isPaused && styles.itemCardPaused]}
+          style={[
+            styles.itemCard, 
+            isPaused && styles.itemCardPaused,
+            !item.available && styles.itemCardOutOfStock
+          ]}
           onPress={() => navigation.navigate('MenuItemForm', { item })}
           activeOpacity={0.7}
         >
@@ -375,10 +379,10 @@ export default function AdminMenuScreen({ navigation, route }) {
               </View>
             )}
             {/* Discount Badge */}
-            {item.originalPrice && item.originalPrice > item.price && (
+            {item.offerPrice && item.offerPrice < item.price && (
               <View style={styles.discountBadge}>
                 <Text style={styles.discountText}>
-                  {Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100)}% OFF
+                  {Math.round(((item.price - item.offerPrice) / item.price) * 100)}% OFF
                 </Text>
               </View>
             )}
@@ -405,7 +409,16 @@ export default function AdminMenuScreen({ navigation, route }) {
               </View>
             )}
             <View style={styles.itemFooter}>
-              <Text style={[styles.itemPrice, isPaused && styles.pricePaused]}>₹{item.price}</Text>
+              <View style={styles.priceContainer}>
+                {item.offerPrice && item.offerPrice < item.price ? (
+                  <View style={styles.priceRow}>
+                    <Text style={[styles.originalPrice, isPaused && styles.pricePaused]}>₹{item.price}</Text>
+                    <Text style={[styles.offerPrice, isPaused && styles.pricePaused]}>₹{item.offerPrice}</Text>
+                  </View>
+                ) : (
+                  <Text style={[styles.itemPrice, isPaused && styles.pricePaused]}>₹{item.price}</Text>
+                )}
+              </View>
               {isPaused ? (
                 <View style={styles.pausedStatusBadge}>
                   <Text style={styles.pausedStatusText}>Paused</Text>
@@ -1042,13 +1055,14 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   itemCardPaused: { backgroundColor: '#FEFCE8', borderWidth: 1, borderColor: '#FEF3C7' },
+  itemCardOutOfStock: { backgroundColor: '#FEE2E2', borderWidth: 2, borderColor: '#FCA5A5' },
   itemImageContainer: { position: 'relative' },
   itemImage: { width: 90, height: 90, borderRadius: 16 },
   itemImagePaused: { opacity: 0.6 },
   placeholderImage: { backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
   placeholderImagePaused: { backgroundColor: '#FEF3C7' },
   foodTypeBadge: {
-    position: 'absolute', top: 6, left: 6,
+    position: 'absolute', bottom: 6, left: 6,
     width: 20, height: 20, borderRadius: 5, borderWidth: 2,
     backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center'
   },
@@ -1074,7 +1088,11 @@ const styles = StyleSheet.create({
   prepTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
   prepTimeText: { fontSize: 12, color: '#9CA3AF', fontWeight: '500' },
   itemFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
+  priceContainer: { flexDirection: 'row', alignItems: 'center' },
+  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   itemPrice: { fontSize: 20, fontWeight: '800', color: ZOMATO_RED },
+  originalPrice: { fontSize: 16, fontWeight: '500', color: '#9CA3AF', textDecorationLine: 'line-through' },
+  offerPrice: { fontSize: 20, fontWeight: '800', color: '#22C55E' },
   pricePaused: { color: '#9CA3AF' },
   availabilityToggle: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, minWidth: 80, alignItems: 'center' },
   availabilityText: { fontSize: 12, fontWeight: '700' },

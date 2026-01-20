@@ -400,9 +400,18 @@ export default function UserMenuPage() {
           )}
           
           {/* Discount Badge - Top Left */}
-          {item.originalPrice && item.originalPrice > item.price && (
-            <div className="absolute top-3 left-3 bg-gradient-to-r from-green-500 to-green-600 text-white px-3 py-1.5 rounded-full text-sm font-bold shadow-lg">
-              {Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100)}% OFF
+          {item.offerPrice && item.offerPrice < item.price && (
+            <div className="absolute top-3 left-3 bg-gradient-to-r from-green-500 to-green-600 text-white px-3 py-1.5 rounded-full text-sm font-bold shadow-lg z-20">
+              {Math.round(((item.price - item.offerPrice) / item.price) * 100)}% OFF
+            </div>
+          )}
+          
+          {/* Offer Type Badge - Below Discount Badge */}
+          {item.offerType && (Array.isArray(item.offerType) ? item.offerType : [item.offerType]).length > 0 && (
+            <div className={`absolute left-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-lg z-20 ${
+              item.offerPrice && item.offerPrice < item.price ? 'top-14' : 'top-3'
+            }`}>
+              🎉 {(Array.isArray(item.offerType) ? item.offerType : [item.offerType])[0]}
             </div>
           )}
           
@@ -476,9 +485,11 @@ export default function UserMenuPage() {
           {/* Price Section */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-orange-600">₹{item.price}</span>
-              {item.originalPrice && item.originalPrice > item.price && (
-                <span className="text-sm text-gray-400 line-through">₹{item.originalPrice}</span>
+              <span className="text-2xl font-bold text-orange-600">
+                ₹{item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}
+              </span>
+              {item.offerPrice && item.offerPrice < item.price && (
+                <span className="text-sm text-gray-400 line-through">₹{item.price}</span>
               )}
             </div>
           </div>

@@ -38,6 +38,7 @@ export default function OfferFormScreen({ route, navigation }) {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState(null);
   const [loadingData, setLoadingData] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   
   const [loading, setLoading] = useState(false);
   
@@ -51,14 +52,6 @@ export default function OfferFormScreen({ route, navigation }) {
     ]).start();
     fetchCategoriesAndItems();
   }, []);
-
-  // Auto-expand first category when modal opens
-  useEffect(() => {
-    if (showCategoryModal && categories.length > 0 && !expandedCategory) {
-      console.log('Auto-expanding first category:', categories[0].name);
-      setExpandedCategory(categories[0].name);
-    }
-  }, [showCategoryModal, categories]);
 
   useEffect(() => {
     console.log('Categories state updated:', categories.length, 'categories');
@@ -93,11 +86,41 @@ export default function OfferFormScreen({ route, navigation }) {
   };
 
   const toggleItem = (itemId) => {
+    const item = menuItems.find(i => i._id === itemId);
+    if (!item) return;
+    
+    let newSelectedItems;
     if (selectedItems.includes(itemId)) {
-      setSelectedItems(selectedItems.filter(id => id !== itemId));
+      newSelectedItems = selectedItems.filter(id => id !== itemId);
     } else {
-      setSelectedItems([...selectedItems, itemId]);
+      newSelectedItems = [...selectedItems, itemId];
     }
+    setSelectedItems(newSelectedItems);
+    
+    // Check if all items in this item's categories are now selected/deselected
+    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+    const newSelectedCategories = [...selectedCategories];
+    
+    itemCategories.forEach(categoryName => {
+      const categoryItems = menuItems.filter(i => 
+        Array.isArray(i.category) ? i.category.includes(categoryName) : i.category === categoryName
+      );
+      const categoryItemIds = categoryItems.map(i => i._id);
+      const allCategoryItemsSelected = categoryItemIds.every(id => newSelectedItems.includes(id));
+      
+      if (allCategoryItemsSelected && !newSelectedCategories.includes(categoryName)) {
+        // All items selected, add category
+        newSelectedCategories.push(categoryName);
+      } else if (!allCategoryItemsSelected && newSelectedCategories.includes(categoryName)) {
+        // Not all items selected, remove category
+        const index = newSelectedCategories.indexOf(categoryName);
+        if (index > -1) {
+          newSelectedCategories.splice(index, 1);
+        }
+      }
+    });
+    
+    setSelectedCategories(newSelectedCategories);
   };
 
   const selectAllItemsInCategory = (categoryName) => {
@@ -110,12 +133,16 @@ export default function OfferFormScreen({ route, navigation }) {
     const allSelected = categoryItemIds.every(id => selectedItems.includes(id));
     
     if (allSelected) {
-      // Deselect all items in this category
+      // Deselect all items in this category and remove category
       setSelectedItems(selectedItems.filter(id => !categoryItemIds.includes(id)));
+      setSelectedCategories(selectedCategories.filter(c => c !== categoryName));
     } else {
-      // Select all items in this category
+      // Select all items in this category and add category
       const newSelectedItems = [...new Set([...selectedItems, ...categoryItemIds])];
       setSelectedItems(newSelectedItems);
+      if (!selectedCategories.includes(categoryName)) {
+        setSelectedCategories([...selectedCategories, categoryName]);
+      }
     }
   };
 
@@ -123,6 +150,39 @@ export default function OfferFormScreen({ route, navigation }) {
     return menuItems.filter(item => 
       Array.isArray(item.category) ? item.category.includes(categoryName) : item.category === categoryName
     );
+  };
+
+  // Filter categories and items based on search query
+  const getFilteredCategoriesAndItems = () => {
+    if (!searchQuery.trim()) {
+      return categories;
+    }
+
+    const query = searchQuery.toLowerCase();
+    
+    return categories.filter(category => {
+      // Check if category name matches
+      const categoryMatches = category.name.toLowerCase().includes(query);
+      
+      // Check if any item in this category matches
+      const categoryItems = getItemsByCategory(category.name);
+      const hasMatchingItems = categoryItems.some(item => 
+        item.name.toLowerCase().includes(query)
+      );
+      
+      return categoryMatches || hasMatchingItems;
+    });
+  };
+
+  const getFilteredItemsByCategory = (categoryName) => {
+    const items = getItemsByCategory(categoryName);
+    
+    if (!searchQuery.trim()) {
+      return items;
+    }
+
+    const query = searchQuery.toLowerCase();
+    return items.filter(item => item.name.toLowerCase().includes(query));
   };
 
   const pickImage = async () => {
@@ -180,6 +240,12 @@ export default function OfferFormScreen({ route, navigation }) {
       const formData = new FormData();
       formData.append('isActive', 'true');
       formData.append('offerType', offerType.trim());
+      
+      console.log('Submitting offer with:');
+      console.log('- Offer Type:', offerType.trim());
+      console.log('- Percentage:', percentage);
+      console.log('- Selected Items:', selectedItems.length, selectedItems);
+      console.log('- Selected Categories:', selectedCategories.length, selectedCategories);
       
       if (percentage && percentage.trim()) {
         formData.append('percentage', percentage);
@@ -421,7 +487,7 @@ export default function OfferFormScreen({ route, navigation }) {
           <View style={styles.modalContent}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>Select Categories & Items</Text>
                 <Text style={styles.modalSubtitle}>
                   {categories.length} total categories • {menuItems.length} total items
@@ -433,6 +499,25 @@ export default function OfferFormScreen({ route, navigation }) {
               <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowCategoryModal(false)}>
                 <Ionicons name="close" size={24} color="#696969" />
               </TouchableOpacity>
+            </View>
+            
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search categories or items..."
+                placeholderTextColor="#9CA3AF"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                  <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+              )}
             </View>
             
             <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
@@ -453,76 +538,112 @@ export default function OfferFormScreen({ route, navigation }) {
                   <Text style={styles.emptyStateText}>No menu items found</Text>
                   <Text style={styles.emptyStateHint}>Add menu items from Menu screen first</Text>
                 </View>
-              ) : (
-                <>
-                  {categories.map((category) => {
-                    const categoryItems = getItemsByCategory(category.name);
-                    const allItemsSelected = categoryItems.length > 0 && categoryItems.every(item => selectedItems.includes(item._id));
-                    
-                    console.log(`Category: ${category.name}, Items count: ${categoryItems.length}`);
-                    
-                    return (
-                      <View key={category._id} style={styles.categorySection}>
-                        <TouchableOpacity 
-                          style={styles.categoryHeader}
-                          onPress={() => setExpandedCategory(expandedCategory === category.name ? null : category.name)}
-                        >
-                          <View style={styles.categoryHeaderLeft}>
-                            <TouchableOpacity 
-                              style={[styles.checkbox, allItemsSelected && styles.checkboxChecked]}
-                              onPress={(e) => {
-                                e.stopPropagation();
-                                selectAllItemsInCategory(category.name);
-                              }}
-                              disabled={categoryItems.length === 0}
-                            >
-                              {allItemsSelected && <Ionicons name="checkmark" size={16} color="#fff" />}
-                            </TouchableOpacity>
-                            <Text style={styles.categoryName}>{category.name}</Text>
-                            <View style={styles.categoryBadge}>
-                              <Text style={styles.categoryBadgeText}>{categoryItems.length}</Text>
-                            </View>
-                          </View>
-                          <Ionicons 
-                            name={expandedCategory === category.name ? "chevron-up" : "chevron-down"} 
-                            size={20} 
-                            color="#9CA3AF" 
-                          />
-                        </TouchableOpacity>
-                        
-                        {expandedCategory === category.name && (
-                          <View style={styles.itemsList}>
-                            {categoryItems.length === 0 ? (
-                              <View style={styles.emptyCategory}>
-                                <Text style={styles.emptyCategoryText}>No items in this category</Text>
+              ) : (() => {
+                const filteredCategories = getFilteredCategoriesAndItems();
+                
+                if (filteredCategories.length === 0) {
+                  return (
+                    <View style={styles.emptyState}>
+                      <Ionicons name="search-outline" size={48} color="#9CA3AF" />
+                      <Text style={styles.emptyStateText}>No results found</Text>
+                      <Text style={styles.emptyStateHint}>Try a different search term</Text>
+                    </View>
+                  );
+                }
+                
+                return (
+                  <>
+                    {filteredCategories.map((category) => {
+                      const categoryItems = getItemsByCategory(category.name);
+                      const filteredItems = getFilteredItemsByCategory(category.name);
+                      const allItemsSelected = categoryItems.length > 0 && categoryItems.every(item => selectedItems.includes(item._id));
+                      
+                      return (
+                        <View key={category._id} style={styles.categorySection}>
+                          <TouchableOpacity 
+                            style={styles.categoryHeader}
+                            onPress={() => setExpandedCategory(expandedCategory === category.name ? null : category.name)}
+                          >
+                            <View style={styles.categoryHeaderLeft}>
+                              <TouchableOpacity 
+                                style={[styles.checkbox, allItemsSelected && styles.checkboxChecked]}
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  selectAllItemsInCategory(category.name);
+                                }}
+                                disabled={categoryItems.length === 0}
+                              >
+                                {allItemsSelected && <Ionicons name="checkmark" size={16} color="#fff" />}
+                              </TouchableOpacity>
+                              <Text style={styles.categoryName}>{category.name}</Text>
+                              <View style={styles.categoryBadge}>
+                                <Text style={styles.categoryBadgeText}>{categoryItems.length}</Text>
                               </View>
-                            ) : (
-                              categoryItems.map((item) => (
-                                <TouchableOpacity 
-                                  key={item._id}
-                                  style={styles.itemRow}
-                                  onPress={() => toggleItem(item._id)}
-                                >
-                                  <View style={[styles.checkbox, selectedItems.includes(item._id) && styles.checkboxChecked]}>
-                                    {selectedItems.includes(item._id) && <Ionicons name="checkmark" size={16} color="#fff" />}
-                                  </View>
-                                  {item.image && (
-                                    <Image source={{ uri: item.image }} style={styles.itemImage} />
-                                  )}
-                                  <View style={styles.itemInfo}>
-                                    <Text style={styles.itemName}>{item.name}</Text>
-                                    <Text style={styles.itemPrice}>₹{item.price}</Text>
-                                  </View>
-                                </TouchableOpacity>
-                              ))
-                            )}
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })}
-                </>
-              )}
+                            </View>
+                            <Ionicons 
+                              name={expandedCategory === category.name ? "chevron-up" : "chevron-down"} 
+                              size={20} 
+                              color="#9CA3AF" 
+                            />
+                          </TouchableOpacity>
+                          
+                          {expandedCategory === category.name && (
+                            <View style={styles.itemsList}>
+                              {filteredItems.length === 0 ? (
+                                <View style={styles.emptyCategory}>
+                                  <Text style={styles.emptyCategoryText}>
+                                    {searchQuery ? 'No matching items in this category' : 'No items in this category'}
+                                  </Text>
+                                </View>
+                              ) : (
+                                filteredItems.map((item) => {
+                                  const discountPercent = percentage && percentage.trim() ? parseFloat(percentage) : 0;
+                                  const offerPrice = discountPercent > 0 ? Math.round(item.price * (1 - discountPercent / 100)) : item.price;
+                                  const discount = item.price - offerPrice;
+                                  
+                                  return (
+                                    <TouchableOpacity 
+                                      key={item._id}
+                                      style={styles.itemRow}
+                                      onPress={() => toggleItem(item._id)}
+                                    >
+                                      <View style={[styles.checkbox, selectedItems.includes(item._id) && styles.checkboxChecked]}>
+                                        {selectedItems.includes(item._id) && <Ionicons name="checkmark" size={16} color="#fff" />}
+                                      </View>
+                                      {item.image && (
+                                        <Image source={{ uri: item.image }} style={styles.itemImage} />
+                                      )}
+                                      <View style={styles.itemInfo}>
+                                        <Text style={styles.itemName}>{item.name}</Text>
+                                        <View style={styles.priceContainer}>
+                                          {discountPercent > 0 ? (
+                                            <>
+                                              <View style={styles.priceRow}>
+                                                <Text style={styles.originalPrice}>₹{item.price}</Text>
+                                                <Ionicons name="arrow-forward" size={12} color="#9CA3AF" style={{ marginHorizontal: 4 }} />
+                                                <Text style={styles.offerPrice}>₹{offerPrice}</Text>
+                                              </View>
+                                              <View style={styles.discountBadge}>
+                                                <Text style={styles.discountText}>Save ₹{discount}</Text>
+                                              </View>
+                                            </>
+                                          ) : (
+                                            <Text style={styles.itemPrice}>₹{item.price}</Text>
+                                          )}
+                                        </View>
+                                      </View>
+                                    </TouchableOpacity>
+                                  );
+                                })
+                              )}
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </>
+                );
+              })()}
             </ScrollView>
             
             <View style={styles.modalFooter}>
@@ -780,6 +901,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  
+  // Search Bar
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#1C1C1C',
+    paddingVertical: 0,
+  },
+  clearButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  
   modalScrollView: {
     flex: 1,
     paddingHorizontal: 20,
@@ -880,6 +1030,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1C1C1C',
     marginBottom: 4,
+  },
+  priceContainer: {
+    gap: 4,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  originalPrice: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    textDecorationLine: 'line-through',
+    fontWeight: '500',
+  },
+  offerPrice: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#22C55E',
+  },
+  discountBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  discountText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#16A34A',
   },
   itemPrice: {
     fontSize: 13,

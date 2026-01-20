@@ -124,8 +124,8 @@ export default function OffersPage() {
 
   // Calculate discount percentage
   const getDiscountPercentage = (item) => {
-    if (!item.originalPrice || item.originalPrice <= item.price) return 0;
-    return Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100);
+    if (!item.offerPrice || item.offerPrice >= item.price) return 0;
+    return Math.round(((item.price - item.offerPrice) / item.price) * 100);
   };
 
   // Filter items that have at least one offer type
@@ -332,31 +332,69 @@ export default function OffersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Hero Banner - Clean clickable image without overlays */}
-      <section 
-        className="relative cursor-pointer transition-all duration-1000 bg-gray-900 overflow-hidden"
-        onClick={() => {
-          if (currentHeaderOffer?.offerType) {
-            handleOfferTypeChange(currentHeaderOffer.offerType);
-          }
-        }}
-      >
-        {/* Full Image Display - No Cropping */}
-        {currentBannerOffer ? (
-          <img 
-            src={getResponsiveImage(currentBannerOffer)}
-            alt={currentBannerOffer.offerType || 'Special Offer'}
-            className="w-full h-auto object-contain transition-opacity duration-1000"
-            style={{ maxHeight: '600px', minHeight: '250px' }}
-          />
-        ) : (
-          <img 
-            src="/banner-delicious-tacos.jpg"
-            alt="Special Offers"
-            className="w-full h-auto object-contain"
-            style={{ maxHeight: '600px', minHeight: '250px' }}
-          />
-        )}
+      {loading ? (
+        // Loading State
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-orange-500 mb-4"></div>
+            <p className="text-gray-600 text-lg font-medium">Loading offers...</p>
+          </div>
+        </div>
+      ) : offers.length === 0 ? (
+        // No Offers Available State - Without Header
+        <div className="min-h-screen flex items-center justify-center px-4">
+          <div className="text-center max-w-md">
+            <div className="mb-6">
+              <Tag className="w-24 h-24 text-gray-300 mx-auto mb-4" />
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">No Offers Available</h2>
+            <p className="text-gray-600 text-lg mb-8">
+              We don't have any active offers at the moment. Check back soon for amazing deals and discounts!
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <a 
+                href="/menu" 
+                className="inline-flex items-center justify-center px-6 py-3 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition-colors"
+              >
+                Browse Menu
+              </a>
+              <a 
+                href="/" 
+                className="inline-flex items-center justify-center px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+              >
+                Go Home
+              </a>
+            </div>
+          </div>
+        </div>
+      ) : (
+        // Normal Content with Offers
+        <>
+          {/* Hero Banner - Clean clickable image without overlays */}
+          <section 
+            className="relative cursor-pointer transition-all duration-1000 bg-gray-900 overflow-hidden"
+            onClick={() => {
+              if (currentHeaderOffer?.offerType) {
+                handleOfferTypeChange(currentHeaderOffer.offerType);
+              }
+            }}
+          >
+            {/* Full Image Display - No Cropping */}
+            {currentBannerOffer ? (
+              <img 
+                src={getResponsiveImage(currentBannerOffer)}
+                alt={currentBannerOffer.offerType || 'Special Offer'}
+                className="w-full h-auto object-contain transition-opacity duration-1000"
+                style={{ maxHeight: '600px', minHeight: '250px' }}
+              />
+            ) : (
+              <img 
+                src="/banner-delicious-tacos.jpg"
+                alt="Special Offers"
+                className="w-full h-auto object-contain"
+                style={{ maxHeight: '600px', minHeight: '250px' }}
+              />
+            )}
         
         {/* Navigation and dots overlays */}
         <div className="absolute inset-0 pointer-events-none">
@@ -547,9 +585,11 @@ export default function OffersPage() {
                     {/* Price Section */}
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
-                        <span className="text-2xl font-bold text-orange-600">₹{item.price}</span>
-                        {item.originalPrice && item.originalPrice > item.price && (
-                          <span className="text-sm text-gray-400 line-through">₹{item.originalPrice}</span>
+                        <span className="text-2xl font-bold text-orange-600">
+                          ₹{item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}
+                        </span>
+                        {item.offerPrice && item.offerPrice < item.price && (
+                          <span className="text-sm text-gray-400 line-through">₹{item.price}</span>
                         )}
                       </div>
                     </div>
@@ -789,6 +829,8 @@ export default function OffersPage() {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

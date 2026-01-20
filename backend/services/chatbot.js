@@ -65,6 +65,23 @@ const sendWithOptionalImageCta = async (phone, imageUrl, message, buttonText, ur
   }
 };
 
+// Helper to format price with offer
+const formatPriceWithOffer = (item) => {
+  if (item.offerPrice && item.offerPrice < item.price) {
+    const discount = Math.round(((item.price - item.offerPrice) / item.price) * 100);
+    return `~₹${item.price}~ ➜ *₹${item.offerPrice}* (${discount}% OFF)`;
+  }
+  return `₹${item.price}`;
+};
+
+// Helper to format offer types
+const formatOfferTypes = (item) => {
+  if (item.offerType && Array.isArray(item.offerType) && item.offerType.length > 0) {
+    return `\n🎉 *Offers:* ${item.offerType.join(', ')}`;
+  }
+  return '';
+};
+
 const chatbot = {
   // Helper to detect cancel order intent from text/voice
   // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
@@ -2069,7 +2086,7 @@ const chatbot = {
               rows: partialMatches.slice(0, 10).map(item => ({
                 id: `view_${item._id}`,
                 title: item.name.substring(0, 24),
-                description: `₹${item.price} • ${item.foodType === 'veg' ? '🟢 Veg' : item.foodType === 'nonveg' ? '🔴 Non-Veg' : '🟡 Egg'}`
+                description: `${formatPriceWithOffer(item)} • ${item.foodType === 'veg' ? '🟢 Veg' : item.foodType === 'nonveg' ? '🔴 Non-Veg' : '🟡 Egg'}`
               }))
             }];
             await whatsapp.sendList(phone, '🔍 Select Item', `Found ${partialMatches.length} items. Please select one:`, 'View Items', sections, 'Tap to view details');
@@ -2260,7 +2277,7 @@ const chatbot = {
             rows: matchingItems.slice(0, 10).map(item => ({
               id: `add_${item._id}`,
               title: item.name.substring(0, 24),
-              description: `₹${item.price} • ${item.foodType === 'veg' ? '🟢 Veg' : item.foodType === 'nonveg' ? '🔴 Non-Veg' : '🟡 Egg'}`
+              description: `${formatPriceWithOffer(item)} • ${item.foodType === 'veg' ? '🟢 Veg' : item.foodType === 'nonveg' ? '🔴 Non-Veg' : '🟡 Egg'}`
             }))
           }];
           await whatsapp.sendList(phone, '🔍 Multiple Items Found', `Found ${matchingItems.length} items matching "${addIntent.itemName}"`, 'Select Item', sections, 'Tap to add to cart');
@@ -3047,10 +3064,11 @@ const chatbot = {
     // Build rows for the list
     const rows = pageItems.map(item => {
       const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
+      const priceDisplay = formatPriceWithOffer(item);
       return {
         rowId: `view_${item._id}`,
         title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
-        description: `${ratingStr} • ₹${item.price} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
+        description: `${ratingStr} • ${priceDisplay} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
       };
     });
 
@@ -3096,10 +3114,11 @@ const chatbot = {
     // Build rows for the list
     const rows = pageItems.map(item => {
       const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
+      const priceDisplay = formatPriceWithOffer(item);
       return {
         rowId: `view_${item._id}`,
         title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
-        description: `${ratingStr} • ₹${item.price} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
+        description: `${ratingStr} • ${priceDisplay} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
       };
     });
 
@@ -3143,10 +3162,11 @@ const chatbot = {
     // Build rows for the list - use view_ prefix so user can see details first
     const rows = pageItems.map(item => {
       const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
+      const priceDisplay = formatPriceWithOffer(item);
       return {
         rowId: `view_${item._id}`,
         title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
-        description: `${ratingStr} • ₹${item.price} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
+        description: `${ratingStr} • ${priceDisplay} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
       };
     });
 
@@ -3223,10 +3243,11 @@ const chatbot = {
     
     let msg = `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n\n`;
     msg += `${ratingDisplay}\n\n`;
-    msg += `💰 *Price:* ₹${item.price} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
+    msg += `💰 *Price:* ${formatPriceWithOffer(item)} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
     msg += `⏱️ *Prep Time:* ${item.preparationTime || 15} mins\n`;
     if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
-    msg += `\n📝 ${item.description || 'Delicious dish prepared fresh!'}`;
+    msg += formatOfferTypes(item);
+    msg += `\n\n📝 ${item.description || 'Delicious dish prepared fresh!'}`;
 
     const buttons = [
       { id: `add_${item._id}`, text: 'Add to Cart' },
@@ -3259,10 +3280,11 @@ const chatbot = {
     
     let msg = `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n\n`;
     msg += `${ratingDisplay}\n\n`;
-    msg += `💰 *Price:* ₹${item.price} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
+    msg += `💰 *Price:* ${formatPriceWithOffer(item)} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
     msg += `⏱️ *Prep Time:* ${item.preparationTime || 15} mins\n`;
     if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
-    msg += `\n📝 ${item.description || 'Delicious dish prepared fresh!'}`;
+    msg += formatOfferTypes(item);
+    msg += `\n\n📝 ${item.description || 'Delicious dish prepared fresh!'}`;
 
     const buttons = [
       { id: `confirm_add_${item._id}`, text: 'Add to Cart' },
@@ -3380,10 +3402,11 @@ const chatbot = {
     // Build rows for the list
     const rows = pageItems.map(item => {
       const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
+      const priceDisplay = formatPriceWithOffer(item);
       return {
         rowId: `add_${item._id}`,
         title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
-        description: `${ratingStr} • ₹${item.price} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
+        description: `${ratingStr} • ${priceDisplay} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
       };
     });
 
@@ -3428,10 +3451,11 @@ const chatbot = {
     // Build rows for the list
     const rows = pageItems.map(item => {
       const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
+      const priceDisplay = formatPriceWithOffer(item);
       return {
         rowId: `add_${item._id}`,
         title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
-        description: `${ratingStr} • ₹${item.price} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
+        description: `${ratingStr} • ${priceDisplay} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
       };
     });
 
@@ -3459,10 +3483,11 @@ const chatbot = {
   async sendQuantitySelection(phone, item) {
     const unitLabel = item.unit || 'piece';
     const qtyLabel = item.quantity || 1;
+    const priceDisplay = formatPriceWithOffer(item);
     const selectQtyImageUrl = await chatbotImagesService.getImageUrl('select_quantity');
     
     await sendWithOptionalImage(phone, selectQtyImageUrl,
-      `*${item.name}*\n💰 ₹${item.price} / ${qtyLabel} ${unitLabel}\n\nHow many would you like?`,
+      `*${item.name}*\n💰 ${priceDisplay} / ${qtyLabel} ${unitLabel}\n\nHow many would you like?`,
       [
         { id: 'qty_1', text: '1' },
         { id: 'qty_2', text: '2' },
@@ -3474,10 +3499,12 @@ const chatbot = {
   async sendAddedToCart(phone, item, qty, cart) {
     const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
     const unitInfo = `${item.quantity || 1} ${item.unit || 'piece'}`;
+    const priceDisplay = formatPriceWithOffer(item);
+    const effectivePrice = item.offerPrice || item.price;
     const addedToCartImageUrl = await chatbotImagesService.getImageUrl('added_to_cart');
     
     await sendWithOptionalImage(phone, addedToCartImageUrl,
-      `✅ *Added to Cart!*\n\n${qty}x ${item.name} (${unitInfo})\n💰 ₹${item.price * qty}\n\n🛒 Cart: ${cartCount} items`,
+      `✅ *Added to Cart!*\n\n${qty}x ${item.name} (${unitInfo})\n💰 ${priceDisplay} × ${qty} = ₹${effectivePrice * qty}\n\n🛒 Cart: ${cartCount} items`,
       [
         { id: 'add_more', text: 'Add More' },
         { id: 'view_cart', text: 'View Cart' },
@@ -3505,12 +3532,14 @@ const chatbot = {
     
     freshCustomer.cart.forEach((item, i) => {
       if (item.menuItem) {
-        const subtotal = item.menuItem.price * item.quantity;
+        const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+        const subtotal = effectivePrice * item.quantity;
         total += subtotal;
         validItems++;
         const unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
+        const priceDisplay = formatPriceWithOffer(item.menuItem);
         cartMsg += `${validItems}. *${item.menuItem.name}* (${unitInfo})\n`;
-        cartMsg += `   Qty: ${item.quantity} × ₹${item.menuItem.price} = ₹${subtotal}\n\n`;
+        cartMsg += `   Qty: ${item.quantity} × ${priceDisplay} = ₹${subtotal}\n\n`;
       }
     });
     
@@ -3562,12 +3591,14 @@ const chatbot = {
     
     freshCustomer.cart.forEach((item, i) => {
       if (item.menuItem) {
-        const subtotal = item.menuItem.price * item.quantity;
+        const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+        const subtotal = effectivePrice * item.quantity;
         total += subtotal;
         validItems++;
         const unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
+        const priceDisplay = formatPriceWithOffer(item.menuItem);
         cartMsg += `${validItems}. *${item.menuItem.name}* (${unitInfo})\n`;
-        cartMsg += `   Qty: ${item.quantity} × ₹${item.menuItem.price} = ₹${subtotal}\n\n`;
+        cartMsg += `   Qty: ${item.quantity} × ${priceDisplay} = ₹${subtotal}\n\n`;
       }
     });
     
@@ -3616,13 +3647,14 @@ const chatbot = {
     const orderId = generateOrderId();
     let total = 0;
     const items = freshCustomer.cart.filter(item => item.menuItem).map(item => {
-      const subtotal = item.menuItem.price * item.quantity;
+      const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+      const subtotal = effectivePrice * item.quantity;
       total += subtotal;
       return {
         menuItem: item.menuItem._id,
         name: item.menuItem.name,
         quantity: item.quantity,
-        price: item.menuItem.price,
+        price: effectivePrice,
         unit: item.menuItem.unit || 'piece',
         unitQty: item.menuItem.quantity || 1,
         image: item.menuItem.image
@@ -3763,12 +3795,14 @@ const chatbot = {
     
     freshCustomer.cart.forEach((item, i) => {
       if (item.menuItem) {
-        const subtotal = item.menuItem.price * item.quantity;
+        const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+        const subtotal = effectivePrice * item.quantity;
         total += subtotal;
         validItems++;
         const unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
+        const priceDisplay = formatPriceWithOffer(item.menuItem);
         reviewMsg += `${validItems}. *${item.menuItem.name}* (${unitInfo})\n`;
-        reviewMsg += `   Qty: ${item.quantity} × ₹${item.menuItem.price} = ₹${subtotal}\n\n`;
+        reviewMsg += `   Qty: ${item.quantity} × ${priceDisplay} = ₹${subtotal}\n\n`;
       }
     });
     
@@ -3817,12 +3851,14 @@ const chatbot = {
     
     freshCustomer.cart.forEach((item, i) => {
       if (item.menuItem) {
-        const subtotal = item.menuItem.price * item.quantity;
+        const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+        const subtotal = effectivePrice * item.quantity;
         total += subtotal;
         validItems++;
         const unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
+        const priceDisplay = formatPriceWithOffer(item.menuItem);
         cartMsg += `${validItems}. *${item.menuItem.name}* (${unitInfo})\n`;
-        cartMsg += `   ${item.quantity} × ₹${item.menuItem.price} = ₹${subtotal}\n\n`;
+        cartMsg += `   ${item.quantity} × ${priceDisplay} = ₹${subtotal}\n\n`;
       }
     });
     
@@ -3869,13 +3905,14 @@ const chatbot = {
     const orderId = generateOrderId();
     let total = 0;
     const items = freshCustomer.cart.filter(item => item.menuItem).map(item => {
-      const subtotal = item.menuItem.price * item.quantity;
+      const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+      const subtotal = effectivePrice * item.quantity;
       total += subtotal;
       return {
         menuItem: item.menuItem._id,
         name: item.menuItem.name,
         quantity: item.quantity,
-        price: item.menuItem.price,
+        price: effectivePrice,
         unit: item.menuItem.unit || 'piece',
         unitQty: item.menuItem.quantity || 1,
         image: item.menuItem.image

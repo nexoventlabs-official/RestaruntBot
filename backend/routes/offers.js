@@ -112,22 +112,35 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
 
     await offer.save();
     
+    console.log('Offer saved:', {
+      offerType,
+      percentage,
+      appliedItems: parsedAppliedItems,
+      appliedCategories: parsedAppliedCategories
+    });
+    
     // Apply discount to selected items and categories if percentage is provided
     if (percentage) {
       const MenuItem = require('../models/MenuItem');
       const discountPercent = parseFloat(percentage);
+      
+      console.log('Applying discount:', discountPercent + '%');
       
       // Collect all item IDs (from both direct selection and categories)
       let allItemIds = [...parsedAppliedItems];
       
       // Add items from selected categories
       if (parsedAppliedCategories.length > 0) {
+        console.log('Finding items in categories:', parsedAppliedCategories);
         const categoryItems = await MenuItem.find({
           category: { $in: parsedAppliedCategories }
         });
+        console.log('Found category items:', categoryItems.length);
         const categoryItemIds = categoryItems.map(item => item._id.toString());
         allItemIds = [...new Set([...allItemIds, ...categoryItemIds])];
       }
+      
+      console.log('Total items to apply discount:', allItemIds.length);
       
       // Apply discount to all collected items
       for (const itemId of allItemIds) {
@@ -135,6 +148,8 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
         if (item) {
           // Calculate offer price
           const offerPrice = Math.round(item.price * (1 - discountPercent / 100));
+          
+          console.log(`Applying to ${item.name}: ${item.price} -> ${offerPrice}`);
           
           // Add offer type to item's offerType array
           const offerTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
@@ -149,6 +164,10 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
           });
         }
       }
+      
+      console.log('Discount application completed');
+    } else {
+      console.log('No percentage provided, skipping discount application');
     }
     
     // Emit SSE event to notify clients to refresh (cache-busting)
