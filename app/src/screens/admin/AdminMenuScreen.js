@@ -137,10 +137,13 @@ export default function AdminMenuScreen({ navigation, route }) {
           style: 'destructive',
           onPress: async () => {
             try {
+              setTogglingId(item._id);
               await api.delete(`/menu/${item._id}`);
               setItems(items.filter(i => i._id !== item._id));
             } catch (error) {
               Alert.alert('Error', 'Failed to delete item');
+            } finally {
+              setTogglingId(null);
             }
           },
         },
@@ -441,8 +444,16 @@ export default function AdminMenuScreen({ navigation, route }) {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.deleteButton} onPress={() => deleteItem(item)}>
-            <Ionicons name="trash-outline" size={20} color={ZOMATO_RED} />
+          <TouchableOpacity 
+            style={styles.deleteButton} 
+            onPress={() => deleteItem(item)}
+            disabled={togglingId === item._id}
+          >
+            {togglingId === item._id ? (
+              <ActivityIndicator size="small" color={ZOMATO_RED} />
+            ) : (
+              <Ionicons name="trash-outline" size={20} color={ZOMATO_RED} />
+            )}
           </TouchableOpacity>
         </TouchableOpacity>
       </Animated.View>

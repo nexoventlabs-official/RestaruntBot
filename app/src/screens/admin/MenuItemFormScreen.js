@@ -81,15 +81,22 @@ export default function MenuItemFormScreen({ route, navigation }) {
   };
 
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled) {
-      setNewImage(result.assets[0]);
-      setImage(result.assets[0].uri);
+    try {
+      setLoading(true);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled) {
+        setNewImage(result.assets[0]);
+        setImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to pick image');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -525,6 +532,17 @@ export default function MenuItemFormScreen({ route, navigation }) {
           </View>
         </View>
       </Modal>
+      {/* Loading Overlay */}
+      {loading && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={ZOMATO_RED} />
+            <Text style={styles.loadingText}>
+              {isEditing ? 'Updating item...' : 'Adding item...'}
+            </Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -812,5 +830,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#22C55E',
+  },
+  
+  // Loading Overlay
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  loadingContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1C1C1C',
   },
 });

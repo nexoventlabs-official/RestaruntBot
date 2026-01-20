@@ -50,8 +50,13 @@ export default function AdminOffersScreen({ navigation }) {
     Alert.alert('Delete Offer', `Are you sure you want to delete "${offer.title}"?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
-        try { await api.delete(`/offers/${offer._id}`); setOffers(offers.filter(o => o._id !== offer._id)); }
+        try { 
+          setLoading(true);
+          await api.delete(`/offers/${offer._id}`); 
+          setOffers(offers.filter(o => o._id !== offer._id)); 
+        }
         catch (error) { Alert.alert('Error', 'Failed to delete offer'); }
+        finally { setLoading(false); }
       }},
     ]);
   };
@@ -212,6 +217,16 @@ export default function AdminOffersScreen({ navigation }) {
           }
         />
       )}
+      
+      {/* Loading Overlay */}
+      {loading && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.zomato.red} />
+            <Text style={styles.loadingText}>Processing...</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -329,4 +344,30 @@ const styles = StyleSheet.create({
   emptyButton: { marginTop: spacing.lg, borderRadius: radius.lg, overflow: 'hidden' },
   emptyButtonGradient: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.xl, paddingVertical: spacing.md },
   emptyButtonText: { color: '#fff', fontWeight: '600', fontSize: typography.title.medium.fontSize },
+  
+  // Loading Overlay
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  loadingContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    ...shadows.lg,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.light.text.primary,
+  },
 });

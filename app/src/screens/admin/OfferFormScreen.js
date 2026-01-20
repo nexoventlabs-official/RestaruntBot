@@ -194,6 +194,8 @@ export default function OfferFormScreen({ route, navigation }) {
         return;
       }
 
+      setLoading(true);
+      
       // Universal aspect ratio 19:6 for all devices
       const aspectRatio = [19, 6];
 
@@ -214,6 +216,8 @@ export default function OfferFormScreen({ route, navigation }) {
     } catch (error) {
       console.error('Error picking image:', error);
       Alert.alert('Error', 'Failed to pick image. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -659,6 +663,18 @@ export default function OfferFormScreen({ route, navigation }) {
           </View>
         </View>
       </Modal>
+      
+      {/* Loading Overlay */}
+      {loading && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={ZOMATO_RED} />
+            <Text style={styles.loadingText}>
+              {isEditing ? 'Updating offer...' : 'Creating offer...'}
+            </Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -1116,4 +1132,34 @@ const styles = StyleSheet.create({
   },
   submitButtonDisabled: { opacity: 0.7 },
   submitButtonText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  
+  // Loading Overlay
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  loadingContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1C1C1C',
+  },
 });
