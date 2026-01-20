@@ -23,21 +23,21 @@ export default function SmoothScrollProvider({ children }) {
       return 1 - Math.pow(1 - t, 4);
     };
 
-    // Initialize Lenis with optimized settings for faster scrolling
+    // Initialize Lenis with optimized settings for faster scrolling on desktop, slower on mobile
     const lenis = new Lenis({
-      duration: 0.8, // Faster scroll duration for snappier feel
+      duration: 1.2, // Slower duration for smoother feel
       easing: smoothEasing,
       orientation: 'vertical',
       gestureOrientation: 'vertical',
       smoothWheel: true,
-      wheelMultiplier: 1.5, // Increased for faster wheel scrolling
-      touchMultiplier: 2, // Faster touch sensitivity
+      wheelMultiplier: 1.5, // Desktop wheel scrolling speed
+      touchMultiplier: 1.2, // Slower touch sensitivity for mobile (reduced from 2)
       infinite: false,
       autoResize: true,
-      lerp: 0.15, // Higher lerp value = faster interpolation
+      lerp: 0.1, // Lower lerp = smoother, slower interpolation (reduced from 0.15)
       syncTouch: true, // Sync touch events for consistent behavior
-      syncTouchLerp: 0.12, // Faster touch scrolling
-      touchInertiaMultiplier: 35, // Better touch inertia on mobile
+      syncTouchLerp: 0.075, // Slower touch scrolling for smoother feel (reduced from 0.12)
+      touchInertiaMultiplier: 25, // Reduced inertia for more controlled scrolling (reduced from 35)
       prevent: (node) => {
         // Don't prevent on horizontal scroll containers - let them handle their own scroll
         // Only prevent if explicitly marked and not a horizontal scroller
