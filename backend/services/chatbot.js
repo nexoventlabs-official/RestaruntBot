@@ -4368,23 +4368,29 @@ const chatbot = {
   async sendHelp(phone) {
     const msg = `❓ *Help & Support*\n\n` +
       `🍽️ *Ordering*\n` +
-      `• Browse menu and place orders\n` +
-      `• Choose delivery, pickup, or dine-in\n\n` +
+      `• Browse our delicious menu\n` +
+      `• Place orders for delivery, pickup, or dine-in\n` +
+      `• Easy payment options available\n\n` +
       `📦 *Order Management*\n` +
-      `• Track your order in real-time\n` +
-      `• Cancel orders before preparation\n` +
+      `• Track your order status in real-time\n` +
+      `• Cancel orders before preparation starts\n` +
       `• Request refunds for paid orders\n\n` +
       `💬 *Quick Commands*\n` +
-      `• "hi" - Main menu\n` +
-      `• "menu" - View menu\n` +
-      `• "cart" - View cart\n` +
-      `• "status" - Check orders`;
+      `• "hi" - Return to main menu\n` +
+      `• "menu" - Browse our menu\n` +
+      `• "cart" - View your cart\n` +
+      `• "status" - Check order status\n\n` +
+      `📞 *Need Immediate Assistance?*\n` +
+      `Our support team is ready to help you with any questions or concerns!`;
 
     const helpSupportImageUrl = await chatbotImagesService.getImageUrl('help_support');
-    await sendWithOptionalImage(phone, helpSupportImageUrl, msg, [
-      { id: 'home', text: 'Main Menu' },
-      { id: 'place_order', text: 'Order Now' }
-    ]);
+    const supportPhone = '+919440203095'; // Support phone number
+    
+    if (helpSupportImageUrl) {
+      await whatsapp.sendImageWithCtaPhone(phone, helpSupportImageUrl, msg, '📞 Call Us Now', supportPhone, 'We\'re here to help! 🙂');
+    } else {
+      await whatsapp.sendCtaPhone(phone, msg, '📞 Call Us Now', supportPhone, 'We\'re here to help! 🙂');
+    }
   },
 
   // ============ WEBSITE LINK ============

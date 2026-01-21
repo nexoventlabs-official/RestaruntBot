@@ -44,6 +44,14 @@ const whatsapp = {
 
   async sendImageWithCtaUrlOriginal(phone, imageUrl, message, buttonText, url, footer = '') {
     return metaCloud.sendImageWithCtaUrlOriginal(phone, imageUrl, message, buttonText, url, footer);
+  },
+
+  async sendCtaPhone(phone, message, buttonText, phoneNumber, footer = '') {
+    return metaCloud.sendCtaPhone(phone, message, buttonText, phoneNumber, footer);
+  },
+
+  async sendImageWithCtaPhone(phone, imageUrl, message, buttonText, phoneNumber, footer = '') {
+    return metaCloud.sendImageWithCtaPhone(phone, imageUrl, message, buttonText, phoneNumber, footer);
   }
 };
 

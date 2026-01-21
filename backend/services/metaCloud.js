@@ -499,6 +499,92 @@ const metaCloud = {
       // Fallback to text message with link
       return this.sendMessage(phone, `${message}\n\n🔗 ${buttonText}: ${url}`);
     }
+  },
+
+  // Send CTA phone call button - for customer support
+  async sendCtaPhone(phone, message, buttonText, phoneNumber, footer = '') {
+    try {
+      const { baseUrl, accessToken } = getConfig();
+      const to = phone.replace('@c.us', '').replace(/\D/g, '');
+      
+      console.log('📤 Meta sendCtaPhone to:', to);
+      
+      const payload = {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'cta_url',
+          body: {
+            text: message
+          },
+          footer: footer ? { text: footer } : undefined,
+          action: {
+            name: 'cta_url',
+            parameters: {
+              display_text: buttonText,
+              url: `tel:${phoneNumber.replace(/\D/g, '')}`
+            }
+          }
+        }
+      };
+      
+      const response = await axios.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      });
+      console.log('✅ Meta sendCtaPhone success');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Meta Cloud CTA Phone error:', error.response?.data || error.message);
+      // Fallback to text message with phone number
+      return this.sendMessage(phone, `${message}\n\n📞 ${buttonText}: ${phoneNumber}`);
+    }
+  },
+
+  // Send image with CTA phone call button
+  async sendImageWithCtaPhone(phone, imageUrl, message, buttonText, phoneNumber, footer = '') {
+    try {
+      const { baseUrl, accessToken } = getConfig();
+      const to = phone.replace('@c.us', '').replace(/\D/g, '');
+      
+      console.log('📤 Meta sendImageWithCtaPhone to:', to);
+      
+      const payload = {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'cta_url',
+          header: {
+            type: 'image',
+            image: {
+              link: imageUrl
+            }
+          },
+          body: {
+            text: message
+          },
+          footer: footer ? { text: footer } : undefined,
+          action: {
+            name: 'cta_url',
+            parameters: {
+              display_text: buttonText,
+              url: `tel:${phoneNumber.replace(/\D/g, '')}`
+            }
+          }
+        }
+      };
+      
+      const response = await axios.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      });
+      console.log('✅ Meta sendImageWithCtaPhone success');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Meta Cloud image CTA Phone error:', error.response?.data || error.message);
+      // Fallback to CTA Phone without image
+      return this.sendCtaPhone(phone, message, buttonText, phoneNumber, footer);
+    }
   }
 };
 
