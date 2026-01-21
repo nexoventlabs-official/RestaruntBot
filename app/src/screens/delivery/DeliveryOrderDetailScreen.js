@@ -1,8 +1,8 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, Linking, Animated, Platform, StatusBar, ImageBackground,
-  ActivityIndicator, Image
+  ActivityIndicator, Image, AppState
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +16,8 @@ const DELIVERY_DARK_GREEN = '#1B5E2E';
 // Background image
 const DETAIL_BG = require('../../../assets/backgrounds/deliveryhistory.jpg');
 
+const POLL_INTERVAL = 5000; // 5 seconds for real-time updates
+
 const STATUS_CONFIG = {
   ready: { color: '#10B981', bg: '#D1FAE5', label: 'Ready for Pickup', icon: 'checkmark-circle' },
   out_for_delivery: { color: '#06B6D4', bg: '#CFFAFE', label: 'Out for Delivery', icon: 'bicycle' },
@@ -24,6 +26,7 @@ const STATUS_CONFIG = {
   confirmed: { color: '#3B82F6', bg: '#DBEAFE', label: 'Confirmed', icon: 'checkmark' },
   preparing: { color: '#8B5CF6', bg: '#EDE9FE', label: 'Preparing', icon: 'restaurant' },
   cancelled: { color: '#EF4444', bg: '#FEE2E2', label: 'Cancelled', icon: 'close-circle' },
+  refunded: { color: '#EF4444', bg: '#FEE2E2', label: 'Refunded', icon: 'close-circle' },
 };
 
 export default function DeliveryOrderDetailScreen({ route, navigation }) {
@@ -33,6 +36,8 @@ export default function DeliveryOrderDetailScreen({ route, navigation }) {
   const [error, setError] = useState(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
+  const pollIntervalRef = useRef(null);
+  const appState = useRef(AppState.currentState);
 
   // Fetch order if only orderId was passed
   useEffect(() => {
@@ -41,19 +46,78 @@ export default function DeliveryOrderDetailScreen({ route, navigation }) {
     }
   }, [orderId]);
 
-  const fetchOrder = async () => {
+  const fetchOrder = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       setError(null);
-      const response = await api.get(`/delivery/orders/${orderId}`);
+      const targetOrderId = orderId || order?.orderId;
+      if (!targetOrderId) return;
+      
+      const response = await api.get(`/delivery/orders/${targetOrderId}`);
       setOrder(response.data);
     } catch (err) {
       console.error('Error fetching order:', err);
       setError('Failed to load order details');
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
+
+  // Start polling for real-time updates
+  const startPolling = useCallback(() => {
+    if (pollIntervalRef.current) return;
+    pollIntervalRef.current = setInterval(() => {
+      fetchOrder(false); // Silent refresh
+    }, POLL_INTERVAL);
+  }, [orderId, order]);
+
+  const stopPolling = useCallback(() => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  }, []);
+
+  // Handle app state changes
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        // App came to foreground - fetch immediately and restart polling
+        fetchOrder(false);
+        startPolling();
+      } else if (nextAppState.match(/inactive|background/)) {
+        // App went to background - stop polling
+        stopPolling();
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription?.remove();
+    };
+  }, [startPolling, stopPolling]);
+
+  // Start polling when screen is focused
+  useEffect(() => {
+    if (order || orderId) {
+      startPolling();
+      
+      const unsubscribe = navigation.addListener('focus', () => {
+        fetchOrder(false);
+        startPolling();
+      });
+      
+      const blurUnsubscribe = navigation.addListener('blur', () => {
+        stopPolling();
+      });
+      
+      return () => {
+        unsubscribe();
+        blurUnsubscribe();
+        stopPolling();
+      };
+    }
+  }, [navigation, order, orderId, startPolling, stopPolling]);
 
   const statusConfig = order ? (STATUS_CONFIG[order.status] || STATUS_CONFIG.pending) : STATUS_CONFIG.pending;
 
@@ -116,7 +180,7 @@ export default function DeliveryOrderDetailScreen({ route, navigation }) {
       <Animated.View style={{ opacity: fadeAnim }}>
         <View style={styles.headerWrapper}>
           <ImageBackground source={DETAIL_BG} style={styles.header} imageStyle={styles.headerBackgroundImage}>
-            <View style={styles.headerOverlay}>
+            <View style={[styles.headerOverlay, (order.status === 'cancelled' || order.status === 'refunded') && styles.headerOverlayCancelled]}>
               <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
                 <Ionicons name="arrow-back" size={24} color="#fff" />
               </TouchableOpacity>
@@ -135,8 +199,23 @@ export default function DeliveryOrderDetailScreen({ route, navigation }) {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+          {/* Cancelled Banner */}
+          {(order.status === 'cancelled' || order.status === 'refunded') && (
+            <View style={styles.cancelledBanner}>
+              <View style={styles.cancelledIconContainer}>
+                <Ionicons name="close-circle" size={32} color="#EF4444" />
+              </View>
+              <View style={styles.cancelledTextContainer}>
+                <Text style={styles.cancelledTitle}>Order Cancelled</Text>
+                <Text style={styles.cancelledMessage}>
+                  This order has been cancelled by the customer
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* Status Card */}
-          <View style={styles.statusCard}>
+          <View style={[styles.statusCard, (order.status === 'cancelled' || order.status === 'refunded') && styles.statusCardCancelled]}>
             <View style={[styles.statusIconContainer, { backgroundColor: statusConfig.bg }]}>
               <Ionicons name={statusConfig.icon} size={32} color={statusConfig.color} />
             </View>
@@ -144,6 +223,11 @@ export default function DeliveryOrderDetailScreen({ route, navigation }) {
             {order.deliveredAt && (
               <Text style={styles.deliveredTime}>
                 Delivered on {new Date(order.deliveredAt).toLocaleString('en-IN')}
+              </Text>
+            )}
+            {(order.status === 'cancelled' || order.status === 'refunded') && order.statusUpdatedAt && (
+              <Text style={styles.deliveredTime}>
+                Cancelled on {new Date(order.statusUpdatedAt).toLocaleString('en-IN')}
               </Text>
             )}
           </View>
@@ -381,6 +465,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  headerOverlayCancelled: {
+    backgroundColor: 'rgba(239, 68, 68, 0.5)',
+  },
   backButton: {
     width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center', alignItems: 'center',
@@ -394,10 +481,50 @@ const styles = StyleSheet.create({
   statusBadgeSmallText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   content: { flex: 1, padding: 16 },
 
+  // Cancelled Banner
+  cancelledBanner: {
+    backgroundColor: '#FEE2E2',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  cancelledIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  cancelledTextContainer: {
+    flex: 1,
+  },
+  cancelledTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#EF4444',
+    marginBottom: 4,
+  },
+  cancelledMessage: {
+    fontSize: 14,
+    color: '#991B1B',
+    lineHeight: 18,
+  },
+
   // Status Card
   statusCard: {
     backgroundColor: '#fff', borderRadius: 20, padding: 24, alignItems: 'center', marginBottom: 16,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 4,
+  },
+  statusCardCancelled: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
   },
   statusIconContainer: { width: 72, height: 72, borderRadius: 36, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
   statusText: { fontSize: 18, fontWeight: '800' },
