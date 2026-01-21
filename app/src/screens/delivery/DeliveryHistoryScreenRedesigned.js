@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  RefreshControl, TouchableOpacity, SectionList, Platform, StatusBar, Modal
+  RefreshControl, TouchableOpacity, SectionList, Platform, StatusBar, Modal, AppState
 } from 'react-native';
 import Animated, {
   FadeInDown,
@@ -15,6 +15,8 @@ import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { OrderCardSkeleton } from '../../components/ui/Skeleton';
 import { colors, spacing, radius, typography, shadows } from '../../theme';
+
+const POLL_INTERVAL = 5000; // 5 seconds for real-time updates
 
 // Filter options
 const FILTER_OPTIONS = [
@@ -134,8 +136,11 @@ export default function DeliveryHistoryScreen({ navigation }) {
   const [filter, setFilter] = useState('week'); // 'today', 'week', 'month', 'all'
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [stats, setStats] = useState({ delivered: 0, cancelled: 0, earnings: 0 });
+  const pollIntervalRef = useRef(null);
+  const appState = useRef(AppState.currentState);
 
-  const fetchHistory = async (selectedFilter = filter) => {
+  const fetchHistory = async (selectedFilter = filter, showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const response = await api.get(`/delivery/orders/history/filtered?filter=${selectedFilter}`);
       const { orders: fetchedOrders, stats: fetchedStats } = response.data;
@@ -179,14 +184,64 @@ export default function DeliveryHistoryScreen({ navigation }) {
     } catch (error) {
       console.error('Error fetching history:', error);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
       setRefreshing(false);
     }
   };
 
+  // Start polling for real-time updates
+  const startPolling = useCallback(() => {
+    if (pollIntervalRef.current) return;
+    pollIntervalRef.current = setInterval(() => {
+      fetchHistory(filter, false); // Silent refresh
+    }, POLL_INTERVAL);
+  }, [filter]);
+
+  const stopPolling = useCallback(() => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  }, []);
+
+  // Handle app state changes
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        // App came to foreground - fetch immediately and restart polling
+        fetchHistory(filter, false);
+        startPolling();
+      } else if (nextAppState.match(/inactive|background/)) {
+        // App went to background - stop polling
+        stopPolling();
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription?.remove();
+    };
+  }, [startPolling, stopPolling, filter]);
+
   useEffect(() => {
     fetchHistory();
-  }, []);
+    startPolling();
+    
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchHistory(filter, false);
+      startPolling();
+    });
+    
+    const blurUnsubscribe = navigation.addListener('blur', () => {
+      stopPolling();
+    });
+    
+    return () => {
+      unsubscribe();
+      blurUnsubscribe();
+      stopPolling();
+    };
+  }, [navigation, startPolling, stopPolling]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -198,8 +253,9 @@ export default function DeliveryHistoryScreen({ navigation }) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setFilter(newFilter);
     setShowFilterModal(false);
-    setLoading(true);
-    fetchHistory(newFilter);
+    stopPolling(); // Stop current polling
+    fetchHistory(newFilter, true); // Fetch with new filter
+    // Polling will restart automatically via useEffect when filter changes
   };
 
   const handleOrderPress = (order) => {
