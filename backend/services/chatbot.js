@@ -4126,16 +4126,30 @@ const chatbot = {
       pending: '⏳', confirmed: '✅', preparing: '👨‍🍳', ready: '📦',
       out_for_delivery: '🛵', delivered: '✅', cancelled: '❌', refunded: '💰'
     };
-    const statusLabel = {
-      pending: 'Pending', confirmed: 'Confirmed', preparing: 'Preparing', ready: 'Ready',
-      out_for_delivery: 'On the Way', delivered: 'Delivered', cancelled: 'Cancelled', refunded: 'Refunded'
-    };
 
     let msg = '📋 *Your Orders*\n\n';
     orders.forEach(o => {
-      const paymentLabel = o.paymentMethod === 'cod' ? '💵 COD' : '💳 Paid';
-      msg += `${statusEmoji[o.status] || '•'} *${o.orderId}*\n`;
-      msg += `   ${statusLabel[o.status] || o.status.replace('_', ' ')} | ₹${o.totalAmount} | ${paymentLabel}\n`;
+      const isPickup = o.serviceType === 'pickup';
+      const paymentLabel = o.paymentMethod === 'cod' 
+        ? (isPickup ? '💵 Pay at Hotel' : '💵 COD')
+        : '💳 Paid';
+      
+      // Show "Completed" for delivered pickup orders
+      let statusText = o.status;
+      if (o.status === 'delivered' && isPickup) {
+        statusText = 'Completed';
+      } else {
+        const statusLabels = {
+          pending: 'Pending', confirmed: 'Confirmed', preparing: 'Preparing', ready: 'Ready',
+          out_for_delivery: 'On the Way', delivered: 'Delivered', cancelled: 'Cancelled', refunded: 'Refunded'
+        };
+        statusText = statusLabels[o.status] || o.status.replace('_', ' ');
+      }
+      
+      const serviceIcon = isPickup ? '🏪' : '🛵';
+      
+      msg += `${statusEmoji[o.status] || '•'} *${o.orderId}* ${serviceIcon}\n`;
+      msg += `   ${statusText} | ₹${o.totalAmount} | ${paymentLabel}\n`;
       msg += `   ${new Date(o.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}\n\n`;
     });
 
@@ -4244,37 +4258,48 @@ const chatbot = {
   async sendCancelOptions(phone) {
     // Can cancel only COD orders that are not delivered, cancelled, or refunded
     // UPI/app payment orders cannot be cancelled by customer
+    // Pickup orders can only be cancelled if status is 'pending' (before confirmation)
     const orders = await Order.find({
       'customer.phone': phone,
       status: { $in: ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery'] },
       paymentMethod: 'cod'  // Only COD orders can be cancelled
     }).sort({ createdAt: -1 }).limit(5);
 
-    if (!orders.length) {
+    // Filter out pickup orders that are already confirmed or beyond
+    const cancellableOrders = orders.filter(order => {
+      if (order.serviceType === 'pickup') {
+        // Pickup orders can only be cancelled if pending
+        return order.status === 'pending';
+      }
+      // Delivery orders can be cancelled at any stage before delivery
+      return true;
+    });
+
+    if (cancellableOrders.length === 0) {
       const noOrdersImageUrl = await chatbotImagesService.getImageUrl('no_orders_found');
       await sendWithOptionalImage(phone, noOrdersImageUrl,
-        '❌ *No Orders to Cancel*\n\nNo cancellable orders found.\n\n_Note: Only Cash on Delivery orders can be cancelled._',
+        '❌ *No Orders to Cancel*\n\nNo cancellable orders found.\n\n_Note: Only Cash on Delivery orders can be cancelled. Pickup orders can only be cancelled before confirmation._',
         [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
       );
       return;
     }
 
     // If only 1 order, directly cancel it
-    if (orders.length === 1) {
-      await this.processCancellation(phone, orders[0].orderId);
+    if (cancellableOrders.length === 1) {
+      await this.processCancellation(phone, cancellableOrders[0].orderId);
       return;
     }
 
     // Multiple orders - show list to choose
-    const rows = orders.map(o => ({
+    const rows = cancellableOrders.map(o => ({
       rowId: `cancel_${o.orderId}`,
       title: o.orderId,
-      description: `₹${o.totalAmount} - ${o.status} - ${o.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}`
+      description: `₹${o.totalAmount} - ${o.status} - ${o.serviceType === 'pickup' ? 'Pickup' : 'Delivery'}`
     }));
 
     await whatsapp.sendList(phone,
       'Cancel Order',
-      `You have ${orders.length} active orders. Select which one to cancel.`,
+      `You have ${cancellableOrders.length} cancellable orders. Select which one to cancel.`,
       'Select Order',
       [{ title: 'Your Orders', rows }],
       'This cannot be undone'
@@ -4298,6 +4323,16 @@ const chatbot = {
       return;
     }
 
+    // Pickup orders can only be cancelled if status is 'pending' (before confirmation)
+    if (order.serviceType === 'pickup' && order.status !== 'pending') {
+      const pickupCancelRestrictedImageUrl = await chatbotImagesService.getImageUrl('pickup_cancel_restricted');
+      await sendWithOptionalImage(phone, pickupCancelRestrictedImageUrl,
+        `❌ *Cannot Cancel Pickup Order*\n\nOrder ${orderId} has already been confirmed and is being prepared.\n\n🏪 Pickup orders can only be cancelled before confirmation.\n\nPlease contact the restaurant if you need assistance.`,
+        [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
+      );
+      return;
+    }
+
     order.status = 'cancelled';
     order.statusUpdatedAt = new Date(); // For auto-cleanup
     order.cancellationReason = 'Customer requested';
@@ -4308,7 +4343,10 @@ const chatbot = {
       order.paymentStatus = 'cancelled';
     }
     
-    let msg = `✅ *Order Cancelled*\n\nOrder ${orderId} has been cancelled.`;
+    const isPickup = order.serviceType === 'pickup';
+    let msg = isPickup 
+      ? `✅ *Pickup Order Cancelled*\n\nOrder ${orderId} has been cancelled.`
+      : `✅ *Order Cancelled*\n\nOrder ${orderId} has been cancelled.`;
     
     // Mark refund as pending if already paid via UPI/online (wait for Razorpay webhook)
     if (order.paymentStatus === 'paid' && order.razorpayPaymentId) {
@@ -4347,7 +4385,9 @@ const chatbot = {
     );
     console.log('📊 Customer cancelled order, syncing to Google Sheets:', order.orderId);
 
-    const cancelledImageUrl = await chatbotImagesService.getImageUrl('order_cancelled');
+    // Use pickup-specific cancelled image if it's a pickup order
+    const imageKey = isPickup ? 'pickup_cancelled' : 'order_cancelled';
+    const cancelledImageUrl = await chatbotImagesService.getImageUrl(imageKey);
     
     await sendWithOptionalImage(phone, cancelledImageUrl, msg, [
       { id: 'place_order', text: 'New Order' },

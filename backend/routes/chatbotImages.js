@@ -206,6 +206,18 @@ const defaultImages = [
     name: 'Pickup Order Tracking',
     description: 'Shown when customer tracks their pickup order status',
     imageUrl: ''
+  },
+  {
+    key: 'pickup_cancelled',
+    name: 'Pickup Order Cancelled',
+    description: 'Shown when pickup order is successfully cancelled',
+    imageUrl: ''
+  },
+  {
+    key: 'pickup_cancel_restricted',
+    name: 'Pickup Cancel Restricted',
+    description: 'Shown when customer tries to cancel pickup order after confirmation',
+    imageUrl: ''
   }
 ];
 

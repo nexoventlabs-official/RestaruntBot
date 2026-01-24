@@ -36,7 +36,9 @@ const chatbotImageSchema = new mongoose.Schema({
       'pickup_confirmed',
       'pickup_ready',
       'pickup_completed',
-      'pickup_tracking'
+      'pickup_tracking',
+      'pickup_cancelled',
+      'pickup_cancel_restricted'
     ]
   },
   name: {
