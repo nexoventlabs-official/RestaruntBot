@@ -311,7 +311,10 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           // Send combined message with image and review CTA button
           const frontendUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
           const reviewUrl = `${frontendUrl}/review/${order.customer.phone}/${order.orderId}`;
-          const deliveredImageUrl = await chatbotImagesService.getImageUrl('delivered');
+          
+          // Use pickup_completed image for pickup orders, delivered image for delivery orders
+          const deliveredImageKey = isPickupOrder ? 'pickup_completed' : 'delivered';
+          const deliveredImageUrl = await chatbotImagesService.getImageUrl(deliveredImageKey);
           
           await sendWithOptionalImageCta(
             order.customer.phone,
@@ -321,9 +324,21 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             reviewUrl,
             'Your feedback helps us improve!'
           );
+        } else if (status === 'confirmed' && isPickupOrder) {
+          // Send pickup confirmed notification with image
+          const confirmedImageUrl = await chatbotImagesService.getImageUrl('pickup_confirmed');
+          await sendWithOptionalImage(
+            order.customer.phone,
+            confirmedImageUrl,
+            msg,
+            [
+              { id: 'track_order', text: '📍 Track Order' },
+              { id: 'home', text: '🏠 Main Menu' }
+            ]
+          );
         } else if (status === 'ready' && isPickupOrder) {
           // Send special notification for pickup orders when ready
-          const readyImageUrl = await chatbotImagesService.getImageUrl('order_ready');
+          const readyImageUrl = await chatbotImagesService.getImageUrl('pickup_ready');
           await sendWithOptionalImage(
             order.customer.phone,
             readyImageUrl,

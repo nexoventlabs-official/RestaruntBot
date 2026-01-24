@@ -4194,32 +4194,48 @@ const chatbot = {
       return;
     }
 
+    const isPickup = order.serviceType === 'pickup';
+
     const statusEmoji = {
       pending: '⏳', confirmed: '✅', preparing: '👨‍🍳', ready: '📦',
       out_for_delivery: '🛵', delivered: '✅', cancelled: '❌', refunded: '💰'
     };
     const statusLabel = {
       pending: 'Pending', confirmed: 'Confirmed', preparing: 'Preparing', ready: 'Ready',
-      out_for_delivery: 'On the Way', delivered: 'Delivered', cancelled: 'Cancelled', refunded: 'Refunded'
+      out_for_delivery: 'On the Way', delivered: isPickup ? 'Completed' : 'Delivered', 
+      cancelled: 'Cancelled', refunded: 'Refunded'
     };
 
-    let msg = `📍 *Order Tracking*\n\n`;
+    // Different messages for pickup vs delivery
+    let msg = isPickup 
+      ? `🏪 *Pickup Order Tracking*\n\n`
+      : `📍 *Order Tracking*\n\n`;
+    
     msg += `Order: *${order.orderId}*\n`;
     msg += `Status: ${statusEmoji[order.status] || '•'} *${(statusLabel[order.status] || order.status.replace('_', ' ')).toUpperCase()}*\n`;
-    msg += `Amount: ₹${order.totalAmount}\n\n`;
-    msg += `━━━━━━━━━━━━━━━\n*Timeline:*\n\n`;
+    msg += `Amount: ₹${order.totalAmount}\n`;
+    
+    if (isPickup) {
+      msg += `Service: 🏪 *Self-Pickup*\n`;
+    }
+    
+    msg += `\n━━━━━━━━━━━━━━━\n*Timeline:*\n\n`;
     
     order.trackingUpdates.forEach(u => {
       msg += `${statusEmoji[u.status] || '•'} ${u.message}\n`;
       msg += `   ${new Date(u.timestamp).toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}\n\n`;
     });
 
-    if (order.estimatedDeliveryTime) {
+    // Show ETA only for delivery orders
+    if (!isPickup && order.estimatedDeliveryTime) {
       msg += `⏰ *ETA:* ${new Date(order.estimatedDeliveryTime).toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}`;
     }
 
-    const orderTrackingImageUrl = await chatbotImagesService.getImageUrl('order_tracking');
-    await sendWithOptionalImage(phone, orderTrackingImageUrl, msg, [
+    // Use different images for pickup vs delivery tracking
+    const imageKey = isPickup ? 'pickup_tracking' : 'order_tracking';
+    const trackingImageUrl = await chatbotImagesService.getImageUrl(imageKey);
+    
+    await sendWithOptionalImage(phone, trackingImageUrl, msg, [
       { id: 'order_status', text: 'All Orders' },
       { id: 'home', text: 'Main Menu' }
     ]);

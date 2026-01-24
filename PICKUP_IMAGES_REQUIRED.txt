@@ -1,0 +1,32 @@
+PICKUP ORDER IMAGES - Required for Admin Panel Upload
+========================================================
+
+Upload these images in the Admin Panel > Chatbot Images section:
+
+1. pickup_confirmed
+   - Key: pickup_confirmed
+   - Description: Image shown when pickup order is confirmed
+   - Usage: Sent to customer when admin confirms pickup order
+
+2. pickup_ready
+   - Key: pickup_ready
+   - Description: Image shown when pickup order is ready for collection
+   - Usage: Sent to customer when order is ready to be picked up from restaurant
+
+3. pickup_completed
+   - Key: pickup_completed
+   - Description: Image shown when customer has picked up their order
+   - Usage: Sent to customer after they collect their order (with bill and order details)
+
+4. pickup_tracking
+   - Key: pickup_tracking
+   - Description: Image shown when customer tracks their pickup order
+   - Usage: Sent when customer clicks "Track Order" for a pickup order
+
+EXISTING IMAGES (Already in use):
+- order_tracking (for delivery orders)
+- delivered (for delivery orders)
+- order_ready (generic ready status)
+- out_for_delivery (for delivery orders)
+
+NOTE: If these images are not uploaded, the messages will still be sent but without images.
