@@ -36,6 +36,15 @@ const SORT_OPTIONS = [
 const OrderCard = ({ item, onPress, index }) => {
   const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.pending;
   const paymentConfig = PAYMENT_STATUS_CONFIG[item.paymentStatus] || PAYMENT_STATUS_CONFIG.pending;
+  
+  // Get appropriate status label based on service type
+  const getStatusLabel = () => {
+    if (item.status === 'delivered' && item.serviceType === 'pickup') {
+      return 'Completed';
+    }
+    return statusConfig.label;
+  };
+  
   const scaleAnim = useRef(new Animated.Value(0.97)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
@@ -65,7 +74,7 @@ const OrderCard = ({ item, onPress, index }) => {
             )}
             <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
               <View style={[styles.statusDot, { backgroundColor: statusConfig.color }]} />
-              <Text style={[styles.statusText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
+              <Text style={[styles.statusText, { color: statusConfig.color }]}>{getStatusLabel()}</Text>
             </View>
           </View>
         </View>

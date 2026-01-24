@@ -20,7 +20,9 @@ const STATUS_CONFIG = {
   refunded: { color: '#6B7280', bg: '#F3F4F6', label: 'Refunded', icon: 'refresh-circle' },
 };
 
-const STATUS_FLOW = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'];
+// Separate status flows for delivery and pickup orders
+const DELIVERY_STATUS_FLOW = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'];
+const PICKUP_STATUS_FLOW = ['pending', 'confirmed', 'ready', 'delivered'];
 
 export default function OrderDetailScreen({ route, navigation }) {
   const { order: passedOrder, orderId } = route.params || {};
@@ -113,8 +115,10 @@ export default function OrderDetailScreen({ route, navigation }) {
   };
 
   const getNextStatus = () => {
-    const currentIndex = STATUS_FLOW.indexOf(order.status);
-    if (currentIndex >= 0 && currentIndex < STATUS_FLOW.length - 1) return STATUS_FLOW[currentIndex + 1];
+    // Use different status flows based on service type
+    const statusFlow = order.serviceType === 'pickup' ? PICKUP_STATUS_FLOW : DELIVERY_STATUS_FLOW;
+    const currentIndex = statusFlow.indexOf(order.status);
+    if (currentIndex >= 0 && currentIndex < statusFlow.length - 1) return statusFlow[currentIndex + 1];
     return null;
   };
 
@@ -185,6 +189,15 @@ export default function OrderDetailScreen({ route, navigation }) {
   // These must be after the loading/error checks since they access order properties
   const nextStatus = getNextStatus();
   const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
+  
+  // Get appropriate status label based on service type
+  const getStatusLabel = (status) => {
+    if (status === 'delivered' && order.serviceType === 'pickup') {
+      return 'Completed';
+    }
+    return STATUS_CONFIG[status]?.label || status;
+  };
+  
   const sortedPartners = [...deliveryPartners].sort((a, b) => {
     if (a.isOnline && !b.isOnline) return -1;
     if (!a.isOnline && b.isOnline) return 1;
@@ -217,7 +230,7 @@ export default function OrderDetailScreen({ route, navigation }) {
               <Ionicons name={statusConfig.icon} size={32} color={statusConfig.color} />
             </View>
             <View style={styles.statusInfo}>
-              <Text style={[styles.statusText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
+              <Text style={[styles.statusText, { color: statusConfig.color }]}>{getStatusLabel(order.status)}</Text>
               <Text style={styles.serviceType}>{order.serviceType?.toUpperCase() || 'DELIVERY'}</Text>
             </View>
             <Text style={styles.statusTime}>{new Date(order.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</Text>
@@ -401,7 +414,11 @@ export default function OrderDetailScreen({ route, navigation }) {
                 }} activeOpacity={0.8}>
                   <LinearGradient colors={[STATUS_CONFIG[nextStatus]?.color || colors.zomato.red, STATUS_CONFIG[nextStatus]?.color || colors.zomato.darkRed]} style={styles.actionButtonGradient}>
                     <Ionicons name={STATUS_CONFIG[nextStatus]?.icon || 'checkmark'} size={20} color="#fff" style={{ marginRight: 8 }} />
-                    <Text style={styles.actionButtonText}>{order.status === 'confirmed' && order.serviceType === 'delivery' ? 'Start Preparing' : `Mark as ${STATUS_CONFIG[nextStatus]?.label}`}</Text>
+                    <Text style={styles.actionButtonText}>
+                      {order.status === 'confirmed' && order.serviceType === 'delivery' 
+                        ? 'Start Preparing' 
+                        : `Mark as ${getStatusLabel(nextStatus)}`}
+                    </Text>
                   </LinearGradient>
                 </TouchableOpacity>
               )}

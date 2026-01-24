@@ -273,7 +273,6 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     // Pickup-specific status messages
     const pickupStatusMessages = {
       confirmed: '✅ Your pickup order has been confirmed!',
-      preparing: '👨‍🍳 Your order is being prepared!',
       ready: '📦 Your order is ready for pickup!\n\n🏪 Please come to the restaurant to collect your order.',
       delivered: '✅ Order completed! Thank you for picking up your order!'
     };
