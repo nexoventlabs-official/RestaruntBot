@@ -339,7 +339,11 @@ export default function OrderDetailScreen({ route, navigation }) {
                   </View>
                   <View>
                     <Text style={styles.paymentMethodLabel}>Payment Method</Text>
-                    <Text style={styles.paymentMethodValue}>{order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'UPI Payment'}</Text>
+                    <Text style={styles.paymentMethodValue}>
+                      {order.paymentMethod === 'cod' 
+                        ? (order.serviceType === 'pickup' ? 'Pay at Hotel' : 'Cash on Delivery')
+                        : 'UPI Payment'}
+                    </Text>
                   </View>
                 </View>
                 <View style={[styles.paymentStatusBadge, { backgroundColor: order.paymentStatus === 'paid' ? '#DCFCE7' : '#FEF3C7' }]}>

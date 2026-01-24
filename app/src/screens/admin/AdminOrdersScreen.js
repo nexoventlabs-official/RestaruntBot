@@ -89,7 +89,9 @@ const OrderCard = ({ item, onPress, index }) => {
           </View>
           <View style={[styles.paymentBadge, { backgroundColor: item.paymentMethod === 'cod' ? '#FEF3C7' : '#DCFCE7' }]}>
             <Text style={[styles.paymentText, { color: item.paymentMethod === 'cod' ? '#92400E' : '#166534' }]}>
-              {item.paymentMethod === 'cod' ? 'COD' : 'Paid'}
+              {item.paymentMethod === 'cod' 
+                ? (item.serviceType === 'pickup' ? 'Pay at Hotel' : 'COD')
+                : 'Paid'}
             </Text>
           </View>
         </View>
