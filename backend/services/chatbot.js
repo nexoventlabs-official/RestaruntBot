@@ -3329,7 +3329,7 @@ const chatbot = {
     const buttons = [
       { id: `add_${item._id}`, text: 'Add to Cart' },
       { id: 'view_menu', text: 'Back to Menu' },
-      { id: 'review_pay', text: 'Review & Pay' }
+      { id: 'review_pay', text: 'Review & Order' }
     ];
 
     if (item.image) {
@@ -3366,7 +3366,7 @@ const chatbot = {
     const buttons = [
       { id: `confirm_add_${item._id}`, text: 'Add to Cart' },
       { id: 'add_more', text: 'Back to Menu' },
-      { id: 'review_pay', text: 'Review & Pay' }
+      { id: 'review_pay', text: 'Review & Order' }
     ];
 
     if (item.image) {
@@ -3585,7 +3585,7 @@ const chatbot = {
       [
         { id: 'add_more', text: 'Add More' },
         { id: 'view_cart', text: 'View Cart' },
-        { id: 'review_pay', text: 'Review & Pay' }
+        { id: 'review_pay', text: 'Review & Order' }
       ]
     );
   },
@@ -3635,9 +3635,9 @@ const chatbot = {
     cartMsg += `━━━━━━━━━━━━━━━\n`;
     cartMsg += `*Total: ₹${total}*`;
 
-    // Show Review & Pay, Add More, Cancel buttons
+    // Show Review & Order, Add More, Cancel buttons
     await whatsapp.sendButtons(phone, cartMsg, [
-      { id: 'review_pay', text: 'Review & Pay' },
+      { id: 'review_pay', text: 'Review & Order' },
       { id: 'add_more', text: 'Add More' },
       { id: 'clear_cart', text: 'Cancel' }
     ]);
@@ -3961,7 +3961,7 @@ const chatbot = {
 
     const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
     await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [
-      { id: 'review_pay', text: 'Review & Pay' },
+      { id: 'review_pay', text: 'Review & Order' },
       { id: 'add_more', text: 'Add More' },
       { id: 'clear_cart', text: 'Clear Cart' }
     ]);
