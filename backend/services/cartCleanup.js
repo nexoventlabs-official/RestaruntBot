@@ -33,26 +33,37 @@ const sendExpiryWarnings = async () => {
         if (warnedCustomers.has(warningKey)) continue;
         
         // Build warning message
-        let message = '⚠️ *Cart Expiry Warning*\n\n';
-        message += 'The following items will be removed from your cart in *10 minutes*:\n\n';
+        let message = '⏰ *Your Cart is About to Expire!*\n\n';
+        message += '⚠️ These items will be removed in *10 minutes* due to inactivity:\n\n';
         
+        let totalAmount = 0;
         expiringItems.forEach((item, index) => {
           const menuItem = item.menuItem;
           if (menuItem) {
-            message += `${index + 1}. ${menuItem.name} x${item.quantity} - ₹${(menuItem.price * item.quantity).toFixed(2)}\n`;
+            const itemTotal = menuItem.price * item.quantity;
+            totalAmount += itemTotal;
+            message += `${index + 1}. *${menuItem.name}*\n`;
+            message += `   ${item.quantity} × ₹${menuItem.price} = ₹${itemTotal}\n\n`;
           }
         });
         
-        message += '\n💡 *Tip:* Add more quantity or proceed to checkout to keep these items!';
+        message += `━━━━━━━━━━━━━━━\n`;
+        message += `💰 Total Value: *₹${totalAmount}*\n`;
+        message += `━━━━━━━━━━━━━━━\n\n`;
+        message += `🚀 *Quick Actions:*\n`;
+        message += `• Checkout now to save your items\n`;
+        message += `• View cart to update quantities\n`;
+        message += `• Or let them expire if you changed your mind\n\n`;
+        message += `⏱️ *Hurry! Only 10 minutes left!*`;
         
         // Send warning message with action buttons and image
         try {
           const cartExpiryImageUrl = await chatbotImagesService.getImageUrl('cart_expiry_warning');
           
           const buttons = [
-            { id: 'review_pay', text: 'Review & Pay' },
-            { id: 'view_cart', text: 'View Cart' },
-            { id: 'clear_cart', text: 'Clear Cart' }
+            { id: 'review_pay', text: '🛒 Checkout Now' },
+            { id: 'view_cart', text: '👀 View Cart' },
+            { id: 'add_more', text: '➕ Add More' }
           ];
           
           if (cartExpiryImageUrl) {
@@ -110,26 +121,50 @@ const cleanupExpiredCartItems = async () => {
         
         // Send notification about removed items
         if (customer.phone && itemsToRemove.length > 0) {
-          let message = '🗑️ *Cart Items Removed*\n\n';
-          message += 'The following items have been removed from your cart due to inactivity (30 minutes):\n\n';
+          let message = '😔 *Cart Items Expired*\n\n';
+          message += `We had to remove ${itemsToRemove.length} item${itemsToRemove.length > 1 ? 's' : ''} from your cart due to 30 minutes of inactivity:\n\n`;
           
+          let totalLostValue = 0;
           itemsToRemove.forEach((item, index) => {
             const menuItem = item.menuItem;
             if (menuItem) {
-              message += `${index + 1}. ${menuItem.name} x${item.quantity}\n`;
+              const itemTotal = menuItem.price * item.quantity;
+              totalLostValue += itemTotal;
+              message += `${index + 1}. *${menuItem.name}*\n`;
+              message += `   ${item.quantity} × ₹${menuItem.price} = ₹${itemTotal}\n\n`;
             }
           });
           
-          message += '\n💡 You can add them again anytime!';
+          if (totalLostValue > 0) {
+            message += `━━━━━━━━━━━━━━━\n`;
+            message += `💸 Total Value Lost: *₹${totalLostValue}*\n`;
+            message += `━━━━━━━━━━━━━━━\n\n`;
+          }
+          
+          message += `🍽️ *Don't worry!* You can add them back anytime.\n\n`;
+          
+          // Check if cart still has items
+          if (customer.cart.length > 0) {
+            message += `✅ You still have *${customer.cart.length} item${customer.cart.length > 1 ? 's' : ''}* in your cart!\n`;
+            message += `Checkout now before they expire too! ⏰`;
+          } else {
+            message += `🛒 Your cart is now empty.\n`;
+            message += `Browse our delicious menu and start fresh! 🍕`;
+          }
           
           try {
             const cartRemovedImageUrl = await chatbotImagesService.getImageUrl('cart_items_removed');
             
-            const buttons = [
-              { id: 'view_menu', text: 'Menu' },
-              { id: 'view_cart', text: 'View Cart' },
-              { id: 'open_website', text: 'Website' }
-            ];
+            const buttons = customer.cart.length > 0 
+              ? [
+                  { id: 'review_pay', text: '🛒 Checkout Now' },
+                  { id: 'view_cart', text: '👀 View Cart' },
+                  { id: 'add_more', text: '➕ Add More' }
+                ]
+              : [
+                  { id: 'view_menu', text: '📋 View Menu' },
+                  { id: 'home', text: '🏠 Main Menu' }
+                ];
             
             if (cartRemovedImageUrl) {
               await whatsapp.sendImageWithButtons(customer.phone, cartRemovedImageUrl, message, buttons);

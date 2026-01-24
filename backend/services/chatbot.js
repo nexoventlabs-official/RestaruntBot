@@ -2120,12 +2120,22 @@ const chatbot = {
       // ========== CART COMMANDS (check CLEAR first, then VIEW - order matters!) ==========
       // Clear cart must be checked BEFORE view cart because "clear my cart" contains "my cart"
       else if (selection === 'clear_cart' || (!selectedId && this.isClearCartIntent(msg))) {
+        const itemCount = customer.cart?.length || 0;
         customer.cart = [];
         await customer.save();
+        
         const cartClearedImageUrl = await chatbotImagesService.getImageUrl('cart_cleared');
-        await sendWithOptionalImage(phone, cartClearedImageUrl, '🗑️ Cart cleared!', [
-          { id: 'place_order', text: 'New Order' },
-          { id: 'home', text: 'Main Menu' }
+        
+        let message = '🗑️ *Cart Cleared Successfully!*\n\n';
+        if (itemCount > 0) {
+          message += `✅ Removed ${itemCount} item${itemCount > 1 ? 's' : ''} from your cart.\n\n`;
+        }
+        message += `🛒 Your cart is now empty and ready for a fresh start!\n\n`;
+        message += `🍽️ Browse our delicious menu and discover your favorites! 😋`;
+        
+        await sendWithOptionalImage(phone, cartClearedImageUrl, message, [
+          { id: 'view_menu', text: '📋 View Menu' },
+          { id: 'home', text: '🏠 Main Menu' }
         ]);
         state.currentStep = 'main_menu';
       }
@@ -2341,11 +2351,28 @@ const chatbot = {
             ]);
             state.currentStep = 'viewing_cart';
           } else {
-            // All items available - proceed to location
-            await this.requestLocation(phone);
-            state.currentStep = 'awaiting_location';
+            // All items available - ask for service type (Delivery or Self-Pickup)
+            await this.sendServiceTypeSelection(phone);
+            state.currentStep = 'select_service_type';
           }
         }
+      }
+      else if (selection === 'service_delivery') {
+        // Customer chose delivery service - proceed to location
+        state.serviceType = 'delivery';
+        await this.requestLocation(phone);
+        state.currentStep = 'awaiting_location';
+      }
+      else if (selection === 'service_pickup') {
+        // Customer chose self-pickup - skip location, go to payment method
+        state.serviceType = 'pickup';
+        customer.deliveryAddress = {
+          address: 'Self-Pickup at Restaurant',
+          updatedAt: new Date()
+        };
+        await customer.save();
+        await this.sendPickupPaymentMethodOptions(phone, customer);
+        state.currentStep = 'select_pickup_payment_method';
       }
       else if (selection === 'share_location') {
         // User tapped share location button - remind them to share
@@ -2423,6 +2450,51 @@ const chatbot = {
             state.paymentMethod = 'cod';
             const result = await this.processCODOrder(phone, customer, state);
             if (result.success) state.currentStep = 'order_confirmed';
+          }
+        }
+      }
+      else if (selection === 'pickup_pay_hotel') {
+        // Self-pickup with payment at hotel
+        if (!customer.cart?.length) {
+          await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+            { id: 'view_menu', text: 'View Menu' }
+          ]);
+          state.currentStep = 'main_menu';
+        } else {
+          state.paymentMethod = 'cod'; // Use COD for at-hotel payment
+          state.serviceType = 'pickup';
+          const result = await this.processPickupCheckout(phone, customer, state);
+          if (result.success) state.currentStep = 'order_placed';
+        }
+      }
+      else if (selection === 'pickup_pay_upi') {
+        // Self-pickup with UPI/App payment
+        if (!customer.cart?.length) {
+          await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+            { id: 'view_menu', text: 'View Menu' }
+          ]);
+          state.currentStep = 'main_menu';
+        } else {
+          // Check if cart items are still available before payment
+          const availabilityCheck = await checkCartAvailability(customer.cart);
+          
+          if (!availabilityCheck.available) {
+            const unavailableNames = availabilityCheck.unavailableItems.map(i => i.name).join(', ');
+            const itemNotAvailableImageUrl = await chatbotImagesService.getImageUrl('item_not_available');
+            
+            const msg = `😔 *Sorry!*\n\nSome items in your cart are currently unavailable:\n\n❌ ${unavailableNames}\n\nPlease remove these items from your cart and try again.`;
+            
+            await sendWithOptionalImage(phone, itemNotAvailableImageUrl, msg, [
+              { id: 'view_cart', text: 'View Cart' },
+              { id: 'clear_cart', text: 'Clear Cart' },
+              { id: 'home', text: 'Main Menu' }
+            ]);
+            state.currentStep = 'viewing_cart';
+          } else {
+            state.paymentMethod = 'upi';
+            state.serviceType = 'pickup';
+            const result = await this.processCheckout(phone, customer, state);
+            if (result.success) state.currentStep = 'awaiting_payment';
           }
         }
       }
@@ -3679,7 +3751,7 @@ const chatbot = {
       customer: { phone: freshCustomer.phone, name: freshCustomer.name || 'Customer', email: freshCustomer.email },
       items,
       totalAmount: total,
-      serviceType: state.selectedService || 'delivery',
+      serviceType: state.serviceType || state.selectedService || 'delivery',
       deliveryAddress: freshCustomer.deliveryAddress ? {
         address: freshCustomer.deliveryAddress.address,
         latitude: freshCustomer.deliveryAddress.latitude,
@@ -3937,7 +4009,7 @@ const chatbot = {
       customer: { phone: freshCustomer.phone, name: freshCustomer.name || 'Customer', email: freshCustomer.email },
       items,
       totalAmount: total,
-      serviceType: state.selectedService || 'delivery',
+      serviceType: state.serviceType || state.selectedService || 'delivery',
       deliveryAddress: freshCustomer.deliveryAddress ? {
         address: freshCustomer.deliveryAddress.address,
         latitude: freshCustomer.deliveryAddress.latitude,
@@ -4404,6 +4476,159 @@ const chatbot = {
 
     const openWebsiteImageUrl = await chatbotImagesService.getImageUrl('open_website');
     await sendWithOptionalImageCta(phone, openWebsiteImageUrl, msg, 'Open Website', websiteUrl, 'Tap to visit');
+  },
+
+  // ============ SERVICE TYPE SELECTION ============
+  async sendServiceTypeSelection(phone) {
+    await whatsapp.sendButtons(phone,
+      '🚚 *Choose Service Type*\n\nHow would you like to receive your order?',
+      [
+        { id: 'service_delivery', text: '🛵 Delivery' },
+        { id: 'service_pickup', text: '🏪 Self-Pickup' }
+      ],
+      'Select your preferred option'
+    );
+  },
+
+  // ============ PICKUP PAYMENT METHOD ============
+  async sendPickupPaymentMethodOptions(phone, customer) {
+    // Refresh customer from database to ensure we have latest cart data
+    const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
+    if (!freshCustomer || !freshCustomer.cart?.length) {
+      await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+        { id: 'view_menu', text: 'View Menu' }
+      ]);
+      return;
+    }
+
+    // Calculate total
+    let total = 0;
+    const items = [];
+    for (const cartItem of freshCustomer.cart) {
+      if (!cartItem.menuItem) continue;
+      const item = cartItem.menuItem;
+      const price = item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price;
+      const itemTotal = price * cartItem.quantity;
+      total += itemTotal;
+      items.push({
+        name: item.name,
+        quantity: cartItem.quantity,
+        price: itemTotal
+      });
+    }
+
+    // Build order summary message
+    let msg = '📋 *Order Summary (Self-Pickup)*\n\n';
+    items.forEach(item => {
+      msg += `• ${item.name} x${item.quantity} - ₹${item.price}\n`;
+    });
+    msg += `\n💰 *Total: ₹${total}*\n\n`;
+    msg += '🏪 *Pickup Location:* Restaurant\n\n';
+    msg += '💳 *Choose Payment Method:*';
+
+    await whatsapp.sendButtons(phone, msg, [
+      { id: 'pickup_pay_hotel', text: '🏨 Pay at Hotel' },
+      { id: 'pickup_pay_upi', text: '📱 UPI/App' }
+    ], 'Select payment method');
+  },
+
+  // ============ PROCESS PICKUP CHECKOUT ============
+  async processPickupCheckout(phone, customer, state) {
+    try {
+      // Refresh customer from database
+      const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
+      if (!freshCustomer || !freshCustomer.cart?.length) {
+        await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+          { id: 'view_menu', text: 'View Menu' }
+        ]);
+        return { success: false };
+      }
+
+      // Calculate total and prepare items
+      let total = 0;
+      const items = [];
+      for (const cartItem of freshCustomer.cart) {
+        if (!cartItem.menuItem) continue;
+        const item = cartItem.menuItem;
+        const price = item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price;
+        const itemTotal = price * cartItem.quantity;
+        total += itemTotal;
+        items.push({
+          menuItem: item._id,
+          name: item.name,
+          quantity: cartItem.quantity,
+          price: itemTotal,
+          unit: item.unit || 'piece',
+          unitQty: item.unitQty || 1,
+          image: item.image
+        });
+      }
+
+      // Create order
+      const orderId = generateOrderId();
+      const order = new Order({
+        orderId,
+        customer: {
+          phone: freshCustomer.phone,
+          name: freshCustomer.name || 'Customer',
+          email: freshCustomer.email
+        },
+        deliveryAddress: {
+          address: 'Self-Pickup at Restaurant'
+        },
+        items,
+        totalAmount: total,
+        serviceType: 'pickup',
+        paymentMethod: state.paymentMethod || 'cod',
+        paymentStatus: 'pending',
+        status: 'pending'
+      });
+
+      await order.save();
+      console.log(`✅ Pickup order created: ${orderId}`);
+
+      // Clear cart
+      freshCustomer.cart = [];
+      freshCustomer.conversationState = { currentStep: 'order_placed' };
+      await freshCustomer.save();
+
+      // Send confirmation message
+      let msg = '✅ *Order Request Successful!*\n\n';
+      msg += `📦 Order ID: *${orderId}*\n`;
+      msg += `🏪 Service: *Self-Pickup*\n`;
+      msg += `💰 Total: *₹${total}*\n`;
+      msg += `💳 Payment: *${state.paymentMethod === 'cod' ? 'Pay at Hotel' : 'UPI/App'}*\n\n`;
+      
+      if (state.paymentMethod === 'cod') {
+        msg += '✨ Your order has been received!\n\n';
+        msg += '📍 Please come to the restaurant to pick up your order.\n';
+        msg += '💵 Payment will be collected at the hotel.\n\n';
+        msg += '⏰ We will notify you when your order is ready!\n\n';
+        msg += 'Thank you for your order! 🙏';
+      } else {
+        msg += '⏳ Waiting for payment confirmation...\n\n';
+        msg += 'Please complete the payment to confirm your order.';
+      }
+
+      await whatsapp.sendButtons(phone, msg, [
+        { id: 'track_order', text: '📍 Track Order' },
+        { id: 'home', text: '🏠 Main Menu' }
+      ]);
+
+      // Sync to Google Sheets
+      googleSheets.updateOrderStatus(orderId, 'pending', 'pending').catch(err =>
+        console.error('Google Sheets sync error:', err)
+      );
+
+      return { success: true, orderId };
+    } catch (error) {
+      console.error('❌ Pickup checkout error:', error);
+      await whatsapp.sendButtons(phone, '❌ Failed to process your order. Please try again.', [
+        { id: 'view_cart', text: 'View Cart' },
+        { id: 'home', text: 'Main Menu' }
+      ]);
+      return { success: false };
+    }
   }
 };
 

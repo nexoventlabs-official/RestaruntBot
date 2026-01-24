@@ -18,6 +18,15 @@ const sendWithOptionalImageCta = async (phone, imageUrl, message, buttonText, ur
   }
 };
 
+// Helper to send message with optional image
+const sendWithOptionalImage = async (phone, imageUrl, message, buttons, footer = '') => {
+  if (imageUrl) {
+    await whatsapp.sendImageWithButtons(phone, imageUrl, message, buttons, footer);
+  } else {
+    await whatsapp.sendButtons(phone, message, buttons, footer);
+  }
+};
+
 // Lightweight endpoint to check for updates (returns hash only)
 router.get('/check-updates', authMiddleware, async (req, res) => {
   try {
@@ -261,11 +270,22 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
       cancelled: '❌ Your order has been cancelled.'
     };
     
-    if (statusMessages[status]) {
+    // Pickup-specific status messages
+    const pickupStatusMessages = {
+      confirmed: '✅ Your pickup order has been confirmed!',
+      preparing: '👨‍🍳 Your order is being prepared!',
+      ready: '📦 Your order is ready for pickup!\n\n🏪 Please come to the restaurant to collect your order.',
+      delivered: '✅ Order completed! Thank you for picking up your order!'
+    };
+    
+    const isPickupOrder = order.serviceType === 'pickup';
+    const messages = isPickupOrder ? pickupStatusMessages : statusMessages;
+    
+    if (messages[status]) {
       try {
-        let msg = `*Order Update*\n\nOrder: ${order.orderId}\n${statusMessages[status]}`;
+        let msg = `*Order Update*\n\nOrder: ${order.orderId}\n${messages[status]}`;
         
-        // Add order details and bill for delivered orders
+        // Add order details and bill for delivered/completed orders
         if (status === 'delivered') {
           msg += `\n\n━━━━━━━━━━━━━━━\n📋 *Order Details*\n━━━━━━━━━━━━━━━\n`;
           
@@ -278,7 +298,14 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           
           msg += `\n━━━━━━━━━━━━━━━\n`;
           msg += `💰 *Total Bill: ₹${order.totalAmount}*\n`;
-          msg += `💳 Payment: ${order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'UPI'} (${order.paymentStatus === 'paid' ? '✅ Paid' : '⏳ Pending'})\n`;
+          
+          if (isPickupOrder) {
+            msg += `🏪 Service: Self-Pickup\n`;
+            msg += `💳 Payment: ${order.paymentMethod === 'cod' ? 'Paid at Hotel' : 'UPI'} (${order.paymentStatus === 'paid' ? '✅ Paid' : '⏳ Pending'})\n`;
+          } else {
+            msg += `💳 Payment: ${order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'UPI'} (${order.paymentStatus === 'paid' ? '✅ Paid' : '⏳ Pending'})\n`;
+          }
+          
           msg += `━━━━━━━━━━━━━━━\n`;
           msg += `\n🙏 Thank you for ordering!\nWe hope you enjoy your meal! 🍽️`;
           
@@ -294,6 +321,18 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             'Leave a Review ⭐',
             reviewUrl,
             'Your feedback helps us improve!'
+          );
+        } else if (status === 'ready' && isPickupOrder) {
+          // Send special notification for pickup orders when ready
+          const readyImageUrl = await chatbotImagesService.getImageUrl('order_ready');
+          await sendWithOptionalImage(
+            order.customer.phone,
+            readyImageUrl,
+            msg,
+            [
+              { id: 'track_order', text: '📍 View Order' },
+              { id: 'home', text: '🏠 Main Menu' }
+            ]
           );
         } else if (status === 'out_for_delivery') {
           // Send image with track order button for out_for_delivery status
