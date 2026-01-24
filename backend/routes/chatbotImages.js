@@ -182,6 +182,30 @@ const defaultImages = [
     name: 'Cart Items Removed',
     description: 'Shown when cart items are removed after 30 minutes of inactivity',
     imageUrl: ''
+  },
+  {
+    key: 'pickup_confirmed',
+    name: 'Pickup Order Confirmed',
+    description: 'Shown when pickup order is confirmed by admin',
+    imageUrl: ''
+  },
+  {
+    key: 'pickup_ready',
+    name: 'Pickup Order Ready',
+    description: 'Shown when pickup order is ready for collection at restaurant',
+    imageUrl: ''
+  },
+  {
+    key: 'pickup_completed',
+    name: 'Pickup Order Completed',
+    description: 'Shown when customer has picked up their order (with bill and order details)',
+    imageUrl: ''
+  },
+  {
+    key: 'pickup_tracking',
+    name: 'Pickup Order Tracking',
+    description: 'Shown when customer tracks their pickup order status',
+    imageUrl: ''
   }
 ];
 
