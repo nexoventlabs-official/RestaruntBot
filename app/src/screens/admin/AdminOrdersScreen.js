@@ -55,9 +55,18 @@ const OrderCard = ({ item, onPress, index }) => {
             <Ionicons name="receipt-outline" size={14} color={colors.zomato.red} />
             <Text style={styles.orderId}>#{item.orderId}</Text>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
-            <View style={[styles.statusDot, { backgroundColor: statusConfig.color }]} />
-            <Text style={[styles.statusText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
+          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+            {/* Service Type Badge - NEW */}
+            {item.serviceType === 'pickup' && (
+              <View style={[styles.serviceTypeBadge, { backgroundColor: '#FEF3C7' }]}>
+                <Ionicons name="bag-handle" size={10} color="#92400E" />
+                <Text style={[styles.serviceTypeBadgeText, { color: '#92400E' }]}>Pickup</Text>
+              </View>
+            )}
+            <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
+              <View style={[styles.statusDot, { backgroundColor: statusConfig.color }]} />
+              <Text style={[styles.statusText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
+            </View>
           </View>
         </View>
 
@@ -94,7 +103,8 @@ export default function AdminOrdersScreen({ navigation }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState('confirmed');
+  const [filter, setFilter] = useState('all'); // Changed to 'all' to show all statuses
+  const [serviceTypeTab, setServiceTypeTab] = useState('all'); // New: all, delivery, pickup
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const shineAnim = useRef(new Animated.Value(-1)).current;
   
@@ -184,6 +194,13 @@ export default function AdminOrdersScreen({ navigation }) {
   const filteredAndSortedOrders = useMemo(() => {
     let result = [...orders];
 
+    // Service Type filter (NEW)
+    if (serviceTypeTab === 'delivery') {
+      result = result.filter(order => order.serviceType === 'delivery' || !order.serviceType);
+    } else if (serviceTypeTab === 'pickup') {
+      result = result.filter(order => order.serviceType === 'pickup');
+    }
+
     // Search filter
     if (searchTerm.trim()) {
       const search = searchTerm.toLowerCase().trim();
@@ -245,7 +262,7 @@ export default function AdminOrdersScreen({ navigation }) {
     });
 
     return result;
-  }, [orders, searchTerm, filter, paymentFilter, dateFilter, minAmount, maxAmount, sortBy]);
+  }, [orders, searchTerm, filter, paymentFilter, dateFilter, minAmount, maxAmount, sortBy, serviceTypeTab]);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
@@ -264,28 +281,26 @@ export default function AdminOrdersScreen({ navigation }) {
     setSortBy('newest');
   };
 
-  const FilterChip = ({ status, label, icon, count }) => {
-    const isActive = filter === status;
-    const statusColor = STATUS_CONFIG[status]?.color || colors.zomato.red;
-    return (
-      <TouchableOpacity
-        style={[styles.filterChip, isActive && styles.filterChipActive, isActive && { backgroundColor: statusColor }]}
-        onPress={() => setFilter(status)} activeOpacity={0.8}
-      >
-        <Ionicons name={icon} size={14} color={isActive ? '#fff' : colors.light.text.secondary} />
-        <Text style={[styles.filterText, isActive && styles.filterTextActive]}>{label}</Text>
-        {count > 0 && (
-          <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
-            <Text style={[styles.filterCountText, isActive && styles.filterCountTextActive]}>{count}</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-    );
+  const getFilterCount = (status) => {
+    let ordersToCount = allOrders;
+    
+    // Filter by service type first
+    if (serviceTypeTab === 'delivery') {
+      ordersToCount = ordersToCount.filter(o => o.serviceType === 'delivery' || !o.serviceType);
+    } else if (serviceTypeTab === 'pickup') {
+      ordersToCount = ordersToCount.filter(o => o.serviceType === 'pickup');
+    }
+    
+    // Then filter by status
+    if (status === 'all') return ordersToCount.length;
+    return ordersToCount.filter(o => o.status === status).length;
   };
 
-  const getFilterCount = (status) => {
-    if (status === 'all') return allOrders.length;
-    return allOrders.filter(o => o.status === status).length;
+  const getServiceTypeCount = (type) => {
+    if (type === 'all') return allOrders.length;
+    if (type === 'delivery') return allOrders.filter(o => o.serviceType === 'delivery' || !o.serviceType).length;
+    if (type === 'pickup') return allOrders.filter(o => o.serviceType === 'pickup').length;
+    return 0;
   };
 
   return (
@@ -305,7 +320,15 @@ export default function AdminOrdersScreen({ navigation }) {
                 <View style={styles.titleIconContainer}><Ionicons name="receipt" size={20} color="#fff" /></View>
                 <Text style={styles.title}>Orders</Text>
               </View>
-              <Text style={styles.subtitle}>{filteredAndSortedOrders.length} of {orders.length} orders</Text>
+              <Text style={styles.subtitle}>
+                {filteredAndSortedOrders.length} of {
+                  serviceTypeTab === 'all' 
+                    ? orders.length 
+                    : serviceTypeTab === 'delivery'
+                    ? orders.filter(o => o.serviceType === 'delivery' || !o.serviceType).length
+                    : orders.filter(o => o.serviceType === 'pickup').length
+                } {serviceTypeTab !== 'all' ? serviceTypeTab : ''} orders
+              </Text>
             </View>
           </View>
           
@@ -348,21 +371,67 @@ export default function AdminOrdersScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Status Filter Chips */}
-      <View style={styles.filterContainer}>
-        <FlatList horizontal showsHorizontalScrollIndicator={false}
-          data={[
-            { status: 'confirmed', label: 'New Orders', icon: 'notifications-outline' },
-            { status: 'preparing', label: 'Preparing', icon: 'restaurant-outline' },
-            { status: 'ready', label: 'Ready', icon: 'checkmark-done-outline' },
-            { status: 'out_for_delivery', label: 'Delivery', icon: 'bicycle-outline' },
-            { status: 'delivered', label: 'Done', icon: 'checkmark-circle-outline' },
-            { status: 'pending', label: 'Pending', icon: 'time-outline' },
-            { status: 'all', label: 'All', icon: 'apps-outline' },
-          ]}
-          renderItem={({ item }) => <FilterChip status={item.status} label={item.label} icon={item.icon} count={getFilterCount(item.status)} />}
-          keyExtractor={(item) => item.status} contentContainerStyle={styles.filterList}
-        />
+      {/* Service Type Tabs Only - Simple 3 Tabs */}
+      <View style={styles.serviceTypeTabs}>
+        <TouchableOpacity
+          style={[styles.serviceTypeTab, serviceTypeTab === 'all' && styles.serviceTypeTabActive]}
+          onPress={() => setServiceTypeTab('all')}
+          activeOpacity={0.7}
+        >
+          <Ionicons 
+            name="apps-outline" 
+            size={18} 
+            color={serviceTypeTab === 'all' ? '#fff' : colors.light.text.secondary} 
+          />
+          <Text style={[styles.serviceTypeTabText, serviceTypeTab === 'all' && styles.serviceTypeTabTextActive]}>
+            All Orders
+          </Text>
+          <View style={[styles.serviceTypeCount, serviceTypeTab === 'all' && styles.serviceTypeCountActive]}>
+            <Text style={[styles.serviceTypeCountText, serviceTypeTab === 'all' && styles.serviceTypeCountTextActive]}>
+              {getServiceTypeCount('all')}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.serviceTypeTab, serviceTypeTab === 'delivery' && styles.serviceTypeTabActive]}
+          onPress={() => setServiceTypeTab('delivery')}
+          activeOpacity={0.7}
+        >
+          <Ionicons 
+            name="bicycle-outline" 
+            size={18} 
+            color={serviceTypeTab === 'delivery' ? '#fff' : colors.light.text.secondary} 
+          />
+          <Text style={[styles.serviceTypeTabText, serviceTypeTab === 'delivery' && styles.serviceTypeTabTextActive]}>
+            Delivery
+          </Text>
+          <View style={[styles.serviceTypeCount, serviceTypeTab === 'delivery' && styles.serviceTypeCountActive]}>
+            <Text style={[styles.serviceTypeCountText, serviceTypeTab === 'delivery' && styles.serviceTypeCountTextActive]}>
+              {getServiceTypeCount('delivery')}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.serviceTypeTab, serviceTypeTab === 'pickup' && styles.serviceTypeTabActive]}
+          onPress={() => setServiceTypeTab('pickup')}
+          activeOpacity={0.7}
+        >
+          <Ionicons 
+            name="bag-handle-outline" 
+            size={18} 
+            color={serviceTypeTab === 'pickup' ? '#fff' : colors.light.text.secondary} 
+          />
+          <Text style={[styles.serviceTypeTabText, serviceTypeTab === 'pickup' && styles.serviceTypeTabTextActive]}>
+            Pickup
+          </Text>
+          <View style={[styles.serviceTypeCount, serviceTypeTab === 'pickup' && styles.serviceTypeCountActive]}>
+            <Text style={[styles.serviceTypeCountText, serviceTypeTab === 'pickup' && styles.serviceTypeCountTextActive]}>
+              {getServiceTypeCount('pickup')}
+            </Text>
+          </View>
+        </TouchableOpacity>
       </View>
 
       {/* Orders List */}
@@ -510,17 +579,58 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 15, color: '#1C1C1C', fontWeight: '500' },
   highlightedText: { backgroundColor: '#FEF3C7', color: '#92400E', fontWeight: '600' },
   
-  // Filter Chips
-  filterContainer: { paddingVertical: spacing.md, paddingTop: spacing.lg },
-  filterList: { paddingHorizontal: spacing.screenHorizontal, gap: spacing.sm },
-  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2, borderRadius: radius.full, backgroundColor: colors.light.surfaceSecondary, marginRight: spacing.sm, borderWidth: 1, borderColor: colors.light.borderLight },
-  filterChipActive: { borderColor: 'transparent' },
-  filterText: { fontSize: 13, color: colors.light.text.secondary, fontWeight: '600' },
-  filterTextActive: { color: '#fff' },
-  filterCount: { backgroundColor: colors.light.border, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.full, minWidth: 20, alignItems: 'center' },
-  filterCountActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
-  filterCountText: { fontSize: 11, fontWeight: '700', color: colors.light.text.secondary },
-  filterCountTextActive: { color: '#fff' },
+  // Service Type Tabs - Simple 3 Tabs
+  serviceTypeTabs: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  serviceTypeTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: colors.light.surfaceSecondary,
+    borderWidth: 2,
+    borderColor: colors.light.borderLight,
+  },
+  serviceTypeTabActive: {
+    backgroundColor: colors.zomato.red,
+    borderColor: colors.zomato.red,
+  },
+  serviceTypeTabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.light.text.secondary,
+  },
+  serviceTypeTabTextActive: {
+    color: '#fff',
+  },
+  serviceTypeCount: {
+    backgroundColor: colors.light.border,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  serviceTypeCountActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  serviceTypeCountText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.light.text.secondary,
+  },
+  serviceTypeCountTextActive: {
+    color: '#fff',
+  },
   
   // Loading & List
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.md },
@@ -558,6 +668,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm + 2, 
     paddingVertical: 6, 
     borderRadius: radius.full,
+  },
+  serviceTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  serviceTypeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: { fontSize: 12, fontWeight: '600' },
