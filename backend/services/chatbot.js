@@ -4666,8 +4666,10 @@ const chatbot = {
         msg += 'Please complete the payment to confirm your order.';
       }
 
+      // Add cancel button for pickup orders (can only cancel before confirmation)
       await whatsapp.sendButtons(phone, msg, [
         { id: 'track_order', text: '📍 Track Order' },
+        { id: `cancel_${orderId}`, text: '❌ Cancel Order' },
         { id: 'home', text: '🏠 Main Menu' }
       ]);
 
