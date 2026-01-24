@@ -274,7 +274,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     const pickupStatusMessages = {
       confirmed: '✅ Your pickup order has been confirmed!',
       ready: '📦 Your order is ready for pickup!\n\n🏪 Please come to the restaurant to collect your order.',
-      delivered: '✅ Order completed! Thank you for picking up your order!'
+      delivered: '✅ Order completed! Thank you for picking up your order!',
+      cancelled: '❌ Your pickup order has been cancelled.\n\n🏪 If you have any questions, please contact the restaurant.'
     };
     
     const isPickupOrder = order.serviceType === 'pickup';
@@ -398,8 +399,9 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             msg += `\n\n⚠️ *Refund Issue*\nWe couldn't process your refund automatically.\nAmount: ₹${order.totalAmount}\n\nOur team will contact you within 24 hours to resolve this.`;
           }
           
-          // Send image with cancelled message
-          const cancelledImageUrl = await chatbotImagesService.getImageUrl('order_cancelled');
+          // Use pickup-specific cancelled image if it's a pickup order
+          const cancelledImageKey = isPickupOrder ? 'pickup_cancelled' : 'order_cancelled';
+          const cancelledImageUrl = await chatbotImagesService.getImageUrl(cancelledImageKey);
           if (cancelledImageUrl) {
             await whatsapp.sendImage(order.customer.phone, cancelledImageUrl, msg);
           } else {
