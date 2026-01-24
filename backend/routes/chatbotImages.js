@@ -232,8 +232,13 @@ router.get('/', auth, async (req, res) => {
     
     // If no images exist, initialize all defaults
     if (images.length === 0) {
+      console.log('[Chatbot Images] No images found, initializing defaults...');
       for (const img of defaultImages) {
-        await ChatbotImage.create(img);
+        try {
+          await ChatbotImage.create(img);
+        } catch (createErr) {
+          console.error(`[Chatbot Images] Error creating ${img.key}:`, createErr.message);
+        }
       }
       images = await ChatbotImage.find().sort('name');
     } else {
@@ -242,8 +247,15 @@ router.get('/', auth, async (req, res) => {
       const missingImages = defaultImages.filter(img => !existingKeys.includes(img.key));
       
       if (missingImages.length > 0) {
+        console.log(`[Chatbot Images] Found ${missingImages.length} missing images, adding them...`);
         for (const img of missingImages) {
-          await ChatbotImage.create(img);
+          try {
+            await ChatbotImage.create(img);
+            console.log(`[Chatbot Images] Added missing image: ${img.key}`);
+          } catch (createErr) {
+            console.error(`[Chatbot Images] Error creating ${img.key}:`, createErr.message);
+            // Continue with other images even if one fails
+          }
         }
         images = await ChatbotImage.find().sort('name');
       }
@@ -251,6 +263,7 @@ router.get('/', auth, async (req, res) => {
     
     res.json(images);
   } catch (error) {
+    console.error('[Chatbot Images] GET error:', error);
     res.status(500).json({ error: error.message });
   }
 });
