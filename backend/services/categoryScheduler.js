@@ -106,7 +106,7 @@ class CategoryScheduler {
       const shouldBePaused = !shouldBeActive;
 
       console.log(`  Result: Should be ${shouldBeActive ? 'ACTIVE' : 'PAUSED'}`);
-      console.log(`  Current status: ${category.isPaused ? 'PAUSED' : 'ACTIVE'}`);
+      console.log(`  Current status: ${category.isPaused ? 'PAUSED' : 'ACTIVE'}, isSoldOut: ${category.isSoldOut ? 'YES' : 'NO'}`);
 
       // Only update if status needs to change
       // When within schedule, category should NOT be paused (isPaused = false)
@@ -116,16 +116,114 @@ class CategoryScheduler {
         const newStatus = shouldBePaused ? 'PAUSED' : 'ACTIVE';
         
         category.isPaused = shouldBePaused;
+        // Also update soldOut status based on schedule
+        category.isSoldOut = shouldBePaused;
         await category.save();
         
         console.log(`  ✓ STATUS CHANGED: ${oldStatus} → ${newStatus}`);
         console.log(`[Category Scheduler] ${category.name}: ${shouldBePaused ? '⏸️  PAUSED (outside schedule)' : '▶️  RESUMED (within schedule)'}`);
+        
+        // Update item availability considering multiple categories
+        await this.updateItemsAvailability(category.name);
       } else {
         console.log(`  ℹ️  No change needed (already ${category.isPaused ? 'paused' : 'active'})`);
       }
       console.log(`[Category Scheduler] ========================================\n`);
     } catch (error) {
       console.error(`[Category Scheduler] Error updating category ${categoryId}:`, error.message);
+    }
+  }
+
+  // Helper function to update item availability based on all its categories
+  async updateItemsAvailability(categoryName) {
+    const MenuItem = require('../models/MenuItem');
+    
+    // Get all sold out category names (isSoldOut = true OR isPaused = true)
+    const unavailableCategories = await Category.find({ 
+      $or: [{ isSoldOut: true }, { isPaused: true }] 
+    }).select('name');
+    const unavailableCategoryNames = unavailableCategories.map(c => c.name);
+    
+    // Find all items that have this category
+    const itemsInCategory = await MenuItem.find({ category: categoryName });
+    
+    for (const item of itemsInCategory) {
+      const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+      
+      // Check if ALL categories of this item are unavailable (sold out or paused)
+      const allCategoriesUnavailable = itemCategories.every(cat => unavailableCategoryNames.includes(cat));
+      
+      // Item should be available if at least one category is available
+      // Item should be unavailable only if ALL its categories are unavailable
+      const shouldBeAvailable = !allCategoriesUnavailable;
+      
+      if (item.available !== shouldBeAvailable) {
+        item.available = shouldBeAvailable;
+        await item.save();
+        console.log(`  [Item Update] "${item.name}" → ${shouldBeAvailable ? 'AVAILABLE' : 'UNAVAILABLE'} (categories: ${itemCategories.join(', ')})`);
+      }
+    }
+  }
+
+  // Check if sold out schedule has expired
+  isSoldOutExpired(soldOutSchedule) {
+    if (!soldOutSchedule || !soldOutSchedule.enabled || !soldOutSchedule.endTime) {
+      return false;
+    }
+
+    const timezone = soldOutSchedule.timezone || 'Asia/Kolkata';
+    const { hours: currentHours, minutes: currentMins } = this.getCurrentTimeInTimezone(timezone);
+    
+    const [endHour, endMin] = soldOutSchedule.endTime.split(':').map(Number);
+    
+    const currentMinutes = currentHours * 60 + currentMins;
+    const endMinutes = endHour * 60 + endMin;
+    
+    const currentTime = `${currentHours.toString().padStart(2, '0')}:${currentMins.toString().padStart(2, '0')}`;
+    console.log(`[Category Scheduler] Sold out check (${timezone}): Current=${currentTime} (${currentMinutes} min), End=${soldOutSchedule.endTime} (${endMinutes} min)`);
+    
+    // Check if current time has passed the end time
+    return currentMinutes >= endMinutes;
+  }
+
+  // Update sold out status based on schedule
+  async updateSoldOutStatus(categoryId) {
+    try {
+      const Category = require('../models/Category');
+      
+      const category = await Category.findById(categoryId);
+      if (!category) {
+        console.log(`[Category Scheduler] Category ${categoryId} not found`);
+        return;
+      }
+
+      if (!category.soldOutSchedule || !category.soldOutSchedule.enabled) {
+        return;
+      }
+
+      console.log(`\n[Category Scheduler] ========== Checking Sold Out for ${category.name} ==========`);
+      console.log(`  Sold out until: ${category.soldOutSchedule.endTime}`);
+
+      const isExpired = this.isSoldOutExpired(category.soldOutSchedule);
+      
+      if (isExpired) {
+        console.log(`  ✓ Sold out period EXPIRED - resuming availability`);
+        
+        category.isSoldOut = false;
+        category.soldOutSchedule.enabled = false;
+        category.soldOutSchedule.endTime = null;
+        await category.save();
+        
+        // Update item availability considering multiple categories
+        await this.updateItemsAvailability(category.name);
+        
+        console.log(`[Category Scheduler] ${category.name}: ▶️  RESUMED (sold out expired)`);
+      } else {
+        console.log(`  ℹ️  Still sold out until ${category.soldOutSchedule.endTime}`);
+      }
+      console.log(`[Category Scheduler] ========================================\n`);
+    } catch (error) {
+      console.error(`[Category Scheduler] Error updating sold out status ${categoryId}:`, error.message);
     }
   }
 
@@ -139,17 +237,28 @@ class CategoryScheduler {
       
       console.log(`\n[Category Scheduler] ⏰ Running check at ${currentTime} IST (${currentDay})`);
       
-      const categories = await Category.find({ 'schedule.enabled': true });
+      // Check availability schedules
+      const categoriesWithSchedule = await Category.find({ 'schedule.enabled': true });
       
-      if (categories.length === 0) {
-        console.log('[Category Scheduler] No categories with schedules enabled');
-        return;
+      if (categoriesWithSchedule.length > 0) {
+        console.log(`[Category Scheduler] Found ${categoriesWithSchedule.length} category(ies) with availability schedules`);
+        for (const category of categoriesWithSchedule) {
+          await this.updateCategoryStatus(category._id);
+        }
       }
       
-      console.log(`[Category Scheduler] Found ${categories.length} category(ies) with schedules enabled`);
+      // Check sold out schedules
+      const categoriesWithSoldOut = await Category.find({ 'soldOutSchedule.enabled': true });
       
-      for (const category of categories) {
-        await this.updateCategoryStatus(category._id);
+      if (categoriesWithSoldOut.length > 0) {
+        console.log(`[Category Scheduler] Found ${categoriesWithSoldOut.length} category(ies) with sold out schedules`);
+        for (const category of categoriesWithSoldOut) {
+          await this.updateSoldOutStatus(category._id);
+        }
+      }
+      
+      if (categoriesWithSchedule.length === 0 && categoriesWithSoldOut.length === 0) {
+        console.log('[Category Scheduler] No categories with schedules enabled');
       }
     } catch (error) {
       console.error('[Category Scheduler] Error checking schedules:', error.message);

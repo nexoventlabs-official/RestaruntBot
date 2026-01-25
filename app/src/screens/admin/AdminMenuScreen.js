@@ -332,6 +332,97 @@ export default function AdminMenuScreen({ navigation, route }) {
     }));
   };
 
+  // Toggle sold out status for category
+  const toggleCategorySoldOut = async (category) => {
+    try {
+      setCategories(prev => prev.map(c =>
+        c._id === category._id ? { ...c, isSoldOut: !c.isSoldOut } : c
+      ));
+      await api.patch(`/categories/${category._id}/toggle-soldout`);
+      fetchCategories();
+      fetchMenu(); // Refresh menu items too
+    } catch (error) {
+      setCategories(prev => prev.map(c =>
+        c._id === category._id ? { ...c, isSoldOut: category.isSoldOut } : c
+      ));
+      Alert.alert('Error', 'Failed to toggle sold out status');
+    }
+  };
+
+  // Show sold out options for category
+  const showSoldOutOptions = (category) => {
+    const isSoldOut = category.isSoldOut;
+    
+    Alert.alert(
+      isSoldOut ? 'Resume Category' : 'Mark as Sold Out',
+      isSoldOut 
+        ? `"${category.name}" is currently sold out. Do you want to mark it as available again?`
+        : `How would you like to mark "${category.name}" as sold out?`,
+      isSoldOut ? [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Mark Available', onPress: () => toggleCategorySoldOut(category) },
+      ] : [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sold Out Now', onPress: () => toggleCategorySoldOut(category) },
+        { text: 'Schedule Time', onPress: () => showSoldOutScheduleModal(category) },
+      ]
+    );
+  };
+
+  // Sold out schedule modal state
+  const [showSoldOutModal, setShowSoldOutModal] = useState(false);
+  const [soldOutCategory, setSoldOutCategory] = useState(null);
+  const [soldOutEndTime, setSoldOutEndTime] = useState('17:00');
+
+  const showSoldOutScheduleModal = (category) => {
+    setSoldOutCategory(category);
+    // Default to 1 hour from now
+    const now = new Date();
+    const hours = (now.getHours() + 1) % 24;
+    setSoldOutEndTime(`${hours.toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
+    setShowSoldOutModal(true);
+  };
+
+  const saveSoldOutSchedule = async () => {
+    if (!soldOutCategory) return;
+    
+    try {
+      setSavingCategory(true);
+      await api.patch(`/categories/${soldOutCategory._id}/schedule-soldout`, {
+        enabled: true,
+        endTime: soldOutEndTime
+      });
+      
+      fetchCategories();
+      fetchMenu();
+      setShowSoldOutModal(false);
+      
+      // Format time for display
+      const [hours, mins] = soldOutEndTime.split(':').map(Number);
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const hours12 = hours % 12 || 12;
+      Alert.alert('Success', `"${soldOutCategory.name}" marked sold out until ${hours12}:${mins.toString().padStart(2, '0')} ${period}`);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to schedule sold out');
+    } finally {
+      setSavingCategory(false);
+    }
+  };
+
+  // Helper to format time remaining for sold out
+  const getSoldOutTimeRemaining = (category) => {
+    if (!category.soldOutSchedule?.enabled || !category.soldOutSchedule?.endTime) {
+      return null;
+    }
+    
+    const [endHour, endMin] = category.soldOutSchedule.endTime.split(':').map(Number);
+    const [hours, mins] = soldOutEndTime.split(':').map(Number);
+    const period = endHour >= 12 ? 'PM' : 'AM';
+    const hours12 = endHour % 12 || 12;
+    
+    return `Until ${hours12}:${endMin.toString().padStart(2, '0')} ${period}`;
+  };
+
   const toggleCategoryPause = async (category) => {
     try {
       setCategories(prev => prev.map(c =>
@@ -756,13 +847,22 @@ export default function AdminMenuScreen({ navigation, route }) {
                   style={styles.categoryItem}
                   onPress={() => setSelectedCategory(cat.name)}
                   onLongPress={() => {
+                    const soldOutText = cat.isSoldOut ? 'Mark Available' : 'Sold Out';
+                    const soldOutTimeText = cat.soldOutSchedule?.enabled && cat.soldOutSchedule?.endTime
+                      ? (() => {
+                          const [h, m] = cat.soldOutSchedule.endTime.split(':').map(Number);
+                          const p = h >= 12 ? 'PM' : 'AM';
+                          const h12 = h % 12 || 12;
+                          return ` (Until ${h12}:${m.toString().padStart(2, '0')} ${p})`;
+                        })()
+                      : '';
+                    
                     Alert.alert(
-                      cat.name,
+                      cat.name + (cat.isSoldOut ? ' - SOLD OUT' + soldOutTimeText : ''),
                       'What would you like to do?',
                       [
                         { text: 'Cancel', style: 'cancel' },
-                        { text: cat.isPaused ? 'Resume' : 'Pause', onPress: () => toggleCategoryPause(cat) },
-                        { text: allItemsPaused ? 'Resume All' : 'Complete Pause', onPress: () => completePauseCategory(cat) },
+                        { text: soldOutText, onPress: () => showSoldOutOptions(cat), style: cat.isSoldOut ? 'default' : 'destructive' },
                         { text: 'Schedule', onPress: () => openScheduleModal(cat) },
                         { text: 'Edit', onPress: () => openCategoryModal(cat) },
                         { text: 'Delete', style: 'destructive', onPress: () => deleteCategory(cat) },
@@ -771,22 +871,28 @@ export default function AdminMenuScreen({ navigation, route }) {
                   }}
                   disabled={isDeleting}
                 >
-                  <View style={[styles.categoryImageWrapper, selectedCategory === cat.name && styles.categoryImageWrapperActive, cat.isPaused && styles.categoryImageWrapperPaused]}>
+                  <View style={[
+                    styles.categoryImageWrapper, 
+                    selectedCategory === cat.name && styles.categoryImageWrapperActive, 
+                    cat.isSoldOut && styles.categoryImageWrapperSoldOut
+                  ]}>
                     {cat.image ? (
                       <Image 
                         source={{ uri: cat.image, cache: 'force-cache' }} 
-                        style={[styles.categoryImage, isDeleting && styles.categoryImageDeleting]}
+                        style={[styles.categoryImage, isDeleting && styles.categoryImageDeleting, cat.isSoldOut && styles.categoryImageSoldOut]}
                         defaultSource={require('../../../assets/icon.png')}
                         resizeMode="cover"
                       />
                     ) : (
                       <View style={[styles.categoryPlaceholder, isDeleting && styles.categoryImageDeleting]}>
-                        <Ionicons name="restaurant-outline" size={24} color={cat.isPaused ? '#f59e0b' : '#9ca3af'} />
+                        <Ionicons name="restaurant-outline" size={24} color={cat.isSoldOut ? '#ef4444' : '#9ca3af'} />
                       </View>
                     )}
-                    {cat.isPaused && !isDeleting && (
-                      <View style={styles.categoryPausedOverlay}>
-                        <Ionicons name="pause-circle" size={16} color="#f59e0b" />
+                    {cat.isSoldOut && !isDeleting && (
+                      <View style={styles.categorySoldOutOverlay}>
+                        <View style={styles.soldOutBadge}>
+                          <Text style={styles.soldOutBadgeText}>SOLD OUT</Text>
+                        </View>
                       </View>
                     )}
                     {isDeleting && (
@@ -798,9 +904,19 @@ export default function AdminMenuScreen({ navigation, route }) {
                   <Text style={[
                     styles.categoryName,
                     selectedCategory === cat.name && styles.categoryNameActive,
-                    cat.isPaused && styles.categoryNamePaused,
+                    cat.isSoldOut && styles.categoryNameSoldOut,
                     isDeleting && styles.categoryNameDeleting
                   ]} numberOfLines={1}>{cat.name}</Text>
+                  {cat.soldOutSchedule?.enabled && cat.soldOutSchedule?.endTime && (
+                    <Text style={styles.categoryTimeoutText}>
+                      {(() => {
+                        const [h, m] = cat.soldOutSchedule.endTime.split(':').map(Number);
+                        const p = h >= 12 ? 'PM' : 'AM';
+                        const h12 = h % 12 || 12;
+                        return `Until ${h12}:${m.toString().padStart(2, '0')} ${p}`;
+                      })()}
+                    </Text>
+                  )}
                   {selectedCategory === cat.name && <View style={styles.categoryUnderline} />}
                 </TouchableOpacity>
               );
@@ -959,6 +1075,130 @@ export default function AdminMenuScreen({ navigation, route }) {
         onClose={() => setShowScheduleModal(false)}
         saving={savingCategory}
       />
+
+      {/* Sold Out Schedule Modal */}
+      <Modal
+        visible={showSoldOutModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowSoldOutModal(false)}
+      >
+        <View style={styles.soldOutModalOverlay}>
+          <View style={styles.soldOutModalContent}>
+            <View style={styles.soldOutModalHeader}>
+              <Text style={styles.soldOutModalTitle}>Schedule Sold Out</Text>
+              <TouchableOpacity onPress={() => setShowSoldOutModal(false)} style={styles.soldOutCloseButton}>
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.soldOutModalBody}>
+              <Text style={styles.soldOutCategoryName}>{soldOutCategory?.name}</Text>
+              <Text style={styles.soldOutDescription}>
+                Mark this category as sold out until a specific time. All items will be marked unavailable.
+              </Text>
+              
+              <View style={styles.soldOutTimeSection}>
+                <Text style={styles.soldOutTimeLabel}>Available again at:</Text>
+                <View style={styles.soldOutTimePicker}>
+                  {/* Hour picker */}
+                  <View style={styles.soldOutTimeUnit}>
+                    <TouchableOpacity 
+                      style={styles.soldOutTimeButton}
+                      onPress={() => {
+                        const [h, m] = soldOutEndTime.split(':').map(Number);
+                        const newH = (h + 1) % 24;
+                        setSoldOutEndTime(`${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+                      }}
+                    >
+                      <Ionicons name="chevron-up" size={24} color={ZOMATO_RED} />
+                    </TouchableOpacity>
+                    <Text style={styles.soldOutTimeValue}>
+                      {(() => {
+                        const h = parseInt(soldOutEndTime.split(':')[0]);
+                        return (h % 12 || 12).toString().padStart(2, '0');
+                      })()}
+                    </Text>
+                    <TouchableOpacity 
+                      style={styles.soldOutTimeButton}
+                      onPress={() => {
+                        const [h, m] = soldOutEndTime.split(':').map(Number);
+                        const newH = (h - 1 + 24) % 24;
+                        setSoldOutEndTime(`${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+                      }}
+                    >
+                      <Ionicons name="chevron-down" size={24} color={ZOMATO_RED} />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <Text style={styles.soldOutTimeSeparator}>:</Text>
+                  
+                  {/* Minute picker */}
+                  <View style={styles.soldOutTimeUnit}>
+                    <TouchableOpacity 
+                      style={styles.soldOutTimeButton}
+                      onPress={() => {
+                        const [h, m] = soldOutEndTime.split(':').map(Number);
+                        const newM = (m + 5) % 60;
+                        setSoldOutEndTime(`${h.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`);
+                      }}
+                    >
+                      <Ionicons name="chevron-up" size={24} color={ZOMATO_RED} />
+                    </TouchableOpacity>
+                    <Text style={styles.soldOutTimeValue}>
+                      {soldOutEndTime.split(':')[1]}
+                    </Text>
+                    <TouchableOpacity 
+                      style={styles.soldOutTimeButton}
+                      onPress={() => {
+                        const [h, m] = soldOutEndTime.split(':').map(Number);
+                        const newM = (m - 5 + 60) % 60;
+                        setSoldOutEndTime(`${h.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`);
+                      }}
+                    >
+                      <Ionicons name="chevron-down" size={24} color={ZOMATO_RED} />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  {/* AM/PM picker */}
+                  <TouchableOpacity 
+                    style={styles.soldOutAmPmButton}
+                    onPress={() => {
+                      const [h, m] = soldOutEndTime.split(':').map(Number);
+                      const newH = h >= 12 ? h - 12 : h + 12;
+                      setSoldOutEndTime(`${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+                    }}
+                  >
+                    <Text style={styles.soldOutAmPmText}>
+                      {parseInt(soldOutEndTime.split(':')[0]) >= 12 ? 'PM' : 'AM'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+            
+            <View style={styles.soldOutModalFooter}>
+              <TouchableOpacity 
+                style={styles.soldOutCancelButton} 
+                onPress={() => setShowSoldOutModal(false)}
+              >
+                <Text style={styles.soldOutCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.soldOutSaveButton, savingCategory && styles.soldOutSaveButtonDisabled]} 
+                onPress={saveSoldOutSchedule}
+                disabled={savingCategory}
+              >
+                {savingCategory ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.soldOutSaveButtonText}>Mark Sold Out</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1167,6 +1407,46 @@ const styles = StyleSheet.create({
   categoryNamePaused: {
     color: '#D97706',
   },
+  categoryNameSoldOut: {
+    color: '#ef4444',
+    fontWeight: '600',
+  },
+  categoryImageWrapperSoldOut: {
+    borderColor: '#ef4444',
+    borderWidth: 2,
+  },
+  categoryImageSoldOut: {
+    opacity: 0.5,
+  },
+  categorySoldOutOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(239, 68, 68, 0.7)',
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  soldOutBadge: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  soldOutBadgeText: {
+    fontSize: 7,
+    fontWeight: '800',
+    color: '#ef4444',
+    letterSpacing: 0.5,
+  },
+  categoryTimeoutText: {
+    fontSize: 9,
+    color: '#ef4444',
+    fontWeight: '500',
+    marginTop: 2,
+  },
   categoryNameDeleting: {
     opacity: 0.5,
   },
@@ -1334,4 +1614,141 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18, paddingVertical: 10, backgroundColor: '#F5F5F5', borderRadius: 24,
   },
   changeCategoryImageText: { fontSize: 13, color: '#696969', fontWeight: '600' },
+
+  // Sold Out Modal Styles
+  soldOutModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  soldOutModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '70%',
+  },
+  soldOutModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  soldOutModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1C1C1C',
+  },
+  soldOutCloseButton: {
+    padding: 4,
+  },
+  soldOutModalBody: {
+    padding: 24,
+  },
+  soldOutCategoryName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#ef4444',
+    marginBottom: 8,
+  },
+  soldOutDescription: {
+    fontSize: 14,
+    color: '#6b7280',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  soldOutTimeSection: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 16,
+    padding: 20,
+  },
+  soldOutTimeLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  soldOutTimePicker: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  soldOutTimeUnit: {
+    alignItems: 'center',
+  },
+  soldOutTimeButton: {
+    padding: 8,
+  },
+  soldOutTimeValue: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#1C1C1C',
+    minWidth: 50,
+    textAlign: 'center',
+  },
+  soldOutTimeSeparator: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#1C1C1C',
+    marginHorizontal: 4,
+  },
+  soldOutAmPmButton: {
+    backgroundColor: ZOMATO_RED,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginLeft: 12,
+  },
+  soldOutAmPmText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  soldOutModalFooter: {
+    flexDirection: 'row',
+    padding: 24,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  soldOutCancelButton: {
+    flex: 1,
+    height: 54,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+  },
+  soldOutCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  soldOutSaveButton: {
+    flex: 1,
+    height: 54,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#ef4444',
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  soldOutSaveButtonDisabled: {
+    opacity: 0.7,
+  },
+  soldOutSaveButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
 });

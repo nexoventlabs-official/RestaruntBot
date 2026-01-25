@@ -191,6 +191,102 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
   }
 });
 
+// Helper function to update item availability based on all its categories
+async function updateItemsAvailability(categoryName) {
+  // Get all sold out category names
+  const soldOutCategories = await Category.find({ isSoldOut: true }).select('name');
+  const soldOutCategoryNames = soldOutCategories.map(c => c.name);
+  
+  // Find all items that have this category
+  const itemsInCategory = await MenuItem.find({ category: categoryName });
+  
+  for (const item of itemsInCategory) {
+    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+    
+    // Check if ALL categories of this item are sold out
+    const allCategoriesSoldOut = itemCategories.every(cat => soldOutCategoryNames.includes(cat));
+    
+    // Item should be available if at least one category is NOT sold out
+    // Item should be unavailable only if ALL its categories are sold out
+    if (item.available === allCategoriesSoldOut) {
+      // Need to toggle - if all sold out, make unavailable; if any available, make available
+      item.available = !allCategoriesSoldOut;
+      await item.save();
+      console.log(`[Category] Item "${item.name}" availability set to ${item.available} (categories: ${itemCategories.join(', ')})`);
+    }
+  }
+}
+
+// Toggle sold out status for category
+router.patch('/:id/toggle-soldout', authMiddleware, async (req, res) => {
+  try {
+    const category = await Category.findById(req.params.id);
+    if (!category) {
+      return res.status(404).json({ error: 'Category not found' });
+    }
+    
+    category.isSoldOut = !category.isSoldOut;
+    
+    // Clear sold out schedule when manually toggling
+    if (category.soldOutSchedule) {
+      category.soldOutSchedule.enabled = false;
+      category.soldOutSchedule.endTime = null;
+    }
+    
+    await category.save();
+    
+    // Update item availability considering multiple categories
+    await updateItemsAvailability(category.name);
+    
+    // Emit event for real-time updates
+    dataEvents.emit('menu');
+    
+    res.json(category);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Schedule sold out for category (temporary sold out until specific time)
+router.patch('/:id/schedule-soldout', authMiddleware, async (req, res) => {
+  try {
+    const { enabled, endTime } = req.body;
+    
+    console.log(`[SoldOut Schedule API] Updating sold out schedule for category ${req.params.id}`);
+    console.log(`[SoldOut Schedule API] Data:`, { enabled, endTime });
+    
+    const category = await Category.findById(req.params.id);
+    if (!category) {
+      return res.status(404).json({ error: 'Category not found' });
+    }
+    
+    // Update sold out schedule
+    category.soldOutSchedule = {
+      enabled: enabled || false,
+      endTime: endTime || null,
+      timezone: 'Asia/Kolkata'
+    };
+    
+    // If scheduling sold out, mark category as sold out
+    if (enabled && endTime) {
+      category.isSoldOut = true;
+    }
+    
+    await category.save();
+    
+    // Update item availability considering multiple categories
+    await updateItemsAvailability(category.name);
+    
+    // Emit event for real-time updates
+    dataEvents.emit('menu');
+    
+    res.json(category);
+  } catch (error) {
+    console.error('[SoldOut Schedule API] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete category
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
