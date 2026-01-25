@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Switch
+  View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Switch, Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,8 +15,21 @@ const DAYS = [
   { value: 6, label: 'Sat' }
 ];
 
-const HOURS = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
-const MINUTES = ['00', '15', '30', '45'];
+// Convert 24-hour time to 12-hour format with AM/PM
+const formatTime12Hour = (time24) => {
+  const [hours, minutes] = time24.split(':').map(Number);
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours % 12 || 12;
+  return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+};
+
+// Convert 12-hour time to 24-hour format
+const convertTo24Hour = (hours12, period) => {
+  let hours = parseInt(hours12);
+  if (period === 'PM' && hours !== 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+  return hours.toString().padStart(2, '0');
+};
 
 export default function CategoryScheduleModal({
   visible,
@@ -36,8 +49,85 @@ export default function CategoryScheduleModal({
     }));
   };
 
-  const updateTime = (field, value) => {
-    setScheduleForm(prev => ({ ...prev, [field]: value }));
+  const updateTime = (field, hours, minutes, period) => {
+    const hours24 = convertTo24Hour(hours, period);
+    const timeString = `${hours24}:${minutes}`;
+    setScheduleForm(prev => ({ ...prev, [field]: timeString }));
+  };
+
+  const incrementHour = (field) => {
+    const [hours, minutes] = scheduleForm[field].split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    let hours12 = hours % 12 || 12;
+    
+    // Increment hour
+    hours12 = hours12 + 1;
+    let newPeriod = period;
+    
+    // Handle wraparound and period change
+    if (hours12 > 12) {
+      hours12 = 1;
+      newPeriod = period === 'AM' ? 'PM' : 'AM';
+    }
+    
+    updateTime(field, hours12, minutes.toString().padStart(2, '0'), newPeriod);
+  };
+
+  const decrementHour = (field) => {
+    const [hours, minutes] = scheduleForm[field].split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    let hours12 = hours % 12 || 12;
+    
+    // Decrement hour
+    hours12 = hours12 - 1;
+    let newPeriod = period;
+    
+    // Handle wraparound and period change
+    if (hours12 < 1) {
+      hours12 = 12;
+      newPeriod = period === 'AM' ? 'PM' : 'AM';
+    }
+    
+    updateTime(field, hours12, minutes.toString().padStart(2, '0'), newPeriod);
+  };
+
+  const togglePeriod = (field) => {
+    const [hours, minutes] = scheduleForm[field].split(':').map(Number);
+    const currentPeriod = hours >= 12 ? 'PM' : 'AM';
+    const newPeriod = currentPeriod === 'AM' ? 'PM' : 'AM';
+    const hours12 = hours % 12 || 12;
+    
+    updateTime(field, hours12, minutes.toString().padStart(2, '0'), newPeriod);
+  };
+
+  const validateAndSave = () => {
+    // Validate custom days
+    if (scheduleForm.type === 'custom' && scheduleForm.days.length === 0) {
+      Alert.alert('Validation Error', 'Please select at least one day for custom schedule');
+      return;
+    }
+
+    // Parse times
+    const [startHour, startMin] = scheduleForm.startTime.split(':').map(Number);
+    const [endHour, endMin] = scheduleForm.endTime.split(':').map(Number);
+    
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+
+    // Check if start and end times are the same
+    if (startMinutes === endMinutes) {
+      Alert.alert(
+        'Invalid Time Range',
+        'Start time and end time cannot be the same. Please choose different times.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Allow overnight schedules (end time before start time is valid)
+    // No validation error for overnight schedules
+
+    onSave();
   };
 
   return (
@@ -144,29 +234,27 @@ export default function CategoryScheduleModal({
                     <Text style={styles.timeLabel}>From</Text>
                     <View style={styles.timePickers}>
                       <View style={styles.timePicker}>
-                        <Text style={styles.timeValue}>{scheduleForm.startTime}</Text>
+                        <Text style={styles.timeValue}>{formatTime12Hour(scheduleForm.startTime)}</Text>
                         <View style={styles.timeButtons}>
                           <TouchableOpacity 
                             style={styles.timeButton}
-                            onPress={() => {
-                              const [h, m] = scheduleForm.startTime.split(':');
-                              const newH = (parseInt(h) + 1) % 24;
-                              updateTime('startTime', `${newH.toString().padStart(2, '0')}:${m}`);
-                            }}
+                            onPress={() => incrementHour('startTime')}
                           >
                             <Ionicons name="chevron-up" size={16} color="#6b7280" />
                           </TouchableOpacity>
                           <TouchableOpacity 
                             style={styles.timeButton}
-                            onPress={() => {
-                              const [h, m] = scheduleForm.startTime.split(':');
-                              const newH = (parseInt(h) - 1 + 24) % 24;
-                              updateTime('startTime', `${newH.toString().padStart(2, '0')}:${m}`);
-                            }}
+                            onPress={() => decrementHour('startTime')}
                           >
                             <Ionicons name="chevron-down" size={16} color="#6b7280" />
                           </TouchableOpacity>
                         </View>
+                        <TouchableOpacity 
+                          style={styles.periodButton}
+                          onPress={() => togglePeriod('startTime')}
+                        >
+                          <Ionicons name="swap-horizontal" size={16} color="#E23744" />
+                        </TouchableOpacity>
                       </View>
                     </View>
                   </View>
@@ -176,35 +264,33 @@ export default function CategoryScheduleModal({
                     <Text style={styles.timeLabel}>To</Text>
                     <View style={styles.timePickers}>
                       <View style={styles.timePicker}>
-                        <Text style={styles.timeValue}>{scheduleForm.endTime}</Text>
+                        <Text style={styles.timeValue}>{formatTime12Hour(scheduleForm.endTime)}</Text>
                         <View style={styles.timeButtons}>
                           <TouchableOpacity 
                             style={styles.timeButton}
-                            onPress={() => {
-                              const [h, m] = scheduleForm.endTime.split(':');
-                              const newH = (parseInt(h) + 1) % 24;
-                              updateTime('endTime', `${newH.toString().padStart(2, '0')}:${m}`);
-                            }}
+                            onPress={() => incrementHour('endTime')}
                           >
                             <Ionicons name="chevron-up" size={16} color="#6b7280" />
                           </TouchableOpacity>
                           <TouchableOpacity 
                             style={styles.timeButton}
-                            onPress={() => {
-                              const [h, m] = scheduleForm.endTime.split(':');
-                              const newH = (parseInt(h) - 1 + 24) % 24;
-                              updateTime('endTime', `${newH.toString().padStart(2, '0')}:${m}`);
-                            }}
+                            onPress={() => decrementHour('endTime')}
                           >
                             <Ionicons name="chevron-down" size={16} color="#6b7280" />
                           </TouchableOpacity>
                         </View>
+                        <TouchableOpacity 
+                          style={styles.periodButton}
+                          onPress={() => togglePeriod('endTime')}
+                        >
+                          <Ionicons name="swap-horizontal" size={16} color="#E23744" />
+                        </TouchableOpacity>
                       </View>
                     </View>
                   </View>
 
                   <Text style={styles.timeHint}>
-                    Category will be available from {scheduleForm.startTime} to {scheduleForm.endTime}
+                    Category will be available from {formatTime12Hour(scheduleForm.startTime)} to {formatTime12Hour(scheduleForm.endTime)}
                     {scheduleForm.type === 'custom' && scheduleForm.days.length > 0 && 
                       ` on ${scheduleForm.days.map(d => DAYS[d].label).join(', ')}`}
                   </Text>
@@ -224,7 +310,7 @@ export default function CategoryScheduleModal({
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-              onPress={onSave}
+              onPress={validateAndSave}
               disabled={saving}
             >
               <LinearGradient
@@ -381,16 +467,22 @@ const styles = StyleSheet.create({
   },
   timeValue: {
     flex: 1,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#111827',
     textAlign: 'center',
   },
   timeButtons: {
     gap: 4,
+    marginRight: 8,
   },
   timeButton: {
     padding: 4,
+  },
+  periodButton: {
+    padding: 6,
+    backgroundColor: '#fee2e2',
+    borderRadius: 8,
   },
   timeHint: {
     fontSize: 13,

@@ -96,12 +96,11 @@ export default function DeliveryFormScreen({ route, navigation }) {
 
   const pickImage = async () => {
     try {
-      setLoading(true);
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 0.5, // Reduced from 0.8 for faster uploads
       });
       if (!result.canceled) {
         setNewPhoto(result.assets[0]);
@@ -109,8 +108,6 @@ export default function DeliveryFormScreen({ route, navigation }) {
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to pick image');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -147,17 +144,30 @@ export default function DeliveryFormScreen({ route, navigation }) {
       if (isEditing) {
         await api.put(`/delivery/${existingDeliveryBoy._id}`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 90000 // 90 seconds for image uploads
         });
         Alert.alert('Success', 'Delivery partner updated');
       } else {
         await api.post('/delivery', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 90000 // 90 seconds for image uploads
         });
         Alert.alert('Success', 'Delivery partner added. Password sent to email.');
       }
       navigation.goBack();
     } catch (error) {
-      Alert.alert('Error', error.response?.data?.error || 'Failed to save');
+      console.error('Submit error:', error);
+      let errorMessage = 'Failed to save';
+      
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorMessage = 'Upload timed out. Please check your internet connection and try again.';
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (!error.response) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      }
+      
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }

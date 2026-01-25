@@ -82,12 +82,11 @@ export default function MenuItemFormScreen({ route, navigation }) {
 
   const pickImage = async () => {
     try {
-      setLoading(true);
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 0.5, // Reduced from 0.8 for faster uploads
       });
       if (!result.canceled) {
         setNewImage(result.assets[0]);
@@ -95,8 +94,6 @@ export default function MenuItemFormScreen({ route, navigation }) {
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to pick image');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -159,15 +156,32 @@ export default function MenuItemFormScreen({ route, navigation }) {
       }
 
       if (isEditing) {
-        await api.put(`/menu/${existingItem._id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        await api.put(`/menu/${existingItem._id}`, formData, { 
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 90000 // 90 seconds for image uploads
+        });
         Alert.alert('Success', 'Menu item updated');
       } else {
-        await api.post('/menu', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        await api.post('/menu', formData, { 
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 90000 // 90 seconds for image uploads
+        });
         Alert.alert('Success', 'Menu item created');
       }
       navigation.goBack();
     } catch (error) {
-      Alert.alert('Error', error.response?.data?.error || 'Failed to save item');
+      console.error('Submit error:', error);
+      let errorMessage = 'Failed to save item';
+      
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorMessage = 'Upload timed out. Please check your internet connection and try again.';
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (!error.response) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      }
+      
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }

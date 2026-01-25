@@ -76,7 +76,15 @@ export default function AdminMenuScreen({ navigation, route }) {
   const fetchMenu = useCallback(async () => {
     try {
       const response = await api.get('/menu');
-      setItems(response.data || []);
+      const menuData = response.data || [];
+      setItems(menuData);
+      
+      // Prefetch images for faster loading
+      menuData.forEach(item => {
+        if (item.image) {
+          Image.prefetch(item.image).catch(() => {});
+        }
+      });
     } catch (error) {
       console.error('Error fetching menu:', error);
     } finally {
@@ -88,7 +96,15 @@ export default function AdminMenuScreen({ navigation, route }) {
   const fetchCategories = useCallback(async () => {
     try {
       const response = await api.get('/categories');
-      setCategories(response.data || []);
+      const categoryData = response.data || [];
+      setCategories(categoryData);
+      
+      // Prefetch category images for faster loading
+      categoryData.forEach(cat => {
+        if (cat.image) {
+          Image.prefetch(cat.image).catch(() => {});
+        }
+      });
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
@@ -425,8 +441,10 @@ export default function AdminMenuScreen({ navigation, route }) {
           <View style={styles.itemImageContainer}>
             {item.image ? (
               <Image
-                source={{ uri: item.image }}
+                source={{ uri: item.image, cache: 'force-cache' }}
                 style={[styles.itemImage, isPaused && styles.itemImagePaused]}
+                defaultSource={require('../../../assets/icon.png')}
+                resizeMode="cover"
               />
             ) : (
               <View style={[styles.itemImage, styles.placeholderImage, isPaused && styles.placeholderImagePaused]}>
@@ -741,7 +759,12 @@ export default function AdminMenuScreen({ navigation, route }) {
                 >
                   <View style={[styles.categoryImageWrapper, selectedCategory === cat.name && styles.categoryImageWrapperActive, cat.isPaused && styles.categoryImageWrapperPaused]}>
                     {cat.image ? (
-                      <Image source={{ uri: cat.image }} style={[styles.categoryImage, isDeleting && styles.categoryImageDeleting]} />
+                      <Image 
+                        source={{ uri: cat.image, cache: 'force-cache' }} 
+                        style={[styles.categoryImage, isDeleting && styles.categoryImageDeleting]}
+                        defaultSource={require('../../../assets/icon.png')}
+                        resizeMode="cover"
+                      />
                     ) : (
                       <View style={[styles.categoryPlaceholder, isDeleting && styles.categoryImageDeleting]}>
                         <Ionicons name="restaurant-outline" size={24} color={cat.isPaused ? '#f59e0b' : '#9ca3af'} />
@@ -790,6 +813,16 @@ export default function AdminMenuScreen({ navigation, route }) {
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[ZOMATO_RED]} tintColor={ZOMATO_RED} />}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          updateCellsBatchingPeriod={50}
+          initialNumToRender={10}
+          windowSize={10}
+          getItemLayout={(data, index) => ({
+            length: 140,
+            offset: 140 * index,
+            index,
+          })}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <View style={styles.emptyIconContainer}>

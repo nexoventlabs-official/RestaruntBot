@@ -13,7 +13,7 @@ export const setAuthLogoutCallback = (callback) => {
 
 const api = axios.create({
   baseURL: `${API_BASE_URL}/api`,
-  timeout: 30000,
+  timeout: 60000, // Increased to 60 seconds for image uploads
   headers: {
     'Content-Type': 'application/json',
   },

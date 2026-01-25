@@ -193,8 +193,6 @@ export default function OfferFormScreen({ route, navigation }) {
         Alert.alert('Permission Required', 'Please allow access to your photo library to upload images.');
         return;
       }
-
-      setLoading(true);
       
       // Universal aspect ratio 19:6 for all devices
       const aspectRatio = [19, 6];
@@ -204,7 +202,7 @@ export default function OfferFormScreen({ route, navigation }) {
         allowsEditing: true,
         allowsMultipleSelection: false,
         aspect: aspectRatio,
-        quality: 0.9,
+        quality: 0.6, // Reduced from 0.9 for faster uploads
         exif: false,
       });
       
@@ -216,8 +214,6 @@ export default function OfferFormScreen({ route, navigation }) {
     } catch (error) {
       console.error('Error picking image:', error);
       Alert.alert('Error', 'Failed to pick image. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -278,6 +274,7 @@ export default function OfferFormScreen({ route, navigation }) {
       if (isEditing) {
         await api.put(`/offers/${existingOffer._id}`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 90000 // 90 seconds for image uploads
         });
         Alert.alert('Success', 'Offer updated successfully', [
           { text: 'OK', onPress: () => navigation.goBack() }
@@ -285,6 +282,7 @@ export default function OfferFormScreen({ route, navigation }) {
       } else {
         await api.post('/offers', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 90000 // 90 seconds for image uploads
         });
         Alert.alert('Success', 'Offer created successfully', [
           { text: 'OK' }
@@ -293,7 +291,17 @@ export default function OfferFormScreen({ route, navigation }) {
       }
     } catch (error) {
       console.error('Error saving offer:', error);
-      Alert.alert('Error', error.response?.data?.error || 'Failed to save offer');
+      let errorMessage = 'Failed to save offer';
+      
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorMessage = 'Upload timed out. Please check your internet connection and try again.';
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (!error.response) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      }
+      
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }
