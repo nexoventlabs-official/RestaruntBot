@@ -6,14 +6,47 @@ class CategoryScheduler {
     this.jobs = new Map();
   }
 
+  // Get current time in specified timezone
+  getCurrentTimeInTimezone(timezone = 'Asia/Kolkata') {
+    const now = new Date();
+    // Get time string in the specified timezone
+    const options = {
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      weekday: 'short'
+    };
+    
+    const formatter = new Intl.DateTimeFormat('en-US', options);
+    const parts = formatter.formatToParts(now);
+    
+    let hours = 0;
+    let minutes = 0;
+    let weekday = '';
+    
+    for (const part of parts) {
+      if (part.type === 'hour') hours = parseInt(part.value);
+      if (part.type === 'minute') minutes = parseInt(part.value);
+      if (part.type === 'weekday') weekday = part.value;
+    }
+    
+    // Map weekday to day number (0=Sunday, 1=Monday, etc.)
+    const dayMap = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 };
+    const dayNumber = dayMap[weekday] ?? new Date().getDay();
+    
+    return { hours, minutes, dayNumber };
+  }
+
   // Check if current time is within schedule
   isWithinSchedule(schedule) {
     if (!schedule || !schedule.enabled || !schedule.startTime || !schedule.endTime) {
       return true; // No schedule means always available
     }
 
-    const now = new Date();
-    const currentDay = now.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+    // Use timezone from schedule, default to Asia/Kolkata
+    const timezone = schedule.timezone || 'Asia/Kolkata';
+    const { hours: currentHours, minutes: currentMins, dayNumber: currentDay } = this.getCurrentTimeInTimezone(timezone);
     
     // Check if today is in the schedule (for custom days)
     if (schedule.type === 'custom' && schedule.days && schedule.days.length > 0) {
@@ -27,12 +60,12 @@ class CategoryScheduler {
     const [startHour, startMin] = schedule.startTime.split(':').map(Number);
     const [endHour, endMin] = schedule.endTime.split(':').map(Number);
 
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const currentMinutes = currentHours * 60 + currentMins;
     const startMinutes = startHour * 60 + startMin;
     const endMinutes = endHour * 60 + endMin;
 
-    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    console.log(`[Category Scheduler] Time check: Current=${currentTime} (${currentMinutes} min), Start=${schedule.startTime} (${startMinutes} min), End=${schedule.endTime} (${endMinutes} min)`);
+    const currentTime = `${currentHours.toString().padStart(2, '0')}:${currentMins.toString().padStart(2, '0')}`;
+    console.log(`[Category Scheduler] Time check (${timezone}): Current=${currentTime} (${currentMinutes} min), Start=${schedule.startTime} (${startMinutes} min), End=${schedule.endTime} (${endMinutes} min)`);
 
     // Handle overnight schedules (e.g., 22:00 to 02:00)
     if (endMinutes < startMinutes) {
@@ -99,11 +132,12 @@ class CategoryScheduler {
   // Check all categories with schedules
   async checkAllSchedules() {
     try {
-      const now = new Date();
-      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-      const currentDay = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][now.getDay()];
+      // Use Asia/Kolkata timezone for logging
+      const { hours, minutes, dayNumber } = this.getCurrentTimeInTimezone('Asia/Kolkata');
+      const currentTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      const currentDay = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayNumber];
       
-      console.log(`\n[Category Scheduler] ⏰ Running check at ${currentTime} (${currentDay})`);
+      console.log(`\n[Category Scheduler] ⏰ Running check at ${currentTime} IST (${currentDay})`);
       
       const categories = await Category.find({ 'schedule.enabled': true });
       
