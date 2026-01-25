@@ -135,10 +135,15 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
   try {
     const { enabled, type, startTime, endTime, days } = req.body;
     
+    console.log(`[Schedule API] Updating schedule for category ${req.params.id}`);
+    console.log(`[Schedule API] Data:`, { enabled, type, startTime, endTime, days });
+    
     const category = await Category.findById(req.params.id);
     if (!category) {
       return res.status(404).json({ error: 'Category not found' });
     }
+
+    console.log(`[Schedule API] Category: ${category.name}, Current isPaused: ${category.isPaused}`);
 
     // Update schedule
     category.schedule = {
@@ -151,11 +156,22 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
     };
 
     await category.save();
+    console.log(`[Schedule API] Schedule saved to database`);
 
     // Immediately check if category should be paused based on new schedule
     if (enabled) {
+      console.log(`[Schedule API] Running scheduler to update category status...`);
       const categoryScheduler = require('../services/categoryScheduler');
       await categoryScheduler.updateCategoryStatus(category._id);
+      
+      // Fetch fresh data after scheduler update
+      const updatedCategory = await Category.findById(category._id);
+      console.log(`[Schedule API] After scheduler: isPaused = ${updatedCategory.isPaused}`);
+      
+      // Emit event for real-time updates
+      dataEvents.emit('menu');
+      
+      return res.json(updatedCategory);
     }
 
     // Emit event for real-time updates
@@ -163,6 +179,7 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
 
     res.json(category);
   } catch (error) {
+    console.error('[Schedule API] Error:', error);
     res.status(500).json({ error: error.message });
   }
 });

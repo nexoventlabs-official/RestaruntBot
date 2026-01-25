@@ -57,38 +57,34 @@ export default function CategoryScheduleModal({
 
   const incrementHour = (field) => {
     const [hours, minutes] = scheduleForm[field].split(':').map(Number);
-    const period = hours >= 12 ? 'PM' : 'AM';
-    let hours12 = hours % 12 || 12;
     
-    // Increment hour
-    hours12 = hours12 + 1;
-    let newPeriod = period;
-    
-    // Handle wraparound and period change
-    if (hours12 > 12) {
-      hours12 = 1;
-      newPeriod = period === 'AM' ? 'PM' : 'AM';
+    // Calculate new hour in 24-hour format
+    let newHours24 = hours + 1;
+    if (newHours24 >= 24) {
+      newHours24 = 0;
     }
     
-    updateTime(field, hours12, minutes.toString().padStart(2, '0'), newPeriod);
+    // Convert to 12-hour format
+    const newPeriod = newHours24 >= 12 ? 'PM' : 'AM';
+    const newHours12 = newHours24 % 12 || 12;
+    
+    updateTime(field, newHours12, minutes.toString().padStart(2, '0'), newPeriod);
   };
 
   const decrementHour = (field) => {
     const [hours, minutes] = scheduleForm[field].split(':').map(Number);
-    const period = hours >= 12 ? 'PM' : 'AM';
-    let hours12 = hours % 12 || 12;
     
-    // Decrement hour
-    hours12 = hours12 - 1;
-    let newPeriod = period;
-    
-    // Handle wraparound and period change
-    if (hours12 < 1) {
-      hours12 = 12;
-      newPeriod = period === 'AM' ? 'PM' : 'AM';
+    // Calculate new hour in 24-hour format
+    let newHours24 = hours - 1;
+    if (newHours24 < 0) {
+      newHours24 = 23;
     }
     
-    updateTime(field, hours12, minutes.toString().padStart(2, '0'), newPeriod);
+    // Convert to 12-hour format
+    const newPeriod = newHours24 >= 12 ? 'PM' : 'AM';
+    const newHours12 = newHours24 % 12 || 12;
+    
+    updateTime(field, newHours12, minutes.toString().padStart(2, '0'), newPeriod);
   };
 
   const togglePeriod = (field) => {

@@ -299,10 +299,15 @@ export default function AdminMenuScreen({ navigation, route }) {
     try {
       setSavingCategory(true);
       await api.patch(`/categories/${scheduleCategory._id}/schedule`, scheduleForm);
+      
+      // Wait a moment for the scheduler to update the category status
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       await fetchCategories();
       setShowScheduleModal(false);
       Alert.alert('Success', 'Schedule saved successfully');
     } catch (error) {
+      console.error('Schedule save error:', error);
       Alert.alert('Error', 'Failed to save schedule');
     } finally {
       setSavingCategory(false);
