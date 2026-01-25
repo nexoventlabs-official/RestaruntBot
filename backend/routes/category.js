@@ -192,10 +192,13 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
 });
 
 // Helper function to update item availability based on all its categories
-async function updateItemsAvailability(categoryName) {
-  // Get all sold out category names
-  const soldOutCategories = await Category.find({ isSoldOut: true }).select('name');
-  const soldOutCategoryNames = soldOutCategories.map(c => c.name);
+// Used when RESUMING a category - only make items available if ALL their categories are available
+async function updateItemsAvailabilityOnResume(categoryName) {
+  // Get all unavailable category names (sold out or paused)
+  const unavailableCategories = await Category.find({ 
+    $or: [{ isSoldOut: true }, { isPaused: true }] 
+  }).select('name');
+  const unavailableCategoryNames = unavailableCategories.map(c => c.name);
   
   // Find all items that have this category
   const itemsInCategory = await MenuItem.find({ category: categoryName });
@@ -203,14 +206,14 @@ async function updateItemsAvailability(categoryName) {
   for (const item of itemsInCategory) {
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
     
-    // Check if ALL categories of this item are sold out
-    const allCategoriesSoldOut = itemCategories.every(cat => soldOutCategoryNames.includes(cat));
+    // Check if ALL categories of this item are unavailable
+    const allCategoriesUnavailable = itemCategories.every(cat => unavailableCategoryNames.includes(cat));
     
-    // Item should be available if at least one category is NOT sold out
-    // Item should be unavailable only if ALL its categories are sold out
-    if (item.available === allCategoriesSoldOut) {
-      // Need to toggle - if all sold out, make unavailable; if any available, make available
-      item.available = !allCategoriesSoldOut;
+    // Item should be available only if at least one category is available
+    const shouldBeAvailable = !allCategoriesUnavailable;
+    
+    if (item.available !== shouldBeAvailable) {
+      item.available = shouldBeAvailable;
       await item.save();
       console.log(`[Category] Item "${item.name}" availability set to ${item.available} (categories: ${itemCategories.join(', ')})`);
     }
@@ -225,6 +228,7 @@ router.patch('/:id/toggle-soldout', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Category not found' });
     }
     
+    const wasSOldOut = category.isSoldOut;
     category.isSoldOut = !category.isSoldOut;
     
     // Clear sold out schedule when manually toggling
@@ -235,8 +239,18 @@ router.patch('/:id/toggle-soldout', authMiddleware, async (req, res) => {
     
     await category.save();
     
-    // Update item availability considering multiple categories
-    await updateItemsAvailability(category.name);
+    if (category.isSoldOut) {
+      // MARKING AS SOLD OUT: Force ALL items in this category to be unavailable
+      await MenuItem.updateMany(
+        { category: category.name },
+        { available: false }
+      );
+      console.log(`[Category] "${category.name}" marked SOLD OUT - all items marked unavailable`);
+    } else {
+      // RESUMING: Only make items available if all their categories are available
+      await updateItemsAvailabilityOnResume(category.name);
+      console.log(`[Category] "${category.name}" RESUMED - items updated based on other categories`);
+    }
     
     // Emit event for real-time updates
     dataEvents.emit('menu');
@@ -267,15 +281,20 @@ router.patch('/:id/schedule-soldout', authMiddleware, async (req, res) => {
       timezone: 'Asia/Kolkata'
     };
     
-    // If scheduling sold out, mark category as sold out
+    // If scheduling sold out, mark category as sold out and ALL items unavailable
     if (enabled && endTime) {
       category.isSoldOut = true;
+      await category.save();
+      
+      // Force ALL items in this category to be unavailable
+      await MenuItem.updateMany(
+        { category: category.name },
+        { available: false }
+      );
+      console.log(`[Category] "${category.name}" scheduled SOLD OUT until ${endTime} - all items marked unavailable`);
+    } else {
+      await category.save();
     }
-    
-    await category.save();
-    
-    // Update item availability considering multiple categories
-    await updateItemsAvailability(category.name);
     
     // Emit event for real-time updates
     dataEvents.emit('menu');
