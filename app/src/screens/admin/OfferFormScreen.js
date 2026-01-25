@@ -41,6 +41,7 @@ export default function OfferFormScreen({ route, navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
   
   const [loading, setLoading] = useState(false);
+  const [pickingImage, setPickingImage] = useState(false);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -194,6 +195,8 @@ export default function OfferFormScreen({ route, navigation }) {
         return;
       }
       
+      setPickingImage(true);
+      
       // Universal aspect ratio 19:6 for all devices
       const aspectRatio = [19, 6];
 
@@ -214,6 +217,8 @@ export default function OfferFormScreen({ route, navigation }) {
     } catch (error) {
       console.error('Error picking image:', error);
       Alert.alert('Error', 'Failed to pick image. Please try again.');
+    } finally {
+      setPickingImage(false);
     }
   };
 
@@ -338,8 +343,16 @@ export default function OfferFormScreen({ route, navigation }) {
           style={[styles.uploadButton, image && styles.uploadButtonWithImage]} 
           onPress={pickImage} 
           activeOpacity={0.8}
+          disabled={pickingImage}
         >
-          {image ? (
+          {pickingImage ? (
+            <>
+              <ActivityIndicator size="small" color={image ? "#fff" : ZOMATO_RED} />
+              <Text style={image ? styles.uploadButtonTextWhite : styles.uploadButtonText}>
+                Opening gallery...
+              </Text>
+            </>
+          ) : image ? (
             <>
               <Ionicons name="camera" size={22} color="#fff" />
               <Text style={styles.uploadButtonTextWhite}>Change Image</Text>
@@ -353,7 +366,7 @@ export default function OfferFormScreen({ route, navigation }) {
           )}
         </TouchableOpacity>
         
-        {image && (
+        {image && !pickingImage && (
           <View style={styles.previewInfo}>
             <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
             <Text style={styles.previewInfoTextSuccess}>

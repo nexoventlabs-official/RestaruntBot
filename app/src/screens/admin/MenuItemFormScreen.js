@@ -40,6 +40,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
   const [image, setImage] = useState(existingItem?.image || null);
   const [newImage, setNewImage] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [pickingImage, setPickingImage] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   
   const [categories, setCategories] = useState([]);
@@ -82,6 +83,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
 
   const pickImage = async () => {
     try {
+      setPickingImage(true);
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -94,6 +96,8 @@ export default function MenuItemFormScreen({ route, navigation }) {
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to pick image');
+    } finally {
+      setPickingImage(false);
     }
   };
 
@@ -214,20 +218,39 @@ export default function MenuItemFormScreen({ route, navigation }) {
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
             {/* Image Section */}
             <View style={styles.imageSection}>
-              <TouchableOpacity style={styles.imageContainer} onPress={pickImage} activeOpacity={0.8}>
+              <TouchableOpacity 
+                style={styles.imageContainer} 
+                onPress={pickImage} 
+                activeOpacity={0.8}
+                disabled={pickingImage}
+              >
                 {image ? (
                   <Image source={{ uri: image }} style={styles.image} />
                 ) : (
                   <View style={styles.imagePlaceholder}>
-                    <View style={styles.imagePlaceholderIcon}>
-                      <Ionicons name="camera-outline" size={32} color={ZOMATO_RED} />
-                    </View>
-                    <Text style={styles.imagePlaceholderText}>Add Photo</Text>
-                    <Text style={styles.imagePlaceholderHint}>Tap to upload</Text>
+                    {pickingImage ? (
+                      <>
+                        <ActivityIndicator size="large" color={ZOMATO_RED} />
+                        <Text style={styles.imagePlaceholderText}>Opening gallery...</Text>
+                      </>
+                    ) : (
+                      <>
+                        <View style={styles.imagePlaceholderIcon}>
+                          <Ionicons name="camera-outline" size={32} color={ZOMATO_RED} />
+                        </View>
+                        <Text style={styles.imagePlaceholderText}>Add Photo</Text>
+                        <Text style={styles.imagePlaceholderHint}>Tap to upload</Text>
+                      </>
+                    )}
+                  </View>
+                )}
+                {pickingImage && image && (
+                  <View style={styles.imageLoadingOverlay}>
+                    <ActivityIndicator size="large" color="#fff" />
                   </View>
                 )}
               </TouchableOpacity>
-              {image && (
+              {image && !pickingImage && (
                 <TouchableOpacity style={styles.removeImageButton} onPress={removeImage}>
                   <Ionicons name="close-circle" size={32} color="#EF4444" />
                 </TouchableOpacity>
@@ -602,6 +625,17 @@ const styles = StyleSheet.create({
   imagePlaceholderText: { color: '#1C1C1C', fontSize: 14, fontWeight: '600' },
   imagePlaceholderHint: { color: '#9CA3AF', fontSize: 12, marginTop: 2 },
   removeImageButton: { position: 'absolute', top: -8, right: '25%' },
+  imageLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   
   // Form
   form: { gap: 20 },

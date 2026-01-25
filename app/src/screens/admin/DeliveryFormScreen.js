@@ -64,6 +64,7 @@ export default function DeliveryFormScreen({ route, navigation }) {
   const [photo, setPhoto] = useState(existingDeliveryBoy?.photo || null);
   const [newPhoto, setNewPhoto] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [pickingImage, setPickingImage] = useState(false);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -96,6 +97,7 @@ export default function DeliveryFormScreen({ route, navigation }) {
 
   const pickImage = async () => {
     try {
+      setPickingImage(true);
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -108,6 +110,8 @@ export default function DeliveryFormScreen({ route, navigation }) {
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to pick image');
+    } finally {
+      setPickingImage(false);
     }
   };
 
@@ -200,20 +204,41 @@ export default function DeliveryFormScreen({ route, navigation }) {
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
             {/* Photo Section */}
             <View style={styles.photoSection}>
-              <TouchableOpacity style={styles.photoContainer} onPress={pickImage} activeOpacity={0.8}>
+              <TouchableOpacity 
+                style={styles.photoContainer} 
+                onPress={pickImage} 
+                activeOpacity={0.8}
+                disabled={pickingImage}
+              >
                 {photo ? (
                   <Image source={{ uri: photo }} style={styles.photo} />
                 ) : (
                   <View style={styles.photoPlaceholder}>
-                    <View style={styles.photoPlaceholderIcon}>
-                      <Ionicons name="person-outline" size={36} color={ZOMATO_RED} />
-                    </View>
-                    <Text style={styles.photoPlaceholderText}>Add Photo</Text>
+                    {pickingImage ? (
+                      <>
+                        <ActivityIndicator size="large" color={ZOMATO_RED} />
+                        <Text style={styles.photoPlaceholderText}>Opening gallery...</Text>
+                      </>
+                    ) : (
+                      <>
+                        <View style={styles.photoPlaceholderIcon}>
+                          <Ionicons name="person-outline" size={36} color={ZOMATO_RED} />
+                        </View>
+                        <Text style={styles.photoPlaceholderText}>Add Photo</Text>
+                      </>
+                    )}
                   </View>
                 )}
-                <View style={styles.cameraButton}>
-                  <Ionicons name="camera" size={18} color="#fff" />
-                </View>
+                {!pickingImage && (
+                  <View style={styles.cameraButton}>
+                    <Ionicons name="camera" size={18} color="#fff" />
+                  </View>
+                )}
+                {pickingImage && photo && (
+                  <View style={styles.photoLoadingOverlay}>
+                    <ActivityIndicator size="large" color="#fff" />
+                  </View>
+                )}
               </TouchableOpacity>
             </View>
 
@@ -500,6 +525,17 @@ const styles = StyleSheet.create({
     width: 38, height: 38, borderRadius: 19, backgroundColor: ZOMATO_RED,
     justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#fff',
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 4,
+  },
+  photoLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 65,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   
   // Form
