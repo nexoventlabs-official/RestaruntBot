@@ -490,17 +490,18 @@ export default function AdminMenuScreen({ navigation, route }) {
     );
   };
 
-  // Get paused category names - memoized
-  const pausedCategoryNames = useMemo(() => 
-    categories.filter(c => c.isPaused).map(c => c.name),
+  // Get unavailable category names (paused or sold out) - memoized
+  const unavailableCategoryNames = useMemo(() => 
+    categories.filter(c => c.isPaused || c.isSoldOut).map(c => c.name),
     [categories]
   );
 
-  const isItemPaused = useCallback((item) => {
-    if (item.isPaused) return true;
+  // Check if item is unavailable due to category status
+  const isItemCategoryUnavailable = useCallback((item) => {
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-    return itemCategories.every(cat => pausedCategoryNames.includes(cat));
-  }, [pausedCategoryNames]);
+    // Item is unavailable if ALL its categories are unavailable
+    return itemCategories.every(cat => unavailableCategoryNames.includes(cat));
+  }, [unavailableCategoryNames]);
 
   // Filter items - memoized
   const filteredItems = useMemo(() => {
@@ -527,7 +528,7 @@ export default function AdminMenuScreen({ navigation, route }) {
   }, [items]);
 
   const renderItem = useCallback(({ item, index }) => {
-    const isPaused = isItemPaused(item);
+    const isCategoryUnavailable = isItemCategoryUnavailable(item);
 
     return (
       <Animated.View style={{
@@ -537,7 +538,7 @@ export default function AdminMenuScreen({ navigation, route }) {
         <TouchableOpacity
           style={[
             styles.itemCard, 
-            isPaused && styles.itemCardPaused,
+            isCategoryUnavailable && styles.itemCardPaused,
             !item.available && styles.itemCardOutOfStock
           ]}
           onPress={() => navigation.navigate('MenuItemForm', { item })}
@@ -547,13 +548,13 @@ export default function AdminMenuScreen({ navigation, route }) {
             {item.image ? (
               <Image
                 source={{ uri: item.image, cache: 'force-cache' }}
-                style={[styles.itemImage, isPaused && styles.itemImagePaused]}
+                style={[styles.itemImage, isCategoryUnavailable && styles.itemImagePaused]}
                 defaultSource={require('../../../assets/icon.png')}
                 resizeMode="cover"
               />
             ) : (
-              <View style={[styles.itemImage, styles.placeholderImage, isPaused && styles.placeholderImagePaused]}>
-                <Ionicons name="restaurant-outline" size={32} color={isPaused ? '#9ca3af' : '#d1d5db'} />
+              <View style={[styles.itemImage, styles.placeholderImage, isCategoryUnavailable && styles.placeholderImagePaused]}>
+                <Ionicons name="restaurant-outline" size={32} color={isCategoryUnavailable ? '#9ca3af' : '#d1d5db'} />
               </View>
             )}
             {/* Discount Badge */}
@@ -566,18 +567,18 @@ export default function AdminMenuScreen({ navigation, route }) {
             )}
             {item.foodType && item.foodType !== 'none' && (
               <View style={[styles.foodTypeBadge, {
-                borderColor: isPaused ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
+                borderColor: isCategoryUnavailable ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
               }]}>
                 <View style={[styles.foodTypeDot, {
-                  backgroundColor: isPaused ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
+                  backgroundColor: isCategoryUnavailable ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
                 }]} />
               </View>
             )}
           </View>
 
           <View style={styles.itemInfo}>
-            <Text style={[styles.itemName, isPaused && styles.textPaused]} numberOfLines={1}>{item.name}</Text>
-            <Text style={[styles.itemCategory, isPaused && styles.textPaused]} numberOfLines={1}>
+            <Text style={[styles.itemName, isCategoryUnavailable && styles.textPaused]} numberOfLines={1}>{item.name}</Text>
+            <Text style={[styles.itemCategory, isCategoryUnavailable && styles.textPaused]} numberOfLines={1}>
               {Array.isArray(item.category) ? item.category.join(', ') : item.category}
             </Text>
             {item.preparationTime > 0 && (
@@ -590,16 +591,16 @@ export default function AdminMenuScreen({ navigation, route }) {
               <View style={styles.priceContainer}>
                 {item.offerPrice && item.offerPrice < item.price ? (
                   <View style={styles.priceRow}>
-                    <Text style={[styles.originalPrice, isPaused && styles.pricePaused]}>₹{item.price}</Text>
-                    <Text style={[styles.offerPrice, isPaused && styles.pricePaused]}>₹{item.offerPrice}</Text>
+                    <Text style={[styles.originalPrice, isCategoryUnavailable && styles.pricePaused]}>₹{item.price}</Text>
+                    <Text style={[styles.offerPrice, isCategoryUnavailable && styles.pricePaused]}>₹{item.offerPrice}</Text>
                   </View>
                 ) : (
-                  <Text style={[styles.itemPrice, isPaused && styles.pricePaused]}>₹{item.price}</Text>
+                  <Text style={[styles.itemPrice, isCategoryUnavailable && styles.pricePaused]}>₹{item.price}</Text>
                 )}
               </View>
-              {isPaused ? (
+              {isCategoryUnavailable ? (
                 <View style={styles.pausedStatusBadge}>
-                  <Text style={styles.pausedStatusText}>Paused</Text>
+                  <Text style={styles.pausedStatusText}>Cat. Closed</Text>
                 </View>
               ) : (
                 <TouchableOpacity
@@ -633,7 +634,7 @@ export default function AdminMenuScreen({ navigation, route }) {
         </TouchableOpacity>
       </Animated.View>
     );
-  }, [fadeAnim, scaleAnim, isItemPaused, navigation, togglingId]);
+  }, [fadeAnim, scaleAnim, isItemCategoryUnavailable, navigation, togglingId]);
 
   const keyExtractor = useCallback((item) => item._id, []);
 

@@ -56,9 +56,14 @@ router.get('/popup-offers', async (req, res) => {
 });
 
 // Get all categories (public)
+// Returns only active categories that are not paused or sold out
 router.get('/categories', async (req, res) => {
   try {
-    const categories = await Category.find({ isActive: true, isPaused: false }).sort({ sortOrder: 1 });
+    const categories = await Category.find({ 
+      isActive: true, 
+      isPaused: false,
+      isSoldOut: { $ne: true }  // Exclude sold out categories
+    }).sort({ sortOrder: 1 });
     res.json(categories);
   } catch (error) {
     res.status(500).json({ error: error.message });

@@ -1,4 +1,5 @@
 const Category = require('../models/Category');
+const MenuItem = require('../models/MenuItem');
 const cron = require('node-cron');
 
 class CategoryScheduler {
@@ -123,17 +124,17 @@ class CategoryScheduler {
         console.log(`  ✓ STATUS CHANGED: ${oldStatus} → ${newStatus}`);
         console.log(`[Category Scheduler] ${category.name}: ${shouldBePaused ? '⏸️  PAUSED (outside schedule)' : '▶️  RESUMED (within schedule)'}`);
         
-        if (shouldBePaused) {
-          // PAUSING: Force ALL items in this category to be unavailable
-          const MenuItem = require('../models/MenuItem');
-          await MenuItem.updateMany(
-            { category: category.name },
-            { available: false }
+        // When category RESUMES (becomes active), make all items in this category available
+        if (!shouldBePaused) {
+          const updateResult = await MenuItem.updateMany(
+            { category: category.name, available: false },
+            { $set: { available: true } }
           );
-          console.log(`  ✓ All items in "${category.name}" marked UNAVAILABLE`);
-        } else {
-          // RESUMING: Only make items available if all their categories are available
-          await this.updateItemsAvailabilityOnResume(category.name);
+          if (updateResult.modifiedCount > 0) {
+            console.log(`  ✓ Made ${updateResult.modifiedCount} item(s) available in ${category.name}`);
+          } else {
+            console.log(`  ℹ️  All items in ${category.name} already available`);
+          }
         }
       } else {
         console.log(`  ℹ️  No change needed (already ${category.isPaused ? 'paused' : 'active'})`);
@@ -141,37 +142,6 @@ class CategoryScheduler {
       console.log(`[Category Scheduler] ========================================\n`);
     } catch (error) {
       console.error(`[Category Scheduler] Error updating category ${categoryId}:`, error.message);
-    }
-  }
-
-  // Helper function to update item availability when RESUMING a category
-  // Only make items available if ALL their categories are available
-  async updateItemsAvailabilityOnResume(categoryName) {
-    const MenuItem = require('../models/MenuItem');
-    
-    // Get all unavailable category names (isSoldOut = true OR isPaused = true)
-    const unavailableCategories = await Category.find({ 
-      $or: [{ isSoldOut: true }, { isPaused: true }] 
-    }).select('name');
-    const unavailableCategoryNames = unavailableCategories.map(c => c.name);
-    
-    // Find all items that have this category
-    const itemsInCategory = await MenuItem.find({ category: categoryName });
-    
-    for (const item of itemsInCategory) {
-      const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-      
-      // Check if ALL categories of this item are unavailable
-      const allCategoriesUnavailable = itemCategories.every(cat => unavailableCategoryNames.includes(cat));
-      
-      // Item should be available only if at least one category is available
-      const shouldBeAvailable = !allCategoriesUnavailable;
-      
-      if (item.available !== shouldBeAvailable) {
-        item.available = shouldBeAvailable;
-        await item.save();
-        console.log(`  [Item Update] "${item.name}" → ${shouldBeAvailable ? 'AVAILABLE' : 'UNAVAILABLE'} (categories: ${itemCategories.join(', ')})`);
-      }
     }
   }
 
@@ -199,8 +169,6 @@ class CategoryScheduler {
   // Update sold out status based on schedule
   async updateSoldOutStatus(categoryId) {
     try {
-      const Category = require('../models/Category');
-      
       const category = await Category.findById(categoryId);
       if (!category) {
         console.log(`[Category Scheduler] Category ${categoryId} not found`);
@@ -217,17 +185,25 @@ class CategoryScheduler {
       const isExpired = this.isSoldOutExpired(category.soldOutSchedule);
       
       if (isExpired) {
-        console.log(`  ✓ Sold out period EXPIRED - resuming availability`);
+        console.log(`  ✓ Sold out period EXPIRED - resuming category`);
         
         category.isSoldOut = false;
         category.soldOutSchedule.enabled = false;
         category.soldOutSchedule.endTime = null;
         await category.save();
         
-        // RESUMING: Only make items available if all their categories are available
-        await this.updateItemsAvailabilityOnResume(category.name);
+        // When category RESUMES (sold out expires), make all items in this category available
+        const updateResult = await MenuItem.updateMany(
+          { category: category.name, available: false },
+          { $set: { available: true } }
+        );
         
         console.log(`[Category Scheduler] ${category.name}: ▶️  RESUMED (sold out expired)`);
+        if (updateResult.modifiedCount > 0) {
+          console.log(`  ✓ Made ${updateResult.modifiedCount} item(s) available in ${category.name}`);
+        } else {
+          console.log(`  ℹ️  All items in ${category.name} already available`);
+        }
       } else {
         console.log(`  ℹ️  Still sold out until ${category.soldOutSchedule.endTime}`);
       }

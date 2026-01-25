@@ -1918,23 +1918,25 @@ const chatbot = {
       console.error('[Chatbot] Failed to save WhatsApp contact:', err.message);
     });
 
-    // Get paused categories to filter them out from chatbot
-    const pausedCategories = await Category.find({ isPaused: true }).select('name');
-    const pausedCategoryNames = pausedCategories.map(c => c.name);
+    // Get unavailable categories (paused or sold out) to filter them out from chatbot
+    const unavailableCategories = await Category.find({ 
+      $or: [{ isPaused: true }, { isSoldOut: true }] 
+    }).select('name');
+    const unavailableCategoryNames = unavailableCategories.map(c => c.name);
     
-    // Get available menu items and filter out items that belong ONLY to paused categories
-    // Also remove paused category names from items that have multiple categories
+    // Get available menu items and filter out items that belong ONLY to unavailable categories
+    // Also remove unavailable category names from items that have multiple categories
     const allMenuItems = await MenuItem.find({ available: true });
     const menuItems = allMenuItems
       .filter(item => {
         const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-        // Keep item if it has at least one non-paused category
-        return itemCategories.some(cat => !pausedCategoryNames.includes(cat));
+        // Keep item if it has at least one available (not paused/sold out) category
+        return itemCategories.some(cat => !unavailableCategoryNames.includes(cat));
       })
       .map(item => {
-        // Remove paused categories from item's category array for display
+        // Remove unavailable categories from item's category array for display
         const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-        const filteredCategories = itemCategories.filter(cat => !pausedCategoryNames.includes(cat));
+        const filteredCategories = itemCategories.filter(cat => !unavailableCategoryNames.includes(cat));
         return { ...item.toObject(), category: filteredCategories };
       });
     

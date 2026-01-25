@@ -147,13 +147,18 @@ export default function UserMenuPage() {
     }
   };
 
+  // Get active categories (not paused, not sold out)
   const activeCategoryNames = categories
-    .filter(cat => cat.isActive && !cat.isPaused)
+    .filter(cat => cat.isActive && !cat.isPaused && !cat.isSoldOut)
     .map(cat => cat.name);
 
   const availableItems = items.filter(item => {
+    // Item must be available (not sold out at item level)
+    if (!item.available) return false;
+    
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-    const isAvailable = itemCategories.some(cat => activeCategoryNames.includes(cat));
+    // Item is shown if at least one of its categories is active
+    const isInActiveCategory = itemCategories.some(cat => activeCategoryNames.includes(cat));
     
     // Apply search filter
     if (searchQuery.trim()) {
@@ -162,15 +167,16 @@ export default function UserMenuPage() {
         item.name.toLowerCase().includes(query) ||
         item.description?.toLowerCase().includes(query) ||
         item.tags?.some(tag => tag.toLowerCase().includes(query));
-      return isAvailable && matchesSearch;
+      return isInActiveCategory && matchesSearch;
     }
     
-    return isAvailable;
+    return isInActiveCategory;
   });
 
   // Get item count for a category from all items (not filtered)
   const getCategoryItemCount = (categoryName) => {
     return allItems.filter(item => {
+      if (!item.available) return false;
       const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
       return itemCategories.includes(categoryName) && itemCategories.some(cat => activeCategoryNames.includes(cat));
     }).length;
@@ -179,6 +185,7 @@ export default function UserMenuPage() {
   // Get total items count
   const getTotalItemsCount = () => {
     return allItems.filter(item => {
+      if (!item.available) return false;
       const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
       return itemCategories.some(cat => activeCategoryNames.includes(cat));
     }).length;
@@ -186,7 +193,7 @@ export default function UserMenuPage() {
 
   const isItemAvailable = (itemId) => {
     const item = items.find(i => i._id === itemId);
-    if (!item) return false;
+    if (!item || !item.available) return false;
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
     return itemCategories.some(cat => activeCategoryNames.includes(cat));
   };
