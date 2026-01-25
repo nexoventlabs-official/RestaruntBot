@@ -22,6 +22,7 @@ const offersRoutes = require('./routes/offers');
 const whatsappBroadcastRoutes = require('./routes/whatsappBroadcast');
 const orderScheduler = require('./services/orderScheduler');
 const dailyCleanup = require('./services/dailyCleanup');
+const categoryScheduler = require('./services/categoryScheduler');
 const orderCleanup = require('./services/orderCleanup');
 const cartCleanup = require('./services/cartCleanup');
 
@@ -53,6 +54,7 @@ mongoose.connect(process.env.MONGODB_URI)
     // Start schedulers after DB connection
     orderScheduler.start();
     dailyCleanup.start();
+    categoryScheduler.start();
     orderCleanup.start();
     cartCleanup.startCartCleanupScheduler();
   })

@@ -8,6 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import api from '../../config/api';
+import CategoryScheduleModal from '../../components/CategoryScheduleModal';
 
 // Zomato Theme Colors
 const ZOMATO_RED = '#E23744';
@@ -35,6 +36,17 @@ export default function AdminMenuScreen({ navigation, route }) {
   const [categoryImage, setCategoryImage] = useState(null);
   const [categoryImagePreview, setCategoryImagePreview] = useState('');
   const [deletingCategoryId, setDeletingCategoryId] = useState(null);
+
+  // Schedule modal
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleCategory, setScheduleCategory] = useState(null);
+  const [scheduleForm, setScheduleForm] = useState({
+    enabled: false,
+    type: 'daily',
+    startTime: '09:00',
+    endTime: '22:00',
+    days: []
+  });
 
   useEffect(() => {
     Animated.parallel([
@@ -252,6 +264,42 @@ export default function AdminMenuScreen({ navigation, route }) {
         },
       ]
     );
+  };
+
+  // Schedule functions
+  const openScheduleModal = (category) => {
+    setScheduleCategory(category);
+    setScheduleForm({
+      enabled: category.schedule?.enabled || false,
+      type: category.schedule?.type || 'daily',
+      startTime: category.schedule?.startTime || '09:00',
+      endTime: category.schedule?.endTime || '22:00',
+      days: category.schedule?.days || []
+    });
+    setShowScheduleModal(true);
+  };
+
+  const saveSchedule = async () => {
+    try {
+      setSavingCategory(true);
+      await api.patch(`/categories/${scheduleCategory._id}/schedule`, scheduleForm);
+      await fetchCategories();
+      setShowScheduleModal(false);
+      Alert.alert('Success', 'Schedule saved successfully');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save schedule');
+    } finally {
+      setSavingCategory(false);
+    }
+  };
+
+  const toggleDay = (day) => {
+    setScheduleForm(prev => ({
+      ...prev,
+      days: prev.days.includes(day)
+        ? prev.days.filter(d => d !== day)
+        : [...prev.days, day].sort()
+    }));
   };
 
   const toggleCategoryPause = async (category) => {
@@ -683,6 +731,7 @@ export default function AdminMenuScreen({ navigation, route }) {
                         { text: 'Cancel', style: 'cancel' },
                         { text: cat.isPaused ? 'Resume' : 'Pause', onPress: () => toggleCategoryPause(cat) },
                         { text: allItemsPaused ? 'Resume All' : 'Complete Pause', onPress: () => completePauseCategory(cat) },
+                        { text: 'Schedule', onPress: () => openScheduleModal(cat) },
                         { text: 'Edit', onPress: () => openCategoryModal(cat) },
                         { text: 'Delete', style: 'destructive', onPress: () => deleteCategory(cat) },
                       ]
@@ -852,6 +901,17 @@ export default function AdminMenuScreen({ navigation, route }) {
           </TouchableOpacity>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Schedule Modal */}
+      <CategoryScheduleModal
+        visible={showScheduleModal}
+        category={scheduleCategory}
+        scheduleForm={scheduleForm}
+        setScheduleForm={setScheduleForm}
+        onSave={saveSchedule}
+        onClose={() => setShowScheduleModal(false)}
+        saving={savingCategory}
+      />
     </View>
   );
 }

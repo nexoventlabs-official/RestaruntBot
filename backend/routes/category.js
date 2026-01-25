@@ -130,6 +130,43 @@ router.patch('/:id/toggle-pause', authMiddleware, async (req, res) => {
   }
 });
 
+// Update category schedule
+router.patch('/:id/schedule', authMiddleware, async (req, res) => {
+  try {
+    const { enabled, type, startTime, endTime, days } = req.body;
+    
+    const category = await Category.findById(req.params.id);
+    if (!category) {
+      return res.status(404).json({ error: 'Category not found' });
+    }
+
+    // Update schedule
+    category.schedule = {
+      enabled: enabled || false,
+      type: type || 'daily',
+      startTime: startTime || null,
+      endTime: endTime || null,
+      days: days || [],
+      timezone: 'Asia/Kolkata'
+    };
+
+    await category.save();
+
+    // Immediately check if category should be paused based on new schedule
+    if (enabled) {
+      const categoryScheduler = require('../services/categoryScheduler');
+      await categoryScheduler.updateCategoryStatus(category._id);
+    }
+
+    // Emit event for real-time updates
+    dataEvents.emit('menu');
+
+    res.json(category);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete category
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
