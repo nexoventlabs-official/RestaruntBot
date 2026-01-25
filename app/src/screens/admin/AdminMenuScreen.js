@@ -298,17 +298,26 @@ export default function AdminMenuScreen({ navigation, route }) {
   const saveSchedule = async () => {
     try {
       setSavingCategory(true);
-      await api.patch(`/categories/${scheduleCategory._id}/schedule`, scheduleForm);
+      console.log('Saving schedule:', scheduleForm);
       
-      // Wait a moment for the scheduler to update the category status
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const response = await api.patch(`/categories/${scheduleCategory._id}/schedule`, scheduleForm);
+      console.log('Schedule save response:', response.data);
+      console.log('Response isPaused:', response.data.isPaused);
       
-      await fetchCategories();
+      // Update the category in state immediately with the response
+      setCategories(prev => prev.map(cat => 
+        cat._id === scheduleCategory._id ? response.data : cat
+      ));
+      
+      // Also fetch all categories after a delay to ensure consistency
+      setTimeout(() => fetchCategories(), 500);
+      
       setShowScheduleModal(false);
-      Alert.alert('Success', 'Schedule saved successfully');
+      Alert.alert('Success', `Schedule saved. Category is now ${response.data.isPaused ? 'paused' : 'active'}.`);
     } catch (error) {
       console.error('Schedule save error:', error);
-      Alert.alert('Error', 'Failed to save schedule');
+      console.error('Error response:', error.response?.data);
+      Alert.alert('Error', error.response?.data?.error || 'Failed to save schedule');
     } finally {
       setSavingCategory(false);
     }

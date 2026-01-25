@@ -87,6 +87,32 @@ export default function CategoryScheduleModal({
     updateTime(field, newHours12, minutes.toString().padStart(2, '0'), newPeriod);
   };
 
+  const incrementMinute = (field) => {
+    const [hours, minutes] = scheduleForm[field].split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours % 12 || 12;
+    
+    let newMinutes = minutes + 5; // Increment by 5 minutes
+    if (newMinutes >= 60) {
+      newMinutes = 0;
+    }
+    
+    updateTime(field, hours12, newMinutes.toString().padStart(2, '0'), period);
+  };
+
+  const decrementMinute = (field) => {
+    const [hours, minutes] = scheduleForm[field].split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours % 12 || 12;
+    
+    let newMinutes = minutes - 5; // Decrement by 5 minutes
+    if (newMinutes < 0) {
+      newMinutes = 55;
+    }
+    
+    updateTime(field, hours12, newMinutes.toString().padStart(2, '0'), period);
+  };
+
   const togglePeriod = (field) => {
     const [hours, minutes] = scheduleForm[field].split(':').map(Number);
     const currentPeriod = hours >= 12 ? 'PM' : 'AM';
@@ -228,60 +254,112 @@ export default function CategoryScheduleModal({
                   {/* Start Time */}
                   <View style={styles.timeRow}>
                     <Text style={styles.timeLabel}>From</Text>
-                    <View style={styles.timePickers}>
-                      <View style={styles.timePicker}>
-                        <Text style={styles.timeValue}>{formatTime12Hour(scheduleForm.startTime)}</Text>
-                        <View style={styles.timeButtons}>
-                          <TouchableOpacity 
-                            style={styles.timeButton}
-                            onPress={() => incrementHour('startTime')}
-                          >
-                            <Ionicons name="chevron-up" size={16} color="#6b7280" />
-                          </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={styles.timeButton}
-                            onPress={() => decrementHour('startTime')}
-                          >
-                            <Ionicons name="chevron-down" size={16} color="#6b7280" />
-                          </TouchableOpacity>
-                        </View>
+                    <View style={styles.timePickersContainer}>
+                      {/* Hour Picker */}
+                      <View style={styles.timePickerBox}>
                         <TouchableOpacity 
-                          style={styles.periodButton}
-                          onPress={() => togglePeriod('startTime')}
+                          style={styles.timeArrowButton}
+                          onPress={() => incrementHour('startTime')}
                         >
-                          <Ionicons name="swap-horizontal" size={16} color="#E23744" />
+                          <Ionicons name="chevron-up" size={20} color="#E23744" />
+                        </TouchableOpacity>
+                        <Text style={styles.timeDigit}>
+                          {scheduleForm.startTime.split(':')[0] % 12 || 12}
+                        </Text>
+                        <TouchableOpacity 
+                          style={styles.timeArrowButton}
+                          onPress={() => decrementHour('startTime')}
+                        >
+                          <Ionicons name="chevron-down" size={20} color="#E23744" />
                         </TouchableOpacity>
                       </View>
+                      
+                      <Text style={styles.timeSeparator}>:</Text>
+                      
+                      {/* Minute Picker */}
+                      <View style={styles.timePickerBox}>
+                        <TouchableOpacity 
+                          style={styles.timeArrowButton}
+                          onPress={() => incrementMinute('startTime')}
+                        >
+                          <Ionicons name="chevron-up" size={20} color="#E23744" />
+                        </TouchableOpacity>
+                        <Text style={styles.timeDigit}>
+                          {scheduleForm.startTime.split(':')[1].padStart(2, '0')}
+                        </Text>
+                        <TouchableOpacity 
+                          style={styles.timeArrowButton}
+                          onPress={() => decrementMinute('startTime')}
+                        >
+                          <Ionicons name="chevron-down" size={20} color="#E23744" />
+                        </TouchableOpacity>
+                      </View>
+                      
+                      {/* AM/PM Toggle */}
+                      <TouchableOpacity 
+                        style={styles.periodToggle}
+                        onPress={() => togglePeriod('startTime')}
+                      >
+                        <Text style={styles.periodText}>
+                          {parseInt(scheduleForm.startTime.split(':')[0]) >= 12 ? 'PM' : 'AM'}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
 
                   {/* End Time */}
                   <View style={styles.timeRow}>
                     <Text style={styles.timeLabel}>To</Text>
-                    <View style={styles.timePickers}>
-                      <View style={styles.timePicker}>
-                        <Text style={styles.timeValue}>{formatTime12Hour(scheduleForm.endTime)}</Text>
-                        <View style={styles.timeButtons}>
-                          <TouchableOpacity 
-                            style={styles.timeButton}
-                            onPress={() => incrementHour('endTime')}
-                          >
-                            <Ionicons name="chevron-up" size={16} color="#6b7280" />
-                          </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={styles.timeButton}
-                            onPress={() => decrementHour('endTime')}
-                          >
-                            <Ionicons name="chevron-down" size={16} color="#6b7280" />
-                          </TouchableOpacity>
-                        </View>
+                    <View style={styles.timePickersContainer}>
+                      {/* Hour Picker */}
+                      <View style={styles.timePickerBox}>
                         <TouchableOpacity 
-                          style={styles.periodButton}
-                          onPress={() => togglePeriod('endTime')}
+                          style={styles.timeArrowButton}
+                          onPress={() => incrementHour('endTime')}
                         >
-                          <Ionicons name="swap-horizontal" size={16} color="#E23744" />
+                          <Ionicons name="chevron-up" size={20} color="#E23744" />
+                        </TouchableOpacity>
+                        <Text style={styles.timeDigit}>
+                          {scheduleForm.endTime.split(':')[0] % 12 || 12}
+                        </Text>
+                        <TouchableOpacity 
+                          style={styles.timeArrowButton}
+                          onPress={() => decrementHour('endTime')}
+                        >
+                          <Ionicons name="chevron-down" size={20} color="#E23744" />
                         </TouchableOpacity>
                       </View>
+                      
+                      <Text style={styles.timeSeparator}>:</Text>
+                      
+                      {/* Minute Picker */}
+                      <View style={styles.timePickerBox}>
+                        <TouchableOpacity 
+                          style={styles.timeArrowButton}
+                          onPress={() => incrementMinute('endTime')}
+                        >
+                          <Ionicons name="chevron-up" size={20} color="#E23744" />
+                        </TouchableOpacity>
+                        <Text style={styles.timeDigit}>
+                          {scheduleForm.endTime.split(':')[1].padStart(2, '0')}
+                        </Text>
+                        <TouchableOpacity 
+                          style={styles.timeArrowButton}
+                          onPress={() => decrementMinute('endTime')}
+                        >
+                          <Ionicons name="chevron-down" size={20} color="#E23744" />
+                        </TouchableOpacity>
+                      </View>
+                      
+                      {/* AM/PM Toggle */}
+                      <TouchableOpacity 
+                        style={styles.periodToggle}
+                        onPress={() => togglePeriod('endTime')}
+                      >
+                        <Text style={styles.periodText}>
+                          {parseInt(scheduleForm.endTime.split(':')[0]) >= 12 ? 'PM' : 'AM'}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
 
@@ -438,7 +516,7 @@ const styles = StyleSheet.create({
   timeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   timeLabel: {
     fontSize: 15,
@@ -446,39 +524,50 @@ const styles = StyleSheet.create({
     color: '#374151',
     width: 60,
   },
-  timePickers: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: 12,
-  },
-  timePicker: {
+  timePickersContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f9fafb',
+    gap: 8,
+  },
+  timePickerBox: {
+    alignItems: 'center',
+    backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#e5e7eb',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    minWidth: 70,
   },
-  timeValue: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    textAlign: 'center',
-  },
-  timeButtons: {
-    gap: 4,
-    marginRight: 8,
-  },
-  timeButton: {
+  timeArrowButton: {
     padding: 4,
   },
-  periodButton: {
-    padding: 6,
-    backgroundColor: '#fee2e2',
-    borderRadius: 8,
+  timeDigit: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#111827',
+    marginVertical: 4,
+  },
+  timeSeparator: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#9ca3af',
+    marginHorizontal: 4,
+  },
+  periodToggle: {
+    backgroundColor: '#E23744',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    minWidth: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  periodText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
   },
   timeHint: {
     fontSize: 13,

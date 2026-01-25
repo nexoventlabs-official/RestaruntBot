@@ -162,11 +162,18 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
     if (enabled) {
       console.log(`[Schedule API] Running scheduler to update category status...`);
       const categoryScheduler = require('../services/categoryScheduler');
-      await categoryScheduler.updateCategoryStatus(category._id);
+      
+      try {
+        await categoryScheduler.updateCategoryStatus(category._id);
+        console.log(`[Schedule API] Scheduler completed successfully`);
+      } catch (schedulerError) {
+        console.error(`[Schedule API] Scheduler error:`, schedulerError);
+      }
       
       // Fetch fresh data after scheduler update
       const updatedCategory = await Category.findById(category._id);
       console.log(`[Schedule API] After scheduler: isPaused = ${updatedCategory.isPaused}`);
+      console.log(`[Schedule API] Returning updated category to client`);
       
       // Emit event for real-time updates
       dataEvents.emit('menu');
