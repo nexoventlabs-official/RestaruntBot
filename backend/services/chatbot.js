@@ -1939,20 +1939,14 @@ const chatbot = {
     }).select('name');
     const unavailableCategoryNames = unavailableCategories.map(c => c.name);
     
-    // Get available menu items and filter out items that belong ONLY to unavailable categories
-    // Also remove unavailable category names from items that have multiple categories
+    // Get available menu items and filter out items that belong to ANY unavailable category
+    // If an item is in a locked/scheduled category, don't show it at all
     const allMenuItems = await MenuItem.find({ available: true });
     const menuItems = allMenuItems
       .filter(item => {
         const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-        // Keep item if it has at least one available (not paused/sold out) category
-        return itemCategories.some(cat => !unavailableCategoryNames.includes(cat));
-      })
-      .map(item => {
-        // Remove unavailable categories from item's category array for display
-        const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-        const filteredCategories = itemCategories.filter(cat => !unavailableCategoryNames.includes(cat));
-        return { ...item.toObject(), category: filteredCategories };
+        // Keep item ONLY if NONE of its categories are unavailable (paused/sold out)
+        return itemCategories.every(cat => !unavailableCategoryNames.includes(cat));
       });
     
     const state = customer.conversationState || { currentStep: 'welcome' };

@@ -93,13 +93,13 @@ router.get('/menu', async (req, res) => {
     
     // Filter items:
     // 1. Only show active offer types
-    // 2. Exclude items where ALL their categories are unavailable
+    // 2. Exclude items where ANY of their categories are unavailable (locked/scheduled)
     const filteredItems = items
       .filter(item => {
-        // Check if item has at least one available category
+        // Check if ALL item's categories are available (none are paused/sold out)
         const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-        const hasAvailableCategory = itemCategories.some(cat => !unavailableCategoryNames.includes(cat));
-        return hasAvailableCategory;
+        const allCategoriesAvailable = itemCategories.every(cat => !unavailableCategoryNames.includes(cat));
+        return allCategoriesAvailable;
       })
       .map(item => {
         const itemObj = item.toObject();
