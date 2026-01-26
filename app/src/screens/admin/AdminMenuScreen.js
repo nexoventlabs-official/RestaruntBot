@@ -621,19 +621,19 @@ export default function AdminMenuScreen({ navigation, route }) {
   }, [unavailableCategoryNames]);
 
   // Check if item is in a scheduled locked category
-  // - When viewing "All": show lock only if ALL item's categories are locked
-  // - When viewing a specific locked category: show lock for items in that category
+  // Show lock if ANY of the item's categories is scheduled and locked
   const isItemScheduledLocked = useCallback((item) => {
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
     
-    // If viewing a specific category that is scheduled locked, show lock for items in it
-    if (selectedCategory !== 'all' && scheduledLockedCategoryNames.includes(selectedCategory)) {
-      return itemCategories.includes(selectedCategory);
-    }
-    
-    // When viewing "All", show lock only if ALL item's categories are scheduled locked
-    return itemCategories.every(cat => scheduledLockedCategoryNames.includes(cat));
-  }, [scheduledLockedCategoryNames, selectedCategory]);
+    // Show lock if ANY of the item's categories is scheduled locked
+    return itemCategories.some(cat => scheduledLockedCategoryNames.includes(cat));
+  }, [scheduledLockedCategoryNames]);
+  
+  // Get which categories are causing the item to be locked (for display)
+  const getItemLockedCategories = useCallback((item) => {
+    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+    return itemCategories.filter(cat => scheduledLockedCategoryNames.includes(cat));
+  }, [scheduledLockedCategoryNames]);
 
   // Filter items - memoized
   const filteredItems = useMemo(() => {
@@ -662,6 +662,7 @@ export default function AdminMenuScreen({ navigation, route }) {
   const renderItem = useCallback(({ item, index }) => {
     const isCategoryUnavailable = isItemCategoryUnavailable(item);
     const isScheduledLocked = isItemScheduledLocked(item);
+    const lockedCategories = getItemLockedCategories(item);
 
     return (
       <Animated.View style={{
@@ -743,7 +744,9 @@ export default function AdminMenuScreen({ navigation, route }) {
               {isScheduledLocked ? (
                 <View style={styles.scheduledStatusBadge}>
                   <Ionicons name="lock-closed" size={10} color="#6366f1" />
-                  <Text style={styles.scheduledStatusText}>Scheduled</Text>
+                  <Text style={styles.scheduledStatusText} numberOfLines={1}>
+                    {lockedCategories.length === 1 ? lockedCategories[0] : `${lockedCategories.length} Cat.`}
+                  </Text>
                 </View>
               ) : isCategoryUnavailable ? (
                 <View style={styles.pausedStatusBadge}>
@@ -781,7 +784,7 @@ export default function AdminMenuScreen({ navigation, route }) {
         </TouchableOpacity>
       </Animated.View>
     );
-  }, [fadeAnim, scaleAnim, isItemCategoryUnavailable, isItemScheduledLocked, navigation, togglingId]);
+  }, [fadeAnim, scaleAnim, isItemCategoryUnavailable, isItemScheduledLocked, getItemLockedCategories, navigation, togglingId]);
 
   const keyExtractor = useCallback((item) => item._id, []);
 

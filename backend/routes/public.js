@@ -80,19 +80,35 @@ router.get('/menu', async (req, res) => {
     
     const items = await MenuItem.find(query).select('-ratings').sort({ name: 1 });
     
+    // Get unavailable categories (paused or sold out)
+    const unavailableCategories = await Category.find({
+      isActive: true,
+      $or: [{ isPaused: true }, { isSoldOut: true }]
+    }).select('name');
+    const unavailableCategoryNames = unavailableCategories.map(c => c.name);
+    
     // Get all active offer types
     const activeOffers = await Offer.find({ isActive: true }).select('offerType');
     const activeOfferTypes = activeOffers.map(o => o.offerType).filter(Boolean);
     
-    // Filter items to only show active offer types
-    const filteredItems = items.map(item => {
-      const itemObj = item.toObject();
-      if (itemObj.offerType && itemObj.offerType.length > 0) {
-        // Only keep offer types that are active
-        itemObj.offerType = itemObj.offerType.filter(ot => activeOfferTypes.includes(ot));
-      }
-      return itemObj;
-    });
+    // Filter items:
+    // 1. Only show active offer types
+    // 2. Exclude items where ALL their categories are unavailable
+    const filteredItems = items
+      .filter(item => {
+        // Check if item has at least one available category
+        const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+        const hasAvailableCategory = itemCategories.some(cat => !unavailableCategoryNames.includes(cat));
+        return hasAvailableCategory;
+      })
+      .map(item => {
+        const itemObj = item.toObject();
+        if (itemObj.offerType && itemObj.offerType.length > 0) {
+          // Only keep offer types that are active
+          itemObj.offerType = itemObj.offerType.filter(ot => activeOfferTypes.includes(ot));
+        }
+        return itemObj;
+      });
     
     res.json(filteredItems);
   } catch (error) {
