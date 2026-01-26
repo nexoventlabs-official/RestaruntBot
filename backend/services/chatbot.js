@@ -1939,14 +1939,18 @@ const chatbot = {
     }).select('name');
     const unavailableCategoryNames = unavailableCategories.map(c => c.name);
     
-    // Get available menu items - show item if it has at least ONE available category
-    // Item is available if ANY of its categories is not paused/sold out
+    // Get available menu items:
+    // - If item is in multiple categories and ALL are locked/paused -> HIDE item
+    // - If item is in multiple categories and at least ONE is active -> SHOW item
+    // Example: Item in "Lunch" (locked) and "Dinner" (active) -> SHOW
+    // Example: Item in "Lunch" (locked) and "Breakfast" (locked) -> HIDE
     const allMenuItems = await MenuItem.find({ available: true });
     const menuItems = allMenuItems
       .filter(item => {
         const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-        // Keep item if it has at least ONE available category
-        return itemCategories.some(cat => !unavailableCategoryNames.includes(cat));
+        // Show item if at least ONE category is available (not locked/paused)
+        const hasAvailableCategory = itemCategories.some(cat => !unavailableCategoryNames.includes(cat));
+        return hasAvailableCategory;
       });
     
     const state = customer.conversationState || { currentStep: 'welcome' };

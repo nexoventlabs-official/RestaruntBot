@@ -93,10 +93,12 @@ router.get('/menu', async (req, res) => {
     
     // Filter items:
     // 1. Only show active offer types
-    // 2. Show item if it has at least ONE available category
+    // 2. If item is in multiple categories:
+    //    - ALL categories locked/paused -> HIDE item
+    //    - At least ONE category active -> SHOW item
     const filteredItems = items
       .filter(item => {
-        // Check if item has at least one available category
+        // Check if item has at least one available category (not locked/paused)
         const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
         const hasAvailableCategory = itemCategories.some(cat => !unavailableCategoryNames.includes(cat));
         return hasAvailableCategory;
