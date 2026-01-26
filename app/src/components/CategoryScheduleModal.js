@@ -286,10 +286,29 @@ export default function CategoryScheduleModal({
         const [endHour, endMin] = daySchedule.endTime.split(':').map(Number);
         const startMinutes = startHour * 60 + startMin;
         const endMinutes = endHour * 60 + endMin;
+        const dayName = DAYS.find(d => d.value === daySchedule.day)?.fullLabel;
         
         if (startMinutes === endMinutes) {
-          const dayName = DAYS.find(d => d.value === daySchedule.day)?.fullLabel;
           Alert.alert('Invalid Time Range', `Start and end time cannot be the same for ${dayName}`);
+          return;
+        }
+        
+        // Check if end time is before start time (and not an overnight schedule)
+        // Allow overnight only if there's at least 1 hour difference
+        if (endMinutes < startMinutes && (startMinutes - endMinutes) < 60) {
+          Alert.alert(
+            'Invalid Time Range', 
+            `End time (${formatTime12Hour(daySchedule.endTime)}) cannot be before start time (${formatTime12Hour(daySchedule.startTime)}) for ${dayName}.\n\nIf you want an overnight schedule, make sure there's at least 1 hour gap.`
+          );
+          return;
+        }
+        
+        // For same-day schedules (end > start), ensure at least 15 min difference
+        if (endMinutes > startMinutes && (endMinutes - startMinutes) < 15) {
+          Alert.alert(
+            'Invalid Time Range', 
+            `Schedule must be at least 15 minutes long for ${dayName}`
+          );
           return;
         }
       }
@@ -302,6 +321,21 @@ export default function CategoryScheduleModal({
 
       if (startMinutes === endMinutes) {
         Alert.alert('Invalid Time Range', 'Start time and end time cannot be the same.');
+        return;
+      }
+      
+      // Check if end time is before start time (and not an overnight schedule)
+      if (endMinutes < startMinutes && (startMinutes - endMinutes) < 60) {
+        Alert.alert(
+          'Invalid Time Range', 
+          `End time (${formatTime12Hour(scheduleForm.endTime)}) cannot be before start time (${formatTime12Hour(scheduleForm.startTime)}).\n\nIf you want an overnight schedule, make sure there's at least 1 hour gap.`
+        );
+        return;
+      }
+      
+      // For same-day schedules, ensure at least 15 min difference
+      if (endMinutes > startMinutes && (endMinutes - startMinutes) < 15) {
+        Alert.alert('Invalid Time Range', 'Schedule must be at least 15 minutes long.');
         return;
       }
     }

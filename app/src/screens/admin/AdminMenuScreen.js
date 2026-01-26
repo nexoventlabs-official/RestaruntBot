@@ -14,6 +14,110 @@ import CategoryScheduleModal from '../../components/CategoryScheduleModal';
 const ZOMATO_RED = '#E23744';
 const ZOMATO_DARK_RED = '#CB1A27';
 
+// Day names for schedule display
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// Format time from 24-hour to 12-hour with AM/PM
+const formatTime12Hour = (time24) => {
+  if (!time24) return '';
+  const [hours, minutes] = time24.split(':').map(Number);
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours % 12 || 12;
+  return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+};
+
+// Get next schedule time for a category (handles custom days)
+const getNextScheduleTime = (schedule) => {
+  if (!schedule || !schedule.enabled) return null;
+  
+  // For custom schedules with custom days
+  if (schedule.type === 'custom' && schedule.customDays && schedule.customDays.length > 0) {
+    const now = new Date();
+    const currentDay = now.getDay();
+    const currentHours = now.getHours();
+    const currentMins = now.getMinutes();
+    const currentMinutes = currentHours * 60 + currentMins;
+    
+    // Find today's schedule
+    const todaySchedule = schedule.customDays.find(d => d.day === currentDay && d.enabled);
+    
+    if (todaySchedule) {
+      const [startH, startM] = todaySchedule.startTime.split(':').map(Number);
+      const startMinutes = startH * 60 + startM;
+      
+      // If we're before today's start time, show today's schedule
+      if (currentMinutes < startMinutes) {
+        return {
+          day: DAY_NAMES[currentDay],
+          startTime: todaySchedule.startTime,
+          endTime: todaySchedule.endTime,
+          isToday: true
+        };
+      }
+      
+      // If we're within today's schedule
+      const [endH, endM] = todaySchedule.endTime.split(':').map(Number);
+      const endMinutes = endH * 60 + endM;
+      if (currentMinutes < endMinutes || endMinutes < startMinutes) {
+        return {
+          day: DAY_NAMES[currentDay],
+          startTime: todaySchedule.startTime,
+          endTime: todaySchedule.endTime,
+          isToday: true,
+          isActive: true
+        };
+      }
+    }
+    
+    // Find next enabled day
+    for (let i = 1; i <= 7; i++) {
+      const nextDay = (currentDay + i) % 7;
+      const nextSchedule = schedule.customDays.find(d => d.day === nextDay && d.enabled);
+      if (nextSchedule) {
+        return {
+          day: DAY_NAMES[nextDay],
+          startTime: nextSchedule.startTime,
+          endTime: nextSchedule.endTime,
+          isToday: false
+        };
+      }
+    }
+    
+    return null;
+  }
+  
+  // For daily schedule or custom with same time for all days
+  if (schedule.startTime && schedule.endTime) {
+    return {
+      day: null,
+      startTime: schedule.startTime,
+      endTime: schedule.endTime,
+      isDaily: true
+    };
+  }
+  
+  return null;
+};
+
+// Format schedule display text
+const formatScheduleDisplay = (schedule) => {
+  const nextSchedule = getNextScheduleTime(schedule);
+  if (!nextSchedule) return '';
+  
+  const startFormatted = formatTime12Hour(nextSchedule.startTime);
+  const endFormatted = formatTime12Hour(nextSchedule.endTime);
+  
+  if (nextSchedule.isDaily) {
+    return `${startFormatted} - ${endFormatted}`;
+  }
+  
+  if (nextSchedule.isToday) {
+    return `Today ${startFormatted} - ${endFormatted}`;
+  }
+  
+  return `${nextSchedule.day} ${startFormatted} - ${endFormatted}`;
+};
+
 export default function AdminMenuScreen({ navigation, route }) {
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -895,8 +999,8 @@ export default function AdminMenuScreen({ navigation, route }) {
                           return ` (Until ${h12}:${m.toString().padStart(2, '0')} ${p})`;
                         })()
                       : '';
-                    const scheduleTimeText = isScheduledLocked && cat.schedule?.startTime && cat.schedule?.endTime
-                      ? ` (${cat.schedule.startTime} - ${cat.schedule.endTime})`
+                    const scheduleTimeText = isScheduledLocked && cat.schedule?.enabled
+                      ? ` (${formatScheduleDisplay(cat.schedule)})`
                       : '';
                     
                     Alert.alert(
@@ -968,9 +1072,15 @@ export default function AdminMenuScreen({ navigation, route }) {
                       })()}
                     </Text>
                   )}
-                  {isScheduledLocked && cat.schedule?.startTime && cat.schedule?.endTime && (
-                    <Text style={styles.categoryScheduleText}>
-                      {cat.schedule.startTime} - {cat.schedule.endTime}
+                  {cat.schedule?.enabled && !cat.isSoldOut && (
+                    <Text style={[
+                      styles.categoryScheduleText,
+                      !cat.isPaused && styles.categoryScheduleActiveText
+                    ]}>
+                      {cat.isPaused 
+                        ? formatScheduleDisplay(cat.schedule)
+                        : `Active ${formatScheduleDisplay(cat.schedule)}`
+                      }
                     </Text>
                   )}
                   {selectedCategory === cat.name && <View style={styles.categoryUnderline} />}
@@ -1508,6 +1618,9 @@ const styles = StyleSheet.create({
     color: '#6366f1',
     fontWeight: '500',
     marginTop: 2,
+  },
+  categoryScheduleActiveText: {
+    color: '#22c55e',
   },
   categoryImageWrapperScheduled: {
     borderColor: '#6366f1',
