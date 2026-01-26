@@ -56,15 +56,55 @@ router.get('/popup-offers', async (req, res) => {
 });
 
 // Get all categories (public)
-// Returns only active categories that are not paused or sold out
+// Returns only categories that have at least one available item
 router.get('/categories', async (req, res) => {
   try {
-    const categories = await Category.find({ 
-      isActive: true, 
-      isPaused: false,
-      isSoldOut: { $ne: true }  // Exclude sold out categories
-    }).sort({ sortOrder: 1 });
-    res.json(categories);
+    const allCategories = await Category.find({ isActive: true }).sort({ sortOrder: 1 });
+    const allMenuItems = await MenuItem.find({ available: true });
+    
+    // Get scheduled categories that are currently ACTIVE (within time, not paused)
+    const scheduledActiveCategories = allCategories
+      .filter(c => c.schedule?.enabled && !c.isPaused && !c.isSoldOut)
+      .map(c => c.name);
+    
+    // Filter categories to only show those with available items
+    const availableCategories = allCategories.filter(category => {
+      // Check if category itself is available
+      const isCategoryAvailable = 
+        // Scheduled and ACTIVE
+        (category.schedule?.enabled && !category.isPaused && !category.isSoldOut) ||
+        // Non-scheduled and not paused/sold out
+        (!category.schedule?.enabled && !category.isPaused && !category.isSoldOut);
+      
+      if (!isCategoryAvailable) return false;
+      
+      // Check if category has at least one available item
+      const categoryItems = allMenuItems.filter(item => {
+        const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+        return itemCategories.includes(category.name);
+      });
+      
+      // Check if any item in this category is available
+      const hasAvailableItems = categoryItems.some(item => {
+        const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+        
+        // Item is available if it has any scheduled category that is ACTIVE
+        const hasScheduledActiveCategory = itemCategories.some(cat => scheduledActiveCategories.includes(cat));
+        if (hasScheduledActiveCategory) return true;
+        
+        // Item is available if it has any non-scheduled category that is not locked
+        const hasActiveNonScheduledCategory = itemCategories.some(cat => {
+          const catObj = allCategories.find(c => c.name === cat);
+          return catObj && !catObj.schedule?.enabled && !catObj.isPaused && !catObj.isSoldOut;
+        });
+        
+        return hasActiveNonScheduledCategory;
+      });
+      
+      return hasAvailableItems;
+    });
+    
+    res.json(availableCategories);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

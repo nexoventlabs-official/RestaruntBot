@@ -1983,10 +1983,14 @@ const chatbot = {
       });
     
     // Debug log - shows which categories are active/locked and how many items filtered
-    if (lockedCategories.length > 0 || scheduledActiveCategories.length > 0) {
-      console.log(`✅ Scheduled ACTIVE categories: [${scheduledActiveCategories.join(', ')}]`);
-      console.log(`🔒 Locked categories: [${lockedCategories.join(', ')}]`);
-      console.log(`📦 Items: ${allMenuItems.length} total → ${menuItems.length} available (${allMenuItems.length - menuItems.length} filtered out)`);
+    console.log(`✅ Scheduled ACTIVE categories: [${scheduledActiveCategories.join(', ') || 'none'}]`);
+    console.log(`🔒 Locked categories: [${lockedCategories.join(', ') || 'none'}]`);
+    console.log(`📦 Items: ${allMenuItems.length} total → ${menuItems.length} available (${allMenuItems.length - menuItems.length} filtered out)`);
+    
+    // Log filtered out items for debugging
+    const filteredOutItems = allMenuItems.filter(item => !menuItems.includes(item));
+    if (filteredOutItems.length > 0) {
+      console.log(`❌ Filtered out items: [${filteredOutItems.map(i => i.name).join(', ')}]`);
     }
     
     const state = customer.conversationState || { currentStep: 'welcome' };
