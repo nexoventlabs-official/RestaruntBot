@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   View, Text, StyleSheet, ScrollView,
   RefreshControl, TouchableOpacity, ActivityIndicator, Animated, Platform,
-  Dimensions, StatusBar, ImageBackground, AppState, Image
+  Dimensions, StatusBar, ImageBackground, AppState, Image, Switch, Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,6 +33,8 @@ export default function AdminHomeScreen({ navigation }) {
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [holidayMode, setHolidayMode] = useState(false);
+  const [togglingHoliday, setTogglingHoliday] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const shineAnim = useRef(new Animated.Value(-1)).current;
@@ -106,12 +108,40 @@ export default function AdminHomeScreen({ navigation }) {
       
       // Check for notification updates
       checkForUpdates();
+      
+      // Fetch holiday mode status
+      try {
+        const holidayRes = await api.get('/settings/holiday/status');
+        setHolidayMode(holidayRes.data.holidayMode || false);
+      } catch (err) {
+        console.log('Could not fetch holiday status');
+      }
     } catch (error) { console.error('Error fetching stats:', error); }
     finally { 
       if (!silent) {
         setLoading(false); 
         setRefreshing(false); 
       }
+    }
+  };
+
+  // Toggle holiday mode
+  const toggleHolidayMode = async () => {
+    try {
+      setTogglingHoliday(true);
+      const response = await api.post('/settings/holiday/toggle');
+      setHolidayMode(response.data.holidayMode);
+      Alert.alert(
+        response.data.holidayMode ? '🏖️ Holiday Mode ON' : '✅ Holiday Mode OFF',
+        response.data.holidayMode 
+          ? 'Customers will see a closed message when they contact you.'
+          : 'Customers can now place orders normally.'
+      );
+    } catch (error) {
+      console.error('Error toggling holiday mode:', error);
+      Alert.alert('Error', 'Failed to toggle holiday mode');
+    } finally {
+      setTogglingHoliday(false);
     }
   };
 
@@ -311,6 +341,37 @@ export default function AdminHomeScreen({ navigation }) {
               </View>
             </View>
           </View>
+        </Animated.View>
+
+        {/* Holiday Mode Toggle */}
+        <Animated.View style={[styles.section, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+          <TouchableOpacity 
+            style={[styles.holidayCard, holidayMode && styles.holidayCardActive]}
+            onPress={toggleHolidayMode}
+            disabled={togglingHoliday}
+            activeOpacity={0.8}
+          >
+            <View style={styles.holidayCardContent}>
+              <View style={[styles.holidayIconContainer, holidayMode && styles.holidayIconContainerActive]}>
+                {togglingHoliday ? (
+                  <ActivityIndicator size="small" color={holidayMode ? '#fff' : '#F59E0B'} />
+                ) : (
+                  <Ionicons name={holidayMode ? "sunny" : "sunny-outline"} size={24} color={holidayMode ? '#fff' : '#F59E0B'} />
+                )}
+              </View>
+              <View style={styles.holidayInfo}>
+                <Text style={[styles.holidayTitle, holidayMode && styles.holidayTitleActive]}>Holiday Mode</Text>
+                <Text style={[styles.holidaySubtitle, holidayMode && styles.holidaySubtitleActive]}>
+                  {holidayMode ? 'Restaurant is closed today' : 'Tap to close for today'}
+                </Text>
+              </View>
+              <View style={[styles.holidayStatus, holidayMode && styles.holidayStatusActive]}>
+                <Text style={[styles.holidayStatusText, holidayMode && styles.holidayStatusTextActive]}>
+                  {holidayMode ? 'ON' : 'OFF'}
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
         </Animated.View>
 
         {/* Order Status Section */}
@@ -1318,5 +1379,71 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  
+  // Holiday Mode Card
+  holidayCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: '#FEF3C7',
+    ...shadows.sm,
+  },
+  holidayCardActive: {
+    backgroundColor: '#F59E0B',
+    borderColor: '#F59E0B',
+  },
+  holidayCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  holidayIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#FEF3C7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  holidayIconContainerActive: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  holidayInfo: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  holidayTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  holidayTitleActive: {
+    color: '#fff',
+  },
+  holidaySubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  holidaySubtitleActive: {
+    color: 'rgba(255,255,255,0.85)',
+  },
+  holidayStatus: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  holidayStatusActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  holidayStatusText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6B7280',
+  },
+  holidayStatusTextActive: {
+    color: '#fff',
   },
 });

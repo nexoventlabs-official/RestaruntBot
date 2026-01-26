@@ -20,6 +20,7 @@ const deliveryBoyRoutes = require('./routes/deliveryboy');
 const heroSectionRoutes = require('./routes/heroSection');
 const offersRoutes = require('./routes/offers');
 const whatsappBroadcastRoutes = require('./routes/whatsappBroadcast');
+const settingsRoutes = require('./routes/settings');
 const orderScheduler = require('./services/orderScheduler');
 const dailyCleanup = require('./services/dailyCleanup');
 const categoryScheduler = require('./services/categoryScheduler');
@@ -75,6 +76,7 @@ app.use('/api/delivery', deliveryBoyRoutes);
 app.use('/api/hero-sections', heroSectionRoutes);
 app.use('/api/offers', offersRoutes);
 app.use('/api/whatsapp-broadcast', whatsappBroadcastRoutes);
+app.use('/api/settings', settingsRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 

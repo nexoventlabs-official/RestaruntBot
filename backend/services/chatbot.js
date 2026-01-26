@@ -2,6 +2,7 @@ const Customer = require('../models/Customer');
 const MenuItem = require('../models/MenuItem');
 const Category = require('../models/Category');
 const Order = require('../models/Order');
+const Settings = require('../models/Settings');
 const whatsapp = require('./whatsapp');
 const razorpayService = require('./razorpay');
 const googleSheets = require('./googleSheets');
@@ -1898,6 +1899,20 @@ const chatbot = {
   },
 
   async handleMessage(phone, message, messageType = 'text', selectedId = null, senderName = null) {
+    // Check if holiday mode is enabled
+    const holidayMode = await Settings.getValue('holidayMode', false);
+    if (holidayMode) {
+      console.log(`🏖️ Holiday mode is ON - sending holiday message to ${phone}`);
+      await whatsapp.sendMessage(phone, 
+        `🏖️ *Holiday Notice*\n\n` +
+        `Dear Customer,\n\n` +
+        `We are currently closed for today. We apologize for any inconvenience caused.\n\n` +
+        `We will be back soon to serve you delicious food! 🍽️\n\n` +
+        `Thank you for your understanding. 🙏`
+      );
+      return;
+    }
+
     let customer = await Customer.findOne({ phone });
     if (!customer) {
       customer = new Customer({ 
