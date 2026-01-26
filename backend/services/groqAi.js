@@ -275,51 +275,79 @@ If already standard or you're unsure, return as is.`
   async generateTags(itemName, category, foodType) {
     try {
       const client = getGroq();
-      const categoryText = Array.isArray(category) ? category.join(', ') : category;
-      const foodTypeText = foodType === 'veg' ? 'vegetarian (veg)' : foodType === 'nonveg' ? 'non-vegetarian (non-veg)' : foodType === 'egg' ? 'egg item' : '';
+      const categories = Array.isArray(category) ? category : [category];
+      const categoryText = categories.join(', ');
+      const foodTypeText = foodType === 'veg' ? 'veg' : foodType === 'nonveg' ? 'nonveg' : foodType === 'egg' ? 'egg' : '';
+      
+      // Extract words from item name (split by space and special chars)
+      const nameWords = itemName
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/gi, ' ')
+        .split(/\s+/)
+        .filter(word => word.length > 1)
+        .map(word => word.trim());
+      
+      // Extract category words
+      const categoryWords = categories
+        .map(cat => cat.toLowerCase().trim())
+        .filter(cat => cat.length > 0);
+      
+      // Combine name words + category words as base tags
+      const baseTags = [...new Set([...nameWords, ...categoryWords])];
       
       const completion = await client.chat.completions.create({
         messages: [{
           role: 'user',
-          content: `Generate 6-10 simple, commonly searched tags for an Indian restaurant menu item. Tags should be words that Indian customers typically type when searching for food.
+          content: `Generate 5-7 additional searchable tags for this Indian restaurant menu item. Only return extra tags that are NOT already in the base tags list.
 
 Item: "${itemName}"
 Category: ${categoryText}
 Type: ${foodTypeText}
+Base tags (already included): ${baseTags.join(', ')}
 
-Generate tags focusing on:
-- Simple Hindi/English food words Indians commonly search (like "roti", "rice", "curry", "gravy", "fry", "masala", "butter", "tandoori", "biryani")
-- Main ingredient (chicken, paneer, dal, aloo, gobi, egg, mutton, fish)
-- Cooking style in simple words (fried, grilled, roasted, steamed, tawa, tandoor)
-- Taste (spicy, mild, sweet, hot, creamy, dry)
-- Meal time (breakfast, lunch, dinner, snacks, tiffin)
-- Regional cuisine if applicable (south indian, north indian, punjabi, hyderabadi, chinese, indo-chinese)
-- Common short forms Indians use (veg, nonveg, combo, thali, meals)
-- If it's a popular/famous dish add: popular, special, bestseller, famous
+Add only these types of extra tags:
+- Main ingredient if not in name (chicken, paneer, dal, aloo, gobi, mutton, fish, prawn)
+- Taste/style (spicy, mild, hot, creamy, dry, crispy, fried, grilled, tandoor)
+- Cuisine type (south indian, north indian, punjabi, hyderabadi, chinese)
+- Meal type (breakfast, lunch, dinner, snacks)
+- Popular terms (special, popular, famous) if applicable
 
-Return ONLY simple comma-separated words, all lowercase, no sentences. Keep words short and commonly typed.
-Example for "Butter Chicken": butter, chicken, curry, gravy, creamy, punjabi, north indian, nonveg, dinner, popular, makhani`
+Return ONLY comma-separated lowercase words. No sentences, no explanations.
+Example: spicy, crispy, popular, lunch, north indian`
         }],
         model: 'llama-3.1-8b-instant',
-        max_tokens: 150,
-        temperature: 0.6
+        max_tokens: 100,
+        temperature: 0.5
       });
       
-      const tagsText = completion.choices[0]?.message?.content?.trim() || '';
-      // Clean up the tags - remove any extra formatting
-      const cleanedTags = tagsText
-        .replace(/[\[\]"]/g, '') // Remove brackets and quotes
-        .replace(/\n/g, ',') // Replace newlines with commas
+      const aiTagsText = completion.choices[0]?.message?.content?.trim() || '';
+      
+      // Clean AI generated tags
+      const aiTags = aiTagsText
+        .replace(/[\[\]"]/g, '')
+        .replace(/\n/g, ',')
         .split(',')
         .map(tag => tag.trim().toLowerCase())
-        .filter(tag => tag.length > 1 && tag.length < 25 && !tag.includes(':')) // Filter empty, too long, or explanation tags
-        .slice(0, 12) // Limit to 12 tags max
-        .join(', ');
+        .filter(tag => tag.length > 1 && tag.length < 20 && !tag.includes(':') && !tag.includes('.'));
       
-      return cleanedTags;
+      // Combine base tags + AI tags + food type, remove duplicates
+      const allTags = [...baseTags];
+      if (foodTypeText) allTags.push(foodTypeText);
+      aiTags.forEach(tag => {
+        if (!allTags.includes(tag)) allTags.push(tag);
+      });
+      
+      // Limit to 15 tags max
+      return allTags.slice(0, 15).join(', ');
     } catch (error) {
       console.error('Groq AI tags error:', error);
-      throw new Error('Failed to generate tags: ' + error.message);
+      // Fallback: return item name words + categories if AI fails
+      const categories = Array.isArray(category) ? category : [category];
+      const nameWords = itemName.toLowerCase().replace(/[^a-z0-9\s]/gi, ' ').split(/\s+/).filter(w => w.length > 1);
+      const categoryWords = categories.map(c => c.toLowerCase().trim());
+      const fallbackTags = [...new Set([...nameWords, ...categoryWords])];
+      if (foodType && foodType !== 'none') fallbackTags.push(foodType);
+      return fallbackTags.join(', ');
     }
   },
 
