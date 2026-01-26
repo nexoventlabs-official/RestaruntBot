@@ -276,39 +276,44 @@ If already standard or you're unsure, return as is.`
     try {
       const client = getGroq();
       const categoryText = Array.isArray(category) ? category.join(', ') : category;
-      const foodTypeText = foodType === 'veg' ? 'vegetarian' : foodType === 'nonveg' ? 'non-vegetarian' : foodType === 'egg' ? 'contains egg' : '';
+      const foodTypeText = foodType === 'veg' ? 'vegetarian (veg)' : foodType === 'nonveg' ? 'non-vegetarian (non-veg)' : foodType === 'egg' ? 'egg item' : '';
       
       const completion = await client.chat.completions.create({
         messages: [{
           role: 'user',
-          content: `Generate 5-8 relevant search tags for a restaurant menu item.
+          content: `Generate 6-10 simple, commonly searched tags for an Indian restaurant menu item. Tags should be words that Indian customers typically type when searching for food.
 
-Item Name: "${itemName}"
+Item: "${itemName}"
 Category: ${categoryText}
-Food Type: ${foodTypeText}
+Type: ${foodTypeText}
 
-Generate tags that customers might search for. Include:
-- Cuisine type (e.g., indian, chinese, south indian)
-- Taste profile (e.g., spicy, mild, sweet, tangy)
-- Meal type (e.g., breakfast, lunch, dinner, snack)
-- Cooking style (e.g., fried, grilled, steamed)
-- Key ingredients if obvious from name
-- Popular descriptors (e.g., bestseller, popular, homestyle)
+Generate tags focusing on:
+- Simple Hindi/English food words Indians commonly search (like "roti", "rice", "curry", "gravy", "fry", "masala", "butter", "tandoori", "biryani")
+- Main ingredient (chicken, paneer, dal, aloo, gobi, egg, mutton, fish)
+- Cooking style in simple words (fried, grilled, roasted, steamed, tawa, tandoor)
+- Taste (spicy, mild, sweet, hot, creamy, dry)
+- Meal time (breakfast, lunch, dinner, snacks, tiffin)
+- Regional cuisine if applicable (south indian, north indian, punjabi, hyderabadi, chinese, indo-chinese)
+- Common short forms Indians use (veg, nonveg, combo, thali, meals)
+- If it's a popular/famous dish add: popular, special, bestseller, famous
 
-Return ONLY comma-separated tags, lowercase, no explanations. Example: spicy, indian, lunch, fried, popular`
+Return ONLY simple comma-separated words, all lowercase, no sentences. Keep words short and commonly typed.
+Example for "Butter Chicken": butter, chicken, curry, gravy, creamy, punjabi, north indian, nonveg, dinner, popular, makhani`
         }],
         model: 'llama-3.1-8b-instant',
-        max_tokens: 100,
-        temperature: 0.7
+        max_tokens: 150,
+        temperature: 0.6
       });
       
       const tagsText = completion.choices[0]?.message?.content?.trim() || '';
       // Clean up the tags - remove any extra formatting
       const cleanedTags = tagsText
         .replace(/[\[\]"]/g, '') // Remove brackets and quotes
+        .replace(/\n/g, ',') // Replace newlines with commas
         .split(',')
         .map(tag => tag.trim().toLowerCase())
-        .filter(tag => tag.length > 0 && tag.length < 30) // Filter empty or too long tags
+        .filter(tag => tag.length > 1 && tag.length < 25 && !tag.includes(':')) // Filter empty, too long, or explanation tags
+        .slice(0, 12) // Limit to 12 tags max
         .join(', ');
       
       return cleanedTags;
