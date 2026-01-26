@@ -42,6 +42,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
   const [loading, setLoading] = useState(false);
   const [pickingImage, setPickingImage] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+  const [tagsAiLoading, setTagsAiLoading] = useState(false);
   
   const [categories, setCategories] = useState([]);
   const [offers, setOffers] = useState([]);
@@ -119,6 +120,26 @@ export default function MenuItemFormScreen({ route, navigation }) {
       Alert.alert('Error', 'Failed to generate description');
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  const generateTags = async () => {
+    if (!name.trim() || selectedCategories.length === 0) {
+      Alert.alert('Required', 'Enter item name and select at least one category first');
+      return;
+    }
+    setTagsAiLoading(true);
+    try {
+      const response = await api.post('/ai/generate-tags', { 
+        name, 
+        category: selectedCategories,
+        foodType 
+      });
+      setTags(response.data.tags);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to generate tags');
+    } finally {
+      setTagsAiLoading(false);
     }
   };
 
@@ -454,7 +475,23 @@ export default function MenuItemFormScreen({ route, navigation }) {
 
               {/* Tags */}
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Tags</Text>
+                <View style={styles.labelRow}>
+                  <Text style={styles.label}>Tags</Text>
+                  <TouchableOpacity 
+                    style={styles.aiTagsButton} 
+                    onPress={generateTags}
+                    disabled={tagsAiLoading}
+                  >
+                    {tagsAiLoading ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <Ionicons name="sparkles" size={14} color="#fff" />
+                        <Text style={styles.aiTagsButtonText}>AI Generate</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
                 <TextInput
                   style={styles.input}
                   value={tags}
@@ -656,6 +693,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3E8FF', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
   },
   aiButtonText: { fontSize: 12, color: '#8B5CF6', fontWeight: '700' },
+  aiTagsButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#8B5CF6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
+  },
+  aiTagsButtonText: { fontSize: 11, color: '#fff', fontWeight: '700' },
   
   // Price
   priceInputContainer: {

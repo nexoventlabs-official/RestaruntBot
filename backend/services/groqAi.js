@@ -272,6 +272,52 @@ If already standard or you're unsure, return as is.`
     }
   },
 
+  async generateTags(itemName, category, foodType) {
+    try {
+      const client = getGroq();
+      const categoryText = Array.isArray(category) ? category.join(', ') : category;
+      const foodTypeText = foodType === 'veg' ? 'vegetarian' : foodType === 'nonveg' ? 'non-vegetarian' : foodType === 'egg' ? 'contains egg' : '';
+      
+      const completion = await client.chat.completions.create({
+        messages: [{
+          role: 'user',
+          content: `Generate 5-8 relevant search tags for a restaurant menu item.
+
+Item Name: "${itemName}"
+Category: ${categoryText}
+Food Type: ${foodTypeText}
+
+Generate tags that customers might search for. Include:
+- Cuisine type (e.g., indian, chinese, south indian)
+- Taste profile (e.g., spicy, mild, sweet, tangy)
+- Meal type (e.g., breakfast, lunch, dinner, snack)
+- Cooking style (e.g., fried, grilled, steamed)
+- Key ingredients if obvious from name
+- Popular descriptors (e.g., bestseller, popular, homestyle)
+
+Return ONLY comma-separated tags, lowercase, no explanations. Example: spicy, indian, lunch, fried, popular`
+        }],
+        model: 'llama-3.1-8b-instant',
+        max_tokens: 100,
+        temperature: 0.7
+      });
+      
+      const tagsText = completion.choices[0]?.message?.content?.trim() || '';
+      // Clean up the tags - remove any extra formatting
+      const cleanedTags = tagsText
+        .replace(/[\[\]"]/g, '') // Remove brackets and quotes
+        .split(',')
+        .map(tag => tag.trim().toLowerCase())
+        .filter(tag => tag.length > 0 && tag.length < 30) // Filter empty or too long tags
+        .join(', ');
+      
+      return cleanedTags;
+    } catch (error) {
+      console.error('Groq AI tags error:', error);
+      throw new Error('Failed to generate tags: ' + error.message);
+    }
+  },
+
   async processCustomerMessage(message, context, menuItems) {
     try {
       const menuList = menuItems.map(m => `${m.name} (₹${m.price}) - ${m.category}`).join('\n');
