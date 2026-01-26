@@ -180,12 +180,32 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
       dataEvents.emit('menu');
       
       return res.json(updatedCategory);
+    } else {
+      // Schedule disabled - unpause category and make all items available
+      console.log(`[Schedule API] Schedule disabled - unpausing category and making items available`);
+      
+      category.isPaused = false;
+      await category.save();
+      
+      // Make all items in this category available
+      const MenuItem = require('../models/MenuItem');
+      const updateResult = await MenuItem.updateMany(
+        { category: category.name, available: false },
+        { $set: { available: true } }
+      );
+      
+      if (updateResult.modifiedCount > 0) {
+        console.log(`[Schedule API] Made ${updateResult.modifiedCount} item(s) available in ${category.name}`);
+      }
+      
+      // Fetch fresh data
+      const updatedCategory = await Category.findById(category._id);
+      
+      // Emit event for real-time updates
+      dataEvents.emit('menu');
+      
+      return res.json(updatedCategory);
     }
-
-    // Emit event for real-time updates
-    dataEvents.emit('menu');
-
-    res.json(category);
   } catch (error) {
     console.error('[Schedule API] Error:', error);
     res.status(500).json({ error: error.message });
