@@ -183,9 +183,11 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
     } else {
       // Schedule disabled - unpause category and make all items available
       console.log(`[Schedule API] Schedule disabled - unpausing category and making items available`);
+      console.log(`[Schedule API] Category ${category.name} was isPaused: ${category.isPaused}, isSoldOut: ${category.isSoldOut}`);
       
       category.isPaused = false;
       await category.save();
+      console.log(`[Schedule API] Category ${category.name} isPaused set to: false`);
       
       // Make all items in this category available
       const MenuItem = require('../models/MenuItem');
@@ -196,10 +198,13 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
       
       if (updateResult.modifiedCount > 0) {
         console.log(`[Schedule API] Made ${updateResult.modifiedCount} item(s) available in ${category.name}`);
+      } else {
+        console.log(`[Schedule API] No items needed availability update in ${category.name}`);
       }
       
       // Fetch fresh data
       const updatedCategory = await Category.findById(category._id);
+      console.log(`[Schedule API] Returning category with isPaused: ${updatedCategory.isPaused}`);
       
       // Emit event for real-time updates
       dataEvents.emit('menu');
