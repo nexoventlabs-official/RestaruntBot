@@ -16,6 +16,7 @@ import {
 
 const WHATSAPP_NUMBER = '15551858897';
 const API_URL = 'https://restaruntbot.onrender.com/api/public';
+const SETTINGS_URL = 'https://restaruntbot.onrender.com/api/settings';
 const SSE_URL = 'https://restaruntbot.onrender.com/api/events';
 
 const navLinks = [
@@ -37,6 +38,7 @@ export default function UserLayout() {
   const [searchResults, setSearchResults] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
   const [dialogQuantity, setDialogQuantity] = useState(1);
+  const [holidayMode, setHolidayMode] = useState(false);
   const searchInputRef = useRef(null);
   const eventSourceRef = useRef(null);
   const lenisRef = useLenis();
@@ -60,11 +62,13 @@ export default function UserLayout() {
   // Fetch available items and categories
   const loadAvailableItems = async () => {
     try {
-      const [catRes, itemRes] = await Promise.all([
+      const [catRes, itemRes, holidayRes] = await Promise.all([
         axios.get(`${API_URL}/categories`),
-        axios.get(`${API_URL}/menu`)
+        axios.get(`${API_URL}/menu`),
+        axios.get(`${SETTINGS_URL}/holiday/status`).catch(() => ({ data: { holidayMode: false } }))
       ]);
       setCategories(catRes.data);
+      setHolidayMode(holidayRes.data.holidayMode || false);
       
       // Filter items based on active categories
       const activeCategoryNames = catRes.data
@@ -198,12 +202,31 @@ export default function UserLayout() {
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] flex flex-col overflow-x-hidden w-full max-w-full">
+      {/* Holiday Announcement Bar */}
+      {holidayMode && (
+        <div className="fixed top-0 left-0 right-0 z-[60] bg-gradient-to-r from-orange-500 via-red-500 to-orange-500 text-white py-2 overflow-hidden">
+          <div className="animate-marquee whitespace-nowrap flex items-center">
+            <span className="mx-8 flex items-center gap-2">
+              🏖️ We are closed for today! Sorry for any inconvenience. We will be back soon to serve you delicious food! Thank you for your understanding. 🙏
+            </span>
+            <span className="mx-8 flex items-center gap-2">
+              🏖️ We are closed for today! Sorry for any inconvenience. We will be back soon to serve you delicious food! Thank you for your understanding. 🙏
+            </span>
+            <span className="mx-8 flex items-center gap-2">
+              🏖️ We are closed for today! Sorry for any inconvenience. We will be back soon to serve you delicious food! Thank you for your understanding. 🙏
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Offer Popup */}
       <OfferPopup />
 
       {/* Header */}
       <header 
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        className={`fixed left-0 right-0 z-50 transition-all duration-300 ${
+          holidayMode ? 'top-10' : 'top-0'
+        } ${
           scrolled
             ? 'bg-white/70 backdrop-blur-md shadow-sm' 
             : 'bg-transparent'
