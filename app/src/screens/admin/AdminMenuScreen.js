@@ -139,6 +139,7 @@ export default function AdminMenuScreen({ navigation, route }) {
   const [savingCategory, setSavingCategory] = useState(false);
   const [categoryImage, setCategoryImage] = useState(null);
   const [categoryImagePreview, setCategoryImagePreview] = useState('');
+  const [pickingCategoryImage, setPickingCategoryImage] = useState(false);
   const [deletingCategoryId, setDeletingCategoryId] = useState(null);
 
   // Schedule modal
@@ -301,15 +302,20 @@ export default function AdminMenuScreen({ navigation, route }) {
   };
 
   const pickCategoryImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled) {
-      setCategoryImage(result.assets[0]);
-      setCategoryImagePreview(result.assets[0].uri);
+    setPickingCategoryImage(true);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled) {
+        setCategoryImage(result.assets[0]);
+        setCategoryImagePreview(result.assets[0].uri);
+      }
+    } finally {
+      setPickingCategoryImage(false);
     }
   };
 
@@ -1197,15 +1203,35 @@ export default function AdminMenuScreen({ navigation, route }) {
                           </TouchableOpacity>
                         </View>
                       ) : (
-                        <TouchableOpacity style={styles.categoryImagePlaceholder} onPress={pickCategoryImage}>
-                          <Ionicons name="camera-outline" size={32} color="#9ca3af" />
-                          <Text style={styles.categoryImagePlaceholderText}>Add Image</Text>
+                        <TouchableOpacity 
+                          style={styles.categoryImagePlaceholder} 
+                          onPress={pickCategoryImage}
+                          disabled={pickingCategoryImage}
+                        >
+                          {pickingCategoryImage ? (
+                            <ActivityIndicator size="small" color="#E23744" />
+                          ) : (
+                            <>
+                              <Ionicons name="camera-outline" size={32} color="#9ca3af" />
+                              <Text style={styles.categoryImagePlaceholderText}>Add Image</Text>
+                            </>
+                          )}
                         </TouchableOpacity>
                       )}
                       {categoryImagePreview && (
-                        <TouchableOpacity style={styles.changeCategoryImageButton} onPress={pickCategoryImage}>
-                          <Ionicons name="image-outline" size={18} color="#696969" />
-                          <Text style={styles.changeCategoryImageText}>Change</Text>
+                        <TouchableOpacity 
+                          style={styles.changeCategoryImageButton} 
+                          onPress={pickCategoryImage}
+                          disabled={pickingCategoryImage}
+                        >
+                          {pickingCategoryImage ? (
+                            <ActivityIndicator size="small" color="#696969" />
+                          ) : (
+                            <>
+                              <Ionicons name="image-outline" size={18} color="#696969" />
+                              <Text style={styles.changeCategoryImageText}>Change</Text>
+                            </>
+                          )}
                         </TouchableOpacity>
                       )}
                     </View>
