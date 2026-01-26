@@ -19,7 +19,7 @@ const checkCartAvailability = async (cart) => {
   
   const unavailableItems = [];
   const categories = await Category.find({ isActive: true });
-  const pausedCategories = categories.filter(c => c.isPaused).map(c => c.name);
+  const unavailableCategories = categories.filter(c => c.isPaused || c.isSoldOut).map(c => c.name);
   
   for (const cartItem of cart) {
     const menuItem = await MenuItem.findById(cartItem.menuItem);
@@ -34,10 +34,10 @@ const checkCartAvailability = async (cart) => {
       continue;
     }
     
-    // Check if item's category is paused
+    // Check if ALL of item's categories are paused/soldOut (item unavailable only if ALL categories locked)
     const itemCategories = Array.isArray(menuItem.category) ? menuItem.category : [menuItem.category];
-    const allCategoriesPaused = itemCategories.every(cat => pausedCategories.includes(cat));
-    if (allCategoriesPaused) {
+    const allCategoriesUnavailable = itemCategories.every(cat => unavailableCategories.includes(cat));
+    if (allCategoriesUnavailable) {
       unavailableItems.push({ name: menuItem.name, reason: 'category_paused' });
     }
   }
@@ -1952,6 +1952,12 @@ const chatbot = {
         const hasAvailableCategory = itemCategories.some(cat => !unavailableCategoryNames.includes(cat));
         return hasAvailableCategory;
       });
+    
+    // Debug log - shows which categories are locked and how many items filtered
+    if (unavailableCategoryNames.length > 0) {
+      console.log(`🔒 Locked categories: [${unavailableCategoryNames.join(', ')}]`);
+      console.log(`📦 Items: ${allMenuItems.length} total → ${menuItems.length} available (${allMenuItems.length - menuItems.length} filtered out)`);
+    }
     
     const state = customer.conversationState || { currentStep: 'welcome' };
     
