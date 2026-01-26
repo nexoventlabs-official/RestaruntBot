@@ -33,23 +33,22 @@ const convertTo24Hour = (hours12, period) => {
 };
 
 // Time Picker Component for individual day
-const DayTimePicker = ({ day, daySchedule, onUpdate }) => {
-  const startTime = daySchedule?.startTime || '09:00';
-  const endTime = daySchedule?.endTime || '22:00';
+const DayTimePicker = ({ day, daySchedule, onUpdate, defaultStartTime, defaultEndTime }) => {
+  const startTime = daySchedule?.startTime || defaultStartTime || '09:00';
+  const endTime = daySchedule?.endTime || defaultEndTime || '22:00';
   const enabled = daySchedule?.enabled !== false;
 
   const updateDayTime = (field, time) => {
     onUpdate(day.value, { 
-      ...daySchedule, 
       day: day.value,
       enabled: true,
-      [field]: time 
+      startTime: field === 'startTime' ? time : startTime,
+      endTime: field === 'endTime' ? time : endTime
     });
   };
 
   const toggleDayEnabled = () => {
     onUpdate(day.value, { 
-      ...daySchedule, 
       day: day.value,
       enabled: !enabled,
       startTime: startTime,
@@ -219,8 +218,8 @@ export default function CategoryScheduleModal({
     return scheduleForm.customDays?.find(d => d.day === dayValue) || {
       day: dayValue,
       enabled: false,
-      startTime: '09:00',
-      endTime: '22:00'
+      startTime: scheduleForm.startTime || '09:00',
+      endTime: scheduleForm.endTime || '22:00'
     };
   };
 
@@ -474,6 +473,8 @@ export default function CategoryScheduleModal({
                         day={day}
                         daySchedule={getDaySchedule(day.value)}
                         onUpdate={updateDaySchedule}
+                        defaultStartTime={scheduleForm.startTime}
+                        defaultEndTime={scheduleForm.endTime}
                       />
                     ))}
                   </View>

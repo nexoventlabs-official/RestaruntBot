@@ -123,10 +123,13 @@ class CategoryScheduler {
       }
 
       console.log(`\n[Category Scheduler] ========== Checking ${category.name} ==========`);
-      console.log(`  Schedule: ${category.schedule.startTime} to ${category.schedule.endTime}`);
       console.log(`  Type: ${category.schedule.type}`);
-      if (category.schedule.type === 'custom') {
-        console.log(`  Days: ${category.schedule.days.join(', ')}`);
+      if (category.schedule.type === 'custom' && category.schedule.customDays?.length > 0) {
+        console.log(`  Custom Days: ${JSON.stringify(category.schedule.customDays)}`);
+      } else if (category.schedule.type === 'custom') {
+        console.log(`  Days: ${category.schedule.days?.join(', ')} (using global times: ${category.schedule.startTime} to ${category.schedule.endTime})`);
+      } else {
+        console.log(`  Daily Schedule: ${category.schedule.startTime} to ${category.schedule.endTime}`);
       }
 
       const shouldBeActive = this.isWithinSchedule(category.schedule);
