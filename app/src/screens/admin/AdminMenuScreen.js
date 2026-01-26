@@ -607,13 +607,19 @@ export default function AdminMenuScreen({ navigation, route }) {
     [categories]
   );
 
-  // Get scheduled locked category names (has schedule enabled AND currently paused)
+  // Get scheduled locked category names (has schedule enabled AND currently paused due to schedule)
   const scheduledLockedCategoryNames = useMemo(() => 
     categories.filter(c => c.schedule?.enabled && c.isPaused && !c.isSoldOut).map(c => c.name),
     [categories]
   );
 
-  // Check if item is unavailable due to category status
+  // Get manually paused category names (paused but NOT scheduled, or sold out)
+  const manuallyPausedCategoryNames = useMemo(() => 
+    categories.filter(c => (c.isPaused && !c.schedule?.enabled) || c.isSoldOut).map(c => c.name),
+    [categories]
+  );
+
+  // Check if item is unavailable due to category status (ALL categories unavailable)
   const isItemCategoryUnavailable = useCallback((item) => {
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
     // Item is unavailable if ALL its categories are unavailable
@@ -624,16 +630,28 @@ export default function AdminMenuScreen({ navigation, route }) {
   // Show lock if ANY of the item's categories is scheduled and locked
   const isItemScheduledLocked = useCallback((item) => {
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-    
     // Show lock if ANY of the item's categories is scheduled locked
     return itemCategories.some(cat => scheduledLockedCategoryNames.includes(cat));
   }, [scheduledLockedCategoryNames]);
   
-  // Get which categories are causing the item to be locked (for display)
+  // Check if item is in a manually paused category (not scheduled)
+  const isItemManuallyPaused = useCallback((item) => {
+    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+    // Show if ANY of the item's categories is manually paused
+    return itemCategories.some(cat => manuallyPausedCategoryNames.includes(cat));
+  }, [manuallyPausedCategoryNames]);
+  
+  // Get which categories are causing the item to be scheduled locked (for display)
   const getItemLockedCategories = useCallback((item) => {
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
     return itemCategories.filter(cat => scheduledLockedCategoryNames.includes(cat));
   }, [scheduledLockedCategoryNames]);
+  
+  // Get which categories are causing the item to be manually paused (for display)
+  const getItemManuallyPausedCategories = useCallback((item) => {
+    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+    return itemCategories.filter(cat => manuallyPausedCategoryNames.includes(cat));
+  }, [manuallyPausedCategoryNames]);
 
   // Filter items - memoized
   const filteredItems = useMemo(() => {
@@ -662,7 +680,12 @@ export default function AdminMenuScreen({ navigation, route }) {
   const renderItem = useCallback(({ item, index }) => {
     const isCategoryUnavailable = isItemCategoryUnavailable(item);
     const isScheduledLocked = isItemScheduledLocked(item);
+    const isManuallyPaused = isItemManuallyPaused(item);
     const lockedCategories = getItemLockedCategories(item);
+    const manuallyPausedCategories = getItemManuallyPausedCategories(item);
+    
+    // Item has some lock if it's scheduled locked OR manually paused
+    const hasAnyLock = isScheduledLocked || isManuallyPaused;
 
     return (
       <Animated.View style={{
@@ -673,7 +696,7 @@ export default function AdminMenuScreen({ navigation, route }) {
           style={[
             styles.itemCard, 
             isScheduledLocked && styles.itemCardScheduled,
-            isCategoryUnavailable && !isScheduledLocked && styles.itemCardPaused,
+            isManuallyPaused && !isScheduledLocked && styles.itemCardPaused,
             !item.available && styles.itemCardOutOfStock
           ]}
           onPress={() => navigation.navigate('MenuItemForm', { item })}
@@ -683,19 +706,19 @@ export default function AdminMenuScreen({ navigation, route }) {
             {item.image ? (
               <Image
                 source={{ uri: item.image, cache: 'force-cache' }}
-                style={[styles.itemImage, (isCategoryUnavailable || isScheduledLocked) && styles.itemImagePaused]}
+                style={[styles.itemImage, hasAnyLock && styles.itemImagePaused]}
                 defaultSource={require('../../../assets/icon.png')}
                 resizeMode="cover"
               />
             ) : (
-              <View style={[styles.itemImage, styles.placeholderImage, (isCategoryUnavailable || isScheduledLocked) && styles.placeholderImagePaused]}>
-                <Ionicons name="restaurant-outline" size={32} color={(isCategoryUnavailable || isScheduledLocked) ? '#9ca3af' : '#d1d5db'} />
+              <View style={[styles.itemImage, styles.placeholderImage, hasAnyLock && styles.placeholderImagePaused]}>
+                <Ionicons name="restaurant-outline" size={32} color={hasAnyLock ? '#9ca3af' : '#d1d5db'} />
               </View>
             )}
-            {/* Lock Icon for Scheduled Items */}
-            {isScheduledLocked && (
+            {/* Lock Icon for Scheduled or Paused Items */}
+            {hasAnyLock && (
               <View style={styles.itemLockOverlay}>
-                <View style={styles.itemLockBadge}>
+                <View style={[styles.itemLockBadge, isManuallyPaused && !isScheduledLocked && { backgroundColor: '#ef4444' }]}>
                   <Ionicons name="lock-closed" size={16} color="#fff" />
                 </View>
               </View>
@@ -710,18 +733,18 @@ export default function AdminMenuScreen({ navigation, route }) {
             )}
             {item.foodType && item.foodType !== 'none' && (
               <View style={[styles.foodTypeBadge, {
-                borderColor: (isCategoryUnavailable || isScheduledLocked) ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
+                borderColor: hasAnyLock ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
               }]}>
                 <View style={[styles.foodTypeDot, {
-                  backgroundColor: (isCategoryUnavailable || isScheduledLocked) ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
+                  backgroundColor: hasAnyLock ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
                 }]} />
               </View>
             )}
           </View>
 
           <View style={styles.itemInfo}>
-            <Text style={[styles.itemName, (isCategoryUnavailable || isScheduledLocked) && styles.textPaused]} numberOfLines={1}>{item.name}</Text>
-            <Text style={[styles.itemCategory, (isCategoryUnavailable || isScheduledLocked) && styles.textPaused]} numberOfLines={1}>
+            <Text style={[styles.itemName, hasAnyLock && styles.textPaused]} numberOfLines={1}>{item.name}</Text>
+            <Text style={[styles.itemCategory, hasAnyLock && styles.textPaused]} numberOfLines={1}>
               {Array.isArray(item.category) ? item.category.join(', ') : item.category}
             </Text>
             {item.preparationTime > 0 && (
@@ -734,11 +757,11 @@ export default function AdminMenuScreen({ navigation, route }) {
               <View style={styles.priceContainer}>
                 {item.offerPrice && item.offerPrice < item.price ? (
                   <View style={styles.priceRow}>
-                    <Text style={[styles.originalPrice, (isCategoryUnavailable || isScheduledLocked) && styles.pricePaused]}>₹{item.price}</Text>
-                    <Text style={[styles.offerPrice, (isCategoryUnavailable || isScheduledLocked) && styles.pricePaused]}>₹{item.offerPrice}</Text>
+                    <Text style={[styles.originalPrice, hasAnyLock && styles.pricePaused]}>₹{item.price}</Text>
+                    <Text style={[styles.offerPrice, hasAnyLock && styles.pricePaused]}>₹{item.offerPrice}</Text>
                   </View>
                 ) : (
-                  <Text style={[styles.itemPrice, (isCategoryUnavailable || isScheduledLocked) && styles.pricePaused]}>₹{item.price}</Text>
+                  <Text style={[styles.itemPrice, hasAnyLock && styles.pricePaused]}>₹{item.price}</Text>
                 )}
               </View>
               {isScheduledLocked ? (
@@ -748,9 +771,12 @@ export default function AdminMenuScreen({ navigation, route }) {
                     {lockedCategories.length === 1 ? lockedCategories[0] : `${lockedCategories.length} Cat.`}
                   </Text>
                 </View>
-              ) : isCategoryUnavailable ? (
+              ) : isManuallyPaused ? (
                 <View style={styles.pausedStatusBadge}>
-                  <Text style={styles.pausedStatusText}>Cat. Closed</Text>
+                  <Ionicons name="lock-closed" size={10} color="#ef4444" />
+                  <Text style={styles.pausedStatusText} numberOfLines={1}>
+                    {manuallyPausedCategories.length === 1 ? manuallyPausedCategories[0] : `${manuallyPausedCategories.length} Cat.`}
+                  </Text>
                 </View>
               ) : (
                 <TouchableOpacity
@@ -784,7 +810,7 @@ export default function AdminMenuScreen({ navigation, route }) {
         </TouchableOpacity>
       </Animated.View>
     );
-  }, [fadeAnim, scaleAnim, isItemCategoryUnavailable, isItemScheduledLocked, getItemLockedCategories, navigation, togglingId]);
+  }, [fadeAnim, scaleAnim, isItemCategoryUnavailable, isItemScheduledLocked, isItemManuallyPaused, getItemLockedCategories, getItemManuallyPausedCategories, navigation, togglingId]);
 
   const keyExtractor = useCallback((item) => item._id, []);
 
@@ -1795,8 +1821,8 @@ const styles = StyleSheet.create({
   pricePaused: { color: '#9CA3AF' },
   availabilityToggle: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, minWidth: 80, alignItems: 'center' },
   availabilityText: { fontSize: 12, fontWeight: '700' },
-  pausedStatusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: '#FEF3C7' },
-  pausedStatusText: { fontSize: 11, fontWeight: '700', color: '#D97706' },
+  pausedStatusBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, backgroundColor: '#FEE2E2', maxWidth: 100 },
+  pausedStatusText: { fontSize: 10, fontWeight: '700', color: '#ef4444' },
   deleteButton: { padding: 12, marginLeft: 4 },
 
   // Empty
