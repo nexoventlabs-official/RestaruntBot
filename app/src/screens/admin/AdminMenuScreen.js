@@ -602,6 +602,7 @@ export default function AdminMenuScreen({ navigation, route }) {
   };
 
   // Get unavailable category names (paused or sold out) - memoized
+  // Non-scheduled categories are "available" unless manually paused or sold out
   const unavailableCategoryNames = useMemo(() => 
     categories.filter(c => c.isPaused || c.isSoldOut).map(c => c.name),
     [categories]
@@ -619,6 +620,16 @@ export default function AdminMenuScreen({ navigation, route }) {
     [categories]
   );
 
+  // Check if item has at least one ACTIVE category (not locked/paused)
+  // This includes non-scheduled categories that are not manually paused
+  // Example: Item in "Dinner"(locked) + "Tiffin"(locked) + "South Indian"(active) → has active category
+  const hasItemActiveCategory = useCallback((item) => {
+    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+    // Item has active category if ANY category is NOT in unavailable list
+    // Non-scheduled categories are always active unless manually paused/sold out
+    return itemCategories.some(cat => !unavailableCategoryNames.includes(cat));
+  }, [unavailableCategoryNames]);
+
   // Check if item is unavailable due to category status (ALL categories unavailable)
   const isItemCategoryUnavailable = useCallback((item) => {
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
@@ -626,20 +637,77 @@ export default function AdminMenuScreen({ navigation, route }) {
     return itemCategories.every(cat => unavailableCategoryNames.includes(cat));
   }, [unavailableCategoryNames]);
 
-  // Check if item is in a scheduled locked category
-  // Show lock if ANY of the item's categories is scheduled and locked
+  // Check if currently viewing category is locked (scheduled or manual)
+  const isSelectedCategoryLocked = useMemo(() => {
+    if (selectedCategory === 'all') return false;
+    return unavailableCategoryNames.includes(selectedCategory);
+  }, [selectedCategory, unavailableCategoryNames]);
+
+  // Check if currently viewing a scheduled category that is ACTIVE (within time)
+  const isSelectedCategoryScheduledActive = useMemo(() => {
+    if (selectedCategory === 'all') return false;
+    const category = categories.find(c => c.name === selectedCategory);
+    // Category is scheduled active if it has schedule enabled AND is NOT paused (within active time)
+    return category?.schedule?.enabled && !category?.isPaused && !category?.isSoldOut;
+  }, [selectedCategory, categories]);
+
+  // Get scheduled categories that are currently ACTIVE (within time, not paused)
+  const scheduledActiveCategoryNames = useMemo(() => 
+    categories.filter(c => c.schedule?.enabled && !c.isPaused && !c.isSoldOut).map(c => c.name),
+    [categories]
+  );
+
+  // Check if item has at least one scheduled category that is currently ACTIVE
+  const hasItemScheduledActiveCategory = useCallback((item) => {
+    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+    return itemCategories.some(cat => scheduledActiveCategoryNames.includes(cat));
+  }, [scheduledActiveCategoryNames]);
+
+  // Check if item should show scheduled lock icon
+  // Show lock if item has ANY scheduled locked category
+  // BUT don't show lock if:
+  // 1. Viewing a scheduled category that is currently ACTIVE, OR
+  // 2. Item has ANY scheduled category that is currently ACTIVE
   const isItemScheduledLocked = useCallback((item) => {
+    // If viewing a scheduled category that is ACTIVE, don't show any locks
+    if (isSelectedCategoryScheduledActive) {
+      return false;
+    }
+    
+    // If item has any scheduled category that is ACTIVE, don't show locks
+    if (hasItemScheduledActiveCategory(item)) {
+      return false;
+    }
+    
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-    // Show lock if ANY of the item's categories is scheduled locked
+    
+    // Show lock if ANY of item's categories is scheduled locked
     return itemCategories.some(cat => scheduledLockedCategoryNames.includes(cat));
-  }, [scheduledLockedCategoryNames]);
+  }, [scheduledLockedCategoryNames, isSelectedCategoryScheduledActive, hasItemScheduledActiveCategory]);
   
-  // Check if item is in a manually paused category (not scheduled)
+  // Check if item should show manually paused lock icon
+  // Show lock if item has ANY manually paused category (but not if already showing scheduled lock)
+  // BUT don't show lock if item has ANY scheduled category that is currently ACTIVE
   const isItemManuallyPaused = useCallback((item) => {
+    // If viewing a scheduled category that is ACTIVE, don't show any locks
+    if (isSelectedCategoryScheduledActive) {
+      return false;
+    }
+    
+    // If item has any scheduled category that is ACTIVE, don't show locks
+    if (hasItemScheduledActiveCategory(item)) {
+      return false;
+    }
+    
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-    // Show if ANY of the item's categories is manually paused
+    
+    // Don't show manual pause if already showing scheduled lock
+    const hasScheduledLock = itemCategories.some(cat => scheduledLockedCategoryNames.includes(cat));
+    if (hasScheduledLock) return false;
+    
+    // Show lock if ANY of item's categories is manually paused
     return itemCategories.some(cat => manuallyPausedCategoryNames.includes(cat));
-  }, [manuallyPausedCategoryNames]);
+  }, [manuallyPausedCategoryNames, scheduledLockedCategoryNames, isSelectedCategoryScheduledActive, hasItemScheduledActiveCategory]);
   
   // Get which categories are causing the item to be scheduled locked (for display)
   const getItemLockedCategories = useCallback((item) => {

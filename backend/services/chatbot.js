@@ -18,8 +18,12 @@ const checkCartAvailability = async (cart) => {
   if (!cart || cart.length === 0) return { available: true, unavailableItems: [] };
   
   const unavailableItems = [];
-  const categories = await Category.find({ isActive: true });
-  const unavailableCategories = categories.filter(c => c.isPaused || c.isSoldOut).map(c => c.name);
+  const allCategories = await Category.find({ isActive: true });
+  
+  // Get scheduled categories that are currently ACTIVE
+  const scheduledActiveCategories = allCategories
+    .filter(c => c.schedule?.enabled && !c.isPaused && !c.isSoldOut)
+    .map(c => c.name);
   
   for (const cartItem of cart) {
     const menuItem = await MenuItem.findById(cartItem.menuItem);
@@ -34,10 +38,20 @@ const checkCartAvailability = async (cart) => {
       continue;
     }
     
-    // Check if ALL of item's categories are paused/soldOut (item unavailable only if ALL categories locked)
+    // Check if item has at least one active category
     const itemCategories = Array.isArray(menuItem.category) ? menuItem.category : [menuItem.category];
-    const allCategoriesUnavailable = itemCategories.every(cat => unavailableCategories.includes(cat));
-    if (allCategoriesUnavailable) {
+    
+    // Check if item has any scheduled category that is ACTIVE
+    const hasScheduledActiveCategory = itemCategories.some(cat => scheduledActiveCategories.includes(cat));
+    
+    // Check if item has any non-scheduled category that is not locked
+    const hasActiveNonScheduledCategory = itemCategories.some(cat => {
+      const category = allCategories.find(c => c.name === cat);
+      return category && !category.schedule?.enabled && !category.isPaused && !category.isSoldOut;
+    });
+    
+    // Item is unavailable if it has no active categories
+    if (!hasScheduledActiveCategory && !hasActiveNonScheduledCategory) {
       unavailableItems.push({ name: menuItem.name, reason: 'category_paused' });
     }
   }
@@ -1933,29 +1947,45 @@ const chatbot = {
       console.error('[Chatbot] Failed to save WhatsApp contact:', err.message);
     });
 
-    // Get unavailable categories (paused or sold out) to filter them out from chatbot
-    const unavailableCategories = await Category.find({ 
-      $or: [{ isPaused: true }, { isSoldOut: true }] 
-    }).select('name');
-    const unavailableCategoryNames = unavailableCategories.map(c => c.name);
+    // Get all categories to check schedule status
+    const allCategories = await Category.find({ isActive: true });
+    
+    // Get scheduled categories that are currently ACTIVE (within time, not paused)
+    const scheduledActiveCategories = allCategories
+      .filter(c => c.schedule?.enabled && !c.isPaused && !c.isSoldOut)
+      .map(c => c.name);
+    
+    // Get locked categories (paused or sold out)
+    const lockedCategories = allCategories
+      .filter(c => c.isPaused || c.isSoldOut)
+      .map(c => c.name);
     
     // Get available menu items:
-    // - If item is in multiple categories and ALL are locked/paused -> HIDE item
-    // - If item is in multiple categories and at least ONE is active -> SHOW item
-    // Example: Item in "Lunch" (locked) and "Dinner" (active) -> SHOW
-    // Example: Item in "Lunch" (locked) and "Breakfast" (locked) -> HIDE
+    // Item is available if it has at least ONE scheduled category that is ACTIVE
+    // OR if it has at least ONE non-scheduled category that is not locked
     const allMenuItems = await MenuItem.find({ available: true });
     const menuItems = allMenuItems
       .filter(item => {
         const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-        // Show item if at least ONE category is available (not locked/paused)
-        const hasAvailableCategory = itemCategories.some(cat => !unavailableCategoryNames.includes(cat));
-        return hasAvailableCategory;
+        
+        // Check if item has any scheduled category that is ACTIVE
+        const hasScheduledActiveCategory = itemCategories.some(cat => scheduledActiveCategories.includes(cat));
+        if (hasScheduledActiveCategory) return true;
+        
+        // Check if item has any non-scheduled category that is not locked
+        const hasActiveNonScheduledCategory = itemCategories.some(cat => {
+          const category = allCategories.find(c => c.name === cat);
+          // Category is active if: not scheduled AND not locked
+          return category && !category.schedule?.enabled && !category.isPaused && !category.isSoldOut;
+        });
+        
+        return hasActiveNonScheduledCategory;
       });
     
-    // Debug log - shows which categories are locked and how many items filtered
-    if (unavailableCategoryNames.length > 0) {
-      console.log(`🔒 Locked categories: [${unavailableCategoryNames.join(', ')}]`);
+    // Debug log - shows which categories are active/locked and how many items filtered
+    if (lockedCategories.length > 0 || scheduledActiveCategories.length > 0) {
+      console.log(`✅ Scheduled ACTIVE categories: [${scheduledActiveCategories.join(', ')}]`);
+      console.log(`🔒 Locked categories: [${lockedCategories.join(', ')}]`);
       console.log(`📦 Items: ${allMenuItems.length} total → ${menuItems.length} available (${allMenuItems.length - menuItems.length} filtered out)`);
     }
     
