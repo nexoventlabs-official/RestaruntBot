@@ -2969,7 +2969,12 @@ const chatbot = {
             // Show message that search didn't find exact match, showing menu instead
             const searchTerm = this.removeFoodTypeKeywords(msg.toLowerCase().trim());
             if (searchTerm.length >= 2) {
-              await whatsapp.sendMessage(phone, `🔍 No items found for "${searchTerm}". Here's our ${label.replace(/[🌿🥚🍗🍽️]\s*/, '')}:`);
+              const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+              if (itemNotAvailableImg) {
+                await whatsapp.sendImage(phone, itemNotAvailableImg, `🔍 No items found for "${searchTerm}". Here's our ${label.replace(/[🌿🥚🍗🍽️]\s*/, '')}:`);
+              } else {
+                await whatsapp.sendMessage(phone, `🔍 No items found for "${searchTerm}". Here's our ${label.replace(/[🌿🥚🍗🍽️]\s*/, '')}:`);
+              }
             }
             await this.sendMenuCategoriesWithLabel(phone, filteredItems, label);
             state.currentStep = 'select_category';
@@ -3005,7 +3010,12 @@ const chatbot = {
         else if (msg.length >= 2 && /^[a-zA-Z\u0900-\u097F\u0C00-\u0C7F\u0B80-\u0BFF\u0C80-\u0CFF\u0D00-\u0D7F\u0980-\u09FF\u0A80-\u0AFF\s]+$/.test(msg)) {
           // Looks like a search term (letters only, including Indian languages)
           // Already tried smartSearch above, so just show menu
-          await whatsapp.sendMessage(phone, `🔍 No items found for "${msg}". Here's our menu:`);
+          const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+          if (itemNotAvailableImg) {
+            await whatsapp.sendImage(phone, itemNotAvailableImg, `🔍 No items found for "${msg}". Here's our menu:`);
+          } else {
+            await whatsapp.sendMessage(phone, `🔍 No items found for "${msg}". Here's our menu:`);
+          }
           await this.sendMenuCategoriesWithLabel(phone, menuItems, '🍽️ All Menu');
           state.currentStep = 'select_category';
         }
@@ -3300,7 +3310,11 @@ const chatbot = {
   // Send items matching a tag keyword (for tag-based search)
   async sendItemsByTag(phone, items, tagKeyword, page = 0) {
     if (!items.length) {
-      await whatsapp.sendButtons(phone, `🔍 No items found for "${tagKeyword}".`, [
+      const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+      if (itemNotAvailableImg) {
+        await whatsapp.sendImage(phone, itemNotAvailableImg, `🔍 No items found for "${tagKeyword}".`);
+      }
+      await whatsapp.sendButtons(phone, itemNotAvailableImg ? 'What would you like to do?' : `🔍 No items found for "${tagKeyword}".`, [
         { id: 'view_menu', text: 'Browse Menu' },
         { id: 'home', text: 'Main Menu' }
       ]);
