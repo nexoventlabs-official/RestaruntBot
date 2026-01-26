@@ -67,9 +67,35 @@ router.get('/categories', async (req, res) => {
       .filter(c => c.schedule?.enabled && !c.isPaused && !c.isSoldOut)
       .map(c => c.name);
     
+    // Get scheduled categories that are LOCKED
+    const scheduledLockedCategories = allCategories
+      .filter(c => c.schedule?.enabled && (c.isPaused || c.isSoldOut))
+      .map(c => c.name);
+    
+    // Helper to check if an item is available (matches app behavior)
+    const isItemAvailable = (item) => {
+      const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+      
+      // If item has ANY scheduled ACTIVE category → available
+      const hasScheduledActiveCategory = itemCategories.some(cat => scheduledActiveCategories.includes(cat));
+      if (hasScheduledActiveCategory) return true;
+      
+      // If item has ANY scheduled LOCKED category → not available
+      const hasScheduledLockedCategory = itemCategories.some(cat => scheduledLockedCategories.includes(cat));
+      if (hasScheduledLockedCategory) return false;
+      
+      // Item has no scheduled categories - check non-scheduled
+      const hasActiveNonScheduledCategory = itemCategories.some(cat => {
+        const catObj = allCategories.find(c => c.name === cat);
+        return catObj && !catObj.schedule?.enabled && !catObj.isPaused && !catObj.isSoldOut;
+      });
+      
+      return hasActiveNonScheduledCategory;
+    };
+    
     // Filter categories to only show those with available items
     const availableCategories = allCategories.filter(category => {
-      // Check if category itself is available
+      // Check if category itself is available (not locked)
       const isCategoryAvailable = 
         // Scheduled and ACTIVE
         (category.schedule?.enabled && !category.isPaused && !category.isSoldOut) ||
@@ -85,21 +111,7 @@ router.get('/categories', async (req, res) => {
       });
       
       // Check if any item in this category is available
-      const hasAvailableItems = categoryItems.some(item => {
-        const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-        
-        // Item is available if it has any scheduled category that is ACTIVE
-        const hasScheduledActiveCategory = itemCategories.some(cat => scheduledActiveCategories.includes(cat));
-        if (hasScheduledActiveCategory) return true;
-        
-        // Item is available if it has any non-scheduled category that is not locked
-        const hasActiveNonScheduledCategory = itemCategories.some(cat => {
-          const catObj = allCategories.find(c => c.name === cat);
-          return catObj && !catObj.schedule?.enabled && !catObj.isPaused && !catObj.isSoldOut;
-        });
-        
-        return hasActiveNonScheduledCategory;
-      });
+      const hasAvailableItems = categoryItems.some(item => isItemAvailable(item));
       
       return hasAvailableItems;
     });
@@ -128,26 +140,34 @@ router.get('/menu', async (req, res) => {
       .filter(c => c.schedule?.enabled && !c.isPaused && !c.isSoldOut)
       .map(c => c.name);
     
+    // Get scheduled categories that are LOCKED
+    const scheduledLockedCategories = allCategories
+      .filter(c => c.schedule?.enabled && (c.isPaused || c.isSoldOut))
+      .map(c => c.name);
+    
     // Get all active offer types
     const activeOffers = await Offer.find({ isActive: true }).select('offerType');
     const activeOfferTypes = activeOffers.map(o => o.offerType).filter(Boolean);
     
-    // Filter items:
-    // 1. Only show active offer types
-    // 2. Item is available if it has at least ONE scheduled category that is ACTIVE
-    //    OR if it has at least ONE non-scheduled category that is not locked
+    // Filter items (matches app behavior):
+    // 1. If item has ANY scheduled ACTIVE category → SHOW
+    // 2. If item has ANY scheduled LOCKED category (and no scheduled active) → HIDE
+    // 3. If item has NO scheduled categories → show if any non-scheduled category is not locked
     const filteredItems = items
       .filter(item => {
         const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
         
-        // Check if item has any scheduled category that is ACTIVE
+        // Check if item has any scheduled category that is ACTIVE → SHOW
         const hasScheduledActiveCategory = itemCategories.some(cat => scheduledActiveCategories.includes(cat));
         if (hasScheduledActiveCategory) return true;
         
-        // Check if item has any non-scheduled category that is not locked
+        // Check if item has any scheduled category that is LOCKED → HIDE
+        const hasScheduledLockedCategory = itemCategories.some(cat => scheduledLockedCategories.includes(cat));
+        if (hasScheduledLockedCategory) return false;
+        
+        // Item has no scheduled categories - check if any non-scheduled category is active
         const hasActiveNonScheduledCategory = itemCategories.some(cat => {
           const category = allCategories.find(c => c.name === cat);
-          // Category is active if: not scheduled AND not locked
           return category && !category.schedule?.enabled && !category.isPaused && !category.isSoldOut;
         });
         
