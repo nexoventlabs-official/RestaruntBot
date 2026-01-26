@@ -112,17 +112,17 @@ class CategoryScheduler {
       // Only update if status needs to change
       // When within schedule, category should NOT be paused (isPaused = false)
       // When outside schedule, category should be paused (isPaused = true)
+      // NOTE: Scheduled categories only set isPaused, NOT isSoldOut (sold out is separate manual action)
       if (category.isPaused !== shouldBePaused) {
         const oldStatus = category.isPaused ? 'PAUSED' : 'ACTIVE';
         const newStatus = shouldBePaused ? 'PAUSED' : 'ACTIVE';
         
         category.isPaused = shouldBePaused;
-        // Also update soldOut status based on schedule
-        category.isSoldOut = shouldBePaused;
+        // Do NOT set isSoldOut - that's for manual sold out action only
         await category.save();
         
         console.log(`  ✓ STATUS CHANGED: ${oldStatus} → ${newStatus}`);
-        console.log(`[Category Scheduler] ${category.name}: ${shouldBePaused ? '⏸️  PAUSED (outside schedule)' : '▶️  RESUMED (within schedule)'}`);
+        console.log(`[Category Scheduler] ${category.name}: ${shouldBePaused ? '🔒 LOCKED (outside schedule)' : '▶️  RESUMED (within schedule)'}`);
         
         // When category RESUMES (becomes active), make all items in this category available
         if (!shouldBePaused) {
