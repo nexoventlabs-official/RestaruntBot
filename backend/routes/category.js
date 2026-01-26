@@ -192,8 +192,8 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
 });
 
 // Toggle sold out status for category
-// NOTE: Category sold out only hides the category from menu
-// Items remain available in other categories - use item-level toggle for complete unavailability
+// When sold out: marks all items in this category as out of stock
+// When resumed: marks all items in this category as available
 router.patch('/:id/toggle-soldout', authMiddleware, async (req, res) => {
   try {
     const category = await Category.findById(req.params.id);
@@ -211,7 +211,22 @@ router.patch('/:id/toggle-soldout', authMiddleware, async (req, res) => {
     
     await category.save();
     
-    console.log(`[Category] "${category.name}" ${category.isSoldOut ? 'marked SOLD OUT' : 'RESUMED'} - category visibility updated`);
+    // Update all items in this category
+    if (category.isSoldOut) {
+      // Mark all items in this category as out of stock
+      const result = await MenuItem.updateMany(
+        { category: category.name },
+        { $set: { available: false } }
+      );
+      console.log(`[Category] "${category.name}" marked SOLD OUT - ${result.modifiedCount} item(s) marked out of stock`);
+    } else {
+      // Mark all items in this category as available
+      const result = await MenuItem.updateMany(
+        { category: category.name },
+        { $set: { available: true } }
+      );
+      console.log(`[Category] "${category.name}" RESUMED - ${result.modifiedCount} item(s) marked available`);
+    }
     
     // Emit event for real-time updates
     dataEvents.emit('menu');
@@ -223,7 +238,8 @@ router.patch('/:id/toggle-soldout', authMiddleware, async (req, res) => {
 });
 
 // Schedule sold out for category (temporary sold out until specific time)
-// NOTE: Only hides category from menu, items remain available in other categories
+// When sold out: marks all items in this category as out of stock
+// When schedule expires: scheduler will mark items as available again
 router.patch('/:id/schedule-soldout', authMiddleware, async (req, res) => {
   try {
     const { enabled, endTime } = req.body;
@@ -243,10 +259,16 @@ router.patch('/:id/schedule-soldout', authMiddleware, async (req, res) => {
       timezone: 'Asia/Kolkata'
     };
     
-    // If scheduling sold out, mark category as sold out
+    // If scheduling sold out, mark category as sold out and items as unavailable
     if (enabled && endTime) {
       category.isSoldOut = true;
-      console.log(`[Category] "${category.name}" scheduled SOLD OUT until ${endTime}`);
+      
+      // Mark all items in this category as out of stock
+      const result = await MenuItem.updateMany(
+        { category: category.name },
+        { $set: { available: false } }
+      );
+      console.log(`[Category] "${category.name}" scheduled SOLD OUT until ${endTime} - ${result.modifiedCount} item(s) marked out of stock`);
     }
     
     await category.save();

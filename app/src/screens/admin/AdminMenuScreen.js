@@ -496,12 +496,25 @@ export default function AdminMenuScreen({ navigation, route }) {
     [categories]
   );
 
+  // Get scheduled locked category names (has schedule enabled AND currently paused)
+  const scheduledLockedCategoryNames = useMemo(() => 
+    categories.filter(c => c.schedule?.enabled && c.isPaused && !c.isSoldOut).map(c => c.name),
+    [categories]
+  );
+
   // Check if item is unavailable due to category status
   const isItemCategoryUnavailable = useCallback((item) => {
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
     // Item is unavailable if ALL its categories are unavailable
     return itemCategories.every(cat => unavailableCategoryNames.includes(cat));
   }, [unavailableCategoryNames]);
+
+  // Check if item is in a scheduled locked category
+  const isItemScheduledLocked = useCallback((item) => {
+    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+    // Item is scheduled locked if ANY of its categories are scheduled locked
+    return itemCategories.some(cat => scheduledLockedCategoryNames.includes(cat));
+  }, [scheduledLockedCategoryNames]);
 
   // Filter items - memoized
   const filteredItems = useMemo(() => {
@@ -529,6 +542,7 @@ export default function AdminMenuScreen({ navigation, route }) {
 
   const renderItem = useCallback(({ item, index }) => {
     const isCategoryUnavailable = isItemCategoryUnavailable(item);
+    const isScheduledLocked = isItemScheduledLocked(item);
 
     return (
       <Animated.View style={{
@@ -538,7 +552,8 @@ export default function AdminMenuScreen({ navigation, route }) {
         <TouchableOpacity
           style={[
             styles.itemCard, 
-            isCategoryUnavailable && styles.itemCardPaused,
+            isScheduledLocked && styles.itemCardScheduled,
+            isCategoryUnavailable && !isScheduledLocked && styles.itemCardPaused,
             !item.available && styles.itemCardOutOfStock
           ]}
           onPress={() => navigation.navigate('MenuItemForm', { item })}
@@ -548,13 +563,21 @@ export default function AdminMenuScreen({ navigation, route }) {
             {item.image ? (
               <Image
                 source={{ uri: item.image, cache: 'force-cache' }}
-                style={[styles.itemImage, isCategoryUnavailable && styles.itemImagePaused]}
+                style={[styles.itemImage, (isCategoryUnavailable || isScheduledLocked) && styles.itemImagePaused]}
                 defaultSource={require('../../../assets/icon.png')}
                 resizeMode="cover"
               />
             ) : (
-              <View style={[styles.itemImage, styles.placeholderImage, isCategoryUnavailable && styles.placeholderImagePaused]}>
-                <Ionicons name="restaurant-outline" size={32} color={isCategoryUnavailable ? '#9ca3af' : '#d1d5db'} />
+              <View style={[styles.itemImage, styles.placeholderImage, (isCategoryUnavailable || isScheduledLocked) && styles.placeholderImagePaused]}>
+                <Ionicons name="restaurant-outline" size={32} color={(isCategoryUnavailable || isScheduledLocked) ? '#9ca3af' : '#d1d5db'} />
+              </View>
+            )}
+            {/* Lock Icon for Scheduled Items */}
+            {isScheduledLocked && (
+              <View style={styles.itemLockOverlay}>
+                <View style={styles.itemLockBadge}>
+                  <Ionicons name="lock-closed" size={16} color="#fff" />
+                </View>
               </View>
             )}
             {/* Discount Badge */}
@@ -567,18 +590,18 @@ export default function AdminMenuScreen({ navigation, route }) {
             )}
             {item.foodType && item.foodType !== 'none' && (
               <View style={[styles.foodTypeBadge, {
-                borderColor: isCategoryUnavailable ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
+                borderColor: (isCategoryUnavailable || isScheduledLocked) ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
               }]}>
                 <View style={[styles.foodTypeDot, {
-                  backgroundColor: isCategoryUnavailable ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
+                  backgroundColor: (isCategoryUnavailable || isScheduledLocked) ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
                 }]} />
               </View>
             )}
           </View>
 
           <View style={styles.itemInfo}>
-            <Text style={[styles.itemName, isCategoryUnavailable && styles.textPaused]} numberOfLines={1}>{item.name}</Text>
-            <Text style={[styles.itemCategory, isCategoryUnavailable && styles.textPaused]} numberOfLines={1}>
+            <Text style={[styles.itemName, (isCategoryUnavailable || isScheduledLocked) && styles.textPaused]} numberOfLines={1}>{item.name}</Text>
+            <Text style={[styles.itemCategory, (isCategoryUnavailable || isScheduledLocked) && styles.textPaused]} numberOfLines={1}>
               {Array.isArray(item.category) ? item.category.join(', ') : item.category}
             </Text>
             {item.preparationTime > 0 && (
@@ -591,14 +614,19 @@ export default function AdminMenuScreen({ navigation, route }) {
               <View style={styles.priceContainer}>
                 {item.offerPrice && item.offerPrice < item.price ? (
                   <View style={styles.priceRow}>
-                    <Text style={[styles.originalPrice, isCategoryUnavailable && styles.pricePaused]}>₹{item.price}</Text>
-                    <Text style={[styles.offerPrice, isCategoryUnavailable && styles.pricePaused]}>₹{item.offerPrice}</Text>
+                    <Text style={[styles.originalPrice, (isCategoryUnavailable || isScheduledLocked) && styles.pricePaused]}>₹{item.price}</Text>
+                    <Text style={[styles.offerPrice, (isCategoryUnavailable || isScheduledLocked) && styles.pricePaused]}>₹{item.offerPrice}</Text>
                   </View>
                 ) : (
-                  <Text style={[styles.itemPrice, isCategoryUnavailable && styles.pricePaused]}>₹{item.price}</Text>
+                  <Text style={[styles.itemPrice, (isCategoryUnavailable || isScheduledLocked) && styles.pricePaused]}>₹{item.price}</Text>
                 )}
               </View>
-              {isCategoryUnavailable ? (
+              {isScheduledLocked ? (
+                <View style={styles.scheduledStatusBadge}>
+                  <Ionicons name="lock-closed" size={10} color="#6366f1" />
+                  <Text style={styles.scheduledStatusText}>Scheduled</Text>
+                </View>
+              ) : isCategoryUnavailable ? (
                 <View style={styles.pausedStatusBadge}>
                   <Text style={styles.pausedStatusText}>Cat. Closed</Text>
                 </View>
@@ -634,7 +662,7 @@ export default function AdminMenuScreen({ navigation, route }) {
         </TouchableOpacity>
       </Animated.View>
     );
-  }, [fadeAnim, scaleAnim, isItemCategoryUnavailable, navigation, togglingId]);
+  }, [fadeAnim, scaleAnim, isItemCategoryUnavailable, isItemScheduledLocked, navigation, togglingId]);
 
   const keyExtractor = useCallback((item) => item._id, []);
 
@@ -841,6 +869,7 @@ export default function AdminMenuScreen({ navigation, route }) {
               });
               const allItemsPaused = itemsInCat.length > 0 && itemsInCat.every(item => item.isPaused);
               const isDeleting = deletingCategoryId === cat._id;
+              const isScheduledLocked = cat.schedule?.enabled && cat.isPaused && !cat.isSoldOut;
 
               return (
                 <TouchableOpacity
@@ -857,9 +886,12 @@ export default function AdminMenuScreen({ navigation, route }) {
                           return ` (Until ${h12}:${m.toString().padStart(2, '0')} ${p})`;
                         })()
                       : '';
+                    const scheduleTimeText = isScheduledLocked && cat.schedule?.startTime && cat.schedule?.endTime
+                      ? ` (${cat.schedule.startTime} - ${cat.schedule.endTime})`
+                      : '';
                     
                     Alert.alert(
-                      cat.name + (cat.isSoldOut ? ' - SOLD OUT' + soldOutTimeText : ''),
+                      cat.name + (cat.isSoldOut ? ' - SOLD OUT' + soldOutTimeText : (isScheduledLocked ? ' - SCHEDULED' + scheduleTimeText : '')),
                       'What would you like to do?',
                       [
                         { text: 'Cancel', style: 'cancel' },
@@ -875,24 +907,32 @@ export default function AdminMenuScreen({ navigation, route }) {
                   <View style={[
                     styles.categoryImageWrapper, 
                     selectedCategory === cat.name && styles.categoryImageWrapperActive, 
-                    cat.isSoldOut && styles.categoryImageWrapperSoldOut
+                    cat.isSoldOut && styles.categoryImageWrapperSoldOut,
+                    isScheduledLocked && styles.categoryImageWrapperScheduled
                   ]}>
                     {cat.image ? (
                       <Image 
                         source={{ uri: cat.image, cache: 'force-cache' }} 
-                        style={[styles.categoryImage, isDeleting && styles.categoryImageDeleting, cat.isSoldOut && styles.categoryImageSoldOut]}
+                        style={[styles.categoryImage, isDeleting && styles.categoryImageDeleting, (cat.isSoldOut || isScheduledLocked) && styles.categoryImageSoldOut]}
                         defaultSource={require('../../../assets/icon.png')}
                         resizeMode="cover"
                       />
                     ) : (
                       <View style={[styles.categoryPlaceholder, isDeleting && styles.categoryImageDeleting]}>
-                        <Ionicons name="restaurant-outline" size={24} color={cat.isSoldOut ? '#ef4444' : '#9ca3af'} />
+                        <Ionicons name="restaurant-outline" size={24} color={cat.isSoldOut ? '#ef4444' : (isScheduledLocked ? '#6366f1' : '#9ca3af')} />
                       </View>
                     )}
                     {cat.isSoldOut && !isDeleting && (
                       <View style={styles.categorySoldOutOverlay}>
                         <View style={styles.soldOutBadge}>
                           <Text style={styles.soldOutBadgeText}>SOLD OUT</Text>
+                        </View>
+                      </View>
+                    )}
+                    {isScheduledLocked && !isDeleting && (
+                      <View style={styles.categoryScheduledOverlay}>
+                        <View style={styles.scheduledBadge}>
+                          <Ionicons name="lock-closed" size={12} color="#fff" />
                         </View>
                       </View>
                     )}
@@ -906,6 +946,7 @@ export default function AdminMenuScreen({ navigation, route }) {
                     styles.categoryName,
                     selectedCategory === cat.name && styles.categoryNameActive,
                     cat.isSoldOut && styles.categoryNameSoldOut,
+                    isScheduledLocked && styles.categoryNameScheduled,
                     isDeleting && styles.categoryNameDeleting
                   ]} numberOfLines={1}>{cat.name}</Text>
                   {cat.soldOutSchedule?.enabled && cat.soldOutSchedule?.endTime && (
@@ -916,6 +957,11 @@ export default function AdminMenuScreen({ navigation, route }) {
                         const h12 = h % 12 || 12;
                         return `Until ${h12}:${m.toString().padStart(2, '0')} ${p}`;
                       })()}
+                    </Text>
+                  )}
+                  {isScheduledLocked && cat.schedule?.startTime && cat.schedule?.endTime && (
+                    <Text style={styles.categoryScheduleText}>
+                      {cat.schedule.startTime} - {cat.schedule.endTime}
                     </Text>
                   )}
                   {selectedCategory === cat.name && <View style={styles.categoryUnderline} />}
@@ -1448,6 +1494,36 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: 2,
   },
+  categoryScheduleText: {
+    fontSize: 9,
+    color: '#6366f1',
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  categoryImageWrapperScheduled: {
+    borderColor: '#6366f1',
+    borderWidth: 2,
+  },
+  categoryScheduledOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(99, 102, 241, 0.7)',
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scheduledBadge: {
+    backgroundColor: '#4f46e5',
+    padding: 6,
+    borderRadius: 20,
+  },
+  categoryNameScheduled: {
+    color: '#6366f1',
+    fontWeight: '600',
+  },
   categoryNameDeleting: {
     opacity: 0.5,
   },
@@ -1494,10 +1570,43 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   itemCardPaused: { backgroundColor: '#FEFCE8', borderWidth: 1, borderColor: '#FEF3C7' },
+  itemCardScheduled: { backgroundColor: '#EEF2FF', borderWidth: 2, borderColor: '#C7D2FE' },
   itemCardOutOfStock: { backgroundColor: '#FEE2E2', borderWidth: 2, borderColor: '#FCA5A5' },
   itemImageContainer: { position: 'relative' },
   itemImage: { width: 90, height: 90, borderRadius: 16 },
   itemImagePaused: { opacity: 0.6 },
+  itemLockOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(99, 102, 241, 0.5)',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  itemLockBadge: {
+    backgroundColor: '#4f46e5',
+    padding: 8,
+    borderRadius: 20,
+  },
+  scheduledStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    gap: 4,
+  },
+  scheduledStatusText: {
+    fontSize: 10,
+    color: '#6366f1',
+    fontWeight: '600',
+  },
   placeholderImage: { backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
   placeholderImagePaused: { backgroundColor: '#FEF3C7' },
   foodTypeBadge: {
