@@ -290,7 +290,8 @@ export default function AdminMenuScreen({ navigation, route }) {
       type: category.schedule?.type || 'daily',
       startTime: category.schedule?.startTime || '09:00',
       endTime: category.schedule?.endTime || '22:00',
-      days: category.schedule?.days || []
+      days: category.schedule?.days || [],
+      customDays: category.schedule?.customDays || []
     });
     setShowScheduleModal(true);
   };
@@ -510,11 +511,19 @@ export default function AdminMenuScreen({ navigation, route }) {
   }, [unavailableCategoryNames]);
 
   // Check if item is in a scheduled locked category
+  // - When viewing "All": show lock only if ALL item's categories are locked
+  // - When viewing a specific locked category: show lock for items in that category
   const isItemScheduledLocked = useCallback((item) => {
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-    // Item is scheduled locked if ANY of its categories are scheduled locked
-    return itemCategories.some(cat => scheduledLockedCategoryNames.includes(cat));
-  }, [scheduledLockedCategoryNames]);
+    
+    // If viewing a specific category that is scheduled locked, show lock for items in it
+    if (selectedCategory !== 'all' && scheduledLockedCategoryNames.includes(selectedCategory)) {
+      return itemCategories.includes(selectedCategory);
+    }
+    
+    // When viewing "All", show lock only if ALL item's categories are scheduled locked
+    return itemCategories.every(cat => scheduledLockedCategoryNames.includes(cat));
+  }, [scheduledLockedCategoryNames, selectedCategory]);
 
   // Filter items - memoized
   const filteredItems = useMemo(() => {

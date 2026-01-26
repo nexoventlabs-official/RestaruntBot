@@ -1,5 +1,13 @@
 const mongoose = require('mongoose');
 
+// Schema for day-specific schedule
+const dayScheduleSchema = new mongoose.Schema({
+  day: { type: Number, min: 0, max: 6, required: true }, // 0=Sunday, 1=Monday, ..., 6=Saturday
+  enabled: { type: Boolean, default: true },
+  startTime: { type: String }, // Format: "HH:MM" (24-hour)
+  endTime: { type: String }    // Format: "HH:MM" (24-hour)
+}, { _id: false });
+
 const categorySchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true },
   description: { type: String },
@@ -14,9 +22,10 @@ const categorySchema = new mongoose.Schema({
   schedule: {
     enabled: { type: Boolean, default: false },
     type: { type: String, enum: ['daily', 'custom'], default: 'daily' },
-    startTime: { type: String }, // Format: "HH:MM" (24-hour)
-    endTime: { type: String },   // Format: "HH:MM" (24-hour)
-    days: [{ type: Number, min: 0, max: 6 }], // 0=Sunday, 1=Monday, ..., 6=Saturday (for custom type)
+    startTime: { type: String }, // Format: "HH:MM" (24-hour) - used for 'daily' type
+    endTime: { type: String },   // Format: "HH:MM" (24-hour) - used for 'daily' type
+    days: [{ type: Number, min: 0, max: 6 }], // 0=Sunday, 1=Monday, ..., 6=Saturday (for custom type - backward compatibility)
+    customDays: [dayScheduleSchema], // Custom schedule per day with different times
     timezone: { type: String, default: 'Asia/Kolkata' }
   },
   

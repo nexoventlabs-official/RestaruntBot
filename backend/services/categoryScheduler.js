@@ -41,32 +41,58 @@ class CategoryScheduler {
 
   // Check if current time is within schedule
   isWithinSchedule(schedule) {
-    if (!schedule || !schedule.enabled || !schedule.startTime || !schedule.endTime) {
+    if (!schedule || !schedule.enabled) {
       return true; // No schedule means always available
     }
 
     // Use timezone from schedule, default to Asia/Kolkata
     const timezone = schedule.timezone || 'Asia/Kolkata';
     const { hours: currentHours, minutes: currentMins, dayNumber: currentDay } = this.getCurrentTimeInTimezone(timezone);
+    const currentTime = `${currentHours.toString().padStart(2, '0')}:${currentMins.toString().padStart(2, '0')}`;
     
-    // Check if today is in the schedule (for custom days)
-    if (schedule.type === 'custom' && schedule.days && schedule.days.length > 0) {
+    let startTime, endTime;
+    
+    // Check for custom days with individual times
+    if (schedule.type === 'custom' && schedule.customDays && schedule.customDays.length > 0) {
+      // Find today's schedule
+      const todaySchedule = schedule.customDays.find(d => d.day === currentDay);
+      
+      if (!todaySchedule || !todaySchedule.enabled) {
+        console.log(`[Category Scheduler] Not scheduled for today (day ${currentDay}) or day disabled`);
+        return false; // Not scheduled for today or day is disabled
+      }
+      
+      startTime = todaySchedule.startTime;
+      endTime = todaySchedule.endTime;
+      console.log(`[Category Scheduler] Custom day schedule for day ${currentDay}: ${startTime} - ${endTime}`);
+    }
+    // Backward compatibility: custom type with days array (same time for all days)
+    else if (schedule.type === 'custom' && schedule.days && schedule.days.length > 0) {
       if (!schedule.days.includes(currentDay)) {
         console.log(`[Category Scheduler] Not scheduled for today (day ${currentDay})`);
         return false; // Not scheduled for today
       }
+      startTime = schedule.startTime;
+      endTime = schedule.endTime;
+    }
+    // Daily schedule (same time every day)
+    else {
+      if (!schedule.startTime || !schedule.endTime) {
+        return true; // No time set means always available
+      }
+      startTime = schedule.startTime;
+      endTime = schedule.endTime;
     }
 
     // Parse time strings (HH:MM format)
-    const [startHour, startMin] = schedule.startTime.split(':').map(Number);
-    const [endHour, endMin] = schedule.endTime.split(':').map(Number);
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    const [endHour, endMin] = endTime.split(':').map(Number);
 
     const currentMinutes = currentHours * 60 + currentMins;
     const startMinutes = startHour * 60 + startMin;
     const endMinutes = endHour * 60 + endMin;
 
-    const currentTime = `${currentHours.toString().padStart(2, '0')}:${currentMins.toString().padStart(2, '0')}`;
-    console.log(`[Category Scheduler] Time check (${timezone}): Current=${currentTime} (${currentMinutes} min), Start=${schedule.startTime} (${startMinutes} min), End=${schedule.endTime} (${endMinutes} min)`);
+    console.log(`[Category Scheduler] Time check (${timezone}): Current=${currentTime} (${currentMinutes} min), Start=${startTime} (${startMinutes} min), End=${endTime} (${endMinutes} min)`);
 
     // Handle overnight schedules (e.g., 22:00 to 02:00)
     if (endMinutes < startMinutes) {

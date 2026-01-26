@@ -133,10 +133,10 @@ router.patch('/:id/toggle-pause', authMiddleware, async (req, res) => {
 // Update category schedule
 router.patch('/:id/schedule', authMiddleware, async (req, res) => {
   try {
-    const { enabled, type, startTime, endTime, days } = req.body;
+    const { enabled, type, startTime, endTime, days, customDays } = req.body;
     
     console.log(`[Schedule API] Updating schedule for category ${req.params.id}`);
-    console.log(`[Schedule API] Data:`, { enabled, type, startTime, endTime, days });
+    console.log(`[Schedule API] Data:`, { enabled, type, startTime, endTime, days, customDays });
     
     const category = await Category.findById(req.params.id);
     if (!category) {
@@ -152,6 +152,7 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
       startTime: startTime || null,
       endTime: endTime || null,
       days: days || [],
+      customDays: customDays || [], // Custom times per day
       timezone: 'Asia/Kolkata'
     };
 
