@@ -574,12 +574,13 @@ const googleSheets = {
         resource: { values: [[paymentLabel]] }
       });
       
-      // Also update payment status to "Paid"
+      // Update payment status to "Paid (Cash)" or "Paid (UPI)"
+      const paymentStatusLabel = actualPaymentMethod === 'cash' ? 'Paid (Cash)' : 'Paid (UPI)';
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
         range: `${sheet.sheetName}!H${orderData.rowIndex + 1}`,
         valueInputOption: 'RAW',
-        resource: { values: [['Paid']] }
+        resource: { values: [[paymentStatusLabel]] }
       });
       
       console.log('✅ Actual payment method updated in Google Sheet:', orderId, paymentLabel);
