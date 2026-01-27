@@ -585,6 +585,105 @@ const metaCloud = {
       // Fallback to CTA Phone without image
       return this.sendCtaPhone(phone, message, buttonText, phoneNumber, footer);
     }
+  },
+
+  // Send a marketing template message (works outside 24-hour window)
+  // This requires a pre-approved template in your WhatsApp Business Manager
+  // Template name: "offer_broadcast" with header image, body text, and CTA button
+  async sendMarketingTemplate(phone, templateName, imageUrl, bodyParams = [], buttonUrl = null) {
+    try {
+      const { baseUrl, accessToken } = getConfig();
+      const to = phone.replace('@c.us', '').replace(/\D/g, '');
+      
+      console.log('📤 Meta sendMarketingTemplate to:', to, 'template:', templateName);
+      
+      // Build components array
+      const components = [];
+      
+      // Add header with image if provided
+      if (imageUrl) {
+        components.push({
+          type: 'header',
+          parameters: [{
+            type: 'image',
+            image: { link: imageUrl }
+          }]
+        });
+      }
+      
+      // Add body parameters if provided
+      if (bodyParams && bodyParams.length > 0) {
+        components.push({
+          type: 'body',
+          parameters: bodyParams.map(param => ({
+            type: 'text',
+            text: param
+          }))
+        });
+      }
+      
+      // Add button URL if provided (for dynamic URL templates)
+      if (buttonUrl) {
+        components.push({
+          type: 'button',
+          sub_type: 'url',
+          index: '0',
+          parameters: [{
+            type: 'text',
+            text: buttonUrl
+          }]
+        });
+      }
+      
+      const payload = {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: 'en' },
+          components: components.length > 0 ? components : undefined
+        }
+      };
+      
+      const response = await axios.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      });
+      console.log('✅ Meta sendMarketingTemplate success');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Meta Cloud marketing template error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  // Send a simple text-only template (hello_world style - works outside 24-hour window)
+  async sendSimpleTemplate(phone, templateName = 'hello_world', languageCode = 'en_US') {
+    try {
+      const { baseUrl, accessToken } = getConfig();
+      const to = phone.replace('@c.us', '').replace(/\D/g, '');
+      
+      console.log('📤 Meta sendSimpleTemplate to:', to, 'template:', templateName);
+      
+      const payload = {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: languageCode }
+        }
+      };
+      
+      const response = await axios.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      });
+      console.log('✅ Meta sendSimpleTemplate success');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Meta Cloud simple template error:', error.response?.data || error.message);
+      throw error;
+    }
   }
 };
 

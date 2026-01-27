@@ -52,6 +52,15 @@ const whatsapp = {
 
   async sendImageWithCtaPhone(phone, imageUrl, message, buttonText, phoneNumber, footer = '') {
     return metaCloud.sendImageWithCtaPhone(phone, imageUrl, message, buttonText, phoneNumber, footer);
+  },
+
+  // Template messages - work outside 24-hour window
+  async sendMarketingTemplate(phone, templateName, imageUrl, bodyParams = [], buttonUrl = null) {
+    return metaCloud.sendMarketingTemplate(phone, templateName, imageUrl, bodyParams, buttonUrl);
+  },
+
+  async sendSimpleTemplate(phone, templateName = 'hello_world', languageCode = 'en_US') {
+    return metaCloud.sendSimpleTemplate(phone, templateName, languageCode);
   }
 };
 
