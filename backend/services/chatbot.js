@@ -4770,7 +4770,7 @@ const chatbot = {
       ]);
 
       // Sync to Google Sheets
-      googleSheets.updateOrderStatus(orderId, 'pending', 'pending').catch(err =>
+      googleSheets.addOrder(order).catch(err =>
         console.error('Google Sheets sync error:', err)
       );
 
