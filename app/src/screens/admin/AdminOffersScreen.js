@@ -64,14 +64,14 @@ export default function AdminOffersScreen({ navigation }) {
   const sendToWhatsApp = async (offer) => {
     Alert.alert(
       'Send to WhatsApp',
-      'Send this offer to all customers who have ordered via WhatsApp?',
+      'Send this offer to ALL customers (including old customers) who have phone numbers?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Send',
           onPress: async () => {
             try {
-              Alert.alert('Sending...', 'Please wait while we send the offer to all customers.');
+              setLoading(true);
               
               const response = await api.post('/whatsapp-broadcast/send-offer', {
                 offerImageUrl: offer.image,
@@ -80,16 +80,57 @@ export default function AdminOffersScreen({ navigation }) {
                 offerType: offer.offerType
               });
 
-              if (response.data.success) {
-                Alert.alert(
-                  'Success!',
-                  `Offer sent to ${response.data.sent} customers!\n${response.data.failed > 0 ? `Failed: ${response.data.failed}` : ''}`
-                );
+              setLoading(false);
+
+              if (response.data.success || response.data.sent > 0) {
+                const { sent, sentViaInteractive, sentViaTemplate, failed, total, message } = response.data;
+                
+                let alertMessage = `Total customers: ${total}\n\n`;
+                alertMessage += `✅ Successfully sent: ${sent}\n`;
+                
+                if (sentViaInteractive > 0) {
+                  alertMessage += `  • ${sentViaInteractive} via interactive message\n`;
+                }
+                if (sentViaTemplate > 0) {
+                  alertMessage += `  • ${sentViaTemplate} via template\n`;
+                }
+                
+                if (failed > 0) {
+                  alertMessage += `\n❌ Failed: ${failed}\n`;
+                  
+                  // Show failure reasons if available
+                  if (response.data.failedContacts && response.data.failedContacts.length > 0) {
+                    const reasons = {};
+                    response.data.failedContacts.forEach(fc => {
+                      const reason = fc.reason || 'unknown';
+                      reasons[reason] = (reasons[reason] || 0) + 1;
+                    });
+                    
+                    Object.entries(reasons).forEach(([reason, count]) => {
+                      if (reason === '24h_no_template') {
+                        alertMessage += `  • ${count} outside 24h window\n`;
+                      } else if (reason === 'test_recipient_restriction') {
+                        alertMessage += `  • ${count} test restrictions\n`;
+                      } else {
+                        alertMessage += `  • ${count} ${reason}\n`;
+                      }
+                    });
+                  }
+                }
+                
+                if (!response.data.templateConfigured && failed > 0) {
+                  alertMessage += `\n💡 Tip: Configure WhatsApp template to reach more customers`;
+                }
+                
+                Alert.alert('Broadcast Complete', alertMessage);
               } else {
-                Alert.alert('Error', response.data.error || 'Failed to send offer');
+                Alert.alert('Error', response.data.message || response.data.error || 'Failed to send offer');
               }
             } catch (error) {
-              Alert.alert('Error', error.response?.data?.error || 'Failed to send offer to WhatsApp');
+              setLoading(false);
+              const errorMsg = error.response?.data?.error || error.message || 'Failed to send offer to WhatsApp';
+              Alert.alert('Error', errorMsg);
+              console.error('WhatsApp broadcast error:', error);
             }
           }
         }

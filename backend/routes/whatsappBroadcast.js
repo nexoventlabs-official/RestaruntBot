@@ -45,34 +45,70 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
       });
     }
 
-    // Get contact count
-    const contacts = await whatsappBroadcast.getAllContacts();
-    const contactCount = contacts.length;
-
-    if (contactCount === 0) {
-      return res.json({ 
-        success: false, 
-        message: 'No contacts found', 
-        sent: 0, 
-        failed: 0 
-      });
-    }
-
-    console.log(`[WhatsApp Broadcast] Starting offer broadcast to ${contactCount} contacts...`);
+    console.log(`[WhatsApp Broadcast] Starting offer broadcast...`);
+    console.log(`[WhatsApp Broadcast] Offer: ${offerTitle || 'No title'}`);
+    console.log(`[WhatsApp Broadcast] Type: ${offerType || 'No type'}`);
 
     // Send offers and wait for actual results
     const result = await whatsappBroadcast.sendOfferToAll(offerImageUrl, offerTitle, offerDescription, offerType);
     
-    console.log('[WhatsApp Broadcast] Offer sending completed:', result);
-    
-    res.json({
-      success: result.success,
-      message: result.sent > 0 ? `Offer sent to ${result.sent} customers` : 'Failed to send offers',
+    console.log('[WhatsApp Broadcast] Offer sending completed:', {
       total: result.total,
       sent: result.sent,
+      sentViaInteractive: result.sentViaInteractive,
+      sentViaTemplate: result.sentViaTemplate,
+      failed: result.failed
+    });
+    
+    // Build detailed message for admin
+    let message = '';
+    if (result.sent > 0) {
+      message = `Successfully sent to ${result.sent} customers!\n`;
+      if (result.sentViaInteractive > 0) {
+        message += `• ${result.sentViaInteractive} via interactive message\n`;
+      }
+      if (result.sentViaTemplate > 0) {
+        message += `• ${result.sentViaTemplate} via template (24h window expired)\n`;
+      }
+    }
+    
+    if (result.failed > 0) {
+      message += `\nFailed: ${result.failed} customers\n`;
+      
+      // Group failures by reason
+      const failureReasons = {};
+      (result.failedContacts || []).forEach(fc => {
+        const reason = fc.reason || 'unknown';
+        failureReasons[reason] = (failureReasons[reason] || 0) + 1;
+      });
+      
+      Object.entries(failureReasons).forEach(([reason, count]) => {
+        if (reason === '24h_no_template') {
+          message += `• ${count} outside 24h window (no template configured)\n`;
+        } else if (reason === 'test_recipient_restriction') {
+          message += `• ${count} test number restrictions\n`;
+        } else if (reason === 'template_failed') {
+          message += `• ${count} template send failed\n`;
+        } else {
+          message += `• ${count} other errors\n`;
+        }
+      });
+    }
+    
+    if (!result.templateConfigured && result.failed > 0) {
+      message += `\n⚠️ Tip: Configure WHATSAPP_OFFER_TEMPLATE in .env to reach customers outside 24h window`;
+    }
+    
+    res.json({
+      success: result.success && result.sent > 0,
+      message: message.trim(),
+      total: result.total,
+      sent: result.sent,
+      sentViaInteractive: result.sentViaInteractive || 0,
       sentViaTemplate: result.sentViaTemplate || 0,
       failed: result.failed,
       failedContacts: result.failedContacts || [],
+      successContacts: result.successContacts || [],
       templateConfigured: result.templateConfigured
     });
 
