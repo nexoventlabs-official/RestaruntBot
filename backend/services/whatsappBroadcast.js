@@ -156,30 +156,86 @@ const whatsappBroadcast = {
       // For customers within 24h window: sends interactive message directly
       // For customers outside 24h window: uses hello_world template to re-open conversation, then sends offer
       for (const contact of contacts) {
+        // Check if customer is outside 24h window based on lastOrderDate
+        const hoursSinceLastInteraction = Math.floor((new Date() - new Date(contact.lastOrderDate)) / (1000 * 60 * 60));
+        const isOutside24h = hoursSinceLastInteraction >= 24;
+        
+        if (isOutside24h) {
+          console.log(`[WhatsApp Broadcast] ${contact.phone} (${contact.name || 'Unknown'}) is outside 24h window (${hoursSinceLastInteraction}h ago), using template...`);
+        }
+        
         try {
-          // Try sending interactive message first (works within 24-hour window)
-          if (offerImageUrl) {
-            await whatsapp.sendImageWithCtaUrlOriginal(
-              contact.phone, 
-              offerImageUrl, 
-              message, 
-              'View Offer', 
-              websiteUrl,
-              'Tap to order now!'
-            );
+          // If customer is outside 24h window, use template directly
+          if (isOutside24h && OFFER_TEMPLATE_NAME) {
+            console.log(`[WhatsApp Broadcast] Sending template to ${contact.phone} (${contact.name || 'Unknown'})...`);
+            
+            if (OFFER_TEMPLATE_NAME === 'hello_world') {
+              // Use the pre-approved hello_world template first to re-open the conversation
+              await whatsapp.sendSimpleTemplate(contact.phone, 'hello_world', 'en_US');
+              console.log(`[WhatsApp Broadcast] Template sent to ${contact.phone}`);
+              
+              // Wait a moment then send the actual offer (now within 24h window)
+              await new Promise(resolve => setTimeout(resolve, 1500));
+              
+              // Now send the actual offer content
+              if (offerImageUrl) {
+                await whatsapp.sendImageWithCtaUrlOriginal(
+                  contact.phone, 
+                  offerImageUrl, 
+                  message, 
+                  'View Offer', 
+                  websiteUrl,
+                  'Tap to order now!'
+                );
+              } else {
+                await whatsapp.sendCtaUrl(
+                  contact.phone, 
+                  message, 
+                  'View Offer', 
+                  websiteUrl,
+                  'Tap to order now!'
+                );
+              }
+            } else {
+              // Send using custom marketing template
+              await whatsapp.sendMarketingTemplate(
+                contact.phone,
+                OFFER_TEMPLATE_NAME,
+                offerImageUrl,
+                [offerTitle || 'Special Offer', offerDescription || 'Check out our latest deals!'],
+                null
+              );
+            }
+            sent++;
+            sentViaTemplate++;
+            successContacts.push({ phone: contact.phone, method: 'template', name: contact.name });
+            console.log(`[WhatsApp Broadcast] ✅ Sent via template to ${contact.phone} (${contact.name || 'Unknown'})`);
+            
           } else {
-            await whatsapp.sendCtaUrl(
-              contact.phone, 
-              message, 
-              'View Offer', 
-              websiteUrl,
-              'Tap to order now!'
-            );
+            // Customer is within 24h window, try sending interactive message directly
+            if (offerImageUrl) {
+              await whatsapp.sendImageWithCtaUrlOriginal(
+                contact.phone, 
+                offerImageUrl, 
+                message, 
+                'View Offer', 
+                websiteUrl,
+                'Tap to order now!'
+              );
+            } else {
+              await whatsapp.sendCtaUrl(
+                contact.phone, 
+                message, 
+                'View Offer', 
+                websiteUrl,
+                'Tap to order now!'
+              );
+            }
+            sent++;
+            sentViaInteractive++;
+            successContacts.push({ phone: contact.phone, method: 'interactive', name: contact.name });
+            console.log(`[WhatsApp Broadcast] ✅ Sent interactive to ${contact.phone} (${contact.name || 'Unknown'})`);
           }
-          sent++;
-          sentViaInteractive++;
-          successContacts.push({ phone: contact.phone, method: 'interactive', name: contact.name });
-          console.log(`[WhatsApp Broadcast] ✅ Sent interactive to ${contact.phone} (${contact.name || 'Unknown'})`);
         } catch (error) {
           const errorMessage = error.response?.data?.error?.message || error.message || '';
           const errorCode = error.response?.data?.error?.code;
