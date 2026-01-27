@@ -56,11 +56,11 @@ router.get('/popup-offers', async (req, res) => {
 });
 
 // Get all categories (public)
-// Returns only categories that have at least one available item
+// Returns all active categories with status information
 router.get('/categories', async (req, res) => {
   try {
     const allCategories = await Category.find({ isActive: true }).sort({ sortOrder: 1 });
-    const allMenuItems = await MenuItem.find({ available: true });
+    const allMenuItems = await MenuItem.find({});
     
     // Get scheduled categories that are currently ACTIVE (within time, not paused)
     const scheduledActiveCategories = allCategories
@@ -72,64 +72,46 @@ router.get('/categories', async (req, res) => {
       .filter(c => c.schedule?.enabled && (c.isPaused || c.isSoldOut))
       .map(c => c.name);
     
-    // Helper to check if an item is available (matches app behavior)
-    const isItemAvailable = (item) => {
-      const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-      
-      // If item has ANY scheduled ACTIVE category → available
-      const hasScheduledActiveCategory = itemCategories.some(cat => scheduledActiveCategories.includes(cat));
-      if (hasScheduledActiveCategory) return true;
-      
-      // If item has ANY scheduled LOCKED category → not available
-      const hasScheduledLockedCategory = itemCategories.some(cat => scheduledLockedCategories.includes(cat));
-      if (hasScheduledLockedCategory) return false;
-      
-      // Item has no scheduled categories - check non-scheduled
-      const hasActiveNonScheduledCategory = itemCategories.some(cat => {
-        const catObj = allCategories.find(c => c.name === cat);
-        return catObj && !catObj.schedule?.enabled && !catObj.isPaused && !catObj.isSoldOut;
-      });
-      
-      return hasActiveNonScheduledCategory;
+    // Helper to determine category status
+    const getCategoryStatus = (category) => {
+      if (category.isSoldOut) return 'soldout';
+      if (category.schedule?.enabled && category.isPaused) return 'unavailable';
+      if (category.isPaused) return 'unavailable';
+      return 'available';
     };
     
-    // Filter categories to only show those with available items
-    const availableCategories = allCategories.filter(category => {
-      // Check if category itself is available (not locked)
-      const isCategoryAvailable = 
-        // Scheduled and ACTIVE
-        (category.schedule?.enabled && !category.isPaused && !category.isSoldOut) ||
-        // Non-scheduled and not paused/sold out
-        (!category.schedule?.enabled && !category.isPaused && !category.isSoldOut);
-      
-      if (!isCategoryAvailable) return false;
-      
-      // Check if category has at least one available item
-      const categoryItems = allMenuItems.filter(item => {
-        const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-        return itemCategories.includes(category.name);
+    // Return all categories with their items and status
+    const categoriesWithStatus = allCategories
+      .filter(category => {
+        // Check if category has at least one item
+        const categoryItems = allMenuItems.filter(item => {
+          const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+          return itemCategories.includes(category.name);
+        });
+        return categoryItems.length > 0;
+      })
+      .map(category => {
+        const catObj = category.toObject();
+        catObj.categoryStatus = getCategoryStatus(category);
+        return catObj;
       });
-      
-      // Check if any item in this category is available
-      const hasAvailableItems = categoryItems.some(item => isItemAvailable(item));
-      
-      return hasAvailableItems;
-    });
     
-    res.json(availableCategories);
+    res.json(categoriesWithStatus);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 // Get all menu items (public)
+// Returns ALL items including sold out and scheduled locked items with status
 router.get('/menu', async (req, res) => {
   try {
     const { category, foodType } = req.query;
-    const query = { available: true };
+    const query = {};
     if (category) query.category = category;
     if (foodType && foodType !== 'all') query.foodType = foodType;
     
+    // Get all items (not just available: true)
     const items = await MenuItem.find(query).select('-ratings').sort({ name: 1 });
     
     // Get all categories to check schedule status
@@ -145,44 +127,74 @@ router.get('/menu', async (req, res) => {
       .filter(c => c.schedule?.enabled && (c.isPaused || c.isSoldOut))
       .map(c => c.name);
     
+    // Get sold out categories (not scheduled, just sold out)
+    const soldOutCategories = allCategories
+      .filter(c => c.isSoldOut)
+      .map(c => c.name);
+    
     // Get all active offer types
     const activeOffers = await Offer.find({ isActive: true }).select('offerType');
     const activeOfferTypes = activeOffers.map(o => o.offerType).filter(Boolean);
     
-    // Filter items (matches app behavior):
-    // 1. If item has ANY scheduled ACTIVE category → SHOW
-    // 2. If item has ANY scheduled LOCKED category (and no scheduled active) → HIDE
-    // 3. If item has NO scheduled categories → show if any non-scheduled category is not locked
-    const filteredItems = items
-      .filter(item => {
-        const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-        
-        // Check if item has any scheduled category that is ACTIVE → SHOW
-        const hasScheduledActiveCategory = itemCategories.some(cat => scheduledActiveCategories.includes(cat));
-        if (hasScheduledActiveCategory) return true;
-        
-        // Check if item has any scheduled category that is LOCKED → HIDE
-        const hasScheduledLockedCategory = itemCategories.some(cat => scheduledLockedCategories.includes(cat));
-        if (hasScheduledLockedCategory) return false;
-        
-        // Item has no scheduled categories - check if any non-scheduled category is active
-        const hasActiveNonScheduledCategory = itemCategories.some(cat => {
-          const category = allCategories.find(c => c.name === cat);
-          return category && !category.schedule?.enabled && !category.isPaused && !category.isSoldOut;
-        });
-        
-        return hasActiveNonScheduledCategory;
-      })
-      .map(item => {
-        const itemObj = item.toObject();
-        if (itemObj.offerType && itemObj.offerType.length > 0) {
-          // Only keep offer types that are active
-          itemObj.offerType = itemObj.offerType.filter(ot => activeOfferTypes.includes(ot));
-        }
-        return itemObj;
+    // Helper to determine item status
+    const getItemStatus = (item) => {
+      const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+      
+      // If item itself is not available (sold out at item level)
+      if (!item.available) {
+        return 'soldout';
+      }
+      
+      // Check if ALL item's categories are sold out
+      const allCategoriesSoldOut = itemCategories.every(cat => soldOutCategories.includes(cat));
+      if (allCategoriesSoldOut) {
+        return 'soldout';
+      }
+      
+      // If item has ANY scheduled ACTIVE category → available
+      const hasScheduledActiveCategory = itemCategories.some(cat => scheduledActiveCategories.includes(cat));
+      if (hasScheduledActiveCategory) return 'available';
+      
+      // If item has ANY scheduled LOCKED category (and no scheduled active) → unavailable (scheduled)
+      const hasScheduledLockedCategory = itemCategories.some(cat => scheduledLockedCategories.includes(cat));
+      if (hasScheduledLockedCategory) return 'unavailable';
+      
+      // Item has no scheduled categories - check if any non-scheduled category is active
+      const hasActiveNonScheduledCategory = itemCategories.some(cat => {
+        const category = allCategories.find(c => c.name === cat);
+        return category && !category.schedule?.enabled && !category.isPaused && !category.isSoldOut;
       });
+      
+      if (hasActiveNonScheduledCategory) return 'available';
+      
+      // All categories are either paused or sold out
+      const allCategoriesPausedOrSoldOut = itemCategories.every(cat => {
+        const category = allCategories.find(c => c.name === cat);
+        return category && (category.isPaused || category.isSoldOut);
+      });
+      
+      if (allCategoriesPausedOrSoldOut) {
+        // Check if any category is specifically sold out
+        const anyCategorySoldOut = itemCategories.some(cat => soldOutCategories.includes(cat));
+        return anyCategorySoldOut ? 'soldout' : 'unavailable';
+      }
+      
+      return 'unavailable';
+    };
     
-    res.json(filteredItems);
+    // Map all items with status information
+    const allItems = items.map(item => {
+      const itemObj = item.toObject();
+      if (itemObj.offerType && itemObj.offerType.length > 0) {
+        // Only keep offer types that are active
+        itemObj.offerType = itemObj.offerType.filter(ot => activeOfferTypes.includes(ot));
+      }
+      // Add item status for frontend display
+      itemObj.itemStatus = getItemStatus(item);
+      return itemObj;
+    });
+    
+    res.json(allItems);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

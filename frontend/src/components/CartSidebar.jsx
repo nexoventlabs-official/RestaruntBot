@@ -14,9 +14,16 @@ export default function CartSidebar({
   addToCart, removeFromWishlist, whatsappNumber,
   availableItems = []
 }) {
-  // Check if item is available
+  // Check if item is available (has itemStatus === 'available')
   const isItemAvailable = (itemId) => {
-    return availableItems.some(item => item._id === itemId);
+    const item = availableItems.find(item => item._id === itemId);
+    return item && item.itemStatus === 'available';
+  };
+
+  // Get item status for display
+  const getItemStatus = (itemId) => {
+    const item = availableItems.find(item => item._id === itemId);
+    return item?.itemStatus || 'unavailable';
   };
 
   // Get available cart items only
@@ -137,7 +144,10 @@ export default function CartSidebar({
                     <div className="border-t pt-4 mt-4">
                       <p className="text-sm font-medium text-gray-500 mb-3">Unavailable Items</p>
                     </div>
-                    {unavailableCartItems.map(item => (
+                    {unavailableCartItems.map(item => {
+                      const status = getItemStatus(item._id);
+                      const isSoldOut = status === 'soldout';
+                      return (
                       <div key={item._id} className="flex gap-3 bg-gray-100 rounded-xl p-3 opacity-60">
                         {item.image ? (
                           <img src={item.image} alt={item.name} className="w-20 h-20 rounded-lg object-cover grayscale" />
@@ -149,7 +159,9 @@ export default function CartSidebar({
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <h4 className="font-medium text-gray-600">{item.name}</h4>
-                            <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs rounded-full">Unavailable</span>
+                            <span className={`px-2 py-0.5 text-xs rounded-full ${isSoldOut ? 'bg-red-100 text-red-600' : 'bg-gray-200 text-gray-600'}`}>
+                              {isSoldOut ? 'Sold Out' : 'Unavailable'}
+                            </span>
                           </div>
                           <p className="text-sm text-gray-400">{item.unitQty} {item.unit}</p>
                           <p className="text-gray-400 line-through">₹{item.price * item.quantity}</p>
@@ -158,7 +170,7 @@ export default function CartSidebar({
                           </button>
                         </div>
                       </div>
-                    ))}
+                    );})}
                   </>
                 )}
               </div>
@@ -184,6 +196,8 @@ export default function CartSidebar({
 
                 {wishlist.map(item => {
                   const available = isItemAvailable(item._id);
+                  const status = getItemStatus(item._id);
+                  const isSoldOut = status === 'soldout';
                   return (
                     <div key={item._id} className={`flex gap-3 rounded-xl p-3 ${available ? 'bg-gray-50' : 'bg-gray-100 opacity-60'}`}>
                       {item.image ? (
@@ -196,7 +210,11 @@ export default function CartSidebar({
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <h4 className={`font-medium ${available ? 'text-gray-900' : 'text-gray-600'}`}>{item.name}</h4>
-                          {!available && <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs rounded-full">Unavailable</span>}
+                          {!available && (
+                            <span className={`px-2 py-0.5 text-xs rounded-full ${isSoldOut ? 'bg-red-100 text-red-600' : 'bg-gray-200 text-gray-600'}`}>
+                              {isSoldOut ? 'Sold Out' : 'Unavailable'}
+                            </span>
+                          )}
                         </div>
                         <p className="text-sm text-gray-500">{item.unitQty} {item.unit}</p>
                         <p className={available ? 'text-orange-600 font-semibold' : 'text-gray-400'}>₹{item.price}</p>
@@ -206,8 +224,8 @@ export default function CartSidebar({
                               Add to Cart
                             </button>
                           ) : (
-                            <span className="px-3 py-1 bg-gray-200 text-gray-500 text-sm rounded-lg cursor-not-allowed">
-                              Unavailable
+                            <span className={`px-3 py-1 text-sm rounded-lg cursor-not-allowed ${isSoldOut ? 'bg-red-100 text-red-500' : 'bg-gray-200 text-gray-500'}`}>
+                              {isSoldOut ? 'Sold Out' : 'Unavailable'}
                             </span>
                           )}
                           <button onClick={() => removeFromWishlist(item._id)} className="p-1 text-red-500 hover:bg-red-50 rounded-full">

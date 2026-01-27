@@ -147,18 +147,21 @@ export default function UserMenuPage() {
     }
   };
 
-  // Get active categories (not paused, not sold out)
+  // Get active categories (available status)
   const activeCategoryNames = categories
-    .filter(cat => cat.isActive && !cat.isPaused && !cat.isSoldOut)
+    .filter(cat => cat.isActive && cat.categoryStatus === 'available')
     .map(cat => cat.name);
 
-  const availableItems = items.filter(item => {
-    // Item must be available (not sold out at item level)
-    if (!item.available) return false;
-    
+  // Get all category names for display
+  const allCategoryNames = categories
+    .filter(cat => cat.isActive)
+    .map(cat => cat.name);
+
+  // Show all items including unavailable ones
+  const displayItems = items.filter(item => {
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-    // Item is shown if at least one of its categories is active
-    const isInActiveCategory = itemCategories.some(cat => activeCategoryNames.includes(cat));
+    // Item is shown if at least one of its categories exists
+    const hasCategory = itemCategories.some(cat => allCategoryNames.includes(cat));
     
     // Apply search filter
     if (searchQuery.trim()) {
@@ -167,35 +170,34 @@ export default function UserMenuPage() {
         item.name.toLowerCase().includes(query) ||
         item.description?.toLowerCase().includes(query) ||
         item.tags?.some(tag => tag.toLowerCase().includes(query));
-      return isInActiveCategory && matchesSearch;
+      return hasCategory && matchesSearch;
     }
     
-    return isInActiveCategory;
+    return hasCategory;
   });
 
-  // Get item count for a category from all items (not filtered)
+  // Get item status (available, soldout, or unavailable)
+  const getItemStatus = (item) => {
+    return item.itemStatus || 'available';
+  };
+
+  // Get item count for a category from all items
   const getCategoryItemCount = (categoryName) => {
     return allItems.filter(item => {
-      if (!item.available) return false;
       const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-      return itemCategories.includes(categoryName) && itemCategories.some(cat => activeCategoryNames.includes(cat));
+      return itemCategories.includes(categoryName);
     }).length;
   };
 
   // Get total items count
   const getTotalItemsCount = () => {
-    return allItems.filter(item => {
-      if (!item.available) return false;
-      const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-      return itemCategories.some(cat => activeCategoryNames.includes(cat));
-    }).length;
+    return allItems.length;
   };
 
   const isItemAvailable = (itemId) => {
     const item = items.find(i => i._id === itemId);
-    if (!item || !item.available) return false;
-    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-    return itemCategories.some(cat => activeCategoryNames.includes(cat));
+    if (!item) return false;
+    return item.itemStatus === 'available';
   };
 
   const handleToggleWishlist = (item, e) => {
@@ -291,8 +293,8 @@ export default function UserMenuPage() {
     closeItemDialog();
   };
 
-  const filteredCategories = [...new Set(availableItems.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))]
-    .filter(cat => activeCategoryNames.includes(cat));
+  const filteredCategories = [...new Set(displayItems.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))]
+    .filter(cat => allCategoryNames.includes(cat));
 
   const MenuItemSkeleton = () => (
     <div className="relative pt-20 sm:pt-24">
@@ -369,7 +371,8 @@ export default function UserMenuPage() {
   const renderItemCard = (item) => {
     const inCart = isInCart ? isInCart(item._id) : false;
     const cartItem = cart?.find(c => c._id === item._id);
-    const available = isItemAvailable(item._id);
+    const itemStatus = getItemStatus(item);
+    const available = itemStatus === 'available';
     const rating = item.avgRating || 0;
     const totalRatings = item.totalRatings || 0;
 
@@ -389,7 +392,7 @@ export default function UserMenuPage() {
     return (
       <div 
         key={item._id} 
-        className={`group relative bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 ease-out flex sm:flex-col ${!available ? 'opacity-60' : ''}`}
+        className={`group relative bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 ease-out flex sm:flex-col ${!available ? 'opacity-75' : ''}`}
         onClick={() => available && openItemDialog(item)}
       >
         {/* Image Container - Full height on mobile, square on larger screens */}
@@ -432,10 +435,17 @@ export default function UserMenuPage() {
             </button>
           )}
           
+          {/* Sold Out Overlay */}
+          {itemStatus === 'soldout' && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
+              <span className="bg-red-600 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">Sold Out</span>
+            </div>
+          )}
+          
           {/* Unavailable Overlay */}
-          {!available && (
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-              <span className="bg-red-500 text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-lg">Unavailable</span>
+          {itemStatus === 'unavailable' && (
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
+              <span className="bg-gray-700 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">Unavailable</span>
             </div>
           )}
         </div>
@@ -488,8 +498,12 @@ export default function UserMenuPage() {
             </div>
 
             {/* Cart Button - Icon Only */}
-            {!available ? (
-              <button className="w-10 h-10 bg-gray-200 text-gray-500 rounded-xl cursor-not-allowed flex items-center justify-center" disabled>
+            {itemStatus === 'soldout' ? (
+              <button className="w-10 h-10 bg-red-100 text-red-500 rounded-xl cursor-not-allowed flex items-center justify-center" disabled title="Sold Out">
+                <ShoppingCart className="w-5 h-5" />
+              </button>
+            ) : itemStatus === 'unavailable' ? (
+              <button className="w-10 h-10 bg-gray-200 text-gray-500 rounded-xl cursor-not-allowed flex items-center justify-center" disabled title="Unavailable">
                 <ShoppingCart className="w-5 h-5" />
               </button>
             ) : inCart ? (
@@ -696,23 +710,25 @@ export default function UserMenuPage() {
             </button>
 
             {/* Category Items */}
-            {categories.filter(cat => cat.isActive && !cat.isPaused).map(cat => {
+            {categories.filter(cat => cat.isActive).map(cat => {
               const itemCount = getCategoryItemCount(cat.name);
+              const isUnavailable = cat.categoryStatus !== 'available';
+              const isSoldOut = cat.categoryStatus === 'soldout';
               
               return (
                 <button 
                   key={cat._id} 
-                  onClick={() => setSelectedCategory(cat.name)} 
-                  className="flex-shrink-0 group"
+                  onClick={() => !isUnavailable && setSelectedCategory(cat.name)} 
+                  className={`flex-shrink-0 group ${isUnavailable ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
                   <div className="relative w-36 md:w-44">
-                    <div className={`${selectedCategory === cat.name ? 'bg-[#3f9065]' : 'bg-[#F5F1E8] group-hover:bg-[#3f9065]'} rounded-t-full rounded-b-3xl pt-6 pb-14 px-4 transition-all duration-300`}>
+                    <div className={`${selectedCategory === cat.name ? 'bg-[#3f9065]' : isUnavailable ? 'bg-gray-200' : 'bg-[#F5F1E8] group-hover:bg-[#3f9065]'} rounded-t-full rounded-b-3xl pt-6 pb-14 px-4 transition-all duration-300`}>
                       <div className="flex justify-center mb-4">
                         {cat.image ? (
                           <img 
                             src={cat.image} 
                             alt={cat.name} 
-                            className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-lg transition-transform group-hover:scale-110"
+                            className={`w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-lg transition-transform group-hover:scale-110 ${isUnavailable ? 'grayscale' : ''}`}
                           />
                         ) : (
                           <div className="w-20 h-20 md:w-24 md:h-24 bg-orange-100 rounded-full flex items-center justify-center">
@@ -721,8 +737,14 @@ export default function UserMenuPage() {
                         )}
                       </div>
                       <div className="text-center">
-                        <h3 className={`font-semibold text-sm md:text-base transition-colors duration-300 line-clamp-1 ${selectedCategory === cat.name ? 'text-yellow-400' : 'text-gray-900 group-hover:text-white'}`}>{cat.name}</h3>
-                        <p className={`text-xs mt-0.5 transition-colors duration-300 ${selectedCategory === cat.name ? 'text-white/80' : 'text-gray-400 group-hover:text-white/80'}`}>{itemCount} Items</p>
+                        <h3 className={`font-semibold text-sm md:text-base transition-colors duration-300 line-clamp-1 ${selectedCategory === cat.name ? 'text-yellow-400' : isUnavailable ? 'text-gray-500' : 'text-gray-900 group-hover:text-white'}`}>{cat.name}</h3>
+                        {isSoldOut ? (
+                          <p className="text-xs mt-0.5 text-red-500 font-semibold">Sold Out</p>
+                        ) : isUnavailable ? (
+                          <p className="text-xs mt-0.5 text-gray-400">Unavailable</p>
+                        ) : (
+                          <p className={`text-xs mt-0.5 transition-colors duration-300 ${selectedCategory === cat.name ? 'text-white/80' : 'text-gray-400 group-hover:text-white/80'}`}>{itemCount} Items</p>
+                        )}
                       </div>
                     </div>
                     <img 
@@ -768,7 +790,7 @@ export default function UserMenuPage() {
           )}
           
           {!itemsLoading && (selectedCategory !== 'all' ? [selectedCategory] : filteredCategories).map(cat => {
-            const itemsInCategory = availableItems.filter(i => 
+            const itemsInCategory = displayItems.filter(i => 
               (Array.isArray(i.category) ? i.category : [i.category]).includes(cat)
             );
             if (itemsInCategory.length === 0) return null;

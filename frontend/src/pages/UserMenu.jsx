@@ -85,28 +85,34 @@ export default function UserMenu() {
     finally { setItemsLoading(false); }
   };
 
-  // Get active (non-paused) category names
+  // Get active (non-paused) category names for filtering the category buttons
   const activeCategoryNames = categories
-    .filter(cat => cat.isActive && !cat.isPaused)
+    .filter(cat => cat.isActive && cat.categoryStatus === 'available')
     .map(cat => cat.name);
 
-  // Filter items to only include those from active categories
-  const availableItems = items.filter(item => {
-    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-    return itemCategories.some(cat => activeCategoryNames.includes(cat));
-  });
+  // Get all category names (including unavailable) for display
+  const allCategoryNames = categories
+    .filter(cat => cat.isActive)
+    .map(cat => cat.name);
 
-  // Check if item is available (exists in available items list - not from paused category)
+  // Show all items - don't filter by category availability
+  const displayItems = items;
+
+  // Check item status (available, soldout, or unavailable)
+  const getItemStatus = (item) => {
+    return item.itemStatus || 'available';
+  };
+
+  // Check if item is available for ordering
   const isItemAvailable = (itemId) => {
     const item = items.find(i => i._id === itemId);
     if (!item) return false;
-    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-    return itemCategories.some(cat => activeCategoryNames.includes(cat));
+    return item.itemStatus === 'available';
   };
 
   // Check if category is available
   const isCategoryAvailable = (categoryName) => {
-    return categories.some(cat => cat.name === categoryName && cat.isActive && !cat.isPaused);
+    return categories.some(cat => cat.name === categoryName && cat.isActive && cat.categoryStatus === 'available');
   };
 
   const handleOrderSingle = (item) => {
@@ -126,8 +132,8 @@ export default function UserMenu() {
     addToCart(item); 
   };
 
-  const filteredCategories = [...new Set(availableItems.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))]
-    .filter(cat => activeCategoryNames.includes(cat));
+  const filteredCategories = [...new Set(displayItems.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))]
+    .filter(cat => allCategoryNames.includes(cat));
 
   const MenuItemSkeleton = () => (
     <div className="bg-white rounded-2xl shadow-md overflow-hidden animate-pulse">
@@ -160,16 +166,22 @@ export default function UserMenu() {
   const renderItemCard = (item) => {
     const inCart = isInCart(item._id);
     const cartItem = cart.find(c => c._id === item._id);
-    const available = isItemAvailable(item._id);
+    const itemStatus = getItemStatus(item);
+    const available = itemStatus === 'available';
     
     return (
-      <div key={item._id} className={`bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-lg transition-shadow group ${!available ? 'opacity-60' : ''}`}>
+      <div key={item._id} className={`bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-lg transition-shadow group ${!available ? 'opacity-70' : ''}`}>
         <div className="h-44 bg-gray-100 relative overflow-hidden">
           {item.image ? <img src={item.image} alt={item.name} className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${!available ? 'grayscale' : ''}`} /> : <div className="w-full h-full flex items-center justify-center"><span className="text-4xl">🍽️</span></div>}
           {item.foodType && <div className="absolute top-3 left-3"><span className={`w-5 h-5 rounded border-2 flex items-center justify-center ${item.foodType === 'veg' ? 'border-green-600 bg-white' : item.foodType === 'egg' ? 'border-yellow-500 bg-white' : 'border-red-600 bg-white'}`}><span className={`w-2.5 h-2.5 rounded-full ${item.foodType === 'veg' ? 'bg-green-600' : item.foodType === 'egg' ? 'bg-yellow-500' : 'bg-red-600'}`}></span></span></div>}
-          {!available && (
+          {itemStatus === 'soldout' && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+              <span className="bg-red-600 text-white px-4 py-1.5 rounded-full text-sm font-bold shadow-lg">Sold Out</span>
+            </div>
+          )}
+          {itemStatus === 'unavailable' && (
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-              <span className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium">Unavailable</span>
+              <span className="bg-gray-700 text-white px-4 py-1.5 rounded-full text-sm font-bold shadow-lg">Unavailable</span>
             </div>
           )}
           <button onClick={(e) => handleToggleWishlist(item, e)} className="absolute top-3 right-3 p-2 bg-white/90 rounded-full shadow-md hover:bg-white transition-colors"><Heart className={`w-4 h-4 ${isInWishlist(item._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} /></button>
@@ -196,7 +208,11 @@ export default function UserMenu() {
             {item.totalRatings > 0 ? <div className="flex items-center gap-1"><Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" /><span className="font-medium text-gray-700">{item.avgRating}</span><span>({item.totalRatings})</span></div> : <div className="flex items-center gap-1 text-gray-300"><Star className="w-3.5 h-3.5" /><span>No ratings</span></div>}
           </div>
           <div className="flex gap-2">
-            {!available ? (
+            {itemStatus === 'soldout' ? (
+              <div className="flex-1 py-2 bg-red-100 text-red-600 rounded-lg text-sm font-semibold text-center cursor-not-allowed">
+                Sold Out
+              </div>
+            ) : itemStatus === 'unavailable' ? (
               <div className="flex-1 py-2 bg-gray-200 text-gray-500 rounded-lg text-sm font-medium text-center cursor-not-allowed">
                 Unavailable
               </div>
@@ -267,22 +283,26 @@ export default function UserMenu() {
               <span className={`text-sm font-medium ${selectedCategory === 'all' ? 'text-orange-600' : 'text-gray-600'}`}>All Items</span>
               {selectedCategory === 'all' && <div className="w-8 h-1 bg-orange-500 rounded-full mt-1"></div>}
             </button>
-            {categories.filter(cat => cat.isActive && !cat.isPaused).map(cat => (
-              <button key={cat._id} onClick={() => setSelectedCategory(cat.name)} className="flex flex-col items-center min-w-[80px] transition-all">
-                <div className="w-16 h-16 rounded-full overflow-hidden mb-2 bg-gray-100">
+            {categories.filter(cat => cat.isActive).map(cat => {
+              const isUnavailable = cat.categoryStatus !== 'available';
+              return (
+              <button key={cat._id} onClick={() => !isUnavailable && setSelectedCategory(cat.name)} className={`flex flex-col items-center min-w-[80px] transition-all ${isUnavailable ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <div className={`w-16 h-16 rounded-full overflow-hidden mb-2 bg-gray-100 ${isUnavailable ? 'grayscale' : ''}`}>
                   {cat.image ? <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gray-200 flex items-center justify-center"><span className="text-gray-400 text-xl">🍽️</span></div>}
                 </div>
-                <span className={`text-sm font-medium ${selectedCategory === cat.name ? 'text-orange-600' : 'text-gray-600'}`}>{cat.name}</span>
+                <span className={`text-sm font-medium ${selectedCategory === cat.name ? 'text-orange-600' : isUnavailable ? 'text-gray-400' : 'text-gray-600'}`}>{cat.name}</span>
+                {cat.categoryStatus === 'soldout' && <span className="text-xs text-red-500 font-medium">Sold Out</span>}
+                {cat.categoryStatus === 'unavailable' && <span className="text-xs text-gray-400">Unavailable</span>}
                 {selectedCategory === cat.name && <div className="w-8 h-1 bg-orange-500 rounded-full mt-1"></div>}
               </button>
-            ))}
+            )})}
           </div>
         </div>
 
         <div className={`space-y-8 transition-opacity duration-300 ${itemsLoading ? 'opacity-50' : 'opacity-100'}`}>
           {itemsLoading && <div className="flex justify-center py-8"><div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin"></div></div>}
           {!itemsLoading && (selectedCategory !== 'all' ? [selectedCategory] : filteredCategories).map(cat => {
-            const itemsInCategory = availableItems.filter(i => (Array.isArray(i.category) ? i.category : [i.category]).includes(cat));
+            const itemsInCategory = displayItems.filter(i => (Array.isArray(i.category) ? i.category : [i.category]).includes(cat));
             if (itemsInCategory.length === 0) return null;
             return (
               <div key={cat}>
@@ -327,7 +347,7 @@ export default function UserMenu() {
         addToCart={addToCart} 
         removeFromWishlist={removeFromWishlist} 
         whatsappNumber={WHATSAPP_NUMBER}
-        availableItems={availableItems}
+        availableItems={displayItems}
       />
 
       <footer className="bg-white border-t mt-8 py-6">
