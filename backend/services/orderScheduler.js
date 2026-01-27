@@ -12,13 +12,18 @@ const orderScheduler = {
       const cutoffTime = new Date(Date.now() - PENDING_TIMEOUT_MINUTES * 60 * 1000);
       
       // Find pending orders older than 15 minutes
+      // EXCLUDE pickup orders with COD (Pay at Hotel) - they don't need payment confirmation
       const expiredOrders = await Order.find({
         status: 'pending',
         paymentStatus: 'pending',
-        createdAt: { $lt: cutoffTime }
+        createdAt: { $lt: cutoffTime },
+        // Exclude pickup orders with COD payment (Pay at Hotel)
+        $nor: [
+          { serviceType: 'pickup', paymentMethod: 'cod' }
+        ]
       });
       
-      console.log(`🔍 Found ${expiredOrders.length} expired pending orders`);
+      console.log(`🔍 Found ${expiredOrders.length} expired pending orders (excluding pickup COD orders)`);
       
       for (const order of expiredOrders) {
         await this.cancelOrder(order);
