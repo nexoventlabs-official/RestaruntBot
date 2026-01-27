@@ -75,11 +75,18 @@ export default function OrderDetailScreen({ route, navigation }) {
     finally { setLoadingPartners(false); }
   };
 
-  const updateStatus = async (newStatus, deliveryBoyId = null) => {
+  const updateStatus = async (newStatus, deliveryBoyId = null, actualPaymentMethod = null) => {
     setLoading(true);
     if (deliveryBoyId) setAssigningPartnerId(deliveryBoyId);
     try {
-      await api.put(`/orders/${order._id}/status`, { status: newStatus });
+      const updateData = { status: newStatus };
+      
+      // If pickup order is being completed and payment method is provided
+      if (actualPaymentMethod) {
+        updateData.actualPaymentMethod = actualPaymentMethod;
+      }
+      
+      await api.put(`/orders/${order._id}/status`, updateData);
       if (deliveryBoyId) await api.put(`/orders/${order._id}/assign-delivery`, { deliveryBoyId });
       setShowDeliveryModal(false);
       Alert.alert('Success', deliveryBoyId ? 'Order assigned and status updated' : 'Order status updated', [{ text: 'OK', onPress: () => navigation.goBack() }]);
@@ -93,10 +100,29 @@ export default function OrderDetailScreen({ route, navigation }) {
   };
 
   const confirmStatusUpdate = (newStatus) => {
-    Alert.alert('Update Status', `Change status to "${STATUS_CONFIG[newStatus]?.label}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Confirm', onPress: () => updateStatus(newStatus) },
-    ]);
+    // For pickup orders being marked as delivered (completed), ask for payment method
+    if (order.serviceType === 'pickup' && newStatus === 'delivered' && order.paymentMethod === 'cod') {
+      Alert.alert(
+        'Complete Order',
+        'How did the customer pay?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Cash', 
+            onPress: () => updateStatus(newStatus, null, 'cash')
+          },
+          { 
+            text: 'UPI', 
+            onPress: () => updateStatus(newStatus, null, 'upi')
+          }
+        ]
+      );
+    } else {
+      Alert.alert('Update Status', `Change status to "${STATUS_CONFIG[newStatus]?.label}"?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Confirm', onPress: () => updateStatus(newStatus) },
+      ]);
+    }
   };
 
   const cancelOrder = () => {
@@ -357,6 +383,12 @@ export default function OrderDetailScreen({ route, navigation }) {
                         ? (order.serviceType === 'pickup' ? 'Pay at Hotel' : 'Cash on Delivery')
                         : 'UPI Payment'}
                     </Text>
+                    {/* Show actual payment method if collected */}
+                    {order.actualPaymentMethod && order.serviceType === 'pickup' && (
+                      <Text style={styles.actualPaymentText}>
+                        Collected via {order.actualPaymentMethod === 'cash' ? 'Cash' : 'UPI'}
+                      </Text>
+                    )}
                   </View>
                 </View>
                 <View style={[styles.paymentStatusBadge, { backgroundColor: order.paymentStatus === 'paid' ? '#DCFCE7' : '#FEF3C7' }]}>
@@ -785,6 +817,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.light.text.primary,
     marginTop: 2,
+  },
+  actualPaymentText: {
+    fontSize: 12,
+    color: '#22C55E',
+    fontWeight: '500',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   paymentStatusBadge: {
     flexDirection: 'row',

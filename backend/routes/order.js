@@ -140,7 +140,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
 router.put('/:id/status', authMiddleware, async (req, res) => {
   console.log('🔄 PUT /orders/:id/status called with id:', req.params.id, 'body:', req.body);
   try {
-    const { status, message } = req.body;
+    const { status, message, actualPaymentMethod } = req.body;
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ error: 'Order not found' });
     console.log('📋 Found order:', order.orderId, 'current status:', order.status, 'new status:', status);
@@ -153,6 +153,17 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     order.status = status;
     order.trackingUpdates.push({ status, message: message || `Status updated to ${statusLabels[status] || status}` });
     
+    // Handle actual payment method for pickup orders
+    if (actualPaymentMethod && order.serviceType === 'pickup') {
+      order.actualPaymentMethod = actualPaymentMethod;
+      order.paymentStatus = 'paid';
+      order.trackingUpdates.push({ 
+        status: 'paid', 
+        message: `Payment collected via ${actualPaymentMethod === 'cash' ? 'Cash' : 'UPI'} at hotel` 
+      });
+      console.log(`💰 Pickup order payment: ${actualPaymentMethod}`);
+    }
+    
     // Track when status changed to delivered/cancelled/refunded for auto-cleanup
     if (status === 'delivered' || status === 'cancelled' || status === 'refunded') {
       order.statusUpdatedAt = new Date();
@@ -160,8 +171,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     
     if (status === 'delivered') {
       order.deliveredAt = new Date();
-      // Auto-mark COD orders as paid when delivered
-      if (order.paymentMethod === 'cod') {
+      // Auto-mark COD orders as paid when delivered (for delivery orders)
+      if (order.paymentMethod === 'cod' && order.serviceType !== 'pickup') {
         order.paymentStatus = 'paid';
         order.trackingUpdates.push({ status: 'paid', message: 'COD payment collected on delivery' });
       }
@@ -248,6 +259,13 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     }
 
     // Sync status update to Google Sheets
+    // Update actual payment method in Google Sheets for pickup orders
+    if (actualPaymentMethod && order.serviceType === 'pickup') {
+      const googleSheets = require('../services/googleSheets');
+      googleSheets.updateActualPaymentMethod(order.orderId, actualPaymentMethod).catch(err => {
+        console.error('Google Sheets actual payment method update error:', err.message);
+      });
+    }
     try {
       console.log('📊 Syncing to Google Sheets:', order.orderId, order.status, order.paymentStatus);
       const sheetUpdated = await googleSheets.updateOrderStatus(order.orderId, order.status, order.paymentStatus);
