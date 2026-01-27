@@ -2730,9 +2730,9 @@ const chatbot = {
           // Save state immediately to ensure selectedItem persists
           customer.conversationState = state;
           await customer.save();
-          // Go directly to quantity selection
-          await this.sendQuantitySelection(phone, item);
-          state.currentStep = 'select_quantity';
+          // Show item details first (consistent with search flow)
+          await this.sendItemDetailsForOrder(phone, item);
+          state.currentStep = 'viewing_item_details';
         } else {
           console.log('❌ Item not found for add_:', itemId);
           await whatsapp.sendButtons(phone,
