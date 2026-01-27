@@ -199,7 +199,64 @@ const whatsappBroadcast = {
                                        errorMessage.includes('recipient') ||
                                        errorMessage.includes('not a valid');
           
-          if ((is24HourError || isTemplateRequiredError) && OFFER_TEMPLATE_NAME) {
+          // For test numbers, if recipient is not added, try template method
+          if (isTestRecipientError && OFFER_TEMPLATE_NAME) {
+            // Try sending via template (templates work even for non-test recipients on test numbers)
+            try {
+              console.log(`[WhatsApp Broadcast] Test recipient restriction for ${contact.phone} (${contact.name || 'Unknown'}), trying template "${OFFER_TEMPLATE_NAME}"...`);
+              
+              if (OFFER_TEMPLATE_NAME === 'hello_world') {
+                // Use the pre-approved hello_world template first to re-open the conversation
+                await whatsapp.sendSimpleTemplate(contact.phone, 'hello_world', 'en_US');
+                
+                // Wait a moment then send the actual offer (now within 24h window)
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                
+                // Now send the actual offer content
+                if (offerImageUrl) {
+                  await whatsapp.sendImageWithCtaUrlOriginal(
+                    contact.phone, 
+                    offerImageUrl, 
+                    message, 
+                    'View Offer', 
+                    websiteUrl,
+                    'Tap to order now!'
+                  );
+                } else {
+                  await whatsapp.sendCtaUrl(
+                    contact.phone, 
+                    message, 
+                    'View Offer', 
+                    websiteUrl,
+                    'Tap to order now!'
+                  );
+                }
+              } else {
+                // Send using custom marketing template
+                await whatsapp.sendMarketingTemplate(
+                  contact.phone,
+                  OFFER_TEMPLATE_NAME,
+                  offerImageUrl,
+                  [offerTitle || 'Special Offer', offerDescription || 'Check out our latest deals!'],
+                  null
+                );
+              }
+              sent++;
+              sentViaTemplate++;
+              successContacts.push({ phone: contact.phone, method: 'template', name: contact.name });
+              console.log(`[WhatsApp Broadcast] ✅ Sent via template to ${contact.phone} (${contact.name || 'Unknown'})`);
+            } catch (templateError) {
+              failed++;
+              const templateErrorMsg = templateError.response?.data?.error?.message || templateError.message;
+              failedContacts.push({ 
+                phone: contact.phone,
+                name: contact.name,
+                error: templateErrorMsg,
+                reason: 'test_recipient_template_failed'
+              });
+              console.error(`[WhatsApp Broadcast] ❌ Template also failed for ${contact.phone} (${contact.name || 'Unknown'}):`, templateErrorMsg);
+            }
+          } else if ((is24HourError || isTemplateRequiredError) && OFFER_TEMPLATE_NAME) {
             // Try sending via template (works outside 24-hour window)
             try {
               console.log(`[WhatsApp Broadcast] 24h window expired for ${contact.phone} (${contact.name || 'Unknown'}), trying template "${OFFER_TEMPLATE_NAME}"...`);
@@ -266,8 +323,8 @@ const whatsappBroadcast = {
               reason: '24h_no_template'
             });
             console.log(`[WhatsApp Broadcast] ⚠️ 24h window expired for ${contact.phone} (${contact.name || 'Unknown'}), no template configured`);
-          } else if (isTestRecipientError) {
-            // Test number restriction
+          } else if (isTestRecipientError && !OFFER_TEMPLATE_NAME) {
+            // Test number restriction and no template to try
             failed++;
             failedContacts.push({ 
               phone: contact.phone,
@@ -275,7 +332,7 @@ const whatsappBroadcast = {
               error: 'Test number restriction: Can only send to registered test recipients. Add this number as a test recipient in Meta Business Manager or switch to a production WhatsApp number.',
               reason: 'test_recipient_restriction'
             });
-            console.log(`[WhatsApp Broadcast] ⚠️ Test recipient restriction for ${contact.phone} (${contact.name || 'Unknown'})`);
+            console.log(`[WhatsApp Broadcast] ⚠️ Test recipient restriction for ${contact.phone} (${contact.name || 'Unknown'}), no template to try`);
           } else {
             // Other error
             failed++;
