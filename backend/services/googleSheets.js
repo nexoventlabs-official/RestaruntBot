@@ -280,12 +280,26 @@ const googleSheets = {
       const istOptions = { timeZone: 'Asia/Kolkata' };
       const itemsStr = order.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
 
+      // Determine payment method label based on service type
+      let paymentMethodLabel = 'UPI/App';
+      if (order.paymentMethod === 'cod') {
+        if (order.serviceType === 'pickup') {
+          paymentMethodLabel = 'Pay at Hotel';
+        } else {
+          paymentMethodLabel = 'COD';
+        }
+      }
+
       // Determine payment status label
       let paymentStatusLabel = 'Pending';
       if (order.paymentStatus === 'paid') {
         paymentStatusLabel = 'Paid';
-      } else if (order.paymentMethod === 'cod' || order.paymentMethod === 'pay_at_hotel') {
-        paymentStatusLabel = 'Pay at Hotel';
+      } else if (order.paymentMethod === 'cod') {
+        if (order.serviceType === 'pickup') {
+          paymentStatusLabel = 'Pay at Hotel';
+        } else {
+          paymentStatusLabel = 'Pending';
+        }
       }
 
       // New column structure: OrderID, Time, Phone, Name, Items, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
@@ -296,7 +310,7 @@ const googleSheets = {
         order.customer?.name || '',
         itemsStr,
         order.totalAmount,
-        order.paymentMethod === 'upi' ? 'UPI/App' : 'Pay at Hotel',
+        paymentMethodLabel,
         paymentStatusLabel,
         STATUS_LABELS[order.status] || order.status || 'Pending',
         order.serviceType === 'pickup' ? 'Self Pickup' : (order.deliveryAddress?.address || ''),
