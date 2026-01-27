@@ -181,6 +181,35 @@ export default function UserMenuPage() {
     return item.itemStatus || 'available';
   };
 
+  // Format time from 24h to 12h format
+  const formatTime = (time) => {
+    if (!time) return '';
+    const [hours, mins] = time.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours % 12 || 12;
+    return `${hours12}:${mins.toString().padStart(2, '0')} ${period}`;
+  };
+
+  // Get schedule display text for item
+  const getScheduleText = (item) => {
+    if (!item.scheduleInfo) return null;
+    const { startTime, endTime } = item.scheduleInfo;
+    if (startTime && endTime) {
+      return `${formatTime(startTime)} - ${formatTime(endTime)}`;
+    }
+    return null;
+  };
+
+  // Get schedule display text for category
+  const getCategoryScheduleText = (cat) => {
+    if (!cat.scheduleInfo) return null;
+    const { startTime, endTime } = cat.scheduleInfo;
+    if (startTime && endTime) {
+      return `${formatTime(startTime)} - ${formatTime(endTime)}`;
+    }
+    return null;
+  };
+
   // Get item count for a category from all items
   const getCategoryItemCount = (categoryName) => {
     return allItems.filter(item => {
@@ -444,8 +473,14 @@ export default function UserMenuPage() {
           
           {/* Unavailable Overlay */}
           {itemStatus === 'unavailable' && (
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
+            <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center z-10 gap-1">
               <span className="bg-gray-700 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">Unavailable</span>
+              {item.scheduleInfo && (
+                <span className="bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-medium shadow-lg flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {getScheduleText(item)}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -740,6 +775,8 @@ export default function UserMenuPage() {
                         <h3 className={`font-semibold text-sm md:text-base transition-colors duration-300 line-clamp-1 ${selectedCategory === cat.name ? 'text-yellow-400' : isUnavailable ? 'text-gray-500' : 'text-gray-900 group-hover:text-white'}`}>{cat.name}</h3>
                         {isSoldOut ? (
                           <p className="text-xs mt-0.5 text-red-500 font-semibold">Sold Out</p>
+                        ) : isUnavailable && cat.scheduleInfo ? (
+                          <p className="text-xs mt-0.5 text-indigo-500 font-medium">{getCategoryScheduleText(cat)}</p>
                         ) : isUnavailable ? (
                           <p className="text-xs mt-0.5 text-gray-400">Unavailable</p>
                         ) : (

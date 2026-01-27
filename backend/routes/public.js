@@ -93,6 +93,16 @@ router.get('/categories', async (req, res) => {
       .map(category => {
         const catObj = category.toObject();
         catObj.categoryStatus = getCategoryStatus(category);
+        // Add schedule info if category has schedule enabled
+        if (category.schedule?.enabled) {
+          catObj.scheduleInfo = {
+            scheduleType: category.schedule.type || 'daily',
+            startTime: category.schedule.startTime,
+            endTime: category.schedule.endTime,
+            days: category.schedule.days || [],
+            customDays: category.schedule.customDays || []
+          };
+        }
         return catObj;
       });
     
@@ -135,6 +145,27 @@ router.get('/menu', async (req, res) => {
     // Get all active offer types
     const activeOffers = await Offer.find({ isActive: true }).select('offerType');
     const activeOfferTypes = activeOffers.map(o => o.offerType).filter(Boolean);
+    
+    // Helper to get schedule info for an item
+    const getItemScheduleInfo = (item) => {
+      const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+      
+      // Find the first scheduled locked category for this item
+      for (const catName of itemCategories) {
+        const category = allCategories.find(c => c.name === catName);
+        if (category && category.schedule?.enabled && (category.isPaused || category.isSoldOut)) {
+          return {
+            categoryName: category.name,
+            scheduleType: category.schedule.type || 'daily',
+            startTime: category.schedule.startTime,
+            endTime: category.schedule.endTime,
+            days: category.schedule.days || [],
+            customDays: category.schedule.customDays || []
+          };
+        }
+      }
+      return null;
+    };
     
     // Helper to determine item status
     const getItemStatus = (item) => {
@@ -191,6 +222,10 @@ router.get('/menu', async (req, res) => {
       }
       // Add item status for frontend display
       itemObj.itemStatus = getItemStatus(item);
+      // Add schedule info if item is unavailable due to schedule
+      if (itemObj.itemStatus === 'unavailable') {
+        itemObj.scheduleInfo = getItemScheduleInfo(item);
+      }
       return itemObj;
     });
     

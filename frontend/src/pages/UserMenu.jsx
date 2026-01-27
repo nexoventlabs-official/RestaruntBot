@@ -102,7 +102,34 @@ export default function UserMenu() {
   const getItemStatus = (item) => {
     return item.itemStatus || 'available';
   };
+  // Format time from 24h to 12h format
+  const formatTime = (time) => {
+    if (!time) return '';
+    const [hours, mins] = time.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours % 12 || 12;
+    return `${hours12}:${mins.toString().padStart(2, '0')} ${period}`;
+  };
 
+  // Get schedule display text for item
+  const getScheduleText = (item) => {
+    if (!item.scheduleInfo) return null;
+    const { startTime, endTime } = item.scheduleInfo;
+    if (startTime && endTime) {
+      return `${formatTime(startTime)} - ${formatTime(endTime)}`;
+    }
+    return null;
+  };
+
+  // Get schedule display text for category
+  const getCategoryScheduleText = (cat) => {
+    if (!cat.scheduleInfo) return null;
+    const { startTime, endTime } = cat.scheduleInfo;
+    if (startTime && endTime) {
+      return `${formatTime(startTime)} - ${formatTime(endTime)}`;
+    }
+    return null;
+  };
   // Check if item is available for ordering
   const isItemAvailable = (itemId) => {
     const item = items.find(i => i._id === itemId);
@@ -180,8 +207,14 @@ export default function UserMenu() {
             </div>
           )}
           {itemStatus === 'unavailable' && (
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center gap-1">
               <span className="bg-gray-700 text-white px-4 py-1.5 rounded-full text-sm font-bold shadow-lg">Unavailable</span>
+              {item.scheduleInfo && (
+                <span className="bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-medium shadow-lg flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {getScheduleText(item)}
+                </span>
+              )}
             </div>
           )}
           <button onClick={(e) => handleToggleWishlist(item, e)} className="absolute top-3 right-3 p-2 bg-white/90 rounded-full shadow-md hover:bg-white transition-colors"><Heart className={`w-4 h-4 ${isInWishlist(item._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} /></button>
@@ -213,8 +246,13 @@ export default function UserMenu() {
                 Sold Out
               </div>
             ) : itemStatus === 'unavailable' ? (
-              <div className="flex-1 py-2 bg-gray-200 text-gray-500 rounded-lg text-sm font-medium text-center cursor-not-allowed">
-                Unavailable
+              <div className="flex-1 py-2 bg-gray-200 text-gray-500 rounded-lg text-xs font-medium text-center cursor-not-allowed">
+                {item.scheduleInfo ? (
+                  <span className="flex items-center justify-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {getScheduleText(item)}
+                  </span>
+                ) : 'Unavailable'}
               </div>
             ) : inCart ? (
               <div className="flex-1 flex items-center justify-center gap-2 bg-orange-50 rounded-lg py-2">
@@ -292,7 +330,8 @@ export default function UserMenu() {
                 </div>
                 <span className={`text-sm font-medium ${selectedCategory === cat.name ? 'text-orange-600' : isUnavailable ? 'text-gray-400' : 'text-gray-600'}`}>{cat.name}</span>
                 {cat.categoryStatus === 'soldout' && <span className="text-xs text-red-500 font-medium">Sold Out</span>}
-                {cat.categoryStatus === 'unavailable' && <span className="text-xs text-gray-400">Unavailable</span>}
+                {cat.categoryStatus === 'unavailable' && cat.scheduleInfo && <span className="text-xs text-indigo-500 font-medium">{getCategoryScheduleText(cat)}</span>}
+                {cat.categoryStatus === 'unavailable' && !cat.scheduleInfo && <span className="text-xs text-gray-400">Unavailable</span>}
                 {selectedCategory === cat.name && <div className="w-8 h-1 bg-orange-500 rounded-full mt-1"></div>}
               </button>
             )})}

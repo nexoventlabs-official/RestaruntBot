@@ -161,6 +161,30 @@ export default function Home() {
     }).length;
   };
 
+  // Get item status (available, soldout, or unavailable)
+  const getItemStatus = (item) => {
+    return item.itemStatus || 'available';
+  };
+
+  // Format time from 24h to 12h format
+  const formatTime = (time) => {
+    if (!time) return '';
+    const [hours, mins] = time.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours % 12 || 12;
+    return `${hours12}:${mins.toString().padStart(2, '0')} ${period}`;
+  };
+
+  // Get schedule display text for item
+  const getScheduleText = (item) => {
+    if (!item.scheduleInfo) return null;
+    const { startTime, endTime } = item.scheduleInfo;
+    if (startTime && endTime) {
+      return `${formatTime(startTime)} - ${formatTime(endTime)}`;
+    }
+    return null;
+  };
+
   const handleToggleWishlist = (item, e) => {
     e.stopPropagation();
     if (!addToWishlist || !removeFromWishlist) return;
@@ -255,6 +279,8 @@ export default function Home() {
     const cartItem = cart?.find(c => c._id === item._id);
     const rating = item.avgRating || 0;
     const totalRatings = item.totalRatings || 0;
+    const itemStatus = getItemStatus(item);
+    const isAvailable = itemStatus === 'available';
 
     const renderStars = () => {
       const stars = [];
@@ -272,28 +298,56 @@ export default function Home() {
     return (
       <div 
         key={item._id} 
-        className="group relative pt-16 sm:pt-20 md:pt-28 cursor-pointer"
-        onClick={() => openItemDialog(item)}
+        className={`group relative pt-16 sm:pt-20 md:pt-28 ${isAvailable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+        onClick={() => isAvailable && openItemDialog(item)}
       >
         {/* Floating Image */}
-        <div className="absolute -top-4 sm:-top-6 md:-top-8 left-1/2 -translate-x-1/2 z-10 w-32 h-32 sm:w-40 sm:h-40 md:w-56 md:h-56 flex items-center justify-center">
+        <div className={`absolute -top-4 sm:-top-6 md:-top-8 left-1/2 -translate-x-1/2 z-10 w-32 h-32 sm:w-40 sm:h-40 md:w-56 md:h-56 flex items-center justify-center ${!isAvailable ? 'grayscale' : ''}`}>
           {item.image ? (
             <div className="relative">
               <img 
                 src={item.image} 
                 alt={item.name} 
-                className="max-h-full max-w-full object-contain group-hover:scale-110 transition-transform duration-300 drop-shadow-xl" 
+                className={`max-h-full max-w-full object-contain transition-transform duration-300 drop-shadow-xl ${isAvailable ? 'group-hover:scale-110' : ''}`} 
               />
+              {/* Status Badge on Image */}
+              {itemStatus === 'soldout' && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="bg-red-600 text-white px-3 py-1.5 rounded-full text-xs sm:text-sm font-bold shadow-lg">Sold Out</span>
+                </div>
+              )}
+              {itemStatus === 'unavailable' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
+                  <span className="bg-gray-700 text-white px-3 py-1.5 rounded-full text-xs sm:text-sm font-bold shadow-lg">Unavailable</span>
+                  {item.scheduleInfo && (
+                    <span className="bg-indigo-600 text-white px-2 py-1 rounded-full text-[10px] sm:text-xs font-medium shadow-lg flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {getScheduleText(item)}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
-            <div className="w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 bg-gradient-to-br from-orange-100 to-orange-200 rounded-full flex items-center justify-center">
+            <div className="w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 bg-gradient-to-br from-orange-100 to-orange-200 rounded-full flex items-center justify-center relative">
               <span className="text-3xl sm:text-4xl md:text-6xl">🍽️</span>
+              {/* Status Badge for no image items */}
+              {itemStatus === 'soldout' && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full">
+                  <span className="bg-red-600 text-white px-2 py-1 rounded-full text-[10px] sm:text-xs font-bold">Sold Out</span>
+                </div>
+              )}
+              {itemStatus === 'unavailable' && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-full">
+                  <span className="bg-gray-700 text-white px-2 py-1 rounded-full text-[10px] sm:text-xs font-bold">Unavailable</span>
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-2xl sm:rounded-3xl pt-16 sm:pt-20 md:pt-24 px-3 sm:px-4 md:px-5 pb-3 sm:pb-4 md:pb-5 shadow-[0_2px_15px_rgba(0,0,0,0.08)] border border-gray-100 hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-shadow">
+        <div className={`bg-white rounded-2xl sm:rounded-3xl pt-16 sm:pt-20 md:pt-24 px-3 sm:px-4 md:px-5 pb-3 sm:pb-4 md:pb-5 shadow-[0_2px_15px_rgba(0,0,0,0.08)] border border-gray-100 transition-shadow ${isAvailable ? 'hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)]' : 'opacity-75'}`}>
           {/* Name & Wishlist */}
           <div className="flex items-center justify-between gap-1 sm:gap-2 mb-1">
             <h3 className="font-bold text-gray-900 uppercase text-xs sm:text-sm tracking-wide line-clamp-1">{item.name}</h3>
@@ -316,20 +370,37 @@ export default function Home() {
             <p className="text-xs sm:text-sm text-gray-500 line-clamp-2 mb-2 sm:mb-4 min-h-[32px] sm:min-h-[40px]">{item.description}</p>
           )}
 
-          {/* Price Only */}
+          {/* Price or Status */}
           <div className="flex items-center gap-2">
-            <div className="relative">
-              <img src="/button.png" alt="" className="h-6 sm:h-7 md:h-8 w-auto" style={{ filter: 'brightness(0) saturate(100%) invert(19%) sepia(97%) saturate(7043%) hue-rotate(359deg) brightness(101%) contrast(117%)' }} />
-              <span className="absolute inset-0 flex items-center justify-center text-white font-bold text-xs sm:text-sm">
-                ₹{item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}
+            {itemStatus === 'soldout' ? (
+              <span className="bg-red-100 text-red-600 px-3 py-1 rounded-full text-xs sm:text-sm font-semibold">
+                Sold Out
               </span>
-            </div>
-            {item.offerPrice && item.offerPrice < item.price && (
+            ) : itemStatus === 'unavailable' ? (
+              <span className="bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-xs sm:text-sm font-medium flex items-center gap-1">
+                {item.scheduleInfo ? (
+                  <>
+                    <Clock className="w-3 h-3" />
+                    {getScheduleText(item)}
+                  </>
+                ) : 'Unavailable'}
+              </span>
+            ) : (
               <>
-                <span className="text-[10px] sm:text-xs text-gray-400 line-through">₹{item.price}</span>
-                <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold shadow-md">
-                  {Math.round(((item.price - item.offerPrice) / item.price) * 100)}% OFF
-                </span>
+                <div className="relative">
+                  <img src="/button.png" alt="" className="h-6 sm:h-7 md:h-8 w-auto" style={{ filter: 'brightness(0) saturate(100%) invert(19%) sepia(97%) saturate(7043%) hue-rotate(359deg) brightness(101%) contrast(117%)' }} />
+                  <span className="absolute inset-0 flex items-center justify-center text-white font-bold text-xs sm:text-sm">
+                    ₹{item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}
+                  </span>
+                </div>
+                {item.offerPrice && item.offerPrice < item.price && (
+                  <>
+                    <span className="text-[10px] sm:text-xs text-gray-400 line-through">₹{item.price}</span>
+                    <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold shadow-md">
+                      {Math.round(((item.price - item.offerPrice) / item.price) * 100)}% OFF
+                    </span>
+                  </>
+                )}
               </>
             )}
           </div>
