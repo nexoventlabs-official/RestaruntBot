@@ -9,9 +9,7 @@ const SHEET_NAMES = {
   new: 'neworders',
   delivered: 'delivered',
   cancelled: 'cancelled',
-  refunded: 'refunded',
-  refundprocessing: 'refundprocessing',
-  refundfailed: 'refundfailed'
+  selfpick: 'selfpick'
 };
 
 // Status colors (RGB values 0-1)
@@ -23,9 +21,9 @@ const STATUS_COLORS = {
   out_for_delivery: { red: 0.85, green: 0.88, blue: 1 },
   delivered: { red: 0.85, green: 1, blue: 0.85 },
   cancelled: { red: 1, green: 0.85, blue: 0.85 },
-  refunded: { red: 1, green: 0.8, blue: 0.8 },
-  refund_processing: { red: 1, green: 0.9, blue: 0.92 },
-  refund_failed: { red: 1, green: 0.7, blue: 0.7 }
+  selfpick: { red: 0.9, green: 0.95, blue: 1 },
+  ready_for_pickup: { red: 0.85, green: 0.9, blue: 1 },
+  picked_up: { red: 0.8, green: 1, blue: 0.9 }
 };
 
 // Status display labels
@@ -37,9 +35,9 @@ const STATUS_LABELS = {
   out_for_delivery: 'On the Way',
   delivered: 'Delivered',
   cancelled: 'Cancelled',
-  refunded: 'Refunded',
-  refund_processing: 'Refund Processing',
-  refund_failed: 'Refund Failed'
+  selfpick: 'Self Pickup',
+  ready_for_pickup: 'Ready for Pickup',
+  picked_up: 'Picked Up'
 };
 
 // Initialize Google Sheets API with Service Account
@@ -346,7 +344,25 @@ const googleSheets = {
         return true;
       }
 
-      // Handle cancelled orders
+      // Handle self-pickup orders - move from neworders to selfpick when picked up
+      if (status === 'picked_up') {
+        const newSheet = await this.getSheetByType(sheets, 'new');
+        if (!newSheet) return false;
+        
+        const orderData = await this.findOrderInSheet(sheets, newSheet.sheetName, orderId);
+        if (!orderData) {
+          console.log('❌ Order not found in neworders sheet');
+          return false;
+        }
+
+        // Add to selfpick sheet
+        await this.addOrderToSheet(sheets, 'selfpick', orderData.rowData, paymentStatus || 'paid', 'picked_up', 'picked_up');
+        // Delete from neworders
+        await this.deleteOrderFromSheet(sheets, newSheet.sheetId, orderData.rowIndex);
+        return true;
+      }
+
+      // Handle cancelled orders - just move to cancelled sheet (no refund logic)
       if (status === 'cancelled') {
         const newSheet = await this.getSheetByType(sheets, 'new');
         let orderData = null;
@@ -355,41 +371,38 @@ const googleSheets = {
           orderData = await this.findOrderInSheet(sheets, newSheet.sheetName, orderId);
         }
         
-        // Get order from database to check refund status
-        let dbOrder = null;
-        try {
-          const Order = require('../models/Order');
-          dbOrder = await Order.findOne({ orderId });
-        } catch (dbErr) {
-          console.error('Error fetching order from database:', dbErr.message);
-        }
-        
         if (!orderData) {
           console.log('⚠️ Order not found in neworders sheet, trying to fetch from database...');
-          // Try to get order data from database and create row data
-          if (dbOrder) {
-            const date = new Date(dbOrder.createdAt || Date.now());
-            const istOptions = { timeZone: 'Asia/Kolkata' };
-            const itemsStr = dbOrder.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
+          // Try to get order data from database
+          try {
+            const Order = require('../models/Order');
+            const dbOrder = await Order.findOne({ orderId });
             
-            // New column structure: OrderID, Time, Phone, Name, Items, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
-            orderData = {
-              rowData: [
-                dbOrder.orderId,
-                date.toLocaleTimeString('en-IN', istOptions),
-                dbOrder.customer?.phone || '',
-                dbOrder.customer?.name || '',
-                itemsStr,
-                dbOrder.totalAmount,
-                (dbOrder.paymentMethod || 'upi').toUpperCase(),
-                'Paid',
-                'Cancelled',
-                dbOrder.deliveryAddress?.address || '',
-                dbOrder.deliveryPartnerName || ''
-              ],
-              rowIndex: -1 // Not in sheet
-            };
-            console.log('✅ Created order data from database for:', orderId);
+            if (dbOrder) {
+              const date = new Date(dbOrder.createdAt || Date.now());
+              const istOptions = { timeZone: 'Asia/Kolkata' };
+              const itemsStr = dbOrder.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
+              
+              orderData = {
+                rowData: [
+                  dbOrder.orderId,
+                  date.toLocaleTimeString('en-IN', istOptions),
+                  dbOrder.customer?.phone || '',
+                  dbOrder.customer?.name || '',
+                  itemsStr,
+                  dbOrder.totalAmount,
+                  (dbOrder.paymentMethod || 'upi').toUpperCase(),
+                  STATUS_LABELS[dbOrder.paymentStatus] || 'Pending',
+                  'Cancelled',
+                  dbOrder.deliveryAddress?.address || dbOrder.serviceType === 'selfpick' ? 'Self Pickup' : '',
+                  dbOrder.deliveryPartnerName || ''
+                ],
+                rowIndex: -1
+              };
+              console.log('✅ Created order data from database for:', orderId);
+            }
+          } catch (dbErr) {
+            console.error('Error fetching order from database:', dbErr.message);
           }
         }
         
@@ -398,19 +411,9 @@ const googleSheets = {
           return false;
         }
 
-        // Check if this is a UPI refund - check both paymentStatus and refundStatus from DB
-        const isUpiRefund = paymentStatus === 'refund_processing' || 
-                           (dbOrder && dbOrder.refundStatus === 'pending' && dbOrder.paymentStatus === 'paid' && dbOrder.razorpayPaymentId);
-
         // Add to cancelled sheet
-        await this.addOrderToSheet(sheets, 'cancelled', orderData.rowData, isUpiRefund ? 'paid' : (paymentStatus || 'cancelled'), 'cancelled', 'cancelled');
+        await this.addOrderToSheet(sheets, 'cancelled', orderData.rowData, paymentStatus || 'cancelled', 'cancelled', 'cancelled');
         
-        // If UPI refund, also add to refundprocessing sheet with light pink color
-        if (isUpiRefund) {
-          console.log('📊 Adding UPI order to refundprocessing sheet...');
-          await this.addOrderToSheet(sheets, 'refundprocessing', orderData.rowData, 'paid', 'refund_processing', 'refund_processing');
-        }
-
         // Delete from neworders only if it was found there
         if (newSheet && orderData.rowIndex !== -1) {
           await this.deleteOrderFromSheet(sheets, newSheet.sheetId, orderData.rowIndex);
@@ -418,170 +421,8 @@ const googleSheets = {
         return true;
       }
 
-      // Handle refunded orders - move from refundprocessing to refunded sheet
-      if (status === 'refunded') {
-        let orderData = null;
-        let sourceSheetId = null;
-        let sourceRowIndex = -1;
-        
-        // Try to find in refundprocessing sheet first
-        const processingSheet = await this.getSheetByType(sheets, 'refundprocessing');
-        if (processingSheet) {
-          const processingOrder = await this.findOrderInSheet(sheets, processingSheet.sheetName, orderId);
-          if (processingOrder) {
-            console.log('📊 Found in refundprocessing sheet, will move to refunded...');
-            orderData = processingOrder;
-            sourceSheetId = processingSheet.sheetId;
-            sourceRowIndex = processingOrder.rowIndex;
-          }
-        }
-        
-        // Try to find in cancelled sheet if not found in refundprocessing
-        if (!orderData) {
-          const cancelledSheet = await this.getSheetByType(sheets, 'cancelled');
-          if (cancelledSheet) {
-            const cancelledOrder = await this.findOrderInSheet(sheets, cancelledSheet.sheetName, orderId);
-            if (cancelledOrder) {
-              console.log('📊 Found in cancelled sheet, adding to refunded...');
-              orderData = cancelledOrder;
-              // Don't delete from cancelled sheet, just copy to refunded
-            }
-          }
-        }
-        
-        // If still not found, try to get from database
-        if (!orderData) {
-          console.log('⚠️ Order not found in sheets, trying to fetch from database...');
-          try {
-            const Order = require('../models/Order');
-            const order = await Order.findOne({ orderId });
-            if (order) {
-              const date = new Date(order.createdAt || Date.now());
-              const istOptions = { timeZone: 'Asia/Kolkata' };
-              const itemsStr = order.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
-              
-              // New column structure: OrderID, Time, Phone, Name, Items, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
-              orderData = {
-                rowData: [
-                  order.orderId,
-                  date.toLocaleTimeString('en-IN', istOptions),
-                  order.customer?.phone || '',
-                  order.customer?.name || '',
-                  itemsStr,
-                  order.totalAmount,
-                  (order.paymentMethod || 'upi').toUpperCase(),
-                  'Refunded',
-                  'Cancelled',
-                  order.deliveryAddress?.address || '',
-                  order.deliveryPartnerName || ''
-                ],
-                rowIndex: -1
-              };
-              console.log('✅ Created order data from database for refunded:', orderId);
-            }
-          } catch (dbErr) {
-            console.error('Error fetching order from database:', dbErr.message);
-          }
-        }
-        
-        if (!orderData) {
-          console.log('❌ Order not found anywhere for refunded update:', orderId);
-          return false;
-        }
-        
-        // Delete from refundprocessing FIRST (before adding to refunded)
-        if (sourceSheetId && sourceRowIndex !== -1) {
-          console.log('🗑️ Deleting from refundprocessing sheet, row:', sourceRowIndex);
-          await this.deleteOrderFromSheet(sheets, sourceSheetId, sourceRowIndex);
-        }
-        
-        // Add to refunded sheet - Payment Status: Refunded, Order Status: Cancelled
-        await this.addOrderToSheet(sheets, 'refunded', orderData.rowData, 'refunded', 'cancelled', 'refunded');
-        
-        return true;
-      }
-
-      // Handle refund_failed orders - move from refundprocessing to refundfailed sheet
-      if (status === 'refund_failed') {
-        let orderData = null;
-        let sourceSheetId = null;
-        let sourceRowIndex = -1;
-        
-        // Try to find in refundprocessing sheet first
-        const processingSheet = await this.getSheetByType(sheets, 'refundprocessing');
-        if (processingSheet) {
-          const processingOrder = await this.findOrderInSheet(sheets, processingSheet.sheetName, orderId);
-          if (processingOrder) {
-            console.log('📊 Found in refundprocessing sheet, will move to refundfailed...');
-            orderData = processingOrder;
-            sourceSheetId = processingSheet.sheetId;
-            sourceRowIndex = processingOrder.rowIndex;
-          }
-        }
-        
-        // Try to find in cancelled sheet if not found in refundprocessing
-        if (!orderData) {
-          const cancelledSheet = await this.getSheetByType(sheets, 'cancelled');
-          if (cancelledSheet) {
-            const cancelledOrder = await this.findOrderInSheet(sheets, cancelledSheet.sheetName, orderId);
-            if (cancelledOrder) {
-              console.log('📊 Found in cancelled sheet, adding to refundfailed...');
-              orderData = cancelledOrder;
-            }
-          }
-        }
-        
-        // If still not found, try to get from database
-        if (!orderData) {
-          console.log('⚠️ Order not found in sheets for refund_failed, trying database...');
-          try {
-            const Order = require('../models/Order');
-            const order = await Order.findOne({ orderId });
-            if (order) {
-              const date = new Date(order.createdAt || Date.now());
-              const istOptions = { timeZone: 'Asia/Kolkata' };
-              const itemsStr = order.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
-              
-              // New column structure: OrderID, Time, Phone, Name, Items, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
-              orderData = {
-                rowData: [
-                  order.orderId,
-                  date.toLocaleTimeString('en-IN', istOptions),
-                  order.customer?.phone || '',
-                  order.customer?.name || '',
-                  itemsStr,
-                  order.totalAmount,
-                  (order.paymentMethod || 'upi').toUpperCase(),
-                  'Refund Failed',
-                  'Refund Failed',
-                  order.deliveryAddress?.address || '',
-                  order.deliveryPartnerName || ''
-                ],
-                rowIndex: -1
-              };
-              console.log('✅ Created order data from database for refund_failed:', orderId);
-            }
-          } catch (dbErr) {
-            console.error('Error fetching order from database:', dbErr.message);
-          }
-        }
-        
-        if (!orderData) {
-          console.log('❌ Order not found anywhere for refund_failed update:', orderId);
-          return false;
-        }
-        
-        // Delete from refundprocessing FIRST (before adding to refundfailed)
-        if (sourceSheetId && sourceRowIndex !== -1) {
-          console.log('🗑️ Deleting from refundprocessing sheet, row:', sourceRowIndex);
-          await this.deleteOrderFromSheet(sheets, sourceSheetId, sourceRowIndex);
-        }
-        
-        // Add to refundfailed sheet
-        await this.addOrderToSheet(sheets, 'refundfailed', orderData.rowData, 'refund_failed', 'refund_failed', 'refund_failed');
-        
-        return true;
-      }
+      // Handle refunded orders - REMOVED (no longer needed)
+      // Handle refund_failed orders - REMOVED (no longer needed)
 
       // For other statuses, update in neworders sheet
       const newSheet = await this.getSheetByType(sheets, 'new');
@@ -640,67 +481,6 @@ const googleSheets = {
       return true;
     } catch (error) {
       console.error('❌ Google Sheets init error:', error.message);
-      return false;
-    }
-  },
-
-  // Sync pending refund orders to refundprocessing sheet
-  async syncPendingRefunds() {
-    try {
-      const auth = getAuthClient();
-      if (!auth) return false;
-      
-      const sheets = google.sheets({ version: 'v4', auth });
-      const Order = require('../models/Order');
-      
-      // Find all orders with pending refund status
-      const pendingOrders = await Order.find({
-        refundStatus: { $in: ['pending', 'scheduled'] },
-        paymentStatus: 'paid',
-        razorpayPaymentId: { $exists: true, $ne: null }
-      });
-      
-      console.log(`📊 Found ${pendingOrders.length} pending refund orders to sync`);
-      
-      for (const order of pendingOrders) {
-        // Check if already in refundprocessing sheet
-        const processingSheet = await this.getSheetByType(sheets, 'refundprocessing');
-        if (processingSheet) {
-          const existingOrder = await this.findOrderInSheet(sheets, processingSheet.sheetName, order.orderId);
-          if (existingOrder) {
-            console.log(`⏭️ Order ${order.orderId} already in refundprocessing sheet`);
-            continue;
-          }
-        }
-        
-        // Create row data from order
-        const date = new Date(order.createdAt || Date.now());
-        const istOptions = { timeZone: 'Asia/Kolkata' };
-        const itemsStr = order.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
-        
-        // New column structure: OrderID, Time, Phone, Name, Items, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
-        const rowData = [
-          order.orderId,
-          date.toLocaleTimeString('en-IN', istOptions),
-          order.customer?.phone || '',
-          order.customer?.name || '',
-          itemsStr,
-          order.totalAmount,
-          (order.paymentMethod || 'upi').toUpperCase(),
-          'Paid',
-          'Refund Processing',
-          order.deliveryAddress?.address || '',
-          order.deliveryPartnerName || ''
-        ];
-        
-        // Add to refundprocessing sheet
-        await this.addOrderToSheet(sheets, 'refundprocessing', rowData, 'paid', 'refund_processing', 'refund_processing');
-        console.log(`✅ Synced order ${order.orderId} to refundprocessing sheet`);
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('❌ Error syncing pending refunds:', error.message);
       return false;
     }
   },
