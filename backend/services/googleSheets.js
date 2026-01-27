@@ -8,8 +8,7 @@ const SHEET_NAME = process.env.GOOGLE_SHEET_NAME || 'Sheet1';
 const SHEET_NAMES = {
   new: 'neworders',
   delivered: 'delivered',
-  cancelled: 'cancelled',
-  selfpick: 'selfpick'
+  cancelled: 'cancelled'
 };
 
 // Status colors (RGB values 0-1)
@@ -261,7 +260,7 @@ const googleSheets = {
     }
   },
 
-  // Add new order to neworders sheet
+  // Add new order to neworders sheet (both delivery and self-pickup)
   async addOrder(order) {
     try {
       const auth = getAuthClient();
@@ -269,9 +268,8 @@ const googleSheets = {
       
       const sheets = google.sheets({ version: 'v4', auth });
       
-      // Determine which sheet to add to based on serviceType
-      const sheetType = order.serviceType === 'pickup' ? 'selfpick' : 'new';
-      const sheet = await this.getSheetByType(sheets, sheetType);
+      // All orders go to neworders sheet (both delivery and pickup)
+      const sheet = await this.getSheetByType(sheets, 'new');
       if (!sheet) return false;
 
       await this.addDateHeader(sheets, sheet.sheetName, sheet.sheetId);
@@ -314,7 +312,7 @@ const googleSheets = {
         paymentStatusLabel,
         STATUS_LABELS[order.status] || order.status || 'Pending',
         order.serviceType === 'pickup' ? 'Self Pickup' : (order.deliveryAddress?.address || ''),
-        '' // Delivery Partner (empty initially, or actual payment method for pickup)
+        '' // Delivery Partner (empty for pickup, or delivery partner name for delivery)
       ];
 
       const response = await sheets.spreadsheets.values.append({
@@ -371,26 +369,26 @@ const googleSheets = {
         return true;
       }
 
-      // Handle self-pickup orders - move from neworders to selfpick when picked up
-      // This is no longer needed since pickup orders go directly to selfpick sheet
-      if (status === 'picked_up') {
-        // Update status in selfpick sheet
-        const selfpickSheet = await this.getSheetByType(sheets, 'selfpick');
-        if (!selfpickSheet) return false;
+      // Handle self-pickup orders - update in neworders sheet (no separate selfpick sheet)
+      if (status === 'picked_up' || status === 'delivered') {
+        // Update status in neworders sheet
+        const newSheet = await this.getSheetByType(sheets, 'new');
+        if (!newSheet) return false;
         
-        const orderData = await this.findOrderInSheet(sheets, selfpickSheet.sheetName, orderId);
+        const orderData = await this.findOrderInSheet(sheets, newSheet.sheetName, orderId);
         if (!orderData) {
-          console.log('❌ Order not found in selfpick sheet');
+          console.log('❌ Order not found in neworders sheet');
           return false;
         }
 
         const updates = [];
-        // Update order status to "Picked Up"
-        updates.push({ range: `${selfpickSheet.sheetName}!I${orderData.rowIndex + 1}`, values: [['Picked Up']] });
+        // Update order status to "Picked Up" or "Delivered"
+        const statusLabel = status === 'picked_up' ? 'Picked Up' : STATUS_LABELS[status];
+        updates.push({ range: `${newSheet.sheetName}!I${orderData.rowIndex + 1}`, values: [[statusLabel]] });
         
         // Update payment status if provided
         if (paymentStatus) {
-          updates.push({ range: `${selfpickSheet.sheetName}!H${orderData.rowIndex + 1}`, values: [[STATUS_LABELS[paymentStatus] || paymentStatus]] });
+          updates.push({ range: `${newSheet.sheetName}!H${orderData.rowIndex + 1}`, values: [[STATUS_LABELS[paymentStatus] || paymentStatus]] });
         }
 
         if (updates.length > 0) {
@@ -400,8 +398,9 @@ const googleSheets = {
           });
         }
         
-        // Update row color to picked_up color
-        await this.updateRowColor(sheets, selfpickSheet.sheetId, orderData.rowIndex, 'picked_up');
+        // Update row color
+        const colorStatus = status === 'picked_up' ? 'picked_up' : status;
+        await this.updateRowColor(sheets, newSheet.sheetId, orderData.rowIndex, colorStatus);
         return true;
       }
 
@@ -567,12 +566,12 @@ const googleSheets = {
       if (!auth) return false;
       
       const sheets = google.sheets({ version: 'v4', auth });
-      const selfpickSheet = await this.getSheetByType(sheets, 'selfpick');
-      if (!selfpickSheet) return false;
+      const newSheet = await this.getSheetByType(sheets, 'new');
+      if (!newSheet) return false;
       
-      const orderData = await this.findOrderInSheet(sheets, selfpickSheet.sheetName, orderId);
+      const orderData = await this.findOrderInSheet(sheets, newSheet.sheetName, orderId);
       if (!orderData) {
-        console.log('❌ Order not found in selfpick sheet for actual payment method update');
+        console.log('❌ Order not found in neworders sheet for actual payment method update');
         return false;
       }
       
@@ -580,7 +579,7 @@ const googleSheets = {
       const paymentLabel = actualPaymentMethod === 'cash' ? 'Cash' : 'UPI';
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${selfpickSheet.sheetName}!K${orderData.rowIndex + 1}`,
+        range: `${newSheet.sheetName}!K${orderData.rowIndex + 1}`,
         valueInputOption: 'RAW',
         resource: { values: [[paymentLabel]] }
       });
@@ -588,7 +587,7 @@ const googleSheets = {
       // Also update payment status to "Paid"
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${selfpickSheet.sheetName}!H${orderData.rowIndex + 1}`,
+        range: `${newSheet.sheetName}!H${orderData.rowIndex + 1}`,
         valueInputOption: 'RAW',
         resource: { values: [['Paid']] }
       });

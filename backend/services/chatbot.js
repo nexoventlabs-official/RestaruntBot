@@ -11,7 +11,10 @@ const chatbotImagesService = require('./chatbotImages');
 const whatsappBroadcast = require('./whatsappBroadcast');
 const axios = require('axios');
 
-const generateOrderId = () => 'ORD' + Date.now().toString(36).toUpperCase();
+const generateOrderId = (serviceType = 'delivery') => {
+  const prefix = serviceType === 'pickup' ? 'S' : 'O';
+  return prefix + 'RD' + Date.now().toString(36).toUpperCase();
+};
 
 // Helper to check if cart items are still available
 const checkCartAvailability = async (cart) => {
@@ -3812,7 +3815,8 @@ const chatbot = {
       return { success: false };
     }
 
-    const orderId = generateOrderId();
+    const serviceType = state.serviceType || state.selectedService || 'delivery';
+    const orderId = generateOrderId(serviceType);
     let total = 0;
     const items = freshCustomer.cart.filter(item => item.menuItem).map(item => {
       const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
@@ -4070,7 +4074,8 @@ const chatbot = {
       return { success: false };
     }
 
-    const orderId = generateOrderId();
+    const serviceType = state.serviceType || state.selectedService || 'delivery';
+    const orderId = generateOrderId(serviceType);
     let total = 0;
     const items = freshCustomer.cart.filter(item => item.menuItem).map(item => {
       const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
@@ -4712,7 +4717,7 @@ const chatbot = {
       }
 
       // Create order
-      const orderId = generateOrderId();
+      const orderId = generateOrderId('pickup');
       const order = new Order({
         orderId,
         customer: {
