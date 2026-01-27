@@ -45,7 +45,7 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
       });
     }
 
-    // Get contact count for immediate response
+    // Get contact count
     const contacts = await whatsappBroadcast.getAllContacts();
     const contactCount = contacts.length;
 
@@ -58,25 +58,50 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
       });
     }
 
-    // Send immediate success response to app
+    console.log(`[WhatsApp Broadcast] Starting offer broadcast to ${contactCount} contacts...`);
+
+    // Send offers and wait for actual results
+    const result = await whatsappBroadcast.sendOfferToAll(offerImageUrl, offerTitle, offerDescription, offerType);
+    
+    console.log('[WhatsApp Broadcast] Offer sending completed:', result);
+    
     res.json({
-      success: true,
-      message: 'Offer is being sent to all customers',
-      total: contactCount,
-      sent: contactCount,
-      failed: 0
+      success: result.success,
+      message: result.sent > 0 ? `Offer sent to ${result.sent} customers` : 'Failed to send offers',
+      total: result.total,
+      sent: result.sent,
+      sentViaTemplate: result.sentViaTemplate || 0,
+      failed: result.failed,
+      failedContacts: result.failedContacts || [],
+      templateConfigured: result.templateConfigured
     });
 
-    // Send offers in background (non-blocking)
-    whatsappBroadcast.sendOfferToAll(offerImageUrl, offerTitle, offerDescription, offerType)
-      .then(result => {
-        console.log('[WhatsApp Broadcast] Offer sending completed:', result);
-      })
-      .catch(error => {
-        console.error('[WhatsApp Broadcast] Offer sending failed:', error);
+  } catch (error) {
+    console.error('[WhatsApp Broadcast] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Test send offer to a single phone number
+router.post('/test-send', authMiddleware, async (req, res) => {
+  try {
+    const { phone, offerImageUrl, offerTitle, offerDescription, offerType } = req.body;
+    
+    if (!phone) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Phone number is required for test' 
       });
+    }
+
+    console.log(`[WhatsApp Broadcast] Testing offer send to ${phone}...`);
+
+    const result = await whatsappBroadcast.sendOfferToSingle(phone, offerImageUrl, offerTitle, offerDescription, offerType);
+    
+    res.json(result);
 
   } catch (error) {
+    console.error('[WhatsApp Broadcast] Test send error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

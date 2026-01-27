@@ -3,8 +3,8 @@ const Customer = require('../models/Customer');
 const whatsapp = require('./whatsapp');
 
 // Template name for broadcast offers - must be created in WhatsApp Business Manager
-// If you don't have a template, set this to null to skip template fallback
-const OFFER_TEMPLATE_NAME = process.env.WHATSAPP_OFFER_TEMPLATE || null;
+// If you don't have a custom template, we'll use 'hello_world' which is pre-approved for all accounts
+const OFFER_TEMPLATE_NAME = process.env.WHATSAPP_OFFER_TEMPLATE || 'hello_world';
 
 // Check if using a test WhatsApp number
 // Test numbers (like 15550001234, or numbers starting with 1555) have restrictions
@@ -158,17 +158,45 @@ const whatsappBroadcast = {
           if ((is24HourError || isTemplateRequiredError) && OFFER_TEMPLATE_NAME) {
             // Try sending via template (works outside 24-hour window)
             try {
-              console.log(`[WhatsApp Broadcast] 24h window expired for ${contact.phone}, trying template...`);
+              console.log(`[WhatsApp Broadcast] 24h window expired for ${contact.phone}, trying template "${OFFER_TEMPLATE_NAME}"...`);
               
-              // Send using marketing template
-              // Template should have: header image, body with {{1}} for title, {{2}} for description
-              await whatsapp.sendMarketingTemplate(
-                contact.phone,
-                OFFER_TEMPLATE_NAME,
-                offerImageUrl,
-                [offerTitle || 'Special Offer', offerDescription || 'Check out our latest deals!'],
-                null // buttonUrl if template has dynamic URL
-              );
+              if (OFFER_TEMPLATE_NAME === 'hello_world') {
+                // Use the pre-approved hello_world template first to re-open the conversation
+                await whatsapp.sendSimpleTemplate(contact.phone, 'hello_world', 'en_US');
+                
+                // Wait a moment then send the actual offer (now within 24h window)
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Now send the actual offer content
+                if (offerImageUrl) {
+                  await whatsapp.sendImageWithCtaUrlOriginal(
+                    contact.phone, 
+                    offerImageUrl, 
+                    message, 
+                    'View Offer', 
+                    websiteUrl,
+                    'Tap to order now!'
+                  );
+                } else {
+                  await whatsapp.sendCtaUrl(
+                    contact.phone, 
+                    message, 
+                    'View Offer', 
+                    websiteUrl,
+                    'Tap to order now!'
+                  );
+                }
+              } else {
+                // Send using custom marketing template
+                // Template should have: header image, body with {{1}} for title, {{2}} for description
+                await whatsapp.sendMarketingTemplate(
+                  contact.phone,
+                  OFFER_TEMPLATE_NAME,
+                  offerImageUrl,
+                  [offerTitle || 'Special Offer', offerDescription || 'Check out our latest deals!'],
+                  null // buttonUrl if template has dynamic URL
+                );
+              }
               sent++;
               sentViaTemplate++;
               console.log(`[WhatsApp Broadcast] ✅ Sent via template to ${contact.phone}`);
@@ -242,6 +270,150 @@ const whatsappBroadcast = {
     } catch (error) {
       console.error('[WhatsApp Broadcast] Error getting stats:', error);
       return { total: 0, active: 0, inactive: 0 };
+    }
+  },
+
+  // Send offer to a single phone number (for testing)
+  async sendOfferToSingle(phone, offerImageUrl, offerTitle, offerDescription, offerType) {
+    try {
+      // Build message
+      let message = `🎉 *New Offer!*\n\n`;
+      if (offerType) {
+        message += `🏷️ *${offerType}*\n\n`;
+      }
+      if (offerTitle) {
+        message += `*${offerTitle}*\n\n`;
+      }
+      if (offerDescription) {
+        message += `${offerDescription}\n\n`;
+      }
+      message += `Order now and enjoy this amazing deal! 🍽️`;
+
+      const websiteUrl = 'https://restarunt-bot.vercel.app/offers';
+
+      console.log(`[WhatsApp Broadcast] Testing send to ${phone}...`);
+
+      try {
+        // Try sending interactive message first
+        if (offerImageUrl) {
+          await whatsapp.sendImageWithCtaUrlOriginal(
+            phone, 
+            offerImageUrl, 
+            message, 
+            'View Offer', 
+            websiteUrl,
+            'Tap to order now!'
+          );
+        } else {
+          await whatsapp.sendCtaUrl(
+            phone, 
+            message, 
+            'View Offer', 
+            websiteUrl,
+            'Tap to order now!'
+          );
+        }
+        
+        console.log(`[WhatsApp Broadcast] ✅ Test send successful to ${phone}`);
+        return {
+          success: true,
+          message: 'Offer sent successfully',
+          phone,
+          method: 'interactive'
+        };
+      } catch (error) {
+        const errorMessage = error.response?.data?.error?.message || error.message || '';
+        const errorCode = error.response?.data?.error?.code;
+        
+        console.error(`[WhatsApp Broadcast] ❌ Test send failed:`, {
+          phone,
+          errorCode,
+          errorMessage,
+          fullError: error.response?.data
+        });
+
+        // Check specific error types
+        const is24HourError = errorCode === 131047 || 
+                             errorMessage.includes('24 hour') || 
+                             errorMessage.includes('re-engage') ||
+                             errorMessage.includes('outside the allowed window');
+        
+        const isTemplateRequiredError = errorMessage.includes('template') && !errorMessage.includes('not found');
+        
+        let reason = 'unknown';
+        let suggestion = '';
+        
+        if (is24HourError || isTemplateRequiredError) {
+          // Try using hello_world template to re-open conversation
+          console.log(`[WhatsApp Broadcast] 24h window expired, trying hello_world template for ${phone}...`);
+          
+          try {
+            // Send hello_world template first
+            await whatsapp.sendSimpleTemplate(phone, 'hello_world', 'en_US');
+            
+            // Wait then send the actual offer
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            if (offerImageUrl) {
+              await whatsapp.sendImageWithCtaUrlOriginal(
+                phone, 
+                offerImageUrl, 
+                message, 
+                'View Offer', 
+                websiteUrl,
+                'Tap to order now!'
+              );
+            } else {
+              await whatsapp.sendCtaUrl(
+                phone, 
+                message, 
+                'View Offer', 
+                websiteUrl,
+                'Tap to order now!'
+              );
+            }
+            
+            console.log(`[WhatsApp Broadcast] ✅ Test send successful via template to ${phone}`);
+            return {
+              success: true,
+              message: 'Offer sent successfully using hello_world template',
+              phone,
+              method: 'template_then_interactive'
+            };
+          } catch (templateErr) {
+            reason = '24_hour_window';
+            suggestion = 'Failed to send via template. The hello_world template may not be available or there is another issue. Check Meta Business Manager for approved templates.';
+            return {
+              success: false,
+              message: 'Failed to send offer',
+              phone,
+              error: templateErr.response?.data?.error?.message || templateErr.message,
+              errorCode: templateErr.response?.data?.error?.code,
+              reason,
+              suggestion
+            };
+          }
+        } else if (errorCode === 131030 || errorMessage.includes('not a valid')) {
+          reason = 'invalid_recipient';
+          suggestion = 'This phone number is not a valid WhatsApp number or not registered on WhatsApp.';
+        } else if (errorMessage.includes('test')) {
+          reason = 'test_number_restriction';
+          suggestion = 'You are using a test WhatsApp number. Test numbers can only send messages to phone numbers registered as test recipients in Meta Business Manager.';
+        }
+
+        return {
+          success: false,
+          message: 'Failed to send offer',
+          phone,
+          error: errorMessage,
+          errorCode,
+          reason,
+          suggestion
+        };
+      }
+    } catch (error) {
+      console.error('[WhatsApp Broadcast] Test send error:', error);
+      return { success: false, error: error.message, phone };
     }
   }
 };
