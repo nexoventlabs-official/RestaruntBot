@@ -4635,8 +4635,8 @@ const chatbot = {
     await whatsapp.sendButtons(phone,
       '🚚 *Choose Service Type*\n\nHow would you like to receive your order?',
       [
-        { id: 'service_delivery', text: '🛵 Delivery' },
-        { id: 'service_pickup', text: '🏪 Self-Pickup' }
+        { id: 'service_delivery', text: 'Delivery' },
+        { id: 'service_pickup', text: 'Self-Pickup' }
       ],
       'Select your preferred option'
     );
@@ -4679,8 +4679,8 @@ const chatbot = {
     msg += '💳 *Choose Payment Method:*';
 
     await whatsapp.sendButtons(phone, msg, [
-      { id: 'pickup_pay_hotel', text: '🏨 Pay at Hotel' },
-      { id: 'pickup_pay_upi', text: '📱 UPI/App' }
+      { id: 'pickup_pay_hotel', text: 'Pay at Hotel' },
+      { id: 'pickup_pay_upi', text: 'UPI/App' }
     ], 'Select payment method');
   },
 
@@ -4797,4 +4797,5 @@ const chatbot = {
 };
 
 module.exports = chatbot;
+
 
