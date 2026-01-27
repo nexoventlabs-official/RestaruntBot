@@ -259,16 +259,9 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     }
 
     // Sync status update to Google Sheets
-    // Update actual payment method in Google Sheets for pickup orders
-    if (actualPaymentMethod && order.serviceType === 'pickup') {
-      const googleSheets = require('../services/googleSheets');
-      googleSheets.updateActualPaymentMethod(order.orderId, actualPaymentMethod).catch(err => {
-        console.error('Google Sheets actual payment method update error:', err.message);
-      });
-    }
     try {
       console.log('📊 Syncing to Google Sheets:', order.orderId, order.status, order.paymentStatus);
-      const sheetUpdated = await googleSheets.updateOrderStatus(order.orderId, order.status, order.paymentStatus);
+      const sheetUpdated = await googleSheets.updateOrderStatus(order.orderId, order.status, order.paymentStatus, actualPaymentMethod);
       if (sheetUpdated) {
         console.log('✅ Google Sheets synced successfully');
       } else {

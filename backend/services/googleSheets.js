@@ -343,9 +343,9 @@ const googleSheets = {
   },
 
   // Main function to update order status
-  async updateOrderStatus(orderId, status, paymentStatus = null) {
+  async updateOrderStatus(orderId, status, paymentStatus = null, actualPaymentMethod = null) {
     try {
-      console.log('📊 updateOrderStatus:', { orderId, status, paymentStatus });
+      console.log('📊 updateOrderStatus:', { orderId, status, paymentStatus, actualPaymentMethod });
       
       const auth = getAuthClient();
       if (!auth) return false;
@@ -366,14 +366,22 @@ const googleSheets = {
         // Check if this is a pickup order by looking at the address column (column 10, index 9)
         const isPickupOrder = orderData.rowData[9] === 'Self Pickup' || orderId.startsWith('S');
         
+        // If actualPaymentMethod is provided for pickup orders, update payment status to show Cash/UPI
+        let finalPaymentStatus = paymentStatus || 'paid';
+        if (isPickupOrder && actualPaymentMethod) {
+          finalPaymentStatus = actualPaymentMethod === 'cash' ? 'Paid (Cash)' : 'Paid (UPI)';
+          // Also update column K (delivery partner/payment method column) with Cash or UPI
+          orderData.rowData[10] = actualPaymentMethod === 'cash' ? 'Cash' : 'UPI';
+        }
+        
         if (isPickupOrder) {
           // Pickup orders go to selfpick sheet when completed
-          console.log('📦 Moving completed pickup order to selfpick sheet:', orderId);
-          await this.addOrderToSheet(sheets, 'selfpick', orderData.rowData, paymentStatus || 'paid', 'picked_up', 'picked_up');
+          console.log('📦 Moving completed pickup order to selfpick sheet:', orderId, 'Payment:', finalPaymentStatus);
+          await this.addOrderToSheet(sheets, 'selfpick', orderData.rowData, finalPaymentStatus, 'picked_up', 'picked_up');
         } else {
           // Delivery orders go to delivered sheet
           console.log('🚚 Moving completed delivery order to delivered sheet:', orderId);
-          await this.addOrderToSheet(sheets, 'delivered', orderData.rowData, paymentStatus || 'paid', 'delivered', 'delivered');
+          await this.addOrderToSheet(sheets, 'delivered', orderData.rowData, finalPaymentStatus, 'delivered', 'delivered');
         }
         
         // Delete from neworders
