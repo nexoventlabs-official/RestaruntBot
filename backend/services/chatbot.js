@@ -4751,6 +4751,16 @@ const chatbot = {
       msg += `💰 Total: *₹${total}*\n`;
       msg += `💳 Payment: *${state.paymentMethod === 'cod' ? 'Pay at Hotel' : 'UPI/App'}*\n\n`;
       
+      // Add order items details
+      msg += `━━━━━━━━━━━━━━━\n`;
+      msg += `📋 *Order Details*\n`;
+      msg += `━━━━━━━━━━━━━━━\n`;
+      items.forEach((item, index) => {
+        msg += `${index + 1}. ${item.name}\n`;
+        msg += `   ${item.quantity} × ₹${item.price} = ₹${item.price * item.quantity}\n`;
+      });
+      msg += `━━━━━━━━━━━━━━━\n\n`;
+      
       if (state.paymentMethod === 'cod') {
         msg += '✨ Your order has been received!\n\n';
         msg += '📍 Please come to the restaurant to pick up your order.\n';
@@ -4764,9 +4774,9 @@ const chatbot = {
 
       // Add cancel button for pickup orders (can only cancel before confirmation)
       await whatsapp.sendButtons(phone, msg, [
-        { id: 'track_order', text: '📍 Track Order' },
-        { id: `cancel_${orderId}`, text: '❌ Cancel Order' },
-        { id: 'home', text: '🏠 Main Menu' }
+        { id: 'track_order', text: 'Track Order' },
+        { id: `cancel_${orderId}`, text: 'Cancel Order' },
+        { id: 'home', text: 'Main Menu' }
       ]);
 
       // Sync to Google Sheets
@@ -4787,3 +4797,4 @@ const chatbot = {
 };
 
 module.exports = chatbot;
+
