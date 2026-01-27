@@ -8,7 +8,8 @@ const SHEET_NAME = process.env.GOOGLE_SHEET_NAME || 'Sheet1';
 const SHEET_NAMES = {
   new: 'neworders',
   delivered: 'delivered',
-  cancelled: 'cancelled'
+  cancelled: 'cancelled',
+  selfpick: 'selfpick'
 };
 
 // Status colors (RGB values 0-1)
@@ -351,8 +352,8 @@ const googleSheets = {
       
       const sheets = google.sheets({ version: 'v4', auth });
 
-      // Handle delivered orders - move from neworders to delivered
-      if (status === 'delivered') {
+      // Handle delivered/completed orders - move from neworders to appropriate sheet
+      if (status === 'delivered' || status === 'picked_up') {
         const newSheet = await this.getSheetByType(sheets, 'new');
         if (!newSheet) return false;
         
@@ -362,45 +363,21 @@ const googleSheets = {
           return false;
         }
 
-        // Add to delivered sheet
-        await this.addOrderToSheet(sheets, 'delivered', orderData.rowData, paymentStatus || 'paid', 'delivered', 'delivered');
+        // Check if this is a pickup order by looking at the address column (column 10, index 9)
+        const isPickupOrder = orderData.rowData[9] === 'Self Pickup' || orderId.startsWith('S');
+        
+        if (isPickupOrder) {
+          // Pickup orders go to selfpick sheet when completed
+          console.log('📦 Moving completed pickup order to selfpick sheet:', orderId);
+          await this.addOrderToSheet(sheets, 'selfpick', orderData.rowData, paymentStatus || 'paid', 'picked_up', 'picked_up');
+        } else {
+          // Delivery orders go to delivered sheet
+          console.log('🚚 Moving completed delivery order to delivered sheet:', orderId);
+          await this.addOrderToSheet(sheets, 'delivered', orderData.rowData, paymentStatus || 'paid', 'delivered', 'delivered');
+        }
+        
         // Delete from neworders
         await this.deleteOrderFromSheet(sheets, newSheet.sheetId, orderData.rowIndex);
-        return true;
-      }
-
-      // Handle self-pickup orders - update in neworders sheet (no separate selfpick sheet)
-      if (status === 'picked_up' || status === 'delivered') {
-        // Update status in neworders sheet
-        const newSheet = await this.getSheetByType(sheets, 'new');
-        if (!newSheet) return false;
-        
-        const orderData = await this.findOrderInSheet(sheets, newSheet.sheetName, orderId);
-        if (!orderData) {
-          console.log('❌ Order not found in neworders sheet');
-          return false;
-        }
-
-        const updates = [];
-        // Update order status to "Picked Up" or "Delivered"
-        const statusLabel = status === 'picked_up' ? 'Picked Up' : STATUS_LABELS[status];
-        updates.push({ range: `${newSheet.sheetName}!I${orderData.rowIndex + 1}`, values: [[statusLabel]] });
-        
-        // Update payment status if provided
-        if (paymentStatus) {
-          updates.push({ range: `${newSheet.sheetName}!H${orderData.rowIndex + 1}`, values: [[STATUS_LABELS[paymentStatus] || paymentStatus]] });
-        }
-
-        if (updates.length > 0) {
-          await sheets.spreadsheets.values.batchUpdate({
-            spreadsheetId: SPREADSHEET_ID,
-            resource: { valueInputOption: 'RAW', data: updates }
-          });
-        }
-        
-        // Update row color
-        const colorStatus = status === 'picked_up' ? 'picked_up' : status;
-        await this.updateRowColor(sheets, newSheet.sheetId, orderData.rowIndex, colorStatus);
         return true;
       }
 
@@ -566,12 +543,25 @@ const googleSheets = {
       if (!auth) return false;
       
       const sheets = google.sheets({ version: 'v4', auth });
-      const newSheet = await this.getSheetByType(sheets, 'new');
-      if (!newSheet) return false;
       
-      const orderData = await this.findOrderInSheet(sheets, newSheet.sheetName, orderId);
+      // Try to find in neworders sheet first
+      let sheet = await this.getSheetByType(sheets, 'new');
+      let orderData = null;
+      
+      if (sheet) {
+        orderData = await this.findOrderInSheet(sheets, sheet.sheetName, orderId);
+      }
+      
+      // If not in neworders, try selfpick sheet (for completed pickup orders)
       if (!orderData) {
-        console.log('❌ Order not found in neworders sheet for actual payment method update');
+        sheet = await this.getSheetByType(sheets, 'selfpick');
+        if (sheet) {
+          orderData = await this.findOrderInSheet(sheets, sheet.sheetName, orderId);
+        }
+      }
+      
+      if (!orderData) {
+        console.log('❌ Order not found in neworders or selfpick sheet for actual payment method update');
         return false;
       }
       
@@ -579,7 +569,7 @@ const googleSheets = {
       const paymentLabel = actualPaymentMethod === 'cash' ? 'Cash' : 'UPI';
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${newSheet.sheetName}!K${orderData.rowIndex + 1}`,
+        range: `${sheet.sheetName}!K${orderData.rowIndex + 1}`,
         valueInputOption: 'RAW',
         resource: { values: [[paymentLabel]] }
       });
@@ -587,7 +577,7 @@ const googleSheets = {
       // Also update payment status to "Paid"
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${newSheet.sheetName}!H${orderData.rowIndex + 1}`,
+        range: `${sheet.sheetName}!H${orderData.rowIndex + 1}`,
         valueInputOption: 'RAW',
         resource: { values: [['Paid']] }
       });
@@ -616,7 +606,15 @@ const googleSheets = {
         orderData = await this.findOrderInSheet(sheets, sheet.sheetName, orderId);
       }
       
-      // If not in neworders, try delivered sheet
+      // If not in neworders, try selfpick sheet
+      if (!orderData) {
+        sheet = await this.getSheetByType(sheets, 'selfpick');
+        if (sheet) {
+          orderData = await this.findOrderInSheet(sheets, sheet.sheetName, orderId);
+        }
+      }
+      
+      // If not in selfpick, try delivered sheet
       if (!orderData) {
         sheet = await this.getSheetByType(sheets, 'delivered');
         if (sheet) {
