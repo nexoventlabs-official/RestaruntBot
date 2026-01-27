@@ -2604,10 +2604,10 @@ const chatbot = {
 
       // ========== CATEGORY SELECTION ==========
       else if (selection === 'cat_all') {
-        // Show all items from all categories
-        const preference = state.foodTypePreference || 'both';
-        const filteredItems = this.filterByFoodType(menuItems, preference);
-        console.log('🍽️ All items selected - Food preference:', preference, 'Total items:', filteredItems.length);
+        // Show all items from all categories - reset food type preference to show everything
+        state.foodTypePreference = 'both'; // Reset to show all items
+        const filteredItems = this.filterByFoodType(menuItems, 'both');
+        console.log('🍽️ All items selected - Total items:', filteredItems.length);
         await this.sendAllItems(phone, filteredItems);
         state.selectedCategory = 'all';
         state.currentStep = 'viewing_items';
@@ -2626,8 +2626,9 @@ const chatbot = {
         state.currentStep = 'viewing_items';
       }
       else if (selection === 'order_cat_all') {
-        // Show all items for ordering
-        const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
+        // Show all items for ordering - reset food type preference to show everything
+        state.foodTypePreference = 'both'; // Reset to show all items
+        const filteredItems = this.filterByFoodType(menuItems, 'both');
         console.log('🍽️ All items for order - Total items:', filteredItems.length);
         await this.sendAllItemsForOrder(phone, filteredItems);
         state.selectedCategory = 'all';
