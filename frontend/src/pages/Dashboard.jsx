@@ -7,9 +7,17 @@ import {
   TrendingUp,
   ArrowUpRight,
   ChefHat,
-  Truck
+  Truck,
+  Database,
+  Cloud,
+  HardDrive,
+  AlertTriangle,
+  CheckCircle,
+  RefreshCw
 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { useDashboardRefresh } from '../hooks/useSmartRefresh';
+import api from '../api';
 
 // Skeleton Components
 const MainStatSkeleton = () => (
@@ -46,8 +54,82 @@ const OrderSkeleton = () => (
   </div>
 );
 
+// Format bytes to human readable
+const formatBytes = (bytes) => {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+// Storage Progress Bar Component
+const StorageProgressBar = ({ used, limit, label, icon: Icon, color, percentage }) => {
+  const getStatusColor = (pct) => {
+    if (pct >= 90) return 'bg-red-500';
+    if (pct >= 75) return 'bg-yellow-500';
+    return color || 'bg-green-500';
+  };
+
+  const getStatusIcon = (pct) => {
+    if (pct >= 90) return <AlertTriangle className="w-4 h-4 text-red-500" />;
+    if (pct >= 75) return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
+    return <CheckCircle className="w-4 h-4 text-green-500" />;
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Icon className="w-4 h-4 text-dark-500" />
+          <span className="text-sm font-medium text-dark-700">{label}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {getStatusIcon(percentage)}
+          <span className="text-sm font-semibold text-dark-900">{percentage}%</span>
+        </div>
+      </div>
+      <div className="h-3 bg-dark-100 rounded-full overflow-hidden">
+        <div 
+          className={`h-full ${getStatusColor(percentage)} transition-all duration-500 rounded-full`}
+          style={{ width: `${Math.min(percentage, 100)}%` }}
+        />
+      </div>
+      <div className="flex justify-between text-xs text-dark-400">
+        <span>{formatBytes(used)} used</span>
+        <span>{formatBytes(limit)} limit</span>
+      </div>
+    </div>
+  );
+};
+
 export default function Dashboard() {
   const { data: stats, loading } = useDashboardRefresh(10000);
+  const [storageStats, setStorageStats] = useState(null);
+  const [storageLoading, setStorageLoading] = useState(true);
+  const [storageError, setStorageError] = useState(null);
+
+  // Fetch storage stats
+  const fetchStorageStats = async () => {
+    try {
+      setStorageLoading(true);
+      setStorageError(null);
+      const response = await api.get('/analytics/storage');
+      setStorageStats(response.data);
+    } catch (error) {
+      console.error('Error fetching storage stats:', error);
+      setStorageError(error.message);
+    } finally {
+      setStorageLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStorageStats();
+    // Refresh storage stats every 5 minutes
+    const interval = setInterval(fetchStorageStats, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const mainStats = [
     { 
@@ -258,6 +340,165 @@ export default function Dashboard() {
               <div className="p-8 text-center">
                 <ShoppingBag className="w-12 h-12 text-dark-200 mx-auto mb-3" />
                 <p className="text-dark-400">No recent orders</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Storage Stats Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* MongoDB Storage */}
+        <div className="bg-white rounded-2xl shadow-card overflow-hidden">
+          <div className="p-5 border-b border-dark-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                <Database className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-dark-900">MongoDB Storage</h2>
+                <p className="text-dark-400 text-sm">Free Tier: 512 MB</p>
+              </div>
+            </div>
+            <button 
+              onClick={fetchStorageStats}
+              disabled={storageLoading}
+              className="p-2 hover:bg-dark-50 rounded-lg transition-colors"
+            >
+              <RefreshCw className={`w-4 h-4 text-dark-400 ${storageLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+          <div className="p-5">
+            {storageLoading && !storageStats ? (
+              <div className="space-y-4 animate-pulse">
+                <div className="h-3 bg-dark-100 rounded-full"></div>
+                <div className="h-8 bg-dark-100 rounded"></div>
+                <div className="h-20 bg-dark-100 rounded"></div>
+              </div>
+            ) : storageError ? (
+              <div className="text-center py-4">
+                <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-2" />
+                <p className="text-dark-400 text-sm">Failed to load storage stats</p>
+              </div>
+            ) : storageStats?.mongodb ? (
+              <div className="space-y-5">
+                <StorageProgressBar 
+                  used={storageStats.mongodb.dataSize}
+                  limit={storageStats.mongodb.limit}
+                  label="Data Storage"
+                  icon={HardDrive}
+                  color="bg-green-500"
+                  percentage={storageStats.mongodb.percentage}
+                />
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-dark-50 rounded-xl p-3">
+                    <p className="text-xs text-dark-400 mb-1">Data Size</p>
+                    <p className="font-semibold text-dark-900">{formatBytes(storageStats.mongodb.dataSize)}</p>
+                  </div>
+                  <div className="bg-dark-50 rounded-xl p-3">
+                    <p className="text-xs text-dark-400 mb-1">Index Size</p>
+                    <p className="font-semibold text-dark-900">{formatBytes(storageStats.mongodb.indexSize)}</p>
+                  </div>
+                </div>
+
+                <div className="bg-dark-50 rounded-xl p-3">
+                  <p className="text-xs text-dark-400 mb-2">Free Space Remaining</p>
+                  <p className="text-xl font-bold text-green-600">{formatBytes(storageStats.mongodb.freeSpaceRemaining)}</p>
+                </div>
+
+                {/* Top Collections */}
+                <div>
+                  <p className="text-xs text-dark-400 mb-2">Top Collections by Size</p>
+                  <div className="space-y-2">
+                    {storageStats.mongodb.collections?.slice(0, 5).map((col, idx) => (
+                      <div key={col.name} className="flex items-center justify-between text-sm">
+                        <span className="text-dark-600 truncate flex-1">{col.name}</span>
+                        <span className="text-dark-400 ml-2">{col.count} docs</span>
+                        <span className="font-medium text-dark-800 ml-3 w-20 text-right">{formatBytes(col.size)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Cloudinary Storage */}
+        <div className="bg-white rounded-2xl shadow-card overflow-hidden">
+          <div className="p-5 border-b border-dark-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                <Cloud className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-dark-900">Cloudinary Storage</h2>
+                <p className="text-dark-400 text-sm">Free Tier: 25 GB</p>
+              </div>
+            </div>
+          </div>
+          <div className="p-5">
+            {storageLoading && !storageStats ? (
+              <div className="space-y-4 animate-pulse">
+                <div className="h-3 bg-dark-100 rounded-full"></div>
+                <div className="h-8 bg-dark-100 rounded"></div>
+                <div className="h-20 bg-dark-100 rounded"></div>
+              </div>
+            ) : storageStats?.cloudinary?.error ? (
+              <div className="text-center py-4">
+                <AlertTriangle className="w-8 h-8 text-yellow-400 mx-auto mb-2" />
+                <p className="text-dark-400 text-sm">Unable to fetch Cloudinary stats</p>
+                <p className="text-xs text-dark-300 mt-1">Check API credentials</p>
+              </div>
+            ) : storageStats?.cloudinary?.storage ? (
+              <div className="space-y-5">
+                <StorageProgressBar 
+                  used={storageStats.cloudinary.storage.used}
+                  limit={storageStats.cloudinary.storage.limit}
+                  label="Storage"
+                  icon={HardDrive}
+                  color="bg-blue-500"
+                  percentage={storageStats.cloudinary.storage.percentage}
+                />
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-dark-50 rounded-xl p-3">
+                    <p className="text-xs text-dark-400 mb-1">Plan</p>
+                    <p className="font-semibold text-dark-900 capitalize">{storageStats.cloudinary.plan}</p>
+                  </div>
+                  <div className="bg-dark-50 rounded-xl p-3">
+                    <p className="text-xs text-dark-400 mb-1">Total Resources</p>
+                    <p className="font-semibold text-dark-900">{storageStats.cloudinary.resources}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-dark-50 rounded-xl p-3">
+                    <p className="text-xs text-dark-400 mb-1">Bandwidth Used</p>
+                    <p className="font-semibold text-dark-900">{formatBytes(storageStats.cloudinary.bandwidth.used)}</p>
+                  </div>
+                  <div className="bg-dark-50 rounded-xl p-3">
+                    <p className="text-xs text-dark-400 mb-1">Transformations</p>
+                    <p className="font-semibold text-dark-900">{storageStats.cloudinary.transformations.used.toLocaleString()}</p>
+                  </div>
+                </div>
+
+                {storageStats.cloudinary.credits && (
+                  <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-blue-600">Monthly Credits</p>
+                      <p className="font-semibold text-blue-700">
+                        {storageStats.cloudinary.credits.used.toFixed(2)} / {storageStats.cloudinary.credits.limit}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <Cloud className="w-8 h-8 text-dark-200 mx-auto mb-2" />
+                <p className="text-dark-400 text-sm">No Cloudinary data</p>
               </div>
             )}
           </div>

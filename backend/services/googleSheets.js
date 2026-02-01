@@ -10,7 +10,10 @@ const SHEET_NAMES = {
   delivered: 'delivered',
   cancelled: 'cancelled',
   selfpick: 'selfpick',
-  customers: 'customers'
+  customers: 'customers',
+  whatsapp_contacts: 'whatsapp_contacts',
+  daily_reports: 'daily_reports',
+  dashboard_stats: 'dashboard_stats'
 };
 
 // Status colors (RGB values 0-1)
@@ -1280,6 +1283,592 @@ const googleSheets = {
       return true;
     } catch (error) {
       console.error('❌ Error cleaning up empty date headers:', error.message);
+      return false;
+    }
+  },
+
+  // ==================== WHATSAPP CONTACTS SHEET FUNCTIONS ====================
+  // Cost-saving: Store WhatsApp contacts in Google Sheets instead of MongoDB
+
+  // Initialize whatsapp_contacts sheet with headers
+  async initializeWhatsAppContactsSheet() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return false;
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'whatsapp_contacts');
+      
+      if (!sheet) {
+        console.log('⚠️ whatsapp_contacts sheet not found. Please create it in your Google Spreadsheet');
+        return false;
+      }
+      
+      // Check if headers exist
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A1:F1`
+      });
+      
+      if (!response.data.values || response.data.values.length === 0) {
+        const headers = ['Phone', 'Name', 'First Order Date', 'Last Order Date', 'Total Orders', 'Is Active'];
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheet.sheetName}!A1:F1`,
+          valueInputOption: 'RAW',
+          resource: { values: [headers] }
+        });
+        
+        // Format header row
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: SPREADSHEET_ID,
+          resource: {
+            requests: [{
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 6 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.2, green: 0.5, blue: 0.3 },
+                    textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                    horizontalAlignment: 'CENTER'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'
+              }
+            }]
+          }
+        });
+        console.log('✅ WhatsApp contacts sheet initialized with headers');
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Error initializing whatsapp_contacts sheet:', error.message);
+      return false;
+    }
+  },
+
+  // Add or update WhatsApp contact in sheet
+  async addOrUpdateWhatsAppContact(contact) {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return false;
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'whatsapp_contacts');
+      if (!sheet) return false;
+      
+      const { phone, name, firstOrderDate, lastOrderDate, totalOrders, isActive } = contact;
+      
+      // Get all rows to find existing contact
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:F`
+      });
+      
+      const rows = response.data.values || [];
+      let existingRowIndex = -1;
+      
+      // Find if contact exists (skip header)
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i][0] === phone) {
+          existingRowIndex = i;
+          break;
+        }
+      }
+      
+      const rowData = [
+        phone,
+        name || '',
+        firstOrderDate ? new Date(firstOrderDate).toLocaleDateString('en-IN') : '',
+        lastOrderDate ? new Date(lastOrderDate).toLocaleDateString('en-IN') : '',
+        totalOrders || 0,
+        isActive !== false ? 'Yes' : 'No'
+      ];
+      
+      if (existingRowIndex > -1) {
+        // Update existing row
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheet.sheetName}!A${existingRowIndex + 1}:F${existingRowIndex + 1}`,
+          valueInputOption: 'RAW',
+          resource: { values: [rowData] }
+        });
+      } else {
+        // Add new row
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheet.sheetName}!A:F`,
+          valueInputOption: 'RAW',
+          insertDataOption: 'INSERT_ROWS',
+          resource: { values: [rowData] }
+        });
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Error adding/updating WhatsApp contact in sheet:', error.message);
+      return false;
+    }
+  },
+
+  // Get all WhatsApp contacts from sheet
+  async getAllWhatsAppContacts() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return [];
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'whatsapp_contacts');
+      if (!sheet) return [];
+      
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:F`
+      });
+      
+      const rows = response.data.values || [];
+      const contacts = [];
+      
+      // Skip header row
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (row[0]) {
+          contacts.push({
+            phone: row[0],
+            name: row[1] || '',
+            firstOrderDate: row[2] || null,
+            lastOrderDate: row[3] || null,
+            totalOrders: parseInt(row[4]) || 0,
+            isActive: row[5] !== 'No'
+          });
+        }
+      }
+      
+      console.log(`📱 Fetched ${contacts.length} WhatsApp contacts from sheet`);
+      return contacts;
+    } catch (error) {
+      console.error('❌ Error fetching WhatsApp contacts from sheet:', error.message);
+      return [];
+    }
+  },
+
+  // Get active WhatsApp contacts for broadcast
+  async getActiveWhatsAppContacts() {
+    const allContacts = await this.getAllWhatsAppContacts();
+    return allContacts.filter(c => c.isActive);
+  },
+
+  // ==================== DAILY REPORTS SHEET FUNCTIONS ====================
+  // Cost-saving: Store daily reports in Google Sheets instead of MongoDB
+
+  // Initialize daily_reports sheet with headers
+  async initializeDailyReportsSheet() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return false;
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'daily_reports');
+      
+      if (!sheet) {
+        console.log('⚠️ daily_reports sheet not found. Please create it in your Google Spreadsheet');
+        return false;
+      }
+      
+      // Check if headers exist
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A1:K1`
+      });
+      
+      if (!response.data.values || response.data.values.length === 0) {
+        const headers = ['Date', 'Revenue', 'Total Orders', 'Delivered', 'Cancelled', 'Refunded', 'COD Orders', 'UPI Orders', 'Items Sold', 'Top Items', 'Top Categories'];
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheet.sheetName}!A1:K1`,
+          valueInputOption: 'RAW',
+          resource: { values: [headers] }
+        });
+        
+        // Format header row
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: SPREADSHEET_ID,
+          resource: {
+            requests: [{
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 11 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.4, green: 0.2, blue: 0.6 },
+                    textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                    horizontalAlignment: 'CENTER'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'
+              }
+            }]
+          }
+        });
+        console.log('✅ Daily reports sheet initialized with headers');
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Error initializing daily_reports sheet:', error.message);
+      return false;
+    }
+  },
+
+  // Add or update daily report in sheet
+  async saveDailyReport(report) {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return false;
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'daily_reports');
+      if (!sheet) return false;
+      
+      const { date, revenue, orders, deliveredOrders, cancelledOrders, refundedOrders, codOrders, upiOrders, itemsSold, items, categories } = report;
+      
+      // Get all rows to find existing date
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:K`
+      });
+      
+      const rows = response.data.values || [];
+      let existingRowIndex = -1;
+      
+      // Find if date exists (skip header)
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i][0] === date) {
+          existingRowIndex = i;
+          break;
+        }
+      }
+      
+      // Format top items and categories for display
+      const topItems = items && items.length > 0 
+        ? items.slice(0, 5).map(i => `${i.name} (${i.quantity})`).join(', ')
+        : '';
+      const topCategories = categories && categories.length > 0
+        ? categories.slice(0, 5).map(c => `${c.category} (₹${c.revenue})`).join(', ')
+        : '';
+      
+      const rowData = [
+        date,
+        revenue || 0,
+        orders || 0,
+        deliveredOrders || 0,
+        cancelledOrders || 0,
+        refundedOrders || 0,
+        codOrders || 0,
+        upiOrders || 0,
+        itemsSold || 0,
+        topItems,
+        topCategories
+      ];
+      
+      if (existingRowIndex > -1) {
+        // Update existing row
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheet.sheetName}!A${existingRowIndex + 1}:K${existingRowIndex + 1}`,
+          valueInputOption: 'RAW',
+          resource: { values: [rowData] }
+        });
+      } else {
+        // Add new row at the top (after header)
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: SPREADSHEET_ID,
+          resource: {
+            requests: [{
+              insertDimension: {
+                range: { sheetId: sheet.sheetId, dimension: 'ROWS', startIndex: 1, endIndex: 2 },
+                inheritFromBefore: false
+              }
+            }]
+          }
+        });
+        
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheet.sheetName}!A2:K2`,
+          valueInputOption: 'RAW',
+          resource: { values: [rowData] }
+        });
+      }
+      
+      console.log(`📊 Daily report saved for ${date}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error saving daily report to sheet:', error.message);
+      return false;
+    }
+  },
+
+  // Get daily report from sheet
+  async getDailyReport(date) {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return null;
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'daily_reports');
+      if (!sheet) return null;
+      
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:K`
+      });
+      
+      const rows = response.data.values || [];
+      
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i][0] === date) {
+          return {
+            date: rows[i][0],
+            revenue: parseFloat(rows[i][1]) || 0,
+            orders: parseInt(rows[i][2]) || 0,
+            deliveredOrders: parseInt(rows[i][3]) || 0,
+            cancelledOrders: parseInt(rows[i][4]) || 0,
+            refundedOrders: parseInt(rows[i][5]) || 0,
+            codOrders: parseInt(rows[i][6]) || 0,
+            upiOrders: parseInt(rows[i][7]) || 0,
+            itemsSold: parseInt(rows[i][8]) || 0
+          };
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('❌ Error fetching daily report from sheet:', error.message);
+      return null;
+    }
+  },
+
+  // Get reports for date range
+  async getReportsInRange(startDate, endDate) {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return [];
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'daily_reports');
+      if (!sheet) return [];
+      
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:K`
+      });
+      
+      const rows = response.data.values || [];
+      const reports = [];
+      
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      for (let i = 1; i < rows.length; i++) {
+        const rowDate = new Date(rows[i][0]);
+        if (rowDate >= start && rowDate <= end) {
+          reports.push({
+            date: rows[i][0],
+            revenue: parseFloat(rows[i][1]) || 0,
+            orders: parseInt(rows[i][2]) || 0,
+            deliveredOrders: parseInt(rows[i][3]) || 0,
+            cancelledOrders: parseInt(rows[i][4]) || 0,
+            refundedOrders: parseInt(rows[i][5]) || 0,
+            codOrders: parseInt(rows[i][6]) || 0,
+            upiOrders: parseInt(rows[i][7]) || 0,
+            itemsSold: parseInt(rows[i][8]) || 0
+          });
+        }
+      }
+      
+      return reports;
+    } catch (error) {
+      console.error('❌ Error fetching reports in range from sheet:', error.message);
+      return [];
+    }
+  },
+
+  // ==================== DASHBOARD STATS SHEET FUNCTIONS ====================
+  // Cost-saving: Store dashboard stats in Google Sheets instead of MongoDB
+
+  // Initialize dashboard_stats sheet with headers
+  async initializeDashboardStatsSheet() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return false;
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'dashboard_stats');
+      
+      if (!sheet) {
+        console.log('⚠️ dashboard_stats sheet not found. Please create it in your Google Spreadsheet');
+        return false;
+      }
+      
+      // Check if headers exist
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A1:D1`
+      });
+      
+      if (!response.data.values || response.data.values.length === 0) {
+        const headers = ['Metric', 'Value', 'Last Updated', 'Notes'];
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheet.sheetName}!A1:D1`,
+          valueInputOption: 'RAW',
+          resource: { values: [headers] }
+        });
+        
+        // Add default metrics
+        const defaultMetrics = [
+          ['Total Orders', '0', new Date().toLocaleString('en-IN'), 'Lifetime total'],
+          ['Total Revenue', '0', new Date().toLocaleString('en-IN'), 'Lifetime total'],
+          ['Total Customers', '0', new Date().toLocaleString('en-IN'), 'Lifetime total'],
+          ['Today Orders', '0', new Date().toLocaleString('en-IN'), 'Resets daily'],
+          ['Today Revenue', '0', new Date().toLocaleString('en-IN'), 'Resets daily'],
+          ['Today Date', new Date().toISOString().split('T')[0], new Date().toLocaleString('en-IN'), 'Current date']
+        ];
+        
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheet.sheetName}!A2:D7`,
+          valueInputOption: 'RAW',
+          resource: { values: defaultMetrics }
+        });
+        
+        // Format header row
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: SPREADSHEET_ID,
+          resource: {
+            requests: [{
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 4 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.1, green: 0.3, blue: 0.5 },
+                    textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                    horizontalAlignment: 'CENTER'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'
+              }
+            }]
+          }
+        });
+        console.log('✅ Dashboard stats sheet initialized with headers');
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Error initializing dashboard_stats sheet:', error.message);
+      return false;
+    }
+  },
+
+  // Update dashboard stat in sheet
+  async updateDashboardStat(metric, value) {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return false;
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'dashboard_stats');
+      if (!sheet) return false;
+      
+      // Get all rows to find metric
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:D`
+      });
+      
+      const rows = response.data.values || [];
+      let rowIndex = -1;
+      
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i][0] === metric) {
+          rowIndex = i;
+          break;
+        }
+      }
+      
+      const timestamp = new Date().toLocaleString('en-IN');
+      
+      if (rowIndex > -1) {
+        // Update existing metric
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheet.sheetName}!B${rowIndex + 1}:C${rowIndex + 1}`,
+          valueInputOption: 'RAW',
+          resource: { values: [[value, timestamp]] }
+        });
+      } else {
+        // Add new metric
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheet.sheetName}!A:D`,
+          valueInputOption: 'RAW',
+          insertDataOption: 'INSERT_ROWS',
+          resource: { values: [[metric, value, timestamp, '']] }
+        });
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Error updating dashboard stat in sheet:', error.message);
+      return false;
+    }
+  },
+
+  // Get all dashboard stats from sheet
+  async getDashboardStats() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return {};
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'dashboard_stats');
+      if (!sheet) return {};
+      
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:D`
+      });
+      
+      const rows = response.data.values || [];
+      const stats = {};
+      
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i][0]) {
+          const metric = rows[i][0];
+          const value = rows[i][1];
+          // Convert to number if it looks like a number
+          stats[metric] = isNaN(value) ? value : parseFloat(value);
+        }
+      }
+      
+      return stats;
+    } catch (error) {
+      console.error('❌ Error fetching dashboard stats from sheet:', error.message);
+      return {};
+    }
+  },
+
+  // Increment dashboard stat
+  async incrementDashboardStat(metric, amount = 1) {
+    try {
+      const stats = await this.getDashboardStats();
+      const currentValue = stats[metric] || 0;
+      await this.updateDashboardStat(metric, currentValue + amount);
+      return true;
+    } catch (error) {
+      console.error('❌ Error incrementing dashboard stat:', error.message);
       return false;
     }
   }

@@ -643,4 +643,97 @@ router.post('/report/send-email', authMiddleware, async (req, res) => {
   }
 });
 
+// Get Storage Stats (MongoDB + Cloudinary)
+router.get('/storage', authMiddleware, async (req, res) => {
+  try {
+    const mongoose = require('mongoose');
+    const cloudinary = require('cloudinary').v2;
+    
+    // Get MongoDB database stats
+    const db = mongoose.connection.db;
+    const dbStats = await db.stats();
+    
+    // Get collection-wise stats
+    const collections = await db.listCollections().toArray();
+    const collectionStats = [];
+    
+    for (const col of collections) {
+      try {
+        const stats = await db.collection(col.name).stats();
+        collectionStats.push({
+          name: col.name,
+          count: stats.count || 0,
+          size: stats.size || 0,
+          avgObjSize: stats.avgObjSize || 0,
+          storageSize: stats.storageSize || 0
+        });
+      } catch (e) {
+        // Some system collections may not have stats
+      }
+    }
+    
+    // Sort by size (largest first)
+    collectionStats.sort((a, b) => b.size - a.size);
+    
+    // MongoDB Free Tier Limit: 512 MB
+    const mongoLimit = 512 * 1024 * 1024; // 512 MB in bytes
+    const mongoUsed = dbStats.dataSize || 0;
+    const mongoPercentage = ((mongoUsed / mongoLimit) * 100).toFixed(2);
+    
+    // Get Cloudinary usage
+    let cloudinaryStats = null;
+    try {
+      const cloudinaryUsage = await cloudinary.api.usage();
+      
+      // Cloudinary Free Tier: 25 credits/month, ~25GB storage
+      const cloudinaryStorageLimit = 25 * 1024 * 1024 * 1024; // 25 GB in bytes
+      const cloudinaryUsedStorage = cloudinaryUsage.storage?.usage || 0;
+      const cloudinaryPercentage = ((cloudinaryUsedStorage / cloudinaryStorageLimit) * 100).toFixed(2);
+      
+      cloudinaryStats = {
+        storage: {
+          used: cloudinaryUsedStorage,
+          limit: cloudinaryStorageLimit,
+          percentage: parseFloat(cloudinaryPercentage)
+        },
+        bandwidth: {
+          used: cloudinaryUsage.bandwidth?.usage || 0,
+          limit: cloudinaryUsage.bandwidth?.limit || 0
+        },
+        transformations: {
+          used: cloudinaryUsage.transformations?.usage || 0,
+          limit: cloudinaryUsage.transformations?.limit || 0
+        },
+        resources: cloudinaryUsage.resources || 0,
+        credits: {
+          used: cloudinaryUsage.credits?.usage || 0,
+          limit: cloudinaryUsage.credits?.limit || 0
+        },
+        plan: cloudinaryUsage.plan || 'Free'
+      };
+    } catch (cloudinaryError) {
+      console.error('Cloudinary usage fetch error:', cloudinaryError.message);
+      cloudinaryStats = { error: 'Unable to fetch Cloudinary stats' };
+    }
+    
+    res.json({
+      mongodb: {
+        dataSize: mongoUsed,
+        storageSize: dbStats.storageSize || 0,
+        indexSize: dbStats.indexSize || 0,
+        totalSize: (dbStats.dataSize || 0) + (dbStats.indexSize || 0),
+        limit: mongoLimit,
+        percentage: parseFloat(mongoPercentage),
+        collections: collectionStats,
+        freeSpaceRemaining: mongoLimit - mongoUsed
+      },
+      cloudinary: cloudinaryStats,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Storage stats error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

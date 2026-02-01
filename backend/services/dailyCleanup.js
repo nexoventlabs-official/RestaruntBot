@@ -42,7 +42,49 @@ const dailyCleanup = {
       if (stats.todayDate !== today) {
         console.log(`🌙 Midnight reset - Previous day revenue: ₹${stats.todayRevenue}, orders: ${stats.todayOrders}`);
         
-        // Reset today's stats
+        // Save yesterday's stats to Google Sheets daily_reports before resetting
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayString = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+        
+        // Get yesterday's detailed stats from orders before they're cleaned
+        const yesterdayStart = new Date(yesterday);
+        yesterdayStart.setHours(0, 0, 0, 0);
+        const yesterdayEnd = new Date(yesterday);
+        yesterdayEnd.setHours(23, 59, 59, 999);
+        
+        const yesterdayOrders = await Order.find({
+          createdAt: { $gte: yesterdayStart, $lte: yesterdayEnd }
+        });
+        
+        const deliveredOrders = yesterdayOrders.filter(o => o.status === 'delivered').length;
+        const cancelledOrders = yesterdayOrders.filter(o => o.status === 'cancelled').length;
+        const refundedOrders = yesterdayOrders.filter(o => o.status === 'refunded').length;
+        const codOrders = yesterdayOrders.filter(o => o.paymentMethod === 'cod').length;
+        const upiOrders = yesterdayOrders.filter(o => o.paymentMethod === 'upi').length;
+        const itemsSold = yesterdayOrders.reduce((sum, o) => sum + (o.items?.length || 0), 0);
+        
+        // Save to Google Sheets
+        await googleSheets.saveDailyReport({
+          date: yesterdayString,
+          revenue: stats.todayRevenue,
+          orders: stats.todayOrders,
+          deliveredOrders,
+          cancelledOrders,
+          refundedOrders,
+          codOrders,
+          upiOrders,
+          itemsSold
+        });
+        
+        // Also update dashboard stats in Google Sheets
+        await googleSheets.updateDashboardStat('Total Orders', stats.totalOrders + stats.todayOrders);
+        await googleSheets.updateDashboardStat('Total Revenue', stats.totalRevenue + stats.todayRevenue);
+        await googleSheets.updateDashboardStat('Today Orders', 0);
+        await googleSheets.updateDashboardStat('Today Revenue', 0);
+        await googleSheets.updateDashboardStat('Today Date', today);
+        
+        // Reset today's stats in MongoDB
         stats.todayRevenue = 0;
         stats.todayOrders = 0;
         stats.todayDate = today;
@@ -51,6 +93,7 @@ const dailyCleanup = {
         await stats.save();
         
         console.log(`✅ Today's stats reset for ${today}`);
+        console.log(`📊 Yesterday's report saved to Google Sheets`);
         dataEvents.emit('dashboard');
         
         // Clean up empty date headers from Google Sheets
@@ -77,6 +120,10 @@ const dailyCleanup = {
       
       await stats.save();
       
+      // Also sync to Google Sheets (cost-saving backup)
+      await googleSheets.updateDashboardStat('Total Orders', stats.totalOrders);
+      await googleSheets.updateDashboardStat('Total Revenue', stats.totalRevenue);
+      
       console.log(`📊 Saved stats: ${orders.length} orders, ₹${revenue} revenue`);
       return stats;
     } catch (error) {
@@ -91,6 +138,9 @@ const dailyCleanup = {
       stats.totalCustomers += count;
       stats.lastUpdated = new Date();
       await stats.save();
+      
+      // Also sync to Google Sheets
+      await googleSheets.updateDashboardStat('Total Customers', stats.totalCustomers);
       
       console.log(`📊 Saved stats: ${count} customers`);
       return stats;

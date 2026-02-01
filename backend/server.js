@@ -26,6 +26,7 @@ const dailyCleanup = require('./services/dailyCleanup');
 const categoryScheduler = require('./services/categoryScheduler');
 const orderCleanup = require('./services/orderCleanup');
 const cartCleanup = require('./services/cartCleanup');
+const googleSheets = require('./services/googleSheets');
 
 const app = express();
 
@@ -50,7 +51,7 @@ app.use('/api', (req, res, next) => {
 });
 
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => {
+  .then(async () => {
     console.log('MongoDB connected');
     // Start schedulers after DB connection
     orderScheduler.start();
@@ -58,6 +59,14 @@ mongoose.connect(process.env.MONGODB_URI)
     categoryScheduler.start();
     orderCleanup.start();
     cartCleanup.startCartCleanupScheduler();
+    
+    // Initialize Google Sheets (cost-saving sheets)
+    console.log('📊 Initializing Google Sheets...');
+    await googleSheets.initializeWhatsAppContactsSheet();
+    await googleSheets.initializeDailyReportsSheet();
+    await googleSheets.initializeDashboardStatsSheet();
+    await googleSheets.initializeCustomersSheet();
+    console.log('✅ Google Sheets initialized');
   })
   .catch(err => console.error('MongoDB connection error:', err));
 

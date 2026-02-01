@@ -1,6 +1,7 @@
 const WhatsAppContact = require('../models/WhatsAppContact');
 const Customer = require('../models/Customer');
 const whatsapp = require('./whatsapp');
+const googleSheets = require('./googleSheets');
 
 // Template name for broadcast offers - must be created in WhatsApp Business Manager
 // If you don't have a custom template, we'll use 'hello_world' which is pre-approved for all accounts
@@ -16,20 +17,29 @@ const isTestNumber = () => {
 };
 
 const whatsappBroadcast = {
-  // Add or update a WhatsApp contact
+  // Add or update a WhatsApp contact - Now saves to Google Sheets (cost-saving)
   async addContact(phone, name = null, orderDate = new Date()) {
     try {
+      // Save to Google Sheets (primary storage)
+      await googleSheets.addOrUpdateWhatsAppContact({
+        phone,
+        name,
+        firstOrderDate: orderDate,
+        lastOrderDate: orderDate,
+        totalOrders: 1,
+        isActive: true
+      });
+      
+      // Also save to MongoDB for backward compatibility (can be removed later)
       const contact = await WhatsAppContact.findOne({ phone });
       
       if (contact) {
-        // Update existing contact
         contact.name = name || contact.name;
         contact.lastOrderDate = orderDate;
         contact.totalOrders += 1;
         await contact.save();
         return contact;
       } else {
-        // Create new contact
         const newContact = new WhatsAppContact({
           phone,
           name,
@@ -46,12 +56,12 @@ const whatsappBroadcast = {
     }
   },
 
-  // Sync all existing customers to WhatsApp contacts
+  // Sync all existing customers to WhatsApp contacts (both MongoDB and Sheets)
   async syncExistingCustomers() {
     try {
-      console.log('[WhatsApp Broadcast] Syncing existing customers...');
+      console.log('[WhatsApp Broadcast] Syncing existing customers to Google Sheets...');
       
-      // Get all customers with phone numbers
+      // Get all customers with phone numbers from MongoDB
       const customers = await Customer.find({ 
         phone: { $exists: true, $ne: null, $ne: '' } 
       });
@@ -59,50 +69,50 @@ const whatsappBroadcast = {
       console.log(`[WhatsApp Broadcast] Found ${customers.length} customers with phone numbers`);
       
       let synced = 0;
-      let updated = 0;
-      let skipped = 0;
       
+      // Sync each customer to Google Sheets
       for (const customer of customers) {
         if (customer.phone && customer.phone.trim() !== '') {
-          const existingContact = await WhatsAppContact.findOne({ phone: customer.phone });
-          
-          if (existingContact) {
-            // Update existing contact if customer has newer order date
-            if (customer.createdAt > existingContact.lastOrderDate) {
-              existingContact.lastOrderDate = customer.createdAt;
-              existingContact.name = customer.name || existingContact.name;
-              await existingContact.save();
-              updated++;
-            } else {
-              skipped++;
-            }
-          } else {
-            // Create new contact
-            await this.addContact(customer.phone, customer.name, customer.createdAt);
-            synced++;
-          }
+          await googleSheets.addOrUpdateWhatsAppContact({
+            phone: customer.phone,
+            name: customer.name || '',
+            firstOrderDate: customer.createdAt,
+            lastOrderDate: customer.updatedAt || customer.createdAt,
+            totalOrders: customer.totalOrders || 1,
+            isActive: true
+          });
+          synced++;
         }
       }
       
-      console.log(`[WhatsApp Broadcast] Sync complete: ${synced} new, ${updated} updated, ${skipped} skipped`);
-      return { success: true, synced, updated, skipped, total: customers.length };
+      console.log(`[WhatsApp Broadcast] Synced ${synced} customers to Google Sheets`);
+      return { success: true, synced, total: customers.length };
     } catch (error) {
       console.error('[WhatsApp Broadcast] Error syncing customers:', error);
       return { success: false, error: error.message };
     }
   },
 
-  // Get all active WhatsApp contacts (includes ALL customers who ever interacted via WhatsApp)
+  // Get all active WhatsApp contacts from Google Sheets (cost-saving)
   async getAllContacts(includeOldCustomers = true) {
     try {
       if (includeOldCustomers) {
-        // First sync any customers that might not be in WhatsAppContact yet
-        // This includes customers who sent "hi" or any message, even if it was months ago
+        // Sync any new customers first
         await this.syncExistingCustomers();
       }
       
+      // Fetch from Google Sheets (primary source)
+      const sheetContacts = await googleSheets.getActiveWhatsAppContacts();
+      
+      if (sheetContacts.length > 0) {
+        console.log(`[WhatsApp Broadcast] Found ${sheetContacts.length} active contacts from Google Sheets`);
+        return sheetContacts;
+      }
+      
+      // Fallback to MongoDB if sheets fail
+      console.log('[WhatsApp Broadcast] Falling back to MongoDB for contacts...');
       const contacts = await WhatsAppContact.find({ isActive: true }).sort({ lastOrderDate: -1 });
-      console.log(`[WhatsApp Broadcast] Found ${contacts.length} active contacts (includes old customers)`);
+      console.log(`[WhatsApp Broadcast] Found ${contacts.length} active contacts from MongoDB`);
       return contacts;
     } catch (error) {
       console.error('[WhatsApp Broadcast] Error getting contacts:', error);
