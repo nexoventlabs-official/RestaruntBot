@@ -1049,8 +1049,40 @@ const chatbot = {
   findCategory(text, menuItems) {
     // Flatten category arrays and dedupe (category is an array field)
     const categories = [...new Set(menuItems.flatMap(m => Array.isArray(m.category) ? m.category : [m.category]))];
-    const lowerText = text.toLowerCase();
-    return categories.find(cat => cat.toLowerCase().includes(lowerText) || lowerText.includes(cat.toLowerCase()));
+    const lowerText = text.toLowerCase().trim();
+    
+    // First try exact match
+    const exactMatch = categories.find(cat => 
+      cat.toLowerCase().includes(lowerText) || lowerText.includes(cat.toLowerCase())
+    );
+    if (exactMatch) return exactMatch;
+    
+    // Try fuzzy matching for typos (e.g., "brekfast" → "breakfast", "beverges" → "beverages")
+    for (const cat of categories) {
+      const catLower = cat.toLowerCase();
+      // Split into words and check each
+      const catWords = catLower.split(/\s+/);
+      const searchWords = lowerText.split(/\s+/);
+      
+      for (const searchWord of searchWords) {
+        if (searchWord.length < 3) continue;
+        
+        // Check against category name
+        if (this.similarityRatio(searchWord, catLower) >= 0.65) {
+          return cat;
+        }
+        
+        // Check against each word in category
+        for (const catWord of catWords) {
+          if (catWord.length < 3) continue;
+          if (this.similarityRatio(searchWord, catWord) >= 0.65) {
+            return cat;
+          }
+        }
+      }
+    }
+    
+    return null;
   },
 
   // Helper to calculate Levenshtein distance between two strings
@@ -1094,57 +1126,371 @@ const chatbot = {
     return 1 - (distance / maxLen);
   },
 
+  // Common phonetic equivalents for fuzzy matching
+  // Handles common misspellings like "brekfast" → "breakfast", "coffe" → "coffee"
+  phoneticEquivalents: {
+    'f': ['ph', 'ff'],
+    'ph': ['f'],
+    'k': ['c', 'ck', 'ch', 'q'],
+    'c': ['k', 's'],
+    's': ['c', 'z', 'ss'],
+    'z': ['s', 'zz'],
+    'i': ['y', 'ee', 'e'],
+    'y': ['i', 'ie', 'ey'],
+    'ee': ['i', 'ea', 'e'],
+    'ea': ['ee', 'e'],
+    'a': ['e', 'ah'],
+    'e': ['a', 'i'],
+    'o': ['u', 'oo'],
+    'u': ['o', 'oo'],
+    'oo': ['u', 'o'],
+    'th': ['t', 'd'],
+    'ch': ['c', 'tch'],
+    'sh': ['s', 'sch'],
+    'ge': ['j'],
+    'j': ['g', 'dg'],
+    'x': ['ks', 'cks'],
+    'tion': ['sion', 'shun'],
+    'sion': ['tion', 'shun'],
+  },
+
+  // Common food-related typos and their corrections
+  // Helps match "brekfast" → "breakfast", "coffe" → "coffee", etc.
+  commonFoodTypos: {
+    // Breakfast variations
+    'brekfast': 'breakfast', 'breakfst': 'breakfast', 'brekfst': 'breakfast',
+    'breakast': 'breakfast', 'brakfast': 'breakfast', 'breaksfast': 'breakfast',
+    'beakfast': 'breakfast', 'brekfest': 'breakfast', 'breakfeast': 'breakfast',
+    'beak fasr': 'breakfast', 'beak fast': 'breakfast', 'break fast': 'breakfast',
+    // Coffee/Tea
+    'coffe': 'coffee', 'cofee': 'coffee', 'cofe': 'coffee', 'coffie': 'coffee',
+    'caffe': 'coffee', 'koffee': 'coffee', 'coffy': 'coffee',
+    'tee': 'tea', 'tae': 'tea', 'chai': 'tea',
+    // Common foods
+    'biryni': 'biryani', 'biriyani': 'biryani', 'birani': 'biryani', 'bryani': 'biryani',
+    'briyani': 'biryani', 'biriani': 'biryani', 'biriany': 'biryani',
+    'dosa': 'dosa', 'dosai': 'dosa', 'dhosa': 'dosa', 'thosai': 'dosa',
+    'idli': 'idly', 'idly': 'idli', 'iddly': 'idli', 'idlee': 'idli',
+    'samosa': 'samosa', 'samsa': 'samosa', 'samossa': 'samosa',
+    'paratha': 'paratha', 'paratta': 'paratha', 'pratha': 'paratha', 'parantha': 'paratha',
+    'chapathi': 'chapati', 'chapti': 'chapati', 'chapatti': 'chapati', 'roti': 'chapati',
+    'puri': 'poori', 'poori': 'puri', 'pooris': 'puri',
+    'naan': 'naan', 'nan': 'naan', 'naaan': 'naan',
+    'pulao': 'pulav', 'pulav': 'pulao', 'pilaf': 'pulao', 'pilau': 'pulao',
+    'paneer': 'paneer', 'panner': 'paneer', 'pannir': 'paneer', 'panir': 'paneer',
+    'chicken': 'chicken', 'chiken': 'chicken', 'chickan': 'chicken', 'chikken': 'chicken',
+    'mutton': 'mutton', 'muton': 'mutton', 'mutan': 'mutton',
+    'manchurian': 'manchurian', 'manchuri': 'manchurian', 'manchuryan': 'manchurian',
+    'manchuriyan': 'manchurian', 'manchuya': 'manchurian', 'manchuria': 'manchurian',
+    'noodles': 'noodles', 'noodels': 'noodles', 'noodle': 'noodles', 'nudels': 'noodles',
+    'pasta': 'pasta', 'psta': 'pasta', 'paasta': 'pasta',
+    'pizza': 'pizza', 'piza': 'pizza', 'pizzza': 'pizza', 'pieza': 'pizza',
+    'burger': 'burger', 'burgar': 'burger', 'burgur': 'burger', 'berger': 'burger',
+    'sandwich': 'sandwich', 'sandwhich': 'sandwich', 'sandwitch': 'sandwich', 'sanwich': 'sandwich',
+    'fries': 'fries', 'frys': 'fries', 'friez': 'fries', 'french fries': 'fries',
+    'shake': 'shake', 'shaek': 'shake', 'milkshake': 'shake',
+    'juice': 'juice', 'juce': 'juice', 'jucie': 'juice', 'jus': 'juice',
+    'smoothie': 'smoothie', 'smoothe': 'smoothie', 'smoothy': 'smoothie',
+    'curry': 'curry', 'curri': 'curry', 'kurry': 'curry', 'currie': 'curry',
+    'gravy': 'gravy', 'gravey': 'gravy', 'gravi': 'gravy',
+    'masala': 'masala', 'masla': 'masala', 'massala': 'masala', 'msala': 'masala',
+    'tikka': 'tikka', 'tika': 'tikka', 'tikah': 'tikka',
+    'kebab': 'kebab', 'kabab': 'kebab', 'kebap': 'kebab', 'kabob': 'kebab',
+    'tandoori': 'tandoori', 'tandori': 'tandoori', 'thandoori': 'tandoori',
+    'dessert': 'dessert', 'desert': 'dessert', 'desrt': 'dessert', 'dessrt': 'dessert',
+    'icecream': 'ice cream', 'ice creem': 'ice cream', 'icecrem': 'ice cream',
+    'sweets': 'sweets', 'sweet': 'sweets', 'swets': 'sweets',
+    'beverages': 'beverages', 'beverges': 'beverages', 'beverage': 'beverages', 'bevrages': 'beverages',
+    'snacks': 'snacks', 'snaks': 'snacks', 'snack': 'snacks', 'snax': 'snacks',
+    'starter': 'starters', 'starters': 'starters', 'strters': 'starters',
+    'appetizer': 'appetizer', 'apetizer': 'appetizer', 'appetiser': 'appetizer',
+    'lunch': 'lunch', 'luch': 'lunch', 'lanch': 'lunch',
+    'dinner': 'dinner', 'diner': 'dinner', 'dinnar': 'dinner',
+    'thali': 'thali', 'thaali': 'thali', 'thaly': 'thali',
+    'combo': 'combo', 'combi': 'combo', 'cumbo': 'combo',
+    'meal': 'meals', 'meals': 'meals', 'mealz': 'meals',
+    'special': 'special', 'spacial': 'special', 'speshal': 'special',
+    'veg': 'veg', 'vege': 'veg', 'veggie': 'veg',
+    'nonveg': 'nonveg', 'non veg': 'nonveg', 'non-veg': 'nonveg',
+    // South Indian
+    'uttapam': 'uttapam', 'utapam': 'uttapam', 'uthappam': 'uttapam',
+    'vada': 'vada', 'vadai': 'vada', 'wada': 'vada', 'bada': 'vada',
+    'upma': 'upma', 'uppma': 'upma', 'upuma': 'upma',
+    'pongal': 'pongal', 'pongel': 'pongal', 'pongl': 'pongal',
+    'rasam': 'rasam', 'rasaam': 'rasam', 'russam': 'rasam',
+    'sambar': 'sambar', 'sambhar': 'sambar', 'samber': 'sambar',
+    'chutney': 'chutney', 'chatni': 'chutney', 'chutnee': 'chutney',
+    // North Indian
+    'roti': 'roti', 'rotis': 'roti', 'rooti': 'roti',
+    'dal': 'dal', 'daal': 'dal', 'dhal': 'dal',
+    'rajma': 'rajma', 'rajmah': 'rajma', 'razma': 'rajma',
+    'chole': 'chole', 'choley': 'chole', 'chhole': 'chole', 'chana': 'chole',
+    'aloo': 'aloo', 'alu': 'aloo', 'aaloo': 'aloo',
+    'gobi': 'gobi', 'gobhi': 'gobi', 'ghobi': 'gobi',
+    'palak': 'palak', 'paalak': 'palak', 'spinach': 'palak',
+    // Chinese
+    'fried rice': 'fried rice', 'friedrice': 'fried rice', 'fry rice': 'fried rice',
+    'chowmein': 'chow mein', 'chowmin': 'chow mein', 'chawmein': 'chow mein',
+    'hakka': 'hakka', 'haka': 'hakka', 'hakaa': 'hakka',
+    'schezwan': 'schezwan', 'szechuan': 'schezwan', 'schewan': 'schezwan', 'sichuan': 'schezwan',
+  },
+
+  // Get corrected food term if it's a common typo
+  correctFoodTypo(text) {
+    const lowerText = text.toLowerCase().trim();
+    return this.commonFoodTypos[lowerText] || text;
+  },
+
+  // Keyboard adjacent keys for typo tolerance
+  keyboardAdjacent: {
+    'q': ['w', 'a'], 'w': ['q', 'e', 's', 'a'], 'e': ['w', 'r', 'd', 's'],
+    'r': ['e', 't', 'f', 'd'], 't': ['r', 'y', 'g', 'f'], 'y': ['t', 'u', 'h', 'g'],
+    'u': ['y', 'i', 'j', 'h'], 'i': ['u', 'o', 'k', 'j'], 'o': ['i', 'p', 'l', 'k'],
+    'p': ['o', 'l'], 'a': ['q', 'w', 's', 'z'], 's': ['a', 'w', 'e', 'd', 'x', 'z'],
+    'd': ['s', 'e', 'r', 'f', 'c', 'x'], 'f': ['d', 'r', 't', 'g', 'v', 'c'],
+    'g': ['f', 't', 'y', 'h', 'b', 'v'], 'h': ['g', 'y', 'u', 'j', 'n', 'b'],
+    'j': ['h', 'u', 'i', 'k', 'm', 'n'], 'k': ['j', 'i', 'o', 'l', 'm'],
+    'l': ['k', 'o', 'p'], 'z': ['a', 's', 'x'], 'x': ['z', 's', 'd', 'c'],
+    'c': ['x', 'd', 'f', 'v'], 'v': ['c', 'f', 'g', 'b'], 'b': ['v', 'g', 'h', 'n'],
+    'n': ['b', 'h', 'j', 'm'], 'm': ['n', 'j', 'k']
+  },
+
+  // Check if two characters are keyboard-adjacent (common typo)
+  isKeyboardAdjacent(char1, char2) {
+    const c1 = char1.toLowerCase();
+    const c2 = char2.toLowerCase();
+    return this.keyboardAdjacent[c1]?.includes(c2) || this.keyboardAdjacent[c2]?.includes(c1);
+  },
+
+  // Calculate similarity with keyboard typo tolerance
+  // Gives partial credit for keyboard-adjacent character substitutions
+  similarityWithTypoTolerance(str1, str2) {
+    const s1 = str1.toLowerCase();
+    const s2 = str2.toLowerCase();
+    
+    // Standard Levenshtein for base score
+    const baseScore = this.similarityRatio(s1, s2);
+    
+    // Calculate bonus for keyboard-adjacent typos
+    let typoBonus = 0;
+    const minLen = Math.min(s1.length, s2.length);
+    const maxLen = Math.max(s1.length, s2.length);
+    
+    // Only give bonus if lengths are similar (within 2 chars)
+    if (Math.abs(s1.length - s2.length) <= 2) {
+      let adjacentTypos = 0;
+      for (let i = 0; i < minLen; i++) {
+        if (s1[i] !== s2[i] && this.isKeyboardAdjacent(s1[i], s2[i])) {
+          adjacentTypos++;
+        }
+      }
+      // Each keyboard-adjacent typo adds a small bonus (max 0.15 bonus)
+      typoBonus = Math.min(0.15, adjacentTypos * 0.05);
+    }
+    
+    return Math.min(1, baseScore + typoBonus);
+  },
+
+  // Normalize common typos and phonetic variations
+  normalizeTypos(text) {
+    let normalized = text.toLowerCase();
+    
+    // Common typo patterns: doubled letters → single, missing letters
+    const typoPatterns = [
+      [/(.)(\1)+/g, '$1'],  // Remove repeated letters: "cofffee" → "cofee"
+      [/([aeiou])\1/g, '$1'], // Reduce doubled vowels: "breead" → "bread"
+      [/ck/g, 'k'],  // "breakckfast" → "breakast"
+      [/kk/g, 'k'],  // "breakkfast" → "breakfast"
+      [/ff/g, 'f'],  // "cofffee" → "cofee"
+      [/ss/g, 's'],  // "classs" → "class"
+    ];
+    
+    for (const [pattern, replacement] of typoPatterns) {
+      normalized = normalized.replace(pattern, replacement);
+    }
+    
+    return normalized;
+  },
+
+  // Generate phonetic variations of a word for matching
+  generatePhoneticVariations(word) {
+    const variations = [word];
+    const wordLower = word.toLowerCase();
+    
+    // Add normalized typo version
+    const normalized = this.normalizeTypos(wordLower);
+    if (normalized !== wordLower) variations.push(normalized);
+    
+    // Generate phonetic variations
+    for (const [sound, equivalents] of Object.entries(this.phoneticEquivalents)) {
+      if (wordLower.includes(sound)) {
+        for (const equiv of equivalents) {
+          const variant = wordLower.replace(sound, equiv);
+          if (variant !== wordLower) variations.push(variant);
+        }
+      }
+    }
+    
+    return [...new Set(variations)];
+  },
+
   // Helper to find fuzzy matches for a search term
-  // Returns items where name or tags have similarity >= threshold (default 0.6 = 60% similar)
-  // E.g., "manchuya" will match "manchurian" (similarity ~0.7)
-  fuzzySearchItems(searchTerm, menuItems, threshold = 0.55) {
-    if (!searchTerm || searchTerm.length < 3) return [];
+  // Returns items where name or tags have similarity >= threshold (default 0.5 = 50% similar)
+  // Enhanced with: keyboard typo tolerance, phonetic matching, word reordering, common food typos
+  // E.g., "manchuya" will match "manchurian", "beak fasr" will match "breakfast"
+  fuzzySearchItems(searchTerm, menuItems, threshold = 0.5) {
+    if (!searchTerm || searchTerm.length < 2) return [];
     
     const searchLower = searchTerm.toLowerCase().trim();
+    
+    // First check if this is a known common typo and correct it
+    const correctedSearch = this.correctFoodTypo(searchLower);
+    const searchTerms = correctedSearch !== searchLower 
+      ? [correctedSearch, searchLower]  // Search with both corrected and original
+      : [searchLower];
+    
+    // Also check individual words for typos (e.g., "beak fasr" → check "beak" and "fasr")
+    const searchWords = searchLower.split(/\s+/).filter(w => w.length >= 2);
+    for (const word of searchWords) {
+      const correctedWord = this.correctFoodTypo(word);
+      if (correctedWord !== word && !searchTerms.includes(correctedWord)) {
+        searchTerms.push(correctedWord);
+      }
+    }
+    
+    // Combined words check (e.g., "break fast" → "breakfast")
+    if (searchWords.length >= 2) {
+      const combined = searchWords.join('');
+      const correctedCombined = this.correctFoodTypo(combined);
+      if (!searchTerms.includes(combined)) searchTerms.push(combined);
+      if (correctedCombined !== combined && !searchTerms.includes(correctedCombined)) {
+        searchTerms.push(correctedCombined);
+      }
+    }
+    
+    const searchNormalized = this.normalizeTypos(searchLower);
+    const searchPhoneticVariants = this.generatePhoneticVariations(searchLower);
+    // Add corrected terms to phonetic variants
+    for (const term of searchTerms) {
+      searchPhoneticVariants.push(...this.generatePhoneticVariations(term));
+    }
+    
     const fuzzyMatches = [];
     
     for (const item of menuItems) {
       let bestScore = 0;
       let matchedOn = null;
       
-      // Check item name - split into words for better matching
+      // Helper to check all variations of search against a target
+      const checkAllVariations = (target) => {
+        const targetLower = target.toLowerCase();
+        const targetNormalized = this.normalizeTypos(targetLower);
+        let maxScore = 0;
+        
+        // Check corrected search terms (including common food typo corrections)
+        for (const term of searchTerms) {
+          maxScore = Math.max(maxScore, this.similarityWithTypoTolerance(term, targetLower));
+          maxScore = Math.max(maxScore, this.similarityRatio(term, targetLower));
+        }
+        
+        // Check direct similarity with typo tolerance
+        maxScore = Math.max(maxScore, this.similarityWithTypoTolerance(searchLower, targetLower));
+        maxScore = Math.max(maxScore, this.similarityWithTypoTolerance(searchNormalized, targetNormalized));
+        
+        // Check phonetic variations
+        for (const variant of searchPhoneticVariants) {
+          maxScore = Math.max(maxScore, this.similarityRatio(variant, targetLower));
+        }
+        
+        // Check if search words match parts of target (handles word reordering)
+        if (searchWords.length > 1) {
+          const targetWords = targetLower.split(/\s+/);
+          let matchedWords = 0;
+          for (const sw of searchWords) {
+            // Check both original and corrected word
+            const correctedSw = this.correctFoodTypo(sw);
+            for (const tw of targetWords) {
+              if (this.similarityWithTypoTolerance(sw, tw) >= 0.65 || 
+                  this.similarityWithTypoTolerance(correctedSw, tw) >= 0.65) {
+                matchedWords++;
+                break;
+              }
+            }
+          }
+          const wordMatchRatio = matchedWords / searchWords.length;
+          maxScore = Math.max(maxScore, wordMatchRatio);
+        }
+        
+        // Check individual search words against target
+        for (const word of searchWords) {
+          if (word.length >= 2) {
+            const correctedWord = this.correctFoodTypo(word);
+            maxScore = Math.max(maxScore, this.similarityWithTypoTolerance(word, targetLower));
+            maxScore = Math.max(maxScore, this.similarityWithTypoTolerance(correctedWord, targetLower));
+            // Check against target words
+            const targetWords = targetLower.split(/\s+/);
+            for (const tw of targetWords) {
+              if (tw.length >= 2) {
+                maxScore = Math.max(maxScore, this.similarityWithTypoTolerance(word, tw));
+                maxScore = Math.max(maxScore, this.similarityWithTypoTolerance(correctedWord, tw));
+              }
+            }
+          }
+        }
+        
+        return maxScore;
+      };
+      
+      // Check item name
+      const nameScore = checkAllVariations(item.name);
+      if (nameScore > bestScore) {
+        bestScore = nameScore;
+        matchedOn = 'name';
+      }
+      
+      // Check individual words in name
       const nameWords = item.name.toLowerCase().split(/\s+/);
       for (const word of nameWords) {
         if (word.length >= 3) {
-          const similarity = this.similarityRatio(searchLower, word);
-          if (similarity > bestScore) {
-            bestScore = similarity;
+          const wordScore = checkAllVariations(word);
+          if (wordScore > bestScore) {
+            bestScore = wordScore;
             matchedOn = 'name';
           }
         }
       }
       
-      // Also check full name if search term might be multi-word
-      const fullNameSimilarity = this.similarityRatio(searchLower, item.name.toLowerCase());
-      if (fullNameSimilarity > bestScore) {
-        bestScore = fullNameSimilarity;
-        matchedOn = 'name';
-      }
-      
       // Check tags
       if (item.tags && item.tags.length > 0) {
         for (const tag of item.tags) {
-          const tagLower = tag.toLowerCase();
-          const similarity = this.similarityRatio(searchLower, tagLower);
-          if (similarity > bestScore) {
-            bestScore = similarity;
+          const tagScore = checkAllVariations(tag);
+          if (tagScore > bestScore) {
+            bestScore = tagScore;
             matchedOn = 'tag';
           }
-          // Also check individual words in tag
-          const tagWords = tagLower.split(/\s+/);
+          
+          // Check individual words in tag
+          const tagWords = tag.toLowerCase().split(/\s+/);
           for (const word of tagWords) {
             if (word.length >= 3) {
-              const wordSimilarity = this.similarityRatio(searchLower, word);
-              if (wordSimilarity > bestScore) {
-                bestScore = wordSimilarity;
+              const wordScore = checkAllVariations(word);
+              if (wordScore > bestScore) {
+                bestScore = wordScore;
                 matchedOn = 'tag';
               }
             }
+          }
+        }
+      }
+      
+      // Check categories
+      const categories = Array.isArray(item.category) ? item.category : [item.category];
+      for (const cat of categories) {
+        if (cat) {
+          const catScore = checkAllVariations(cat);
+          if (catScore > bestScore) {
+            bestScore = catScore;
+            matchedOn = 'category';
           }
         }
       }
@@ -1165,34 +1511,77 @@ const chatbot = {
       .map(m => m.item);
   },
 
-  // Helper to find item by name
+  // Helper to find item by name (with fuzzy fallback)
   findItem(text, menuItems) {
-    const lowerText = text.toLowerCase();
-    return menuItems.find(item => 
+    const lowerText = text.toLowerCase().trim();
+    
+    // First try exact/substring match
+    const exactMatch = menuItems.find(item => 
       item.name.toLowerCase().includes(lowerText) || 
       lowerText.includes(item.name.toLowerCase())
     );
+    if (exactMatch) return exactMatch;
+    
+    // Fuzzy fallback for typos
+    if (lowerText.length >= 3) {
+      for (const item of menuItems) {
+        const nameLower = item.name.toLowerCase();
+        // Check full name similarity
+        if (this.similarityWithTypoTolerance(lowerText, nameLower) >= 0.65) {
+          return item;
+        }
+        // Check each word in name
+        const nameWords = nameLower.split(/\s+/);
+        for (const word of nameWords) {
+          if (word.length >= 3 && this.similarityWithTypoTolerance(lowerText, word) >= 0.65) {
+            return item;
+          }
+        }
+      }
+    }
+    
+    return null;
   },
 
-  // Helper to find items by tag keyword
+  // Helper to find items by tag keyword (with fuzzy matching)
   findItemsByTag(text, menuItems) {
     const lowerText = text.toLowerCase().trim();
-    // Find all items that have a tag matching the keyword
-    const matchingItems = menuItems.filter(item => 
+    if (lowerText.length < 2) return null;
+    
+    // First try exact/substring match
+    let matchingItems = menuItems.filter(item => 
       item.tags?.some(tag => 
         tag.toLowerCase().includes(lowerText) || 
         lowerText.includes(tag.toLowerCase())
       )
     );
+    
+    // Fuzzy fallback if no exact matches
+    if (matchingItems.length === 0 && lowerText.length >= 3) {
+      matchingItems = menuItems.filter(item => {
+        return item.tags?.some(tag => {
+          const tagLower = tag.toLowerCase();
+          // Check tag similarity
+          if (this.similarityWithTypoTolerance(lowerText, tagLower) >= 0.6) return true;
+          // Check tag words
+          const tagWords = tagLower.split(/\s+/);
+          return tagWords.some(word => 
+            word.length >= 3 && this.similarityWithTypoTolerance(lowerText, word) >= 0.6
+          );
+        });
+      });
+    }
+    
     return matchingItems.length > 0 ? matchingItems : null;
   },
 
-  // Helper to find items by name OR tag keyword (returns all matching items)
+  // Helper to find items by name OR tag keyword (with fuzzy matching)
   findItemsByNameOrTag(text, menuItems) {
     const lowerText = text.toLowerCase().trim();
-    if (lowerText.length < 2) return null; // Skip very short searches
+    if (lowerText.length < 2) return null;
     
-    const matchingItems = menuItems.filter(item => {
+    // First try exact/substring matches
+    let matchingItems = menuItems.filter(item => {
       // Check if name matches
       const nameMatch = item.name.toLowerCase().includes(lowerText) || 
         lowerText.includes(item.name.toLowerCase());
@@ -1205,6 +1594,32 @@ const chatbot = {
       
       return nameMatch || tagMatch;
     });
+    
+    // Fuzzy fallback if no exact matches
+    if (matchingItems.length === 0 && lowerText.length >= 3) {
+      matchingItems = menuItems.filter(item => {
+        const nameLower = item.name.toLowerCase();
+        
+        // Fuzzy name match
+        if (this.similarityWithTypoTolerance(lowerText, nameLower) >= 0.55) return true;
+        
+        // Fuzzy name word match
+        const nameWords = nameLower.split(/\s+/);
+        if (nameWords.some(word => word.length >= 3 && this.similarityWithTypoTolerance(lowerText, word) >= 0.6)) {
+          return true;
+        }
+        
+        // Fuzzy tag match
+        return item.tags?.some(tag => {
+          const tagLower = tag.toLowerCase();
+          if (this.similarityWithTypoTolerance(lowerText, tagLower) >= 0.55) return true;
+          const tagWords = tagLower.split(/\s+/);
+          return tagWords.some(word => 
+            word.length >= 3 && this.similarityWithTypoTolerance(lowerText, word) >= 0.6
+          );
+        });
+      });
+    }
     
     return matchingItems.length > 0 ? matchingItems : null;
   },
@@ -1712,11 +2127,57 @@ const chatbot = {
   // Example: "masala dosa" → exact match OR all items with "masala" OR "dosa" tags
   // Example: "dosa" → all items with "dosa" tag (not just exact title match)
   // Now with AI-powered tag matching for native language queries
+  // Enhanced with typo correction for common food-related misspellings
   async smartSearch(text, menuItems) {
-    // First translate regional language to English using AI (returns variations)
-    const translationResult = await this.translateWithAI(text);
+    // First apply common food typo correction
+    let correctedText = text.toLowerCase().trim();
+    const originalText = correctedText;
+    
+    // Check if the whole phrase is a common typo
+    const phraseCorrection = this.correctFoodTypo(correctedText);
+    if (phraseCorrection !== correctedText) {
+      console.log(`📝 Typo correction: "${correctedText}" → "${phraseCorrection}"`);
+      correctedText = phraseCorrection;
+    }
+    
+    // Also check individual words for typos and correct them
+    const words = correctedText.split(/\s+/);
+    const correctedWords = words.map(word => {
+      const corrected = this.correctFoodTypo(word);
+      if (corrected !== word) {
+        console.log(`📝 Word typo correction: "${word}" → "${corrected}"`);
+      }
+      return corrected;
+    });
+    const wordCorrectedText = correctedWords.join(' ');
+    if (wordCorrectedText !== correctedText) {
+      correctedText = wordCorrectedText;
+    }
+    
+    // Check if words combined form a common term (e.g., "beak fast" → "breakfast")
+    if (words.length >= 2) {
+      const combinedWords = words.join('');
+      const combinedCorrection = this.correctFoodTypo(combinedWords);
+      if (combinedCorrection !== combinedWords) {
+        console.log(`📝 Combined typo correction: "${words.join(' ')}" → "${combinedCorrection}"`);
+        // Add this as a variation but keep the corrected text too
+      }
+    }
+    
+    // Use corrected text for translation
+    const translationResult = await this.translateWithAI(correctedText);
     const primaryText = translationResult.primary.toLowerCase().trim();
-    const allVariations = translationResult.variations || [primaryText];
+    let allVariations = translationResult.variations || [primaryText];
+    
+    // Add original text variations if different from corrected
+    if (originalText !== correctedText) {
+      allVariations.push(originalText);
+      // Also add original translation
+      const origTranslation = await this.translateWithAI(originalText);
+      if (origTranslation.primary !== primaryText) {
+        allVariations.push(...origTranslation.variations);
+      }
+    }
     
     if (primaryText.length < 2) return null;
     
@@ -2231,21 +2692,30 @@ const chatbot = {
       
       // ========== FUZZY MATCHING FALLBACK ==========
       // If still no results, use Levenshtein distance to find items with similar names/tags
-      // This handles typos like "manchuya" → "manchurian", "birani" → "biryani"
+      // This handles typos like "manchuya" → "manchurian", "birani" → "biryani", "beak fasr" → "breakfast"
       if (matchingItems.length === 0) {
         console.log(`🔤 Fuzzy Search: Finding items similar to "${primarySearchTerm}"...`);
         
-        // Try fuzzy matching with the primary search term
-        let fuzzyResults = this.fuzzySearchItems(primarySearchTerm, menuItems, 0.55);
+        // Lower threshold (0.45) for better typo tolerance
+        const fuzzyThreshold = 0.45;
         
-        // Also try fuzzy matching with individual keywords
+        // Try fuzzy matching with the primary search term
+        let fuzzyResults = this.fuzzySearchItems(primarySearchTerm, menuItems, fuzzyThreshold);
+        
+        // Also try fuzzy matching with individual keywords (useful for multi-word typos like "beak fasr")
         if (fuzzyResults.length === 0) {
-          const keywords = primarySearchTerm.split(/\s+/).filter(k => k.length >= 3);
+          const keywords = primarySearchTerm.split(/\s+/).filter(k => k.length >= 2);
           for (const keyword of keywords) {
-            const keywordFuzzy = this.fuzzySearchItems(keyword, menuItems, 0.55);
+            const keywordFuzzy = this.fuzzySearchItems(keyword, menuItems, fuzzyThreshold);
             if (keywordFuzzy.length > 0) {
-              fuzzyResults = keywordFuzzy;
-              break;
+              // Combine results from all keywords
+              const existingIds = new Set(fuzzyResults.map(i => i._id.toString()));
+              for (const item of keywordFuzzy) {
+                if (!existingIds.has(item._id.toString())) {
+                  fuzzyResults.push(item);
+                  existingIds.add(item._id.toString());
+                }
+              }
             }
           }
         }
@@ -2253,10 +2723,18 @@ const chatbot = {
         // Also try with all search variations
         if (fuzzyResults.length === 0) {
           for (const term of uniqueSearchTerms) {
-            if (term.length >= 3) {
-              fuzzyResults = this.fuzzySearchItems(term, menuItems, 0.55);
+            if (term.length >= 2) {
+              fuzzyResults = this.fuzzySearchItems(term, menuItems, fuzzyThreshold);
               if (fuzzyResults.length > 0) break;
             }
+          }
+        }
+        
+        // Try combining words that might have been split by accident (e.g., "break fast" → "breakfast")
+        if (fuzzyResults.length === 0 && searchWords.length >= 2) {
+          const combinedWords = searchWords.join('');
+          if (combinedWords.length >= 3) {
+            fuzzyResults = this.fuzzySearchItems(combinedWords, menuItems, fuzzyThreshold);
           }
         }
         
