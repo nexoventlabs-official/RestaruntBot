@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, SectionList,
   RefreshControl, TouchableOpacity, Animated, Platform, StatusBar, ImageBackground,
-  Modal, AppState
+  Modal, AppState, TextInput, Keyboard
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -99,21 +99,42 @@ export default function DeliveryHistoryScreen({ navigation }) {
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pollIntervalRef = useRef(null);
   const appState = useRef(AppState.currentState);
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   }, []);
 
   // Apply filters
-  const applyFilters = useCallback((allOrders, status, date) => {
+  const applyFilters = useCallback((allOrders, status, date, search) => {
     let filtered = [...allOrders];
     
     // Status filter
     if (status !== 'all') {
       filtered = filtered.filter(order => order.status === status);
+    }
+    
+    // Search filter (search in orderId, customerName, phone, items)
+    if (search && search.trim()) {
+      const query = search.toLowerCase().trim();
+      filtered = filtered.filter(order => {
+        const orderId = (order.orderId || '').toLowerCase();
+        const customerName = (order.customerName || order.customer?.name || '').toLowerCase();
+        const phone = (order.phone || order.customer?.phone || '');
+        const items = (order.items || '').toLowerCase();
+        const address = (order.address || order.deliveryAddress?.address || '').toLowerCase();
+        
+        return orderId.includes(query) ||
+          customerName.includes(query) ||
+          phone.includes(query) ||
+          items.includes(query) ||
+          address.includes(query);
+      });
     }
     
     // Date filter
@@ -124,17 +145,17 @@ export default function DeliveryHistoryScreen({ navigation }) {
     
     if (date === 'today') {
       filtered = filtered.filter(order => {
-        const orderDate = new Date(order.statusUpdatedAt || order.deliveredAt);
+        const orderDate = new Date(order.statusUpdatedAt || order.deliveredAt || order.createdAt);
         return orderDate >= today;
       });
     } else if (date === 'week') {
       filtered = filtered.filter(order => {
-        const orderDate = new Date(order.statusUpdatedAt || order.deliveredAt);
+        const orderDate = new Date(order.statusUpdatedAt || order.deliveredAt || order.createdAt);
         return orderDate >= weekAgo;
       });
     } else if (date === 'month') {
       filtered = filtered.filter(order => {
-        const orderDate = new Date(order.statusUpdatedAt || order.deliveredAt);
+        const orderDate = new Date(order.statusUpdatedAt || order.deliveredAt || order.createdAt);
         return orderDate >= monthAgo;
       });
     }
@@ -143,7 +164,15 @@ export default function DeliveryHistoryScreen({ navigation }) {
     
     // Group by date
     const grouped = filtered.reduce((acc, order) => {
-      const date = new Date(order.statusUpdatedAt || order.deliveredAt);
+      // For sheets data, parse from time string or use current date
+      let date;
+      if (order.source === 'sheets') {
+        // Sheets orders don't have full date, group by orderId prefix date or use 'Recent'
+        date = new Date(); // Default to today for sheets data
+      } else {
+        date = new Date(order.statusUpdatedAt || order.deliveredAt || order.createdAt);
+      }
+      
       const todayDate = new Date();
       const yesterday = new Date(todayDate);
       yesterday.setDate(yesterday.getDate() - 1);
@@ -161,14 +190,33 @@ export default function DeliveryHistoryScreen({ navigation }) {
     setSections(Object.entries(grouped).map(([title, data]) => ({ title, data })));
   }, []);
 
+  // Fetch history from Google Sheets endpoint (cost-saving approach)
   const fetchHistory = useCallback(async () => {
     try {
-      const response = await api.get('/delivery/orders/history');
-      setOrders(response.data);
-      applyFilters(response.data, statusFilter, dateFilter);
-    } catch (error) { console.error('Error fetching history:', error); }
+      // Fetch from Google Sheets endpoint
+      const response = await api.get('/delivery/orders/history/sheets', {
+        params: {
+          search: searchQuery || undefined,
+          status: statusFilter !== 'all' ? statusFilter : undefined
+        }
+      });
+      
+      const historyOrders = response.data.orders || response.data || [];
+      setOrders(historyOrders);
+      applyFilters(historyOrders, statusFilter, dateFilter, searchQuery);
+    } catch (error) {
+      console.error('Error fetching history:', error);
+      // Fallback to old endpoint if sheets endpoint fails
+      try {
+        const fallbackResponse = await api.get('/delivery/orders/history');
+        setOrders(fallbackResponse.data);
+        applyFilters(fallbackResponse.data, statusFilter, dateFilter, searchQuery);
+      } catch (fallbackError) {
+        console.error('Fallback history fetch failed:', fallbackError);
+      }
+    }
     finally { setLoading(false); setRefreshing(false); }
-  }, [applyFilters, statusFilter, dateFilter]);
+  }, [applyFilters, statusFilter, dateFilter, searchQuery]);
 
   useEffect(() => { fetchHistory(); }, []);
   
@@ -209,25 +257,63 @@ export default function DeliveryHistoryScreen({ navigation }) {
   
   useEffect(() => {
     if (orders.length > 0) {
-      applyFilters(orders, statusFilter, dateFilter);
+      applyFilters(orders, statusFilter, dateFilter, searchQuery);
     }
-  }, [statusFilter, dateFilter, orders, applyFilters]);
+  }, [statusFilter, dateFilter, searchQuery, orders, applyFilters]);
   
-  const onRefresh = useCallback(() => { setRefreshing(true); fetchHistory(); }, []);
+  // Debounced search effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (orders.length > 0) {
+        applyFilters(orders, statusFilter, dateFilter, searchQuery);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+  
+  const onRefresh = useCallback(() => { setRefreshing(true); fetchHistory(); }, [fetchHistory]);
   
   const clearFilters = () => {
     setStatusFilter('all');
     setDateFilter('all');
+    setSearchQuery('');
   };
   
-  const hasActiveFilters = statusFilter !== 'all' || dateFilter !== 'all';
+  const hasActiveFilters = statusFilter !== 'all' || dateFilter !== 'all' || searchQuery.trim() !== '';
 
   const renderOrder = ({ item }) => {
     const isCancelled = item.status === 'cancelled';
     
+    // Handle both MongoDB and Sheets data formats
+    const orderId = item.orderId || item._id;
+    const customerName = item.customerName || item.customer?.name || 'Customer';
+    const customerPhone = item.phone || item.customer?.phone || '';
+    const address = item.address || item.deliveryAddress?.address || item.customer?.address || 'N/A';
+    const totalAmount = item.totalAmount || 0;
+    const itemsCount = item.items ? (typeof item.items === 'string' ? item.items.split(',').length : item.items.length) : 0;
+    const orderTime = item.time || (item.deliveredAt ? new Date(item.deliveredAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 
+                      item.statusUpdatedAt ? new Date(item.statusUpdatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'N/A');
+    
     return (
       <Animated.View style={{ opacity: fadeAnim }}>
-        <TouchableOpacity onPress={() => navigation.navigate('DeliveryOrderDetail', { order: item })} activeOpacity={0.8}>
+        <TouchableOpacity 
+          onPress={() => {
+            // For sheets data, we need to construct order object
+            if (item.source === 'sheets') {
+              navigation.navigate('DeliveryOrderDetail', { 
+                order: {
+                  ...item,
+                  customer: { name: customerName, phone: customerPhone },
+                  deliveryAddress: { address },
+                  items: typeof item.items === 'string' ? [{ name: item.items, quantity: 1 }] : item.items
+                }
+              });
+            } else {
+              navigation.navigate('DeliveryOrderDetail', { order: item });
+            }
+          }} 
+          activeOpacity={0.8}
+        >
           <View style={[styles.orderCardBg, isCancelled && styles.orderCardCancelled]}>
             <View style={styles.orderCard}>
               <View style={styles.orderHeader}>
@@ -235,7 +321,7 @@ export default function DeliveryHistoryScreen({ navigation }) {
                   <View style={[styles.checkIcon, isCancelled && styles.cancelledIcon]}>
                     <Ionicons name={isCancelled ? 'close' : 'checkmark'} size={12} color="#fff" />
                   </View>
-                  <Text style={styles.orderId}>#{item.orderId}</Text>
+                  <Text style={styles.orderId}>#{orderId}</Text>
                   {isCancelled && (
                     <View style={styles.cancelledBadge}>
                       <Text style={styles.cancelledBadgeText}>Cancelled</Text>
@@ -243,34 +329,29 @@ export default function DeliveryHistoryScreen({ navigation }) {
                   )}
                 </View>
                 <Text style={[styles.orderAmount, isCancelled && styles.orderAmountCancelled]}>
-                  {isCancelled ? '' : '₹'}{isCancelled ? 'Cancelled' : item.totalAmount}
+                  {isCancelled ? '' : '₹'}{isCancelled ? 'Cancelled' : totalAmount}
                 </Text>
               </View>
 
               <View style={styles.orderDetails}>
                 <View style={styles.orderDetail}>
                   <Ionicons name="person-outline" size={14} color={colors.light.text.tertiary} />
-                  <Text style={styles.orderDetailText}>{item.customer?.name || item.customer?.phone}</Text>
+                  <Text style={styles.orderDetailText}>{customerName || customerPhone}</Text>
                 </View>
                 <View style={styles.orderDetail}>
                   <Ionicons name="location-outline" size={14} color={colors.light.text.tertiary} />
-                  <Text style={styles.orderDetailText} numberOfLines={1}>{item.deliveryAddress?.address || item.customer?.address || 'N/A'}</Text>
+                  <Text style={styles.orderDetailText} numberOfLines={1}>{address}</Text>
                 </View>
               </View>
 
               <View style={styles.orderFooter}>
                 <View style={styles.orderTime}>
                   <Ionicons name="time-outline" size={14} color={colors.light.text.tertiary} />
-                  <Text style={styles.orderTimeText}>
-                    {isCancelled 
-                      ? (item.statusUpdatedAt ? new Date(item.statusUpdatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'N/A')
-                      : (item.deliveredAt ? new Date(item.deliveredAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'N/A')
-                    }
-                  </Text>
+                  <Text style={styles.orderTimeText}>{orderTime}</Text>
                 </View>
                 <View style={[styles.itemsCount, isCancelled && styles.itemsCountCancelled]}>
                   <Text style={[styles.itemsCountText, isCancelled && styles.itemsCountTextCancelled]}>
-                    {isCancelled ? 'Cancelled' : `${item.items?.length || 0} items`}
+                    {isCancelled ? 'Cancelled' : `${itemsCount} items`}
                   </Text>
                 </View>
               </View>
@@ -293,17 +374,55 @@ export default function DeliveryHistoryScreen({ navigation }) {
                 <Text style={styles.title}>Delivery History</Text>
                 <Text style={styles.subtitle}>{filteredOrders.length} deliveries {hasActiveFilters ? '(filtered)' : 'completed'}</Text>
               </View>
-              <TouchableOpacity 
-                style={[styles.filterButton, hasActiveFilters && styles.filterButtonActive]} 
-                onPress={() => setShowFilterModal(true)}
-              >
-                <Ionicons name="filter" size={20} color="#fff" />
-                {hasActiveFilters && <View style={styles.filterDot} />}
-              </TouchableOpacity>
+              <View style={styles.headerActions}>
+                <TouchableOpacity 
+                  style={styles.searchButton} 
+                  onPress={() => {
+                    setShowSearch(!showSearch);
+                    if (!showSearch) {
+                      setTimeout(() => searchInputRef.current?.focus(), 100);
+                    }
+                  }}
+                >
+                  <Ionicons name={showSearch ? "close" : "search"} size={20} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.filterButton, hasActiveFilters && styles.filterButtonActive]} 
+                  onPress={() => setShowFilterModal(true)}
+                >
+                  <Ionicons name="filter" size={20} color="#fff" />
+                  {hasActiveFilters && <View style={styles.filterDot} />}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </ImageBackground>
       </View>
+
+      {/* Search Bar */}
+      {showSearch && (
+        <View style={styles.searchBarContainer}>
+          <View style={styles.searchBar}>
+            <Ionicons name="search-outline" size={20} color={colors.light.text.tertiary} />
+            <TextInput
+              ref={searchInputRef}
+              style={styles.searchInput}
+              placeholder="Search by order ID, name, phone..."
+              placeholderTextColor={colors.light.text.tertiary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={20} color={colors.light.text.tertiary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      )}
 
       {/* Active Filters Bar */}
       {hasActiveFilters && (
@@ -480,11 +599,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.screenHorizontal,
   },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   title: { fontSize: 28, fontWeight: '700', color: '#fff' },
   subtitle: { fontSize: typography.body.large.fontSize, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
-  filterButton: { width: 50, height: 50, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
+  searchButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
+  filterButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
   filterButtonActive: { backgroundColor: DELIVERY_GREEN },
-  filterDot: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
+  filterDot: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
+  
+  // Search Bar
+  searchBarContainer: {
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.light.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.light.borderLight,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.light.surfaceSecondary,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: Platform.OS === 'ios' ? spacing.sm : 0,
+    gap: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: typography.body.medium.fontSize,
+    color: colors.light.text.primary,
+    paddingVertical: spacing.sm,
+  },
   
   // Active Filters Bar
   activeFiltersBar: {

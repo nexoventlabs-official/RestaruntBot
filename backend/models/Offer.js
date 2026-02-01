@@ -21,6 +21,16 @@ const offerSchema = new mongoose.Schema({
   showAsPopup: { type: Boolean, default: true },
   buttonText: { type: String, default: 'Order Now' },
   buttonLink: { type: String, default: '/menu' },
+  
+  // Targeting options for top customers
+  targetType: { 
+    type: String, 
+    enum: ['all', 'top_percentage'], 
+    default: 'all' 
+  }, // 'all' = all customers, 'top_percentage' = top X% customers by spending
+  targetPercentage: { type: Number, default: 100 }, // e.g., 10 = top 10% customers
+  targetedCustomers: [{ type: String }], // Phone numbers of targeted customers (populated when offer is created)
+  
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

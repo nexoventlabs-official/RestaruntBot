@@ -625,6 +625,92 @@ router.get('/orders/history', verifyDeliveryToken, async (req, res) => {
   }
 });
 
+// Get order history from Google Sheets (cost-saving - fetches completed orders from sheets)
+// This is the main history endpoint that should be used for viewing past orders
+router.get('/orders/history/sheets', verifyDeliveryToken, async (req, res) => {
+  try {
+    const { search, status, startDate, endDate } = req.query;
+    const deliveryBoyName = req.deliveryBoy.name;
+    
+    // Fetch from Google Sheets
+    const { orders: sheetOrders, error } = await googleSheets.getOrderHistory({
+      deliveryBoyName,
+      searchQuery: search,
+      status: status !== 'all' ? status : undefined,
+      startDate,
+      endDate
+    });
+    
+    if (error) {
+      console.error('Error fetching from sheets:', error);
+    }
+    
+    // Also check MongoDB for any recent orders that might not be in sheets yet
+    // (orders within last few minutes that are delivered/cancelled)
+    const recentCutoff = new Date(Date.now() - 5 * 60 * 1000); // 5 minutes ago
+    const recentQuery = {
+      assignedTo: req.deliveryBoy._id,
+      status: { $in: ['delivered', 'cancelled'] },
+      statusUpdatedAt: { $gte: recentCutoff }
+    };
+    
+    if (status && status !== 'all') {
+      recentQuery.status = status;
+    }
+    
+    const recentDbOrders = await Order.find(recentQuery)
+      .sort({ statusUpdatedAt: -1 })
+      .limit(10)
+      .lean();
+    
+    // Convert DB orders to same format and merge (avoiding duplicates)
+    const sheetOrderIds = new Set(sheetOrders.map(o => o.orderId));
+    const mergedOrders = [...sheetOrders];
+    
+    for (const dbOrder of recentDbOrders) {
+      if (!sheetOrderIds.has(dbOrder.orderId)) {
+        mergedOrders.unshift({
+          orderId: dbOrder.orderId,
+          time: new Date(dbOrder.createdAt).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }),
+          phone: dbOrder.customer?.phone || '',
+          customerName: dbOrder.customer?.name || '',
+          items: dbOrder.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', '),
+          totalAmount: dbOrder.totalAmount,
+          paymentMethod: dbOrder.paymentMethod === 'cod' ? 'COD' : 'UPI',
+          paymentStatus: dbOrder.paymentStatus === 'paid' ? 'Paid' : 'Pending',
+          status: dbOrder.status,
+          address: dbOrder.deliveryAddress?.address || '',
+          deliveryPartnerName: dbOrder.deliveryPartnerName || '',
+          source: 'mongodb',
+          statusUpdatedAt: dbOrder.statusUpdatedAt,
+          deliveredAt: dbOrder.deliveredAt
+        });
+      }
+    }
+    
+    // Apply search filter to merged results if not already filtered by sheets
+    let filteredOrders = mergedOrders;
+    if (search && recentDbOrders.length > 0) {
+      const query = search.toLowerCase();
+      filteredOrders = mergedOrders.filter(order => 
+        order.orderId.toLowerCase().includes(query) ||
+        order.customerName.toLowerCase().includes(query) ||
+        order.phone.includes(query) ||
+        order.items.toLowerCase().includes(query)
+      );
+    }
+    
+    res.json({
+      orders: filteredOrders,
+      total: filteredOrders.length,
+      source: sheetOrders.length > 0 ? 'sheets' : 'mongodb'
+    });
+  } catch (error) {
+    console.error('Error in history/sheets endpoint:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get order stats for delivery boy (must be before :orderId route)
 router.get('/orders/stats', verifyDeliveryToken, async (req, res) => {
   try {
@@ -676,58 +762,120 @@ router.get('/profile/stats', verifyDeliveryToken, async (req, res) => {
 });
 
 // Get delivery history with filter (today, this week, this month, all time)
+// Cost-saving: Fetches from Google Sheets instead of MongoDB
 router.get('/orders/history/filtered', verifyDeliveryToken, async (req, res) => {
   try {
     const { filter = 'week' } = req.query; // 'today', 'week', 'month', 'all'
+    const deliveryBoyName = req.deliveryBoy.name;
     
-    let dateFilter = {};
-    const now = new Date();
+    // Fetch from Google Sheets (complete history, cost-saving)
+    const { orders: sheetOrders, stats: sheetStats, error } = await googleSheets.getDeliveryPartnerHistory({
+      deliveryBoyName,
+      filter
+    });
     
-    if (filter === 'today') {
-      const startOfDay = new Date(now);
-      startOfDay.setHours(0, 0, 0, 0);
-      dateFilter = { deliveredAt: { $gte: startOfDay } };
-    } else if (filter === 'week') {
-      // Get Monday of current week
-      const dayOfWeek = now.getDay();
-      const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Sunday = 0
-      const startOfWeek = new Date(now);
-      startOfWeek.setDate(now.getDate() - diffToMonday);
-      startOfWeek.setHours(0, 0, 0, 0);
-      // Get Sunday of current week
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6);
-      endOfWeek.setHours(23, 59, 59, 999);
-      dateFilter = { deliveredAt: { $gte: startOfWeek, $lte: endOfWeek } };
-    } else if (filter === 'month') {
-      // Get 1st of current month
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      // Get last day of current month
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-      dateFilter = { deliveredAt: { $gte: startOfMonth, $lte: endOfMonth } };
+    if (error) {
+      console.error('Error fetching from sheets, falling back to MongoDB:', error);
+      
+      // Fallback to MongoDB if sheets fail
+      let dateFilter = {};
+      const now = new Date();
+      
+      if (filter === 'today') {
+        const startOfDay = new Date(now);
+        startOfDay.setHours(0, 0, 0, 0);
+        dateFilter = { deliveredAt: { $gte: startOfDay } };
+      } else if (filter === 'week') {
+        const dayOfWeek = now.getDay();
+        const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - diffToMonday);
+        startOfWeek.setHours(0, 0, 0, 0);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+        dateFilter = { deliveredAt: { $gte: startOfWeek, $lte: endOfWeek } };
+      } else if (filter === 'month') {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        dateFilter = { deliveredAt: { $gte: startOfMonth, $lte: endOfMonth } };
+      }
+      
+      const orders = await Order.find({
+        assignedTo: req.deliveryBoy._id,
+        status: { $in: ['delivered', 'cancelled'] },
+        ...dateFilter
+      }).sort({ deliveredAt: -1, statusUpdatedAt: -1 }).limit(filter === 'all' ? 500 : 100);
+      
+      const deliveredOrders = orders.filter(o => o.status === 'delivered');
+      const cancelledOrders = orders.filter(o => o.status === 'cancelled');
+      const totalEarnings = deliveredOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+      
+      return res.json({
+        orders,
+        stats: {
+          delivered: deliveredOrders.length,
+          cancelled: cancelledOrders.length,
+          earnings: totalEarnings
+        },
+        source: 'mongodb'
+      });
     }
-    // 'all' - no date filter
     
-    const orders = await Order.find({
+    // Also check MongoDB for very recent orders that might not be in sheets yet (last 5 mins)
+    const recentCutoff = new Date(Date.now() - 5 * 60 * 1000);
+    const recentDbOrders = await Order.find({
       assignedTo: req.deliveryBoy._id,
       status: { $in: ['delivered', 'cancelled'] },
-      ...dateFilter
-    }).sort({ deliveredAt: -1, statusUpdatedAt: -1 }).limit(100);
+      statusUpdatedAt: { $gte: recentCutoff }
+    }).sort({ statusUpdatedAt: -1 }).limit(10).lean();
     
-    // Calculate stats for the filtered period
-    const deliveredOrders = orders.filter(o => o.status === 'delivered');
-    const cancelledOrders = orders.filter(o => o.status === 'cancelled');
-    const totalEarnings = deliveredOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    // Merge recent DB orders with sheet orders (avoiding duplicates)
+    const sheetOrderIds = new Set(sheetOrders.map(o => o.orderId));
+    const mergedOrders = [...sheetOrders];
+    let extraDelivered = 0;
+    let extraCancelled = 0;
+    let extraEarnings = 0;
+    
+    for (const dbOrder of recentDbOrders) {
+      if (!sheetOrderIds.has(dbOrder.orderId)) {
+        mergedOrders.unshift({
+          orderId: dbOrder.orderId,
+          time: new Date(dbOrder.createdAt).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }),
+          phone: dbOrder.customer?.phone || '',
+          customerName: dbOrder.customer?.name || '',
+          items: dbOrder.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', '),
+          totalAmount: dbOrder.totalAmount,
+          paymentMethod: dbOrder.paymentMethod === 'cod' ? 'COD' : 'UPI',
+          paymentStatus: dbOrder.paymentStatus === 'paid' ? 'Paid' : 'Pending',
+          status: dbOrder.status,
+          address: dbOrder.deliveryAddress?.address || '',
+          deliveryPartnerName: dbOrder.deliveryPartnerName || '',
+          source: 'mongodb',
+          deliveredAt: dbOrder.deliveredAt || dbOrder.statusUpdatedAt,
+          statusUpdatedAt: dbOrder.statusUpdatedAt
+        });
+        
+        if (dbOrder.status === 'delivered') {
+          extraDelivered++;
+          extraEarnings += dbOrder.totalAmount || 0;
+        } else if (dbOrder.status === 'cancelled') {
+          extraCancelled++;
+        }
+      }
+    }
     
     res.json({
-      orders,
+      orders: mergedOrders,
       stats: {
-        delivered: deliveredOrders.length,
-        cancelled: cancelledOrders.length,
-        earnings: totalEarnings
-      }
+        delivered: sheetStats.delivered + extraDelivered,
+        cancelled: sheetStats.cancelled + extraCancelled,
+        earnings: sheetStats.earnings + extraEarnings
+      },
+      source: 'sheets'
     });
   } catch (error) {
+    console.error('Error in history/filtered endpoint:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1048,6 +1196,26 @@ router.post('/orders/:orderId/delivered', verifyDeliveryToken, async (req, res) 
     
     dataEvents.emit('orders');
     dataEvents.emit('dashboard');
+    
+    // Update customer order history in Google Sheets (non-blocking)
+    googleSheets.updateCustomerOrder(order.customer.phone, order, 'delivered').catch(err => {
+      console.error('Failed to update customer order in sheets:', err.message);
+    });
+    
+    // INSTANT CLEANUP: Hide delivered order from dashboard immediately
+    // Data remains in Google Sheets for history viewing (cost-saving approach)
+    setTimeout(async () => {
+      try {
+        await Order.updateOne(
+          { orderId: order.orderId },
+          { $set: { isHidden: true } }
+        );
+        console.log(`🧹 Order ${order.orderId} hidden from dashboard (delivered by delivery partner)`);
+        dataEvents.emit('orders');
+      } catch (cleanupErr) {
+        console.error('Instant cleanup error:', cleanupErr.message);
+      }
+    }, 3000); // 3 second delay to ensure sheets sync
     
     res.json({ message: 'Order marked as delivered', order });
   } catch (error) {

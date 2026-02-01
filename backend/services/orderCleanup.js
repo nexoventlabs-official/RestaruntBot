@@ -4,7 +4,9 @@ const DashboardStats = require('../models/DashboardStats');
 const ReportHistory = require('../models/ReportHistory');
 const dataEvents = require('./eventEmitter');
 
-const CLEANUP_DELAY_HOURS = 1; // Remove delivered/cancelled orders after 1 hour
+// COST-SAVING: Orders are now hidden INSTANTLY after delivered/cancelled (in routes)
+// This cleanup is just a fallback for any orders that might have been missed
+const CLEANUP_DELAY_MINUTES = 5; // Fallback cleanup after 5 minutes (was 1 hour)
 
 const orderCleanup = {
   // Get or create dashboard stats document
@@ -165,10 +167,10 @@ const orderCleanup = {
     }
   },
 
-  // Hide delivered, cancelled, and refunded orders older than 1 hour from status update
+  // Hide delivered, cancelled, and refunded orders older than 5 minutes from status update (fallback)
   async cleanupCompletedOrders() {
     try {
-      const cutoffTime = new Date(Date.now() - CLEANUP_DELAY_HOURS * 60 * 60 * 1000);
+      const cutoffTime = new Date(Date.now() - CLEANUP_DELAY_MINUTES * 60 * 1000);
       
       // Find delivered/cancelled/refunded orders where statusUpdatedAt is older than 1 hour and not already hidden
       const ordersToHide = await Order.find({
@@ -206,17 +208,17 @@ const orderCleanup = {
     }
   },
 
-  // Start the scheduler (runs every 5 minutes)
+  // Start the scheduler (runs every 2 minutes for quick fallback cleanup)
   start() {
-    console.log(`🧹 Order cleanup scheduler started - removes delivered/cancelled/refunded orders after ${CLEANUP_DELAY_HOURS} hour(s)`);
+    console.log(`🧹 Order cleanup scheduler started - fallback cleanup for delivered/cancelled/refunded orders after ${CLEANUP_DELAY_MINUTES} minute(s)`);
     
     // Run immediately on start
     this.cleanupCompletedOrders();
     
-    // Then run every 5 minutes
+    // Then run every 2 minutes (faster than before for quick fallback)
     setInterval(() => {
       this.cleanupCompletedOrders();
-    }, 5 * 60 * 1000); // Every 5 minutes
+    }, 2 * 60 * 1000); // Every 2 minutes
   }
 };
 

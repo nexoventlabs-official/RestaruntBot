@@ -3183,6 +3183,11 @@ const chatbot = {
       console.error('[Chatbot] Failed to save WhatsApp contact:', err.message);
     });
 
+    // Save customer to Google Sheets for cost-saving (non-blocking)
+    googleSheets.addOrUpdateCustomer(phone, customer.name || senderName, customer.deliveryAddress?.address).catch(err => {
+      console.error('[Chatbot] Failed to save customer to Google Sheets:', err.message);
+    });
+
     // Get all categories to check schedule status
     const allCategories = await Category.find({ isActive: true });
     

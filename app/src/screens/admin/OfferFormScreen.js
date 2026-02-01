@@ -40,6 +40,14 @@ export default function OfferFormScreen({ route, navigation }) {
   const [loadingData, setLoadingData] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Targeting state
+  const [targetType, setTargetType] = useState(existingOffer?.targetType || 'all');
+  const [targetPercentage, setTargetPercentage] = useState(
+    existingOffer?.targetPercentage?.toString() || '10'
+  );
+  const [customerStats, setCustomerStats] = useState({ total: 0, selected: 0 });
+  const [loadingCustomerStats, setLoadingCustomerStats] = useState(false);
+  
   const [loading, setLoading] = useState(false);
   const [pickingImage, setPickingImage] = useState(false);
   
@@ -53,6 +61,31 @@ export default function OfferFormScreen({ route, navigation }) {
     ]).start();
     fetchCategoriesAndItems();
   }, []);
+
+  // Fetch customer stats when targeting changes
+  useEffect(() => {
+    if (targetType === 'top_percentage') {
+      fetchCustomerStats();
+    }
+  }, [targetType, targetPercentage]);
+
+  const fetchCustomerStats = async () => {
+    try {
+      setLoadingCustomerStats(true);
+      const pct = parseInt(targetPercentage) || 10;
+      const response = await api.get(`/offers/customers/top/${pct}`);
+      if (response.data.success) {
+        setCustomerStats({
+          total: response.data.totalCustomers || 0,
+          selected: response.data.selectedCount || 0
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching customer stats:', error);
+    } finally {
+      setLoadingCustomerStats(false);
+    }
+  };
 
   useEffect(() => {
     console.log('Categories state updated:', categories.length, 'categories');
@@ -251,6 +284,8 @@ export default function OfferFormScreen({ route, navigation }) {
       console.log('- Percentage:', percentage);
       console.log('- Selected Items:', selectedItems.length, selectedItems);
       console.log('- Selected Categories:', selectedCategories.length, selectedCategories);
+      console.log('- Target Type:', targetType);
+      console.log('- Target Percentage:', targetPercentage);
       
       if (percentage && percentage.trim()) {
         formData.append('percentage', percentage);
@@ -262,6 +297,12 @@ export default function OfferFormScreen({ route, navigation }) {
       
       if (selectedCategories.length > 0) {
         formData.append('appliedCategories', JSON.stringify(selectedCategories));
+      }
+
+      // Add targeting fields
+      formData.append('targetType', targetType);
+      if (targetType === 'top_percentage') {
+        formData.append('targetPercentage', targetPercentage);
       }
 
       // Add the universal image for all three device types
@@ -471,6 +512,102 @@ export default function OfferFormScreen({ route, navigation }) {
                       {percentage && percentage.trim()
                         ? `${percentage}% discount will be applied to ${selectedCategories.length} category(ies) and ${selectedItems.length} item(s)`
                         : `Offer will apply to ${selectedCategories.length} category(ies) and ${selectedItems.length} item(s)`}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Customer Targeting Section */}
+              <View style={styles.applySection}>
+                <View style={styles.applySectionHeader}>
+                  <Ionicons name="people" size={20} color={ZOMATO_RED} />
+                  <Text style={styles.applySectionTitle}>Customer Targeting</Text>
+                </View>
+                <Text style={styles.applySectionHint}>
+                  Choose who can see this offer
+                </Text>
+                
+                {/* Target Type Selection */}
+                <View style={styles.targetTypeContainer}>
+                  <TouchableOpacity 
+                    style={[
+                      styles.targetTypeOption,
+                      targetType === 'all' && styles.targetTypeOptionActive
+                    ]}
+                    onPress={() => setTargetType('all')}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons 
+                      name={targetType === 'all' ? 'radio-button-on' : 'radio-button-off'} 
+                      size={20} 
+                      color={targetType === 'all' ? ZOMATO_RED : '#9CA3AF'} 
+                    />
+                    <Text style={[
+                      styles.targetTypeText,
+                      targetType === 'all' && styles.targetTypeTextActive
+                    ]}>All Customers</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[
+                      styles.targetTypeOption,
+                      targetType === 'top_percentage' && styles.targetTypeOptionActive
+                    ]}
+                    onPress={() => setTargetType('top_percentage')}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons 
+                      name={targetType === 'top_percentage' ? 'radio-button-on' : 'radio-button-off'} 
+                      size={20} 
+                      color={targetType === 'top_percentage' ? ZOMATO_RED : '#9CA3AF'} 
+                    />
+                    <Text style={[
+                      styles.targetTypeText,
+                      targetType === 'top_percentage' && styles.targetTypeTextActive
+                    ]}>Top Spenders Only</Text>
+                  </TouchableOpacity>
+                </View>
+                
+                {/* Top Percentage Input - Only show when targeting top customers */}
+                {targetType === 'top_percentage' && (
+                  <View style={styles.targetPercentageSection}>
+                    <Text style={styles.targetPercentageLabel}>
+                      Target Top <Text style={{ color: ZOMATO_RED, fontWeight: '700' }}>{targetPercentage}%</Text> of Customers
+                    </Text>
+                    <View style={styles.targetPercentageInputContainer}>
+                      <TextInput
+                        style={styles.targetPercentageInput}
+                        value={targetPercentage}
+                        onChangeText={(text) => {
+                          const num = parseInt(text) || 0;
+                          if (num >= 0 && num <= 100) {
+                            setTargetPercentage(text);
+                          }
+                        }}
+                        placeholder="10"
+                        placeholderTextColor="#9CA3AF"
+                        keyboardType="numeric"
+                        maxLength={3}
+                      />
+                      <Text style={styles.targetPercentageSymbol}>%</Text>
+                    </View>
+                    
+                    {/* Customer Stats Preview */}
+                    <View style={styles.customerStatsContainer}>
+                      {loadingCustomerStats ? (
+                        <ActivityIndicator size="small" color={ZOMATO_RED} />
+                      ) : (
+                        <>
+                          <Ionicons name="analytics" size={16} color="#6B7280" />
+                          <Text style={styles.customerStatsText}>
+                            {customerStats.selected} of {customerStats.total} customers will see this offer
+                          </Text>
+                        </>
+                      )}
+                    </View>
+                    
+                    <Text style={styles.targetPercentageHint}>
+                      Based on total spending from Google Sheets data
                     </Text>
                   </View>
                 )}
@@ -1174,5 +1311,94 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#1C1C1C',
+  },
+  
+  // Customer Targeting Styles
+  targetTypeContainer: {
+    flexDirection: 'column',
+    gap: 10,
+    marginTop: 12,
+  },
+  targetTypeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+  },
+  targetTypeOptionActive: {
+    backgroundColor: '#FEF2F2',
+    borderColor: ZOMATO_RED,
+  },
+  targetTypeText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  targetTypeTextActive: {
+    color: ZOMATO_RED,
+  },
+  targetPercentageSection: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  targetPercentageLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1C1C1C',
+    marginBottom: 12,
+  },
+  targetPercentageInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 16,
+  },
+  targetPercentageInput: {
+    flex: 1,
+    height: 48,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1C1C1C',
+    textAlign: 'center',
+  },
+  targetPercentageSymbol: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: ZOMATO_RED,
+    marginLeft: 4,
+  },
+  customerStatsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+  },
+  customerStatsText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  targetPercentageHint: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 8,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });

@@ -9,7 +9,8 @@ const SHEET_NAMES = {
   new: 'neworders',
   delivered: 'delivered',
   cancelled: 'cancelled',
-  selfpick: 'selfpick'
+  selfpick: 'selfpick',
+  customers: 'customers'
 };
 
 // Status colors (RGB values 0-1)
@@ -649,6 +650,552 @@ const googleSheets = {
     } catch (error) {
       console.error('❌ Google Sheets payment method update error:', error.message);
       return false;
+    }
+  },
+
+  // Fetch order history from Google Sheets (delivered, cancelled, selfpick sheets)
+  // This is the cost-saving method - fetches from sheets instead of MongoDB
+  async getOrderHistory(options = {}) {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return { orders: [], error: 'Google auth not configured' };
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const { deliveryBoyName, startDate, endDate, searchQuery, status } = options;
+      
+      let allOrders = [];
+      
+      // Determine which sheets to fetch from based on status filter
+      let sheetsToFetch = [];
+      if (status === 'delivered') {
+        sheetsToFetch = ['delivered', 'selfpick'];
+      } else if (status === 'cancelled') {
+        sheetsToFetch = ['cancelled'];
+      } else {
+        // All statuses - fetch from all completed order sheets
+        sheetsToFetch = ['delivered', 'cancelled', 'selfpick'];
+      }
+      
+      for (const sheetType of sheetsToFetch) {
+        const sheet = await this.getSheetByType(sheets, sheetType);
+        if (!sheet) continue;
+        
+        try {
+          const response = await sheets.spreadsheets.values.get({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${sheet.sheetName}!A:K`
+          });
+          
+          const rows = response.data.values || [];
+          
+          // Parse rows (skip date headers which start with 📅)
+          for (const row of rows) {
+            if (!row[0] || row[0].startsWith('📅')) continue;
+            
+            // Column structure: OrderID, Time, Phone, Name, Items, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
+            const order = {
+              orderId: row[0] || '',
+              time: row[1] || '',
+              phone: row[2] || '',
+              customerName: row[3] || '',
+              items: row[4] || '',
+              totalAmount: parseFloat(row[5]) || 0,
+              paymentMethod: row[6] || '',
+              paymentStatus: row[7] || '',
+              status: sheetType === 'selfpick' ? 'delivered' : sheetType,
+              address: row[9] || '',
+              deliveryPartnerName: row[10] || '',
+              source: 'sheets',
+              sheetType: sheetType
+            };
+            
+            // Filter by delivery boy name if specified
+            if (deliveryBoyName && order.deliveryPartnerName !== deliveryBoyName) {
+              continue;
+            }
+            
+            // Filter by search query (search in orderId, customerName, phone, items)
+            if (searchQuery) {
+              const query = searchQuery.toLowerCase();
+              const matches = 
+                order.orderId.toLowerCase().includes(query) ||
+                order.customerName.toLowerCase().includes(query) ||
+                order.phone.includes(query) ||
+                order.items.toLowerCase().includes(query);
+              if (!matches) continue;
+            }
+            
+            allOrders.push(order);
+          }
+        } catch (sheetError) {
+          console.error(`Error fetching from ${sheet.sheetName}:`, sheetError.message);
+        }
+      }
+      
+      // Sort by orderId (descending - newest first)
+      // OrderIds typically have format like D1234 or S1234, sort by numeric part
+      allOrders.sort((a, b) => {
+        const numA = parseInt(a.orderId.replace(/[^0-9]/g, '')) || 0;
+        const numB = parseInt(b.orderId.replace(/[^0-9]/g, '')) || 0;
+        return numB - numA;
+      });
+      
+      console.log(`📊 Fetched ${allOrders.length} orders from Google Sheets history`);
+      return { orders: allOrders, error: null };
+    } catch (error) {
+      console.error('❌ Error fetching order history from sheets:', error.message);
+      return { orders: [], error: error.message };
+    }
+  },
+
+  // Get delivery partner history from Google Sheets with date filtering
+  // Cost-saving: Fetches complete history from sheets instead of MongoDB
+  async getDeliveryPartnerHistory(options = {}) {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return { orders: [], stats: { delivered: 0, cancelled: 0, earnings: 0 }, error: 'Google auth not configured' };
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const { deliveryBoyName, filter = 'all' } = options;
+      
+      if (!deliveryBoyName) {
+        return { orders: [], stats: { delivered: 0, cancelled: 0, earnings: 0 }, error: 'Delivery partner name required' };
+      }
+      
+      let allOrders = [];
+      
+      // Fetch from delivered and cancelled sheets
+      const sheetsToFetch = ['delivered', 'cancelled'];
+      
+      for (const sheetType of sheetsToFetch) {
+        const sheet = await this.getSheetByType(sheets, sheetType);
+        if (!sheet) continue;
+        
+        try {
+          const response = await sheets.spreadsheets.values.get({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${sheet.sheetName}!A:L`
+          });
+          
+          const rows = response.data.values || [];
+          let currentDate = null;
+          
+          // Parse rows
+          for (const row of rows) {
+            if (!row[0]) continue;
+            
+            // Check if this is a date header row (starts with 📅)
+            if (row[0].startsWith('📅')) {
+              // Extract date from header like "📅 01-Feb-2026"
+              const dateMatch = row[0].match(/📅\s*(.+)/);
+              if (dateMatch) {
+                currentDate = dateMatch[1].trim();
+              }
+              continue;
+            }
+            
+            // Column structure: OrderID, Time, Phone, Name, Items, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
+            const deliveryPartner = row[10] || '';
+            
+            // Filter by delivery partner name
+            if (deliveryPartner !== deliveryBoyName) {
+              continue;
+            }
+            
+            // Parse order date (use current date header or extract from time)
+            let orderDate = null;
+            if (currentDate) {
+              try {
+                // Parse date like "01-Feb-2026" or "15-Jan-2026"
+                const [day, month, year] = currentDate.split('-');
+                const monthMap = { 'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5, 'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11 };
+                orderDate = new Date(parseInt(year), monthMap[month] || 0, parseInt(day));
+              } catch (e) {
+                orderDate = new Date();
+              }
+            }
+            
+            const order = {
+              orderId: row[0] || '',
+              time: row[1] || '',
+              phone: row[2] || '',
+              customerName: row[3] || '',
+              items: row[4] || '',
+              totalAmount: parseFloat(row[5]) || 0,
+              paymentMethod: row[6] || '',
+              paymentStatus: row[7] || '',
+              status: sheetType,
+              address: row[9] || '',
+              deliveryPartnerName: deliveryPartner,
+              source: 'sheets',
+              sheetType: sheetType,
+              orderDate: orderDate,
+              // For compatibility with frontend
+              deliveredAt: orderDate,
+              statusUpdatedAt: orderDate
+            };
+            
+            allOrders.push(order);
+          }
+        } catch (sheetError) {
+          console.error(`Error fetching from ${sheetType}:`, sheetError.message);
+        }
+      }
+      
+      // Apply date filter
+      const now = new Date();
+      let filteredOrders = allOrders;
+      
+      if (filter === 'today') {
+        const startOfDay = new Date(now);
+        startOfDay.setHours(0, 0, 0, 0);
+        filteredOrders = allOrders.filter(o => o.orderDate && o.orderDate >= startOfDay);
+      } else if (filter === 'week') {
+        // Get Monday of current week
+        const dayOfWeek = now.getDay();
+        const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - diffToMonday);
+        startOfWeek.setHours(0, 0, 0, 0);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+        filteredOrders = allOrders.filter(o => o.orderDate && o.orderDate >= startOfWeek && o.orderDate <= endOfWeek);
+      } else if (filter === 'month') {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        filteredOrders = allOrders.filter(o => o.orderDate && o.orderDate >= startOfMonth && o.orderDate <= endOfMonth);
+      }
+      // 'all' - no date filter, return complete history
+      
+      // Sort by order date (newest first)
+      filteredOrders.sort((a, b) => {
+        if (!a.orderDate && !b.orderDate) return 0;
+        if (!a.orderDate) return 1;
+        if (!b.orderDate) return -1;
+        return b.orderDate - a.orderDate;
+      });
+      
+      // Calculate stats
+      const deliveredOrders = filteredOrders.filter(o => o.status === 'delivered');
+      const cancelledOrders = filteredOrders.filter(o => o.status === 'cancelled');
+      const totalEarnings = deliveredOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+      
+      console.log(`📊 Fetched ${filteredOrders.length} orders for delivery partner "${deliveryBoyName}" (filter: ${filter})`);
+      
+      return { 
+        orders: filteredOrders, 
+        stats: {
+          delivered: deliveredOrders.length,
+          cancelled: cancelledOrders.length,
+          earnings: totalEarnings
+        },
+        error: null 
+      };
+    } catch (error) {
+      console.error('❌ Error fetching delivery partner history from sheets:', error.message);
+      return { orders: [], stats: { delivered: 0, cancelled: 0, earnings: 0 }, error: error.message };
+    }
+  },
+  // Cost-saving: Store customers in Google Sheets instead of fetching from MongoDB
+
+  // Initialize customers sheet with headers if not exists
+  async initializeCustomersSheet() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return false;
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'customers');
+      
+      if (!sheet) {
+        console.log('⚠️ Customers sheet not found. Please create a sheet named "customers" in your Google Spreadsheet');
+        return false;
+      }
+      
+      // Check if headers exist
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A1:G1`
+      });
+      
+      if (!response.data.values || response.data.values.length === 0) {
+        // Add headers: Phone, Name, Location, Orders Count, Total Spent, Last Order, Order History
+        const headers = ['Phone', 'Name', 'Location', 'Orders Count', 'Total Spent', 'Last Order Date', 'Order History'];
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheet.sheetName}!A1:G1`,
+          valueInputOption: 'RAW',
+          resource: { values: [headers] }
+        });
+        
+        // Format header row
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: SPREADSHEET_ID,
+          resource: {
+            requests: [{
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 7 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.2, green: 0.4, blue: 0.6 },
+                    textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                    horizontalAlignment: 'CENTER'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'
+              }
+            }]
+          }
+        });
+        
+        console.log('✅ Customers sheet initialized with headers');
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Error initializing customers sheet:', error.message);
+      return false;
+    }
+  },
+
+  // Add or update customer in the customers sheet
+  async addOrUpdateCustomer(phone, name = null, location = null) {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return false;
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'customers');
+      
+      if (!sheet) {
+        console.log('⚠️ Customers sheet not found');
+        return false;
+      }
+      
+      // Initialize sheet if needed
+      await this.initializeCustomersSheet();
+      
+      // Check if customer already exists
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:G`
+      });
+      
+      const rows = response.data.values || [];
+      const existingRowIndex = rows.findIndex((row, index) => index > 0 && row[0] === phone);
+      
+      if (existingRowIndex !== -1) {
+        // Update existing customer's name and location if provided
+        const updates = [];
+        if (name && name.trim()) {
+          updates.push({
+            range: `${sheet.sheetName}!B${existingRowIndex + 1}`,
+            values: [[name]]
+          });
+        }
+        if (location && location.trim()) {
+          updates.push({
+            range: `${sheet.sheetName}!C${existingRowIndex + 1}`,
+            values: [[location]]
+          });
+        }
+        
+        if (updates.length > 0) {
+          await sheets.spreadsheets.values.batchUpdate({
+            spreadsheetId: SPREADSHEET_ID,
+            resource: { valueInputOption: 'RAW', data: updates }
+          });
+        }
+        
+        console.log(`📱 Customer ${phone} already exists, updated info`);
+        return true;
+      }
+      
+      // Add new customer
+      const newRow = [phone, name || '', location || '', 0, 0, '', ''];
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:G`,
+        valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
+        resource: { values: [newRow] }
+      });
+      
+      console.log(`✅ Customer ${phone} added to Google Sheets`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error adding customer to sheets:', error.message);
+      return false;
+    }
+  },
+
+  // Update customer's order in the sheet (called when order is delivered/cancelled)
+  async updateCustomerOrder(phone, order, status) {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return false;
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'customers');
+      
+      if (!sheet) return false;
+      
+      // Get customer row
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:G`
+      });
+      
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex((row, index) => index > 0 && row[0] === phone);
+      
+      if (rowIndex === -1) {
+        // Customer not found, add them first
+        await this.addOrUpdateCustomer(phone, order.customer?.name, order.deliveryAddress?.address);
+        return this.updateCustomerOrder(phone, order, status);
+      }
+      
+      const currentRow = rows[rowIndex];
+      const currentOrdersCount = parseInt(currentRow[3]) || 0;
+      const currentTotalSpent = parseFloat(currentRow[4]) || 0;
+      const currentOrderHistory = currentRow[6] || '';
+      
+      // Format order entry: OrderID|Items|Amount|Status|Date
+      const date = new Date();
+      const dateStr = date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
+      const itemsStr = order.items?.map(i => `${i.name}x${i.quantity}`).join(', ') || '';
+      const orderEntry = `${order.orderId}|${itemsStr}|₹${order.totalAmount}|${status}|${dateStr}`;
+      
+      // Append to order history
+      const newOrderHistory = currentOrderHistory ? `${currentOrderHistory} || ${orderEntry}` : orderEntry;
+      
+      // Update totals (only add to total if delivered)
+      const newOrdersCount = currentOrdersCount + 1;
+      const newTotalSpent = status === 'delivered' ? currentTotalSpent + (order.totalAmount || 0) : currentTotalSpent;
+      
+      // Update the row
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!D${rowIndex + 1}:G${rowIndex + 1}`,
+        valueInputOption: 'RAW',
+        resource: { 
+          values: [[newOrdersCount, newTotalSpent, dateStr, newOrderHistory]] 
+        }
+      });
+      
+      // Color the row based on status (green for delivered, red for cancelled)
+      const color = status === 'delivered' 
+        ? { red: 0.9, green: 1, blue: 0.9 }  // Light green
+        : { red: 1, green: 0.9, blue: 0.9 }; // Light red
+      
+      // Only color if this is the most recent order
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+          requests: [{
+            repeatCell: {
+              range: { sheetId: sheet.sheetId, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: 0, endColumnIndex: 7 },
+              cell: {
+                userEnteredFormat: {
+                  backgroundColor: color
+                }
+              },
+              fields: 'userEnteredFormat.backgroundColor'
+            }
+          }]
+        }
+      });
+      
+      console.log(`✅ Customer ${phone} order history updated in Google Sheets`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error updating customer order in sheets:', error.message);
+      return false;
+    }
+  },
+
+  // Get all customers from Google Sheets (for offers/broadcast)
+  async getAllCustomers() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return { customers: [], error: 'Auth not configured' };
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'customers');
+      
+      if (!sheet) {
+        return { customers: [], error: 'Customers sheet not found' };
+      }
+      
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:G`
+      });
+      
+      const rows = response.data.values || [];
+      const customers = [];
+      
+      // Skip header row
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row[0]) continue; // Skip empty rows
+        
+        customers.push({
+          phone: row[0] || '',
+          name: row[1] || '',
+          location: row[2] || '',
+          ordersCount: parseInt(row[3]) || 0,
+          totalSpent: parseFloat(row[4]) || 0,
+          lastOrderDate: row[5] || '',
+          orderHistory: row[6] || '',
+          rowIndex: i
+        });
+      }
+      
+      console.log(`📊 Fetched ${customers.length} customers from Google Sheets`);
+      return { customers, error: null };
+    } catch (error) {
+      console.error('❌ Error fetching customers from sheets:', error.message);
+      return { customers: [], error: error.message };
+    }
+  },
+
+  // Get top percentage of customers by total spent (for targeted offers)
+  async getTopCustomersBySpent(percentage) {
+    try {
+      const { customers, error } = await this.getAllCustomers();
+      
+      if (error || customers.length === 0) {
+        return { customers: [], error: error || 'No customers found' };
+      }
+      
+      // Filter customers who have ordered at least once
+      const orderedCustomers = customers.filter(c => c.ordersCount > 0 && c.totalSpent > 0);
+      
+      if (orderedCustomers.length === 0) {
+        return { customers: [], error: 'No customers with orders found' };
+      }
+      
+      // Sort by total spent (descending)
+      orderedCustomers.sort((a, b) => b.totalSpent - a.totalSpent);
+      
+      // Calculate how many customers are in the top percentage
+      const topCount = Math.max(1, Math.ceil(orderedCustomers.length * (percentage / 100)));
+      
+      // Get top customers
+      const topCustomers = orderedCustomers.slice(0, topCount);
+      
+      console.log(`📊 Top ${percentage}% customers: ${topCustomers.length} out of ${orderedCustomers.length}`);
+      return { 
+        customers: topCustomers, 
+        totalCustomers: orderedCustomers.length,
+        selectedCount: topCustomers.length,
+        error: null 
+      };
+    } catch (error) {
+      console.error('❌ Error getting top customers:', error.message);
+      return { customers: [], error: error.message };
     }
   },
 

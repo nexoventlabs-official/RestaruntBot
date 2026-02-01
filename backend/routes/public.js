@@ -19,9 +19,12 @@ router.get('/hero-sections', async (req, res) => {
 });
 
 // Get active offers (public)
+// Optional query param: customerPhone - to filter targeted offers
 router.get('/offers', async (req, res) => {
   try {
     const now = new Date();
+    const { customerPhone } = req.query;
+    
     const offers = await Offer.find({ 
       isActive: true,
       $or: [
@@ -30,17 +33,46 @@ router.get('/offers', async (req, res) => {
       ],
       validFrom: { $lte: now }
     }).sort({ createdAt: -1 });
-    res.json(offers);
+    
+    // Filter offers based on targeting
+    const filteredOffers = offers.filter(offer => {
+      // If offer targets all customers, show it
+      if (!offer.targetType || offer.targetType === 'all') {
+        return true;
+      }
+      
+      // If targeting top percentage, check if customer is in targeted list
+      if (offer.targetType === 'top_percentage') {
+        // If no customer phone provided, don't show targeted offers
+        if (!customerPhone) {
+          return false;
+        }
+        
+        // Check if customer phone is in targetedCustomers array
+        const normalizedPhone = customerPhone.replace(/[^0-9]/g, '');
+        return offer.targetedCustomers && offer.targetedCustomers.some(phone => {
+          const normalizedTargetPhone = phone.replace(/[^0-9]/g, '');
+          return normalizedTargetPhone.includes(normalizedPhone) || normalizedPhone.includes(normalizedTargetPhone);
+        });
+      }
+      
+      return true;
+    });
+    
+    res.json(filteredOffers);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 // Get popup offers (public)
+// Optional query param: customerPhone - to filter targeted offers
 router.get('/popup-offers', async (req, res) => {
   try {
     const now = new Date();
-    const offers = await Offer.find({ 
+    const { customerPhone } = req.query;
+    
+    let offers = await Offer.find({ 
       isActive: true,
       showAsPopup: true,
       $or: [
@@ -48,7 +80,33 @@ router.get('/popup-offers', async (req, res) => {
         { validUntil: { $gte: now } }
       ],
       validFrom: { $lte: now }
-    }).sort({ createdAt: -1 }).limit(1);
+    }).sort({ createdAt: -1 });
+    
+    // Filter offers based on targeting
+    offers = offers.filter(offer => {
+      // If offer targets all customers, show it
+      if (!offer.targetType || offer.targetType === 'all') {
+        return true;
+      }
+      
+      // If targeting top percentage, check if customer is in targeted list
+      if (offer.targetType === 'top_percentage') {
+        // If no customer phone provided, don't show targeted offers
+        if (!customerPhone) {
+          return false;
+        }
+        
+        // Check if customer phone is in targetedCustomers array
+        const normalizedPhone = customerPhone.replace(/[^0-9]/g, '');
+        return offer.targetedCustomers && offer.targetedCustomers.some(phone => {
+          const normalizedTargetPhone = phone.replace(/[^0-9]/g, '');
+          return normalizedTargetPhone.includes(normalizedPhone) || normalizedPhone.includes(normalizedTargetPhone);
+        });
+      }
+      
+      return true;
+    });
+    
     res.json(offers[0] || null);
   } catch (error) {
     res.status(500).json({ error: error.message });

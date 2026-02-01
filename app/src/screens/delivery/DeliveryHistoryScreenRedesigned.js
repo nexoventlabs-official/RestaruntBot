@@ -71,54 +71,63 @@ const SummaryCard = ({ stats, filterLabel }) => {
   );
 };
 
-// Order Item Component
-const OrderItem = ({ item, index, onPress }) => (
-  <Animated.View entering={FadeInDown.delay(index * 50).duration(400)}>
-    <Card style={styles.orderCard} onPress={onPress}>
-      <View style={styles.orderHeader}>
-        <View style={styles.orderIdContainer}>
-          <View style={styles.checkIcon}>
-            <Ionicons name="checkmark" size={14} color="#fff" />
+// Order Item Component - Handles both MongoDB and Google Sheets data formats
+const OrderItem = ({ item, index, onPress }) => {
+  // Handle both data formats
+  const customerName = item.customerName || item.customer?.name || item.customer?.phone || 'Customer';
+  const customerPhone = item.phone || item.customer?.phone || '';
+  const address = item.address || item.deliveryAddress?.address || item.customer?.address || 'N/A';
+  const orderTime = item.time || (item.deliveredAt ? new Date(item.deliveredAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'N/A');
+  const itemsCount = typeof item.items === 'string' ? item.items.split(',').length : (item.items?.length || 0);
+  const isFromSheets = item.source === 'sheets';
+  const isCancelled = item.status === 'cancelled';
+  
+  return (
+    <Animated.View entering={FadeInDown.delay(index * 50).duration(400)}>
+      <Card style={styles.orderCard} onPress={onPress}>
+        <View style={styles.orderHeader}>
+          <View style={styles.orderIdContainer}>
+            <View style={[styles.checkIcon, isCancelled && styles.cancelledIcon]}>
+              <Ionicons name={isCancelled ? "close" : "checkmark"} size={14} color="#fff" />
+            </View>
+            <Text style={styles.orderId}>#{item.orderId}</Text>
           </View>
-          <Text style={styles.orderId}>#{item.orderId}</Text>
+          <Text style={styles.orderAmount}>₹{item.totalAmount}</Text>
         </View>
-        <Text style={styles.orderAmount}>₹{item.totalAmount}</Text>
-      </View>
 
-      <View style={styles.orderDetails}>
-        <View style={styles.orderDetail}>
-          <Ionicons name="person-outline" size={14} color={colors.light.text.tertiary} />
-          <Text style={styles.orderDetailText}>
-            {item.customer?.name || item.customer?.phone}
-          </Text>
+        <View style={styles.orderDetails}>
+          <View style={styles.orderDetail}>
+            <Ionicons name="person-outline" size={14} color={colors.light.text.tertiary} />
+            <Text style={styles.orderDetailText}>
+              {customerName}
+            </Text>
+          </View>
+          <View style={styles.orderDetail}>
+            <Ionicons name="location-outline" size={14} color={colors.light.text.tertiary} />
+            <Text style={styles.orderDetailText} numberOfLines={1}>
+              {address}
+            </Text>
+          </View>
         </View>
-        <View style={styles.orderDetail}>
-          <Ionicons name="location-outline" size={14} color={colors.light.text.tertiary} />
-          <Text style={styles.orderDetailText} numberOfLines={1}>
-            {item.deliveryAddress?.address || item.customer?.address || 'N/A'}
-          </Text>
-        </View>
-      </View>
 
-      <View style={styles.orderFooter}>
-        <View style={styles.orderTime}>
-          <Ionicons name="time-outline" size={14} color={colors.light.text.tertiary} />
-          <Text style={styles.orderTimeText}>
-            {item.deliveredAt
-              ? new Date(item.deliveredAt).toLocaleTimeString('en-IN', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })
-              : 'N/A'}
-          </Text>
+        <View style={styles.orderFooter}>
+          <View style={styles.orderTime}>
+            <Ionicons name="time-outline" size={14} color={colors.light.text.tertiary} />
+            <Text style={styles.orderTimeText}>{orderTime}</Text>
+          </View>
+          <View style={styles.itemsCount}>
+            <Text style={styles.itemsCountText}>{itemsCount} items</Text>
+          </View>
+          {isCancelled && (
+            <View style={styles.cancelledBadge}>
+              <Text style={styles.cancelledBadgeText}>Cancelled</Text>
+            </View>
+          )}
         </View>
-        <View style={styles.itemsCount}>
-          <Text style={styles.itemsCountText}>{item.items?.length || 0} items</Text>
-        </View>
-      </View>
-    </Card>
-  </Animated.View>
-);
+      </Card>
+    </Animated.View>
+  );
+};
 
 // Section Header Component
 const SectionHeader = ({ title }) => (
@@ -624,6 +633,20 @@ const styles = StyleSheet.create({
   },
   filterOptionTextActive: {
     color: colors.primary[400],
+    fontWeight: '600',
+  },
+  cancelledIcon: {
+    backgroundColor: colors.error.main,
+  },
+  cancelledBadge: {
+    backgroundColor: colors.error.light,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
+  },
+  cancelledBadgeText: {
+    fontSize: typography.label.small.fontSize,
+    color: colors.error.main,
     fontWeight: '600',
   },
 });

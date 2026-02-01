@@ -102,17 +102,9 @@ export default function MyOrdersScreen({ navigation }) {
       const response = await api.get('/delivery/orders/my');
       const allOrders = response.data;
       
-      // Filter cancelled orders - only show if cancelled within last 1 hour
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-      const filteredOrders = allOrders.filter(order => {
-        if (order.status === 'cancelled') {
-          const cancelledAt = new Date(order.statusUpdatedAt || order.updatedAt);
-          return cancelledAt > oneHourAgo;
-        }
-        return true;
-      });
-      
-      setOrders(filteredOrders);
+      // Orders are now hidden instantly from backend after delivered/cancelled
+      // No need to filter on client side anymore - backend handles it
+      setOrders(allOrders);
     } catch (error) { console.error('Error fetching orders:', error); }
     finally { setLoading(false); setRefreshing(false); }
   };
@@ -396,6 +388,15 @@ export default function MyOrdersScreen({ navigation }) {
                 <Text style={styles.title}>My Orders</Text>
                 <Text style={styles.subtitle}>{orders.length} active deliveries</Text>
               </View>
+              <TouchableOpacity 
+                style={styles.historyButton} 
+                onPress={() => navigation.navigate('History', { screen: 'HistoryList' })}
+                activeOpacity={0.8}
+              >
+                <View style={styles.historyButtonInner}>
+                  <Ionicons name="time-outline" size={22} color="#fff" />
+                </View>
+              </TouchableOpacity>
             </View>
           </View>
         </ImageBackground>
@@ -494,6 +495,17 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '700', color: '#fff' },
   subtitle: { fontSize: typography.body.large.fontSize, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
   headerBadge: { width: 50, height: 50, borderRadius: 16, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+  historyButton: { padding: 4 },
+  historyButtonInner: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 22, 
+    backgroundColor: 'rgba(255,255,255,0.2)', 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
   listContent: { padding: spacing.screenHorizontal, paddingBottom: 100, paddingTop: spacing.md },
   
   // Order Card

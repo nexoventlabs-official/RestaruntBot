@@ -3,6 +3,7 @@ const router = express.Router();
 const Offer = require('../models/Offer');
 const auth = require('../middleware/auth');
 const cloudinary = require('../services/cloudinary');
+const googleSheets = require('../services/googleSheets');
 const multer = require('multer');
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -25,13 +26,60 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+// Get all customers from Google Sheets (cost-saving approach)
+router.get('/customers', auth, async (req, res) => {
+  try {
+    const { customers, error } = await googleSheets.getAllCustomers();
+    
+    if (error) {
+      return res.status(500).json({ error });
+    }
+    
+    res.json({ 
+      success: true, 
+      customers,
+      total: customers.length 
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get top percentage of customers by spending
+router.get('/customers/top/:percentage', auth, async (req, res) => {
+  try {
+    const percentage = parseInt(req.params.percentage);
+    
+    if (isNaN(percentage) || percentage < 1 || percentage > 100) {
+      return res.status(400).json({ error: 'Percentage must be between 1 and 100' });
+    }
+    
+    const result = await googleSheets.getTopCustomersBySpent(percentage);
+    
+    if (result.error) {
+      return res.status(500).json({ error: result.error });
+    }
+    
+    res.json({
+      success: true,
+      customers: result.customers,
+      totalCustomers: result.totalCustomers,
+      selectedCount: result.selectedCount,
+      percentage
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Create offer
 router.post('/', auth, uploadMultiple, async (req, res) => {
   try {
     const { 
       title, description, offerType, code, discountType, discountValue, 
       minOrderAmount, validFrom, validUntil, isActive, showAsPopup,
-      buttonText, buttonLink, percentage, appliedItems, appliedCategories
+      buttonText, buttonLink, percentage, appliedItems, appliedCategories,
+      targetType, targetPercentage
     } = req.body;
     
     let imageMobileUrl = '';
@@ -87,6 +135,19 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       parsedAppliedCategories = typeof appliedCategories === 'string' ? JSON.parse(appliedCategories) : appliedCategories;
     }
 
+    // Handle targeting - get targeted customers from Google Sheets
+    let targetedCustomerPhones = [];
+    const finalTargetType = targetType || 'all';
+    const finalTargetPercentage = parseInt(targetPercentage) || 100;
+    
+    if (finalTargetType === 'top_percentage' && finalTargetPercentage < 100) {
+      const result = await googleSheets.getTopCustomersBySpent(finalTargetPercentage);
+      if (result.customers && result.customers.length > 0) {
+        targetedCustomerPhones = result.customers.map(c => c.phone);
+        console.log(`🎯 Targeting top ${finalTargetPercentage}% customers: ${targetedCustomerPhones.length} customers`);
+      }
+    }
+
     const offer = new Offer({
       title,
       description,
@@ -107,7 +168,10 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       isActive: isActive !== 'false',
       showAsPopup: showAsPopup !== 'false',
       buttonText: buttonText || 'Order Now',
-      buttonLink: buttonLink || '/menu'
+      buttonLink: buttonLink || '/menu',
+      targetType: finalTargetType,
+      targetPercentage: finalTargetPercentage,
+      targetedCustomers: targetedCustomerPhones
     });
 
     await offer.save();

@@ -441,6 +441,29 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     dataEvents.emit('orders');
     dataEvents.emit('dashboard');
 
+    // INSTANT CLEANUP: Hide delivered/cancelled orders from admin dashboard immediately
+    // They remain in Google Sheets for history viewing (cost-saving approach)
+    if (status === 'delivered' || status === 'cancelled') {
+      try {
+        // Update customer order history in Google Sheets (non-blocking)
+        googleSheets.updateCustomerOrder(order.customer.phone, order, status).catch(err => {
+          console.error('Failed to update customer order in sheets:', err.message);
+        });
+        
+        // Wait a small delay to ensure Google Sheets sync is complete
+        setTimeout(async () => {
+          await Order.updateOne(
+            { _id: order._id },
+            { $set: { isHidden: true } }
+          );
+          console.log(`🧹 Order ${order.orderId} hidden from dashboard (status: ${status})`);
+          dataEvents.emit('orders');
+        }, 3000); // 3 second delay to ensure sheets sync
+      } catch (cleanupErr) {
+        console.error('Instant cleanup error:', cleanupErr.message);
+      }
+    }
+
     res.json(order);
   } catch (error) {
     res.status(500).json({ error: error.message });
