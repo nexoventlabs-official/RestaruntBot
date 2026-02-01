@@ -1161,6 +1161,25 @@ const chatbot = {
   // Food synonyms - regional/local names mapped to common English equivalents
   // Used to expand search terms for better matching
   foodSynonyms: {
+    // ========== MEAL TIME SYNONYMS ==========
+    // Breakfast/Morning/Tiffin - all should match each other
+    'breakfast': ['breakfast', 'tiffin', 'tiffins', 'morning', 'nashta', 'naashta', 'subah'],
+    'tiffin': ['tiffin', 'tiffins', 'breakfast', 'morning', 'nashta', 'naashta'],
+    'tiffins': ['tiffins', 'tiffin', 'breakfast', 'morning'],
+    'morning': ['morning', 'breakfast', 'tiffin', 'tiffins', 'nashta', 'subah'],
+    'nashta': ['nashta', 'naashta', 'breakfast', 'tiffin', 'morning'],
+    'naashta': ['naashta', 'nashta', 'breakfast', 'tiffin', 'morning'],
+    // Lunch/Dinner/Meals
+    'lunch': ['lunch', 'meals', 'meal', 'thali', 'afternoon', 'bhojan', 'khana'],
+    'dinner': ['dinner', 'meals', 'meal', 'thali', 'night', 'raat', 'bhojan'],
+    'meals': ['meals', 'meal', 'lunch', 'dinner', 'thali', 'bhojan'],
+    'meal': ['meal', 'meals', 'lunch', 'dinner', 'thali'],
+    'thali': ['thali', 'meals', 'meal', 'lunch', 'dinner'],
+    // Snacks/Evening
+    'snacks': ['snacks', 'snack', 'starters', 'appetizer', 'evening', 'tea time', 'chat', 'chaat'],
+    'starters': ['starters', 'snacks', 'appetizer', 'appetizers'],
+    'evening': ['evening', 'snacks', 'tea time'],
+    // ========== FOOD TYPE SYNONYMS ==========
     // Telugu/South Indian curry terms
     'pulusu': ['curry', 'gravy', 'pulusu'],
     'kura': ['curry', 'sabji', 'vegetable'],
@@ -1192,7 +1211,18 @@ const chatbot = {
     'gravy': ['curry', 'gravy', 'rassa'],
     'fry': ['fry', 'vepudu', 'varuval', 'roast'],
     'biryani': ['biryani', 'biriyani', 'briyani'],
-    'rice': ['rice', 'annam', 'chawal', 'bhat']
+    'rice': ['rice', 'annam', 'chawal', 'bhat'],
+    // South Indian items
+    'idli': ['idli', 'idly', 'idle'],
+    'idly': ['idly', 'idli', 'idle'],
+    'dosa': ['dosa', 'dosai', 'dhosha', 'dose'],
+    'dosai': ['dosai', 'dosa', 'dose'],
+    'vada': ['vada', 'vadai', 'wade', 'medu vada'],
+    'vadai': ['vadai', 'vada', 'wade'],
+    'upma': ['upma', 'uppuma', 'uppit'],
+    'pongal': ['pongal', 'pongali', 'ven pongal'],
+    'uttapam': ['uttapam', 'uthappam', 'utappam'],
+    'pesarattu': ['pesarattu', 'pesaratu', 'pesarat']
   },
 
   // Get synonyms for a search term
