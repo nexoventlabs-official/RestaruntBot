@@ -1158,6 +1158,35 @@ const chatbot = {
     return cleanText.trim().replace(/\s+/g, ' ');
   },
 
+  // Helper to normalize text by removing common plural suffixes
+  // This helps match "milk shakes" with "milk shake", "biryanis" with "biryani", etc.
+  normalizePlural(text) {
+    if (!text) return text;
+    let normalized = text.toLowerCase().trim();
+    // Remove trailing 's' or 'es' for common plural forms
+    // But be careful with words that naturally end in 's' (like 'rice', 'juice')
+    const preserveWords = ['rice', 'juice', 'fries', 'noodles', 'pickles', 'chips', 'oats', 'nuts', 'peas', 'beans', 'greens', 'meals', 'sweets'];
+    
+    // Check each word in the text
+    const words = normalized.split(/\s+/);
+    const normalizedWords = words.map(word => {
+      // Skip if word should be preserved
+      if (preserveWords.includes(word)) return word;
+      // Skip short words
+      if (word.length <= 3) return word;
+      // Remove 'es' suffix (cakes -> cake, shakes -> shake)
+      if (word.endsWith('es') && word.length > 4) {
+        return word.slice(0, -1); // shakes -> shake (remove just 's', keep 'e')
+      }
+      // Remove 's' suffix (items -> item, biryanis -> biryani)
+      if (word.endsWith('s') && !word.endsWith('ss')) {
+        return word.slice(0, -1);
+      }
+      return word;
+    });
+    return normalizedWords.join(' ');
+  },
+
   // Food synonyms - regional/local names mapped to common English equivalents
   // Used to expand search terms for better matching
   foodSynonyms: {
@@ -1523,11 +1552,23 @@ const chatbot = {
     const expandedTerms = [];
     for (const term of searchVariations) {
       expandedTerms.push(term);
+      // Also add normalized plural version (e.g., "milk shakes" → "milk shake")
+      const normalizedTerm = this.normalizePlural(term);
+      if (normalizedTerm !== term) {
+        expandedTerms.push(normalizedTerm);
+      }
       // Get synonyms for each word in the term
       const words = term.split(/\s+/).filter(w => w.length >= 2);
       for (const word of words) {
         const synonyms = this.getSynonyms(word);
         expandedTerms.push(...synonyms);
+        // Also add normalized plural of each word
+        const normalizedWord = this.normalizePlural(word);
+        if (normalizedWord !== word) {
+          expandedTerms.push(normalizedWord);
+          const wordSynonyms = this.getSynonyms(normalizedWord);
+          expandedTerms.push(...wordSynonyms);
+        }
       }
     }
     
@@ -1702,26 +1743,41 @@ const chatbot = {
     // "ground nuts" → "groundnuts", "veg biryani" → "vegbiryani"
     const normalizeText = (text) => text.toLowerCase().replace(/\s+/g, '');
     
-    // Helper to check if two strings match (with or without spaces)
-    // Matches: "groundnuts" with "ground nuts", "vegbiryani" with "veg biryani"
+    // Helper to normalize plural forms for comparison
+    // "milk shakes" → "milk shake", "biryanis" → "biryani"
+    const normalizePluralText = (text) => this.normalizePlural(text);
+    
+    // Helper to check if two strings match (with or without spaces, with or without plural 's')
+    // Matches: "groundnuts" with "ground nuts", "milk shakes" with "milk shake"
     const flexibleMatch = (str1, str2) => {
       const norm1 = normalizeText(str1);
       const norm2 = normalizeText(str2);
-      return norm1 === norm2 || norm1.includes(norm2) || norm2.includes(norm1);
+      const plural1 = normalizeText(normalizePluralText(str1));
+      const plural2 = normalizeText(normalizePluralText(str2));
+      return norm1 === norm2 || norm1.includes(norm2) || norm2.includes(norm1) ||
+             plural1 === plural2 || plural1.includes(plural2) || plural2.includes(plural1) ||
+             norm1 === plural2 || norm2 === plural1;
     };
     
-    // Helper to find ALL items with exact tag OR category match (flexible - handles spaces)
+    // Helper to find ALL items with exact tag OR category match (flexible - handles spaces and plurals)
     const findAllExactTagMatches = (items, term) => {
       const termLower = term.toLowerCase();
       const termNorm = normalizeText(term);
+      const termPlural = normalizePluralText(term);
+      const termPluralNorm = normalizeText(termPlural);
       return items.filter(item => {
         // Check tags
         const tagMatch = item.tags?.some(tag => {
           const tagNorm = normalizeText(tag);
           const tagLower = tag.toLowerCase();
+          const tagPlural = normalizePluralText(tag);
+          const tagPluralNorm = normalizeText(tagPlural);
           return tagNorm === termNorm || tagLower === termLower || 
                  tagNorm.includes(termNorm) || termNorm.includes(tagNorm) ||
-                 tagLower.includes(termLower) || termLower.includes(tagLower);
+                 tagLower.includes(termLower) || termLower.includes(tagLower) ||
+                 // Also match with plural normalization
+                 tagPluralNorm === termPluralNorm || tagPlural === termPlural ||
+                 tagPluralNorm.includes(termPluralNorm) || termPluralNorm.includes(tagPluralNorm);
         });
         if (tagMatch) return true;
         
@@ -1730,9 +1786,13 @@ const chatbot = {
         const categoryMatch = itemCategories.some(cat => {
           const catLower = cat.toLowerCase();
           const catNorm = normalizeText(cat);
+          const catPlural = normalizePluralText(cat);
+          const catPluralNorm = normalizeText(catPlural);
           return catLower === termLower || catNorm === termNorm ||
                  catLower.includes(termLower) || termLower.includes(catLower) ||
-                 catNorm.includes(termNorm) || termNorm.includes(catNorm);
+                 catNorm.includes(termNorm) || termNorm.includes(catNorm) ||
+                 // Also match with plural normalization
+                 catPluralNorm === termPluralNorm || catPlural === termPlural;
         });
         
         return categoryMatch;
@@ -1816,20 +1876,26 @@ const chatbot = {
     }
     
     // Helper function to search items by a term (checks tags, category, then name)
-    // Now handles flexible matching (with/without spaces)
+    // Now handles flexible matching (with/without spaces and plural forms)
     const searchByTerm = (items, term) => {
       if (!term || term.length < 2) return [];
       const termLower = term.toLowerCase();
       const termNorm = normalizeText(term);
+      const termPlural = normalizePluralText(term);
+      const termPluralNorm = normalizeText(termPlural);
       
       // First check tags
       const tagMatches = items.filter(item => 
         item.tags?.some(tag => {
           const tagLower = tag.toLowerCase();
           const tagNorm = normalizeText(tag);
-          // Match with spaces or without spaces
+          const tagPlural = normalizePluralText(tag);
+          const tagPluralNorm = normalizeText(tagPlural);
+          // Match with spaces or without spaces, and with/without plural
           return tagLower.includes(termLower) || termLower.includes(tagLower) ||
-                 tagNorm.includes(termNorm) || termNorm.includes(tagNorm);
+                 tagNorm.includes(termNorm) || termNorm.includes(tagNorm) ||
+                 tagPluralNorm.includes(termPluralNorm) || termPluralNorm.includes(tagPluralNorm) ||
+                 tagPlural.includes(termPlural) || termPlural.includes(tagPlural);
         })
       );
       
@@ -1842,8 +1908,11 @@ const chatbot = {
         return itemCategories.some(cat => {
           const catLower = cat.toLowerCase();
           const catNorm = normalizeText(cat);
+          const catPlural = normalizePluralText(cat);
+          const catPluralNorm = normalizeText(catPlural);
           return catLower.includes(termLower) || termLower.includes(catLower) ||
-                 catNorm.includes(termNorm) || termNorm.includes(catNorm);
+                 catNorm.includes(termNorm) || termNorm.includes(catNorm) ||
+                 catPluralNorm.includes(termPluralNorm) || termPluralNorm.includes(catPluralNorm);
         });
       });
       
@@ -1854,9 +1923,12 @@ const chatbot = {
         if (tagMatchIds.has(item._id.toString()) || catMatchIds.has(item._id.toString())) return false;
         const nameLower = item.name.toLowerCase();
         const nameNorm = normalizeText(item.name);
-        // Match with spaces or without spaces
+        const namePlural = normalizePluralText(item.name);
+        const namePluralNorm = normalizeText(namePlural);
+        // Match with spaces or without spaces, and with/without plural
         return nameLower.includes(termLower) || termLower.includes(nameLower) ||
-               nameNorm.includes(termNorm) || termNorm.includes(nameNorm);
+               nameNorm.includes(termNorm) || termNorm.includes(nameNorm) ||
+               namePluralNorm.includes(termPluralNorm) || termPluralNorm.includes(namePluralNorm);
       });
       
       return [...tagMatches, ...categoryMatches, ...nameMatches];
@@ -1870,12 +1942,17 @@ const chatbot = {
         if (term.length < 2) continue;
         const termLower = term.toLowerCase();
         const termNorm = normalizeText(term);
+        const termPlural = normalizePluralText(term);
+        const termPluralNorm = normalizeText(termPlural);
         
         // Check for exact name match first (highest priority) - flexible matching
         for (const item of items) {
           const nameLower = item.name.toLowerCase();
           const nameNorm = normalizeText(item.name);
-          if (nameLower === termLower || nameNorm === termNorm) {
+          const namePlural = normalizePluralText(item.name);
+          const namePluralNorm = normalizeText(namePlural);
+          if (nameLower === termLower || nameNorm === termNorm ||
+              namePlural === termPlural || namePluralNorm === termPluralNorm) {
             const id = item._id.toString();
             if (!itemMatches.has(id)) {
               itemMatches.set(id, { item, score: 0 });
@@ -1889,7 +1966,10 @@ const chatbot = {
           if (item.tags?.some(tag => {
             const tagLower = tag.toLowerCase();
             const tagNorm = normalizeText(tag);
-            return tagLower === termLower || tagNorm === termNorm;
+            const tagPlural = normalizePluralText(tag);
+            const tagPluralNorm = normalizeText(tagPlural);
+            return tagLower === termLower || tagNorm === termNorm ||
+                   tagPlural === termPlural || tagPluralNorm === termPluralNorm;
           })) {
             const id = item._id.toString();
             if (!itemMatches.has(id)) {
@@ -2319,7 +2399,8 @@ const chatbot = {
         }
       }
       // ========== GLOBAL COMMANDS (work from any state) ==========
-      else if (msg === 'hi' || msg === 'hello' || msg === 'start' || msg === 'hey') {
+      // Greeting patterns - support common variations with extra letters (hi, hii, hiii, hey, heyyy, etc.)
+      else if (/^h+i+$/i.test(msg) || /^h+e+y+$/i.test(msg) || /^h+e+l+o+$/i.test(msg) || msg === 'hello' || msg === 'start' || msg === 'hai' || msg === 'hlo' || msg === 'helo') {
         await this.sendWelcome(phone);
         state.currentStep = 'main_menu';
       }
@@ -3077,45 +3158,65 @@ const chatbot = {
             state.currentStep = 'viewing_tag_results';
           }
         }
-        // If user typed something with food type keyword but no search results, show that food type menu
-        // e.g., "veg xyz" where xyz doesn't match anything -> show veg menu
+        // If user typed something with food type keyword but no search results
+        // e.g., "veg xyz" where xyz doesn't match anything -> show item not found
         else if (this.detectFoodTypeFromMessage(msg)) {
           const detected = this.detectFoodTypeFromMessage(msg);
-          let foodType = 'both';
-          let label = '🍽️ All Menu';
+          const searchTerm = this.removeFoodTypeKeywords(msg.toLowerCase().trim());
           
-          if (detected.type === 'veg') {
-            foodType = 'veg';
-            label = '🌿 Veg Menu';
-          } else if (detected.type === 'egg') {
-            foodType = 'egg';
-            label = '🥚 Egg Menu';
-          } else if (detected.type === 'nonveg' || detected.type === 'specific') {
-            foodType = 'nonveg';
-            label = '🍗 Non-Veg Menu';
-          }
-          
-          state.foodTypePreference = foodType;
-          const filteredItems = this.filterByFoodType(menuItems, foodType);
-          
-          if (filteredItems.length > 0) {
-            // Show message that search didn't find exact match, showing menu instead
-            const searchTerm = this.removeFoodTypeKeywords(msg.toLowerCase().trim());
-            if (searchTerm.length >= 2) {
-              const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-              if (itemNotAvailableImg) {
-                await whatsapp.sendImage(phone, itemNotAvailableImg, `🔍 No items found for "${searchTerm}". Here's our ${label.replace(/[🌿🥚🍗🍽️]\s*/, '')}:`);
-              } else {
-                await whatsapp.sendMessage(phone, `🔍 No items found for "${searchTerm}". Here's our ${label.replace(/[🌿🥚🍗🍽️]\s*/, '')}:`);
-              }
+          // If there's a specific search term that didn't match, show "not found"
+          if (searchTerm.length >= 2) {
+            const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+            if (itemNotAvailableImg) {
+              await whatsapp.sendImageWithButtons(phone, itemNotAvailableImg, 
+                `❌ *Item Not Found*\n\nSorry, we couldn't find "${searchTerm}" in our menu.\n\nWould you like to browse our menu?`,
+                [
+                  { id: 'view_menu', text: '📋 View Menu' },
+                  { id: 'home', text: '🏠 Main Menu' }
+                ]
+              );
+            } else {
+              await whatsapp.sendButtons(phone, 
+                `❌ *Item Not Found*\n\nSorry, we couldn't find "${searchTerm}" in our menu.\n\nWould you like to browse our menu?`,
+                [
+                  { id: 'view_menu', text: '📋 View Menu' },
+                  { id: 'home', text: '🏠 Main Menu' }
+                ]
+              );
             }
-            await this.sendMenuCategoriesWithLabel(phone, filteredItems, label);
-            state.currentStep = 'select_category';
+            state.currentStep = 'main_menu';
           } else {
-            // No items in this food type, show all menu instead
-            await whatsapp.sendMessage(phone, `🔍 No items found. Here's our full menu:`);
-            await this.sendMenuCategoriesWithLabel(phone, menuItems, '🍽️ All Menu');
-            state.currentStep = 'select_category';
+            // Only food type keyword (e.g., just "veg" or "nonveg") - show that menu
+            let foodType = 'both';
+            let label = '🍽️ All Menu';
+            
+            if (detected.type === 'veg') {
+              foodType = 'veg';
+              label = '🌿 Veg Menu';
+            } else if (detected.type === 'egg') {
+              foodType = 'egg';
+              label = '🥚 Egg Menu';
+            } else if (detected.type === 'nonveg' || detected.type === 'specific') {
+              foodType = 'nonveg';
+              label = '🍗 Non-Veg Menu';
+            }
+            
+            state.foodTypePreference = foodType;
+            const filteredItems = this.filterByFoodType(menuItems, foodType);
+            
+            if (filteredItems.length > 0) {
+              await this.sendMenuCategoriesWithLabel(phone, filteredItems, label);
+              state.currentStep = 'select_category';
+            } else {
+              await whatsapp.sendButtons(phone, 
+                `❌ No ${label.replace(/[🌿🥚🍗🍽️]\s*/, '')} items available right now.`,
+                [
+                  { id: 'view_menu', text: '📋 View All Menu' },
+                  { id: 'home', text: '🏠 Main Menu' }
+                ]
+              );
+              state.currentStep = 'main_menu';
+            }
           }
         }
         // Category search - only if no food type specified and matches a category
@@ -3138,19 +3239,30 @@ const chatbot = {
           state.currentStep = 'main_menu';
         }
         // ========== GENERAL SEARCH FALLBACK ==========
-        // If user typed something that looks like a search (2+ chars), try to find items
-        // If nothing found, show the full menu instead of "I didn't understand"
+        // If user typed something that looks like a search (2+ chars), show item not found
+        // Don't show menu automatically - let user choose to browse
         else if (msg.length >= 2 && /^[a-zA-Z\u0900-\u097F\u0C00-\u0C7F\u0B80-\u0BFF\u0C80-\u0CFF\u0D00-\u0D7F\u0980-\u09FF\u0A80-\u0AFF\s]+$/.test(msg)) {
           // Looks like a search term (letters only, including Indian languages)
-          // Already tried smartSearch above, so just show menu
+          // Already tried smartSearch above, item not found
           const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
           if (itemNotAvailableImg) {
-            await whatsapp.sendImage(phone, itemNotAvailableImg, `🔍 No items found for "${msg}". Here's our menu:`);
+            await whatsapp.sendImageWithButtons(phone, itemNotAvailableImg, 
+              `❌ *Item Not Found*\n\nSorry, we couldn't find "${msg}" in our menu.\n\nWould you like to browse our menu?`,
+              [
+                { id: 'view_menu', text: '📋 View Menu' },
+                { id: 'home', text: '🏠 Main Menu' }
+              ]
+            );
           } else {
-            await whatsapp.sendMessage(phone, `🔍 No items found for "${msg}". Here's our menu:`);
+            await whatsapp.sendButtons(phone, 
+              `❌ *Item Not Found*\n\nSorry, we couldn't find "${msg}" in our menu.\n\nWould you like to browse our menu?`,
+              [
+                { id: 'view_menu', text: '📋 View Menu' },
+                { id: 'home', text: '🏠 Main Menu' }
+              ]
+            );
           }
-          await this.sendMenuCategoriesWithLabel(phone, menuItems, '🍽️ All Menu');
-          state.currentStep = 'select_category';
+          state.currentStep = 'main_menu';
         }
         // ========== FALLBACK ==========
         else {

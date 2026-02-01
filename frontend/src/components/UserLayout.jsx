@@ -139,12 +139,48 @@ export default function UserLayout() {
       setSearchResults([]);
       return;
     }
-    const filtered = availableItems.filter(item =>
-      item.name.toLowerCase().includes(query.toLowerCase()) ||
-      item.description?.toLowerCase().includes(query.toLowerCase()) ||
-      item.tags?.some(tag => tag.toLowerCase().includes(query.toLowerCase()))
-    );
-    setSearchResults(filtered.slice(0, 8));
+    
+    const searchTerm = query.toLowerCase().trim();
+    // Split search term into individual words for flexible matching
+    const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
+    
+    const filtered = availableItems.filter(item => {
+      // Combine all searchable text into one string (remove spaces for flexible matching)
+      const itemName = (item.name || '').toLowerCase();
+      const itemDescription = (item.description || '').toLowerCase();
+      const itemCategories = Array.isArray(item.category)
+        ? item.category.join(' ').toLowerCase()
+        : (item.category || '').toLowerCase();
+      const itemTags = (item.tags || []).join(' ').toLowerCase();
+      const itemFoodType = (item.foodType || '').toLowerCase();
+      
+      // Create searchable text with and without spaces
+      const searchableText = `${itemName} ${itemDescription} ${itemCategories} ${itemTags} ${itemFoodType}`;
+      const searchableTextNoSpaces = searchableText.replace(/\s+/g, '');
+      const searchTermNoSpaces = searchTerm.replace(/\s+/g, '');
+      
+      // Method 1: Direct match (handles "sambar idli" or "breakfast")
+      if (searchableText.includes(searchTerm)) {
+        return true;
+      }
+      
+      // Method 2: Match without spaces (handles "break fast" -> "breakfast")
+      if (searchableTextNoSpaces.includes(searchTermNoSpaces)) {
+        return true;
+      }
+      
+      // Method 3: All words present in any order (handles "idli sambar" vs "sambar idli")
+      const allWordsMatch = searchWords.every(word => 
+        searchableText.includes(word)
+      );
+      if (allWordsMatch) {
+        return true;
+      }
+      
+      return false;
+    });
+    
+    setSearchResults(filtered);
   };
 
   const openSearch = () => {
@@ -369,7 +405,8 @@ export default function UserLayout() {
                 placeholder="Search for dishes..."
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
-                className="flex-1 text-lg outline-none bg-transparent"
+                className="flex-1 text-lg outline-none bg-transparent focus:outline-none focus:ring-0 focus:border-transparent"
+                style={{ boxShadow: 'none' }}
               />
               <button onClick={closeSearch} className="p-2 hover:bg-gray-100 rounded-full">
                 <X className="w-5 h-5 text-gray-500" />
@@ -377,7 +414,32 @@ export default function UserLayout() {
             </div>
 
             {/* Search Results */}
-            <div className="max-h-[60vh] overflow-y-auto">
+            <div 
+              className="max-h-[60vh] overflow-y-scroll overscroll-contain"
+              style={{ 
+                WebkitOverflowScrolling: 'touch',
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#fb923c #f3f4f6'
+              }}
+              onWheel={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+            >
+              <style>{`
+                .max-h-\\[60vh\\]::-webkit-scrollbar {
+                  width: 8px;
+                }
+                .max-h-\\[60vh\\]::-webkit-scrollbar-track {
+                  background: #f3f4f6;
+                  border-radius: 10px;
+                }
+                .max-h-\\[60vh\\]::-webkit-scrollbar-thumb {
+                  background: #fb923c;
+                  border-radius: 10px;
+                }
+                .max-h-\\[60vh\\]::-webkit-scrollbar-thumb:hover {
+                  background: #f97316;
+                }
+              `}</style>
               {searchQuery && searchResults.length === 0 && (
                 <div className="p-8 text-center text-gray-500">
                   <span className="text-4xl block mb-2">🔍</span>
@@ -493,7 +555,32 @@ export default function UserLayout() {
             </div>
 
             {/* Right Side - Details (PC) / Bottom (Mobile) */}
-            <div className="flex-1 overflow-y-auto p-5 sm:p-6 lg:p-8">
+            <div 
+              className="flex-1 overflow-y-scroll p-5 sm:p-6 lg:p-8"
+              style={{
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#fb923c #f3f4f6',
+                overscrollBehavior: 'contain'
+              }}
+              onWheel={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+            >
+              <style>{`
+                .flex-1.overflow-y-scroll::-webkit-scrollbar {
+                  width: 6px;
+                }
+                .flex-1.overflow-y-scroll::-webkit-scrollbar-track {
+                  background: #f3f4f6;
+                  border-radius: 10px;
+                }
+                .flex-1.overflow-y-scroll::-webkit-scrollbar-thumb {
+                  background: #fb923c;
+                  border-radius: 10px;
+                }
+                .flex-1.overflow-y-scroll::-webkit-scrollbar-thumb:hover {
+                  background: #f97316;
+                }
+              `}</style>
               {/* Name & Price */}
               <div className="flex items-start justify-between gap-3 mb-3">
                 <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{selectedItem.name}</h2>
@@ -537,7 +624,7 @@ export default function UserLayout() {
                   <Package className="w-5 h-5 text-orange-500" />
                   <div>
                     <p className="text-xs text-gray-500">Unit</p>
-                    <p className="font-semibold text-gray-900">{selectedItem.unitQty || 1} {selectedItem.unit || 'piece'}</p>
+                    <p className="font-semibold text-gray-900">{selectedItem.quantity || 1} {selectedItem.unit || 'piece'}</p>
                   </div>
                 </div>
               </div>
@@ -592,7 +679,7 @@ export default function UserLayout() {
       )}
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg safe-area-bottom">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[60] bg-white border-t border-gray-200 shadow-lg safe-area-bottom">
         <div className="flex items-center justify-around h-16">
           {navLinks.map(link => {
             const Icon = link.icon;
@@ -746,19 +833,6 @@ export default function UserLayout() {
 
       {/* Floating Pizza Scroll Indicator */}
       <FloatingPizza />
-
-      {/* Floating Cart Button - Mobile */}
-      {cartCount > 0 && (
-        <button 
-          onClick={() => { setActiveTab('cart'); setSidebarOpen(true); }} 
-          className="fixed bottom-6 right-6 bg-orange-500 text-white px-5 py-3 rounded-full shadow-lg flex items-center gap-2 hover:bg-orange-600 transition-all md:hidden z-40 hover:scale-105"
-        >
-          <CartIcon className="w-5 h-5" />
-          <span className="font-semibold">{cartCount}</span>
-          <span className="w-px h-4 bg-white/30" />
-          <span className="font-bold">₹{cartTotal}</span>
-        </button>
-      )}
 
       {/* Cart Sidebar */}
       <CartSidebar 

@@ -5,7 +5,7 @@ export default function OffersFloat() {
   return (
     <Link
       to="/offers"
-      className="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-50 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white p-3 md:p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 group"
+      className="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-40 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white p-3 md:p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 group"
       aria-label="View Offers"
     >
       <Tag className="w-6 h-6 md:w-7 md:h-7" />

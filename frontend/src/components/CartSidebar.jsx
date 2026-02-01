@@ -120,7 +120,7 @@ export default function CartSidebar({
                     )}
                     <div className="flex-1">
                       <h4 className="font-medium text-gray-900">{item.name}</h4>
-                      <p className="text-sm text-gray-500">{item.unitQty} {item.unit}</p>
+                      <p className="text-sm text-gray-500">{item.quantity || 1} {item.unit}</p>
                       <p className="text-orange-600 font-semibold">₹{item.price * item.quantity}</p>
                       <div className="flex items-center gap-2 mt-2">
                         <button onClick={() => updateQuantity(item._id, item.quantity - 1)} className="p-1 bg-white rounded-full shadow hover:bg-gray-50">
@@ -163,7 +163,7 @@ export default function CartSidebar({
                               {isSoldOut ? 'Sold Out' : 'Unavailable'}
                             </span>
                           </div>
-                          <p className="text-sm text-gray-400">{item.unitQty} {item.unit}</p>
+                          <p className="text-sm text-gray-400">{item.quantity || 1} {item.unit}</p>
                           <p className="text-gray-400 line-through">₹{item.price * item.quantity}</p>
                           <button onClick={() => removeFromCart(item._id)} className="mt-2 px-3 py-1 bg-red-100 text-red-600 text-sm rounded-lg hover:bg-red-200">
                             Remove
@@ -216,7 +216,7 @@ export default function CartSidebar({
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-gray-500">{item.unitQty} {item.unit}</p>
+                        <p className="text-sm text-gray-500">{item.quantity || 1} {item.unit}</p>
                         <p className={available ? 'text-orange-600 font-semibold' : 'text-gray-400'}>₹{item.price}</p>
                         <div className="flex gap-2 mt-2">
                           {available ? (

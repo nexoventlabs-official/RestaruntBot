@@ -719,12 +719,13 @@ const styles = StyleSheet.create({
   // Picker
   pickerButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 18, height: 54,
+    backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 18, minHeight: 54,
+    paddingVertical: 12,
     borderWidth: 1.5, borderColor: '#E8E8E8',
   },
   pickerPlaceholder: { color: '#9CA3AF', fontSize: 15 },
   pickerValue: { color: '#1C1C1C', fontSize: 15, fontWeight: '600' },
-  selectedTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, flex: 1 },
+  selectedTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, flex: 1, alignItems: 'center' },
   selectedTag: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: ZOMATO_RED, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,

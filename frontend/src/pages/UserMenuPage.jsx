@@ -264,7 +264,7 @@ export default function UserMenuPage() {
     // Build message like chatbot format
     let msg = `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n\n`;
     msg += `${ratingDisplay}\n\n`;
-    msg += `💰 *Price:* ₹${item.price} / ${item.unitQty || 1} ${item.unit || 'piece'}\n`;
+    msg += `💰 *Price:* ₹${item.price} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
     msg += `⏱️ *Prep Time:* ${item.preparationTime || 15} mins\n`;
     if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
     msg += `\n📝 ${item.description || 'Delicious dish prepared fresh!'}`;
@@ -524,7 +524,7 @@ export default function UserMenuPage() {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1">
                 <Package className="w-4 h-4 text-gray-500" />
-                <span className="font-medium whitespace-nowrap">{item.unitQty || 1} {item.unit || 'piece'}</span>
+                <span className="font-medium whitespace-nowrap">{item.quantity || 1} {item.unit || 'piece'}</span>
               </div>
               <div className="flex items-center gap-1">
                 <Clock className="w-4 h-4 text-gray-500" />
@@ -998,7 +998,7 @@ export default function UserMenuPage() {
                   <Package className="w-5 h-5 text-orange-500" />
                   <div>
                     <p className="text-xs text-gray-500">Unit</p>
-                    <p className="font-semibold text-gray-900">{selectedItem.unitQty || 1} {selectedItem.unit || 'piece'}</p>
+                    <p className="font-semibold text-gray-900">{selectedItem.quantity || 1} {selectedItem.unit || 'piece'}</p>
                   </div>
                 </div>
               </div>

@@ -891,7 +891,7 @@ export default function Home() {
                   <Package className="w-5 h-5 text-orange-500" />
                   <div>
                     <p className="text-xs text-gray-500">Unit</p>
-                    <p className="font-semibold text-gray-900">{selectedItem.unitQty || 1} {selectedItem.unit || 'piece'}</p>
+                    <p className="font-semibold text-gray-900">{selectedItem.quantity || 1} {selectedItem.unit || 'piece'}</p>
                   </div>
                 </div>
               </div>

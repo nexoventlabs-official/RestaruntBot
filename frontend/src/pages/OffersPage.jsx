@@ -232,7 +232,7 @@ export default function OffersPage() {
       const discount = Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100);
       msg += ` (${discount}% OFF - Was ₹${item.originalPrice})`;
     }
-    msg += ` / ${item.unitQty || 1} ${item.unit || 'piece'}\n`;
+    msg += ` / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
     msg += `⏱️ *Prep Time:* ${item.preparationTime || 15} mins\n`;
     if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
     msg += `\n📝 ${item.description || 'Delicious dish prepared fresh!'}`;
@@ -621,7 +621,7 @@ export default function OffersPage() {
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-1">
                           <Package className="w-4 h-4 text-gray-500" />
-                          <span className="font-medium whitespace-nowrap">{item.unitQty || 1} {item.unit || 'piece'}</span>
+                          <span className="font-medium whitespace-nowrap">{item.quantity || 1} {item.unit || 'piece'}</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <Clock className="w-4 h-4 text-gray-500" />
@@ -812,7 +812,7 @@ export default function OffersPage() {
                   <Package className="w-5 h-5 text-orange-500" />
                   <div>
                     <p className="text-xs text-gray-500">Unit</p>
-                    <p className="font-semibold text-gray-900">{selectedItem.unitQty || 1} {selectedItem.unit || 'piece'}</p>
+                    <p className="font-semibold text-gray-900">{selectedItem.quantity || 1} {selectedItem.unit || 'piece'}</p>
                   </div>
                 </div>
               </div>

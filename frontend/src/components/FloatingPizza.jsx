@@ -41,7 +41,7 @@ export default function FloatingPizza() {
 
   return (
     <div 
-      className="fixed right-2 sm:right-4 md:right-6 z-[50] pointer-events-auto cursor-pointer"
+      className="fixed right-2 sm:right-4 md:right-6 z-40 pointer-events-auto cursor-pointer"
       style={{ 
         top: `${topPosition}%`,
         transform: 'translateY(-50%)',
