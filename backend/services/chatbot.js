@@ -3403,35 +3403,58 @@ const chatbot = {
           const matchingItems = searchResult.items;
           const isExactMatch = searchResult.exactMatch === true;
           
-          // Use pre-built label or construct one
-          const displayLabel = searchResult.label 
-            ? (searchResult.searchTerm ? `${searchResult.label} "${searchResult.searchTerm}"` : searchResult.label)
-            : (searchResult.searchTerm ? `"${searchResult.searchTerm}"` : 'Search Results');
-          
-          // If NOT an exact match, show "Item Not Found" message first, then show related items
+          // If NOT an exact match, show "Item Not Available" message and browse menu options
           if (!isExactMatch) {
             const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-            const notFoundMessage = `❌ *Item Not Available*\n\nSorry, we couldn't find an exact match for "${msg}".\n\n✨ *But here are some related items you might like:*`;
+            const notFoundMessage = `❌ *Item Not Available*\n\nSorry, we couldn't find "${msg}" in our menu.\n\nWould you like to browse our menu?`;
+            
+            // Send "Browse Menu" message with image and buttons
+            const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
             
             if (itemNotAvailableImg) {
               await whatsapp.sendImage(phone, itemNotAvailableImg, notFoundMessage);
             } else {
               await whatsapp.sendText(phone, notFoundMessage);
             }
-          }
-          
-          // If only 1 item matches, show item details directly
-          if (matchingItems.length === 1) {
-            const item = matchingItems[0];
-            state.selectedItem = item._id.toString();
-            await this.sendItemDetails(phone, menuItems, item._id.toString());
-            state.currentStep = 'viewing_item_details';
+            
+            // Send Browse Menu options
+            const browseMessage = `🍽️ *Browse Menu*\n\nExplore our delicious menu and select your favorite items.\n\nWhat would you like to see?`;
+            
+            if (browseMenuImg) {
+              await whatsapp.sendImageWithButtons(phone, browseMenuImg, browseMessage, [
+                { id: 'veg_only', text: '🌿 Veg Only' },
+                { id: 'nonveg_only', text: '🍗 Non-Veg Only' },
+                { id: 'show_all', text: '🍽️ Show All' }
+              ]);
+            } else {
+              await whatsapp.sendButtons(phone, browseMessage, [
+                { id: 'veg_only', text: '🌿 Veg Only' },
+                { id: 'nonveg_only', text: '🍗 Non-Veg Only' },
+                { id: 'show_all', text: '🍽️ Show All' }
+              ]);
+            }
+            
+            state.currentStep = 'main_menu';
           } else {
-            // Multiple items - show list
-            state.searchTag = msg.trim();
-            state.tagSearchResults = matchingItems.map(i => i._id.toString());
-            await this.sendItemsByTag(phone, matchingItems, displayLabel);
-            state.currentStep = 'viewing_tag_results';
+            // Exact match found - show items
+            // Use pre-built label or construct one
+            const displayLabel = searchResult.label 
+              ? (searchResult.searchTerm ? `${searchResult.label} "${searchResult.searchTerm}"` : searchResult.label)
+              : (searchResult.searchTerm ? `"${searchResult.searchTerm}"` : 'Search Results');
+            
+            // If only 1 item matches, show item details directly
+            if (matchingItems.length === 1) {
+              const item = matchingItems[0];
+              state.selectedItem = item._id.toString();
+              await this.sendItemDetails(phone, menuItems, item._id.toString());
+              state.currentStep = 'viewing_item_details';
+            } else {
+              // Multiple items - show list
+              state.searchTag = msg.trim();
+              state.tagSearchResults = matchingItems.map(i => i._id.toString());
+              await this.sendItemsByTag(phone, matchingItems, displayLabel);
+              state.currentStep = 'viewing_tag_results';
+            }
           }
         }
         // If user typed something with food type keyword but no search results
