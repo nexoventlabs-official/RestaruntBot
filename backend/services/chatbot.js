@@ -3558,10 +3558,9 @@ const chatbot = {
             state.currentStep = 'main_menu';
           }
         } else {
-          // Show all items
-          state.foodTypePreference = 'both';
-          await this.sendMenuCategoriesWithLabel(phone, menuItems, '🍽️ All Menu');
-          state.currentStep = 'select_category';
+          // Show food type selection (Browse Menu screen with Veg/Non-Veg/All options)
+          await this.sendFoodTypeSelection(phone);
+          state.currentStep = 'select_food_type';
         }
       }
       else if (selection === 'food_veg' || selection === 'food_nonveg' || selection === 'food_both') {
