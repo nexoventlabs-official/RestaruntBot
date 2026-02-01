@@ -133,7 +133,9 @@ export default function MenuItemFormScreen({ route, navigation }) {
       const response = await api.post('/ai/generate-tags', { 
         name, 
         category: selectedCategories,
-        foodType 
+        foodType,
+        quantity: quantity || '1',
+        unit: unit || 'piece'
       });
       setTags(response.data.tags);
     } catch (error) {
@@ -154,6 +156,13 @@ export default function MenuItemFormScreen({ route, navigation }) {
   const handleSubmit = async () => {
     if (!name.trim() || !price.trim() || selectedCategories.length === 0) {
       Alert.alert('Error', 'Please fill in name, price, and select at least one category');
+      return;
+    }
+    
+    // Validate tags - required field
+    const cleanedTags = tags.trim();
+    if (!cleanedTags) {
+      Alert.alert('Error', 'Please add tags for the item. Use AI Generate button to auto-generate tags.');
       return;
     }
 
@@ -476,7 +485,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
               {/* Tags */}
               <View style={styles.inputGroup}>
                 <View style={styles.labelRow}>
-                  <Text style={styles.label}>Tags</Text>
+                  <Text style={styles.label}>Tags <Text style={styles.required}>*</Text></Text>
                   <TouchableOpacity 
                     style={styles.aiTagsButton} 
                     onPress={generateTags}
@@ -496,10 +505,10 @@ export default function MenuItemFormScreen({ route, navigation }) {
                   style={styles.input}
                   value={tags}
                   onChangeText={setTags}
-                  placeholder="e.g., spicy, bestseller, new"
+                  placeholder="Click AI Generate for accurate tags"
                   placeholderTextColor="#9CA3AF"
                 />
-                <Text style={styles.inputHint}>Separate tags with commas</Text>
+                <Text style={styles.inputHint}>Up to 10 tags, separated by commas (use AI Generate for best results)</Text>
               </View>
 
               {/* Available Switch */}

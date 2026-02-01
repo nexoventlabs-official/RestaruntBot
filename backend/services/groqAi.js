@@ -272,82 +272,125 @@ If already standard or you're unsure, return as is.`
     }
   },
 
-  async generateTags(itemName, category, foodType) {
+  async generateTags(itemName, category, foodType, quantity = '1', unit = 'piece') {
     try {
       const client = getGroq();
       const categories = Array.isArray(category) ? category : [category];
-      const categoryText = categories.join(', ');
-      const foodTypeText = foodType === 'veg' ? 'veg' : foodType === 'nonveg' ? 'nonveg' : foodType === 'egg' ? 'egg' : '';
       
-      // Extract words from item name (split by space and special chars)
-      const nameWords = itemName
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/gi, ' ')
-        .split(/\s+/)
-        .filter(word => word.length > 1)
-        .map(word => word.trim());
+      // Food type label
+      const foodTypeLabel = foodType === 'veg' ? 'veg' : foodType === 'nonveg' ? 'non veg' : foodType === 'egg' ? 'egg' : '';
       
-      // Extract category words
-      const categoryWords = categories
-        .map(cat => cat.toLowerCase().trim())
-        .filter(cat => cat.length > 0);
-      
-      // Combine name words + category words as base tags
-      const baseTags = [...new Set([...nameWords, ...categoryWords])];
+      // Build quantity info for context (e.g., "2 pieces", "1 plate")
+      const qty = parseInt(quantity) || 1;
+      const unitLabel = unit || 'piece';
       
       const completion = await client.chat.completions.create({
         messages: [{
+          role: 'system',
+          content: `You are a tag generator for a restaurant food ordering chatbot. Generate EXACTLY 10 simple, accurate search tags that customers would use to find this food item.
+
+RULES:
+1. Tags must be simple daily-use words that match the food item exactly
+2. NO abstract or ingredient-based tags (e.g., don't add "rice" for "idli", don't add "flour" for "dosa")
+3. Include the exact food item name as first tag
+4. Include category name(s) as tags
+5. Include food type (veg/non veg/egg) as a tag
+6. Add serving size if relevant (e.g., "2 pieces", "full plate")
+7. Add simple descriptive words customers would search (e.g., "hot", "crispy", "spicy", "sweet")
+8. Add common variations of the food name people might search
+9. Keep tags SHORT (1-2 words max per tag)
+10. NO duplicate tags
+11. All tags in lowercase
+
+EXAMPLES:
+- "Idli" (Tiffin, Veg, 4 pieces) → idli, tiffin, veg, 4 pieces, south indian, breakfast, soft, hot, steamed, idly
+- "Chicken Biryani" (Meals, Non-Veg, 1 plate) → chicken biryani, biryani, meals, non veg, 1 plate, rice, lunch, dinner, hyderabadi, spicy
+- "Masala Dosa" (Breakfast, Veg, 1 piece) → masala dosa, dosa, breakfast, veg, 1 piece, crispy, south indian, hot, dosai, morning`
+        }, {
           role: 'user',
-          content: `Generate 5-7 additional searchable tags for this Indian restaurant menu item. Only return extra tags that are NOT already in the base tags list.
+          content: `Generate exactly 10 search tags for:
+Food Item: "${itemName}"
+Category: ${categories.join(', ')}
+Food Type: ${foodTypeLabel}
+Serving: ${qty} ${unitLabel}${qty > 1 ? 's' : ''}
 
-Item: "${itemName}"
-Category: ${categoryText}
-Type: ${foodTypeText}
-Base tags (already included): ${baseTags.join(', ')}
-
-Add only these types of extra tags:
-- Main ingredient if not in name (chicken, paneer, dal, aloo, gobi, mutton, fish, prawn)
-- Taste/style (spicy, mild, hot, creamy, dry, crispy, fried, grilled, tandoor)
-- Cuisine type (south indian, north indian, punjabi, hyderabadi, chinese)
-- Meal type (breakfast, lunch, dinner, snacks)
-- Popular terms (special, popular, famous) if applicable
-
-Return ONLY comma-separated lowercase words. No sentences, no explanations.
-Example: spicy, crispy, popular, lunch, north indian`
+Return ONLY 10 comma-separated lowercase tags. No explanations, no numbering, no extra text.`
         }],
         model: 'llama-3.1-8b-instant',
-        max_tokens: 100,
-        temperature: 0.5
+        max_tokens: 150,
+        temperature: 0.3
       });
       
       const aiTagsText = completion.choices[0]?.message?.content?.trim() || '';
       
-      // Clean AI generated tags
-      const aiTags = aiTagsText
-        .replace(/[\[\]"]/g, '')
+      // Clean and parse tags
+      let tags = aiTagsText
+        .replace(/[\[\]"\d\.\)\(]/g, '')
         .replace(/\n/g, ',')
         .split(',')
         .map(tag => tag.trim().toLowerCase())
-        .filter(tag => tag.length > 1 && tag.length < 20 && !tag.includes(':') && !tag.includes('.'));
+        .filter(tag => 
+          tag.length > 0 && 
+          tag.length < 25 && 
+          !tag.includes(':') && 
+          !tag.includes('tag') &&
+          !tag.includes('example') &&
+          !tag.includes('here')
+        );
       
-      // Combine base tags + AI tags + food type, remove duplicates
-      const allTags = [...baseTags];
-      if (foodTypeText) allTags.push(foodTypeText);
-      aiTags.forEach(tag => {
-        if (!allTags.includes(tag)) allTags.push(tag);
+      // Remove duplicates
+      tags = [...new Set(tags)];
+      
+      // Ensure we have essential tags at the start
+      const essentialTags = [];
+      
+      // Add item name as first tag
+      const itemNameLower = itemName.toLowerCase().trim();
+      if (!tags.includes(itemNameLower)) {
+        essentialTags.push(itemNameLower);
+      }
+      
+      // Add categories
+      categories.forEach(cat => {
+        const catLower = cat.toLowerCase().trim();
+        if (!tags.includes(catLower) && !essentialTags.includes(catLower)) {
+          essentialTags.push(catLower);
+        }
       });
       
-      // Limit to 15 tags max
-      return allTags.slice(0, 15).join(', ');
+      // Add food type
+      if (foodTypeLabel && !tags.includes(foodTypeLabel) && !essentialTags.includes(foodTypeLabel)) {
+        essentialTags.push(foodTypeLabel);
+      }
+      
+      // Add serving size
+      const servingTag = `${qty} ${unitLabel}${qty > 1 ? 's' : ''}`;
+      if (!tags.includes(servingTag) && !essentialTags.includes(servingTag)) {
+        essentialTags.push(servingTag);
+      }
+      
+      // Combine essential tags first, then AI tags
+      const finalTags = [...essentialTags, ...tags.filter(t => !essentialTags.includes(t))];
+      
+      // Limit to exactly 10 unique tags
+      return finalTags.slice(0, 10).join(', ');
     } catch (error) {
       console.error('Groq AI tags error:', error);
-      // Fallback: return item name words + categories if AI fails
+      // Fallback: generate basic tags without AI
       const categories = Array.isArray(category) ? category : [category];
-      const nameWords = itemName.toLowerCase().replace(/[^a-z0-9\s]/gi, ' ').split(/\s+/).filter(w => w.length > 1);
-      const categoryWords = categories.map(c => c.toLowerCase().trim());
-      const fallbackTags = [...new Set([...nameWords, ...categoryWords])];
-      if (foodType && foodType !== 'none') fallbackTags.push(foodType);
-      return fallbackTags.join(', ');
+      const foodTypeLabel = foodType === 'veg' ? 'veg' : foodType === 'nonveg' ? 'non veg' : foodType === 'egg' ? 'egg' : '';
+      const qty = parseInt(quantity) || 1;
+      const unitLabel = unit || 'piece';
+      
+      const fallbackTags = [
+        itemName.toLowerCase().trim(),
+        ...categories.map(c => c.toLowerCase().trim()),
+        foodTypeLabel,
+        `${qty} ${unitLabel}${qty > 1 ? 's' : ''}`
+      ].filter(t => t && t.length > 0);
+      
+      // Remove duplicates and limit to 10
+      return [...new Set(fallbackTags)].slice(0, 10).join(', ');
     }
   },
 
