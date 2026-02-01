@@ -3401,10 +3401,24 @@ const chatbot = {
         
         if (searchResult && searchResult.items && searchResult.items.length > 0) {
           const matchingItems = searchResult.items;
+          const isExactMatch = searchResult.exactMatch === true;
+          
           // Use pre-built label or construct one
           const displayLabel = searchResult.label 
             ? (searchResult.searchTerm ? `${searchResult.label} "${searchResult.searchTerm}"` : searchResult.label)
             : (searchResult.searchTerm ? `"${searchResult.searchTerm}"` : 'Search Results');
+          
+          // If NOT an exact match, show "Item Not Found" message first, then show related items
+          if (!isExactMatch) {
+            const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+            const notFoundMessage = `❌ *Item Not Available*\n\nSorry, we couldn't find an exact match for "${msg}".\n\n✨ *But here are some related items you might like:*`;
+            
+            if (itemNotAvailableImg) {
+              await whatsapp.sendImage(phone, itemNotAvailableImg, notFoundMessage);
+            } else {
+              await whatsapp.sendText(phone, notFoundMessage);
+            }
+          }
           
           // If only 1 item matches, show item details directly
           if (matchingItems.length === 1) {
