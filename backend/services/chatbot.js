@@ -380,6 +380,33 @@ const chatbot = {
     return cartPatterns.some(pattern => pattern.test(lowerText));
   },
 
+  // Helper to detect simple/standalone cart keyword (e.g., just "cart" without "my", "view", "show", etc.)
+  // When user types just "cart", we show cart options menu instead of directly showing cart
+  isSimpleCartKeyword(text) {
+    if (!text) return false;
+    const trimmed = text.trim().toLowerCase();
+    // Match standalone cart-related words (no verbs like "view", "show", "my", etc.)
+    const simpleCartPatterns = [
+      /^cart$/,
+      /^card$/,
+      /^kart$/,
+      /^cot$/,
+      /^caught$/,
+      /^cat$/,
+      /^court$/,
+      /^art$/,
+      /^cartt$/,
+      /^caart$/,
+      /^कार्ट$/,
+      /^కార్ట్$/,
+      /^கார்ட்$/,
+      /^ಕಾರ್ಟ್$/,
+      /^കാർട്ട്$/,
+      /^কার্ট$/
+    ];
+    return simpleCartPatterns.some(pattern => pattern.test(trimmed));
+  },
+
   // Helper to detect clear/empty cart intent from text/voice
   // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
   // Handles voice recognition mistakes like "card", "cut", "kart", "cot", "caught", "cat", "court" instead of "cart"
@@ -799,6 +826,13 @@ const chatbot = {
       /\ball\s+menu\b/, /\bshow\s+all\s+menu\b/, /\bview\s+all\s+menu\b/, /\bsee\s+all\s+menu\b/,
       /\bcomplete\s+menu\b/, /\bwhole\s+menu\b/, /\btotal\s+menu\b/,
       /\ball\s+food\b/, /\bshow\s+all\s+food\b/, /\bfull\s+items\b/,
+      // Browse menu patterns
+      /\bbrowse\s+(?:the\s+)?menu\b/, /\bbrowse\s+(?:the\s+)?items\b/, /\bbrowse\s+(?:the\s+)?food\b/,
+      /\bbrowse\s+(?:our\s+)?menu\b/, /\bbrowse\s+(?:your\s+)?menu\b/,
+      /\bexplore\s+(?:the\s+)?menu\b/, /\bexplore\s+(?:the\s+)?items\b/, /\bexplore\s+(?:the\s+)?food\b/,
+      /\bcheck\s+(?:the\s+)?menu\b/, /\bcheck\s+(?:out\s+)?(?:the\s+)?menu\b/,
+      /\bopen\s+(?:the\s+)?menu\b/, /\bopen\s+menu\b/,
+      /\bview\s+(?:the\s+)?menu\b/, /\bview\s+menu\b/,
       // Hindi - "sab menu", "pura menu", "all menu dikhao"
       /\bmenu\s+dikhao\b/, /\bsab\s+items\s+dikhao\b/, /\bkhana\s+dikhao\b/,
       /\bमेन्यू\s+दिखाओ\b/, /\bसब\s+आइटम\b/, /\bखाना\s+दिखाओ\b/, /\bक्या\s+है\b/,
@@ -945,6 +979,20 @@ const chatbot = {
     // Check for general menu intent
     const isMenuIntent = menuPatterns.some(pattern => pattern.test(lowerText));
     if (isMenuIntent) {
+      return { showMenu: true, foodType: 'both', searchTerm: null };
+    }
+    
+    // Check for standalone menu keywords (trimmed text without added spaces)
+    const trimmedLower = text.toLowerCase().trim();
+    const standaloneMenuPatterns = [
+      /^menu$/, /^browse menu$/, /^view menu$/, /^show menu$/, /^see menu$/,
+      /^check menu$/, /^open menu$/, /^explore menu$/, /^the menu$/,
+      /^browse the menu$/, /^view the menu$/, /^show the menu$/, /^see the menu$/,
+      /^check the menu$/, /^open the menu$/, /^explore the menu$/,
+      /^food menu$/, /^our menu$/, /^your menu$/
+    ];
+    const isStandaloneMenu = standaloneMenuPatterns.some(pattern => pattern.test(trimmedLower));
+    if (isStandaloneMenu) {
       return { showMenu: true, foodType: 'both', searchTerm: null };
     }
     
@@ -3447,7 +3495,17 @@ const chatbot = {
         ]);
         state.currentStep = 'main_menu';
       }
-      else if (selection === 'view_cart' || (!selectedId && this.isCartIntent(msg))) {
+      else if (selection === 'view_cart') {
+        await this.sendCart(phone, customer);
+        state.currentStep = 'viewing_cart';
+      }
+      // Handle simple cart keyword (just "cart") - show cart options menu
+      else if (!selectedId && this.isSimpleCartKeyword(msg)) {
+        await this.sendCartOptionsMenu(phone);
+        state.currentStep = 'cart_options';
+      }
+      // Handle full cart intent ("view cart", "my cart", etc.) - show cart directly
+      else if (!selectedId && this.isCartIntent(msg)) {
         await this.sendCart(phone, customer);
         state.currentStep = 'viewing_cart';
       }
@@ -5289,6 +5347,18 @@ const chatbot = {
       { id: 'confirm_order', text: 'Confirm & Pay' },
       { id: 'add_more', text: 'Add More' },
       { id: 'clear_cart', text: 'Cancel' }
+    ]);
+  },
+
+  // Send cart options menu when user types just "cart"
+  async sendCartOptionsMenu(phone) {
+    const cartOptionsImageUrl = await chatbotImagesService.getImageUrl('cart_options');
+    const message = `🛒 *Cart Options*\n\nWhat would you like to do?`;
+    
+    await sendWithOptionalImage(phone, cartOptionsImageUrl, message, [
+      { id: 'view_cart', text: '🛒 My Cart' },
+      { id: 'clear_cart', text: '🗑️ Clear Cart' },
+      { id: 'view_menu', text: '📋 Menu' }
     ]);
   },
 
