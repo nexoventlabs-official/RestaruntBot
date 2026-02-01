@@ -448,6 +448,12 @@ Return ONLY 10 comma-separated lowercase tags. No explanations, no numbering, no
         essentialTags.push(foodTypeLabel);
       }
       
+      // Add quantity and unit (e.g., "4 pieces", "1 plate")
+      const servingTag = `${qty} ${unitLabel}${qty > 1 ? 's' : ''}`;
+      if (!tags.includes(servingTag) && !essentialTags.includes(servingTag)) {
+        essentialTags.push(servingTag);
+      }
+      
       // Add meal time tags based on category
       for (const mealTag of mealTimeTags.slice(0, 2)) { // Add up to 2 meal time tags
         if (!tags.includes(mealTag) && !essentialTags.includes(mealTag)) {
@@ -473,6 +479,7 @@ Return ONLY 10 comma-separated lowercase tags. No explanations, no numbering, no
         itemName.toLowerCase().trim(),
         ...categories.map(c => c.toLowerCase().trim()),
         foodTypeLabel,
+        `${qty} ${unitLabel}${qty > 1 ? 's' : ''}`,
         ...mealTimeTags.slice(0, 2)
       ].filter(t => t && t.length > 0);
       
