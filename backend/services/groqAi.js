@@ -636,6 +636,162 @@ Return ONLY comma-separated item names from the menu that match or are related t
     }
   },
 
+  // AI-powered typo correction for food search
+  // Handles misspellings like "thaiyr" → "thayir", "brekfast" → "breakfast"
+  async correctFoodTypo(searchQuery, availableTags = [], menuItemNames = []) {
+    try {
+      const client = getGroq();
+      
+      // Combine tags and menu item names for context
+      const contextItems = [...new Set([...availableTags, ...menuItemNames])].slice(0, 100);
+      
+      const completion = await client.chat.completions.create({
+        messages: [{
+          role: 'system',
+          content: `You are an expert food search typo corrector for an Indian restaurant. Correct spelling mistakes in food search queries.
+
+TASK: Identify if the search query has spelling mistakes and return the corrected food term.
+
+COMMON FOOD TYPO PATTERNS:
+1. Letter swaps: "thaiyr" → "thayir", "brekfast" → "breakfast"
+2. Missing letters: "brakfast" → "breakfast", "coffe" → "coffee"
+3. Extra letters: "breakfastt" → "breakfast", "coffeee" → "coffee"
+4. Wrong vowels: "biryoni" → "biryani", "idlee" → "idli"
+5. Phonetic mistakes: "dhosha" → "dosa", "chappathi" → "chapati"
+
+REGIONAL FOOD TERMS TO RECOGNIZE:
+- thayir/thair/tayir = curd (Tamil)
+- perugu = curd (Telugu)
+- mosaru = curd (Kannada)
+- dahi = curd (Hindi)
+- annam/anna = rice
+- dosai = dosa
+- idly = idli
+- vadai = vada
+- rasam/rasamu = rasam
+- sambar/sambhar = sambar
+- upma/uppuma/uppit = upma
+- pongal/pongali = pongal
+- pulihora/pulihoura = tamarind rice
+- pesarattu/pesarat = pesarattu
+- parotta/paratha/barotta = parotta
+- chapathi/chapati/roti/phulka/pulka = chapati/roti
+
+RULES:
+1. Return ONLY the corrected word(s), nothing else
+2. If no correction needed, return the original query
+3. Keep the correction simple and common
+4. Match to available items/tags if provided
+5. Handle multi-word queries word by word`
+        }, {
+          role: 'user',
+          content: `Search query: "${searchQuery}"
+${contextItems.length > 0 ? `Available items/tags: ${contextItems.slice(0, 50).join(', ')}` : ''}
+
+Return ONLY the corrected search term. No explanation.`
+        }],
+        model: 'llama-3.1-8b-instant',
+        max_tokens: 50,
+        temperature: 0.1
+      });
+      
+      const corrected = completion.choices[0]?.message?.content?.trim()?.toLowerCase() || searchQuery;
+      
+      // Clean the response - remove quotes, explanations
+      const cleanCorrected = corrected
+        .replace(/^["']|["']$/g, '')
+        .replace(/^corrected:?\s*/i, '')
+        .replace(/\s*\(.*\)\s*$/, '')
+        .trim();
+      
+      if (cleanCorrected && cleanCorrected.length > 0 && cleanCorrected.length < 50) {
+        if (cleanCorrected.toLowerCase() !== searchQuery.toLowerCase()) {
+          console.log(`🤖 AI typo correction: "${searchQuery}" → "${cleanCorrected}"`);
+        }
+        return cleanCorrected;
+      }
+      
+      return searchQuery;
+    } catch (error) {
+      console.error('Groq AI typo correction error:', error.message);
+      return searchQuery;
+    }
+  },
+
+  // Enhanced fuzzy search using AI - finds similar items even with bad typos
+  async fuzzySearchWithAI(searchQuery, menuItemNames, tags = []) {
+    try {
+      const client = getGroq();
+      
+      const itemList = menuItemNames.slice(0, 100).join(', ');
+      const tagList = [...new Set(tags)].slice(0, 50).join(', ');
+      
+      const completion = await client.chat.completions.create({
+        messages: [{
+          role: 'system',
+          content: `You are an expert Indian food search assistant. The customer may have MISSPELLED their search. Find matching menu items even if the spelling is wrong.
+
+SPELLING MISTAKE PATTERNS TO HANDLE:
+- Swapped letters: "thaiyr" = "thayir" = curd
+- Missing vowels: "brkfst" = "breakfast"  
+- Extra letters: "breakfastt" = "breakfast"
+- Phonetic spelling: "beak fasr" = "breakfast"
+- Regional variations: "thayir sadam" = "curd rice"
+
+REGIONAL FOOD KNOWLEDGE:
+Tamil: thayir=curd, sadam/saadam=rice, dosai=dosa, idly=idli
+Telugu: perugu=curd, annam=rice, dosa=dosa, idli=idli
+Kannada: mosaru=curd, anna=rice
+Hindi: dahi=curd, chawal=rice
+
+MATCHING RULES:
+1. Find items that SOUND LIKE or MEAN THE SAME as the search
+2. Handle character swaps (thaiyr → thayir)
+3. Handle missing/extra characters
+4. Match regional food names to English equivalents
+5. Return maximum 10 items, ordered by relevance
+6. Return ONLY exact item names from the menu list`
+        }, {
+          role: 'user',
+          content: `Customer searched: "${searchQuery}"
+
+Menu items: ${itemList}
+${tagList ? `Available tags: ${tagList}` : ''}
+
+Find ALL menu items that match this search (consider spelling mistakes). Return comma-separated item names. If nothing matches, return "NONE".`
+        }],
+        model: 'llama-3.1-8b-instant',
+        max_tokens: 200,
+        temperature: 0.3
+      });
+      
+      const responseText = completion.choices[0]?.message?.content?.trim() || '';
+      
+      if (responseText.toUpperCase() === 'NONE' || responseText.toLowerCase().includes('no match')) {
+        return [];
+      }
+      
+      const matchedItems = responseText
+        .replace(/[\[\]"]/g, '')
+        .split(',')
+        .map(item => item.trim())
+        .filter(item => {
+          if (!item || item.length < 2 || item.length > 50) return false;
+          return menuItemNames.some(menuItem => 
+            menuItem.toLowerCase() === item.toLowerCase() ||
+            menuItem.toLowerCase().includes(item.toLowerCase()) ||
+            item.toLowerCase().includes(menuItem.toLowerCase())
+          );
+        });
+      
+      console.log(`🤖 AI fuzzy search: "${searchQuery}" → [${matchedItems.join(', ')}]`);
+      return matchedItems;
+    } catch (error) {
+      console.error('Groq AI fuzzy search error:', error.message);
+      return [];
+    }
+  },
+
   async processCustomerMessage(message, context, menuItems) {
     try {
       const menuList = menuItems.map(m => `${m.name} (₹${m.price}) - ${m.category}`).join('\n');

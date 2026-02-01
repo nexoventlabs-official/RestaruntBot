@@ -1057,7 +1057,10 @@ const chatbot = {
     );
     if (exactMatch) return exactMatch;
     
-    // Try fuzzy matching for typos (e.g., "brekfast" → "breakfast", "beverges" → "beverages")
+    // Try fuzzy matching with typo tolerance for ANY category (lowered threshold to 0.55)
+    let bestMatch = null;
+    let bestScore = 0;
+    
     for (const cat of categories) {
       const catLower = cat.toLowerCase();
       // Split into words and check each
@@ -1065,24 +1068,39 @@ const chatbot = {
       const searchWords = lowerText.split(/\s+/);
       
       for (const searchWord of searchWords) {
-        if (searchWord.length < 3) continue;
+        if (searchWord.length < 2) continue;
         
-        // Check against category name
-        if (this.similarityRatio(searchWord, catLower) >= 0.65) {
-          return cat;
+        // Check against full category name with typo tolerance
+        const fullScore = this.similarityWithTypoTolerance(searchWord, catLower);
+        if (fullScore > bestScore && fullScore >= 0.55) {
+          bestScore = fullScore;
+          bestMatch = cat;
         }
         
         // Check against each word in category
         for (const catWord of catWords) {
-          if (catWord.length < 3) continue;
-          if (this.similarityRatio(searchWord, catWord) >= 0.65) {
-            return cat;
+          if (catWord.length < 2) continue;
+          const wordScore = this.similarityWithTypoTolerance(searchWord, catWord);
+          if (wordScore > bestScore && wordScore >= 0.55) {
+            bestScore = wordScore;
+            bestMatch = cat;
           }
         }
       }
+      
+      // Also check full text against category
+      const fullTextScore = this.similarityWithTypoTolerance(lowerText, catLower);
+      if (fullTextScore > bestScore && fullTextScore >= 0.55) {
+        bestScore = fullTextScore;
+        bestMatch = cat;
+      }
     }
     
-    return null;
+    if (bestMatch) {
+      console.log(`🔄 Category fuzzy match: "${text}" → "${bestMatch}" (${Math.round(bestScore * 100)}%)`);
+    }
+    
+    return bestMatch;
   },
 
   // Helper to calculate Levenshtein distance between two strings
@@ -1212,27 +1230,46 @@ const chatbot = {
     'special': 'special', 'spacial': 'special', 'speshal': 'special',
     'veg': 'veg', 'vege': 'veg', 'veggie': 'veg',
     'nonveg': 'nonveg', 'non veg': 'nonveg', 'non-veg': 'nonveg',
-    // South Indian
-    'uttapam': 'uttapam', 'utapam': 'uttapam', 'uthappam': 'uttapam',
-    'vada': 'vada', 'vadai': 'vada', 'wada': 'vada', 'bada': 'vada',
-    'upma': 'upma', 'uppma': 'upma', 'upuma': 'upma',
-    'pongal': 'pongal', 'pongel': 'pongal', 'pongl': 'pongal',
-    'rasam': 'rasam', 'rasaam': 'rasam', 'russam': 'rasam',
-    'sambar': 'sambar', 'sambhar': 'sambar', 'samber': 'sambar',
-    'chutney': 'chutney', 'chatni': 'chutney', 'chutnee': 'chutney',
+    // South Indian - Curd/Thayir variations (common typos)
+    'thayir': 'curd', 'thaiyr': 'curd', 'tayir': 'curd', 'thair': 'curd', 
+    'thayr': 'curd', 'thyir': 'curd', 'thayri': 'curd', 'thayeer': 'curd',
+    'thaiir': 'curd', 'thaiyir': 'curd', 'thaiyar': 'curd', 'tayeer': 'curd',
+    'perugu': 'curd', 'peruug': 'curd', 'perugu': 'curd', 'perguu': 'curd',
+    'mosaru': 'curd', 'mosuru': 'curd', 'mosru': 'curd',
+    'dahi': 'curd', 'dhahi': 'curd', 'dahee': 'curd',
+    'curd': 'curd', 'curd rice': 'curd rice', 'curds': 'curd',
+    'thayir sadam': 'curd rice', 'thaiyr sadam': 'curd rice', 'tayir sadam': 'curd rice',
+    'thayir rice': 'curd rice', 'perugu annam': 'curd rice', 'mosaru anna': 'curd rice',
+    'dahi chawal': 'curd rice', 'dahi rice': 'curd rice',
+    // South Indian - Other items
+    'uttapam': 'uttapam', 'utapam': 'uttapam', 'uthappam': 'uttapam', 'utappam': 'uttapam',
+    'vada': 'vada', 'vadai': 'vada', 'wada': 'vada', 'bada': 'vada', 'vadaa': 'vada',
+    'upma': 'upma', 'uppma': 'upma', 'upuma': 'upma', 'uppuma': 'upma', 'uppit': 'upma',
+    'pongal': 'pongal', 'pongel': 'pongal', 'pongl': 'pongal', 'pongali': 'pongal',
+    'rasam': 'rasam', 'rasaam': 'rasam', 'russam': 'rasam', 'rasamu': 'rasam',
+    'sambar': 'sambar', 'sambhar': 'sambar', 'samber': 'sambar', 'saambar': 'sambar',
+    'chutney': 'chutney', 'chatni': 'chutney', 'chutnee': 'chutney', 'chatney': 'chutney',
+    'pesarattu': 'pesarattu', 'pesarat': 'pesarattu', 'pesaratu': 'pesarattu', 'pesarathu': 'pesarattu',
+    'pulihora': 'tamarind rice', 'pulihoura': 'tamarind rice', 'pulihara': 'tamarind rice',
+    'gongura': 'gongura', 'gongora': 'gongura', 'gangura': 'gongura', 'gonguru': 'gongura',
+    // Rice varieties
+    'sadam': 'rice', 'annam': 'rice', 'anna': 'rice', 'chawal': 'rice', 'rice': 'rice',
+    'lemon rice': 'lemon rice', 'nimbu rice': 'lemon rice', 'nimmakaya annam': 'lemon rice',
+    'tomato rice': 'tomato rice', 'tomato annam': 'tomato rice',
+    'coconut rice': 'coconut rice', 'kobbari annam': 'coconut rice',
     // North Indian
-    'roti': 'roti', 'rotis': 'roti', 'rooti': 'roti',
-    'dal': 'dal', 'daal': 'dal', 'dhal': 'dal',
-    'rajma': 'rajma', 'rajmah': 'rajma', 'razma': 'rajma',
-    'chole': 'chole', 'choley': 'chole', 'chhole': 'chole', 'chana': 'chole',
-    'aloo': 'aloo', 'alu': 'aloo', 'aaloo': 'aloo',
-    'gobi': 'gobi', 'gobhi': 'gobi', 'ghobi': 'gobi',
-    'palak': 'palak', 'paalak': 'palak', 'spinach': 'palak',
+    'roti': 'roti', 'rotis': 'roti', 'rooti': 'roti', 'rotti': 'roti',
+    'dal': 'dal', 'daal': 'dal', 'dhal': 'dal', 'dhall': 'dal',
+    'rajma': 'rajma', 'rajmah': 'rajma', 'razma': 'rajma', 'rajmaa': 'rajma',
+    'chole': 'chole', 'choley': 'chole', 'chhole': 'chole', 'chana': 'chole', 'chholey': 'chole',
+    'aloo': 'aloo', 'alu': 'aloo', 'aaloo': 'aloo', 'allu': 'aloo',
+    'gobi': 'gobi', 'gobhi': 'gobi', 'ghobi': 'gobi', 'gobhee': 'gobi',
+    'palak': 'palak', 'paalak': 'palak', 'spinach': 'palak', 'paalak': 'palak',
     // Chinese
-    'fried rice': 'fried rice', 'friedrice': 'fried rice', 'fry rice': 'fried rice',
-    'chowmein': 'chow mein', 'chowmin': 'chow mein', 'chawmein': 'chow mein',
-    'hakka': 'hakka', 'haka': 'hakka', 'hakaa': 'hakka',
-    'schezwan': 'schezwan', 'szechuan': 'schezwan', 'schewan': 'schezwan', 'sichuan': 'schezwan',
+    'fried rice': 'fried rice', 'friedrice': 'fried rice', 'fry rice': 'fried rice', 'fryrice': 'fried rice',
+    'chowmein': 'chow mein', 'chowmin': 'chow mein', 'chawmein': 'chow mein', 'chowmine': 'chow mein',
+    'hakka': 'hakka', 'haka': 'hakka', 'hakaa': 'hakka', 'hakka noodles': 'hakka noodles',
+    'schezwan': 'schezwan', 'szechuan': 'schezwan', 'schewan': 'schezwan', 'sichuan': 'schezwan', 'schezuan': 'schezwan',
   },
 
   // Get corrected food term if it's a common typo
@@ -1334,17 +1371,107 @@ const chatbot = {
     return [...new Set(variations)];
   },
 
+  // Dynamic typo correction - finds best matching item/tag for any search term
+  // Works for ANY menu item, not just hardcoded ones
+  findBestMatchingTerm(searchTerm, menuItems) {
+    if (!searchTerm || searchTerm.length < 2) return null;
+    
+    const searchLower = searchTerm.toLowerCase().trim();
+    let bestMatch = null;
+    let bestScore = 0;
+    const threshold = 0.55; // 55% similarity minimum
+    
+    // Collect all possible targets from menu items
+    const targets = new Set();
+    
+    for (const item of menuItems) {
+      // Add item name and its words
+      targets.add(item.name.toLowerCase());
+      item.name.toLowerCase().split(/\s+/).forEach(w => w.length >= 3 && targets.add(w));
+      
+      // Add all tags and their words
+      if (item.tags) {
+        item.tags.forEach(tag => {
+          targets.add(tag.toLowerCase());
+          tag.toLowerCase().split(/\s+/).forEach(w => w.length >= 3 && targets.add(w));
+        });
+      }
+      
+      // Add categories
+      const cats = Array.isArray(item.category) ? item.category : [item.category];
+      cats.forEach(cat => cat && targets.add(cat.toLowerCase()));
+    }
+    
+    // Find the best matching target for the search term
+    for (const target of targets) {
+      // Skip very short targets
+      if (target.length < 2) continue;
+      
+      // Calculate similarity with typo tolerance
+      const score = this.similarityWithTypoTolerance(searchLower, target);
+      
+      // Also try with normalized versions
+      const normalizedSearch = this.normalizeTypos(searchLower);
+      const normalizedTarget = this.normalizeTypos(target);
+      const normalizedScore = this.similarityWithTypoTolerance(normalizedSearch, normalizedTarget);
+      
+      const finalScore = Math.max(score, normalizedScore);
+      
+      if (finalScore > bestScore && finalScore >= threshold) {
+        bestScore = finalScore;
+        bestMatch = target;
+      }
+    }
+    
+    // If we found a match better than the original, return it
+    if (bestMatch && bestMatch !== searchLower && bestScore >= threshold) {
+      console.log(`🔄 Dynamic typo match: "${searchTerm}" → "${bestMatch}" (${Math.round(bestScore * 100)}%)`);
+      return bestMatch;
+    }
+    
+    return null;
+  },
+
+  // Get corrected food term - checks both hardcoded dictionary AND dynamic menu matching
+  correctFoodTypoDynamic(text, menuItems) {
+    const lowerText = text.toLowerCase().trim();
+    
+    // First check hardcoded common typos (fast lookup)
+    const hardcodedCorrection = this.commonFoodTypos[lowerText];
+    if (hardcodedCorrection && hardcodedCorrection !== lowerText) {
+      return hardcodedCorrection;
+    }
+    
+    // Then try dynamic matching against actual menu items
+    if (menuItems && menuItems.length > 0) {
+      const dynamicMatch = this.findBestMatchingTerm(lowerText, menuItems);
+      if (dynamicMatch) {
+        return dynamicMatch;
+      }
+    }
+    
+    return text;
+  },
+
   // Helper to find fuzzy matches for a search term
-  // Returns items where name or tags have similarity >= threshold (default 0.5 = 50% similar)
-  // Enhanced with: keyboard typo tolerance, phonetic matching, word reordering, common food typos
-  // E.g., "manchuya" will match "manchurian", "beak fasr" will match "breakfast"
-  fuzzySearchItems(searchTerm, menuItems, threshold = 0.5) {
+  // Returns items where name or tags have similarity >= threshold (default 0.45 = 45% similar)
+  // Enhanced with: keyboard typo tolerance, phonetic matching, word reordering, dynamic menu matching
+  // Works for ANY menu item - not just hardcoded foods
+  fuzzySearchItems(searchTerm, menuItems, threshold = 0.45) {
     if (!searchTerm || searchTerm.length < 2) return [];
     
     const searchLower = searchTerm.toLowerCase().trim();
     
-    // First check if this is a known common typo and correct it
-    const correctedSearch = this.correctFoodTypo(searchLower);
+    // First check hardcoded typos, then try dynamic matching
+    let correctedSearch = this.correctFoodTypo(searchLower);
+    if (correctedSearch === searchLower) {
+      // No hardcoded match, try dynamic matching
+      const dynamicMatch = this.findBestMatchingTerm(searchLower, menuItems);
+      if (dynamicMatch) {
+        correctedSearch = dynamicMatch;
+      }
+    }
+    
     const searchTerms = correctedSearch !== searchLower 
       ? [correctedSearch, searchLower]  // Search with both corrected and original
       : [searchLower];
@@ -1352,7 +1479,15 @@ const chatbot = {
     // Also check individual words for typos (e.g., "beak fasr" → check "beak" and "fasr")
     const searchWords = searchLower.split(/\s+/).filter(w => w.length >= 2);
     for (const word of searchWords) {
-      const correctedWord = this.correctFoodTypo(word);
+      // Check hardcoded first
+      let correctedWord = this.correctFoodTypo(word);
+      // Then try dynamic matching
+      if (correctedWord === word) {
+        const dynamicWordMatch = this.findBestMatchingTerm(word, menuItems);
+        if (dynamicWordMatch) {
+          correctedWord = dynamicWordMatch;
+        }
+      }
       if (correctedWord !== word && !searchTerms.includes(correctedWord)) {
         searchTerms.push(correctedWord);
       }
@@ -1511,7 +1646,7 @@ const chatbot = {
       .map(m => m.item);
   },
 
-  // Helper to find item by name (with fuzzy fallback)
+  // Helper to find item by name (with dynamic fuzzy fallback - works for ANY item)
   findItem(text, menuItems) {
     const lowerText = text.toLowerCase().trim();
     
@@ -1522,18 +1657,28 @@ const chatbot = {
     );
     if (exactMatch) return exactMatch;
     
-    // Fuzzy fallback for typos
-    if (lowerText.length >= 3) {
+    // Try dynamic typo correction first
+    const corrected = this.findBestMatchingTerm(lowerText, menuItems);
+    if (corrected && corrected !== lowerText) {
+      const correctedMatch = menuItems.find(item => 
+        item.name.toLowerCase().includes(corrected) || 
+        corrected.includes(item.name.toLowerCase())
+      );
+      if (correctedMatch) return correctedMatch;
+    }
+    
+    // Fuzzy fallback for typos (lowered threshold to 0.55)
+    if (lowerText.length >= 2) {
       for (const item of menuItems) {
         const nameLower = item.name.toLowerCase();
         // Check full name similarity
-        if (this.similarityWithTypoTolerance(lowerText, nameLower) >= 0.65) {
+        if (this.similarityWithTypoTolerance(lowerText, nameLower) >= 0.55) {
           return item;
         }
         // Check each word in name
         const nameWords = nameLower.split(/\s+/);
         for (const word of nameWords) {
-          if (word.length >= 3 && this.similarityWithTypoTolerance(lowerText, word) >= 0.65) {
+          if (word.length >= 2 && this.similarityWithTypoTolerance(lowerText, word) >= 0.6) {
             return item;
           }
         }
@@ -1543,7 +1688,7 @@ const chatbot = {
     return null;
   },
 
-  // Helper to find items by tag keyword (with fuzzy matching)
+  // Helper to find items by tag keyword (with dynamic fuzzy matching - works for ANY tag)
   findItemsByTag(text, menuItems) {
     const lowerText = text.toLowerCase().trim();
     if (lowerText.length < 2) return null;
@@ -1556,17 +1701,30 @@ const chatbot = {
       )
     );
     
-    // Fuzzy fallback if no exact matches
-    if (matchingItems.length === 0 && lowerText.length >= 3) {
+    // Try dynamic typo correction
+    if (matchingItems.length === 0) {
+      const corrected = this.findBestMatchingTerm(lowerText, menuItems);
+      if (corrected && corrected !== lowerText) {
+        matchingItems = menuItems.filter(item => 
+          item.tags?.some(tag => 
+            tag.toLowerCase().includes(corrected) || 
+            corrected.includes(tag.toLowerCase())
+          )
+        );
+      }
+    }
+    
+    // Fuzzy fallback if no exact matches (lowered threshold to 0.5)
+    if (matchingItems.length === 0 && lowerText.length >= 2) {
       matchingItems = menuItems.filter(item => {
         return item.tags?.some(tag => {
           const tagLower = tag.toLowerCase();
           // Check tag similarity
-          if (this.similarityWithTypoTolerance(lowerText, tagLower) >= 0.6) return true;
+          if (this.similarityWithTypoTolerance(lowerText, tagLower) >= 0.5) return true;
           // Check tag words
           const tagWords = tagLower.split(/\s+/);
           return tagWords.some(word => 
-            word.length >= 3 && this.similarityWithTypoTolerance(lowerText, word) >= 0.6
+            word.length >= 2 && this.similarityWithTypoTolerance(lowerText, word) >= 0.55
           );
         });
       });
@@ -1575,28 +1733,35 @@ const chatbot = {
     return matchingItems.length > 0 ? matchingItems : null;
   },
 
-  // Helper to find items by name OR tag keyword (with fuzzy matching)
+  // Helper to find items by name OR tag keyword (with dynamic fuzzy matching - works for ANY item)
   findItemsByNameOrTag(text, menuItems) {
     const lowerText = text.toLowerCase().trim();
     if (lowerText.length < 2) return null;
     
-    // First try exact/substring matches
+    // Try dynamic typo correction first
+    const corrected = this.findBestMatchingTerm(lowerText, menuItems);
+    const searchTerms = corrected && corrected !== lowerText ? [lowerText, corrected] : [lowerText];
+    
+    // First try exact/substring matches with all search terms
     let matchingItems = menuItems.filter(item => {
-      // Check if name matches
-      const nameMatch = item.name.toLowerCase().includes(lowerText) || 
-        lowerText.includes(item.name.toLowerCase());
-      
-      // Check if any tag matches
-      const tagMatch = item.tags?.some(tag => 
-        tag.toLowerCase().includes(lowerText) || 
-        lowerText.includes(tag.toLowerCase())
-      );
-      
-      return nameMatch || tagMatch;
+      for (const term of searchTerms) {
+        // Check if name matches
+        const nameMatch = item.name.toLowerCase().includes(term) || 
+          term.includes(item.name.toLowerCase());
+        
+        // Check if any tag matches
+        const tagMatch = item.tags?.some(tag => 
+          tag.toLowerCase().includes(term) || 
+          term.includes(tag.toLowerCase())
+        );
+        
+        if (nameMatch || tagMatch) return true;
+      }
+      return false;
     });
     
-    // Fuzzy fallback if no exact matches
-    if (matchingItems.length === 0 && lowerText.length >= 3) {
+    // Fuzzy fallback if no exact matches (lowered threshold to 0.5)
+    if (matchingItems.length === 0 && lowerText.length >= 2) {
       matchingItems = menuItems.filter(item => {
         const nameLower = item.name.toLowerCase();
         
@@ -2127,23 +2292,40 @@ const chatbot = {
   // Example: "masala dosa" → exact match OR all items with "masala" OR "dosa" tags
   // Example: "dosa" → all items with "dosa" tag (not just exact title match)
   // Now with AI-powered tag matching for native language queries
-  // Enhanced with typo correction for common food-related misspellings
+  // Enhanced with DYNAMIC typo correction - works for ANY menu item
   async smartSearch(text, menuItems) {
-    // First apply common food typo correction
+    // First apply common food typo correction (hardcoded + dynamic)
     let correctedText = text.toLowerCase().trim();
     const originalText = correctedText;
     
-    // Check if the whole phrase is a common typo
-    const phraseCorrection = this.correctFoodTypo(correctedText);
+    // Check hardcoded typos first
+    let phraseCorrection = this.correctFoodTypo(correctedText);
+    
+    // If no hardcoded match, try dynamic matching against actual menu
+    if (phraseCorrection === correctedText) {
+      const dynamicMatch = this.findBestMatchingTerm(correctedText, menuItems);
+      if (dynamicMatch) {
+        phraseCorrection = dynamicMatch;
+      }
+    }
+    
     if (phraseCorrection !== correctedText) {
       console.log(`📝 Typo correction: "${correctedText}" → "${phraseCorrection}"`);
       correctedText = phraseCorrection;
     }
     
-    // Also check individual words for typos and correct them
+    // Also check individual words for typos and correct them (hardcoded + dynamic)
     const words = correctedText.split(/\s+/);
     const correctedWords = words.map(word => {
-      const corrected = this.correctFoodTypo(word);
+      // First check hardcoded
+      let corrected = this.correctFoodTypo(word);
+      // Then try dynamic matching if no hardcoded match
+      if (corrected === word && word.length >= 3) {
+        const dynamicWordMatch = this.findBestMatchingTerm(word, menuItems);
+        if (dynamicWordMatch) {
+          corrected = dynamicWordMatch;
+        }
+      }
       if (corrected !== word) {
         console.log(`📝 Word typo correction: "${word}" → "${corrected}"`);
       }
@@ -2157,7 +2339,14 @@ const chatbot = {
     // Check if words combined form a common term (e.g., "beak fast" → "breakfast")
     if (words.length >= 2) {
       const combinedWords = words.join('');
-      const combinedCorrection = this.correctFoodTypo(combinedWords);
+      let combinedCorrection = this.correctFoodTypo(combinedWords);
+      // Also try dynamic matching for combined words
+      if (combinedCorrection === combinedWords) {
+        const dynamicCombined = this.findBestMatchingTerm(combinedWords, menuItems);
+        if (dynamicCombined) {
+          combinedCorrection = dynamicCombined;
+        }
+      }
       if (combinedCorrection !== combinedWords) {
         console.log(`📝 Combined typo correction: "${words.join(' ')}" → "${combinedCorrection}"`);
         // Add this as a variation but keep the corrected text too
@@ -2749,6 +2938,89 @@ const chatbot = {
             label: `🔍 Did you mean`,
             fuzzyMatch: true 
           };
+        }
+      }
+      
+      // ========== AI TYPO CORRECTION FALLBACK ==========
+      // Use Groq AI to correct potential typos like "thaiyr" → "thayir"
+      if (matchingItems.length === 0) {
+        try {
+          console.log(`🤖 AI Typo Correction: Checking "${text}" for spelling mistakes...`);
+          const menuItemNames = menuItems.map(item => item.name);
+          const aiCorrected = await groqAi.correctFoodTypo(text, allAvailableTags, menuItemNames);
+          
+          if (aiCorrected && aiCorrected.toLowerCase() !== text.toLowerCase()) {
+            console.log(`🤖 AI corrected: "${text}" → "${aiCorrected}"`);
+            
+            // Search with AI-corrected term
+            const correctedResults = searchByMultipleTerms(menuItems, [aiCorrected]);
+            if (correctedResults.length > 0) {
+              matchingItems = correctedResults;
+              console.log(`✅ AI typo correction found ${matchingItems.length} items`);
+              return { 
+                items: matchingItems, 
+                foodType: detected, 
+                searchTerm: aiCorrected, 
+                label: `🔍 Showing results for "${aiCorrected}"`,
+                aiCorrected: true 
+              };
+            }
+            
+            // Also try fuzzy search with corrected term
+            const correctedFuzzy = this.fuzzySearchItems(aiCorrected, menuItems, 0.45);
+            if (correctedFuzzy.length > 0) {
+              matchingItems = correctedFuzzy;
+              console.log(`✅ AI typo + fuzzy found ${matchingItems.length} items`);
+              return { 
+                items: matchingItems, 
+                foodType: detected, 
+                searchTerm: aiCorrected, 
+                label: `🔍 Showing results for "${aiCorrected}"`,
+                aiCorrected: true 
+              };
+            }
+          }
+        } catch (error) {
+          console.error('AI typo correction fallback failed:', error.message);
+        }
+      }
+      
+      // ========== AI FUZZY SEARCH FALLBACK ==========
+      // Use AI to find items even with bad typos
+      if (matchingItems.length === 0) {
+        try {
+          console.log(`🤖 AI Fuzzy Search: Finding items matching "${text}" (with typo tolerance)...`);
+          const menuItemNames = menuItems.map(item => item.name);
+          const aiFuzzyMatches = await groqAi.fuzzySearchWithAI(text, menuItemNames, allAvailableTags);
+          
+          if (aiFuzzyMatches && aiFuzzyMatches.length > 0) {
+            console.log(`🤖 AI fuzzy found: [${aiFuzzyMatches.join(', ')}]`);
+            
+            // Find matching menu items by name
+            for (const aiItemName of aiFuzzyMatches) {
+              const matchedItem = menuItems.find(item => 
+                item.name.toLowerCase() === aiItemName.toLowerCase() ||
+                item.name.toLowerCase().includes(aiItemName.toLowerCase()) ||
+                aiItemName.toLowerCase().includes(item.name.toLowerCase())
+              );
+              if (matchedItem && !matchingItems.find(m => m._id.toString() === matchedItem._id.toString())) {
+                matchingItems.push(matchedItem);
+              }
+            }
+            
+            if (matchingItems.length > 0) {
+              console.log(`✅ AI fuzzy search found ${matchingItems.length} items`);
+              return { 
+                items: matchingItems, 
+                foodType: detected, 
+                searchTerm: primarySearchTerm, 
+                label: `🔍 Did you mean`,
+                aiFuzzy: true 
+              };
+            }
+          }
+        } catch (error) {
+          console.error('AI fuzzy search fallback failed:', error.message);
         }
       }
       
