@@ -1469,6 +1469,7 @@ const chatbot = {
   // Improved: EXACT match returns single item, otherwise searches ALL related items by tags
   // Example: "masala dosa" → exact match OR all items with "masala" OR "dosa" tags
   // Example: "dosa" → all items with "dosa" tag (not just exact title match)
+  // Now with AI-powered tag matching for native language queries
   async smartSearch(text, menuItems) {
     // First translate regional language to English using AI (returns variations)
     const translationResult = await this.translateWithAI(text);
@@ -1499,7 +1500,27 @@ const chatbot = {
     }
     
     // Add unique variations (including synonyms)
-    const uniqueSearchTerms = [...new Set(expandedTerms)];
+    let uniqueSearchTerms = [...new Set(expandedTerms)];
+    
+    // ========== AI-POWERED TAG MATCHING ==========
+    // Use Groq AI to match native language or variations to actual tags
+    // Collect all available tags from menu items
+    const allAvailableTags = [...new Set(menuItems.flatMap(item => item.tags || []))];
+    
+    // If search has non-English characters OR limited matches, use AI to find matching tags
+    const hasNonEnglish = /[^\x00-\x7F]/.test(text);
+    if (hasNonEnglish && allAvailableTags.length > 0) {
+      try {
+        const aiMatchedTags = await groqAi.matchSearchToTags(text, allAvailableTags);
+        if (aiMatchedTags && aiMatchedTags.length > 0) {
+          uniqueSearchTerms = [...new Set([...uniqueSearchTerms, ...aiMatchedTags])];
+          console.log(`🤖 AI added tags: [${aiMatchedTags.join(', ')}]`);
+        }
+      } catch (error) {
+        console.error('AI tag matching failed:', error.message);
+      }
+    }
+    
     console.log(`🔍 Search terms with synonyms: [${uniqueSearchTerms.join(', ')}]`);
     
     // If search term is too short after removing keywords, search by ingredient/type only
@@ -1878,6 +1899,44 @@ const chatbot = {
           console.log(`🔍 Fallback: finding items matching ANY keyword: [${allKeywords.join(', ')}]`);
           // Search each keyword and combine all results
           matchingItems = searchByMultipleTerms(menuItems, allKeywords);
+        }
+      }
+      
+      // ========== AI TAG MATCHING FALLBACK ==========
+      // If still no results, use AI to match search query to tags
+      if (matchingItems.length === 0 && allAvailableTags.length > 0) {
+        try {
+          console.log(`🤖 AI Fallback: Matching "${text}" to available tags...`);
+          const aiMatchedTags = await groqAi.matchSearchToTags(text, allAvailableTags);
+          
+          if (aiMatchedTags && aiMatchedTags.length > 0) {
+            console.log(`🤖 AI matched tags: [${aiMatchedTags.join(', ')}]`);
+            
+            // Search using AI-matched tags
+            const aiSearchItems = new Map();
+            for (const aiTag of aiMatchedTags) {
+              for (const item of menuItems) {
+                const hasTag = item.tags?.some(t => 
+                  t.toLowerCase() === aiTag.toLowerCase() || 
+                  t.toLowerCase().includes(aiTag.toLowerCase()) ||
+                  aiTag.toLowerCase().includes(t.toLowerCase())
+                );
+                if (hasTag) {
+                  const id = item._id.toString();
+                  if (!aiSearchItems.has(id)) {
+                    aiSearchItems.set(id, item);
+                  }
+                }
+              }
+            }
+            
+            if (aiSearchItems.size > 0) {
+              matchingItems = Array.from(aiSearchItems.values());
+              console.log(`✅ AI tag search found ${matchingItems.length} items`);
+            }
+          }
+        } catch (error) {
+          console.error('AI tag matching fallback failed:', error.message);
         }
       }
     } else if (detected?.type === 'specific' && filteredItems.length > 0) {

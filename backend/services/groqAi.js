@@ -272,6 +272,75 @@ If already standard or you're unsure, return as is.`
     }
   },
 
+  // Category to meal time mappings - used to add relevant meal time tags
+  categoryMealMapping: {
+    // Breakfast/Morning items
+    'tiffin': ['breakfast', 'morning', 'tiffin'],
+    'tiffins': ['breakfast', 'morning', 'tiffin'],
+    'breakfast': ['breakfast', 'morning'],
+    'morning': ['breakfast', 'morning'],
+    // Lunch items
+    'meals': ['lunch', 'dinner', 'meals'],
+    'meal': ['lunch', 'dinner', 'meals'],
+    'lunch': ['lunch', 'afternoon'],
+    'thali': ['lunch', 'dinner', 'thali'],
+    // Dinner items
+    'dinner': ['dinner', 'night'],
+    'night': ['dinner', 'night'],
+    // Snacks
+    'snacks': ['snacks', 'evening', 'tea time'],
+    'starters': ['snacks', 'starters', 'appetizer'],
+    'appetizers': ['snacks', 'starters', 'appetizer'],
+    'chat': ['snacks', 'evening', 'chat'],
+    'chaat': ['snacks', 'evening', 'chaat'],
+    // Beverages
+    'beverages': ['drinks', 'beverages'],
+    'drinks': ['drinks', 'beverages'],
+    'juices': ['drinks', 'juice', 'beverages'],
+    // Desserts
+    'desserts': ['desserts', 'sweets', 'sweet'],
+    'sweets': ['desserts', 'sweets', 'sweet'],
+    // Biryani/Rice
+    'biryani': ['biryani', 'lunch', 'dinner', 'rice'],
+    'rice': ['rice', 'lunch', 'dinner'],
+    'pulao': ['rice', 'lunch', 'dinner', 'pulao'],
+    // Curries
+    'curries': ['curry', 'gravy', 'lunch', 'dinner'],
+    'curry': ['curry', 'gravy', 'lunch', 'dinner'],
+    'gravies': ['curry', 'gravy', 'lunch', 'dinner'],
+    // Breads
+    'breads': ['bread', 'roti', 'naan'],
+    'rotis': ['bread', 'roti', 'chapati'],
+    // Chinese
+    'chinese': ['chinese', 'indo chinese'],
+    'indo chinese': ['chinese', 'indo chinese', 'noodles'],
+    // South Indian specific
+    'south indian': ['south indian', 'dosa', 'idli'],
+    'north indian': ['north indian', 'punjabi'],
+  },
+
+  // Get meal time tags based on category
+  getMealTimeTags(categories) {
+    const mealTags = [];
+    const categoriesArray = Array.isArray(categories) ? categories : [categories];
+    
+    for (const cat of categoriesArray) {
+      const catLower = cat.toLowerCase().trim();
+      // Check exact match
+      if (this.categoryMealMapping[catLower]) {
+        mealTags.push(...this.categoryMealMapping[catLower]);
+      }
+      // Check partial match
+      for (const [key, values] of Object.entries(this.categoryMealMapping)) {
+        if (catLower.includes(key) || key.includes(catLower)) {
+          mealTags.push(...values);
+        }
+      }
+    }
+    
+    return [...new Set(mealTags)]; // Remove duplicates
+  },
+
   async generateTags(itemName, category, foodType, quantity = '1', unit = 'piece') {
     try {
       const client = getGroq();
@@ -284,28 +353,40 @@ If already standard or you're unsure, return as is.`
       const qty = parseInt(quantity) || 1;
       const unitLabel = unit || 'piece';
       
+      // Get meal time tags based on category
+      const mealTimeTags = this.getMealTimeTags(categories);
+      const mealTimeHint = mealTimeTags.length > 0 ? `Meal times for this category: ${mealTimeTags.join(', ')}` : '';
+      
       const completion = await client.chat.completions.create({
         messages: [{
           role: 'system',
-          content: `You are a tag generator for a restaurant food ordering chatbot. Generate EXACTLY 10 simple, accurate search tags that customers would use to find this food item.
+          content: `You are a tag generator for an Indian restaurant food ordering chatbot. Generate EXACTLY 10 simple, accurate search tags that customers would use to find this food item.
 
-RULES:
-1. Tags must be simple daily-use words that match the food item exactly
-2. NO abstract or ingredient-based tags (e.g., don't add "rice" for "idli", don't add "flour" for "dosa")
-3. Include the exact food item name as first tag
-4. Include category name(s) as tags
-5. Include food type (veg/non veg/egg) as a tag
-6. Add serving size if relevant (e.g., "2 pieces", "full plate")
-7. Add simple descriptive words customers would search (e.g., "hot", "crispy", "spicy", "sweet")
-8. Add common variations of the food name people might search
-9. Keep tags SHORT (1-2 words max per tag)
-10. NO duplicate tags
-11. All tags in lowercase
+CRITICAL RULES:
+1. Tags must be simple daily-use words that EXACTLY match the food item
+2. NO abstract ingredients (don't add "rice" for "idli", don't add "flour" for "dosa", don't add "wheat" for "chapati")
+3. ONLY add ingredients that are IN THE NAME (e.g., "chicken biryani" → add "chicken")
+4. Include exact food item name as first tag
+5. Include category name(s) as tags
+6. Include food type (veg/non veg/egg) as tag
+7. Include meal time (breakfast/lunch/dinner/snacks) based on category
+8. Add common spelling variations people search (idli/idly, dosa/dosai)
+9. Add 1-2 simple descriptive words (hot, crispy, spicy, soft)
+10. Keep tags SHORT (1-2 words max per tag)
+11. NO duplicate tags, all lowercase
+12. NO generic words like "food", "item", "delicious", "tasty"
+
+CATEGORY TO MEAL TIME MAPPING:
+- Tiffin/Breakfast → breakfast, morning
+- Meals/Thali → lunch, dinner
+- Snacks/Starters → snacks, evening
+- Desserts/Sweets → desserts, sweets
 
 EXAMPLES:
-- "Idli" (Tiffin, Veg, 4 pieces) → idli, tiffin, veg, 4 pieces, south indian, breakfast, soft, hot, steamed, idly
-- "Chicken Biryani" (Meals, Non-Veg, 1 plate) → chicken biryani, biryani, meals, non veg, 1 plate, rice, lunch, dinner, hyderabadi, spicy
-- "Masala Dosa" (Breakfast, Veg, 1 piece) → masala dosa, dosa, breakfast, veg, 1 piece, crispy, south indian, hot, dosai, morning`
+- "Idli" (Tiffin, Veg, 4 pieces) → idli, tiffin, veg, breakfast, morning, south indian, soft, hot, steamed, idly
+- "Chicken Biryani" (Meals, Non-Veg, 1 plate) → chicken biryani, chicken, biryani, meals, non veg, lunch, dinner, spicy, hyderabadi, dum
+- "Masala Dosa" (Tiffin, Veg, 1 piece) → masala dosa, dosa, tiffin, veg, breakfast, morning, crispy, south indian, dosai, hot
+- "Veg Fried Rice" (Chinese, Veg, 1 plate) → veg fried rice, fried rice, chinese, veg, lunch, dinner, rice, indo chinese, hot, noodles`
         }, {
           role: 'user',
           content: `Generate exactly 10 search tags for:
@@ -313,6 +394,7 @@ Food Item: "${itemName}"
 Category: ${categories.join(', ')}
 Food Type: ${foodTypeLabel}
 Serving: ${qty} ${unitLabel}${qty > 1 ? 's' : ''}
+${mealTimeHint}
 
 Return ONLY 10 comma-separated lowercase tags. No explanations, no numbering, no extra text.`
         }],
@@ -335,7 +417,10 @@ Return ONLY 10 comma-separated lowercase tags. No explanations, no numbering, no
           !tag.includes(':') && 
           !tag.includes('tag') &&
           !tag.includes('example') &&
-          !tag.includes('here')
+          !tag.includes('here') &&
+          !tag.includes('food') &&
+          tag !== 'delicious' &&
+          tag !== 'tasty'
         );
       
       // Remove duplicates
@@ -363,10 +448,11 @@ Return ONLY 10 comma-separated lowercase tags. No explanations, no numbering, no
         essentialTags.push(foodTypeLabel);
       }
       
-      // Add serving size
-      const servingTag = `${qty} ${unitLabel}${qty > 1 ? 's' : ''}`;
-      if (!tags.includes(servingTag) && !essentialTags.includes(servingTag)) {
-        essentialTags.push(servingTag);
+      // Add meal time tags based on category
+      for (const mealTag of mealTimeTags.slice(0, 2)) { // Add up to 2 meal time tags
+        if (!tags.includes(mealTag) && !essentialTags.includes(mealTag)) {
+          essentialTags.push(mealTag);
+        }
       }
       
       // Combine essential tags first, then AI tags
@@ -381,16 +467,74 @@ Return ONLY 10 comma-separated lowercase tags. No explanations, no numbering, no
       const foodTypeLabel = foodType === 'veg' ? 'veg' : foodType === 'nonveg' ? 'non veg' : foodType === 'egg' ? 'egg' : '';
       const qty = parseInt(quantity) || 1;
       const unitLabel = unit || 'piece';
+      const mealTimeTags = this.getMealTimeTags(categories);
       
       const fallbackTags = [
         itemName.toLowerCase().trim(),
         ...categories.map(c => c.toLowerCase().trim()),
         foodTypeLabel,
-        `${qty} ${unitLabel}${qty > 1 ? 's' : ''}`
+        ...mealTimeTags.slice(0, 2)
       ].filter(t => t && t.length > 0);
       
       // Remove duplicates and limit to 10
       return [...new Set(fallbackTags)].slice(0, 10).join(', ');
+    }
+  },
+
+  // AI-powered tag matching for search queries
+  // Helps match native language or variations to actual tags
+  async matchSearchToTags(searchQuery, availableTags) {
+    try {
+      const client = getGroq();
+      
+      // Get unique tags from all items (limit to avoid token overflow)
+      const uniqueTags = [...new Set(availableTags)].slice(0, 100);
+      
+      const completion = await client.chat.completions.create({
+        messages: [{
+          role: 'system',
+          content: `You are a food search assistant for an Indian restaurant chatbot. Match the customer's search query to the most relevant tags from the available tags list.
+
+RULES:
+1. Return ONLY matching tags from the available list, comma-separated
+2. Match regional language words to English equivalents (e.g., "టిఫిన్" → "tiffin", "नाश्ता" → "breakfast")
+3. Match spelling variations (idli/idly, dosa/dosai)
+4. Match synonyms (morning food → breakfast, రోజు → dosa)
+5. Return maximum 5 most relevant tags
+6. If no match found, return the closest possible matches
+7. ONLY return tags that exist in the available list
+
+EXAMPLES:
+- Query: "నేను breakfast కావాలి" (Telugu for "I want breakfast") → breakfast, morning, tiffin
+- Query: "सुबह का खाना" (Hindi for "morning food") → breakfast, morning, tiffin
+- Query: "dosa" → dosa, dosai, masala dosa
+- Query: "undi" (slang for idli) → idli, idly`
+        }, {
+          role: 'user',
+          content: `Search query: "${searchQuery}"
+Available tags: ${uniqueTags.join(', ')}
+
+Return ONLY comma-separated matching tags from the available list. No explanations.`
+        }],
+        model: 'llama-3.1-8b-instant',
+        max_tokens: 100,
+        temperature: 0.2
+      });
+      
+      const matchedTagsText = completion.choices[0]?.message?.content?.trim() || '';
+      
+      // Clean and parse matched tags
+      const matchedTags = matchedTagsText
+        .replace(/[\[\]"]/g, '')
+        .split(',')
+        .map(tag => tag.trim().toLowerCase())
+        .filter(tag => tag.length > 0 && tag.length < 30 && uniqueTags.includes(tag));
+      
+      console.log(`🤖 AI tag match: "${searchQuery}" → [${matchedTags.join(', ')}]`);
+      return matchedTags;
+    } catch (error) {
+      console.error('Groq AI tag matching error:', error.message);
+      return [];
     }
   },
 
