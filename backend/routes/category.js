@@ -34,7 +34,15 @@ router.get('/', async (req, res) => {
 router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
   try {
     const { name, description, image } = req.body;
-    const existing = await Category.findOne({ name: { $regex: new RegExp(`^${name}`, 'i') } });
+    
+    // Trim whitespace from name
+    const trimmedName = name ? name.trim() : '';
+    if (!trimmedName) {
+      return res.status(400).json({ error: 'Category name is required' });
+    }
+    
+    // Check for exact match (case-insensitive) - not partial match
+    const existing = await Category.findOne({ name: { $regex: new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } });
     if (existing) {
       return res.status(400).json({ error: 'Category already exists' });
     }
@@ -46,7 +54,7 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
       imageUrl = await cloudinaryService.uploadFromBuffer(req.file.buffer, 'restaurant-bot/categories');
     }
     
-    const category = new Category({ name, description, image: imageUrl });
+    const category = new Category({ name: trimmedName, description: description ? description.trim() : '', image: imageUrl });
     await category.save();
     
     // Emit event for real-time updates
@@ -62,6 +70,10 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
 router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
   try {
     const { name, description, image, isActive, isPaused, sortOrder, removeImage } = req.body;
+    
+    // Trim whitespace from name
+    const trimmedName = name ? name.trim() : '';
+    const trimmedDescription = description ? description.trim() : '';
     
     // Get existing category to check for old image
     const existingCategory = await Category.findById(req.params.id);
@@ -98,7 +110,7 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
     
     const category = await Category.findByIdAndUpdate(
       req.params.id,
-      { name, description, image: imageUrl, isActive, isPaused, sortOrder },
+      { name: trimmedName || existingCategory?.name, description: trimmedDescription, image: imageUrl, isActive, isPaused, sortOrder },
       { new: true }
     );
     

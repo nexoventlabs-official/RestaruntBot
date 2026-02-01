@@ -40,6 +40,15 @@ router.get('/categories', async (req, res) => {
 router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
   try {
     const { name, description, price, originalPrice, category, unit, quantity, foodType, offerType, available, preparationTime, tags, image } = req.body;
+    
+    // Trim whitespace from name and description
+    const trimmedName = name ? name.trim() : '';
+    const trimmedDescription = description ? description.trim() : '';
+    
+    if (!trimmedName) {
+      return res.status(400).json({ error: 'Item name is required' });
+    }
+    
     const parseTags = (t) => Array.isArray(t) ? t : (typeof t === 'string' ? t.split(',').map(s => s.trim()).filter(Boolean) : []);
     const parseCategory = (c) => {
       if (Array.isArray(c)) return c;
@@ -64,7 +73,7 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
     }
     
     const itemData = {
-      name, description, price: parseFloat(price), category: parseCategory(category),
+      name: trimmedName, description: trimmedDescription, price: parseFloat(price), category: parseCategory(category),
       unit: unit || 'piece',
       quantity: parseFloat(quantity) || 1,
       foodType: foodType || 'none',
@@ -95,6 +104,11 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
 router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
   try {
     const { name, description, price, originalPrice, category, unit, quantity, foodType, offerType, available, preparationTime, tags, image, removeImage } = req.body;
+    
+    // Trim whitespace from name and description
+    const trimmedName = name ? name.trim() : '';
+    const trimmedDescription = description ? description.trim() : '';
+    
     const parseTags = (t) => Array.isArray(t) ? t : (typeof t === 'string' ? t.split(',').map(s => s.trim()).filter(Boolean) : []);
     const parseCategory = (c) => {
       if (Array.isArray(c)) return c;
@@ -147,7 +161,7 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
     }
     
     const update = {
-      name, description, price: parseFloat(price), category: parseCategory(category),
+      name: trimmedName || existingItem?.name, description: trimmedDescription, price: parseFloat(price), category: parseCategory(category),
       unit: unit || 'piece',
       quantity: parseFloat(quantity) || 1,
       foodType: foodType || 'none',

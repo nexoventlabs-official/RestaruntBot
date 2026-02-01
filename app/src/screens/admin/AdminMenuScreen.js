@@ -153,6 +153,10 @@ export default function AdminMenuScreen({ navigation, route }) {
     days: []
   });
 
+  // Category action modal (for long press)
+  const [showCategoryActionModal, setShowCategoryActionModal] = useState(false);
+  const [categoryActionTarget, setCategoryActionTarget] = useState(null);
+
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -1093,30 +1097,8 @@ export default function AdminMenuScreen({ navigation, route }) {
                   style={styles.categoryItem}
                   onPress={() => setSelectedCategory(cat.name)}
                   onLongPress={() => {
-                    const soldOutText = cat.isSoldOut ? 'Mark Available' : 'Sold Out';
-                    const soldOutTimeText = cat.soldOutSchedule?.enabled && cat.soldOutSchedule?.endTime
-                      ? (() => {
-                          const [h, m] = cat.soldOutSchedule.endTime.split(':').map(Number);
-                          const p = h >= 12 ? 'PM' : 'AM';
-                          const h12 = h % 12 || 12;
-                          return ` (Until ${h12}:${m.toString().padStart(2, '0')} ${p})`;
-                        })()
-                      : '';
-                    const scheduleTimeText = isScheduledLocked && cat.schedule?.enabled
-                      ? ` (${formatScheduleDisplay(cat.schedule)})`
-                      : '';
-                    
-                    Alert.alert(
-                      cat.name + (cat.isSoldOut ? ' - SOLD OUT' + soldOutTimeText : (isScheduledLocked ? ' - SCHEDULED' + scheduleTimeText : '')),
-                      'What would you like to do?',
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: soldOutText, onPress: () => showSoldOutOptions(cat), style: cat.isSoldOut ? 'default' : 'destructive' },
-                        { text: 'Schedule', onPress: () => openScheduleModal(cat) },
-                        { text: 'Edit', onPress: () => openCategoryModal(cat) },
-                        { text: 'Delete', style: 'destructive', onPress: () => deleteCategory(cat) },
-                      ]
-                    );
+                    setCategoryActionTarget(cat);
+                    setShowCategoryActionModal(true);
                   }}
                   disabled={isDeleting}
                 >
@@ -1364,6 +1346,152 @@ export default function AdminMenuScreen({ navigation, route }) {
         onClose={() => setShowScheduleModal(false)}
         saving={savingCategory}
       />
+
+      {/* Category Action Modal (Long Press) */}
+      <Modal
+        visible={showCategoryActionModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowCategoryActionModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.categoryActionOverlay} 
+          activeOpacity={1} 
+          onPress={() => setShowCategoryActionModal(false)}
+        >
+          <View style={styles.categoryActionContent}>
+            {/* Header */}
+            <View style={styles.categoryActionHeader}>
+              <View style={styles.categoryActionHeaderLeft}>
+                {categoryActionTarget?.image ? (
+                  <Image 
+                    source={{ uri: categoryActionTarget.image }} 
+                    style={styles.categoryActionImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.categoryActionImagePlaceholder}>
+                    <Ionicons name="restaurant-outline" size={20} color="#9ca3af" />
+                  </View>
+                )}
+                <View style={styles.categoryActionHeaderText}>
+                  <Text style={styles.categoryActionTitle}>{categoryActionTarget?.name}</Text>
+                  {categoryActionTarget?.isSoldOut && (
+                    <View style={styles.categoryActionBadgeSoldOut}>
+                      <Text style={styles.categoryActionBadgeText}>SOLD OUT</Text>
+                      {categoryActionTarget?.soldOutSchedule?.enabled && categoryActionTarget?.soldOutSchedule?.endTime && (
+                        <Text style={styles.categoryActionBadgeTime}>
+                          {(() => {
+                            const [h, m] = categoryActionTarget.soldOutSchedule.endTime.split(':').map(Number);
+                            const p = h >= 12 ? 'PM' : 'AM';
+                            const h12 = h % 12 || 12;
+                            return ` until ${h12}:${m.toString().padStart(2, '0')} ${p}`;
+                          })()}
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                  {categoryActionTarget?.schedule?.enabled && categoryActionTarget?.isPaused && !categoryActionTarget?.isSoldOut && (
+                    <View style={styles.categoryActionBadgeScheduled}>
+                      <Ionicons name="time-outline" size={12} color="#6366f1" />
+                      <Text style={styles.categoryActionBadgeScheduledText}>Scheduled</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+              <TouchableOpacity 
+                style={styles.categoryActionCloseBtn}
+                onPress={() => setShowCategoryActionModal(false)}
+              >
+                <Ionicons name="close" size={22} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Actions */}
+            <View style={styles.categoryActionList}>
+              {/* Sold Out / Mark Available */}
+              <TouchableOpacity 
+                style={styles.categoryActionItem}
+                onPress={() => {
+                  setShowCategoryActionModal(false);
+                  showSoldOutOptions(categoryActionTarget);
+                }}
+              >
+                <View style={[styles.categoryActionIcon, { backgroundColor: categoryActionTarget?.isSoldOut ? '#dcfce7' : '#fef2f2' }]}>
+                  <Ionicons 
+                    name={categoryActionTarget?.isSoldOut ? 'checkmark-circle-outline' : 'close-circle-outline'} 
+                    size={22} 
+                    color={categoryActionTarget?.isSoldOut ? '#22c55e' : '#ef4444'} 
+                  />
+                </View>
+                <View style={styles.categoryActionItemText}>
+                  <Text style={styles.categoryActionItemTitle}>
+                    {categoryActionTarget?.isSoldOut ? 'Mark Available' : 'Mark Sold Out'}
+                  </Text>
+                  <Text style={styles.categoryActionItemDesc}>
+                    {categoryActionTarget?.isSoldOut ? 'Make category available for orders' : 'Temporarily mark as sold out'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+              </TouchableOpacity>
+
+              {/* Schedule */}
+              <TouchableOpacity 
+                style={styles.categoryActionItem}
+                onPress={() => {
+                  setShowCategoryActionModal(false);
+                  openScheduleModal(categoryActionTarget);
+                }}
+              >
+                <View style={[styles.categoryActionIcon, { backgroundColor: '#f0f9ff' }]}>
+                  <Ionicons name="time-outline" size={22} color="#0ea5e9" />
+                </View>
+                <View style={styles.categoryActionItemText}>
+                  <Text style={styles.categoryActionItemTitle}>Schedule</Text>
+                  <Text style={styles.categoryActionItemDesc}>Set availability time slots</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+              </TouchableOpacity>
+
+              {/* Edit */}
+              <TouchableOpacity 
+                style={styles.categoryActionItem}
+                onPress={() => {
+                  setShowCategoryActionModal(false);
+                  openCategoryModal(categoryActionTarget);
+                }}
+              >
+                <View style={[styles.categoryActionIcon, { backgroundColor: '#fef3c7' }]}>
+                  <Ionicons name="create-outline" size={22} color="#f59e0b" />
+                </View>
+                <View style={styles.categoryActionItemText}>
+                  <Text style={styles.categoryActionItemTitle}>Edit Category</Text>
+                  <Text style={styles.categoryActionItemDesc}>Change name or image</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+              </TouchableOpacity>
+
+              {/* Delete */}
+              <TouchableOpacity 
+                style={[styles.categoryActionItem, styles.categoryActionItemDanger]}
+                onPress={() => {
+                  setShowCategoryActionModal(false);
+                  deleteCategory(categoryActionTarget);
+                }}
+              >
+                <View style={[styles.categoryActionIcon, { backgroundColor: '#fef2f2' }]}>
+                  <Ionicons name="trash-outline" size={22} color="#ef4444" />
+                </View>
+                <View style={styles.categoryActionItemText}>
+                  <Text style={[styles.categoryActionItemTitle, { color: '#ef4444' }]}>Delete Category</Text>
+                  <Text style={styles.categoryActionItemDesc}>Remove this category permanently</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#fca5a5" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Sold Out Schedule Modal */}
       <Modal
@@ -2105,5 +2233,134 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#fff',
+  },
+  // Category Action Modal Styles
+  categoryActionOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  categoryActionContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    maxHeight: '70%',
+  },
+  categoryActionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  categoryActionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  categoryActionImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+  },
+  categoryActionImagePlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categoryActionHeaderText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  categoryActionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  categoryActionBadgeSoldOut: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  categoryActionBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ef4444',
+    backgroundColor: '#fef2f2',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  categoryActionBadgeTime: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginLeft: 4,
+  },
+  categoryActionBadgeScheduled: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    backgroundColor: '#eef2ff',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  categoryActionBadgeScheduledText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6366f1',
+    marginLeft: 4,
+  },
+  categoryActionCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categoryActionList: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  categoryActionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  categoryActionItemDanger: {
+    borderBottomWidth: 0,
+  },
+  categoryActionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categoryActionItemText: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  categoryActionItemTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  categoryActionItemDesc: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 2,
   },
 });
