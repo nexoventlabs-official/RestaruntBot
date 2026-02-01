@@ -1053,6 +1053,118 @@ const chatbot = {
     return categories.find(cat => cat.toLowerCase().includes(lowerText) || lowerText.includes(cat.toLowerCase()));
   },
 
+  // Helper to calculate Levenshtein distance between two strings
+  // Used for fuzzy matching to handle typos like "manchuya" → "manchurian"
+  levenshteinDistance(str1, str2) {
+    const m = str1.length;
+    const n = str2.length;
+    
+    // Create a matrix to store distances
+    const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+    
+    // Initialize first column and row
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    
+    // Fill in the rest of the matrix
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        if (str1[i - 1] === str2[j - 1]) {
+          dp[i][j] = dp[i - 1][j - 1];
+        } else {
+          dp[i][j] = 1 + Math.min(
+            dp[i - 1][j],     // deletion
+            dp[i][j - 1],     // insertion
+            dp[i - 1][j - 1]  // substitution
+          );
+        }
+      }
+    }
+    
+    return dp[m][n];
+  },
+
+  // Helper to calculate similarity ratio (0 to 1, where 1 is exact match)
+  similarityRatio(str1, str2) {
+    const s1 = str1.toLowerCase();
+    const s2 = str2.toLowerCase();
+    const distance = this.levenshteinDistance(s1, s2);
+    const maxLen = Math.max(s1.length, s2.length);
+    if (maxLen === 0) return 1;
+    return 1 - (distance / maxLen);
+  },
+
+  // Helper to find fuzzy matches for a search term
+  // Returns items where name or tags have similarity >= threshold (default 0.6 = 60% similar)
+  // E.g., "manchuya" will match "manchurian" (similarity ~0.7)
+  fuzzySearchItems(searchTerm, menuItems, threshold = 0.55) {
+    if (!searchTerm || searchTerm.length < 3) return [];
+    
+    const searchLower = searchTerm.toLowerCase().trim();
+    const fuzzyMatches = [];
+    
+    for (const item of menuItems) {
+      let bestScore = 0;
+      let matchedOn = null;
+      
+      // Check item name - split into words for better matching
+      const nameWords = item.name.toLowerCase().split(/\s+/);
+      for (const word of nameWords) {
+        if (word.length >= 3) {
+          const similarity = this.similarityRatio(searchLower, word);
+          if (similarity > bestScore) {
+            bestScore = similarity;
+            matchedOn = 'name';
+          }
+        }
+      }
+      
+      // Also check full name if search term might be multi-word
+      const fullNameSimilarity = this.similarityRatio(searchLower, item.name.toLowerCase());
+      if (fullNameSimilarity > bestScore) {
+        bestScore = fullNameSimilarity;
+        matchedOn = 'name';
+      }
+      
+      // Check tags
+      if (item.tags && item.tags.length > 0) {
+        for (const tag of item.tags) {
+          const tagLower = tag.toLowerCase();
+          const similarity = this.similarityRatio(searchLower, tagLower);
+          if (similarity > bestScore) {
+            bestScore = similarity;
+            matchedOn = 'tag';
+          }
+          // Also check individual words in tag
+          const tagWords = tagLower.split(/\s+/);
+          for (const word of tagWords) {
+            if (word.length >= 3) {
+              const wordSimilarity = this.similarityRatio(searchLower, word);
+              if (wordSimilarity > bestScore) {
+                bestScore = wordSimilarity;
+                matchedOn = 'tag';
+              }
+            }
+          }
+        }
+      }
+      
+      // If best score meets threshold, add to results
+      if (bestScore >= threshold) {
+        fuzzyMatches.push({
+          item,
+          score: bestScore,
+          matchedOn
+        });
+      }
+    }
+    
+    // Sort by score (highest first) and return items
+    return fuzzyMatches
+      .sort((a, b) => b.score - a.score)
+      .map(m => m.item);
+  },
+
   // Helper to find item by name
   findItem(text, menuItems) {
     const lowerText = text.toLowerCase();
@@ -1261,8 +1373,18 @@ const chatbot = {
     'curry': ['curry', 'gravy', 'kura', 'pulusu', 'kuzhambu'],
     'gravy': ['curry', 'gravy', 'rassa'],
     'fry': ['fry', 'vepudu', 'varuval', 'roast'],
-    'biryani': ['biryani', 'biriyani', 'briyani'],
+    'biryani': ['biryani', 'biriyani', 'briyani', 'birani', 'biriani', 'byriani', 'bryani'],
     'rice': ['rice', 'annam', 'chawal', 'bhat'],
+    // Chinese/Indo-Chinese items with common misspellings
+    'manchurian': ['manchurian', 'manchuriya', 'manchuria', 'manchuya', 'manchurya', 'manchuri', 'manchu', 'manchoorian'],
+    'manchuriya': ['manchurian', 'manchuriya', 'manchuria', 'manchuya', 'manchurya', 'manchuri'],
+    'manchuya': ['manchurian', 'manchuriya', 'manchuria', 'manchuya', 'manchurya'],
+    'noodles': ['noodles', 'noodels', 'nodles', 'nudels', 'nuddles'],
+    'chowmein': ['chowmein', 'chowmin', 'chow mein', 'chow min', 'chowmain', 'chawmin'],
+    'momos': ['momos', 'momo', 'momu', 'mamus'],
+    'schezwan': ['schezwan', 'szechuan', 'schezuan', 'shezwan', 'sezwan', 'schezwan'],
+    'hakka': ['hakka', 'haka', 'hakaa'],
+    'fried rice': ['fried rice', 'friedrice', 'fry rice', 'fryrice'],
     // South Indian items
     'idli': ['idli', 'idly', 'idle', 'undi'],
     'idly': ['idly', 'idli', 'idle', 'undi'],
@@ -1284,7 +1406,35 @@ const chatbot = {
     // Poha/Avalakki
     'poha': ['poha', 'pohe', 'avalakki', 'atukulu', 'chivda'],
     'avalakki': ['poha', 'avalakki', 'atukulu'],
-    'atukulu': ['poha', 'avalakki', 'atukulu']
+    'atukulu': ['poha', 'avalakki', 'atukulu'],
+    // Common misspellings for popular items
+    'paneer': ['paneer', 'paner', 'panir', 'panner'],
+    'samosa': ['samosa', 'samsa', 'samoza', 'sumosa'],
+    'pakora': ['pakora', 'pakoda', 'pakodi', 'bhajji', 'bhaji'],
+    'pakoda': ['pakoda', 'pakora', 'pakodi', 'bhajji', 'bhaji'],
+    'chutney': ['chutney', 'chatni', 'chutni', 'chatney'],
+    'korma': ['korma', 'kurma', 'qorma'],
+    'kebab': ['kebab', 'kabab', 'kabob', 'kebob'],
+    'tikka': ['tikka', 'tika', 'tikaa'],
+    'tandoori': ['tandoori', 'tanduri', 'tandoor', 'tandori'],
+    'masala': ['masala', 'masalla', 'massala'],
+    'paratha': ['paratha', 'parotta', 'parantha', 'pratha', 'prantha'],
+    'kulcha': ['kulcha', 'kulca', 'kulchaa'],
+    'lassi': ['lassi', 'lasi', 'lasee', 'lassy'],
+    'raita': ['raita', 'raitha', 'rayta'],
+    'kheer': ['kheer', 'khir', 'keer', 'payasam'],
+    'halwa': ['halwa', 'halva', 'halwaa', 'sheera'],
+    'jalebi': ['jalebi', 'jilebi', 'jaleebi'],
+    'gulab jamun': ['gulab jamun', 'gulabjamun', 'gulab jamoon', 'jamun'],
+    'rasmalai': ['rasmalai', 'ras malai', 'rasmallai', 'rasmalae'],
+    'burger': ['burger', 'burgar', 'berger', 'burgur'],
+    'pizza': ['pizza', 'piza', 'pizzza', 'pezza'],
+    'sandwich': ['sandwich', 'sandwitch', 'sandwhich', 'sanwich'],
+    'shake': ['shake', 'shak', 'shaik', 'milk shake', 'milkshake'],
+    'juice': ['juice', 'juce', 'joos', 'juise'],
+    'coffee': ['coffee', 'coffe', 'cofee', 'koffee', 'kaafi'],
+    'tea': ['tea', 'chai', 'chay', 'tee'],
+    'omelette': ['omelette', 'omlet', 'omelet', 'omlette', 'omlete']
   },
 
   // Get synonyms for a search term
@@ -2076,6 +2226,51 @@ const chatbot = {
           console.log(`🔍 Fallback: finding items matching ANY keyword: [${allKeywords.join(', ')}]`);
           // Search each keyword and combine all results
           matchingItems = searchByMultipleTerms(menuItems, allKeywords);
+        }
+      }
+      
+      // ========== FUZZY MATCHING FALLBACK ==========
+      // If still no results, use Levenshtein distance to find items with similar names/tags
+      // This handles typos like "manchuya" → "manchurian", "birani" → "biryani"
+      if (matchingItems.length === 0) {
+        console.log(`🔤 Fuzzy Search: Finding items similar to "${primarySearchTerm}"...`);
+        
+        // Try fuzzy matching with the primary search term
+        let fuzzyResults = this.fuzzySearchItems(primarySearchTerm, menuItems, 0.55);
+        
+        // Also try fuzzy matching with individual keywords
+        if (fuzzyResults.length === 0) {
+          const keywords = primarySearchTerm.split(/\s+/).filter(k => k.length >= 3);
+          for (const keyword of keywords) {
+            const keywordFuzzy = this.fuzzySearchItems(keyword, menuItems, 0.55);
+            if (keywordFuzzy.length > 0) {
+              fuzzyResults = keywordFuzzy;
+              break;
+            }
+          }
+        }
+        
+        // Also try with all search variations
+        if (fuzzyResults.length === 0) {
+          for (const term of uniqueSearchTerms) {
+            if (term.length >= 3) {
+              fuzzyResults = this.fuzzySearchItems(term, menuItems, 0.55);
+              if (fuzzyResults.length > 0) break;
+            }
+          }
+        }
+        
+        if (fuzzyResults.length > 0) {
+          matchingItems = fuzzyResults;
+          console.log(`✅ Fuzzy search found ${matchingItems.length} similar items`);
+          // Return with "Did you mean" label for fuzzy matches
+          return { 
+            items: matchingItems, 
+            foodType: detected, 
+            searchTerm: primarySearchTerm, 
+            label: `🔍 Did you mean`,
+            fuzzyMatch: true 
+          };
         }
       }
       
@@ -3226,29 +3421,29 @@ const chatbot = {
           }
         }
         // If user typed something with food type keyword but no search results
-        // e.g., "veg xyz" where xyz doesn't match anything -> show item not found then menu
+        // e.g., "veg xyz" where xyz doesn't match anything -> show item not found
         else if (this.detectFoodTypeFromMessage(msg)) {
           const detected = this.detectFoodTypeFromMessage(msg);
           const searchTerm = this.removeFoodTypeKeywords(msg.toLowerCase().trim());
           
-          // If there's a specific search term that didn't match, show "not found" then menu
+          // If there's a specific search term that didn't match, show "not found" with browse option
           if (searchTerm.length >= 2) {
-            // First send "Item not found" message
+            // Send "Item not found" message with buttons
             const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-            if (itemNotAvailableImg) {
-              await whatsapp.sendImage(phone, itemNotAvailableImg, 
-                `❌ *Item Not Found*\n\nSorry, we couldn't find "${searchTerm}" in our menu.`
-              );
-            } else {
-              await whatsapp.sendMessage(phone, 
-                `❌ *Item Not Found*\n\nSorry, we couldn't find "${searchTerm}" in our menu.`
-              );
-            }
+            const notFoundMessage = `❌ *Item Not Found*\n\nSorry, we couldn't find "${searchTerm}" in our menu.\n\nTry a different search or browse our menu.`;
             
-            // Then show the full menu
-            await whatsapp.sendMessage(phone, `📋 Here's our menu - browse and find what you like:`);
-            await this.sendMenuCategoriesWithLabel(phone, menuItems, '🍽️ All Menu');
-            state.currentStep = 'select_category';
+            if (itemNotAvailableImg) {
+              await whatsapp.sendImageWithButtons(phone, itemNotAvailableImg, notFoundMessage, [
+                { id: 'view_menu', text: '📋 Browse Menu' },
+                { id: 'home', text: '🏠 Main Menu' }
+              ]);
+            } else {
+              await whatsapp.sendButtons(phone, notFoundMessage, [
+                { id: 'view_menu', text: '📋 Browse Menu' },
+                { id: 'home', text: '🏠 Main Menu' }
+              ]);
+            }
+            state.currentStep = 'main_menu';
           } else {
             // Only food type keyword (e.g., just "veg" or "nonveg") - show that menu
             let foodType = 'both';
@@ -3304,27 +3499,27 @@ const chatbot = {
         }
         // ========== GENERAL SEARCH FALLBACK ==========
         // If user typed something that looks like a search (2+ chars), show item not found
-        // Then show the menu so they can browse
+        // Don't show all menu - let user choose to browse if they want
         else if (msg.length >= 2 && /^[a-zA-Z\u0900-\u097F\u0C00-\u0C7F\u0B80-\u0BFF\u0C80-\u0CFF\u0D00-\u0D7F\u0980-\u09FF\u0A80-\u0AFF\s]+$/.test(msg)) {
           // Looks like a search term (letters only, including Indian languages)
-          // Already tried smartSearch above, item not found
+          // Already tried smartSearch above (including fuzzy matching), item not found
           
-          // First send "Item not found" message
+          // Send "Item not found" message with buttons to browse menu
           const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-          if (itemNotAvailableImg) {
-            await whatsapp.sendImage(phone, itemNotAvailableImg, 
-              `❌ *Item Not Found*\n\nSorry, we couldn't find "${msg}" in our menu.`
-            );
-          } else {
-            await whatsapp.sendMessage(phone, 
-              `❌ *Item Not Found*\n\nSorry, we couldn't find "${msg}" in our menu.`
-            );
-          }
+          const notFoundMessage = `❌ *Item Not Found*\n\nSorry, we couldn't find "${msg}" in our menu.\n\nTry a different search or browse our menu.`;
           
-          // Then show the full menu
-          await whatsapp.sendMessage(phone, `📋 Here's our menu - browse and find what you like:`);
-          await this.sendMenuCategoriesWithLabel(phone, menuItems, '🍽️ All Menu');
-          state.currentStep = 'select_category';
+          if (itemNotAvailableImg) {
+            await whatsapp.sendImageWithButtons(phone, itemNotAvailableImg, notFoundMessage, [
+              { id: 'view_menu', text: '📋 Browse Menu' },
+              { id: 'home', text: '🏠 Main Menu' }
+            ]);
+          } else {
+            await whatsapp.sendButtons(phone, notFoundMessage, [
+              { id: 'view_menu', text: '📋 Browse Menu' },
+              { id: 'home', text: '🏠 Main Menu' }
+            ]);
+          }
+          state.currentStep = 'main_menu';
         }
         // ========== FALLBACK ==========
         else {
