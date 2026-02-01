@@ -1586,27 +1586,42 @@ const chatbot = {
         }
       }
       
-      // ========== CHECK FOR EXACT TAG MATCH (e.g., "dosa" matches all items with "dosa" tag) ==========
+      // ========== CHECK FOR EXACT TAG OR CATEGORY MATCH ==========
       // Split search into individual keywords
       const searchKeywords = primarySearchTerm.split(/\s+/).filter(k => k.length >= 2);
       
-      // First try: Find items where ALL keywords match tags exactly
-      const allKeywordsTagMatches = menuItems.filter(item => {
-        if (!item.tags || item.tags.length === 0) return false;
-        const itemTagsLower = item.tags.map(t => t.toLowerCase().trim());
-        const itemTagsNorm = item.tags.map(t => normalizeForMatch(t));
+      // Helper to check if item matches a keyword (checks tags AND category)
+      const itemMatchesKeyword = (item, keyword) => {
+        const kwLower = keyword.toLowerCase();
+        const kwNorm = normalizeForMatch(keyword);
         
-        // Check if ALL search keywords match at least one tag
-        return searchKeywords.every(keyword => {
-          const kwLower = keyword.toLowerCase();
-          const kwNorm = normalizeForMatch(keyword);
-          return itemTagsLower.some(tag => tag === kwLower || tag.includes(kwLower) || kwLower.includes(tag)) ||
-                 itemTagsNorm.some(tagNorm => tagNorm === kwNorm || tagNorm.includes(kwNorm) || kwNorm.includes(tagNorm));
+        // Check tags
+        const itemTagsLower = (item.tags || []).map(t => t.toLowerCase().trim());
+        const itemTagsNorm = (item.tags || []).map(t => normalizeForMatch(t));
+        const tagMatch = itemTagsLower.some(tag => tag === kwLower || tag.includes(kwLower) || kwLower.includes(tag)) ||
+                         itemTagsNorm.some(tagNorm => tagNorm === kwNorm || tagNorm.includes(kwNorm) || kwNorm.includes(tagNorm));
+        if (tagMatch) return true;
+        
+        // Check category names
+        const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+        const categoryMatch = itemCategories.some(cat => {
+          const catLower = cat.toLowerCase().trim();
+          const catNorm = normalizeForMatch(cat);
+          return catLower === kwLower || catLower.includes(kwLower) || kwLower.includes(catLower) ||
+                 catNorm === kwNorm || catNorm.includes(kwNorm) || kwNorm.includes(catNorm);
         });
+        
+        return categoryMatch;
+      };
+      
+      // First try: Find items where ALL keywords match tags or category exactly
+      const allKeywordsTagMatches = menuItems.filter(item => {
+        // Check if ALL search keywords match at least one tag or category
+        return searchKeywords.every(keyword => itemMatchesKeyword(item, keyword));
       });
       
       if (allKeywordsTagMatches.length > 0) {
-        console.log(`✅ All keywords tag match: "${primarySearchTerm}" → ${allKeywordsTagMatches.length} item(s)`);
+        console.log(`✅ All keywords tag/category match: "${primarySearchTerm}" → ${allKeywordsTagMatches.length} item(s)`);
         return { 
           items: allKeywordsTagMatches, 
           foodType: detected, 
@@ -1616,22 +1631,11 @@ const chatbot = {
         };
       }
       
-      // Second try: Find items where ANY keyword matches tags (e.g., "masala dosa" → items with "masala" OR "dosa" tags)
+      // Second try: Find items where ANY keyword matches tags or category
       const anyKeywordTagMatches = new Map();
       for (const keyword of searchKeywords) {
-        const kwLower = keyword.toLowerCase();
-        const kwNorm = normalizeForMatch(keyword);
-        
         for (const item of menuItems) {
-          if (!item.tags || item.tags.length === 0) continue;
-          const itemTagsLower = item.tags.map(t => t.toLowerCase().trim());
-          const itemTagsNorm = item.tags.map(t => normalizeForMatch(t));
-          
-          // Check if this keyword matches any tag
-          const hasTagMatch = itemTagsLower.some(tag => tag === kwLower || tag.includes(kwLower) || kwLower.includes(tag)) ||
-                              itemTagsNorm.some(tagNorm => tagNorm === kwNorm || tagNorm.includes(kwNorm) || kwNorm.includes(tagNorm));
-          
-          if (hasTagMatch) {
+          if (itemMatchesKeyword(item, keyword)) {
             const id = item._id.toString();
             if (!anyKeywordTagMatches.has(id)) {
               anyKeywordTagMatches.set(id, { item, matchCount: 0, matchedKeywords: [] });
@@ -1704,15 +1708,33 @@ const chatbot = {
       return norm1 === norm2 || norm1.includes(norm2) || norm2.includes(norm1);
     };
     
-    // Helper to find ALL items with exact tag match (flexible - handles spaces)
+    // Helper to find ALL items with exact tag OR category match (flexible - handles spaces)
     const findAllExactTagMatches = (items, term) => {
+      const termLower = term.toLowerCase();
       const termNorm = normalizeText(term);
-      return items.filter(item => 
-        item.tags?.some(tag => {
+      return items.filter(item => {
+        // Check tags
+        const tagMatch = item.tags?.some(tag => {
           const tagNorm = normalizeText(tag);
-          return tagNorm === termNorm || tagNorm === term.toLowerCase();
-        })
-      );
+          const tagLower = tag.toLowerCase();
+          return tagNorm === termNorm || tagLower === termLower || 
+                 tagNorm.includes(termNorm) || termNorm.includes(tagNorm) ||
+                 tagLower.includes(termLower) || termLower.includes(tagLower);
+        });
+        if (tagMatch) return true;
+        
+        // Check category names
+        const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+        const categoryMatch = itemCategories.some(cat => {
+          const catLower = cat.toLowerCase();
+          const catNorm = normalizeText(cat);
+          return catLower === termLower || catNorm === termNorm ||
+                 catLower.includes(termLower) || termLower.includes(catLower) ||
+                 catNorm.includes(termNorm) || termNorm.includes(catNorm);
+        });
+        
+        return categoryMatch;
+      });
     };
     
     // Non-veg ingredient keywords - if search contains these, filter out veg items
@@ -1791,13 +1813,14 @@ const chatbot = {
       }
     }
     
-    // Helper function to search items by a term (checks tags first, then name)
+    // Helper function to search items by a term (checks tags, category, then name)
     // Now handles flexible matching (with/without spaces)
     const searchByTerm = (items, term) => {
       if (!term || term.length < 2) return [];
       const termLower = term.toLowerCase();
       const termNorm = normalizeText(term);
       
+      // First check tags
       const tagMatches = items.filter(item => 
         item.tags?.some(tag => {
           const tagLower = tag.toLowerCase();
@@ -1809,8 +1832,24 @@ const chatbot = {
       );
       
       const tagMatchIds = new Set(tagMatches.map(i => i._id.toString()));
-      const nameMatches = items.filter(item => {
+      
+      // Then check category names
+      const categoryMatches = items.filter(item => {
         if (tagMatchIds.has(item._id.toString())) return false;
+        const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+        return itemCategories.some(cat => {
+          const catLower = cat.toLowerCase();
+          const catNorm = normalizeText(cat);
+          return catLower.includes(termLower) || termLower.includes(catLower) ||
+                 catNorm.includes(termNorm) || termNorm.includes(catNorm);
+        });
+      });
+      
+      const catMatchIds = new Set(categoryMatches.map(i => i._id.toString()));
+      
+      // Then check item names
+      const nameMatches = items.filter(item => {
+        if (tagMatchIds.has(item._id.toString()) || catMatchIds.has(item._id.toString())) return false;
         const nameLower = item.name.toLowerCase();
         const nameNorm = normalizeText(item.name);
         // Match with spaces or without spaces
@@ -1818,7 +1857,7 @@ const chatbot = {
                nameNorm.includes(termNorm) || termNorm.includes(nameNorm);
       });
       
-      return [...tagMatches, ...nameMatches];
+      return [...tagMatches, ...categoryMatches, ...nameMatches];
     };
     
     // Helper to search by multiple terms/keywords and combine results
