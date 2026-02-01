@@ -1210,6 +1210,26 @@ const chatbot = {
     'snacks': ['snacks', 'snack', 'starters', 'appetizer', 'evening', 'tea time', 'chat', 'chaat'],
     'starters': ['starters', 'snacks', 'appetizer', 'appetizers'],
     'evening': ['evening', 'snacks', 'tea time'],
+    // ========== BREAD/ROTI SYNONYMS ==========
+    // Pulka, Phulka, Chapathi, Roti - all are similar flatbreads
+    'pulka': ['chapati', 'chapathi', 'roti', 'phulka', 'fulka', 'rotla', 'rotta'],
+    'phulka': ['chapati', 'chapathi', 'roti', 'pulka', 'fulka', 'rotla', 'rotta'],
+    'fulka': ['chapati', 'chapathi', 'roti', 'pulka', 'phulka', 'rotla', 'rotta'],
+    'chapati': ['chapati', 'chapathi', 'roti', 'pulka', 'phulka', 'fulka', 'rotta'],
+    'chapathi': ['chapathi', 'chapati', 'roti', 'pulka', 'phulka', 'fulka', 'rotta'],
+    'roti': ['roti', 'chapati', 'chapathi', 'pulka', 'phulka', 'fulka', 'rotta'],
+    'rotta': ['roti', 'chapati', 'chapathi', 'pulka', 'phulka', 'rotla'],
+    'rotla': ['roti', 'chapati', 'chapathi', 'pulka', 'phulka', 'rotta'],
+    // Parotta/Paratha variations
+    'parotta': ['parotta', 'paratha', 'barotta', 'porotta', 'kerala parotta'],
+    'paratha': ['paratha', 'parotta', 'barotta', 'prantha'],
+    'barotta': ['parotta', 'paratha', 'barotta', 'porotta'],
+    // Naan variations
+    'naan': ['naan', 'nan', 'tandoori naan', 'butter naan'],
+    'nan': ['naan', 'nan', 'tandoori naan'],
+    // Poori/Puri variations
+    'poori': ['poori', 'puri', 'pooree'],
+    'puri': ['puri', 'poori', 'pooree'],
     // ========== FOOD TYPE SYNONYMS ==========
     // Telugu/South Indian curry terms
     'pulusu': ['curry', 'gravy', 'pulusu'],
@@ -1244,16 +1264,27 @@ const chatbot = {
     'biryani': ['biryani', 'biriyani', 'briyani'],
     'rice': ['rice', 'annam', 'chawal', 'bhat'],
     // South Indian items
-    'idli': ['idli', 'idly', 'idle'],
-    'idly': ['idly', 'idli', 'idle'],
-    'dosa': ['dosa', 'dosai', 'dhosha', 'dose'],
-    'dosai': ['dosai', 'dosa', 'dose'],
-    'vada': ['vada', 'vadai', 'wade', 'medu vada'],
-    'vadai': ['vadai', 'vada', 'wade'],
-    'upma': ['upma', 'uppuma', 'uppit'],
+    'idli': ['idli', 'idly', 'idle', 'undi'],
+    'idly': ['idly', 'idli', 'idle', 'undi'],
+    'undi': ['idli', 'idly', 'idle', 'undi'],
+    'dosa': ['dosa', 'dosai', 'dhosha', 'dose', 'attu'],
+    'dosai': ['dosai', 'dosa', 'dose', 'attu'],
+    'attu': ['dosa', 'dosai', 'attu'],
+    'vada': ['vada', 'vadai', 'wade', 'medu vada', 'wada', 'garelu'],
+    'vadai': ['vadai', 'vada', 'wade', 'wada', 'garelu'],
+    'wada': ['vada', 'vadai', 'wade', 'wada', 'garelu'],
+    'garelu': ['vada', 'vadai', 'garelu', 'medu vada'],
+    'upma': ['upma', 'uppuma', 'uppit', 'uppittu'],
+    'uppit': ['upma', 'uppuma', 'uppit', 'uppittu'],
+    'uppittu': ['upma', 'uppuma', 'uppit', 'uppittu'],
     'pongal': ['pongal', 'pongali', 'ven pongal'],
     'uttapam': ['uttapam', 'uthappam', 'utappam'],
-    'pesarattu': ['pesarattu', 'pesaratu', 'pesarat']
+    'pesarattu': ['pesarattu', 'pesaratu', 'pesarat', 'pesara dosa'],
+    'pesarat': ['pesarattu', 'pesaratu', 'pesarat'],
+    // Poha/Avalakki
+    'poha': ['poha', 'pohe', 'avalakki', 'atukulu', 'chivda'],
+    'avalakki': ['poha', 'avalakki', 'atukulu'],
+    'atukulu': ['poha', 'avalakki', 'atukulu']
   },
 
   // Get synonyms for a search term
@@ -1759,41 +1790,57 @@ const chatbot = {
              norm1 === plural2 || norm2 === plural1;
     };
     
-    // Helper to find ALL items with exact tag OR category match (flexible - handles spaces and plurals)
-    const findAllExactTagMatches = (items, term) => {
-      const termLower = term.toLowerCase();
-      const termNorm = normalizeText(term);
-      const termPlural = normalizePluralText(term);
+    // Helper to check if search term matches tag/name (strict matching)
+    // Only allows: exact match OR tag contains search term (not search term contains tag)
+    // This prevents "gobi" from matching items with tag "bi" or "go"
+    const strictMatch = (tagOrName, searchTerm) => {
+      if (!tagOrName || !searchTerm) return false;
+      const tagLower = tagOrName.toLowerCase().trim();
+      const termLower = searchTerm.toLowerCase().trim();
+      const tagNorm = normalizeText(tagOrName);
+      const termNorm = normalizeText(searchTerm);
+      const tagPlural = normalizePluralText(tagOrName);
+      const termPlural = normalizePluralText(searchTerm);
+      const tagPluralNorm = normalizeText(tagPlural);
       const termPluralNorm = normalizeText(termPlural);
+      
+      // Exact matches (with or without spaces/plurals)
+      if (tagLower === termLower || tagNorm === termNorm || 
+          tagPlural === termPlural || tagPluralNorm === termPluralNorm) {
+        return true;
+      }
+      
+      // Tag contains search term (search term is substring of tag)
+      // e.g., search "gobi" matches tag "gobi manchurian"
+      if (tagLower.includes(termLower) || tagNorm.includes(termNorm) ||
+          tagPluralNorm.includes(termPluralNorm)) {
+        return true;
+      }
+      
+      // Search term contains tag ONLY if tag is a complete word in search term
+      // e.g., search "gobi manchurian" matches tag "gobi" (complete word)
+      // but search "gobi" should NOT match tag "go" or "bi" (not complete words)
+      if (termLower.length > tagLower.length && tagLower.length >= 3) {
+        // Check if tag appears as a complete word in search term
+        const wordBoundaryRegex = new RegExp(`\\b${tagLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+        if (wordBoundaryRegex.test(termLower)) {
+          return true;
+        }
+      }
+      
+      return false;
+    };
+    
+    // Helper to find ALL items with exact tag OR category match (strict matching)
+    const findAllExactTagMatches = (items, term) => {
       return items.filter(item => {
         // Check tags
-        const tagMatch = item.tags?.some(tag => {
-          const tagNorm = normalizeText(tag);
-          const tagLower = tag.toLowerCase();
-          const tagPlural = normalizePluralText(tag);
-          const tagPluralNorm = normalizeText(tagPlural);
-          return tagNorm === termNorm || tagLower === termLower || 
-                 tagNorm.includes(termNorm) || termNorm.includes(tagNorm) ||
-                 tagLower.includes(termLower) || termLower.includes(tagLower) ||
-                 // Also match with plural normalization
-                 tagPluralNorm === termPluralNorm || tagPlural === termPlural ||
-                 tagPluralNorm.includes(termPluralNorm) || termPluralNorm.includes(tagPluralNorm);
-        });
+        const tagMatch = item.tags?.some(tag => strictMatch(tag, term));
         if (tagMatch) return true;
         
         // Check category names
         const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-        const categoryMatch = itemCategories.some(cat => {
-          const catLower = cat.toLowerCase();
-          const catNorm = normalizeText(cat);
-          const catPlural = normalizePluralText(cat);
-          const catPluralNorm = normalizeText(catPlural);
-          return catLower === termLower || catNorm === termNorm ||
-                 catLower.includes(termLower) || termLower.includes(catLower) ||
-                 catNorm.includes(termNorm) || termNorm.includes(catNorm) ||
-                 // Also match with plural normalization
-                 catPluralNorm === termPluralNorm || catPlural === termPlural;
-        });
+        const categoryMatch = itemCategories.some(cat => strictMatch(cat, term));
         
         return categoryMatch;
       });
@@ -1876,59 +1923,30 @@ const chatbot = {
     }
     
     // Helper function to search items by a term (checks tags, category, then name)
-    // Now handles flexible matching (with/without spaces and plural forms)
+    // Uses strict matching to prevent false positives
     const searchByTerm = (items, term) => {
       if (!term || term.length < 2) return [];
-      const termLower = term.toLowerCase();
-      const termNorm = normalizeText(term);
-      const termPlural = normalizePluralText(term);
-      const termPluralNorm = normalizeText(termPlural);
       
-      // First check tags
+      // First check tags using strict matching
       const tagMatches = items.filter(item => 
-        item.tags?.some(tag => {
-          const tagLower = tag.toLowerCase();
-          const tagNorm = normalizeText(tag);
-          const tagPlural = normalizePluralText(tag);
-          const tagPluralNorm = normalizeText(tagPlural);
-          // Match with spaces or without spaces, and with/without plural
-          return tagLower.includes(termLower) || termLower.includes(tagLower) ||
-                 tagNorm.includes(termNorm) || termNorm.includes(tagNorm) ||
-                 tagPluralNorm.includes(termPluralNorm) || termPluralNorm.includes(tagPluralNorm) ||
-                 tagPlural.includes(termPlural) || termPlural.includes(tagPlural);
-        })
+        item.tags?.some(tag => strictMatch(tag, term))
       );
       
       const tagMatchIds = new Set(tagMatches.map(i => i._id.toString()));
       
-      // Then check category names
+      // Then check category names using strict matching
       const categoryMatches = items.filter(item => {
         if (tagMatchIds.has(item._id.toString())) return false;
         const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-        return itemCategories.some(cat => {
-          const catLower = cat.toLowerCase();
-          const catNorm = normalizeText(cat);
-          const catPlural = normalizePluralText(cat);
-          const catPluralNorm = normalizeText(catPlural);
-          return catLower.includes(termLower) || termLower.includes(catLower) ||
-                 catNorm.includes(termNorm) || termNorm.includes(catNorm) ||
-                 catPluralNorm.includes(termPluralNorm) || termPluralNorm.includes(catPluralNorm);
-        });
+        return itemCategories.some(cat => strictMatch(cat, term));
       });
       
       const catMatchIds = new Set(categoryMatches.map(i => i._id.toString()));
       
-      // Then check item names
+      // Then check item names using strict matching
       const nameMatches = items.filter(item => {
         if (tagMatchIds.has(item._id.toString()) || catMatchIds.has(item._id.toString())) return false;
-        const nameLower = item.name.toLowerCase();
-        const nameNorm = normalizeText(item.name);
-        const namePlural = normalizePluralText(item.name);
-        const namePluralNorm = normalizeText(namePlural);
-        // Match with spaces or without spaces, and with/without plural
-        return nameLower.includes(termLower) || termLower.includes(nameLower) ||
-               nameNorm.includes(termNorm) || termNorm.includes(nameNorm) ||
-               namePluralNorm.includes(termPluralNorm) || termPluralNorm.includes(namePluralNorm);
+        return strictMatch(item.name, term);
       });
       
       return [...tagMatches, ...categoryMatches, ...nameMatches];
@@ -1979,7 +1997,7 @@ const chatbot = {
           }
         }
         
-        // Search partial term matches
+        // Search partial term matches using strict matching
         const matches = searchByTerm(items, term);
         for (const item of matches) {
           const id = item._id.toString();
@@ -1994,21 +2012,10 @@ const chatbot = {
         if (keywords.length > 1) {
           // Multi-word search - search each keyword and add matching items
           for (const keyword of keywords) {
-            const kwLower = keyword.toLowerCase();
-            const kwNorm = normalizeText(keyword);
-            
             for (const item of items) {
-              const itemNameLower = item.name.toLowerCase();
-              const itemNameNorm = normalizeText(item.name);
-              const itemTags = item.tags?.map(t => t.toLowerCase()) || [];
-              const itemTagsNorm = item.tags?.map(t => normalizeText(t)) || [];
-              
-              // Check in name
-              const nameMatch = itemNameLower.includes(kwLower) || itemNameNorm.includes(kwNorm);
-              
-              // Check in tags
-              const tagMatch = itemTags.some(tag => tag.includes(kwLower) || kwLower.includes(tag)) ||
-                               itemTagsNorm.some(tagNorm => tagNorm.includes(kwNorm) || kwNorm.includes(tagNorm));
+              // Use strict matching for name and tags
+              const nameMatch = strictMatch(item.name, keyword);
+              const tagMatch = item.tags?.some(tag => strictMatch(tag, keyword));
               
               if (nameMatch || tagMatch) {
                 const id = item._id.toString();
@@ -2088,6 +2095,47 @@ const chatbot = {
           }
         } catch (error) {
           console.error('AI tag matching fallback failed:', error.message);
+        }
+      }
+      
+      // ========== AI SEMANTIC SEARCH - FINAL FALLBACK ==========
+      // If STILL no results, use AI to find semantically related menu items
+      // This handles cases like "pulka" → "chapathi", "rotta" → "roti"
+      if (matchingItems.length === 0) {
+        try {
+          console.log(`🤖 AI Semantic Search: Finding items related to "${text}"...`);
+          const menuItemNames = menuItems.map(item => item.name);
+          const aiMatchedItems = await groqAi.findRelatedMenuItems(text, menuItemNames);
+          
+          if (aiMatchedItems && aiMatchedItems.length > 0) {
+            console.log(`🤖 AI found related items: [${aiMatchedItems.join(', ')}]`);
+            
+            // Find matching menu items by name
+            for (const aiItemName of aiMatchedItems) {
+              const matchedItem = menuItems.find(item => 
+                item.name.toLowerCase() === aiItemName.toLowerCase() ||
+                item.name.toLowerCase().includes(aiItemName.toLowerCase()) ||
+                aiItemName.toLowerCase().includes(item.name.toLowerCase())
+              );
+              if (matchedItem && !matchingItems.find(m => m._id.toString() === matchedItem._id.toString())) {
+                matchingItems.push(matchedItem);
+              }
+            }
+            
+            if (matchingItems.length > 0) {
+              console.log(`✅ AI semantic search found ${matchingItems.length} items`);
+              // Return with a label indicating AI suggestion
+              return { 
+                items: matchingItems, 
+                foodType: detected, 
+                searchTerm: primarySearchTerm, 
+                label: `🤖 Similar to "${primarySearchTerm}"`,
+                aiSuggestion: true 
+              };
+            }
+          }
+        } catch (error) {
+          console.error('AI semantic search fallback failed:', error.message);
         }
       }
     } else if (detected?.type === 'specific' && filteredItems.length > 0) {

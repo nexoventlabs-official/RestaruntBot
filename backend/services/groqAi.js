@@ -545,6 +545,97 @@ Return ONLY comma-separated matching tags from the available list. No explanatio
     }
   },
 
+  // Smart semantic search - matches search query to menu item names using AI
+  // Handles related items like "pulka" → "chapathi", "rotta" → "roti"
+  async findRelatedMenuItems(searchQuery, menuItemNames) {
+    try {
+      const client = getGroq();
+      
+      // Limit items to avoid token overflow
+      const itemList = menuItemNames.slice(0, 150).join(', ');
+      
+      const completion = await client.chat.completions.create({
+        messages: [{
+          role: 'system',
+          content: `You are an expert Indian food search assistant. Find menu items that match or are RELATED to the customer's search.
+
+CRITICAL MATCHING RULES:
+1. Match EXACT names if available
+2. Match SIMILAR/RELATED foods (same type of dish):
+   - pulka, phulka, fulka, rotta → chapati, chapathi, roti
+   - parotta, paratha, barotta → chapati, roti
+   - rumali roti, naan → chapati, roti
+   - uppit, uppittu → upma
+   - avalakki → poha
+   - pesarattu, pesarat → dosa
+   - undi → idli
+   - vade, wada → vada
+   - koora, kura → curry
+   - pulusu → curry, gravy
+   - pappu → dal
+   - annam → rice
+   - podi → powder
+   - pachadi → chutney
+   - perugu → curd
+
+3. Match regional language names to English:
+   - Telugu: పులక (pulka), చపాతి (chapathi), ఇడ్లీ (idli)
+   - Tamil: சப்பாத்தி (chapathi), இட்லி (idli)
+   - Hindi: रोटी (roti), चपाती (chapati)
+
+4. Return ONLY item names from the available menu list
+5. Maximum 10 most relevant items
+6. If EXACT match exists, prioritize it
+
+EXAMPLES:
+- "pulka" when menu has "Chapathi" → Chapathi
+- "rotta" when menu has "Plain Roti", "Butter Roti" → Plain Roti, Butter Roti
+- "undi" when menu has "Idli", "Idli Vada" → Idli, Idli Vada
+- "pesarat" when menu has "Pesarattu Dosa" → Pesarattu Dosa`
+        }, {
+          role: 'user',
+          content: `Customer searched: "${searchQuery}"
+
+Available menu items: ${itemList}
+
+Return ONLY comma-separated item names from the menu that match or are related to the search. No explanations. If nothing matches, return "NONE".`
+        }],
+        model: 'llama-3.1-8b-instant',
+        max_tokens: 200,
+        temperature: 0.3
+      });
+      
+      const responseText = completion.choices[0]?.message?.content?.trim() || '';
+      
+      // Check if no match
+      if (responseText.toUpperCase() === 'NONE' || responseText.toLowerCase().includes('no match') || responseText.toLowerCase().includes('not found')) {
+        console.log(`🤖 AI semantic search: "${searchQuery}" → No matches found`);
+        return [];
+      }
+      
+      // Parse matched items - be flexible with the AI response format
+      const matchedItems = responseText
+        .replace(/[\[\]"]/g, '')
+        .split(',')
+        .map(item => item.trim())
+        .filter(item => {
+          if (!item || item.length < 2 || item.length > 50) return false;
+          // Check if this item exists in menu (case-insensitive)
+          return menuItemNames.some(menuItem => 
+            menuItem.toLowerCase() === item.toLowerCase() ||
+            menuItem.toLowerCase().includes(item.toLowerCase()) ||
+            item.toLowerCase().includes(menuItem.toLowerCase())
+          );
+        });
+      
+      console.log(`🤖 AI semantic search: "${searchQuery}" → [${matchedItems.join(', ')}]`);
+      return matchedItems;
+    } catch (error) {
+      console.error('Groq AI semantic search error:', error.message);
+      return [];
+    }
+  },
+
   async processCustomerMessage(message, context, menuItems) {
     try {
       const menuList = menuItems.map(m => `${m.name} (₹${m.price}) - ${m.category}`).join('\n');
