@@ -1162,13 +1162,15 @@ const chatbot = {
   // Used to expand search terms for better matching
   foodSynonyms: {
     // ========== MEAL TIME SYNONYMS ==========
-    // Breakfast/Morning/Tiffin - all should match each other
-    'breakfast': ['breakfast', 'tiffin', 'tiffins', 'morning', 'nashta', 'naashta', 'subah'],
-    'tiffin': ['tiffin', 'tiffins', 'breakfast', 'morning', 'nashta', 'naashta'],
-    'tiffins': ['tiffins', 'tiffin', 'breakfast', 'morning'],
-    'morning': ['morning', 'breakfast', 'tiffin', 'tiffins', 'nashta', 'subah'],
-    'nashta': ['nashta', 'naashta', 'breakfast', 'tiffin', 'morning'],
-    'naashta': ['naashta', 'nashta', 'breakfast', 'tiffin', 'morning'],
+    // Breakfast/Morning/Tiffin - all should match each other (including spelling variations)
+    'breakfast': ['breakfast', 'tiffin', 'tiffins', 'tifin', 'tifins', 'morning', 'nashta', 'naashta', 'subah'],
+    'tiffin': ['tiffin', 'tiffins', 'tifin', 'tifins', 'breakfast', 'morning', 'nashta', 'naashta'],
+    'tiffins': ['tiffins', 'tiffin', 'tifin', 'tifins', 'breakfast', 'morning'],
+    'tifin': ['tifin', 'tifins', 'tiffin', 'tiffins', 'breakfast', 'morning', 'nashta'],
+    'tifins': ['tifins', 'tifin', 'tiffin', 'tiffins', 'breakfast', 'morning'],
+    'morning': ['morning', 'breakfast', 'tiffin', 'tiffins', 'tifin', 'tifins', 'nashta', 'subah'],
+    'nashta': ['nashta', 'naashta', 'breakfast', 'tiffin', 'tifin', 'morning'],
+    'naashta': ['naashta', 'nashta', 'breakfast', 'tiffin', 'tifin', 'morning'],
     // Lunch/Dinner/Meals
     'lunch': ['lunch', 'meals', 'meal', 'thali', 'afternoon', 'bhojan', 'khana'],
     'dinner': ['dinner', 'meals', 'meal', 'thali', 'night', 'raat', 'bhojan'],
