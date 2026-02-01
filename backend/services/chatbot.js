@@ -1664,25 +1664,44 @@ const chatbot = {
       // Split search into individual keywords
       const searchKeywords = primarySearchTerm.split(/\s+/).filter(k => k.length >= 2);
       
-      // Helper to check if item matches a keyword (checks tags AND category)
+      // Helper to check if item matches a keyword using STRICT matching
+      // Prevents "gobi" from matching items with short tags like "bi" or "go"
       const itemMatchesKeyword = (item, keyword) => {
-        const kwLower = keyword.toLowerCase();
+        const kwLower = keyword.toLowerCase().trim();
         const kwNorm = normalizeForMatch(keyword);
         
-        // Check tags
-        const itemTagsLower = (item.tags || []).map(t => t.toLowerCase().trim());
-        const itemTagsNorm = (item.tags || []).map(t => normalizeForMatch(t));
-        const tagMatch = itemTagsLower.some(tag => tag === kwLower || tag.includes(kwLower) || kwLower.includes(tag)) ||
-                         itemTagsNorm.some(tagNorm => tagNorm === kwNorm || tagNorm.includes(kwNorm) || kwNorm.includes(tagNorm));
+        // Check tags - must be exact match or tag contains keyword (not keyword contains tag)
+        const tagMatch = (item.tags || []).some(tag => {
+          const tagLower = tag.toLowerCase().trim();
+          const tagNorm = normalizeForMatch(tag);
+          // Exact match
+          if (tagLower === kwLower || tagNorm === kwNorm) return true;
+          // Tag contains keyword (e.g., "gobi manchurian" contains "gobi")
+          if (tagLower.includes(kwLower) || tagNorm.includes(kwNorm)) return true;
+          // Keyword contains tag ONLY if tag is a complete word (3+ chars) in keyword
+          if (kwLower.length > tagLower.length && tagLower.length >= 3) {
+            const wordBoundaryRegex = new RegExp(`\\b${tagLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+            if (wordBoundaryRegex.test(kwLower)) return true;
+          }
+          return false;
+        });
         if (tagMatch) return true;
         
-        // Check category names
+        // Check category names with same strict matching
         const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
         const categoryMatch = itemCategories.some(cat => {
           const catLower = cat.toLowerCase().trim();
           const catNorm = normalizeForMatch(cat);
-          return catLower === kwLower || catLower.includes(kwLower) || kwLower.includes(catLower) ||
-                 catNorm === kwNorm || catNorm.includes(kwNorm) || kwNorm.includes(catNorm);
+          // Exact match
+          if (catLower === kwLower || catNorm === kwNorm) return true;
+          // Category contains keyword
+          if (catLower.includes(kwLower) || catNorm.includes(kwNorm)) return true;
+          // Keyword contains category ONLY if category is a complete word
+          if (kwLower.length > catLower.length && catLower.length >= 3) {
+            const wordBoundaryRegex = new RegExp(`\\b${catLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+            if (wordBoundaryRegex.test(kwLower)) return true;
+          }
+          return false;
         });
         
         return categoryMatch;
@@ -3207,32 +3226,29 @@ const chatbot = {
           }
         }
         // If user typed something with food type keyword but no search results
-        // e.g., "veg xyz" where xyz doesn't match anything -> show item not found
+        // e.g., "veg xyz" where xyz doesn't match anything -> show item not found then menu
         else if (this.detectFoodTypeFromMessage(msg)) {
           const detected = this.detectFoodTypeFromMessage(msg);
           const searchTerm = this.removeFoodTypeKeywords(msg.toLowerCase().trim());
           
-          // If there's a specific search term that didn't match, show "not found"
+          // If there's a specific search term that didn't match, show "not found" then menu
           if (searchTerm.length >= 2) {
+            // First send "Item not found" message
             const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
             if (itemNotAvailableImg) {
-              await whatsapp.sendImageWithButtons(phone, itemNotAvailableImg, 
-                `❌ *Item Not Found*\n\nSorry, we couldn't find "${searchTerm}" in our menu.\n\nWould you like to browse our menu?`,
-                [
-                  { id: 'view_menu', text: '📋 View Menu' },
-                  { id: 'home', text: '🏠 Main Menu' }
-                ]
+              await whatsapp.sendImage(phone, itemNotAvailableImg, 
+                `❌ *Item Not Found*\n\nSorry, we couldn't find "${searchTerm}" in our menu.`
               );
             } else {
-              await whatsapp.sendButtons(phone, 
-                `❌ *Item Not Found*\n\nSorry, we couldn't find "${searchTerm}" in our menu.\n\nWould you like to browse our menu?`,
-                [
-                  { id: 'view_menu', text: '📋 View Menu' },
-                  { id: 'home', text: '🏠 Main Menu' }
-                ]
+              await whatsapp.sendMessage(phone, 
+                `❌ *Item Not Found*\n\nSorry, we couldn't find "${searchTerm}" in our menu.`
               );
             }
-            state.currentStep = 'main_menu';
+            
+            // Then show the full menu
+            await whatsapp.sendMessage(phone, `📋 Here's our menu - browse and find what you like:`);
+            await this.sendMenuCategoriesWithLabel(phone, menuItems, '🍽️ All Menu');
+            state.currentStep = 'select_category';
           } else {
             // Only food type keyword (e.g., just "veg" or "nonveg") - show that menu
             let foodType = 'both';
@@ -3288,29 +3304,27 @@ const chatbot = {
         }
         // ========== GENERAL SEARCH FALLBACK ==========
         // If user typed something that looks like a search (2+ chars), show item not found
-        // Don't show menu automatically - let user choose to browse
+        // Then show the menu so they can browse
         else if (msg.length >= 2 && /^[a-zA-Z\u0900-\u097F\u0C00-\u0C7F\u0B80-\u0BFF\u0C80-\u0CFF\u0D00-\u0D7F\u0980-\u09FF\u0A80-\u0AFF\s]+$/.test(msg)) {
           // Looks like a search term (letters only, including Indian languages)
           // Already tried smartSearch above, item not found
+          
+          // First send "Item not found" message
           const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
           if (itemNotAvailableImg) {
-            await whatsapp.sendImageWithButtons(phone, itemNotAvailableImg, 
-              `❌ *Item Not Found*\n\nSorry, we couldn't find "${msg}" in our menu.\n\nWould you like to browse our menu?`,
-              [
-                { id: 'view_menu', text: '📋 View Menu' },
-                { id: 'home', text: '🏠 Main Menu' }
-              ]
+            await whatsapp.sendImage(phone, itemNotAvailableImg, 
+              `❌ *Item Not Found*\n\nSorry, we couldn't find "${msg}" in our menu.`
             );
           } else {
-            await whatsapp.sendButtons(phone, 
-              `❌ *Item Not Found*\n\nSorry, we couldn't find "${msg}" in our menu.\n\nWould you like to browse our menu?`,
-              [
-                { id: 'view_menu', text: '📋 View Menu' },
-                { id: 'home', text: '🏠 Main Menu' }
-              ]
+            await whatsapp.sendMessage(phone, 
+              `❌ *Item Not Found*\n\nSorry, we couldn't find "${msg}" in our menu.`
             );
           }
-          state.currentStep = 'main_menu';
+          
+          // Then show the full menu
+          await whatsapp.sendMessage(phone, `📋 Here's our menu - browse and find what you like:`);
+          await this.sendMenuCategoriesWithLabel(phone, menuItems, '🍽️ All Menu');
+          state.currentStep = 'select_category';
         }
         // ========== FALLBACK ==========
         else {
