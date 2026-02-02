@@ -158,16 +158,20 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
       return { charge: 0, distance: null, withinFreeRadius: true, message: null };
     }
     
-    // Get distance multiplier from settings (default 1.4 to approximate road distance)
-    const distanceMultiplier = deliverySettings.distanceMultiplier || 1.4;
-    
-    // Calculate distance (Restaurant → Customer)
-    const distance = await calculateDistance(
+    // Calculate RADIUS distance (straight-line) - not road distance
+    // This is simpler and more consistent regardless of route taken
+    const distance = calculateStraightLineDistance(
       restaurantLocation.latitude, 
       restaurantLocation.longitude,
       customerLat, 
       customerLon
     );
+    
+    console.log(`\n📍 ========== RADIUS CHECK ==========`);
+    console.log(`📍 Restaurant: ${restaurantLocation.latitude}, ${restaurantLocation.longitude}`);
+    console.log(`📍 Customer: ${customerLat}, ${customerLon}`);
+    console.log(`📏 Radius distance: ${distance} KM (straight-line)`);
+    console.log(`📍 ===================================\n`);
     
     if (distance === null) {
       console.log('📍 Could not calculate distance - no delivery charge');
