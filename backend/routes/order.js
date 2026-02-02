@@ -200,7 +200,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     order.status = status;
     order.trackingUpdates.push({ status, message: message || `Status updated to ${statusLabels[status] || status}` });
     
-    // Handle actual payment method for pickup orders
+    // Handle actual payment method for pickup orders (Pay at Hotel)
     if (actualPaymentMethod && order.serviceType === 'pickup') {
       order.actualPaymentMethod = actualPaymentMethod;
       order.paymentStatus = 'paid';
@@ -209,6 +209,12 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
         message: `Payment collected via ${actualPaymentMethod === 'cash' ? 'Cash' : 'UPI'} at hotel` 
       });
       console.log(`💰 Pickup order payment: ${actualPaymentMethod}`);
+    }
+    
+    // Handle actual payment method for delivery COD orders
+    if (actualPaymentMethod && order.serviceType === 'delivery' && order.paymentMethod === 'cod') {
+      order.actualPaymentMethod = actualPaymentMethod;
+      console.log(`💰 Delivery COD payment: ${actualPaymentMethod}`);
     }
     
     // Track when status changed to delivered/cancelled/refunded for auto-cleanup
@@ -221,7 +227,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
       // Auto-mark COD orders as paid when delivered (for delivery orders)
       if (order.paymentMethod === 'cod' && order.serviceType !== 'pickup') {
         order.paymentStatus = 'paid';
-        order.trackingUpdates.push({ status: 'paid', message: 'COD payment collected on delivery' });
+        order.trackingUpdates.push({ status: 'paid', message: `COD payment collected via ${order.actualPaymentMethod === 'upi' ? 'UPI' : 'Cash'}` });
       }
       
       // Track today's revenue for delivered + paid orders

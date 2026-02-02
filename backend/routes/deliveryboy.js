@@ -1160,8 +1160,9 @@ router.post('/orders/:orderId/delivered', verifyDeliveryToken, async (req, res) 
       paymentMethodLabel = `COD/${collectionMethod.toUpperCase()}`;
     }
     
-    // Update Google Sheets - move to delivered sheet with payment method
-    await googleSheets.updateOrderStatus(orderId, 'delivered', 'paid');
+    // Update Google Sheets - move to delivered sheet with actual payment method
+    // Pass actualPaymentMethod so sheet shows "Paid (Cash)" or "Paid (UPI)" for COD orders
+    await googleSheets.updateOrderStatus(orderId, 'delivered', 'paid', actualPaymentMethod);
     await googleSheets.updatePaymentMethod(orderId, paymentMethodLabel);
     
     // Send WhatsApp notification with review link

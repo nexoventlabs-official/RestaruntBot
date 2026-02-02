@@ -451,7 +451,14 @@ const googleSheets = {
           await this.addOrderToSheet(sheets, 'selfpick', orderData.rowData, finalPaymentStatus, 'picked_up', 'picked_up');
         } else {
           // Delivery orders go to delivered sheet
-          console.log('🚚 Moving completed delivery order to delivered sheet:', orderId);
+          // For COD delivery orders, determine payment status based on actual payment method
+          const isCodDelivery = originalPaymentMethod.includes('cod') || originalPaymentMethod === 'cash';
+          if (isCodDelivery && actualPaymentMethod) {
+            finalPaymentStatus = actualPaymentMethod === 'cash' ? 'Paid (Cash)' : 'Paid (UPI)';
+          } else if (isPrepaidOnline) {
+            finalPaymentStatus = 'Paid';
+          }
+          console.log('🚚 Moving completed delivery order to delivered sheet:', orderId, 'Status:', finalPaymentStatus);
           await this.addOrderToSheet(sheets, 'delivered', orderData.rowData, finalPaymentStatus, 'delivered', 'delivered');
         }
         

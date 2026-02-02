@@ -384,13 +384,16 @@ export default function OrderDetailScreen({ route, navigation }) {
                   const paymentMethodFromSheet = (order.paymentMethod || '').toLowerCase().trim();
                   const isPickup = order.serviceType === 'pickup';
                   const isCancelled = order.status === 'cancelled';
+                  const isDelivered = order.status === 'delivered';
                   const isUpiOrder = order.paymentMethod === 'upi' || paymentMethodFromSheet === 'upi' || 
                                      paymentMethodFromSheet === 'upi/app' || paymentMethodFromSheet === 'online';
+                  const isCodOrder = order.paymentMethod === 'cod' || paymentMethodFromSheet === 'cod' || 
+                                     paymentMethodFromSheet === 'pay at hotel';
                   const isPaymentPending = paymentStatusFromSheet === 'pending' || order.paymentStatus === 'pending';
                   const isPaymentPaid = paymentStatusFromSheet === 'paid' || order.paymentStatus === 'paid';
                   
                   // Determine Payment Method display
-                  let methodLabel = 'UPI Payment';
+                  let methodLabel = 'UPI/App';
                   let methodIcon = 'phone-portrait-outline';
                   let methodIconBg = '#EDE9FE';
                   let methodIconColor = '#8B5CF6';
@@ -411,8 +414,8 @@ export default function OrderDetailScreen({ route, navigation }) {
                     }
                   } else {
                     // Delivery order
-                    if (order.paymentMethod === 'cod') {
-                      methodLabel = 'Cash on Delivery';
+                    if (isCodOrder) {
+                      methodLabel = 'COD';
                       methodIcon = 'cash-outline';
                       methodIconBg = '#FEF3C7';
                       methodIconColor = '#F59E0B';
@@ -442,17 +445,21 @@ export default function OrderDetailScreen({ route, navigation }) {
                     statusBgColor = '#FEE2E2';
                     statusTextColor = '#DC2626';
                     statusIcon = 'alert-circle';
+                  } else if (isUpiOrder && isPaymentPaid) {
+                    // UPI order that is paid
+                    statusLabel = 'Paid';
                   } else if (isPickup) {
                     // Self-pickup orders - use paymentStatus from sheet
                     if (paymentStatusFromSheet === 'paid (upi)' || paymentStatusFromSheet.includes('paid (upi)')) {
                       statusLabel = 'Paid (UPI)';
                     } else if (paymentStatusFromSheet === 'paid (cash)' || paymentStatusFromSheet.includes('paid (cash)')) {
                       statusLabel = 'Paid (Cash)';
-                    } else if (isPaymentPaid || methodLabel === 'UPI/App') {
+                    } else if (isPaymentPaid && methodLabel === 'UPI/App') {
                       statusLabel = 'Paid';
-                    } else if (methodLabel === 'Pay at Hotel' && order.status === 'delivered') {
-                      statusLabel = order.actualPaymentMethod === 'cash' ? 'Paid (Cash)' : 
-                                   order.actualPaymentMethod === 'upi' ? 'Paid (UPI)' : 'Paid';
+                    } else if (methodLabel === 'Pay at Hotel' && isDelivered) {
+                      // Completed pay at hotel order - show how it was paid
+                      statusLabel = order.actualPaymentMethod === 'cash' ? 'Cash' : 
+                                   order.actualPaymentMethod === 'upi' ? 'UPI/App' : 'Paid';
                     } else if (methodLabel === 'Pay at Hotel') {
                       // Pay at hotel order not yet completed
                       isPaid = false;
@@ -465,15 +472,22 @@ export default function OrderDetailScreen({ route, navigation }) {
                     }
                   } else {
                     // Delivery orders
-                    if (order.paymentMethod === 'cod') {
-                      isPaid = order.status === 'delivered';
-                      statusLabel = isPaid ? 'COD Paid' : 'COD';
-                      if (!isPaid) {
+                    if (isCodOrder) {
+                      if (isDelivered) {
+                        // COD order delivered - show how it was paid
+                        isPaid = true;
+                        statusLabel = order.actualPaymentMethod === 'upi' ? 'Paid (UPI)' : 
+                                     order.actualPaymentMethod === 'cash' ? 'Paid (Cash)' : 'Paid';
+                      } else {
+                        // COD order not yet delivered
+                        isPaid = false;
+                        statusLabel = 'Pending';
                         statusBgColor = '#FEF3C7';
                         statusTextColor = '#F59E0B';
                         statusIcon = 'time';
                       }
                     } else if (isPaymentPaid) {
+                      // UPI/App prepaid order
                       statusLabel = 'Paid';
                     }
                   }

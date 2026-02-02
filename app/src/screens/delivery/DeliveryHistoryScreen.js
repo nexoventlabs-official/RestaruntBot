@@ -300,12 +300,34 @@ export default function DeliveryHistoryScreen({ navigation }) {
           onPress={() => {
             // For sheets data, we need to construct order object
             if (item.source === 'sheets') {
+              // Parse items string like "Kiwi juice x1 (₹150), Another item x2 (₹200)"
+              let parsedItems = [];
+              if (typeof item.items === 'string' && item.items) {
+                const itemParts = item.items.split(', ');
+                parsedItems = itemParts.map(part => {
+                  // Match pattern: "Item name x2 (₹300)" or "Item name x1"
+                  const match = part.match(/^(.+?)\s*x(\d+)(?:\s*\(₹(\d+)\))?$/);
+                  if (match) {
+                    const quantity = parseInt(match[2]) || 1;
+                    const totalPrice = parseInt(match[3]) || 0;
+                    return {
+                      name: match[1].trim(),
+                      quantity: quantity,
+                      price: totalPrice / quantity || 0
+                    };
+                  }
+                  return { name: part.trim(), quantity: 1, price: 0 };
+                });
+              } else if (Array.isArray(item.items)) {
+                parsedItems = item.items;
+              }
+              
               navigation.navigate('DeliveryOrderDetail', { 
                 order: {
                   ...item,
                   customer: { name: customerName, phone: customerPhone },
                   deliveryAddress: { address },
-                  items: typeof item.items === 'string' ? [{ name: item.items, quantity: 1 }] : item.items
+                  items: parsedItems
                 }
               });
             } else {

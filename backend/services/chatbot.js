@@ -3023,11 +3023,12 @@ const chatbot = {
     }
     // If neither or both, show all (generic search like "curry", "biryani")
     
-    // ========== CHECK FOR EXACT TAG MATCH - COLLECT ALL MATCHING ITEMS FROM ALL KEYWORDS ==========
+    // ========== CHECK FOR EXACT TAG MATCH - PRIORITIZE ITEMS MATCHING ALL KEYWORDS ==========
     if (hasSearchTerm) {
-      const allTagMatches = new Map(); // Use Map to avoid duplicates
+      // Split search into individual keywords
+      const searchKeywords = primarySearchTerm.split(/\s+/).filter(k => k.length >= 2);
       
-      // Split search into individual keywords and include synonyms
+      // Get all unique keywords including synonyms
       const allKeywords = [];
       for (const searchTerm of uniqueSearchTerms) {
         const words = searchTerm.split(/\s+/).filter(w => w.length >= 2);
@@ -3035,46 +3036,88 @@ const chatbot = {
       }
       const uniqueKeywords = [...new Set(allKeywords)];
       
-      console.log(`🔍 Searching tags for keywords: [${uniqueKeywords.join(', ')}], foodTypeFilter: ${searchFoodTypeFilter || 'all'}`);
+      console.log(`🔍 Tag search - Primary keywords: [${searchKeywords.join(', ')}], All keywords: [${uniqueKeywords.join(', ')}], foodTypeFilter: ${searchFoodTypeFilter || 'all'}`);
       
-      // Search each keyword and collect all matching items
-      for (const keyword of uniqueKeywords) {
-        let matches = findAllExactTagMatches(filteredItems, keyword);
-        if (matches.length === 0) {
-          matches = findAllExactTagMatches(menuItems, keyword);
-        }
-        
-        for (const item of matches) {
-          const id = item._id.toString();
-          if (!allTagMatches.has(id)) {
-            // Apply food type filter based on search keywords
-            if (searchFoodTypeFilter === 'nonveg') {
-              // Non-veg search: only include non-veg and egg items
-              if (item.foodType === 'nonveg' || item.foodType === 'egg') {
-                allTagMatches.set(id, item);
-              }
-            } else if (searchFoodTypeFilter === 'veg') {
-              // Veg search: only include veg items
-              if (item.foodType === 'veg') {
-                allTagMatches.set(id, item);
-              }
-            } else {
-              // Generic search: include all
-              allTagMatches.set(id, item);
-            }
-          }
-        }
-      }
+      // Helper to check if item tags match a keyword
+      const itemTagsMatchKeyword = (item, keyword) => {
+        const kwLower = keyword.toLowerCase().trim();
+        return (item.tags || []).some(tag => {
+          const tagLower = tag.toLowerCase().trim();
+          // Exact match
+          if (tagLower === kwLower) return true;
+          // Tag contains keyword (e.g., tag "egg dosa" contains keyword "egg")
+          if (tagLower.includes(kwLower)) return true;
+          // Keyword contains tag if tag is complete word (e.g., keyword "eggdosa" contains tag "egg")
+          if (kwLower.includes(tagLower) && tagLower.length >= 3) return true;
+          return false;
+        });
+      };
       
-      if (allTagMatches.size > 0) {
-        const matchedItems = Array.from(allTagMatches.values());
-        console.log(`✅ Tag matches found: ${matchedItems.length} items for keywords [${uniqueKeywords.join(', ')}]`);
+      // Helper to apply food type filter
+      const passesFilter = (item) => {
+        if (searchFoodTypeFilter === 'nonveg') {
+          return item.foodType === 'nonveg' || item.foodType === 'egg';
+        } else if (searchFoodTypeFilter === 'veg') {
+          return item.foodType === 'veg';
+        }
+        return true;
+      };
+      
+      // PRIORITY 1: Items where ALL primary search keywords match tags
+      const allKeywordsMatch = menuItems.filter(item => {
+        if (!passesFilter(item)) return false;
+        return searchKeywords.every(kw => itemTagsMatchKeyword(item, kw));
+      });
+      
+      if (allKeywordsMatch.length > 0) {
+        console.log(`✅ PRIORITY 1 - ALL keywords tag match: "${searchKeywords.join(' ')}" → ${allKeywordsMatch.length} item(s)`);
         return { 
-          items: matchedItems, 
+          items: allKeywordsMatch, 
           foodType: detected, 
           searchTerm: primarySearchTerm, 
           label: null,
           exactMatch: true 
+        };
+      }
+      
+      // PRIORITY 2: Items matching SOME keywords - sorted by match count
+      const partialTagMatches = new Map();
+      
+      for (const item of menuItems) {
+        if (!passesFilter(item)) continue;
+        
+        // Count how many search keywords match this item's tags
+        let matchCount = 0;
+        const matchedKeywords = [];
+        
+        for (const kw of searchKeywords) {
+          if (itemTagsMatchKeyword(item, kw)) {
+            matchCount++;
+            matchedKeywords.push(kw);
+          }
+        }
+        
+        if (matchCount > 0) {
+          const id = item._id.toString();
+          partialTagMatches.set(id, { item, matchCount, matchedKeywords });
+        }
+      }
+      
+      if (partialTagMatches.size > 0) {
+        // Sort by match count (more matches = higher priority)
+        const sortedMatches = Array.from(partialTagMatches.values())
+          .sort((a, b) => b.matchCount - a.matchCount)
+          .map(m => m.item);
+        
+        const matchCounts = Array.from(partialTagMatches.values()).map(m => `${m.item.name}(${m.matchCount})`);
+        console.log(`✅ PRIORITY 2 - Partial tag matches (sorted by count): ${sortedMatches.length} item(s) - [${matchCounts.slice(0, 5).join(', ')}...]`);
+        
+        return { 
+          items: sortedMatches, 
+          foodType: detected, 
+          searchTerm: primarySearchTerm, 
+          label: null,
+          exactMatch: false 
         };
       }
     }

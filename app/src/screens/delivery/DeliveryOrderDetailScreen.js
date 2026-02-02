@@ -294,38 +294,56 @@ export default function DeliveryOrderDetailScreen({ route, navigation }) {
               </View>
               <Text style={styles.sectionTitle}>Order Items</Text>
               <View style={styles.itemCountBadge}>
-                <Text style={styles.itemCountText}>{order.items?.length || 0} items</Text>
+                <Text style={styles.itemCountText}>{Array.isArray(order.items) ? order.items.length : 0} items</Text>
               </View>
             </View>
             <View style={styles.cardBg}>
               <View style={styles.card}>
-                {order.items?.map((item, index) => {
-                  const itemImage = item.image || item.menuItem?.image;
-                  return (
-                    <View key={index} style={[styles.orderItemRow, index > 0 && styles.orderItemBorder]}>
-                      <View style={styles.orderItemImageContainer}>
-                        {itemImage ? (
-                          <Image 
-                            source={{ uri: itemImage.startsWith('http') ? itemImage : `${API_BASE_URL}${itemImage}` }} 
-                            style={styles.orderItemImage} 
-                          />
-                        ) : (
-                          <View style={styles.orderItemImagePlaceholder}>
-                            <Ionicons name="fast-food-outline" size={24} color={colors.light.text.tertiary} />
-                          </View>
-                        )}
-                      </View>
-                      <View style={styles.orderItemInfo}>
-                        <Text style={styles.orderItemName} numberOfLines={2}>{item.name}</Text>
-                        <View style={styles.orderItemMeta}>
-                          <Text style={styles.orderItemQty}>Qty: {item.quantity}</Text>
-                          <Text style={styles.orderItemUnitPrice}>₹{item.price} each</Text>
+                {Array.isArray(order.items) && order.items.length > 0 ? (
+                  order.items.map((item, index) => {
+                    const itemImage = item.image || item.menuItem?.image;
+                    return (
+                      <View key={index} style={[styles.orderItemRow, index > 0 && styles.orderItemBorder]}>
+                        <View style={styles.orderItemImageContainer}>
+                          {itemImage ? (
+                            <Image 
+                              source={{ uri: itemImage.startsWith('http') ? itemImage : `${API_BASE_URL}${itemImage}` }} 
+                              style={styles.orderItemImage} 
+                            />
+                          ) : (
+                            <View style={styles.orderItemImagePlaceholder}>
+                              <Ionicons name="fast-food-outline" size={24} color={colors.light.text.tertiary} />
+                            </View>
+                          )}
                         </View>
+                        <View style={styles.orderItemInfo}>
+                          <Text style={styles.orderItemName} numberOfLines={2}>{item.name}</Text>
+                          <View style={styles.orderItemMeta}>
+                            <Text style={styles.orderItemQty}>Qty: {item.quantity}</Text>
+                            {item.price > 0 && <Text style={styles.orderItemUnitPrice}>₹{item.price} each</Text>}
+                          </View>
+                        </View>
+                        <Text style={styles.orderItemPrice}>₹{(item.price || 0) * (item.quantity || 1)}</Text>
                       </View>
-                      <Text style={styles.orderItemPrice}>₹{item.price * item.quantity}</Text>
+                    );
+                  })
+                ) : typeof order.items === 'string' ? (
+                  // Fallback: display raw items string if not parsed
+                  <View style={styles.orderItemRow}>
+                    <View style={styles.orderItemImageContainer}>
+                      <View style={styles.orderItemImagePlaceholder}>
+                        <Ionicons name="fast-food-outline" size={24} color={colors.light.text.tertiary} />
+                      </View>
                     </View>
-                  );
-                })}
+                    <View style={styles.orderItemInfo}>
+                      <Text style={styles.orderItemName} numberOfLines={3}>{order.items}</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.orderItemRow}>
+                    <Text style={styles.orderItemName}>No items available</Text>
+                  </View>
+                )}
                 
                 {/* Order Summary */}
                 <View style={styles.orderSummary}>

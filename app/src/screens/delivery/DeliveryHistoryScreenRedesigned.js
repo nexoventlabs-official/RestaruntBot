@@ -269,7 +269,37 @@ export default function DeliveryHistoryScreen({ navigation }) {
 
   const handleOrderPress = (order) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.navigate('DeliveryOrderDetail', { order });
+    
+    // For sheets data, we need to parse items string
+    if (order.source === 'sheets' && typeof order.items === 'string') {
+      let parsedItems = [];
+      if (order.items) {
+        const itemParts = order.items.split(', ');
+        parsedItems = itemParts.map(part => {
+          // Match pattern: "Item name x2 (₹300)" or "Item name x1"
+          const match = part.match(/^(.+?)\s*x(\d+)(?:\s*\(₹(\d+)\))?$/);
+          if (match) {
+            const quantity = parseInt(match[2]) || 1;
+            const totalPrice = parseInt(match[3]) || 0;
+            return {
+              name: match[1].trim(),
+              quantity: quantity,
+              price: totalPrice / quantity || 0
+            };
+          }
+          return { name: part.trim(), quantity: 1, price: 0 };
+        });
+      }
+      
+      navigation.navigate('DeliveryOrderDetail', { 
+        order: {
+          ...order,
+          items: parsedItems
+        }
+      });
+    } else {
+      navigation.navigate('DeliveryOrderDetail', { order });
+    }
   };
 
   // Filter Modal

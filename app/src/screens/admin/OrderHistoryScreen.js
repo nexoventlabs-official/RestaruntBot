@@ -50,8 +50,22 @@ const OrderHistoryScreen = ({ navigation }) => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
+  const [menuItems, setMenuItems] = useState([]);
   
   const shineAnim = useRef(new Animated.Value(-1)).current;
+  
+  // Fetch menu items for image matching
+  useEffect(() => {
+    const fetchMenuItems = async () => {
+      try {
+        const response = await api.get('/menu');
+        setMenuItems(response.data || []);
+      } catch (error) {
+        console.error('Error fetching menu items:', error);
+      }
+    };
+    fetchMenuItems();
+  }, []);
   
   useEffect(() => {
     const runShineAnimation = () => {
@@ -135,6 +149,34 @@ const OrderHistoryScreen = ({ navigation }) => {
 
   // Navigate to order detail with constructed order object
   const handleOrderPress = (item) => {
+    // Parse items from string and match with menu items for images
+    let parsedItems = [];
+    if (typeof item.items === 'string') {
+      parsedItems = item.items.split(',').map(i => {
+        const match = i.trim().match(/^(.+?)\s*x(\d+)\s*\(₹(\d+)\)$/);
+        if (match) {
+          const itemName = match[1].trim();
+          const quantity = parseInt(match[2]);
+          const totalPrice = parseInt(match[3]);
+          // Try to find matching menu item for image
+          const menuItem = menuItems.find(m => 
+            m.name.toLowerCase() === itemName.toLowerCase() ||
+            m.name.toLowerCase().includes(itemName.toLowerCase()) ||
+            itemName.toLowerCase().includes(m.name.toLowerCase())
+          );
+          return { 
+            name: itemName, 
+            quantity: quantity, 
+            price: totalPrice / quantity,
+            image: menuItem?.image || null
+          };
+        }
+        return { name: i.trim(), quantity: 1, price: 0, image: null };
+      });
+    } else {
+      parsedItems = item.items || [];
+    }
+    
     // Construct order object for detail screen
     const orderForDetail = {
       _id: item.orderId,
@@ -143,22 +185,16 @@ const OrderHistoryScreen = ({ navigation }) => {
         name: item.customerName,
         phone: item.phone,
       },
-      items: typeof item.items === 'string' 
-        ? item.items.split(',').map(i => {
-            const match = i.trim().match(/^(.+?)\s*x(\d+)\s*\(₹(\d+)\)$/);
-            if (match) {
-              return { name: match[1].trim(), quantity: parseInt(match[2]), price: parseInt(match[3]) / parseInt(match[2]) };
-            }
-            return { name: i.trim(), quantity: 1, price: 0 };
-          })
-        : item.items || [],
+      items: parsedItems,
+      itemsTotal: item.itemsTotal,
+      deliveryCharge: item.deliveryCharge || 0,
       totalAmount: item.totalAmount,
       status: item.status,
       paymentStatus: item.paymentStatus,
       paymentMethod: item.paymentMethod,
       serviceType: item.sheetType === 'selfpick' ? 'pickup' : 'delivery',
       deliveryAddress: { address: item.address },
-      deliveryPartner: item.deliveryPartnerName ? { name: item.deliveryPartnerName } : null,
+      deliveryPartnerName: item.deliveryPartnerName || null,
       createdAt: item.time,
       source: 'sheets',
     };
