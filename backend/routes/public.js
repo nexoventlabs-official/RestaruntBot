@@ -462,10 +462,19 @@ router.get('/track/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
     
-    const order = await Order.findOne({ orderId });
+    const order = await Order.findOne({ orderId }).populate('assignedTo', 'name phone');
     
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    // Get delivery partner info if assigned (for ready/out_for_delivery status)
+    let deliveryPartner = null;
+    if (order.assignedTo && ['ready', 'out_for_delivery'].includes(order.status)) {
+      deliveryPartner = {
+        name: order.assignedTo.name,
+        phone: order.assignedTo.phone
+      };
     }
     
     // Return order tracking details
@@ -484,6 +493,7 @@ router.get('/track/:orderId', async (req, res) => {
         unitQty: item.unitQty
       })),
       deliveryAddress: order.deliveryAddress?.address || null,
+      deliveryPartner,
       trackingUpdates: order.trackingUpdates || [],
       estimatedDeliveryTime: order.estimatedDeliveryTime,
       createdAt: order.createdAt,

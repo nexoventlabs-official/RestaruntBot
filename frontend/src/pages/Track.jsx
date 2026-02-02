@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { 
   ClockIcon, CheckCircleIcon, XCircleIcon, TruckIcon, 
-  PackageIcon, ArrowLeftIcon, RefreshIcon, LocationIcon 
+  PackageIcon, ArrowLeftIcon, RefreshIcon, LocationIcon, PhoneIcon 
 } from '../components/Icons';
 
 const API_URL = 'https://restaruntbot.onrender.com/api/public';
@@ -320,6 +320,39 @@ export default function Track() {
             )}
           </div>
         </div>
+
+        {/* Delivery Partner Contact Card */}
+        {order.deliveryPartner && (order.status === 'ready' || order.status === 'out_for_delivery') && (
+          <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-2xl shadow-lg p-6 text-white">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center">
+                  <TruckIcon className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <p className="text-white/80 text-sm">Delivery Partner</p>
+                  <p className="font-bold text-xl">{order.deliveryPartner.name}</p>
+                  <p className="text-white/90 text-sm mt-1">
+                    {order.status === 'ready' ? '📦 Picking up your order' : '🛵 On the way to you'}
+                  </p>
+                </div>
+              </div>
+              <a 
+                href={`tel:${order.deliveryPartner.phone}`}
+                className="flex flex-col items-center gap-1 bg-white text-orange-600 px-4 py-3 rounded-xl hover:bg-orange-50 transition-colors shadow-lg"
+              >
+                <PhoneIcon className="w-6 h-6" />
+                <span className="text-xs font-semibold">Call Now</span>
+              </a>
+            </div>
+            <div className="mt-4 pt-4 border-t border-white/20">
+              <p className="text-white/80 text-sm">Contact Number</p>
+              <a href={`tel:${order.deliveryPartner.phone}`} className="font-semibold text-lg hover:underline">
+                {order.deliveryPartner.phone}
+              </a>
+            </div>
+          </div>
+        )}
 
         {/* Timeline */}
         {order.trackingUpdates && order.trackingUpdates.length > 0 && (
