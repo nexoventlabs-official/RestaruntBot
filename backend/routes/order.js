@@ -251,6 +251,17 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           await stats.save();
           
           console.log(`📊 Today's revenue updated: +₹${order.totalAmount} (Total: ₹${stats.todayRevenue})`);
+          
+          // Also update Google Sheets dashboard in real-time
+          try {
+            await googleSheets.incrementDashboardStat('Today Orders', 1);
+            await googleSheets.incrementDashboardStat('Today Revenue', order.totalAmount || 0);
+            await googleSheets.incrementDashboardStat('Total Orders', 1);
+            await googleSheets.incrementDashboardStat('Total Revenue', order.totalAmount || 0);
+            console.log('📊 Google Sheets dashboard updated in real-time');
+          } catch (sheetsErr) {
+            console.error('Google Sheets dashboard update error:', sheetsErr.message);
+          }
         } catch (statsErr) {
           console.error('Error updating today revenue:', statsErr.message);
         }

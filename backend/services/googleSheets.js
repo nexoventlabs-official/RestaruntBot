@@ -41,7 +41,8 @@ const STATUS_LABELS = {
   cancelled: 'Cancelled',
   selfpick: 'Self Pickup',
   ready_for_pickup: 'Ready for Pickup',
-  picked_up: 'Picked Up'
+  picked_up: 'Completed',
+  completed: 'Completed'
 };
 
 // Initialize Google Sheets API with Service Account
@@ -211,11 +212,16 @@ const googleSheets = {
 
       await this.addDateHeader(sheets, sheet.sheetName, sheet.sheetId);
 
-      // Prepare row data (11 columns: OrderID, Time, Phone, Name, Items, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner)
+      // Prepare row data (13 columns): 
+      // OrderID(0), Time(1), Phone(2), Name(3), Items(4), ItemsTotal(5), DeliveryCharge(6), Total(7), 
+      // PaymentMethod(8), PaymentStatus(9), OrderStatus(10), Address(11), DeliveryPartner(12)
       const newRowData = [...rowData];
-      while (newRowData.length < 11) newRowData.push('');
-      newRowData[7] = STATUS_LABELS[paymentStatus] || paymentStatus;
-      newRowData[8] = STATUS_LABELS[orderStatus] || orderStatus;
+      while (newRowData.length < 13) newRowData.push('');
+      
+      // Set payment status at correct index (9)
+      newRowData[9] = STATUS_LABELS[paymentStatus] || paymentStatus;
+      // Set order status at correct index (10)
+      newRowData[10] = STATUS_LABELS[orderStatus] || orderStatus;
 
       // Add row
       await sheets.spreadsheets.values.append({
@@ -419,6 +425,13 @@ const googleSheets = {
               const istOptions = { timeZone: 'Asia/Kolkata' };
               const itemsStr = dbOrder.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
               
+              // Determine payment method label
+              let paymentMethodLabel = 'UPI/App';
+              if (dbOrder.paymentMethod === 'cod') {
+                paymentMethodLabel = dbOrder.serviceType === 'pickup' ? 'Pay at Hotel' : 'COD';
+              }
+              
+              // Use 13-column structure: OrderID, Time, Phone, Name, Items, ItemsTotal, DeliveryCharge, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
               orderData = {
                 rowData: [
                   dbOrder.orderId,
@@ -426,11 +439,13 @@ const googleSheets = {
                   dbOrder.customer?.phone || '',
                   dbOrder.customer?.name || '',
                   itemsStr,
+                  dbOrder.itemsTotal || dbOrder.totalAmount,
+                  dbOrder.deliveryCharge || 0,
                   dbOrder.totalAmount,
-                  (dbOrder.paymentMethod || 'upi').toUpperCase(),
+                  paymentMethodLabel,
                   STATUS_LABELS[dbOrder.paymentStatus] || 'Pending',
                   'Cancelled',
-                  dbOrder.deliveryAddress?.address || dbOrder.serviceType === 'selfpick' ? 'Self Pickup' : '',
+                  dbOrder.serviceType === 'pickup' ? 'Self Pickup' : (dbOrder.deliveryAddress?.address || ''),
                   dbOrder.deliveryPartnerName || ''
                 ],
                 rowIndex: -1
@@ -696,9 +711,13 @@ const googleSheets = {
           
           const rows = response.data.values || [];
           
-          // Parse rows (skip date headers which start with 📅 and column headers)
+          // Parse rows (skip date headers and column headers)
+          // Date headers start with emoji charCode 55357 or contain date patterns
           for (const row of rows) {
-            if (!row[0] || row[0].startsWith('📅') || row[0] === 'Order ID') continue;
+            if (!row[0]) continue;
+            const firstChar = row[0].charCodeAt(0);
+            // Skip header row and date rows (emoji starts with charCode 55357)
+            if (row[0] === 'Order ID' || firstChar === 55357) continue;
             
             // Column structure (13 columns): 
             // OrderID(0), Time(1), Phone(2), Name(3), Items(4), ItemsTotal(5), Delivery(6), Total(7), 
@@ -792,10 +811,11 @@ const googleSheets = {
           for (const row of rows) {
             if (!row[0]) continue;
             
-            // Check if this is a date header row (starts with 📅)
-            if (row[0].startsWith('📅')) {
+            // Check if this is a date header row (emoji charCode 55357)
+            const firstChar = row[0].charCodeAt(0);
+            if (firstChar === 55357) {
               // Extract date from header like "📅 01-Feb-2026"
-              const dateMatch = row[0].match(/📅\s*(.+)/);
+              const dateMatch = row[0].match(/\s*(.+)/);
               if (dateMatch) {
                 currentDate = dateMatch[1].trim();
               }
@@ -1030,6 +1050,9 @@ const googleSheets = {
         resource: { values: [newRow] }
       });
       
+      // Update Total Customers in dashboard_stats
+      await this.incrementDashboardStat('Total Customers', 1);
+      
       console.log(`✅ Customer ${phone} added to Google Sheets`);
       return true;
     } catch (error) {
@@ -1232,13 +1255,14 @@ const googleSheets = {
           const rows = response.data.values || [];
           const rowsToDelete = [];
           
-          // Find date header rows (they start with 📅)
+          // Find date header rows (emoji charCode 55357)
           for (let i = 0; i < rows.length; i++) {
             const cellValue = rows[i]?.[0] || '';
-            if (cellValue.startsWith('📅')) {
+            const firstCharCode = cellValue.charCodeAt(0);
+            if (firstCharCode === 55357) {
               // Check if next row is another date header or empty (no orders under this date)
               const nextRow = rows[i + 1]?.[0] || '';
-              const isNextRowDateHeader = nextRow.startsWith('📅');
+              const isNextRowDateHeader = nextRow.charCodeAt(0) === 55357;
               const isNextRowEmpty = !nextRow || nextRow.trim() === '';
               const isLastRow = i === rows.length - 1;
               
