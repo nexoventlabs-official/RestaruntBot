@@ -66,10 +66,47 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
     
     console.log(`📍 Distance from restaurant: ${distance} KM`);
     
+    const noFreeDelivery = deliverySettings.noFreeDelivery || false;
+    const baseDeliveryCharge = deliverySettings.baseDeliveryCharge || 0;
     const freeRadius = deliverySettings.freeDeliveryRadius || 5;
     const maxRadius = deliverySettings.maxDeliveryRadius;
     const extraChargeEnabled = deliverySettings.enableExtraDeliveryCharge;
     const extraCharge = deliverySettings.extraDeliveryCharge || 0;
+    
+    // Check if beyond max delivery radius first
+    if (maxRadius && distance > maxRadius) {
+      console.log(`❌ Beyond max delivery radius (${maxRadius} KM)`);
+      return { 
+        charge: null, 
+        distance, 
+        withinFreeRadius: false, 
+        beyondMaxRadius: true,
+        maxRadius,
+        message: `Sorry, we don't deliver to locations beyond ${maxRadius} KM from our restaurant. Your location is ${distance.toFixed(1)} KM away.`
+      };
+    }
+    
+    // If restaurant charges for ALL deliveries (no free delivery)
+    if (noFreeDelivery) {
+      console.log(`💰 No free delivery - base charge: ₹${baseDeliveryCharge}`);
+      // If outside free radius AND extra charge enabled, add extra on top of base
+      if (distance > freeRadius && extraChargeEnabled && extraCharge > 0) {
+        const totalCharge = baseDeliveryCharge + extraCharge;
+        console.log(`💰 Beyond ${freeRadius} KM - total charge: ₹${totalCharge}`);
+        return { 
+          charge: totalCharge, 
+          distance, 
+          withinFreeRadius: false, 
+          message: `Your location is ${distance.toFixed(1)} KM away. Delivery charge: ₹${totalCharge} (₹${baseDeliveryCharge} base + ₹${extraCharge} extra).`
+        };
+      }
+      return { 
+        charge: baseDeliveryCharge, 
+        distance, 
+        withinFreeRadius: true, 
+        message: `Delivery charge: ₹${baseDeliveryCharge}`
+      };
+    }
     
     // Check if within free delivery radius
     if (distance <= freeRadius) {
@@ -82,19 +119,6 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
       };
     }
     
-    // Check if beyond max delivery radius
-    if (maxRadius && distance > maxRadius) {
-      console.log(`❌ Beyond max delivery radius (${maxRadius} KM)`);
-      return { 
-        charge: null, 
-        distance, 
-        withinFreeRadius: false, 
-        beyondMaxRadius: true,
-        maxRadius,
-        message: `Sorry, we don't deliver to locations beyond ${maxRadius} KM from our restaurant. Your location is ${distance} KM away.`
-      };
-    }
-    
     // Outside free radius - check if extra charge is enabled
     if (extraChargeEnabled && extraCharge > 0) {
       console.log(`💰 Outside free radius - adding delivery charge: ₹${extraCharge}`);
@@ -102,17 +126,19 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
         charge: extraCharge, 
         distance, 
         withinFreeRadius: false, 
-        message: `Your location is ${distance} KM away. A delivery charge of ₹${extraCharge} will be added.`
+        message: `Your location is ${distance.toFixed(1)} KM away. A delivery charge of ₹${extraCharge} will be added.`
       };
     }
     
-    // Extra charge not enabled - free delivery
-    console.log(`✅ Extra charge not enabled - free delivery`);
+    // Extra charge NOT enabled AND customer is outside free radius - REJECT ORDER
+    console.log(`❌ Outside free radius (${freeRadius} KM) - delivery not available`);
     return { 
-      charge: 0, 
+      charge: null, 
       distance, 
       withinFreeRadius: false, 
-      message: null 
+      deliveryNotAvailable: true,
+      freeRadius,
+      message: `Sorry, our delivery service is available only within ${freeRadius} KM. Your location is ${distance.toFixed(1)} KM away. Please try pickup instead.`
     };
     
   } catch (error) {
@@ -3471,6 +3497,30 @@ const chatbot = {
           
           // If beyond max delivery radius, reject the order
           if (deliveryResult.beyondMaxRadius) {
+            const outOfRangeImg = await chatbotImagesService.getImageUrl('out_of_delivery_range');
+            const message = `❌ *Delivery Not Available*\n\n${deliveryResult.message}\n\nWould you like to try a different address or opt for self-pickup?`;
+            
+            if (outOfRangeImg) {
+              await whatsapp.sendImageWithButtons(phone, outOfRangeImg, message, [
+                { id: 'service_pickup', text: '🏪 Self-Pickup' },
+                { id: 'share_location', text: '📍 New Location' },
+                { id: 'home', text: '🏠 Main Menu' }
+              ]);
+            } else {
+              await whatsapp.sendButtons(phone, message, [
+                { id: 'service_pickup', text: '🏪 Self-Pickup' },
+                { id: 'share_location', text: '📍 New Location' },
+                { id: 'home', text: '🏠 Main Menu' }
+              ]);
+            }
+            state.currentStep = 'awaiting_location';
+            customer.conversationState = state;
+            await customer.save();
+            return;
+          }
+          
+          // If delivery not available (outside free radius and extra charge not enabled)
+          if (deliveryResult.deliveryNotAvailable) {
             const outOfRangeImg = await chatbotImagesService.getImageUrl('out_of_delivery_range');
             const message = `❌ *Delivery Not Available*\n\n${deliveryResult.message}\n\nWould you like to try a different address or opt for self-pickup?`;
             

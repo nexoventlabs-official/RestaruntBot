@@ -30,8 +30,10 @@ export default function Settings() {
       address: ''
     },
     deliverySettings: {
+      noFreeDelivery: false, // If true, all deliveries are charged
+      baseDeliveryCharge: 20, // Base charge for all deliveries (when noFreeDelivery is true)
       freeDeliveryRadius: 5, // in KM
-      enableExtraDeliveryCharge: false,
+      enableExtraDeliveryCharge: false, // If true, charge extra for beyond free radius; if false, reject orders
       extraDeliveryCharge: 30, // in INR
       maxDeliveryRadius: 15 // Maximum delivery radius in KM (optional)
     },
@@ -396,10 +398,67 @@ export default function Settings() {
         </div>
 
         <div className="space-y-6">
+          {/* No Free Delivery Option */}
+          <div className="flex items-start gap-4 p-4 bg-red-50 border border-red-200 rounded-xl">
+            <input
+              type="checkbox"
+              id="noFreeDelivery"
+              checked={settings.deliverySettings.noFreeDelivery}
+              onChange={(e) => setSettings(prev => ({
+                ...prev,
+                deliverySettings: {
+                  ...prev.deliverySettings,
+                  noFreeDelivery: e.target.checked
+                }
+              }))}
+              className="w-5 h-5 mt-1 rounded border-red-300 text-red-600 focus:ring-red-500"
+            />
+            <div className="flex-1">
+              <label htmlFor="noFreeDelivery" className="text-sm font-medium text-red-800 cursor-pointer">
+                No Free Delivery (Charge for ALL deliveries)
+              </label>
+              <p className="text-xs text-red-600 mt-1">
+                If enabled, ALL customers will be charged for delivery regardless of distance
+              </p>
+            </div>
+          </div>
+
+          {/* Base Delivery Charge (when no free delivery) */}
+          {settings.deliverySettings.noFreeDelivery && (
+            <div className="ml-9 p-4 bg-red-50 border border-red-200 rounded-xl">
+              <label className="block text-sm font-medium text-dark-700 mb-2">
+                Base Delivery Charge (₹)
+              </label>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center">
+                  <span className="px-3 py-3 bg-dark-100 border border-r-0 border-dark-200 rounded-l-xl text-dark-500">
+                    <IndianRupee className="w-4 h-4" />
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={settings.deliverySettings.baseDeliveryCharge}
+                    onChange={(e) => setSettings(prev => ({
+                      ...prev,
+                      deliverySettings: {
+                        ...prev.deliverySettings,
+                        baseDeliveryCharge: parseInt(e.target.value) || 0
+                      }
+                    }))}
+                    className="w-28 px-4 py-3 border border-dark-200 rounded-r-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-dark-400 mt-1">
+                This amount will be charged for ALL deliveries
+              </p>
+            </div>
+          )}
+
           {/* Free Delivery Radius */}
           <div>
             <label className="block text-sm font-medium text-dark-700 mb-2">
-              Free Delivery Radius (KM)
+              {settings.deliverySettings.noFreeDelivery ? 'Standard Delivery Radius (KM)' : 'Free Delivery Radius (KM)'}
             </label>
             <div className="flex items-center gap-4">
               <input
@@ -419,7 +478,9 @@ export default function Settings() {
               <span className="text-dark-500">kilometers</span>
             </div>
             <p className="text-xs text-dark-400 mt-1">
-              Customers within this radius will get free delivery
+              {settings.deliverySettings.noFreeDelivery 
+                ? 'Customers within this radius pay base charge only'
+                : 'Customers within this radius will get free delivery'}
             </p>
           </div>
 
@@ -440,10 +501,14 @@ export default function Settings() {
             />
             <div className="flex-1">
               <label htmlFor="enableExtraCharge" className="text-sm font-medium text-dark-800 cursor-pointer">
-                Charge extra for deliveries beyond free radius
+                {settings.deliverySettings.noFreeDelivery 
+                  ? 'Charge extra for deliveries beyond standard radius'
+                  : 'Accept deliveries beyond free radius (with extra charge)'}
               </label>
               <p className="text-xs text-dark-500 mt-1">
-                If enabled, customers outside the free delivery radius will be charged an additional delivery fee
+                {settings.deliverySettings.noFreeDelivery 
+                  ? 'If enabled, customers outside the standard radius will be charged base + extra fee'
+                  : 'If DISABLED, orders from customers outside the free delivery radius will be REJECTED'}
               </p>
             </div>
           </div>
@@ -517,9 +582,22 @@ export default function Settings() {
               <p className="font-medium mb-1">How it works:</p>
               <ul className="list-disc list-inside space-y-1 text-blue-700">
                 <li>When a customer shares their delivery location, we calculate the distance from your restaurant</li>
-                <li>If within {settings.deliverySettings.freeDeliveryRadius} KM, delivery is free</li>
-                {settings.deliverySettings.enableExtraDeliveryCharge && (
-                  <li>If beyond {settings.deliverySettings.freeDeliveryRadius} KM, ₹{settings.deliverySettings.extraDeliveryCharge} delivery charge is added</li>
+                {settings.deliverySettings.noFreeDelivery ? (
+                  <>
+                    <li>ALL deliveries are charged ₹{settings.deliverySettings.baseDeliveryCharge} (base charge)</li>
+                    {settings.deliverySettings.enableExtraDeliveryCharge && (
+                      <li>If beyond {settings.deliverySettings.freeDeliveryRadius} KM, ₹{settings.deliverySettings.extraDeliveryCharge} extra is added (total: ₹{settings.deliverySettings.baseDeliveryCharge + settings.deliverySettings.extraDeliveryCharge})</li>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <li>If within {settings.deliverySettings.freeDeliveryRadius} KM, delivery is FREE</li>
+                    {settings.deliverySettings.enableExtraDeliveryCharge ? (
+                      <li>If beyond {settings.deliverySettings.freeDeliveryRadius} KM, ₹{settings.deliverySettings.extraDeliveryCharge} delivery charge is added</li>
+                    ) : (
+                      <li className="text-red-600 font-medium">⚠️ Orders beyond {settings.deliverySettings.freeDeliveryRadius} KM will be REJECTED (enable extra charge to accept them)</li>
+                    )}
+                  </>
                 )}
                 {settings.deliverySettings.maxDeliveryRadius && (
                   <li>Orders beyond {settings.deliverySettings.maxDeliveryRadius} KM are not accepted</li>
