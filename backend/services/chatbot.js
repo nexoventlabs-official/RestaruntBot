@@ -161,13 +161,12 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
     // Get distance multiplier from settings (default 1.4 to approximate road distance)
     const distanceMultiplier = deliverySettings.distanceMultiplier || 1.4;
     
-    // Calculate distance (uses Google Maps API if available, else straight-line × multiplier)
+    // Calculate distance (Restaurant → Customer)
     const distance = await calculateDistance(
-      customerLat, 
-      customerLon, 
       restaurantLocation.latitude, 
       restaurantLocation.longitude,
-      distanceMultiplier
+      customerLat, 
+      customerLon
     );
     
     if (distance === null) {
