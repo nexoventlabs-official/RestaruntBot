@@ -612,10 +612,12 @@ const googleSheets = {
         return false;
       }
       
-      // Add delivery partner name to column K (11th column)
+      // 13-column structure: DeliveryPartner is column M (index 12)
+      // A=OrderID, B=Time, C=Phone, D=Name, E=Items, F=ItemsTotal, G=Delivery, 
+      // H=Total, I=PaymentMethod, J=PaymentStatus, K=OrderStatus, L=Address, M=DeliveryPartner
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${newSheet.sheetName}!K${orderData.rowIndex + 1}`,
+        range: `${newSheet.sheetName}!M${orderData.rowIndex + 1}`,
         valueInputOption: 'RAW',
         resource: { values: [[deliveryPartnerName]] }
       });

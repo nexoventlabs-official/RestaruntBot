@@ -96,13 +96,37 @@ const OrderCard = ({ item, onPress, index }) => {
             <Text style={styles.amountLabel}>Amount</Text>
             <Text style={styles.amount}>₹{item.totalAmount}</Text>
           </View>
-          <View style={[styles.paymentBadge, { backgroundColor: item.paymentMethod === 'cod' ? '#FEF3C7' : '#DCFCE7' }]}>
-            <Text style={[styles.paymentText, { color: item.paymentMethod === 'cod' ? '#92400E' : '#166534' }]}>
-              {item.paymentMethod === 'cod' 
-                ? (item.serviceType === 'pickup' ? 'Pay at Hotel' : 'COD')
-                : 'Paid'}
-            </Text>
-          </View>
+          {(() => {
+            // Determine payment badge display
+            const isCOD = item.paymentMethod === 'cod';
+            const isPaid = item.paymentStatus === 'paid';
+            const isPickup = item.serviceType === 'pickup';
+            
+            let badgeBg, textColor, label;
+            
+            if (isCOD) {
+              // COD / Pay at Hotel orders
+              badgeBg = '#FEF3C7';
+              textColor = '#92400E';
+              label = isPickup ? 'Pay at Hotel' : 'COD';
+            } else if (isPaid) {
+              // UPI paid orders
+              badgeBg = '#DCFCE7';
+              textColor = '#166534';
+              label = 'Paid';
+            } else {
+              // UPI unpaid/pending orders
+              badgeBg = '#FEE2E2';
+              textColor = '#DC2626';
+              label = 'Unpaid';
+            }
+            
+            return (
+              <View style={[styles.paymentBadge, { backgroundColor: badgeBg }]}>
+                <Text style={[styles.paymentText, { color: textColor }]}>{label}</Text>
+              </View>
+            );
+          })()}
         </View>
       </TouchableOpacity>
     </Animated.View>

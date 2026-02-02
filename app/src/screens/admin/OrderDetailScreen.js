@@ -378,92 +378,128 @@ export default function OrderDetailScreen({ route, navigation }) {
             </View>
             <View style={styles.paymentCard}>
               <View style={styles.paymentRow}>
-                <View style={styles.paymentMethodContainer}>
-                  <View style={[styles.paymentMethodIcon, { backgroundColor: order.paymentMethod === 'cod' ? '#FEF3C7' : '#EDE9FE' }]}>
-                    <Ionicons 
-                      name={order.paymentMethod === 'cod' ? 'cash-outline' : 'phone-portrait-outline'} 
-                      size={24} 
-                      color={order.paymentMethod === 'cod' ? '#F59E0B' : '#8B5CF6'} 
-                    />
-                  </View>
-                  <View>
-                    <Text style={styles.paymentMethodLabel}>Payment Method</Text>
-                    <Text style={styles.paymentMethodValue}>
-                      {order.paymentMethod === 'cod' 
-                        ? (order.serviceType === 'pickup' ? 'Pay at Hotel' : 'Cash on Delivery')
-                        : 'UPI Payment'}
-                    </Text>
-                    {/* Show actual payment method if collected */}
-                    {order.actualPaymentMethod && order.serviceType === 'pickup' && (
-                      <Text style={styles.actualPaymentText}>
-                        Collected via {order.actualPaymentMethod === 'cash' ? 'Cash' : 'UPI'}
-                      </Text>
-                    )}
-                  </View>
-                </View>
                 {(() => {
-                  // Determine payment status display
-                  // Use paymentStatus field from sheet (column J), fallback to paymentMethod (column I)
-                  const paymentStatus = (order.paymentStatus || '').toLowerCase().trim();
-                  const paymentMethod = (order.paymentMethod || '').toLowerCase().trim();
+                  // Determine payment method and status display
+                  const paymentStatusFromSheet = (order.paymentStatus || '').toLowerCase().trim();
+                  const paymentMethodFromSheet = (order.paymentMethod || '').toLowerCase().trim();
                   const isPickup = order.serviceType === 'pickup';
                   const isCancelled = order.status === 'cancelled';
+                  const isUpiOrder = order.paymentMethod === 'upi' || paymentMethodFromSheet === 'upi' || 
+                                     paymentMethodFromSheet === 'upi/app' || paymentMethodFromSheet === 'online';
+                  const isPaymentPending = paymentStatusFromSheet === 'pending' || order.paymentStatus === 'pending';
+                  const isPaymentPaid = paymentStatusFromSheet === 'paid' || order.paymentStatus === 'paid';
                   
-                  let isPaid = !isCancelled; // Cancelled orders show as not paid
+                  // Determine Payment Method display
+                  let methodLabel = 'UPI Payment';
+                  let methodIcon = 'phone-portrait-outline';
+                  let methodIconBg = '#EDE9FE';
+                  let methodIconColor = '#8B5CF6';
+                  
+                  if (isPickup) {
+                    // Self-pickup order
+                    if (paymentMethodFromSheet === 'pay at hotel' || paymentMethodFromSheet.includes('pay at hotel') || 
+                        order.paymentMethod === 'cod' || paymentMethodFromSheet === 'cod') {
+                      methodLabel = 'Pay at Hotel';
+                      methodIcon = 'cash-outline';
+                      methodIconBg = '#FEF3C7';
+                      methodIconColor = '#F59E0B';
+                    } else {
+                      methodLabel = 'UPI/App';
+                      methodIcon = 'phone-portrait-outline';
+                      methodIconBg = '#EDE9FE';
+                      methodIconColor = '#8B5CF6';
+                    }
+                  } else {
+                    // Delivery order
+                    if (order.paymentMethod === 'cod') {
+                      methodLabel = 'Cash on Delivery';
+                      methodIcon = 'cash-outline';
+                      methodIconBg = '#FEF3C7';
+                      methodIconColor = '#F59E0B';
+                    } else {
+                      methodLabel = 'UPI/App';
+                    }
+                  }
+                  
+                  // Determine Payment Status display
+                  let isPaid = true;
                   let statusLabel = 'Paid';
+                  let statusBgColor = '#DCFCE7';
+                  let statusTextColor = '#22C55E';
+                  let statusIcon = 'checkmark-circle';
                   
                   if (isCancelled) {
-                    // Cancelled orders - show original payment method info
-                    if (paymentMethod === 'upi/app' || paymentMethod === 'upi' || paymentMethod === 'online' || paymentMethod === 'paid') {
-                      statusLabel = 'Cancelled (UPI/App)';
-                      isPaid = false;
-                    } else if (paymentMethod === 'pay at hotel' || paymentMethod.includes('pay at hotel') || paymentMethod === 'cod') {
-                      statusLabel = 'Cancelled (Pay at Hotel)';
-                      isPaid = false;
-                    } else if (paymentMethod.includes('cod') || paymentMethod.includes('cash')) {
-                      statusLabel = 'Cancelled (COD)';
-                      isPaid = false;
-                    } else {
-                      statusLabel = 'Cancelled';
-                      isPaid = false;
-                    }
+                    // Cancelled orders
+                    isPaid = false;
+                    statusLabel = 'Cancelled';
+                    statusBgColor = '#FEE2E2';
+                    statusTextColor = '#DC2626';
+                    statusIcon = 'close-circle';
+                  } else if (isUpiOrder && isPaymentPending) {
+                    // UPI order with pending payment (unpaid)
+                    isPaid = false;
+                    statusLabel = 'Unpaid';
+                    statusBgColor = '#FEE2E2';
+                    statusTextColor = '#DC2626';
+                    statusIcon = 'alert-circle';
                   } else if (isPickup) {
-                    // Self-pickup orders - check paymentStatus first
-                    if (paymentStatus === 'paid (upi)' || paymentStatus.includes('paid (upi)')) {
+                    // Self-pickup orders - use paymentStatus from sheet
+                    if (paymentStatusFromSheet === 'paid (upi)' || paymentStatusFromSheet.includes('paid (upi)')) {
                       statusLabel = 'Paid (UPI)';
-                    } else if (paymentStatus === 'paid (cash)' || paymentStatus.includes('paid (cash)')) {
+                    } else if (paymentStatusFromSheet === 'paid (cash)' || paymentStatusFromSheet.includes('paid (cash)')) {
                       statusLabel = 'Paid (Cash)';
-                    } else if (paymentStatus === 'paid') {
-                      // Pre-paid with UPI/App
-                      statusLabel = 'UPI/App';
-                    } else if (paymentMethod === 'upi/app' || paymentMethod === 'upi') {
-                      statusLabel = 'UPI/App';
-                    } else if (paymentMethod === 'pay at hotel' || paymentMethod.includes('pay at hotel')) {
-                      statusLabel = 'Paid at Hotel';
+                    } else if (isPaymentPaid || methodLabel === 'UPI/App') {
+                      statusLabel = 'Paid';
+                    } else if (methodLabel === 'Pay at Hotel' && order.status === 'delivered') {
+                      statusLabel = order.actualPaymentMethod === 'cash' ? 'Paid (Cash)' : 
+                                   order.actualPaymentMethod === 'upi' ? 'Paid (UPI)' : 'Paid';
+                    } else if (methodLabel === 'Pay at Hotel') {
+                      // Pay at hotel order not yet completed
+                      isPaid = false;
+                      statusLabel = 'Pending';
+                      statusBgColor = '#FEF3C7';
+                      statusTextColor = '#F59E0B';
+                      statusIcon = 'time';
                     } else {
                       statusLabel = 'Paid';
                     }
                   } else {
                     // Delivery orders
-                    if (paymentMethod.includes('cod') || paymentMethod.includes('cash')) {
+                    if (order.paymentMethod === 'cod') {
                       isPaid = order.status === 'delivered';
                       statusLabel = isPaid ? 'COD Paid' : 'COD';
-                    } else {
+                      if (!isPaid) {
+                        statusBgColor = '#FEF3C7';
+                        statusTextColor = '#F59E0B';
+                        statusIcon = 'time';
+                      }
+                    } else if (isPaymentPaid) {
                       statusLabel = 'Paid';
                     }
                   }
                   
                   return (
-                    <View style={[styles.paymentStatusBadge, { backgroundColor: isPaid ? '#DCFCE7' : '#FEF3C7' }]}>
-                      <Ionicons 
-                        name={isPaid ? 'checkmark-circle' : 'time'} 
-                        size={16} 
-                        color={isPaid ? '#22C55E' : '#F59E0B'} 
-                      />
-                      <Text style={[styles.paymentStatusText, { color: isPaid ? '#22C55E' : '#F59E0B' }]}>
-                        {statusLabel}
-                      </Text>
-                    </View>
+                    <>
+                      <View style={styles.paymentMethodContainer}>
+                        <View style={[styles.paymentMethodIcon, { backgroundColor: methodIconBg }]}>
+                          <Ionicons name={methodIcon} size={24} color={methodIconColor} />
+                        </View>
+                        <View>
+                          <Text style={styles.paymentMethodLabel}>Payment Method</Text>
+                          <Text style={styles.paymentMethodValue}>{methodLabel}</Text>
+                        </View>
+                      </View>
+                      <View style={[styles.paymentStatusBadge, { backgroundColor: statusBgColor }]}>
+                        <Ionicons 
+                          name={statusIcon} 
+                          size={16} 
+                          color={statusTextColor} 
+                        />
+                        <Text style={[styles.paymentStatusText, { color: statusTextColor }]}>
+                          {statusLabel}
+                        </Text>
+                      </View>
+                    </>
                   );
                 })()}
               </View>

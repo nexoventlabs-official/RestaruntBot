@@ -465,6 +465,26 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             trackOrderUrl,
             'Tap to track your delivery'
           );
+          
+          // Send call delivery partner button if delivery partner is assigned
+          if (order.assignedTo && order.deliveryPartnerName) {
+            try {
+              const DeliveryBoy = require('../models/DeliveryBoy');
+              const deliveryBoy = await DeliveryBoy.findById(order.assignedTo);
+              if (deliveryBoy && deliveryBoy.phone) {
+                const callMsg = `📞 *Contact Delivery Partner*\n\n👤 ${order.deliveryPartnerName}\n\nTap below to call your delivery partner if needed.`;
+                await whatsapp.sendCtaPhone(
+                  order.customer.phone,
+                  callMsg,
+                  `📞 Call ${order.deliveryPartnerName}`,
+                  deliveryBoy.phone,
+                  'Your order is on the way!'
+                );
+              }
+            } catch (callErr) {
+              console.error('Failed to send call button:', callErr.message);
+            }
+          }
         } else if (status === 'preparing') {
           // Send image with track order button for preparing status
           const frontendUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
