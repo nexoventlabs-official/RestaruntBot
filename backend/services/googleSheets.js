@@ -729,10 +729,12 @@ const googleSheets = {
         return false;
       }
       
-      // Update payment method in column G (7th column)
+      // Update payment method in column I (9th column, index 8)
+      // 13-column structure: A=OrderID, B=Time, C=Phone, D=Name, E=Items, F=ItemsTotal, 
+      // G=Delivery, H=Total, I=PaymentMethod, J=PaymentStatus, K=OrderStatus, L=Address, M=DeliveryPartner
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!G${orderData.rowIndex + 1}`,
+        range: `${sheet.sheetName}!I${orderData.rowIndex + 1}`,
         valueInputOption: 'RAW',
         resource: { values: [[paymentMethodLabel]] }
       });
@@ -792,6 +794,7 @@ const googleSheets = {
             // OrderID(0), Time(1), Phone(2), Name(3), Items(4), ItemsTotal(5), Delivery(6), Total(7), 
             // PaymentMethod(8), PaymentStatus(9), OrderStatus(10), Address(11), DeliveryPartner(12)
             const order = {
+              _id: `${sheetType}-${row[0] || ''}-${row[1] || ''}`.replace(/\s+/g, ''), // Unique ID from sheet type + order ID + time
               orderId: row[0] || '',
               time: row[1] || '',
               phone: row[2] || '',
@@ -940,6 +943,7 @@ const googleSheets = {
             }
             
             const order = {
+              _id: `${sheetType}-${row[0] || ''}-${row[1] || ''}`.replace(/\s+/g, ''), // Unique ID
               orderId: row[0] || '',
               time: row[1] || '',
               phone: row[2] || '',
