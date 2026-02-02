@@ -1,6 +1,7 @@
 const express = require('express');
 const Order = require('../models/Order');
 const Customer = require('../models/Customer');
+const Settings = require('../models/Settings');
 const whatsapp = require('../services/whatsapp');
 const brevoMail = require('../services/brevoMail');
 const googleSheets = require('../services/googleSheets');
@@ -8,6 +9,20 @@ const razorpayService = require('../services/razorpay');
 const chatbotImagesService = require('../services/chatbotImages');
 const authMiddleware = require('../middleware/auth');
 const router = express.Router();
+
+// Helper to get Google Maps navigation URL
+const getGoogleMapsNavigationUrl = async () => {
+  try {
+    const restaurantLocation = await Settings.getValue('restaurantLocation');
+    if (restaurantLocation?.latitude && restaurantLocation?.longitude) {
+      return `https://www.google.com/maps/dir/?api=1&destination=${restaurantLocation.latitude},${restaurantLocation.longitude}`;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting restaurant location:', error);
+    return null;
+  }
+};
 
 // Helper to send message with optional image and CTA URL
 const sendWithOptionalImageCta = async (phone, imageUrl, message, buttonText, url, footer = '') => {
@@ -352,6 +367,13 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           msg += `━━━━━━━━━━━━━━━\n`;
           msg += `\n🙏 Thank you for ordering!\nWe hope you enjoy your meal! 🍽️`;
           
+          // Add review request message
+          if (isPickupOrder) {
+            msg += `\n\n⭐ *Rate your food!*\nTap below to rate the items you ordered.`;
+          } else {
+            msg += `\n\n⭐ *How was your order?*\nTap below to share your feedback.`;
+          }
+          
           // Send combined message with image and review CTA button
           const frontendUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
           const reviewUrl = `${frontendUrl}/review/${order.customer.phone}/${order.orderId}`;
@@ -364,34 +386,60 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             order.customer.phone,
             deliveredImageUrl,
             msg,
-            'Leave a Review ⭐',
+            isPickupOrder ? 'Rate Your Food ⭐' : 'Leave a Review ⭐',
             reviewUrl,
-            'Your feedback helps us improve!'
+            isPickupOrder ? 'Help us improve by rating your food items' : 'Your feedback helps us improve!'
           );
         } else if (status === 'confirmed' && isPickupOrder) {
-          // Send pickup confirmed notification with image
+          // Send pickup confirmed notification with Google Maps CTA
           const confirmedImageUrl = await chatbotImagesService.getImageUrl('pickup_confirmed');
-          await sendWithOptionalImage(
-            order.customer.phone,
-            confirmedImageUrl,
-            msg,
-            [
-              { id: 'track_order', text: '📍 Track Order' },
-              { id: 'home', text: '🏠 Main Menu' }
-            ]
-          );
+          const mapsUrl = await getGoogleMapsNavigationUrl();
+          
+          if (mapsUrl) {
+            await sendWithOptionalImageCta(
+              order.customer.phone,
+              confirmedImageUrl,
+              msg,
+              '📍 Navigate to Hotel',
+              mapsUrl,
+              'Get directions to pick up your order'
+            );
+          } else {
+            await sendWithOptionalImage(
+              order.customer.phone,
+              confirmedImageUrl,
+              msg,
+              [
+                { id: 'track_order', text: '📍 Track Order' },
+                { id: 'home', text: '🏠 Main Menu' }
+              ]
+            );
+          }
         } else if (status === 'ready' && isPickupOrder) {
-          // Send special notification for pickup orders when ready
+          // Send special notification for pickup orders when ready with Google Maps CTA
           const readyImageUrl = await chatbotImagesService.getImageUrl('pickup_ready');
-          await sendWithOptionalImage(
-            order.customer.phone,
-            readyImageUrl,
-            msg,
-            [
-              { id: 'track_order', text: '📍 View Order' },
-              { id: 'home', text: '🏠 Main Menu' }
-            ]
-          );
+          const mapsUrl = await getGoogleMapsNavigationUrl();
+          
+          if (mapsUrl) {
+            await sendWithOptionalImageCta(
+              order.customer.phone,
+              readyImageUrl,
+              msg,
+              '📍 Navigate to Hotel',
+              mapsUrl,
+              'Your order is ready! Get directions now'
+            );
+          } else {
+            await sendWithOptionalImage(
+              order.customer.phone,
+              readyImageUrl,
+              msg,
+              [
+                { id: 'track_order', text: '📍 View Order' },
+                { id: 'home', text: '🏠 Main Menu' }
+              ]
+            );
+          }
         } else if (status === 'out_for_delivery') {
           // Send image with track order button for out_for_delivery status
           const frontendUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
