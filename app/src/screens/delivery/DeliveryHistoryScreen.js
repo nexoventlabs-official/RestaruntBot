@@ -138,25 +138,31 @@ export default function DeliveryHistoryScreen({ navigation }) {
     }
     
     // Date filter
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-    
-    if (date === 'today') {
+    if (date !== 'all') {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
       filtered = filtered.filter(order => {
-        const orderDate = new Date(order.statusUpdatedAt || order.deliveredAt || order.createdAt);
-        return orderDate >= today;
-      });
-    } else if (date === 'week') {
-      filtered = filtered.filter(order => {
-        const orderDate = new Date(order.statusUpdatedAt || order.deliveredAt || order.createdAt);
-        return orderDate >= weekAgo;
-      });
-    } else if (date === 'month') {
-      filtered = filtered.filter(order => {
-        const orderDate = new Date(order.statusUpdatedAt || order.deliveredAt || order.createdAt);
-        return orderDate >= monthAgo;
+        // Parse the order date - handle both Date objects and ISO strings
+        const dateValue = order.orderDate || order.statusUpdatedAt || order.deliveredAt || order.createdAt;
+        if (!dateValue) return false;
+        
+        const orderDate = new Date(dateValue);
+        if (isNaN(orderDate.getTime())) return false;
+        
+        // Reset time portion for comparison
+        const orderDateOnly = new Date(orderDate.getFullYear(), orderDate.getMonth(), orderDate.getDate());
+        
+        if (date === 'today') {
+          return orderDateOnly.getTime() === today.getTime();
+        } else if (date === 'week') {
+          const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+          return orderDateOnly >= weekAgo;
+        } else if (date === 'month') {
+          const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+          return orderDateOnly >= monthAgo;
+        }
+        return true;
       });
     }
     

@@ -781,18 +781,43 @@ const googleSheets = {
           });
           
           const rows = response.data.values || [];
+          let currentDate = null; // Track current date header
           
           // Parse rows (skip date headers and column headers)
           // Date headers start with emoji charCode 55357 or contain date patterns
           for (const row of rows) {
             if (!row[0]) continue;
             const firstChar = row[0].charCodeAt(0);
-            // Skip header row and date rows (emoji starts with charCode 55357)
-            if (row[0] === 'Order ID' || firstChar === 55357) continue;
+            
+            // Check if this is a date header row (emoji calendar icon)
+            if (firstChar === 55357) {
+              // Parse date from header like "📅 Monday, 2/2/2026 (2026)" or "📅 02-Feb-2026"
+              const dateText = row[0];
+              try {
+                // Try to extract date - look for patterns like "2/2/2026" or "02-Feb-2026"
+                const dateMatch = dateText.match(/(\d{1,2})[\/\-](\d{1,2}|\w{3})[\/\-](\d{4})/);
+                if (dateMatch) {
+                  const [, day, monthOrNum, year] = dateMatch;
+                  const monthMap = { 'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5, 'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11 };
+                  const month = isNaN(monthOrNum) ? monthMap[monthOrNum] : parseInt(monthOrNum) - 1;
+                  currentDate = new Date(parseInt(year), month, parseInt(day));
+                }
+              } catch (e) {
+                console.log('Failed to parse date header:', dateText);
+              }
+              continue;
+            }
+            
+            // Skip header row
+            if (row[0] === 'Order ID') continue;
             
             // Column structure (13 columns): 
             // OrderID(0), Time(1), Phone(2), Name(3), Items(4), ItemsTotal(5), Delivery(6), Total(7), 
             // PaymentMethod(8), PaymentStatus(9), OrderStatus(10), Address(11), DeliveryPartner(12)
+            
+            // Use current date header or default to today
+            const orderDate = currentDate || new Date();
+            
             const order = {
               _id: `${sheetType}-${row[0] || ''}-${row[1] || ''}`.replace(/\s+/g, ''), // Unique ID from sheet type + order ID + time
               orderId: row[0] || '',
@@ -809,7 +834,12 @@ const googleSheets = {
               address: row[11] || row[9] || '',
               deliveryPartnerName: row[12] || row[10] || '',
               source: 'sheets',
-              sheetType: sheetType
+              sheetType: sheetType,
+              // Date fields for filtering
+              orderDate: orderDate,
+              deliveredAt: orderDate,
+              statusUpdatedAt: orderDate,
+              createdAt: orderDate
             };
             
             // Filter by delivery boy name if specified
