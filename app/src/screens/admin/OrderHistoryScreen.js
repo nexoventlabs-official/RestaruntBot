@@ -26,8 +26,10 @@ const STATUS_CONFIG = {
 
 const PAYMENT_STATUS_CONFIG = {
   paid: { color: '#2ecc71', label: 'Paid', icon: 'checkmark-circle' },
+  'upi/app': { color: '#3498db', label: 'UPI/App', icon: 'card-outline' },
+  'paid (upi)': { color: '#2ecc71', label: 'Paid (UPI)', icon: 'checkmark-circle' },
+  'paid (cash)': { color: '#2ecc71', label: 'Paid (Cash)', icon: 'checkmark-circle' },
   'paid at hotel': { color: '#2ecc71', label: 'Paid at Hotel', icon: 'checkmark-circle' },
-  'pay at hotel': { color: '#2ecc71', label: 'Paid at Hotel', icon: 'checkmark-circle' },
   unpaid: { color: '#e74c3c', label: 'Unpaid', icon: 'close-circle' },
   refunded: { color: '#9b59b6', label: 'Refunded', icon: 'refresh-circle' },
   pending: { color: '#f39c12', label: 'Pending', icon: 'time' },
@@ -162,21 +164,36 @@ const OrderHistoryScreen = ({ navigation }) => {
   const renderOrderItem = ({ item }) => {
     const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.delivered;
     
-    // Determine payment status - for completed orders
-    let paymentStatusKey = item.paymentStatus?.toLowerCase()?.trim() || 'pending';
+    // Determine payment status display
+    // Use paymentStatus field from sheet (column J), fallback to paymentMethod (column I)
+    const paymentStatus = item.paymentStatus?.toLowerCase()?.trim() || '';
+    const paymentMethod = item.paymentMethod?.toLowerCase()?.trim() || '';
+    let paymentStatusKey = 'pending';
     
-    // For self-pickup completed orders, treat "pending" as "paid at hotel"
+    // For self-pickup orders (selfpick sheet)
     if (item.sheetType === 'selfpick') {
-      if (paymentStatusKey === 'pending' || paymentStatusKey === 'pay at hotel') {
+      // Check paymentStatus field first (this contains "Paid", "Paid (UPI)", "Paid (Cash)")
+      if (paymentStatus === 'paid (upi)' || paymentStatus.includes('paid (upi)')) {
+        paymentStatusKey = 'paid (upi)';
+      } else if (paymentStatus === 'paid (cash)' || paymentStatus.includes('paid (cash)')) {
+        paymentStatusKey = 'paid (cash)';
+      } else if (paymentStatus === 'paid') {
+        // Pre-paid with UPI/App
+        paymentStatusKey = 'upi/app';
+      } else if (paymentMethod === 'upi/app' || paymentMethod === 'upi') {
+        // Fallback: check payment method
+        paymentStatusKey = 'upi/app';
+      } else if (paymentMethod === 'pay at hotel' || paymentMethod.includes('pay at hotel')) {
         paymentStatusKey = 'paid at hotel';
+      } else {
+        paymentStatusKey = 'paid';
       }
-    }
-    
-    // For delivered orders with COD, show as paid
-    if (item.status === 'delivered' && paymentStatusKey === 'pending') {
-      const paymentMethod = item.paymentMethod?.toLowerCase() || '';
+    } else {
+      // For delivery orders
       if (paymentMethod.includes('cod') || paymentMethod.includes('cash')) {
-        paymentStatusKey = 'cod';
+        paymentStatusKey = item.status === 'delivered' ? 'cod' : 'pending';
+      } else {
+        paymentStatusKey = 'paid';
       }
     }
     

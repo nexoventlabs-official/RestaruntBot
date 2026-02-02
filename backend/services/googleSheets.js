@@ -409,28 +409,45 @@ const googleSheets = {
           return false;
         }
 
-        // Check if this is a pickup order by looking at the address column (column 10, index 9)
-        const isPickupOrder = orderData.rowData[9] === 'Self Pickup' || orderId.startsWith('S');
+        // 13-column structure: A=OrderID(0), B=Time(1), C=Phone(2), D=Name(3), E=Items(4), F=ItemsTotal(5), 
+        // G=Delivery(6), H=Total(7), I=PaymentMethod(8), J=PaymentStatus(9), K=OrderStatus(10), L=Address(11), M=DeliveryPartner(12)
         
-        // If actualPaymentMethod is provided for pickup orders, update payment status to show Cash/UPI
+        // Check if this is a pickup order by looking at address column (index 11) or order ID prefix
+        const addressCol = (orderData.rowData[11] || '').toString();
+        const isPickupOrder = addressCol === 'Self Pickup' || orderId.startsWith('S');
+        
+        // Get original payment method from column I (index 8)
+        const originalPaymentMethod = (orderData.rowData[8] || '').toString().toLowerCase();
+        const isPrepaidOnline = originalPaymentMethod.includes('upi') || originalPaymentMethod === 'paid' || 
+                                originalPaymentMethod === 'online' || originalPaymentMethod === 'upi/app';
+        const isPayAtHotel = originalPaymentMethod.includes('pay at hotel') || originalPaymentMethod.includes('cod') || 
+                            originalPaymentMethod === 'cash';
+        
+        // Determine final Payment Method (column I) and Payment Status (column J)
+        let finalPaymentMethod = orderData.rowData[8];
         let finalPaymentStatus = paymentStatus || 'paid';
-        if (isPickupOrder && actualPaymentMethod) {
-          finalPaymentStatus = actualPaymentMethod === 'cash' ? 'Paid (Cash)' : 'Paid (UPI)';
-          // Update payment method column (index 8 in 13-column structure)
-          orderData.rowData[8] = actualPaymentMethod === 'cash' ? 'Cash' : 'UPI/App';
-        } else if (isPickupOrder && orderData.rowData[8]) {
-          // Normalize existing payment method for UPI
-          const existingMethod = (orderData.rowData[8] || '').toString().toLowerCase();
-          if (existingMethod.includes('upi') || existingMethod === 'paid' || existingMethod === 'online') {
-            orderData.rowData[8] = 'UPI/App';
-          } else if (existingMethod.includes('pay at hotel') || existingMethod.includes('cod')) {
-            orderData.rowData[8] = 'Pay at Hotel';
+        
+        if (isPickupOrder) {
+          if (isPrepaidOnline) {
+            // Pre-paid online order: Payment Method = "UPI/App", Payment Status = "Paid"
+            finalPaymentMethod = 'UPI/App';
+            finalPaymentStatus = 'Paid';
+          } else if (isPayAtHotel || actualPaymentMethod) {
+            // Pay at Hotel order: Payment Method = "Pay at Hotel", Payment Status = "Paid (Cash)" or "Paid (UPI)"
+            finalPaymentMethod = 'Pay at Hotel';
+            if (actualPaymentMethod) {
+              finalPaymentStatus = actualPaymentMethod === 'cash' ? 'Paid (Cash)' : 'Paid (UPI)';
+            } else {
+              finalPaymentStatus = 'Paid (Cash)'; // Default to cash if not specified
+            }
           }
+          // Update the rowData with correct values
+          orderData.rowData[8] = finalPaymentMethod;
         }
         
         if (isPickupOrder) {
           // Pickup orders go to selfpick sheet when completed
-          console.log('📦 Moving completed pickup order to selfpick sheet:', orderId, 'Payment:', finalPaymentStatus);
+          console.log('📦 Moving completed pickup order to selfpick sheet:', orderId, 'Method:', finalPaymentMethod, 'Status:', finalPaymentStatus);
           await this.addOrderToSheet(sheets, 'selfpick', orderData.rowData, finalPaymentStatus, 'picked_up', 'picked_up');
         } else {
           // Delivery orders go to delivered sheet
@@ -524,12 +541,16 @@ const googleSheets = {
         return false;
       }
 
+      // 13-column structure: A=OrderID, B=Time, C=Phone, D=Name, E=Items, F=ItemsTotal, G=Delivery, 
+      // H=Total, I=PaymentMethod, J=PaymentStatus, K=OrderStatus, L=Address, M=DeliveryPartner
       const updates = [];
       if (status) {
-        updates.push({ range: `${newSheet.sheetName}!I${orderData.rowIndex + 1}`, values: [[STATUS_LABELS[status] || status]] });
+        // Order Status is column K (index 10)
+        updates.push({ range: `${newSheet.sheetName}!K${orderData.rowIndex + 1}`, values: [[STATUS_LABELS[status] || status]] });
       }
       if (paymentStatus) {
-        updates.push({ range: `${newSheet.sheetName}!H${orderData.rowIndex + 1}`, values: [[STATUS_LABELS[paymentStatus] || paymentStatus]] });
+        // Payment Status is column J (index 9)
+        updates.push({ range: `${newSheet.sheetName}!J${orderData.rowIndex + 1}`, values: [[STATUS_LABELS[paymentStatus] || paymentStatus]] });
       }
 
       if (updates.length > 0) {

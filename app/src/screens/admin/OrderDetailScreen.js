@@ -401,18 +401,55 @@ export default function OrderDetailScreen({ route, navigation }) {
                     )}
                   </View>
                 </View>
-                <View style={[styles.paymentStatusBadge, { backgroundColor: ['paid', 'paid at hotel', 'pay at hotel', 'cod'].includes(order.paymentStatus?.toLowerCase()) ? '#DCFCE7' : '#FEF3C7' }]}>
-                  <Ionicons 
-                    name={['paid', 'paid at hotel', 'pay at hotel', 'cod'].includes(order.paymentStatus?.toLowerCase()) ? 'checkmark-circle' : 'time'} 
-                    size={16} 
-                    color={['paid', 'paid at hotel', 'pay at hotel', 'cod'].includes(order.paymentStatus?.toLowerCase()) ? '#22C55E' : '#F59E0B'} 
-                  />
-                  <Text style={[styles.paymentStatusText, { color: ['paid', 'paid at hotel', 'pay at hotel', 'cod'].includes(order.paymentStatus?.toLowerCase()) ? '#22C55E' : '#F59E0B' }]}>
-                    {order.paymentStatus === 'paid' ? 'Paid' : 
-                     ['paid at hotel', 'pay at hotel'].includes(order.paymentStatus?.toLowerCase()) ? 'Paid at Hotel' :
-                     order.paymentStatus?.toLowerCase() === 'cod' ? 'COD Paid' : 'Pending'}
-                  </Text>
-                </View>
+                {(() => {
+                  // Determine payment status display
+                  // Use paymentStatus field from sheet (column J), fallback to paymentMethod (column I)
+                  const paymentStatus = (order.paymentStatus || '').toLowerCase().trim();
+                  const paymentMethod = (order.paymentMethod || '').toLowerCase().trim();
+                  const isPickup = order.serviceType === 'pickup';
+                  
+                  let isPaid = true;
+                  let statusLabel = 'Paid';
+                  
+                  if (isPickup) {
+                    // Self-pickup orders - check paymentStatus first
+                    if (paymentStatus === 'paid (upi)' || paymentStatus.includes('paid (upi)')) {
+                      statusLabel = 'Paid (UPI)';
+                    } else if (paymentStatus === 'paid (cash)' || paymentStatus.includes('paid (cash)')) {
+                      statusLabel = 'Paid (Cash)';
+                    } else if (paymentStatus === 'paid') {
+                      // Pre-paid with UPI/App
+                      statusLabel = 'UPI/App';
+                    } else if (paymentMethod === 'upi/app' || paymentMethod === 'upi') {
+                      statusLabel = 'UPI/App';
+                    } else if (paymentMethod === 'pay at hotel' || paymentMethod.includes('pay at hotel')) {
+                      statusLabel = 'Paid at Hotel';
+                    } else {
+                      statusLabel = 'Paid';
+                    }
+                  } else {
+                    // Delivery orders
+                    if (paymentMethod.includes('cod') || paymentMethod.includes('cash')) {
+                      isPaid = order.status === 'delivered';
+                      statusLabel = isPaid ? 'COD Paid' : 'COD';
+                    } else {
+                      statusLabel = 'Paid';
+                    }
+                  }
+                  
+                  return (
+                    <View style={[styles.paymentStatusBadge, { backgroundColor: isPaid ? '#DCFCE7' : '#FEF3C7' }]}>
+                      <Ionicons 
+                        name={isPaid ? 'checkmark-circle' : 'time'} 
+                        size={16} 
+                        color={isPaid ? '#22C55E' : '#F59E0B'} 
+                      />
+                      <Text style={[styles.paymentStatusText, { color: isPaid ? '#22C55E' : '#F59E0B' }]}>
+                        {statusLabel}
+                      </Text>
+                    </View>
+                  );
+                })()}
               </View>
             </View>
           </View>
