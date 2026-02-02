@@ -87,7 +87,7 @@ const googleSheets = {
     try {
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheetName}!A:K`
+        range: `${sheetName}!A:M`
       });
       
       const rows = response.data.values || [];
@@ -119,13 +119,13 @@ const googleSheets = {
       const rows = response.data.values || [];
       if (rows.some(row => row[0] && row[0].includes(dateStr))) return;
 
-      // Add header (11 columns now)
+      // Add header (13 columns now)
       await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheetName}!A:K`,
+        range: `${sheetName}!A:M`,
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
-        resource: { values: [[dateHeaderText, '', '', '', '', '', '', '', '', '', '']] }
+        resource: { values: [[dateHeaderText, '', '', '', '', '', '', '', '', '', '', '', '']] }
       });
 
       // Style header
@@ -142,7 +142,7 @@ const googleSheets = {
             requests: [
               {
                 repeatCell: {
-                  range: { sheetId, startRowIndex: headerRowIndex, endRowIndex: headerRowIndex + 1, startColumnIndex: 0, endColumnIndex: 11 },
+                  range: { sheetId, startRowIndex: headerRowIndex, endRowIndex: headerRowIndex + 1, startColumnIndex: 0, endColumnIndex: 13 },
                   cell: {
                     userEnteredFormat: {
                       backgroundColor: { red: 0.2, green: 0.4, blue: 0.6 },
@@ -155,7 +155,7 @@ const googleSheets = {
               },
               {
                 mergeCells: {
-                  range: { sheetId, startRowIndex: headerRowIndex, endRowIndex: headerRowIndex + 1, startColumnIndex: 0, endColumnIndex: 11 },
+                  range: { sheetId, startRowIndex: headerRowIndex, endRowIndex: headerRowIndex + 1, startColumnIndex: 0, endColumnIndex: 13 },
                   mergeType: 'MERGE_ALL'
                 }
               }
@@ -177,7 +177,7 @@ const googleSheets = {
         resource: {
           requests: [{
             repeatCell: {
-              range: { sheetId, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: 0, endColumnIndex: 11 },
+              range: { sheetId, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: 0, endColumnIndex: 13 },
               cell: {
                 userEnteredFormat: {
                   backgroundColor: color,
@@ -220,7 +220,7 @@ const googleSheets = {
       // Add row
       await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A:K`,
+        range: `${sheet.sheetName}!A:M`,
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
         resource: { values: [newRowData] }
@@ -305,13 +305,18 @@ const googleSheets = {
         }
       }
 
-      // New column structure: OrderID, Time, Phone, Name, Items, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
+      // New column structure: OrderID, Time, Phone, Name, Items, ItemsTotal, DeliveryCharge, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
+      const itemsTotal = order.itemsTotal || order.totalAmount;
+      const deliveryCharge = order.deliveryCharge || 0;
+      
       const row = [
         order.orderId,
         date.toLocaleTimeString('en-IN', istOptions),
         order.customer?.phone || '',
         order.customer?.name || '',
         itemsStr,
+        itemsTotal,
+        deliveryCharge,
         order.totalAmount,
         paymentMethodLabel,
         paymentStatusLabel,
@@ -322,7 +327,7 @@ const googleSheets = {
 
       const response = await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A:K`,
+        range: `${sheet.sheetName}!A:M`,
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
         resource: { values: [row] }
@@ -497,14 +502,14 @@ const googleSheets = {
       
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${SHEET_NAME}!A1:K1`
+        range: `${SHEET_NAME}!A1:M1`
       });
       
       if (!response.data.values || response.data.values.length === 0) {
-        const headers = ['Order ID', 'Time', 'Customer Phone', 'Customer Name', 'Items', 'Total Amount', 'Payment Method', 'Payment Status', 'Order Status', 'Delivery Address', 'Delivery Partner'];
+        const headers = ['Order ID', 'Time', 'Customer Phone', 'Customer Name', 'Items', 'Items Total', 'Delivery Charge', 'Total Amount', 'Payment Method', 'Payment Status', 'Order Status', 'Delivery Address', 'Delivery Partner'];
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!A1:K1`,
+          range: `${SHEET_NAME}!A1:M1`,
           valueInputOption: 'RAW',
           resource: { values: [headers] }
         });
@@ -686,7 +691,7 @@ const googleSheets = {
         try {
           const response = await sheets.spreadsheets.values.get({
             spreadsheetId: SPREADSHEET_ID,
-            range: `${sheet.sheetName}!A:K`
+            range: `${sheet.sheetName}!A:M`
           });
           
           const rows = response.data.values || [];
@@ -1497,7 +1502,7 @@ const googleSheets = {
           resource: {
             requests: [{
               repeatCell: {
-                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 11 },
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 13 },
                 cell: {
                   userEnteredFormat: {
                     backgroundColor: { red: 0.4, green: 0.2, blue: 0.6 },
@@ -1535,7 +1540,7 @@ const googleSheets = {
       // Get all rows to find existing date
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A:K`
+        range: `${sheet.sheetName}!A:M`
       });
       
       const rows = response.data.values || [];
@@ -1621,7 +1626,7 @@ const googleSheets = {
       
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A:K`
+        range: `${sheet.sheetName}!A:M`
       });
       
       const rows = response.data.values || [];
@@ -1661,7 +1666,7 @@ const googleSheets = {
       
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A:K`
+        range: `${sheet.sheetName}!A:M`
       });
       
       const rows = response.data.values || [];

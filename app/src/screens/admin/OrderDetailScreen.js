@@ -343,13 +343,23 @@ export default function OrderDetailScreen({ route, navigation }) {
               {/* Order Summary */}
               <View style={styles.orderSummary}>
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Subtotal</Text>
-                  <Text style={styles.summaryValue}>₹{order.totalAmount}</Text>
+                  <Text style={styles.summaryLabel}>Items Total</Text>
+                  <Text style={styles.summaryValue}>₹{order.itemsTotal || (order.totalAmount - (order.deliveryCharge || 0))}</Text>
                 </View>
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Delivery Fee</Text>
-                  <Text style={styles.summaryValue}>₹0</Text>
-                </View>
+                {order.serviceType === 'delivery' && (
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Delivery Charge</Text>
+                    <Text style={[styles.summaryValue, order.deliveryCharge > 0 && { color: '#F59E0B' }]}>
+                      {order.deliveryCharge > 0 ? `₹${order.deliveryCharge}` : 'FREE'}
+                    </Text>
+                  </View>
+                )}
+                {order.deliveryDistance && (
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Distance</Text>
+                    <Text style={styles.summaryValue}>{order.deliveryDistance} KM</Text>
+                  </View>
+                )}
                 <View style={styles.totalRow}>
                   <Text style={styles.totalLabel}>Total Amount</Text>
                   <Text style={styles.totalAmount}>₹{order.totalAmount}</Text>
