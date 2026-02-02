@@ -3038,10 +3038,16 @@ const chatbot = {
       
       console.log(`🔍 Tag search - Primary keywords: [${searchKeywords.join(', ')}], All keywords: [${uniqueKeywords.join(', ')}], foodTypeFilter: ${searchFoodTypeFilter || 'all'}`);
       
-      // Helper to check if item tags match a keyword
-      const itemTagsMatchKeyword = (item, keyword) => {
+      // Helper to check if item tags OR name OR category match a keyword
+      const itemMatchesKeyword = (item, keyword) => {
         const kwLower = keyword.toLowerCase().trim();
-        return (item.tags || []).some(tag => {
+        
+        // Check item NAME first (highest priority)
+        const nameLower = item.name.toLowerCase();
+        if (nameLower.includes(kwLower)) return true;
+        
+        // Check TAGS
+        const tagMatch = (item.tags || []).some(tag => {
           const tagLower = tag.toLowerCase().trim();
           // Exact match
           if (tagLower === kwLower) return true;
@@ -3051,6 +3057,17 @@ const chatbot = {
           if (kwLower.includes(tagLower) && tagLower.length >= 3) return true;
           return false;
         });
+        if (tagMatch) return true;
+        
+        // Check CATEGORY
+        const categories = Array.isArray(item.category) ? item.category : [item.category];
+        const categoryMatch = categories.some(cat => {
+          if (!cat) return false;
+          const catLower = cat.toLowerCase().trim();
+          return catLower.includes(kwLower) || kwLower.includes(catLower);
+        });
+        
+        return categoryMatch;
       };
       
       // Helper to apply food type filter
@@ -3063,14 +3080,14 @@ const chatbot = {
         return true;
       };
       
-      // PRIORITY 1: Items where ALL primary search keywords match tags
+      // PRIORITY 1: Items where ALL primary search keywords match (name, tags, or category)
       const allKeywordsMatch = menuItems.filter(item => {
         if (!passesFilter(item)) return false;
-        return searchKeywords.every(kw => itemTagsMatchKeyword(item, kw));
+        return searchKeywords.every(kw => itemMatchesKeyword(item, kw));
       });
       
       if (allKeywordsMatch.length > 0) {
-        console.log(`✅ PRIORITY 1 - ALL keywords tag match: "${searchKeywords.join(' ')}" → ${allKeywordsMatch.length} item(s)`);
+        console.log(`✅ PRIORITY 1 - ALL keywords match: "${searchKeywords.join(' ')}" → ${allKeywordsMatch.length} item(s): [${allKeywordsMatch.map(i => i.name).slice(0, 5).join(', ')}]`);
         return { 
           items: allKeywordsMatch, 
           foodType: detected, 
@@ -3086,12 +3103,12 @@ const chatbot = {
       for (const item of menuItems) {
         if (!passesFilter(item)) continue;
         
-        // Count how many search keywords match this item's tags
+        // Count how many search keywords match this item
         let matchCount = 0;
         const matchedKeywords = [];
         
         for (const kw of searchKeywords) {
-          if (itemTagsMatchKeyword(item, kw)) {
+          if (itemMatchesKeyword(item, kw)) {
             matchCount++;
             matchedKeywords.push(kw);
           }
@@ -3402,6 +3419,63 @@ const chatbot = {
           }
         } catch (error) {
           console.error('AI fuzzy search fallback failed:', error.message);
+        }
+      }
+      
+      // ========== AI TAG-BASED SPELL CORRECTION ==========
+      // Use Groq to find closest matching TAGS for misspelled searches
+      // This is better than random fuzzy matching - uses actual menu tags
+      if (matchingItems.length === 0 && allAvailableTags.length > 0) {
+        try {
+          console.log(`🔤 AI Tag Spell Check: Finding closest tags for "${text}"...`);
+          const spellResult = await groqAi.findClosestTagMatch(text, allAvailableTags);
+          
+          if (spellResult.matchedTags && spellResult.matchedTags.length > 0) {
+            console.log(`🔤 Spell check matched tags: [${spellResult.matchedTags.join(', ')}]`);
+            
+            // Find items that have ALL matched tags (priority) or SOME matched tags
+            const tagMatchedItems = new Map();
+            
+            for (const item of menuItems) {
+              const itemTags = (item.tags || []).map(t => t.toLowerCase());
+              let matchCount = 0;
+              
+              for (const matchedTag of spellResult.matchedTags) {
+                const tagLower = matchedTag.toLowerCase();
+                // Check if item has this tag (exact or contains)
+                if (itemTags.some(t => t === tagLower || t.includes(tagLower) || tagLower.includes(t))) {
+                  matchCount++;
+                }
+              }
+              
+              if (matchCount > 0) {
+                const id = item._id.toString();
+                tagMatchedItems.set(id, { item, matchCount });
+              }
+            }
+            
+            if (tagMatchedItems.size > 0) {
+              // Sort by match count (items matching more tags first)
+              matchingItems = Array.from(tagMatchedItems.values())
+                .sort((a, b) => b.matchCount - a.matchCount)
+                .map(m => m.item);
+              
+              const correctedLabel = spellResult.correctedQuery 
+                ? `🔍 Showing results for "${spellResult.correctedQuery}"`
+                : `🔍 Did you mean`;
+              
+              console.log(`✅ AI tag spell check found ${matchingItems.length} items`);
+              return { 
+                items: matchingItems, 
+                foodType: detected, 
+                searchTerm: spellResult.correctedQuery || primarySearchTerm, 
+                label: correctedLabel,
+                spellCorrected: true 
+              };
+            }
+          }
+        } catch (error) {
+          console.error('AI tag spell check failed:', error.message);
         }
       }
       

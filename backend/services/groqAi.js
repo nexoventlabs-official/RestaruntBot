@@ -353,6 +353,30 @@ If already standard or you're unsure, return as is.`
       const qty = parseInt(quantity) || 1;
       const unitLabel = unit || 'piece';
       
+      // ========== AUTO-GENERATE BASE TAGS FROM ITEM NAME AND CATEGORY ==========
+      // Split item name into individual words (e.g., "egg masala dosa" → ["egg", "masala", "dosa"])
+      const nameWords = itemName.toLowerCase().trim()
+        .split(/\s+/)
+        .filter(word => word.length >= 2)
+        .map(word => word.replace(/[^a-z]/g, ''));
+      
+      // Add category words
+      const categoryWords = categories.flatMap(cat => 
+        cat.toLowerCase().trim().split(/\s+/).filter(word => word.length >= 2)
+      );
+      
+      // Base tags from name, categories, food type, quantity
+      const baseTags = [
+        itemName.toLowerCase().trim(), // Full name as first tag
+        ...nameWords,                   // Individual words from name
+        ...categoryWords,               // Category words
+        foodTypeLabel,                  // veg/non veg/egg
+        unitLabel,                      // piece/plate/bowl etc.
+      ].filter(tag => tag && tag.length >= 2);
+      
+      // Remove duplicates from base tags
+      const uniqueBaseTags = [...new Set(baseTags)];
+      
       // Get meal time tags based on category
       const mealTimeTags = this.getMealTimeTags(categories);
       const mealTimeHint = mealTimeTags.length > 0 ? `Meal times for this category: ${mealTimeTags.join(', ')}` : '';
@@ -360,112 +384,81 @@ If already standard or you're unsure, return as is.`
       const completion = await client.chat.completions.create({
         messages: [{
           role: 'system',
-          content: `You are a tag generator for an Indian restaurant food ordering chatbot. Generate EXACTLY 10 simple, accurate search tags that customers would use to find this food item.
+          content: `You are a tag generator for an Indian restaurant food ordering chatbot. Generate additional search tags to complement the base tags.
+
+BASE TAGS ALREADY INCLUDED: ${uniqueBaseTags.join(', ')}
 
 CRITICAL RULES:
-1. Tags must be simple daily-use words that EXACTLY match the food item
-2. NO abstract ingredients (don't add "rice" for "idli", don't add "flour" for "dosa", don't add "wheat" for "chapati")
-3. ONLY add ingredients that are IN THE NAME (e.g., "chicken biryani" → add "chicken")
-4. Include exact food item name as first tag
-5. Include category name(s) as tags
-6. Include food type (veg/non veg/egg) as tag
-7. Include meal time (breakfast/lunch/dinner/snacks) based on category
-8. Add common spelling variations people search (idli/idly, dosa/dosai)
-9. Add 1-2 simple descriptive words (hot, crispy, spicy, soft)
-10. Keep tags SHORT (1-2 words max per tag)
-11. NO duplicate tags, all lowercase
-12. NO generic words like "food", "item", "delicious", "tasty"
-
-CATEGORY TO MEAL TIME MAPPING:
-- Tiffin/Breakfast → breakfast, morning
-- Meals/Thali → lunch, dinner
-- Snacks/Starters → snacks, evening
-- Desserts/Sweets → desserts, sweets
+1. DO NOT repeat any of the base tags above
+2. Add ONLY useful additional tags: spelling variations, regional names, meal times
+3. Add common spelling variations people search (idli/idly, dosa/dosai, biryani/biriyani)
+4. Add regional language variations if applicable (Telugu, Hindi names)
+5. Add meal time (breakfast/lunch/dinner/snacks) based on category
+6. Add descriptive words (hot, crispy, spicy, soft) if relevant
+7. Keep tags SHORT (1-2 words max per tag)
+8. NO duplicate tags, all lowercase
+9. NO generic words like "food", "item", "delicious", "tasty"
+10. Return ONLY 5-7 additional tags, not more
 
 EXAMPLES:
-- "Idli" (Tiffin, Veg, 4 pieces) → idli, tiffin, veg, breakfast, morning, south indian, soft, hot, steamed, idly
-- "Chicken Biryani" (Meals, Non-Veg, 1 plate) → chicken biryani, chicken, biryani, meals, non veg, lunch, dinner, spicy, hyderabadi, dum
-- "Masala Dosa" (Tiffin, Veg, 1 piece) → masala dosa, dosa, tiffin, veg, breakfast, morning, crispy, south indian, dosai, hot
-- "Veg Fried Rice" (Chinese, Veg, 1 plate) → veg fried rice, fried rice, chinese, veg, lunch, dinner, rice, indo chinese, hot, noodles`
+- "Egg Masala Dosa" base tags: egg masala dosa, egg, masala, dosa, tiffin → Add: dosai, morning, breakfast, crispy, spicy
+- "Chicken Biryani" base tags: chicken biryani, chicken, biryani, meals → Add: biriyani, lunch, dinner, hyderabadi, dum, spicy`
         }, {
           role: 'user',
-          content: `Generate exactly 10 search tags for:
+          content: `Generate 5-7 ADDITIONAL search tags for:
 Food Item: "${itemName}"
 Category: ${categories.join(', ')}
 Food Type: ${foodTypeLabel}
 Serving: ${qty} ${unitLabel}${qty > 1 ? 's' : ''}
 ${mealTimeHint}
 
-Return ONLY 10 comma-separated lowercase tags. No explanations, no numbering, no extra text.`
+BASE TAGS (already included, DO NOT repeat): ${uniqueBaseTags.join(', ')}
+
+Return ONLY 5-7 comma-separated lowercase additional tags. No explanations, no numbering.`
         }],
         model: 'llama-3.1-8b-instant',
-        max_tokens: 150,
+        max_tokens: 100,
         temperature: 0.3
       });
       
       const aiTagsText = completion.choices[0]?.message?.content?.trim() || '';
       
-      // Clean and parse tags
-      let tags = aiTagsText
+      // Clean and parse AI tags
+      let aiTags = aiTagsText
         .replace(/[\[\]"\d\.\)\(]/g, '')
         .replace(/\n/g, ',')
         .split(',')
         .map(tag => tag.trim().toLowerCase())
         .filter(tag => 
-          tag.length > 0 && 
+          tag.length >= 2 && 
           tag.length < 25 && 
           !tag.includes(':') && 
           !tag.includes('tag') &&
           !tag.includes('example') &&
           !tag.includes('here') &&
           !tag.includes('food') &&
+          !tag.includes('base') &&
+          !tag.includes('already') &&
           tag !== 'delicious' &&
           tag !== 'tasty'
         );
       
-      // Remove duplicates
-      tags = [...new Set(tags)];
+      // Remove duplicates and tags already in base
+      aiTags = [...new Set(aiTags)].filter(tag => !uniqueBaseTags.includes(tag));
       
-      // Ensure we have essential tags at the start
-      const essentialTags = [];
-      
-      // Add item name as first tag
-      const itemNameLower = itemName.toLowerCase().trim();
-      if (!tags.includes(itemNameLower)) {
-        essentialTags.push(itemNameLower);
-      }
-      
-      // Add categories
-      categories.forEach(cat => {
-        const catLower = cat.toLowerCase().trim();
-        if (!tags.includes(catLower) && !essentialTags.includes(catLower)) {
-          essentialTags.push(catLower);
-        }
-      });
-      
-      // Add food type
-      if (foodTypeLabel && !tags.includes(foodTypeLabel) && !essentialTags.includes(foodTypeLabel)) {
-        essentialTags.push(foodTypeLabel);
-      }
-      
-      // Add quantity and unit (e.g., "4 pieces", "1 plate")
-      const servingTag = `${qty} ${unitLabel}${qty > 1 ? 's' : ''}`;
-      if (!tags.includes(servingTag) && !essentialTags.includes(servingTag)) {
-        essentialTags.push(servingTag);
-      }
-      
-      // Add meal time tags based on category
-      for (const mealTag of mealTimeTags.slice(0, 2)) { // Add up to 2 meal time tags
-        if (!tags.includes(mealTag) && !essentialTags.includes(mealTag)) {
-          essentialTags.push(mealTag);
+      // Add meal time tags
+      const allMealTags = [...mealTimeTags];
+      for (const mt of allMealTags) {
+        if (!uniqueBaseTags.includes(mt) && !aiTags.includes(mt)) {
+          aiTags.unshift(mt);
         }
       }
       
-      // Combine essential tags first, then AI tags
-      const finalTags = [...essentialTags, ...tags.filter(t => !essentialTags.includes(t))];
+      // Combine: base tags first, then AI tags
+      const finalTags = [...uniqueBaseTags, ...aiTags];
       
-      // Limit to exactly 10 unique tags
-      return finalTags.slice(0, 10).join(', ');
+      // Limit to 12-15 unique tags
+      return [...new Set(finalTags)].slice(0, 15).join(', ');
     } catch (error) {
       console.error('Groq AI tags error:', error);
       // Fallback: generate basic tags without AI
@@ -475,16 +468,22 @@ Return ONLY 10 comma-separated lowercase tags. No explanations, no numbering, no
       const unitLabel = unit || 'piece';
       const mealTimeTags = this.getMealTimeTags(categories);
       
+      // Split item name into words
+      const nameWords = itemName.toLowerCase().trim()
+        .split(/\s+/)
+        .filter(word => word.length >= 2);
+      
       const fallbackTags = [
         itemName.toLowerCase().trim(),
+        ...nameWords,
         ...categories.map(c => c.toLowerCase().trim()),
         foodTypeLabel,
-        `${qty} ${unitLabel}${qty > 1 ? 's' : ''}`,
+        unitLabel,
         ...mealTimeTags.slice(0, 2)
-      ].filter(t => t && t.length > 0);
+      ].filter(t => t && t.length >= 2);
       
-      // Remove duplicates and limit to 10
-      return [...new Set(fallbackTags)].slice(0, 10).join(', ');
+      // Remove duplicates and limit to 12
+      return [...new Set(fallbackTags)].slice(0, 12).join(', ');
     }
   },
 
@@ -558,6 +557,89 @@ Return ONLY comma-separated matching tags from the available list. No explanatio
     } catch (error) {
       console.error('Groq AI tag matching error:', error.message);
       return [];
+    }
+  },
+
+  // AI-powered spell correction for search queries
+  // Uses Groq to find closest matching tags when customer has spelling mistakes
+  async findClosestTagMatch(misspelledQuery, availableTags) {
+    try {
+      // Skip gibberish
+      if (this.isGibberishSearch(misspelledQuery)) {
+        console.log(`🚫 Gibberish search: "${misspelledQuery}" - skipping spell check`);
+        return { correctedQuery: null, matchedTags: [] };
+      }
+      
+      const client = getGroq();
+      
+      // Get unique tags
+      const uniqueTags = [...new Set(availableTags)].slice(0, 150);
+      
+      const completion = await client.chat.completions.create({
+        messages: [{
+          role: 'system',
+          content: `You are a spell-check assistant for an Indian restaurant food ordering chatbot. The customer has made spelling mistakes in their search. Find the CLOSEST matching tags.
+
+CRITICAL RULES:
+1. Analyze the misspelled query and find tags that are SIMILAR in spelling
+2. Focus on tags where letters match even if some are missing or swapped
+3. Example: "eg dsa" should match "egg", "dosa" (missing letters)
+4. Example: "masla" should match "masala" (missing 'a')
+5. Example: "chiken" should match "chicken" (swapped letters)
+6. Example: "birani" should match "biryani" (missing 'y')
+7. Return ONLY tags from the available list that closely match
+8. If no close match (too different), return "NONE"
+9. Prioritize tags that match MORE characters from the search
+10. Return maximum 5 best matching tags
+
+OUTPUT FORMAT:
+CORRECTED: <what the customer likely meant>
+TAGS: <comma-separated matching tags from available list>`
+        }, {
+          role: 'user',
+          content: `Misspelled search: "${misspelledQuery}"
+Available tags: ${uniqueTags.join(', ')}
+
+Find closest matching tags for this misspelled search.`
+        }],
+        model: 'llama-3.1-8b-instant',
+        max_tokens: 100,
+        temperature: 0.2
+      });
+      
+      const response = completion.choices[0]?.message?.content?.trim() || '';
+      
+      // Parse response
+      let correctedQuery = null;
+      let matchedTags = [];
+      
+      // Check for NONE
+      if (response.toUpperCase().includes('NONE')) {
+        console.log(`🔤 No close match for: "${misspelledQuery}"`);
+        return { correctedQuery: null, matchedTags: [] };
+      }
+      
+      // Extract corrected query
+      const correctedMatch = response.match(/CORRECTED:\s*(.+?)(?:\n|TAGS:|$)/i);
+      if (correctedMatch) {
+        correctedQuery = correctedMatch[1].trim().toLowerCase();
+      }
+      
+      // Extract tags
+      const tagsMatch = response.match(/TAGS:\s*(.+)/i);
+      if (tagsMatch) {
+        matchedTags = tagsMatch[1]
+          .replace(/[\[\]"]/g, '')
+          .split(',')
+          .map(tag => tag.trim().toLowerCase())
+          .filter(tag => tag.length > 0 && uniqueTags.map(t => t.toLowerCase()).includes(tag));
+      }
+      
+      console.log(`🔤 Spell correction: "${misspelledQuery}" → "${correctedQuery}" → [${matchedTags.join(', ')}]`);
+      return { correctedQuery, matchedTags };
+    } catch (error) {
+      console.error('Groq spell correction error:', error.message);
+      return { correctedQuery: null, matchedTags: [] };
     }
   },
 
