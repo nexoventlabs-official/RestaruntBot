@@ -383,36 +383,6 @@ export default function Settings() {
               className="w-full px-4 py-3 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none resize-none"
             />
           </div>
-
-          {/* Distance Calculation Multiplier */}
-          <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl">
-            <label className="block text-sm font-medium text-purple-800 mb-2">
-              Road Distance Multiplier
-            </label>
-            <div className="flex items-center gap-4">
-              <input
-                type="number"
-                min="1"
-                max="2"
-                step="0.1"
-                value={settings.deliverySettings.distanceMultiplier || 1.4}
-                onChange={(e) => setSettings(prev => ({
-                  ...prev,
-                  deliverySettings: {
-                    ...prev.deliverySettings,
-                    distanceMultiplier: parseFloat(e.target.value) || 1.4
-                  }
-                }))}
-                className="w-24 px-4 py-3 border border-purple-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
-              />
-              <span className="text-purple-700">× straight-line distance</span>
-            </div>
-            <p className="text-xs text-purple-600 mt-2">
-              Roads are typically 30-50% longer than straight-line distance. Use 1.3-1.5 for cities, 1.4-1.6 for rural areas.
-              <br />
-              <span className="font-medium">Note:</span> The system automatically uses OSRM (OpenStreetMap) for accurate road distances. This multiplier is used as fallback only.
-            </p>
-          </div>
         </div>
       </div>
 
