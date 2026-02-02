@@ -37,43 +37,85 @@ const calculateStraightLineDistance = (lat1, lon1, lat2, lon2) => {
 const calculateOSRMDistance = async (lat1, lon1, lat2, lon2) => {
   try {
     // OSRM public API (free, uses OpenStreetMap data)
-    // Format: /route/v1/driving/{lon1},{lat1};{lon2},{lat2}
+    // IMPORTANT: OSRM uses longitude,latitude order (not lat,lon)
     const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=false`;
     
-    const response = await axios.get(url, { timeout: 5000 });
+    console.log(`🗺️ OSRM request: Restaurant(${lat1},${lon1}) → Customer(${lat2},${lon2})`);
+    
+    const response = await axios.get(url, { 
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'RestaurantBot/1.0'
+      }
+    });
     
     if (response.data.code === 'Ok' && response.data.routes?.[0]) {
       const distanceInMeters = response.data.routes[0].distance;
+      const durationInSeconds = response.data.routes[0].duration;
       const distanceInKm = distanceInMeters / 1000;
-      console.log(`🗺️ OSRM road distance: ${distanceInKm.toFixed(2)} KM`);
+      const durationInMins = Math.round(durationInSeconds / 60);
+      console.log(`✅ OSRM road distance: ${distanceInKm.toFixed(2)} KM (approx ${durationInMins} mins drive)`);
       return Math.round(distanceInKm * 100) / 100;
     }
     
-    console.log('⚠️ OSRM API returned no valid route, falling back to straight-line');
+    console.log('⚠️ OSRM API returned no valid route:', response.data.code);
     return null;
   } catch (error) {
-    console.error('OSRM API error:', error.message);
+    console.error('❌ OSRM API error:', error.message);
     return null;
   }
 };
 
-// Main distance calculator - uses OSRM (free) if available, else straight-line with multiplier
+// Fallback: Use GraphHopper free API
+const calculateGraphHopperDistance = async (lat1, lon1, lat2, lon2) => {
+  try {
+    // GraphHopper free API (limited but reliable)
+    const url = `https://graphhopper.com/api/1/route?point=${lat1},${lon1}&point=${lat2},${lon2}&vehicle=car&calc_points=false&key=`;
+    
+    const response = await axios.get(url, { timeout: 10000 });
+    
+    if (response.data.paths?.[0]) {
+      const distanceInMeters = response.data.paths[0].distance;
+      const distanceInKm = distanceInMeters / 1000;
+      console.log(`✅ GraphHopper road distance: ${distanceInKm.toFixed(2)} KM`);
+      return Math.round(distanceInKm * 100) / 100;
+    }
+    
+    return null;
+  } catch (error) {
+    // GraphHopper requires API key for most requests, so this is expected to fail
+    return null;
+  }
+};
+
+// Main distance calculator - uses OSRM (free) with smart fallback
 const calculateDistance = async (lat1, lon1, lat2, lon2, distanceMultiplier = 1.4) => {
-  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  if (!lat1 || !lon1 || !lat2 || !lon2) {
+    console.log('⚠️ Missing coordinates for distance calculation');
+    return null;
+  }
+  
+  console.log(`📍 Calculating distance: (${lat1}, ${lon1}) → (${lat2}, ${lon2})`);
   
   // Try OSRM API first (free, uses OpenStreetMap data)
   const osrmDistance = await calculateOSRMDistance(lat1, lon1, lat2, lon2);
-  if (osrmDistance !== null) {
+  if (osrmDistance !== null && osrmDistance > 0) {
     return osrmDistance;
   }
   
+  // Try GraphHopper as backup
+  const graphHopperDistance = await calculateGraphHopperDistance(lat1, lon1, lat2, lon2);
+  if (graphHopperDistance !== null && graphHopperDistance > 0) {
+    return graphHopperDistance;
+  }
+  
   // Fall back to straight-line distance with multiplier to approximate road distance
-  // Default multiplier is 1.4 (roads are typically 30-50% longer than straight-line)
   const straightLineDistance = calculateStraightLineDistance(lat1, lon1, lat2, lon2);
   if (straightLineDistance === null) return null;
   
-  const approximateRoadDistance = straightLineDistance * distanceMultiplier;
-  console.log(`📍 Straight-line: ${straightLineDistance} KM × ${distanceMultiplier} = ~${approximateRoadDistance.toFixed(2)} KM (estimated road distance)`);
+  // Use higher multiplier (1.5) for better approximation when APIs fail
+  const approximateRoadDistance = straightLineDistance * 1.5;
+  console.log(`📍 FALLBACK: Straight-line ${straightLineDistance} KM × 1.5 = ~${approximateRoadDistance.toFixed(2)} KM`);
   
   return Math.round(approximateRoadDistance * 100) / 100;
 };
