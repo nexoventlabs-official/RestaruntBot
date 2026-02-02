@@ -77,6 +77,38 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
+// Get order history from Google Sheets (cost-saving - not from MongoDB)
+router.get('/history', authMiddleware, async (req, res) => {
+  try {
+    const { page = 1, limit = 30, search, status } = req.query;
+    
+    // Fetch all historical orders from Google Sheets
+    const { orders: sheetOrders, error } = await googleSheets.getOrderHistory({
+      searchQuery: search,
+      status: status !== 'all' ? status : undefined,
+    });
+    
+    if (error) {
+      return res.status(500).json({ success: false, error });
+    }
+    
+    // Paginate the results
+    const startIndex = (parseInt(page) - 1) * parseInt(limit);
+    const paginatedOrders = sheetOrders.slice(startIndex, startIndex + parseInt(limit));
+    
+    res.json({
+      success: true,
+      orders: paginatedOrders,
+      total: sheetOrders.length,
+      pages: Math.ceil(sheetOrders.length / parseInt(limit)),
+      page: parseInt(page),
+    });
+  } catch (error) {
+    console.error('Error fetching order history:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Get refunds with filter - MUST be before /:id route
 router.get('/refunds', authMiddleware, async (req, res) => {
   try {

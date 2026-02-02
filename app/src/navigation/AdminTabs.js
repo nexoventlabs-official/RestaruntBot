@@ -18,6 +18,7 @@ import AdminOffersScreen from '../screens/admin/AdminOffersScreen';
 import OfferFormScreen from '../screens/admin/OfferFormScreen';
 import ReportDetailScreen from '../screens/admin/ReportDetailScreen';
 import NotificationsScreen from '../screens/admin/NotificationsScreen';
+import OrderHistoryScreen from '../screens/admin/OrderHistoryScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -50,6 +51,7 @@ function OrdersStack() {
     <Stack.Navigator screenOptions={stackScreenOptions}>
       <Stack.Screen name="OrdersList" component={AdminOrdersScreen} />
       <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
+      <Stack.Screen name="OrderHistory" component={OrderHistoryScreen} />
     </Stack.Navigator>
   );
 }

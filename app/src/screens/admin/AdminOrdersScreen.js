@@ -341,6 +341,15 @@ export default function AdminOrdersScreen({ navigation }) {
                 } {serviceTypeTab !== 'all' ? serviceTypeTab : ''} orders
               </Text>
             </View>
+            
+            {/* History Icon Button */}
+            <TouchableOpacity 
+              style={styles.historyButton}
+              onPress={() => navigation.navigate('OrderHistory')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="time-outline" size={22} color="#fff" />
+            </TouchableOpacity>
           </View>
           
           {/* Glass Shine Effect */}
@@ -578,7 +587,8 @@ const styles = StyleSheet.create({
   headerOverlay: { backgroundColor: 'rgba(0, 0, 0, 0.4)', marginTop: -(Platform.OS === 'android' ? StatusBar.currentHeight + 35 : 75), marginBottom: -55, marginHorizontal: -spacing.screenHorizontal, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 35 : 75, paddingBottom: 55, paddingHorizontal: spacing.screenHorizontal, overflow: 'hidden' },
   glassShine: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: 100, backgroundColor: 'rgba(255, 255, 255, 0.3)', transform: [{ skewX: '-20deg' }] },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerLeft: {},
+  headerLeft: { flex: 1 },
+  historyButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   titleIconContainer: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
   title: { fontSize: 28, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
