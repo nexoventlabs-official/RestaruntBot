@@ -492,6 +492,12 @@ Return ONLY 10 comma-separated lowercase tags. No explanations, no numbering, no
   // Helps match native language or variations to actual tags
   async matchSearchToTags(searchQuery, availableTags) {
     try {
+      // Check for gibberish search - don't waste AI call
+      if (this.isGibberishSearch(searchQuery)) {
+        console.log(`🚫 Gibberish search detected: "${searchQuery}" - skipping tag matching`);
+        return [];
+      }
+      
       const client = getGroq();
       
       // Get unique tags from all items (limit to avoid token overflow)
@@ -502,12 +508,16 @@ Return ONLY 10 comma-separated lowercase tags. No explanations, no numbering, no
           role: 'system',
           content: `You are a food search assistant for an Indian restaurant chatbot. Match the customer's search query to the most relevant tags from the available tags list.
 
+CRITICAL: If the search query looks like RANDOM GIBBERISH (not a real word), return "NONE" immediately.
+
 RULES:
 1. Return ONLY matching tags from the available list, comma-separated
 2. Match regional language words to English equivalents (e.g., "టిఫిన్" → "tiffin", "नाश्ता" → "breakfast")
 3. Match spelling variations (idli/idly, dosa/dosai)
 4. Match synonyms (morning food → breakfast, రోజు → dosa)
 5. Return maximum 5 most relevant tags
+6. If search looks like gibberish or no match found, return "NONE"
+7. ONLY return tags that exist in the available list
 6. If no match found, return the closest possible matches
 7. ONLY return tags that exist in the available list
 
@@ -530,6 +540,12 @@ Return ONLY comma-separated matching tags from the available list. No explanatio
       
       const matchedTagsText = completion.choices[0]?.message?.content?.trim() || '';
       
+      // Check if no match found
+      if (matchedTagsText.toUpperCase() === 'NONE' || matchedTagsText.toLowerCase().includes('no match')) {
+        console.log(`🤖 AI tag match: "${searchQuery}" → No matches found`);
+        return [];
+      }
+      
       // Clean and parse matched tags
       const matchedTags = matchedTagsText
         .replace(/[\[\]"]/g, '')
@@ -545,10 +561,49 @@ Return ONLY comma-separated matching tags from the available list. No explanatio
     }
   },
 
+  // Helper to check if search query is gibberish (random characters with no meaning)
+  isGibberishSearch(query) {
+    if (!query || query.length < 2) return true;
+    const cleaned = query.toLowerCase().trim();
+    
+    // Check for common patterns that indicate gibberish
+    // 1. Too many consonants in a row (more than 4 without vowels)
+    const consonantStreak = /[bcdfghjklmnpqrstvwxyz]{5,}/i.test(cleaned);
+    if (consonantStreak) return true;
+    
+    // 2. No vowels at all in a word of 4+ chars
+    const words = cleaned.split(/\s+/);
+    for (const word of words) {
+      if (word.length >= 4 && !/[aeiou]/i.test(word)) {
+        return true;
+      }
+    }
+    
+    // 3. Unusual character repetition (same char 3+ times)
+    if (/(.)\1{2,}/.test(cleaned)) return true;
+    
+    // 4. Very low vowel-to-consonant ratio for longer words
+    for (const word of words) {
+      if (word.length >= 5) {
+        const vowels = (word.match(/[aeiou]/gi) || []).length;
+        const ratio = vowels / word.length;
+        if (ratio < 0.15) return true; // Less than 15% vowels
+      }
+    }
+    
+    return false;
+  },
+
   // Smart semantic search - matches search query to menu item names using AI
   // Handles related items like "pulka" → "chapathi", "rotta" → "roti"
   async findRelatedMenuItems(searchQuery, menuItemNames) {
     try {
+      // Check for gibberish search - don't waste AI call
+      if (this.isGibberishSearch(searchQuery)) {
+        console.log(`🚫 Gibberish search detected: "${searchQuery}" - skipping AI`);
+        return [];
+      }
+      
       const client = getGroq();
       
       // Limit items to avoid token overflow
@@ -640,6 +695,12 @@ Return ONLY comma-separated item names from the menu that match or are related t
   // Handles misspellings like "thaiyr" → "thayir", "brekfast" → "breakfast"
   async correctFoodTypo(searchQuery, availableTags = [], menuItemNames = []) {
     try {
+      // Check for gibberish search - return as-is (will fail matching anyway)
+      if (this.isGibberishSearch(searchQuery)) {
+        console.log(`🚫 Gibberish search detected: "${searchQuery}" - skipping typo correction`);
+        return searchQuery;
+      }
+      
       const client = getGroq();
       
       // Combine tags and menu item names for context
@@ -649,6 +710,8 @@ Return ONLY comma-separated item names from the menu that match or are related t
         messages: [{
           role: 'system',
           content: `You are an expert food search typo corrector for an Indian restaurant. Correct spelling mistakes in food search queries.
+
+CRITICAL: If the search query looks like RANDOM GIBBERISH (not a real word), return the original query unchanged.
 
 TASK: Identify if the search query has spelling mistakes and return the corrected food term.
 
@@ -679,7 +742,7 @@ REGIONAL FOOD TERMS TO RECOGNIZE:
 
 RULES:
 1. Return ONLY the corrected word(s), nothing else
-2. If no correction needed, return the original query
+2. If no correction needed OR if gibberish, return the original query
 3. Keep the correction simple and common
 4. Match to available items/tags if provided
 5. Handle multi-word queries word by word`
@@ -688,7 +751,7 @@ RULES:
           content: `Search query: "${searchQuery}"
 ${contextItems.length > 0 ? `Available items/tags: ${contextItems.slice(0, 50).join(', ')}` : ''}
 
-Return ONLY the corrected search term. No explanation.`
+Return ONLY the corrected search term. If it's gibberish or no correction needed, return the original. No explanation.`
         }],
         model: 'llama-3.1-8b-instant',
         max_tokens: 50,
@@ -721,6 +784,12 @@ Return ONLY the corrected search term. No explanation.`
   // Enhanced fuzzy search using AI - finds similar items even with bad typos
   async fuzzySearchWithAI(searchQuery, menuItemNames, tags = []) {
     try {
+      // Check for gibberish search - don't waste AI call
+      if (this.isGibberishSearch(searchQuery)) {
+        console.log(`🚫 Gibberish search detected: "${searchQuery}" - skipping AI fuzzy search`);
+        return [];
+      }
+      
       const client = getGroq();
       
       const itemList = menuItemNames.slice(0, 100).join(', ');
@@ -730,6 +799,8 @@ Return ONLY the corrected search term. No explanation.`
         messages: [{
           role: 'system',
           content: `You are an expert Indian food search assistant. The customer may have MISSPELLED their search. Find matching menu items even if the spelling is wrong.
+
+CRITICAL: If the search query looks like RANDOM GIBBERISH (not a real word or food name), return "NONE" immediately.
 
 SPELLING MISTAKE PATTERNS TO HANDLE:
 - Swapped letters: "thaiyr" = "thayir" = curd
@@ -745,12 +816,13 @@ Kannada: mosaru=curd, anna=rice
 Hindi: dahi=curd, chawal=rice
 
 MATCHING RULES:
-1. Find items that SOUND LIKE or MEAN THE SAME as the search
-2. Handle character swaps (thaiyr → thayir)
-3. Handle missing/extra characters
-4. Match regional food names to English equivalents
-5. Return maximum 10 items, ordered by relevance
-6. Return ONLY exact item names from the menu list`
+1. ONLY return matches if the search SOUNDS LIKE or MEANS THE SAME as a real food
+2. If search is random letters with no meaning, return "NONE"
+3. Handle character swaps (thaiyr → thayir)
+4. Handle missing/extra characters
+5. Match regional food names to English equivalents
+6. Return maximum 10 items, ordered by relevance
+7. Return ONLY exact item names from the menu list`
         }, {
           role: 'user',
           content: `Customer searched: "${searchQuery}"
@@ -758,7 +830,7 @@ MATCHING RULES:
 Menu items: ${itemList}
 ${tagList ? `Available tags: ${tagList}` : ''}
 
-Find ALL menu items that match this search (consider spelling mistakes). Return comma-separated item names. If nothing matches, return "NONE".`
+Find ALL menu items that match this search (consider spelling mistakes). Return comma-separated item names. If the search looks like random gibberish or nothing matches, return "NONE".`
         }],
         model: 'llama-3.1-8b-instant',
         max_tokens: 200,

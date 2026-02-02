@@ -1501,12 +1501,51 @@ const chatbot = {
     return text;
   },
 
+  // Helper to check if search query is gibberish (random characters with no meaning)
+  isGibberishSearch(query) {
+    if (!query || query.length < 2) return true;
+    const cleaned = query.toLowerCase().trim();
+    
+    // Check for common patterns that indicate gibberish
+    // 1. Too many consonants in a row (more than 4 without vowels)
+    const consonantStreak = /[bcdfghjklmnpqrstvwxyz]{5,}/i.test(cleaned);
+    if (consonantStreak) return true;
+    
+    // 2. No vowels at all in a word of 4+ chars
+    const words = cleaned.split(/\s+/);
+    for (const word of words) {
+      if (word.length >= 4 && !/[aeiou]/i.test(word)) {
+        return true;
+      }
+    }
+    
+    // 3. Unusual character repetition (same char 3+ times)
+    if (/(.)\1{2,}/.test(cleaned)) return true;
+    
+    // 4. Very low vowel-to-consonant ratio for longer words
+    for (const word of words) {
+      if (word.length >= 5) {
+        const vowels = (word.match(/[aeiou]/gi) || []).length;
+        const ratio = vowels / word.length;
+        if (ratio < 0.15) return true; // Less than 15% vowels
+      }
+    }
+    
+    return false;
+  },
+
   // Helper to find fuzzy matches for a search term
   // Returns items where name or tags have similarity >= threshold (default 0.45 = 45% similar)
   // Enhanced with: keyboard typo tolerance, phonetic matching, word reordering, dynamic menu matching
   // Works for ANY menu item - not just hardcoded foods
   fuzzySearchItems(searchTerm, menuItems, threshold = 0.45) {
     if (!searchTerm || searchTerm.length < 2) return [];
+    
+    // Skip fuzzy search for gibberish queries
+    if (this.isGibberishSearch(searchTerm)) {
+      console.log(`🚫 Gibberish search detected: "${searchTerm}" - skipping fuzzy search`);
+      return [];
+    }
     
     const searchLower = searchTerm.toLowerCase().trim();
     
@@ -2342,6 +2381,12 @@ const chatbot = {
   // Now with AI-powered tag matching for native language queries
   // Enhanced with DYNAMIC typo correction - works for ANY menu item
   async smartSearch(text, menuItems) {
+    // Early return for gibberish searches
+    if (this.isGibberishSearch(text)) {
+      console.log(`🚫 Gibberish search detected: "${text}" - returning no results`);
+      return null;
+    }
+    
     // First apply common food typo correction (hardcoded + dynamic)
     let correctedText = text.toLowerCase().trim();
     const originalText = correctedText;
