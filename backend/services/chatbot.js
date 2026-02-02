@@ -16,8 +16,8 @@ const generateOrderId = (serviceType = 'delivery') => {
   return prefix + 'RD' + Date.now().toString(36).toUpperCase();
 };
 
-// Haversine formula to calculate distance between two coordinates in KM
-const calculateDistance = (lat1, lon1, lat2, lon2) => {
+// Haversine formula to calculate straight-line distance between two coordinates in KM
+const calculateStraightLineDistance = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return null;
   
   const R = 6371; // Earth's radius in kilometers
@@ -31,6 +31,51 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
   const distance = R * c;
   
   return Math.round(distance * 100) / 100; // Round to 2 decimal places
+};
+
+// Calculate road distance using OSRM (OpenStreetMap Routing) - FREE API
+const calculateOSRMDistance = async (lat1, lon1, lat2, lon2) => {
+  try {
+    // OSRM public API (free, uses OpenStreetMap data)
+    // Format: /route/v1/driving/{lon1},{lat1};{lon2},{lat2}
+    const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=false`;
+    
+    const response = await axios.get(url, { timeout: 5000 });
+    
+    if (response.data.code === 'Ok' && response.data.routes?.[0]) {
+      const distanceInMeters = response.data.routes[0].distance;
+      const distanceInKm = distanceInMeters / 1000;
+      console.log(`🗺️ OSRM road distance: ${distanceInKm.toFixed(2)} KM`);
+      return Math.round(distanceInKm * 100) / 100;
+    }
+    
+    console.log('⚠️ OSRM API returned no valid route, falling back to straight-line');
+    return null;
+  } catch (error) {
+    console.error('OSRM API error:', error.message);
+    return null;
+  }
+};
+
+// Main distance calculator - uses OSRM (free) if available, else straight-line with multiplier
+const calculateDistance = async (lat1, lon1, lat2, lon2, distanceMultiplier = 1.4) => {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  
+  // Try OSRM API first (free, uses OpenStreetMap data)
+  const osrmDistance = await calculateOSRMDistance(lat1, lon1, lat2, lon2);
+  if (osrmDistance !== null) {
+    return osrmDistance;
+  }
+  
+  // Fall back to straight-line distance with multiplier to approximate road distance
+  // Default multiplier is 1.4 (roads are typically 30-50% longer than straight-line)
+  const straightLineDistance = calculateStraightLineDistance(lat1, lon1, lat2, lon2);
+  if (straightLineDistance === null) return null;
+  
+  const approximateRoadDistance = straightLineDistance * distanceMultiplier;
+  console.log(`📍 Straight-line: ${straightLineDistance} KM × ${distanceMultiplier} = ~${approximateRoadDistance.toFixed(2)} KM (estimated road distance)`);
+  
+  return Math.round(approximateRoadDistance * 100) / 100;
 };
 
 // Helper to calculate delivery charge based on customer location
@@ -51,12 +96,16 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
       return { charge: 0, distance: null, withinFreeRadius: true, message: null };
     }
     
-    // Calculate distance
-    const distance = calculateDistance(
+    // Get distance multiplier from settings (default 1.4 to approximate road distance)
+    const distanceMultiplier = deliverySettings.distanceMultiplier || 1.4;
+    
+    // Calculate distance (uses Google Maps API if available, else straight-line × multiplier)
+    const distance = await calculateDistance(
       customerLat, 
       customerLon, 
       restaurantLocation.latitude, 
-      restaurantLocation.longitude
+      restaurantLocation.longitude,
+      distanceMultiplier
     );
     
     if (distance === null) {
