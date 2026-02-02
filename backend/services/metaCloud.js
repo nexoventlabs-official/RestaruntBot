@@ -204,6 +204,14 @@ const metaCloud = {
         orderMsg += `*${item.name}*\nQuantity ${item.quantity}    ₹${item.quantity * item.price}.00\n\n`;
       });
       orderMsg += `━━━━━━━━━━━━━━━\n`;
+      
+      // Show items total if delivery charge exists
+      if (order.deliveryCharge && order.deliveryCharge > 0) {
+        orderMsg += `*Items Total*    ₹${order.itemsTotal || (order.totalAmount - order.deliveryCharge)}.00\n`;
+        orderMsg += `*Delivery Charge*    ₹${order.deliveryCharge}.00\n`;
+        orderMsg += `━━━━━━━━━━━━━━━\n`;
+      }
+      
       orderMsg += `*Total*    ₹${order.totalAmount}.00\n\n`;
       orderMsg += `💳 Select your UPI app to pay`;
 
@@ -252,6 +260,13 @@ const metaCloud = {
         orderMsg += `*${item.name}*\nQty: ${item.quantity} × ₹${item.price} = ₹${item.quantity * item.price}\n\n`;
       });
       orderMsg += `━━━━━━━━━━━━━━━\n`;
+      
+      // Show items total if delivery charge exists (fallback)
+      if (order.deliveryCharge && order.deliveryCharge > 0) {
+        orderMsg += `*Items Total: ₹${order.itemsTotal || (order.totalAmount - order.deliveryCharge)}*\n`;
+        orderMsg += `*Delivery Charge: ₹${order.deliveryCharge}*\n`;
+      }
+      
       orderMsg += `*Total: ₹${order.totalAmount}*\n\n`;
       orderMsg += `💳 *Pay here (Select UPI App):*\n${paymentUrl}`;
 

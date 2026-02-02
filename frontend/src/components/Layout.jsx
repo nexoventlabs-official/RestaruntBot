@@ -8,7 +8,8 @@ import {
   BarChart3,
   Image,
   Bike,
-  Tag
+  Tag,
+  Settings
 } from 'lucide-react';
 
 const navItems = [
@@ -19,6 +20,7 @@ const navItems = [
   { path: '/admin/delivery-persons', icon: Bike, label: 'Delivery', description: 'Delivery partners' },
   { path: '/admin/reports', icon: BarChart3, label: 'Reports', description: 'Analytics & reports' },
   { path: '/admin/chatbot-images', icon: Image, label: 'Bot Images', description: 'WhatsApp images' },
+  { path: '/admin/settings', icon: Settings, label: 'Settings', description: 'Restaurant settings' },
 ];
 
 export default function Layout() {

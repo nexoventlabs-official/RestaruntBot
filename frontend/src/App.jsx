@@ -22,6 +22,7 @@ import DeliveryPersons from './pages/DeliveryPersons';
 import DeliveryLogin from './pages/DeliveryLogin';
 import DeliveryDashboard from './pages/DeliveryDashboard';
 import Offers from './pages/Offers';
+import Settings from './pages/Settings';
 import api from './api';
 import { useImagePreloader } from './hooks/useImagePreloader';
 
@@ -98,6 +99,7 @@ function App() {
           <Route path="reports" element={<Reports />} />
           <Route path="chatbot-images" element={<ChatbotImages />} />
           <Route path="delivery-persons" element={<DeliveryPersons />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
         
         {/* Delivery Boy Routes */}

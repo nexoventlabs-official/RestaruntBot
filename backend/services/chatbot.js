@@ -16,6 +16,111 @@ const generateOrderId = (serviceType = 'delivery') => {
   return prefix + 'RD' + Date.now().toString(36).toUpperCase();
 };
 
+// Haversine formula to calculate distance between two coordinates in KM
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distance = R * c;
+  
+  return Math.round(distance * 100) / 100; // Round to 2 decimal places
+};
+
+// Helper to calculate delivery charge based on customer location
+const calculateDeliveryCharge = async (customerLat, customerLon) => {
+  try {
+    // Get restaurant location settings
+    const restaurantLocation = await Settings.getValue('restaurantLocation');
+    const deliverySettings = await Settings.getValue('deliverySettings');
+    
+    // If settings not configured, no delivery charge
+    if (!restaurantLocation?.latitude || !restaurantLocation?.longitude) {
+      console.log('📍 Restaurant location not configured - no delivery charge');
+      return { charge: 0, distance: null, withinFreeRadius: true, message: null };
+    }
+    
+    if (!deliverySettings) {
+      console.log('🚚 Delivery settings not configured - no delivery charge');
+      return { charge: 0, distance: null, withinFreeRadius: true, message: null };
+    }
+    
+    // Calculate distance
+    const distance = calculateDistance(
+      customerLat, 
+      customerLon, 
+      restaurantLocation.latitude, 
+      restaurantLocation.longitude
+    );
+    
+    if (distance === null) {
+      console.log('📍 Could not calculate distance - no delivery charge');
+      return { charge: 0, distance: null, withinFreeRadius: true, message: null };
+    }
+    
+    console.log(`📍 Distance from restaurant: ${distance} KM`);
+    
+    const freeRadius = deliverySettings.freeDeliveryRadius || 5;
+    const maxRadius = deliverySettings.maxDeliveryRadius;
+    const extraChargeEnabled = deliverySettings.enableExtraDeliveryCharge;
+    const extraCharge = deliverySettings.extraDeliveryCharge || 0;
+    
+    // Check if within free delivery radius
+    if (distance <= freeRadius) {
+      console.log(`✅ Within free delivery radius (${freeRadius} KM)`);
+      return { 
+        charge: 0, 
+        distance, 
+        withinFreeRadius: true, 
+        message: null 
+      };
+    }
+    
+    // Check if beyond max delivery radius
+    if (maxRadius && distance > maxRadius) {
+      console.log(`❌ Beyond max delivery radius (${maxRadius} KM)`);
+      return { 
+        charge: null, 
+        distance, 
+        withinFreeRadius: false, 
+        beyondMaxRadius: true,
+        maxRadius,
+        message: `Sorry, we don't deliver to locations beyond ${maxRadius} KM from our restaurant. Your location is ${distance} KM away.`
+      };
+    }
+    
+    // Outside free radius - check if extra charge is enabled
+    if (extraChargeEnabled && extraCharge > 0) {
+      console.log(`💰 Outside free radius - adding delivery charge: ₹${extraCharge}`);
+      return { 
+        charge: extraCharge, 
+        distance, 
+        withinFreeRadius: false, 
+        message: `Your location is ${distance} KM away. A delivery charge of ₹${extraCharge} will be added.`
+      };
+    }
+    
+    // Extra charge not enabled - free delivery
+    console.log(`✅ Extra charge not enabled - free delivery`);
+    return { 
+      charge: 0, 
+      distance, 
+      withinFreeRadius: false, 
+      message: null 
+    };
+    
+  } catch (error) {
+    console.error('Error calculating delivery charge:', error);
+    return { charge: 0, distance: null, withinFreeRadius: true, message: null };
+  }
+};
+
 // Helper to check if cart items are still available
 const checkCartAvailability = async (cart) => {
   if (!cart || cart.length === 0) return { available: true, unavailableItems: [] };
@@ -3360,6 +3465,39 @@ const chatbot = {
           formattedAddress = await this.reverseGeocode(locationData.latitude, locationData.longitude);
         }
         
+        // Check delivery radius BEFORE saving location
+        if (locationData.latitude && locationData.longitude && customer.cart?.length > 0) {
+          const deliveryResult = await calculateDeliveryCharge(locationData.latitude, locationData.longitude);
+          
+          // If beyond max delivery radius, reject the order
+          if (deliveryResult.beyondMaxRadius) {
+            const outOfRangeImg = await chatbotImagesService.getImageUrl('out_of_delivery_range');
+            const message = `❌ *Delivery Not Available*\n\n${deliveryResult.message}\n\nWould you like to try a different address or opt for self-pickup?`;
+            
+            if (outOfRangeImg) {
+              await whatsapp.sendImageWithButtons(phone, outOfRangeImg, message, [
+                { id: 'service_pickup', text: '🏪 Self-Pickup' },
+                { id: 'share_location', text: '📍 New Location' },
+                { id: 'home', text: '🏠 Main Menu' }
+              ]);
+            } else {
+              await whatsapp.sendButtons(phone, message, [
+                { id: 'service_pickup', text: '🏪 Self-Pickup' },
+                { id: 'share_location', text: '📍 New Location' },
+                { id: 'home', text: '🏠 Main Menu' }
+              ]);
+            }
+            state.currentStep = 'awaiting_location';
+            customer.conversationState = state;
+            await customer.save();
+            return;
+          }
+          
+          // Store delivery charge info in customer state for later use
+          state.deliveryCharge = deliveryResult.charge || 0;
+          state.deliveryDistance = deliveryResult.distance;
+        }
+        
         customer.deliveryAddress = {
           latitude: locationData.latitude,
           longitude: locationData.longitude,
@@ -3370,7 +3508,7 @@ const chatbot = {
         
         // If customer has items in cart, show order summary with payment options
         if (customer.cart?.length > 0) {
-          await this.sendPaymentMethodOptions(phone, customer);
+          await this.sendPaymentMethodOptions(phone, customer, state);
           state.currentStep = 'select_payment_method';
         } else {
           // No cart items, just confirm location saved
@@ -5137,7 +5275,7 @@ const chatbot = {
     );
   },
 
-  async sendPaymentMethodOptions(phone, customer) {
+  async sendPaymentMethodOptions(phone, customer, state = {}) {
     // Refresh customer from database to ensure we have latest cart data
     const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
@@ -5149,7 +5287,7 @@ const chatbot = {
       return;
     }
 
-    let total = 0;
+    let itemsTotal = 0;
     let cartMsg = '🛒 *Order Summary*\n\n';
     let validItems = 0;
     
@@ -5157,7 +5295,7 @@ const chatbot = {
       if (item.menuItem) {
         const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
         const subtotal = effectivePrice * item.quantity;
-        total += subtotal;
+        itemsTotal += subtotal;
         validItems++;
         const unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
         const priceDisplay = formatPriceWithOffer(item.menuItem);
@@ -5179,11 +5317,41 @@ const chatbot = {
     }
     
     cartMsg += `━━━━━━━━━━━━━━━\n`;
-    cartMsg += `*Total: ₹${total}*\n\n`;
+    cartMsg += `*Items Total: ₹${itemsTotal}*\n`;
+    
+    // Calculate delivery charge if applicable
+    let deliveryCharge = state.deliveryCharge || 0;
+    const serviceType = state.serviceType || 'delivery';
+    
+    // Recalculate delivery charge if customer has location and service type is delivery
+    if (serviceType === 'delivery' && freshCustomer.deliveryAddress?.latitude && freshCustomer.deliveryAddress?.longitude) {
+      const deliveryResult = await calculateDeliveryCharge(
+        freshCustomer.deliveryAddress.latitude,
+        freshCustomer.deliveryAddress.longitude
+      );
+      deliveryCharge = deliveryResult.charge || 0;
+      
+      if (deliveryResult.distance) {
+        cartMsg += `📍 *Distance:* ${deliveryResult.distance} KM\n`;
+      }
+    }
+    
+    // Show delivery charge if applicable
+    if (deliveryCharge > 0) {
+      cartMsg += `🚚 *Delivery Charge:* ₹${deliveryCharge}\n`;
+    } else if (serviceType === 'delivery') {
+      cartMsg += `🚚 *Delivery:* FREE\n`;
+    }
+    
+    const grandTotal = itemsTotal + deliveryCharge;
+    cartMsg += `━━━━━━━━━━━━━━━\n`;
+    cartMsg += `*Grand Total: ₹${grandTotal}*\n\n`;
     
     // Show delivery address if available
-    if (freshCustomer.deliveryAddress?.address) {
+    if (freshCustomer.deliveryAddress?.address && serviceType === 'delivery') {
       cartMsg += `📍 *Delivery Address:*\n${freshCustomer.deliveryAddress.address}\n\n`;
+    } else if (serviceType === 'pickup') {
+      cartMsg += `🏪 *Self-Pickup at Restaurant*\n\n`;
     }
     
     cartMsg += `💳 Select payment method:`;
@@ -5210,11 +5378,11 @@ const chatbot = {
 
     const serviceType = state.serviceType || state.selectedService || 'delivery';
     const orderId = generateOrderId(serviceType);
-    let total = 0;
+    let itemsTotal = 0;
     const items = freshCustomer.cart.filter(item => item.menuItem).map(item => {
       const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
       const subtotal = effectivePrice * item.quantity;
-      total += subtotal;
+      itemsTotal += subtotal;
       return {
         menuItem: item.menuItem._id,
         name: item.menuItem.name,
@@ -5234,10 +5402,27 @@ const chatbot = {
       return { success: false };
     }
 
+    // Calculate delivery charge for delivery orders
+    let deliveryCharge = 0;
+    let deliveryDistance = null;
+    if (serviceType === 'delivery' && freshCustomer.deliveryAddress?.latitude && freshCustomer.deliveryAddress?.longitude) {
+      const deliveryResult = await calculateDeliveryCharge(
+        freshCustomer.deliveryAddress.latitude,
+        freshCustomer.deliveryAddress.longitude
+      );
+      deliveryCharge = deliveryResult.charge || 0;
+      deliveryDistance = deliveryResult.distance;
+    }
+    
+    const total = itemsTotal + deliveryCharge;
+
     const order = new Order({
       orderId,
       customer: { phone: freshCustomer.phone, name: freshCustomer.name || 'Customer', email: freshCustomer.email },
       items,
+      itemsTotal,
+      deliveryCharge,
+      deliveryDistance,
       totalAmount: total,
       serviceType: state.serviceType || state.selectedService || 'delivery',
       deliveryAddress: freshCustomer.deliveryAddress ? {
@@ -5321,14 +5506,18 @@ const chatbot = {
 
     let confirmMsg = `✅ *Order Confirmed!*\n\n`;
     confirmMsg += `📦 Order ID: *${orderId}*\n`;
-    confirmMsg += `💵 Payment: *Cash on Delivery*\n`;
-    confirmMsg += `💰 Total: *₹${total}*\n\n`;
+    confirmMsg += `💵 Payment: *Cash on Delivery*\n\n`;
     confirmMsg += `━━━━━━━━━━━━━━━\n`;
     confirmMsg += `*Items:*\n`;
     items.forEach((item, i) => {
       confirmMsg += `${i + 1}. ${item.name} (${item.unitQty} ${item.unit}) x${item.quantity} - ₹${item.price * item.quantity}\n`;
     });
-    confirmMsg += `━━━━━━━━━━━━━━━\n\n`;
+    confirmMsg += `━━━━━━━━━━━━━━━\n`;
+    confirmMsg += `*Items Total:* ₹${itemsTotal}\n`;
+    if (deliveryCharge > 0) {
+      confirmMsg += `*Delivery Charge:* ₹${deliveryCharge}\n`;
+    }
+    confirmMsg += `*Grand Total:* ₹${total}\n\n`;
     confirmMsg += `🙏 Thank you for your order!\nPlease keep ₹${total} ready for payment.`;
 
     const confirmedImageUrl = await chatbotImagesService.getImageUrl('order_confirmed');
@@ -5481,11 +5670,11 @@ const chatbot = {
 
     const serviceType = state.serviceType || state.selectedService || 'delivery';
     const orderId = generateOrderId(serviceType);
-    let total = 0;
+    let itemsTotal = 0;
     const items = freshCustomer.cart.filter(item => item.menuItem).map(item => {
       const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
       const subtotal = effectivePrice * item.quantity;
-      total += subtotal;
+      itemsTotal += subtotal;
       return {
         menuItem: item.menuItem._id,
         name: item.menuItem.name,
@@ -5505,10 +5694,27 @@ const chatbot = {
       return { success: false };
     }
 
+    // Calculate delivery charge for delivery orders
+    let deliveryCharge = 0;
+    let deliveryDistance = null;
+    if (serviceType === 'delivery' && freshCustomer.deliveryAddress?.latitude && freshCustomer.deliveryAddress?.longitude) {
+      const deliveryResult = await calculateDeliveryCharge(
+        freshCustomer.deliveryAddress.latitude,
+        freshCustomer.deliveryAddress.longitude
+      );
+      deliveryCharge = deliveryResult.charge || 0;
+      deliveryDistance = deliveryResult.distance;
+    }
+    
+    const total = itemsTotal + deliveryCharge;
+
     const order = new Order({
       orderId,
       customer: { phone: freshCustomer.phone, name: freshCustomer.name || 'Customer', email: freshCustomer.email },
       items,
+      itemsTotal,
+      deliveryCharge,
+      deliveryDistance,
       totalAmount: total,
       serviceType: state.serviceType || state.selectedService || 'delivery',
       deliveryAddress: freshCustomer.deliveryAddress ? {

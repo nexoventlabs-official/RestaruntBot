@@ -22,6 +22,9 @@ const orderSchema = new mongoose.Schema({
     unitQty: { type: Number, default: 1 },
     image: String
   }],
+  itemsTotal: { type: Number }, // Total of items before delivery charge
+  deliveryCharge: { type: Number, default: 0 }, // Extra delivery charge for distances beyond free radius
+  deliveryDistance: { type: Number }, // Distance in KM from restaurant to delivery address
   totalAmount: { type: Number, required: true },
   status: {
     type: String,
