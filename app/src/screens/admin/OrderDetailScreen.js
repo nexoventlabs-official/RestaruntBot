@@ -25,7 +25,7 @@ const DELIVERY_STATUS_FLOW = ['pending', 'confirmed', 'preparing', 'ready', 'out
 const PICKUP_STATUS_FLOW = ['pending', 'confirmed', 'ready', 'delivered'];
 
 export default function OrderDetailScreen({ route, navigation }) {
-  const { order: passedOrder, orderId } = route.params || {};
+  const { order: passedOrder, orderId, fromHistory = false } = route.params || {};
   const [order, setOrder] = useState(passedOrder || null);
   const [loading, setLoading] = useState(!passedOrder && !!orderId);
   const [fetchError, setFetchError] = useState(null);
@@ -240,7 +240,7 @@ export default function OrderDetailScreen({ route, navigation }) {
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
-            <Text style={styles.title}>Order Details</Text>
+            <Text style={styles.title}>{fromHistory ? 'Order History' : 'Order Details'}</Text>
             <Text style={styles.orderId}>#{order.orderId}</Text>
           </View>
           <View style={{ width: 44 }} />
@@ -401,14 +401,16 @@ export default function OrderDetailScreen({ route, navigation }) {
                     )}
                   </View>
                 </View>
-                <View style={[styles.paymentStatusBadge, { backgroundColor: order.paymentStatus === 'paid' ? '#DCFCE7' : '#FEF3C7' }]}>
+                <View style={[styles.paymentStatusBadge, { backgroundColor: ['paid', 'paid at hotel', 'pay at hotel', 'cod'].includes(order.paymentStatus?.toLowerCase()) ? '#DCFCE7' : '#FEF3C7' }]}>
                   <Ionicons 
-                    name={order.paymentStatus === 'paid' ? 'checkmark-circle' : 'time'} 
+                    name={['paid', 'paid at hotel', 'pay at hotel', 'cod'].includes(order.paymentStatus?.toLowerCase()) ? 'checkmark-circle' : 'time'} 
                     size={16} 
-                    color={order.paymentStatus === 'paid' ? '#22C55E' : '#F59E0B'} 
+                    color={['paid', 'paid at hotel', 'pay at hotel', 'cod'].includes(order.paymentStatus?.toLowerCase()) ? '#22C55E' : '#F59E0B'} 
                   />
-                  <Text style={[styles.paymentStatusText, { color: order.paymentStatus === 'paid' ? '#22C55E' : '#F59E0B' }]}>
-                    {order.paymentStatus === 'paid' ? 'Paid' : 'Pending'}
+                  <Text style={[styles.paymentStatusText, { color: ['paid', 'paid at hotel', 'pay at hotel', 'cod'].includes(order.paymentStatus?.toLowerCase()) ? '#22C55E' : '#F59E0B' }]}>
+                    {order.paymentStatus === 'paid' ? 'Paid' : 
+                     ['paid at hotel', 'pay at hotel'].includes(order.paymentStatus?.toLowerCase()) ? 'Paid at Hotel' :
+                     order.paymentStatus?.toLowerCase() === 'cod' ? 'COD Paid' : 'Pending'}
                   </Text>
                 </View>
               </View>
@@ -445,7 +447,7 @@ export default function OrderDetailScreen({ route, navigation }) {
         <View style={{ height: 140 }} />
       </ScrollView>
 
-      {!['delivered', 'cancelled', 'refunded'].includes(order.status) && (
+      {!fromHistory && !['delivered', 'cancelled', 'refunded'].includes(order.status) && (
         <View style={styles.footer}>
           {loading ? <ActivityIndicator size="large" color={colors.zomato.red} /> : (
             <View style={styles.footerButtons}>

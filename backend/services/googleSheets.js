@@ -696,23 +696,27 @@ const googleSheets = {
           
           const rows = response.data.values || [];
           
-          // Parse rows (skip date headers which start with 📅)
+          // Parse rows (skip date headers which start with 📅 and column headers)
           for (const row of rows) {
-            if (!row[0] || row[0].startsWith('📅')) continue;
+            if (!row[0] || row[0].startsWith('📅') || row[0] === 'Order ID') continue;
             
-            // Column structure: OrderID, Time, Phone, Name, Items, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
+            // Column structure (13 columns): 
+            // OrderID(0), Time(1), Phone(2), Name(3), Items(4), ItemsTotal(5), Delivery(6), Total(7), 
+            // PaymentMethod(8), PaymentStatus(9), OrderStatus(10), Address(11), DeliveryPartner(12)
             const order = {
               orderId: row[0] || '',
               time: row[1] || '',
               phone: row[2] || '',
               customerName: row[3] || '',
               items: row[4] || '',
-              totalAmount: parseFloat(row[5]) || 0,
-              paymentMethod: row[6] || '',
-              paymentStatus: row[7] || '',
+              itemsTotal: parseFloat(row[5]) || 0,
+              deliveryCharge: parseFloat(row[6]) || 0,
+              totalAmount: parseFloat(row[7]) || parseFloat(row[5]) || 0,
+              paymentMethod: row[8] || row[6] || '',
+              paymentStatus: row[9] || row[7] || '',
               status: sheetType === 'selfpick' ? 'delivered' : sheetType,
-              address: row[9] || '',
-              deliveryPartnerName: row[10] || '',
+              address: row[11] || row[9] || '',
+              deliveryPartnerName: row[12] || row[10] || '',
               source: 'sheets',
               sheetType: sheetType
             };
@@ -740,13 +744,9 @@ const googleSheets = {
         }
       }
       
-      // Sort by orderId (descending - newest first)
-      // OrderIds typically have format like D1234 or S1234, sort by numeric part
-      allOrders.sort((a, b) => {
-        const numA = parseInt(a.orderId.replace(/[^0-9]/g, '')) || 0;
-        const numB = parseInt(b.orderId.replace(/[^0-9]/g, '')) || 0;
-        return numB - numA;
-      });
+      // Sort orders by most recent first
+      // Try to parse time from format like "2:30 PM" or row order
+      allOrders.reverse(); // Reverse since sheets append new orders at bottom
       
       console.log(`📊 Fetched ${allOrders.length} orders from Google Sheets history`);
       return { orders: allOrders, error: null };

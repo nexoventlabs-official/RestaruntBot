@@ -26,9 +26,12 @@ const STATUS_CONFIG = {
 
 const PAYMENT_STATUS_CONFIG = {
   paid: { color: '#2ecc71', label: 'Paid', icon: 'checkmark-circle' },
+  'paid at hotel': { color: '#2ecc71', label: 'Paid at Hotel', icon: 'checkmark-circle' },
+  'pay at hotel': { color: '#2ecc71', label: 'Paid at Hotel', icon: 'checkmark-circle' },
   unpaid: { color: '#e74c3c', label: 'Unpaid', icon: 'close-circle' },
   refunded: { color: '#9b59b6', label: 'Refunded', icon: 'refresh-circle' },
   pending: { color: '#f39c12', label: 'Pending', icon: 'time' },
+  cod: { color: '#2ecc71', label: 'COD Paid', icon: 'checkmark-circle' },
 };
 
 const OrderHistoryScreen = ({ navigation }) => {
@@ -123,14 +126,67 @@ const OrderHistoryScreen = ({ navigation }) => {
 
   const filteredOrders = orders;
 
+  // Navigate to order detail with constructed order object
+  const handleOrderPress = (item) => {
+    // Construct order object for detail screen
+    const orderForDetail = {
+      _id: item.orderId,
+      orderId: item.orderId,
+      customer: {
+        name: item.customerName,
+        phone: item.phone,
+      },
+      items: typeof item.items === 'string' 
+        ? item.items.split(',').map(i => {
+            const match = i.trim().match(/^(.+?)\s*x(\d+)\s*\(₹(\d+)\)$/);
+            if (match) {
+              return { name: match[1].trim(), quantity: parseInt(match[2]), price: parseInt(match[3]) / parseInt(match[2]) };
+            }
+            return { name: i.trim(), quantity: 1, price: 0 };
+          })
+        : item.items || [],
+      totalAmount: item.totalAmount,
+      status: item.status,
+      paymentStatus: item.paymentStatus,
+      paymentMethod: item.paymentMethod,
+      serviceType: item.sheetType === 'selfpick' ? 'pickup' : 'delivery',
+      deliveryAddress: { address: item.address },
+      deliveryPartner: item.deliveryPartnerName ? { name: item.deliveryPartnerName } : null,
+      createdAt: item.time,
+      source: 'sheets',
+    };
+    
+    navigation.navigate('OrderDetail', { order: orderForDetail, fromHistory: true });
+  };
+
   const renderOrderItem = ({ item }) => {
     const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.delivered;
-    const paymentConfig = PAYMENT_STATUS_CONFIG[item.paymentStatus?.toLowerCase()] || PAYMENT_STATUS_CONFIG.pending;
+    
+    // Determine payment status - for completed orders
+    let paymentStatusKey = item.paymentStatus?.toLowerCase()?.trim() || 'pending';
+    
+    // For self-pickup completed orders, treat "pending" as "paid at hotel"
+    if (item.sheetType === 'selfpick') {
+      if (paymentStatusKey === 'pending' || paymentStatusKey === 'pay at hotel') {
+        paymentStatusKey = 'paid at hotel';
+      }
+    }
+    
+    // For delivered orders with COD, show as paid
+    if (item.status === 'delivered' && paymentStatusKey === 'pending') {
+      const paymentMethod = item.paymentMethod?.toLowerCase() || '';
+      if (paymentMethod.includes('cod') || paymentMethod.includes('cash')) {
+        paymentStatusKey = 'cod';
+      }
+    }
+    
+    const paymentConfig = PAYMENT_STATUS_CONFIG[paymentStatusKey] || PAYMENT_STATUS_CONFIG.pending;
     
     return (
       <TouchableOpacity
         style={styles.orderCard}
         activeOpacity={0.7}
+        onPress={() => handleOrderPress(item)}
       >
         <View style={styles.orderHeader}>
           <View style={styles.orderIdContainer}>
