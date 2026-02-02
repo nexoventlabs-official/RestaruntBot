@@ -36,11 +36,10 @@ const calculateStraightLineDistance = (lat1, lon1, lat2, lon2) => {
 // Calculate road distance using OSRM (OpenStreetMap Routing) - FREE API
 const calculateOSRMDistance = async (lat1, lon1, lat2, lon2) => {
   try {
-    // OSRM public API (free, uses OpenStreetMap data)
-    // IMPORTANT: OSRM uses longitude,latitude order (not lat,lon)
+    // OSRM public API - Note: format is longitude,latitude (NOT lat,lon!)
     const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=false`;
     
-    console.log(`🗺️ OSRM request: Restaurant(${lat1},${lon1}) → Customer(${lat2},${lon2})`);
+    console.log(`🗺️ OSRM URL: ${url}`);
     
     const response = await axios.get(url, { 
       timeout: 10000,
@@ -48,6 +47,8 @@ const calculateOSRMDistance = async (lat1, lon1, lat2, lon2) => {
         'User-Agent': 'RestaurantBot/1.0'
       }
     });
+    
+    console.log(`🗺️ OSRM Response code: ${response.data.code}`);
     
     if (response.data.code === 'Ok' && response.data.routes?.[0]) {
       const distanceInMeters = response.data.routes[0].distance;
@@ -58,7 +59,7 @@ const calculateOSRMDistance = async (lat1, lon1, lat2, lon2) => {
       return Math.round(distanceInKm * 100) / 100;
     }
     
-    console.log('⚠️ OSRM API returned no valid route:', response.data.code);
+    console.log('⚠️ OSRM API returned no valid route:', response.data);
     return null;
   } catch (error) {
     console.error('❌ OSRM API error:', error.message);
@@ -66,56 +67,75 @@ const calculateOSRMDistance = async (lat1, lon1, lat2, lon2) => {
   }
 };
 
-// Fallback: Use GraphHopper free API
-const calculateGraphHopperDistance = async (lat1, lon1, lat2, lon2) => {
+// Alternative: OpenRouteService API (free tier available)
+const calculateOpenRouteServiceDistance = async (lat1, lon1, lat2, lon2) => {
   try {
-    // GraphHopper free API (limited but reliable)
-    const url = `https://graphhopper.com/api/1/route?point=${lat1},${lon1}&point=${lat2},${lon2}&vehicle=car&calc_points=false&key=`;
+    // OpenRouteService - coordinates are [lon, lat]
+    const url = `https://api.openrouteservice.org/v2/directions/driving-car?start=${lon1},${lat1}&end=${lon2},${lat2}`;
     
-    const response = await axios.get(url, { timeout: 10000 });
+    const response = await axios.get(url, { 
+      timeout: 10000,
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
     
-    if (response.data.paths?.[0]) {
-      const distanceInMeters = response.data.paths[0].distance;
+    if (response.data.features?.[0]?.properties?.segments?.[0]) {
+      const distanceInMeters = response.data.features[0].properties.segments[0].distance;
       const distanceInKm = distanceInMeters / 1000;
-      console.log(`✅ GraphHopper road distance: ${distanceInKm.toFixed(2)} KM`);
+      console.log(`✅ OpenRouteService road distance: ${distanceInKm.toFixed(2)} KM`);
       return Math.round(distanceInKm * 100) / 100;
     }
     
     return null;
   } catch (error) {
-    // GraphHopper requires API key for most requests, so this is expected to fail
+    console.error('OpenRouteService error:', error.message);
     return null;
   }
 };
 
-// Main distance calculator - uses OSRM (free) with smart fallback
-const calculateDistance = async (lat1, lon1, lat2, lon2, distanceMultiplier = 1.4) => {
+// Main distance calculator - tries multiple free APIs with smart fallback
+const calculateDistance = async (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) {
     console.log('⚠️ Missing coordinates for distance calculation');
     return null;
   }
   
-  console.log(`📍 Calculating distance: (${lat1}, ${lon1}) → (${lat2}, ${lon2})`);
+  // Ensure coordinates are numbers
+  lat1 = parseFloat(lat1);
+  lon1 = parseFloat(lon1);
+  lat2 = parseFloat(lat2);
+  lon2 = parseFloat(lon2);
+  
+  console.log(`\n📍 ========== DISTANCE CALCULATION ==========`);
+  console.log(`📍 Restaurant: ${lat1}, ${lon1}`);
+  console.log(`📍 Customer: ${lat2}, ${lon2}`);
+  
+  // Calculate straight-line first for reference
+  const straightLineDistance = calculateStraightLineDistance(lat1, lon1, lat2, lon2);
+  console.log(`📏 Straight-line distance: ${straightLineDistance} KM`);
   
   // Try OSRM API first (free, uses OpenStreetMap data)
   const osrmDistance = await calculateOSRMDistance(lat1, lon1, lat2, lon2);
   if (osrmDistance !== null && osrmDistance > 0) {
+    console.log(`📍 =========================================\n`);
     return osrmDistance;
   }
   
-  // Try GraphHopper as backup
-  const graphHopperDistance = await calculateGraphHopperDistance(lat1, lon1, lat2, lon2);
-  if (graphHopperDistance !== null && graphHopperDistance > 0) {
-    return graphHopperDistance;
+  // Try OpenRouteService as backup
+  const orsDistance = await calculateOpenRouteServiceDistance(lat1, lon1, lat2, lon2);
+  if (orsDistance !== null && orsDistance > 0) {
+    console.log(`📍 =========================================\n`);
+    return orsDistance;
   }
   
-  // Fall back to straight-line distance with multiplier to approximate road distance
-  const straightLineDistance = calculateStraightLineDistance(lat1, lon1, lat2, lon2);
+  // Fall back to straight-line distance with multiplier
+  // Using 1.6 multiplier for India (roads are often more winding)
   if (straightLineDistance === null) return null;
   
-  // Use higher multiplier (1.5) for better approximation when APIs fail
-  const approximateRoadDistance = straightLineDistance * 1.5;
-  console.log(`📍 FALLBACK: Straight-line ${straightLineDistance} KM × 1.5 = ~${approximateRoadDistance.toFixed(2)} KM`);
+  const approximateRoadDistance = straightLineDistance * 1.6;
+  console.log(`⚠️ FALLBACK: Using straight-line × 1.6 = ${approximateRoadDistance.toFixed(2)} KM`);
+  console.log(`📍 =========================================\n`);
   
   return Math.round(approximateRoadDistance * 100) / 100;
 };
