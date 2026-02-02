@@ -1876,6 +1876,739 @@ const googleSheets = {
       console.error('❌ Error incrementing dashboard stat:', error.message);
       return false;
     }
+  },
+
+  // ==================== CLEAR / RESET SHEET FUNCTIONS ====================
+
+  // Clear all order sheets (neworders, delivered, cancelled, selfpick) with proper headers
+  async clearAllOrderSheets() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return { success: false, error: 'Auth not configured' };
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const orderSheets = ['new', 'delivered', 'cancelled', 'selfpick'];
+      const results = {};
+      
+      // Column headers for order sheets
+      const orderHeaders = ['Order ID', 'Time', 'Phone', 'Name', 'Items', 'Items Total', 'Delivery', 'Total', 'Payment Method', 'Payment Status', 'Order Status', 'Address', 'Delivery Partner'];
+      
+      // Sheet-specific colors
+      const sheetColors = {
+        new: { red: 0.93, green: 0.8, blue: 0.2 },       // Yellow/Orange
+        delivered: { red: 0.2, green: 0.6, blue: 0.4 },  // Green
+        cancelled: { red: 0.8, green: 0.2, blue: 0.2 },  // Red
+        selfpick: { red: 0.2, green: 0.5, blue: 0.7 }    // Blue
+      };
+      
+      for (const sheetType of orderSheets) {
+        const sheet = await this.getSheetByType(sheets, sheetType);
+        if (!sheet) {
+          results[sheetType] = 'Sheet not found';
+          continue;
+        }
+        
+        try {
+          // Get current data count
+          const response = await sheets.spreadsheets.values.get({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${sheet.sheetName}!A:A`
+          });
+          const rowCount = (response.data.values || []).length;
+          
+          // Clear all data
+          await sheets.spreadsheets.values.clear({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${sheet.sheetName}!A:Z`
+          });
+          
+          // Add headers
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${sheet.sheetName}!A1:M1`,
+            valueInputOption: 'RAW',
+            resource: { values: [orderHeaders] }
+          });
+          
+          // Apply header formatting and column widths
+          const headerColor = sheetColors[sheetType];
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: SPREADSHEET_ID,
+            resource: {
+              requests: [
+                // Header styling
+                {
+                  repeatCell: {
+                    range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 13 },
+                    cell: {
+                      userEnteredFormat: {
+                        backgroundColor: headerColor,
+                        textFormat: { bold: true, fontSize: 10, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                        horizontalAlignment: 'CENTER',
+                        verticalAlignment: 'MIDDLE',
+                        wrapStrategy: 'WRAP'
+                      }
+                    },
+                    fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy)'
+                  }
+                },
+                // Header row height
+                {
+                  updateDimensionProperties: {
+                    range: { sheetId: sheet.sheetId, dimension: 'ROWS', startIndex: 0, endIndex: 1 },
+                    properties: { pixelSize: 35 },
+                    fields: 'pixelSize'
+                  }
+                },
+                // Column widths: OrderID(80), Time(70), Phone(100), Name(100), Items(200), ItemsTotal(80), Delivery(70), Total(80), PayMethod(100), PayStatus(100), OrderStatus(100), Address(180), DeliveryPartner(120)
+                { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 85 }, fields: 'pixelSize' } },
+                { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 75 }, fields: 'pixelSize' } },
+                { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+                { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+                { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 220 }, fields: 'pixelSize' } },
+                { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 85 }, fields: 'pixelSize' } },
+                { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 70 }, fields: 'pixelSize' } },
+                { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 7, endIndex: 8 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
+                { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 8, endIndex: 9 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+                { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 9, endIndex: 10 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+                { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 10, endIndex: 11 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+                { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 11, endIndex: 12 }, properties: { pixelSize: 180 }, fields: 'pixelSize' } },
+                { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 12, endIndex: 13 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
+                // Freeze header row
+                {
+                  updateSheetProperties: {
+                    properties: {
+                      sheetId: sheet.sheetId,
+                      gridProperties: { frozenRowCount: 1 }
+                    },
+                    fields: 'gridProperties.frozenRowCount'
+                  }
+                }
+              ]
+            }
+          });
+          
+          results[sheetType] = `Cleared ${rowCount} rows, headers added`;
+        } catch (err) {
+          results[sheetType] = `Error: ${err.message}`;
+        }
+      }
+      
+      console.log('🧹 Order sheets cleared:', results);
+      return { success: true, results };
+    } catch (error) {
+      console.error('❌ Error clearing order sheets:', error.message);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Clear and reset customers sheet
+  async clearCustomersSheet() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return { success: false, error: 'Auth not configured' };
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'customers');
+      
+      if (!sheet) return { success: false, error: 'Customers sheet not found' };
+      
+      // Get current row count
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:A`
+      });
+      const rowCount = (response.data.values || []).length;
+      
+      // Clear all data including header
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:Z`
+      });
+      
+      // Re-initialize with headers and formatting
+      const headers = ['Phone', 'Name', 'Location', 'Orders Count', 'Total Spent', 'Last Order Date', 'Order History'];
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A1:G1`,
+        valueInputOption: 'RAW',
+        resource: { values: [headers] }
+      });
+      
+      // Apply header formatting
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+          requests: [
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 7 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.2, green: 0.4, blue: 0.6 },
+                    textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                    horizontalAlignment: 'CENTER',
+                    verticalAlignment: 'MIDDLE'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+              }
+            },
+            {
+              updateDimensionProperties: {
+                range: { sheetId: sheet.sheetId, dimension: 'ROWS', startIndex: 0, endIndex: 1 },
+                properties: { pixelSize: 35 },
+                fields: 'pixelSize'
+              }
+            },
+            {
+              updateDimensionProperties: {
+                range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 7 },
+                properties: { pixelSize: 130 },
+                fields: 'pixelSize'
+              }
+            }
+          ]
+        }
+      });
+      
+      console.log(`🧹 Customers sheet cleared: ${rowCount - 1} rows removed`);
+      return { success: true, clearedRows: rowCount - 1 };
+    } catch (error) {
+      console.error('❌ Error clearing customers sheet:', error.message);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Clear and reset WhatsApp contacts sheet
+  async clearWhatsAppContactsSheet() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return { success: false, error: 'Auth not configured' };
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'whatsapp_contacts');
+      
+      if (!sheet) return { success: false, error: 'WhatsApp contacts sheet not found' };
+      
+      // Get current row count
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:A`
+      });
+      const rowCount = (response.data.values || []).length;
+      
+      // Clear all data
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:Z`
+      });
+      
+      // Re-initialize with headers
+      const headers = ['Phone', 'Name', 'First Order Date', 'Last Order Date', 'Total Orders', 'Is Active'];
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A1:F1`,
+        valueInputOption: 'RAW',
+        resource: { values: [headers] }
+      });
+      
+      // Apply header formatting
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+          requests: [
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 6 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.2, green: 0.5, blue: 0.3 },
+                    textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                    horizontalAlignment: 'CENTER',
+                    verticalAlignment: 'MIDDLE'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+              }
+            },
+            {
+              updateDimensionProperties: {
+                range: { sheetId: sheet.sheetId, dimension: 'ROWS', startIndex: 0, endIndex: 1 },
+                properties: { pixelSize: 35 },
+                fields: 'pixelSize'
+              }
+            },
+            {
+              updateDimensionProperties: {
+                range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 6 },
+                properties: { pixelSize: 140 },
+                fields: 'pixelSize'
+              }
+            }
+          ]
+        }
+      });
+      
+      console.log(`🧹 WhatsApp contacts sheet cleared: ${rowCount - 1} rows removed`);
+      return { success: true, clearedRows: rowCount - 1 };
+    } catch (error) {
+      console.error('❌ Error clearing whatsapp_contacts sheet:', error.message);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Clear and reset daily reports sheet - NEW FORMAT: dates as columns
+  async clearDailyReportsSheet() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return { success: false, error: 'Auth not configured' };
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'daily_reports');
+      
+      if (!sheet) return { success: false, error: 'Daily reports sheet not found' };
+      
+      // Clear all data
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:ZZ`
+      });
+      
+      // NEW FORMAT: Metrics as rows, dates as columns
+      // Column A = Metric names, subsequent columns = dates
+      const metricHeaders = [
+        ['Metric'],  // A1 - will be followed by date columns
+        ['💰 Revenue'],
+        ['📦 Total Orders'],
+        ['✅ Delivered'],
+        ['❌ Cancelled'],
+        ['💸 Refunded'],
+        ['💵 COD Orders'],
+        ['📱 UPI Orders'],
+        ['🍽️ Items Sold'],
+        ['🏆 Top Item'],
+        ['📂 Top Category']
+      ];
+      
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A1:A11`,
+        valueInputOption: 'RAW',
+        resource: { values: metricHeaders }
+      });
+      
+      // Apply formatting
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+          requests: [
+            // Header row (A1) formatting
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 1 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.4, green: 0.2, blue: 0.6 },
+                    textFormat: { bold: true, fontSize: 12, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                    horizontalAlignment: 'CENTER',
+                    verticalAlignment: 'MIDDLE'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+              }
+            },
+            // Metric names column formatting (A2:A11)
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 1, endRowIndex: 11, startColumnIndex: 0, endColumnIndex: 1 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.95, green: 0.95, blue: 0.98 },
+                    textFormat: { bold: true, fontSize: 11 },
+                    horizontalAlignment: 'LEFT',
+                    verticalAlignment: 'MIDDLE'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+              }
+            },
+            // Set column A width
+            {
+              updateDimensionProperties: {
+                range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 },
+                properties: { pixelSize: 150 },
+                fields: 'pixelSize'
+              }
+            },
+            // Set row heights
+            {
+              updateDimensionProperties: {
+                range: { sheetId: sheet.sheetId, dimension: 'ROWS', startIndex: 0, endIndex: 11 },
+                properties: { pixelSize: 30 },
+                fields: 'pixelSize'
+              }
+            },
+            // Freeze first column
+            {
+              updateSheetProperties: {
+                properties: {
+                  sheetId: sheet.sheetId,
+                  gridProperties: { frozenColumnCount: 1 }
+                },
+                fields: 'gridProperties.frozenColumnCount'
+              }
+            }
+          ]
+        }
+      });
+      
+      console.log('🧹 Daily reports sheet cleared and reformatted (dates as columns)');
+      return { success: true, message: 'Sheet reset with new date-column format' };
+    } catch (error) {
+      console.error('❌ Error clearing daily_reports sheet:', error.message);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Clear and reset dashboard stats sheet
+  async clearDashboardStatsSheet() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return { success: false, error: 'Auth not configured' };
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'dashboard_stats');
+      
+      if (!sheet) return { success: false, error: 'Dashboard stats sheet not found' };
+      
+      // Clear all data
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:Z`
+      });
+      
+      // Re-initialize with headers and default values
+      const headers = ['Metric', 'Value', 'Last Updated', 'Notes'];
+      const defaultMetrics = [
+        ['Total Orders', '0', new Date().toLocaleString('en-IN'), 'Lifetime total'],
+        ['Total Revenue', '0', new Date().toLocaleString('en-IN'), 'Lifetime total'],
+        ['Total Customers', '0', new Date().toLocaleString('en-IN'), 'Lifetime total'],
+        ['Today Orders', '0', new Date().toLocaleString('en-IN'), 'Resets daily'],
+        ['Today Revenue', '0', new Date().toLocaleString('en-IN'), 'Resets daily'],
+        ['Today Date', new Date().toISOString().split('T')[0], new Date().toLocaleString('en-IN'), 'Current date']
+      ];
+      
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A1:D7`,
+        valueInputOption: 'RAW',
+        resource: { values: [headers, ...defaultMetrics] }
+      });
+      
+      // Apply formatting
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+          requests: [
+            // Header formatting
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 4 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.1, green: 0.3, blue: 0.5 },
+                    textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                    horizontalAlignment: 'CENTER',
+                    verticalAlignment: 'MIDDLE'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+              }
+            },
+            // Data rows formatting
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 1, endRowIndex: 7, startColumnIndex: 0, endColumnIndex: 4 },
+                cell: {
+                  userEnteredFormat: {
+                    horizontalAlignment: 'CENTER',
+                    verticalAlignment: 'MIDDLE'
+                  }
+                },
+                fields: 'userEnteredFormat(horizontalAlignment,verticalAlignment)'
+              }
+            },
+            // Column widths
+            {
+              updateDimensionProperties: {
+                range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 },
+                properties: { pixelSize: 140 },
+                fields: 'pixelSize'
+              }
+            },
+            {
+              updateDimensionProperties: {
+                range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 },
+                properties: { pixelSize: 120 },
+                fields: 'pixelSize'
+              }
+            },
+            {
+              updateDimensionProperties: {
+                range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 },
+                properties: { pixelSize: 180 },
+                fields: 'pixelSize'
+              }
+            },
+            {
+              updateDimensionProperties: {
+                range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 },
+                properties: { pixelSize: 120 },
+                fields: 'pixelSize'
+              }
+            },
+            // Row heights
+            {
+              updateDimensionProperties: {
+                range: { sheetId: sheet.sheetId, dimension: 'ROWS', startIndex: 0, endIndex: 7 },
+                properties: { pixelSize: 32 },
+                fields: 'pixelSize'
+              }
+            },
+            // Add borders
+            {
+              updateBorders: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 7, startColumnIndex: 0, endColumnIndex: 4 },
+                top: { style: 'SOLID', color: { red: 0.8, green: 0.8, blue: 0.8 } },
+                bottom: { style: 'SOLID', color: { red: 0.8, green: 0.8, blue: 0.8 } },
+                left: { style: 'SOLID', color: { red: 0.8, green: 0.8, blue: 0.8 } },
+                right: { style: 'SOLID', color: { red: 0.8, green: 0.8, blue: 0.8 } },
+                innerHorizontal: { style: 'SOLID', color: { red: 0.9, green: 0.9, blue: 0.9 } },
+                innerVertical: { style: 'SOLID', color: { red: 0.9, green: 0.9, blue: 0.9 } }
+              }
+            }
+          ]
+        }
+      });
+      
+      console.log('🧹 Dashboard stats sheet cleared and reset');
+      return { success: true, message: 'Sheet reset with default metrics' };
+    } catch (error) {
+      console.error('❌ Error clearing dashboard_stats sheet:', error.message);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Clear all sheets at once
+  async clearAllSheets() {
+    console.log('\n🧹 Clearing all Google Sheets data...\n');
+    
+    const results = {
+      orders: await this.clearAllOrderSheets(),
+      customers: await this.clearCustomersSheet(),
+      whatsappContacts: await this.clearWhatsAppContactsSheet(),
+      dailyReports: await this.clearDailyReportsSheet(),
+      dashboardStats: await this.clearDashboardStatsSheet()
+    };
+    
+    console.log('\n✅ All sheets cleared!\n');
+    return results;
+  },
+
+  // ==================== UPDATED DAILY REPORT FUNCTIONS ====================
+  
+  // Save daily report - NEW FORMAT: dates as columns
+  async saveDailyReportByDate(report) {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return false;
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'daily_reports');
+      if (!sheet) return false;
+      
+      const { date, revenue, orders, deliveredOrders, cancelledOrders, refundedOrders, codOrders, upiOrders, itemsSold, items, categories } = report;
+      
+      // Get current headers to find the date column
+      const headerResponse = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!1:1`
+      });
+      
+      const headers = headerResponse.data.values?.[0] || ['Metric'];
+      let dateColumnIndex = headers.findIndex(h => h === date);
+      
+      // If date column doesn't exist, add it
+      if (dateColumnIndex === -1) {
+        dateColumnIndex = headers.length;
+        
+        // Add date header
+        const columnLetter = this.getColumnLetter(dateColumnIndex);
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheet.sheetName}!${columnLetter}1`,
+          valueInputOption: 'RAW',
+          resource: { values: [[`📅 ${date}`]] }
+        });
+        
+        // Format the new date header
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: SPREADSHEET_ID,
+          resource: {
+            requests: [
+              {
+                repeatCell: {
+                  range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: dateColumnIndex, endColumnIndex: dateColumnIndex + 1 },
+                  cell: {
+                    userEnteredFormat: {
+                      backgroundColor: { red: 0.4, green: 0.2, blue: 0.6 },
+                      textFormat: { bold: true, fontSize: 10, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                      horizontalAlignment: 'CENTER',
+                      verticalAlignment: 'MIDDLE'
+                    }
+                  },
+                  fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+                }
+              },
+              {
+                updateDimensionProperties: {
+                  range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: dateColumnIndex, endIndex: dateColumnIndex + 1 },
+                  properties: { pixelSize: 110 },
+                  fields: 'pixelSize'
+                }
+              }
+            ]
+          }
+        });
+      }
+      
+      // Get top item and category
+      const topItem = items?.[0]?.name || '-';
+      const topCategory = categories?.[0]?.category || '-';
+      
+      // Prepare column data (rows 2-11 for the date column)
+      const columnData = [
+        [`₹${(revenue || 0).toLocaleString()}`],
+        [orders || 0],
+        [deliveredOrders || 0],
+        [cancelledOrders || 0],
+        [refundedOrders || 0],
+        [codOrders || 0],
+        [upiOrders || 0],
+        [itemsSold || 0],
+        [topItem],
+        [topCategory]
+      ];
+      
+      const columnLetter = this.getColumnLetter(dateColumnIndex);
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!${columnLetter}2:${columnLetter}11`,
+        valueInputOption: 'RAW',
+        resource: { values: columnData }
+      });
+      
+      // Format the data cells
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+          requests: [
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 1, endRowIndex: 11, startColumnIndex: dateColumnIndex, endColumnIndex: dateColumnIndex + 1 },
+                cell: {
+                  userEnteredFormat: {
+                    horizontalAlignment: 'CENTER',
+                    verticalAlignment: 'MIDDLE'
+                  }
+                },
+                fields: 'userEnteredFormat(horizontalAlignment,verticalAlignment)'
+              }
+            },
+            // Revenue row styling (row 2)
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: dateColumnIndex, endColumnIndex: dateColumnIndex + 1 },
+                cell: {
+                  userEnteredFormat: {
+                    textFormat: { bold: true, foregroundColor: { red: 0.13, green: 0.55, blue: 0.13 } }
+                  }
+                },
+                fields: 'userEnteredFormat(textFormat)'
+              }
+            }
+          ]
+        }
+      });
+      
+      console.log(`📊 Daily report saved for ${date} in column ${columnLetter}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error saving daily report by date:', error.message);
+      return false;
+    }
+  },
+
+  // Get all daily reports (all dates)
+  async getAllDailyReports() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return [];
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'daily_reports');
+      if (!sheet) return [];
+      
+      // Get all data
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:ZZ`
+      });
+      
+      const rows = response.data.values || [];
+      if (rows.length < 2) return [];
+      
+      const headers = rows[0];
+      const reports = [];
+      
+      // Each column after A is a date
+      for (let col = 1; col < headers.length; col++) {
+        const dateHeader = headers[col] || '';
+        const date = dateHeader.replace('📅 ', '').trim();
+        
+        if (!date) continue;
+        
+        reports.push({
+          date,
+          revenue: rows[1]?.[col]?.replace(/[₹,]/g, '') || '0',
+          orders: rows[2]?.[col] || '0',
+          delivered: rows[3]?.[col] || '0',
+          cancelled: rows[4]?.[col] || '0',
+          refunded: rows[5]?.[col] || '0',
+          cod: rows[6]?.[col] || '0',
+          upi: rows[7]?.[col] || '0',
+          itemsSold: rows[8]?.[col] || '0',
+          topItem: rows[9]?.[col] || '-',
+          topCategory: rows[10]?.[col] || '-'
+        });
+      }
+      
+      return reports;
+    } catch (error) {
+      console.error('❌ Error fetching all daily reports:', error.message);
+      return [];
+    }
+  },
+
+  // Helper function to convert column index to letter (0=A, 1=B, 26=AA, etc.)
+  getColumnLetter(index) {
+    let letter = '';
+    while (index >= 0) {
+      letter = String.fromCharCode((index % 26) + 65) + letter;
+      index = Math.floor(index / 26) - 1;
+    }
+    return letter;
   }
 };
 

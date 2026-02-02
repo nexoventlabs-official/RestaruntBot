@@ -64,8 +64,32 @@ const dailyCleanup = {
         const upiOrders = yesterdayOrders.filter(o => o.paymentMethod === 'upi').length;
         const itemsSold = yesterdayOrders.reduce((sum, o) => sum + (o.items?.length || 0), 0);
         
-        // Save to Google Sheets
-        await googleSheets.saveDailyReport({
+        // Calculate top items and categories
+        const itemCounts = {};
+        const categoryCounts = {};
+        yesterdayOrders.forEach(order => {
+          order.items?.forEach(item => {
+            const itemName = item.name || 'Unknown';
+            const category = item.category || 'Other';
+            const revenue = (item.price || 0) * (item.quantity || 1);
+            
+            itemCounts[itemName] = (itemCounts[itemName] || 0) + (item.quantity || 1);
+            categoryCounts[category] = (categoryCounts[category] || 0) + revenue;
+          });
+        });
+        
+        const topItems = Object.entries(itemCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([name, quantity]) => ({ name, quantity }));
+          
+        const topCategories = Object.entries(categoryCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([category, revenue]) => ({ category, revenue }));
+        
+        // Save to Google Sheets (new column-based format)
+        await googleSheets.saveDailyReportByDate({
           date: yesterdayString,
           revenue: stats.todayRevenue,
           orders: stats.todayOrders,
@@ -74,7 +98,9 @@ const dailyCleanup = {
           refundedOrders,
           codOrders,
           upiOrders,
-          itemsSold
+          itemsSold,
+          items: topItems,
+          categories: topCategories
         });
         
         // Also update dashboard stats in Google Sheets
