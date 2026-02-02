@@ -212,11 +212,42 @@ const googleSheets = {
 
       await this.addDateHeader(sheets, sheet.sheetName, sheet.sheetId);
 
-      // Prepare row data (13 columns): 
-      // OrderID(0), Time(1), Phone(2), Name(3), Items(4), ItemsTotal(5), DeliveryCharge(6), Total(7), 
-      // PaymentMethod(8), PaymentStatus(9), OrderStatus(10), Address(11), DeliveryPartner(12)
-      const newRowData = [...rowData];
-      while (newRowData.length < 13) newRowData.push('');
+      // Normalize row data to 13-column structure
+      // Detect if data is in old 11-column format by checking if column 7 contains status text
+      const col7 = (rowData[7] || '').toString();
+      const isOldFormat = col7.includes('Pending') || col7.includes('Paid') || col7.includes('Ready') || 
+                          col7.includes('Confirmed') || col7.includes('Preparing');
+      
+      let newRowData;
+      if (isOldFormat && rowData.length <= 11) {
+        // Old 11-column format: OrderID, Time, Phone, Name, Items, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
+        // Convert to 13-column: OrderID, Time, Phone, Name, Items, ItemsTotal, Delivery, Total, PaymentMethod, PaymentStatus, OrderStatus, Address, DeliveryPartner
+        const itemsTotal = parseFloat(rowData[5]) || 0;
+        newRowData = [
+          rowData[0],  // OrderID
+          rowData[1],  // Time
+          rowData[2],  // Phone
+          rowData[3],  // Name
+          rowData[4],  // Items
+          itemsTotal,  // ItemsTotal
+          0,           // Delivery
+          itemsTotal,  // Total (same as items total for pickup)
+          rowData[6] || '',  // PaymentMethod
+          '',          // PaymentStatus (will be set below)
+          '',          // OrderStatus (will be set below)
+          rowData[9] || 'Self Pickup',  // Address
+          rowData[10] || ''  // DeliveryPartner
+        ];
+      } else {
+        // Already 13-column format or close to it
+        newRowData = [...rowData];
+        while (newRowData.length < 13) newRowData.push('');
+      }
+      
+      // Ensure Total column (7) has numeric value, not status text
+      if (isNaN(parseFloat(newRowData[7])) || newRowData[7].toString().includes('Pending') || newRowData[7].toString().includes('Ready')) {
+        newRowData[7] = newRowData[5] || 0; // Use ItemsTotal
+      }
       
       // Set payment status at correct index (9)
       newRowData[9] = STATUS_LABELS[paymentStatus] || paymentStatus;
@@ -385,8 +416,16 @@ const googleSheets = {
         let finalPaymentStatus = paymentStatus || 'paid';
         if (isPickupOrder && actualPaymentMethod) {
           finalPaymentStatus = actualPaymentMethod === 'cash' ? 'Paid (Cash)' : 'Paid (UPI)';
-          // Also update column K (delivery partner/payment method column) with Cash or UPI
-          orderData.rowData[10] = actualPaymentMethod === 'cash' ? 'Cash' : 'UPI';
+          // Update payment method column (index 8 in 13-column structure)
+          orderData.rowData[8] = actualPaymentMethod === 'cash' ? 'Cash' : 'UPI/App';
+        } else if (isPickupOrder && orderData.rowData[8]) {
+          // Normalize existing payment method for UPI
+          const existingMethod = (orderData.rowData[8] || '').toString().toLowerCase();
+          if (existingMethod.includes('upi') || existingMethod === 'paid' || existingMethod === 'online') {
+            orderData.rowData[8] = 'UPI/App';
+          } else if (existingMethod.includes('pay at hotel') || existingMethod.includes('cod')) {
+            orderData.rowData[8] = 'Pay at Hotel';
+          }
         }
         
         if (isPickupOrder) {
