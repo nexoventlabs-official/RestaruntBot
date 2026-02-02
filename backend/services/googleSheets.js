@@ -823,11 +823,38 @@ const googleSheets = {
         }
       }
       
-      // Sort orders by most recent first
-      // Try to parse time from format like "2:30 PM" or row order
-      allOrders.reverse(); // Reverse since sheets append new orders at bottom
+      // Sort orders by time - parse time from format like "2:30:15 pm" or "2:30 PM"
+      allOrders.sort((a, b) => {
+        // Parse time strings to comparable values
+        const parseTime = (timeStr) => {
+          if (!timeStr) return 0;
+          const str = timeStr.toString().toLowerCase().trim();
+          // Match format: "2:30:15 pm" or "2:30 pm" or "14:30:15"
+          const match12 = str.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)/i);
+          const match24 = str.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+          
+          if (match12) {
+            let hours = parseInt(match12[1]);
+            const mins = parseInt(match12[2]);
+            const secs = parseInt(match12[3] || 0);
+            const isPM = match12[4].toLowerCase() === 'pm';
+            if (isPM && hours !== 12) hours += 12;
+            if (!isPM && hours === 12) hours = 0;
+            return hours * 3600 + mins * 60 + secs;
+          } else if (match24) {
+            const hours = parseInt(match24[1]);
+            const mins = parseInt(match24[2]);
+            const secs = parseInt(match24[3] || 0);
+            return hours * 3600 + mins * 60 + secs;
+          }
+          return 0;
+        };
+        
+        // Sort by time descending (most recent first)
+        return parseTime(b.time) - parseTime(a.time);
+      });
       
-      console.log(`📊 Fetched ${allOrders.length} orders from Google Sheets history`);
+      console.log(`📊 Fetched ${allOrders.length} orders from Google Sheets history (sorted by time)`);
       return { orders: allOrders, error: null };
     } catch (error) {
       console.error('❌ Error fetching order history from sheets:', error.message);

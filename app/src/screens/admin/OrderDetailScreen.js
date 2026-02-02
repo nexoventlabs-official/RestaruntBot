@@ -407,11 +407,27 @@ export default function OrderDetailScreen({ route, navigation }) {
                   const paymentStatus = (order.paymentStatus || '').toLowerCase().trim();
                   const paymentMethod = (order.paymentMethod || '').toLowerCase().trim();
                   const isPickup = order.serviceType === 'pickup';
+                  const isCancelled = order.status === 'cancelled';
                   
-                  let isPaid = true;
+                  let isPaid = !isCancelled; // Cancelled orders show as not paid
                   let statusLabel = 'Paid';
                   
-                  if (isPickup) {
+                  if (isCancelled) {
+                    // Cancelled orders - show original payment method info
+                    if (paymentMethod === 'upi/app' || paymentMethod === 'upi' || paymentMethod === 'online' || paymentMethod === 'paid') {
+                      statusLabel = 'Cancelled (UPI/App)';
+                      isPaid = false;
+                    } else if (paymentMethod === 'pay at hotel' || paymentMethod.includes('pay at hotel') || paymentMethod === 'cod') {
+                      statusLabel = 'Cancelled (Pay at Hotel)';
+                      isPaid = false;
+                    } else if (paymentMethod.includes('cod') || paymentMethod.includes('cash')) {
+                      statusLabel = 'Cancelled (COD)';
+                      isPaid = false;
+                    } else {
+                      statusLabel = 'Cancelled';
+                      isPaid = false;
+                    }
+                  } else if (isPickup) {
                     // Self-pickup orders - check paymentStatus first
                     if (paymentStatus === 'paid (upi)' || paymentStatus.includes('paid (upi)')) {
                       statusLabel = 'Paid (UPI)';

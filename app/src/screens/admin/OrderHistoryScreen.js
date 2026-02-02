@@ -34,6 +34,11 @@ const PAYMENT_STATUS_CONFIG = {
   refunded: { color: '#9b59b6', label: 'Refunded', icon: 'refresh-circle' },
   pending: { color: '#f39c12', label: 'Pending', icon: 'time' },
   cod: { color: '#2ecc71', label: 'COD Paid', icon: 'checkmark-circle' },
+  // Cancelled order payment statuses
+  'cancelled_upi': { color: '#e74c3c', label: 'UPI/App', icon: 'card-outline' },
+  'cancelled_payathotel': { color: '#e74c3c', label: 'Pay at Hotel', icon: 'cash-outline' },
+  'cancelled_cod': { color: '#e74c3c', label: 'COD', icon: 'cash-outline' },
+  'cancelled': { color: '#e74c3c', label: 'Cancelled', icon: 'close-circle' },
 };
 
 const OrderHistoryScreen = ({ navigation }) => {
@@ -168,10 +173,22 @@ const OrderHistoryScreen = ({ navigation }) => {
     // Use paymentStatus field from sheet (column J), fallback to paymentMethod (column I)
     const paymentStatus = item.paymentStatus?.toLowerCase()?.trim() || '';
     const paymentMethod = item.paymentMethod?.toLowerCase()?.trim() || '';
+    const isCancelled = item.status === 'cancelled' || item.sheetType === 'cancelled';
     let paymentStatusKey = 'pending';
     
-    // For self-pickup orders (selfpick sheet)
-    if (item.sheetType === 'selfpick') {
+    if (isCancelled) {
+      // Cancelled orders - show original payment method info
+      if (paymentMethod === 'upi/app' || paymentMethod === 'upi' || paymentMethod === 'online' || paymentMethod === 'paid') {
+        paymentStatusKey = 'cancelled_upi';
+      } else if (paymentMethod === 'pay at hotel' || paymentMethod.includes('pay at hotel')) {
+        paymentStatusKey = 'cancelled_payathotel';
+      } else if (paymentMethod.includes('cod') || paymentMethod.includes('cash')) {
+        paymentStatusKey = 'cancelled_cod';
+      } else {
+        paymentStatusKey = 'cancelled';
+      }
+    } else if (item.sheetType === 'selfpick') {
+      // For self-pickup orders (selfpick sheet)
       // Check paymentStatus field first (this contains "Paid", "Paid (UPI)", "Paid (Cash)")
       if (paymentStatus === 'paid (upi)' || paymentStatus.includes('paid (upi)')) {
         paymentStatusKey = 'paid (upi)';
