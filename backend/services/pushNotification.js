@@ -26,11 +26,21 @@ const pushNotification = {
       data,
       priority: 'high',
       channelId: channelId,
-      // Android specific
+      // CRITICAL: These settings ensure delivery when app is killed/background
       _displayInForeground: true,
+      // TTL of 1 week to ensure delivery
+      ttl: 604800,
+      // Android specific - high priority for immediate delivery
+      android: {
+        priority: 'high',
+        channelId: channelId,
+        sound: true,
+        vibrate: [0, 500, 250, 500],
+      },
       // iOS specific
       badge: 1,
       mutableContent: true,
+      categoryId: channelId === 'new-orders' ? 'new-orders' : undefined,
     };
 
     try {
@@ -80,7 +90,15 @@ const pushNotification = {
         priority: 'high',
         channelId: channelId,
         _displayInForeground: true,
+        ttl: 604800,
+        android: {
+          priority: 'high',
+          channelId: channelId,
+          sound: true,
+          vibrate: [0, 500, 250, 500],
+        },
         badge: 1,
+        categoryId: channelId === 'new-orders' ? 'new-orders' : undefined,
       });
     }
 

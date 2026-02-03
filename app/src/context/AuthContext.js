@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import { AppState } from 'react-native';
 import api, { setAuthLogoutCallback } from '../config/api';
 import pushNotifications from '../services/pushNotifications';
 
@@ -7,10 +8,15 @@ const AuthContext = createContext({});
 
 export const useAuth = () => useContext(AuthContext);
 
+// Key for tracking if permission has been granted
+const NOTIFICATION_PERMISSION_GRANTED_KEY = 'notification_permission_granted';
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
+  const appState = useRef(AppState.currentState);
+  const permissionCheckInterval = useRef(null);
 
   // Force logout function (called from API interceptor on 401)
   const forceLogout = useCallback(() => {
@@ -18,6 +24,51 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setRole(null);
   }, []);
+
+  // Check notification permission and prompt if not granted
+  const checkAndPromptNotificationPermission = useCallback(async (userRole) => {
+    if (!pushNotifications.isSupported()) return;
+    
+    const hasPermission = await pushNotifications.hasNotificationPermission();
+    
+    if (!hasPermission) {
+      // Permission not granted, show prompt
+      console.log('📱 Notification permission not granted, showing prompt...');
+      await registerPushToken(userRole, true); // Force prompt
+    } else {
+      // Permission granted, ensure token is registered
+      const permissionGranted = await SecureStore.getItemAsync(NOTIFICATION_PERMISSION_GRANTED_KEY);
+      if (!permissionGranted) {
+        await SecureStore.setItemAsync(NOTIFICATION_PERMISSION_GRANTED_KEY, 'true');
+      }
+      // Re-register token to ensure it's up to date
+      await registerPushToken(userRole, false);
+    }
+  }, []);
+
+  // Handle app state changes - re-register token when coming to foreground
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        // App came to foreground
+        console.log('📱 App came to foreground - checking notification permission');
+        
+        const storedRole = await SecureStore.getItemAsync('role');
+        if (storedRole) {
+          // Check permission and prompt if needed
+          await checkAndPromptNotificationPermission(storedRole);
+        }
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription?.remove();
+      if (permissionCheckInterval.current) {
+        clearInterval(permissionCheckInterval.current);
+      }
+    };
+  }, [checkAndPromptNotificationPermission]);
 
   useEffect(() => {
     // Register the logout callback with API interceptor
@@ -43,12 +94,12 @@ export const AuthProvider = ({ children }) => {
         try {
           if (storedRole === 'admin') {
             await api.get('/auth/verify');
-            // Register push token for admin
-            registerPushToken('admin');
+            // Check and register push token for admin
+            checkAndPromptNotificationPermission('admin');
           } else {
             await api.get('/delivery/verify');
-            // Re-register push token for delivery partner
-            registerPushToken('delivery');
+            // Check and register push token for delivery partner
+            checkAndPromptNotificationPermission('delivery');
           }
         } catch (error) {
           await logout();
@@ -93,34 +144,20 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // Register push notifications
-  const registerPushToken = async (userRole) => {
+  const registerPushToken = async (userRole, forcePrompt = false) => {
     try {
-      const { token: pushToken, permissionDenied } = await pushNotifications.registerForPushNotifications();
+      const { token: pushToken, permissionDenied } = await pushNotifications.registerForPushNotifications(false, forcePrompt);
       
       if (permissionDenied) {
-        // Show alert to user about enabling notifications
-        const { Alert, Linking, Platform } = require('react-native');
-        Alert.alert(
-          'Enable Notifications',
-          'To receive order updates and important alerts, please enable notifications in your device settings.',
-          [
-            { text: 'Later', style: 'cancel' },
-            { 
-              text: 'Open Settings', 
-              onPress: () => {
-                if (Platform.OS === 'ios') {
-                  Linking.openURL('app-settings:');
-                } else {
-                  Linking.openSettings();
-                }
-              }
-            }
-          ]
-        );
-        return;
+        // Permission was denied, will be prompted again on next app foreground
+        console.log('📱 Push notification permission denied');
+        return false;
       }
       
       if (pushToken) {
+        // Mark that permission was granted
+        await SecureStore.setItemAsync(NOTIFICATION_PERMISSION_GRANTED_KEY, 'true');
+        
         // Send to appropriate endpoint based on role
         if (userRole === 'admin') {
           await api.post('/auth/push-token', { pushToken });
@@ -129,10 +166,12 @@ export const AuthProvider = ({ children }) => {
           await pushNotifications.updatePushToken(pushToken);
           console.log('📱 Delivery push token registered');
         }
+        return true;
       }
     } catch (error) {
       console.error('Error registering push token:', error);
     }
+    return false;
   };
 
   const loginAdmin = async (username, password) => {
@@ -146,8 +185,8 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
     setRole('admin');
     
-    // Register push notifications for admin
-    registerPushToken('admin');
+    // Register push notifications for admin with force prompt
+    registerPushToken('admin', true);
     
     return userData;
   };
@@ -163,8 +202,8 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
     setRole('delivery');
     
-    // Register push notifications for delivery partner
-    registerPushToken('delivery');
+    // Register push notifications for delivery partner with force prompt
+    registerPushToken('delivery', true);
     
     return userData;
   };
@@ -181,6 +220,8 @@ export const AuthProvider = ({ children }) => {
     await SecureStore.deleteItemAsync('token');
     await SecureStore.deleteItemAsync('user');
     await SecureStore.deleteItemAsync('role');
+    // Clear notification permission flag on logout so it prompts again on next login
+    await SecureStore.deleteItemAsync(NOTIFICATION_PERMISSION_GRANTED_KEY);
     
     setUser(null);
     setRole(null);

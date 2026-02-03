@@ -1,7 +1,7 @@
 import 'react-native-gesture-handler';
 import React, { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, StyleSheet, AppState } from 'react-native';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -21,7 +21,6 @@ const Stack = createNativeStackNavigator();
 function AppNavigator() {
   const { user, role, loading } = useAuth();
   const navigationRef = useRef(null);
-  const appState = useRef(AppState.currentState);
 
   useEffect(() => {
     let responseSubscription = null;
@@ -68,15 +67,6 @@ function AppNavigator() {
       checkInitialNotification();
     }
 
-    // Handle app state changes
-    const subscription = AppState.addEventListener('change', nextAppState => {
-      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        // App came to foreground - check for any pending notifications
-        console.log('📱 App came to foreground');
-      }
-      appState.current = nextAppState;
-    });
-
     return () => {
       if (responseSubscription) {
         pushNotifications.removeNotificationListener(responseSubscription);
@@ -84,7 +74,6 @@ function AppNavigator() {
       if (receivedSubscription) {
         pushNotifications.removeNotificationListener(receivedSubscription);
       }
-      subscription?.remove();
     };
   }, [role]);
 
