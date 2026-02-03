@@ -2863,16 +2863,22 @@ const chatbot = {
       }
       
       // Second try: Find items where ANY keyword matches tags or category
+      // ONLY use this fallback if user searched for a SINGLE keyword
+      // For multi-keyword searches (e.g., "egg dosa"), require ALL keywords to match
       const anyKeywordTagMatches = new Map();
-      for (const keyword of searchKeywords) {
-        for (const item of menuItems) {
-          if (itemMatchesKeyword(item, keyword)) {
-            const id = item._id.toString();
-            if (!anyKeywordTagMatches.has(id)) {
-              anyKeywordTagMatches.set(id, { item, matchCount: 0, matchedKeywords: [] });
+      
+      // Only allow partial matches if searching for a single keyword
+      if (searchKeywords.length === 1) {
+        for (const keyword of searchKeywords) {
+          for (const item of menuItems) {
+            if (itemMatchesKeyword(item, keyword)) {
+              const id = item._id.toString();
+              if (!anyKeywordTagMatches.has(id)) {
+                anyKeywordTagMatches.set(id, { item, matchCount: 0, matchedKeywords: [] });
+              }
+              anyKeywordTagMatches.get(id).matchCount++;
+              anyKeywordTagMatches.get(id).matchedKeywords.push(keyword);
             }
-            anyKeywordTagMatches.get(id).matchCount++;
-            anyKeywordTagMatches.get(id).matchedKeywords.push(keyword);
           }
         }
       }
@@ -3098,25 +3104,30 @@ const chatbot = {
       }
       
       // PRIORITY 2: Items matching SOME keywords - sorted by match count
+      // ONLY use this fallback if user searched for a SINGLE keyword
+      // For multi-keyword searches (e.g., "egg dosa"), require ALL keywords to match
       const partialTagMatches = new Map();
       
-      for (const item of menuItems) {
-        if (!passesFilter(item)) continue;
-        
-        // Count how many search keywords match this item
-        let matchCount = 0;
-        const matchedKeywords = [];
-        
-        for (const kw of searchKeywords) {
-          if (itemMatchesKeyword(item, kw)) {
-            matchCount++;
-            matchedKeywords.push(kw);
+      // Only allow partial matches if searching for a single keyword
+      if (searchKeywords.length === 1) {
+        for (const item of menuItems) {
+          if (!passesFilter(item)) continue;
+          
+          // Count how many search keywords match this item
+          let matchCount = 0;
+          const matchedKeywords = [];
+          
+          for (const kw of searchKeywords) {
+            if (itemMatchesKeyword(item, kw)) {
+              matchCount++;
+              matchedKeywords.push(kw);
+            }
           }
-        }
-        
-        if (matchCount > 0) {
-          const id = item._id.toString();
-          partialTagMatches.set(id, { item, matchCount, matchedKeywords });
+          
+          if (matchCount > 0) {
+            const id = item._id.toString();
+            partialTagMatches.set(id, { item, matchCount, matchedKeywords });
+          }
         }
       }
       
