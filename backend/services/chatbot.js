@@ -2863,22 +2863,17 @@ const chatbot = {
       }
       
       // Second try: Find items where ANY keyword matches tags or category
-      // ONLY use this fallback if user searched for a SINGLE keyword
-      // For multi-keyword searches (e.g., "egg dosa"), require ALL keywords to match
+      // Sort by match count - items matching more keywords appear first
       const anyKeywordTagMatches = new Map();
-      
-      // Only allow partial matches if searching for a single keyword
-      if (searchKeywords.length === 1) {
-        for (const keyword of searchKeywords) {
-          for (const item of menuItems) {
-            if (itemMatchesKeyword(item, keyword)) {
-              const id = item._id.toString();
-              if (!anyKeywordTagMatches.has(id)) {
-                anyKeywordTagMatches.set(id, { item, matchCount: 0, matchedKeywords: [] });
-              }
-              anyKeywordTagMatches.get(id).matchCount++;
-              anyKeywordTagMatches.get(id).matchedKeywords.push(keyword);
+      for (const keyword of searchKeywords) {
+        for (const item of menuItems) {
+          if (itemMatchesKeyword(item, keyword)) {
+            const id = item._id.toString();
+            if (!anyKeywordTagMatches.has(id)) {
+              anyKeywordTagMatches.set(id, { item, matchCount: 0, matchedKeywords: [] });
             }
+            anyKeywordTagMatches.get(id).matchCount++;
+            anyKeywordTagMatches.get(id).matchedKeywords.push(keyword);
           }
         }
       }
@@ -2889,14 +2884,27 @@ const chatbot = {
           .sort((a, b) => b.matchCount - a.matchCount)
           .map(m => m.item);
         
-        console.log(`✅ Any keyword tag match: "${primarySearchTerm}" → ${sortedMatches.length} item(s)`);
-        return { 
-          items: sortedMatches, 
-          foodType: detected, 
-          searchTerm: primarySearchTerm, 
-          label: null,
-          exactMatch: false 
-        };
+        // For multi-keyword searches, only return items matching ALL keywords
+        // For single keyword searches, return all matches
+        const totalKeywords = searchKeywords.length;
+        const filteredMatches = totalKeywords > 1 
+          ? sortedMatches.filter(item => {
+              const id = item._id.toString();
+              const matchData = anyKeywordTagMatches.get(id);
+              return matchData && matchData.matchCount === totalKeywords;
+            })
+          : sortedMatches;
+        
+        if (filteredMatches.length > 0) {
+          console.log(`✅ Any keyword tag match: "${primarySearchTerm}" → ${filteredMatches.length} item(s) (filtered from ${sortedMatches.length})`);
+          return { 
+            items: filteredMatches, 
+            foodType: detected, 
+            searchTerm: primarySearchTerm, 
+            label: null,
+            exactMatch: true // Mark as exact since all keywords matched
+          };
+        }
       }
     }
     
@@ -3104,30 +3112,25 @@ const chatbot = {
       }
       
       // PRIORITY 2: Items matching SOME keywords - sorted by match count
-      // ONLY use this fallback if user searched for a SINGLE keyword
-      // For multi-keyword searches (e.g., "egg dosa"), require ALL keywords to match
       const partialTagMatches = new Map();
       
-      // Only allow partial matches if searching for a single keyword
-      if (searchKeywords.length === 1) {
-        for (const item of menuItems) {
-          if (!passesFilter(item)) continue;
-          
-          // Count how many search keywords match this item
-          let matchCount = 0;
-          const matchedKeywords = [];
-          
-          for (const kw of searchKeywords) {
-            if (itemMatchesKeyword(item, kw)) {
-              matchCount++;
-              matchedKeywords.push(kw);
-            }
+      for (const item of menuItems) {
+        if (!passesFilter(item)) continue;
+        
+        // Count how many search keywords match this item
+        let matchCount = 0;
+        const matchedKeywords = [];
+        
+        for (const kw of searchKeywords) {
+          if (itemMatchesKeyword(item, kw)) {
+            matchCount++;
+            matchedKeywords.push(kw);
           }
-          
-          if (matchCount > 0) {
-            const id = item._id.toString();
-            partialTagMatches.set(id, { item, matchCount, matchedKeywords });
-          }
+        }
+        
+        if (matchCount > 0) {
+          const id = item._id.toString();
+          partialTagMatches.set(id, { item, matchCount, matchedKeywords });
         }
       }
       
@@ -3137,16 +3140,31 @@ const chatbot = {
           .sort((a, b) => b.matchCount - a.matchCount)
           .map(m => m.item);
         
-        const matchCounts = Array.from(partialTagMatches.values()).map(m => `${m.item.name}(${m.matchCount})`);
-        console.log(`✅ PRIORITY 2 - Partial tag matches (sorted by count): ${sortedMatches.length} item(s) - [${matchCounts.slice(0, 5).join(', ')}...]`);
+        // For multi-keyword searches, only return items matching ALL keywords
+        // For single keyword searches, return all matches
+        const totalKeywords = searchKeywords.length;
+        const filteredMatches = totalKeywords > 1 
+          ? sortedMatches.filter(item => {
+              const id = item._id.toString();
+              const matchData = partialTagMatches.get(id);
+              return matchData && matchData.matchCount === totalKeywords;
+            })
+          : sortedMatches;
         
-        return { 
-          items: sortedMatches, 
-          foodType: detected, 
-          searchTerm: primarySearchTerm, 
-          label: null,
-          exactMatch: false 
-        };
+        if (filteredMatches.length > 0) {
+          const matchCounts = Array.from(partialTagMatches.values())
+            .filter(m => filteredMatches.includes(m.item))
+            .map(m => `${m.item.name}(${m.matchCount})`);
+          console.log(`✅ PRIORITY 2 - Partial tag matches (sorted by count): ${filteredMatches.length} item(s) - [${matchCounts.slice(0, 5).join(', ')}...]`);
+          
+          return { 
+            items: filteredMatches, 
+            foodType: detected, 
+            searchTerm: primarySearchTerm, 
+            label: null,
+            exactMatch: true // Mark as exact since all keywords matched
+          };
+        }
       }
     }
     
