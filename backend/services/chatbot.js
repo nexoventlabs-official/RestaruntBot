@@ -3281,12 +3281,11 @@ const chatbot = {
       console.log(`🔍 Searching with variations: [${uniqueSearchTerms.join(', ')}]`);
       matchingItems = searchByMultipleTerms(searchableItems, uniqueSearchTerms);
       
-      // If no results with food type filter, try ALL items as fallback
-      if (matchingItems.length === 0 && searchableItems.length < menuItems.length) {
+      // IMPORTANT: If user explicitly specified food type (e.g., "veg curry"), do NOT fall back to all items
+      // Only try all items if no food type was detected (generic search like "curry")
+      if (matchingItems.length === 0 && !detected && searchableItems.length < menuItems.length) {
+        console.log(`🔍 No food type detected, falling back to all items...`);
         matchingItems = searchByMultipleTerms(menuItems, uniqueSearchTerms);
-        if (matchingItems.length > 0) {
-          foodTypeLabel = null; // Clear food type label since we're showing all items
-        }
       }
       
       // If still no results, try finding items that match ANY keyword (show all related items)
@@ -3294,9 +3293,11 @@ const chatbot = {
         const allKeywords = uniqueSearchTerms.flatMap(term => term.split(/\s+/).filter(k => k.length >= 2));
         if (allKeywords.length > 0) {
           console.log(`🔍 Fallback: finding items matching ANY keyword: [${allKeywords.join(', ')}]`);
-          // Search each keyword and combine all results - first try searchableItems
+          // Search keywords only in searchableItems (respects food type filter)
           matchingItems = searchByMultipleTerms(searchableItems, allKeywords);
-          if (matchingItems.length === 0) {
+          // Only fall back to all items if NO food type was specified
+          if (matchingItems.length === 0 && !detected) {
+            console.log(`🔍 No food type detected, trying all items for keywords...`);
             matchingItems = searchByMultipleTerms(menuItems, allKeywords);
           }
         }
@@ -3311,11 +3312,12 @@ const chatbot = {
         // Lower threshold (0.45) for better typo tolerance
         const fuzzyThreshold = 0.45;
         
-        // Try fuzzy matching with the primary search term - use searchableItems first
+        // Try fuzzy matching with the primary search term - use searchableItems (respects food type filter)
         let fuzzyResults = this.fuzzySearchItems(primarySearchTerm, searchableItems, fuzzyThreshold);
         
-        // If no results, try all menu items
-        if (fuzzyResults.length === 0) {
+        // Only try all menu items if NO food type was detected
+        if (fuzzyResults.length === 0 && !detected) {
+          console.log(`🔍 No food type detected, trying fuzzy search on all items...`);
           fuzzyResults = this.fuzzySearchItems(primarySearchTerm, menuItems, fuzzyThreshold);
         }
         
@@ -3337,11 +3339,13 @@ const chatbot = {
           }
         }
         
-        // Also try with all search variations
+        // Also try with all search variations - respect food type filter
         if (fuzzyResults.length === 0) {
           for (const term of uniqueSearchTerms) {
             if (term.length >= 2) {
-              fuzzyResults = this.fuzzySearchItems(term, menuItems, fuzzyThreshold);
+              // Only search all items if no food type was detected
+              const itemsToSearch = detected ? searchableItems : menuItems;
+              fuzzyResults = this.fuzzySearchItems(term, itemsToSearch, fuzzyThreshold);
               if (fuzzyResults.length > 0) break;
             }
           }
@@ -3351,7 +3355,9 @@ const chatbot = {
         if (fuzzyResults.length === 0 && searchWords.length >= 2) {
           const combinedWords = searchWords.join('');
           if (combinedWords.length >= 3) {
-            fuzzyResults = this.fuzzySearchItems(combinedWords, menuItems, fuzzyThreshold);
+            // Respect food type filter
+            const itemsToSearch = detected ? searchableItems : menuItems;
+            fuzzyResults = this.fuzzySearchItems(combinedWords, itemsToSearch, fuzzyThreshold);
           }
         }
         
