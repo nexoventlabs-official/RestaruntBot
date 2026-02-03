@@ -29,7 +29,21 @@ router.post('/login', async (req, res) => {
     
     // Check env credentials first
     if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
-      const token = jwt.sign({ username, role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '24h' });
+      // Find or create admin user in database for push token storage
+      let adminUser = await User.findOne({ username });
+      if (!adminUser) {
+        // Create admin user in database (password won't be used since we check env first)
+        adminUser = new User({ 
+          username, 
+          password: require('crypto').randomBytes(32).toString('hex'),
+          role: 'admin' 
+        });
+        await adminUser.save();
+        console.log('📱 Created admin user in database for push notifications');
+      }
+      
+      // Include user ID in token so push token can be saved
+      const token = jwt.sign({ id: adminUser._id, username, role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '24h' });
       return res.json({ token, user: { username, role: 'admin' } });
     }
 
@@ -73,12 +87,24 @@ router.post('/push-token', async (req, res) => {
     // If user has an ID (database user), update their push token
     if (decoded.id) {
       await User.findByIdAndUpdate(decoded.id, { pushToken });
+      console.log(`📱 Admin push token saved for ${decoded.username}: ${pushToken.substring(0, 30)}...`);
+    } else {
+      // Try to find user by username and update (for legacy tokens without ID)
+      const user = await User.findOneAndUpdate(
+        { username: decoded.username },
+        { pushToken },
+        { new: true }
+      );
+      if (user) {
+        console.log(`📱 Admin push token saved (by username) for ${decoded.username}: ${pushToken.substring(0, 30)}...`);
+      } else {
+        console.warn(`⚠️ No database user found for ${decoded.username} - push token not saved!`);
+      }
     }
-    
-    console.log(`📱 Admin push token updated for ${decoded.username}`);
     
     res.json({ message: 'Push token updated' });
   } catch (error) {
+    console.error('Push token error:', error);
     res.status(401).json({ error: 'Invalid token' });
   }
 });
