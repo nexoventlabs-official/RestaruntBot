@@ -2601,17 +2601,8 @@ const chatbot = {
       variations.push(basicTranslated.toLowerCase());
     }
     
-    // For romanized text, try Groq AI to get more variations
-    if (text.length >= 3) {
-      try {
-        const aiResult = await groqAi.translateRomanizedFood(text);
-        if (aiResult && aiResult.toLowerCase() !== text.toLowerCase()) {
-          variations.push(aiResult.toLowerCase());
-        }
-      } catch (error) {
-        console.error('AI romanized translation failed:', error.message);
-      }
-    }
+    // Skip AI for romanized English text - rely on tag-based matching instead
+    // This reduces API calls and makes search faster
     
     // Remove duplicates
     const cleanVariations = [...new Set(variations)];
@@ -2620,11 +2611,10 @@ const chatbot = {
   },
 
   // Smart search - detects food type and searches by name/tag (async for AI translation)
-  // Improved: EXACT match returns single item, otherwise searches ALL related items by tags
-  // Example: "masala dosa" → exact match OR all items with "masala" OR "dosa" tags
-  // Example: "dosa" → all items with "dosa" tag (not just exact title match)
-  // Now with AI-powered tag matching for native language queries
-  // Enhanced with DYNAMIC typo correction - works for ANY menu item
+  // Improved: Tag-based search with food type, quantity, and unit matching
+  // Reduced AI dependency - uses local tag matching first
+  // Example: "veg curry" → finds items with tags containing "veg" AND "curry"
+  // Example: "5 piece" → finds items with quantity/unit tag "5 piece"
   async smartSearch(text, menuItems) {
     // Early return for gibberish searches
     if (this.isGibberishSearch(text)) {
@@ -3368,224 +3358,14 @@ const chatbot = {
         }
       }
       
-      // ========== AI TYPO CORRECTION FALLBACK ==========
-      // Use Groq AI to correct potential typos like "thaiyr" → "thayir"
-      if (matchingItems.length === 0) {
-        try {
-          console.log(`🤖 AI Typo Correction: Checking "${text}" for spelling mistakes...`);
-          const menuItemNames = menuItems.map(item => item.name);
-          const aiCorrected = await groqAi.correctFoodTypo(text, allAvailableTags, menuItemNames);
-          
-          if (aiCorrected && aiCorrected.toLowerCase() !== text.toLowerCase()) {
-            console.log(`🤖 AI corrected: "${text}" → "${aiCorrected}"`);
-            
-            // Search with AI-corrected term
-            const correctedResults = searchByMultipleTerms(menuItems, [aiCorrected]);
-            if (correctedResults.length > 0) {
-              matchingItems = correctedResults;
-              console.log(`✅ AI typo correction found ${matchingItems.length} items`);
-              return { 
-                items: matchingItems, 
-                foodType: detected, 
-                searchTerm: aiCorrected, 
-                label: `🔍 Showing results for "${aiCorrected}"`,
-                aiCorrected: true 
-              };
-            }
-            
-            // Also try fuzzy search with corrected term
-            const correctedFuzzy = this.fuzzySearchItems(aiCorrected, menuItems, 0.45);
-            if (correctedFuzzy.length > 0) {
-              matchingItems = correctedFuzzy;
-              console.log(`✅ AI typo + fuzzy found ${matchingItems.length} items`);
-              return { 
-                items: matchingItems, 
-                foodType: detected, 
-                searchTerm: aiCorrected, 
-                label: `🔍 Showing results for "${aiCorrected}"`,
-                aiCorrected: true 
-              };
-            }
-          }
-        } catch (error) {
-          console.error('AI typo correction fallback failed:', error.message);
-        }
-      }
+      // ========== SKIP EXCESSIVE AI CALLS ==========
+      // The menu items now have auto-generated tags including food type, quantity, and name words
+      // If fuzzy search also failed, it means the item truly doesn't exist in the menu
+      // Instead of calling multiple AI services, just return no results
+      // This is more honest to the user and reduces API costs
       
-      // ========== AI FUZZY SEARCH FALLBACK ==========
-      // Use AI to find items even with bad typos
-      if (matchingItems.length === 0) {
-        try {
-          console.log(`🤖 AI Fuzzy Search: Finding items matching "${text}" (with typo tolerance)...`);
-          const menuItemNames = menuItems.map(item => item.name);
-          const aiFuzzyMatches = await groqAi.fuzzySearchWithAI(text, menuItemNames, allAvailableTags);
-          
-          if (aiFuzzyMatches && aiFuzzyMatches.length > 0) {
-            console.log(`🤖 AI fuzzy found: [${aiFuzzyMatches.join(', ')}]`);
-            
-            // Find matching menu items by name
-            for (const aiItemName of aiFuzzyMatches) {
-              const matchedItem = menuItems.find(item => 
-                item.name.toLowerCase() === aiItemName.toLowerCase() ||
-                item.name.toLowerCase().includes(aiItemName.toLowerCase()) ||
-                aiItemName.toLowerCase().includes(item.name.toLowerCase())
-              );
-              if (matchedItem && !matchingItems.find(m => m._id.toString() === matchedItem._id.toString())) {
-                matchingItems.push(matchedItem);
-              }
-            }
-            
-            if (matchingItems.length > 0) {
-              console.log(`✅ AI fuzzy search found ${matchingItems.length} items`);
-              return { 
-                items: matchingItems, 
-                foodType: detected, 
-                searchTerm: primarySearchTerm, 
-                label: `🔍 Did you mean`,
-                aiFuzzy: true 
-              };
-            }
-          }
-        } catch (error) {
-          console.error('AI fuzzy search fallback failed:', error.message);
-        }
-      }
+      console.log(`❌ No matching items found for "${text}" after tag-based and fuzzy search`);
       
-      // ========== AI TAG-BASED SPELL CORRECTION ==========
-      // Use Groq to find closest matching TAGS for misspelled searches
-      // This is better than random fuzzy matching - uses actual menu tags
-      if (matchingItems.length === 0 && allAvailableTags.length > 0) {
-        try {
-          console.log(`🔤 AI Tag Spell Check: Finding closest tags for "${text}"...`);
-          const spellResult = await groqAi.findClosestTagMatch(text, allAvailableTags);
-          
-          if (spellResult.matchedTags && spellResult.matchedTags.length > 0) {
-            console.log(`🔤 Spell check matched tags: [${spellResult.matchedTags.join(', ')}]`);
-            
-            // Find items that have ALL matched tags (priority) or SOME matched tags
-            const tagMatchedItems = new Map();
-            
-            for (const item of menuItems) {
-              const itemTags = (item.tags || []).map(t => t.toLowerCase());
-              let matchCount = 0;
-              
-              for (const matchedTag of spellResult.matchedTags) {
-                const tagLower = matchedTag.toLowerCase();
-                // Check if item has this tag (exact or contains)
-                if (itemTags.some(t => t === tagLower || t.includes(tagLower) || tagLower.includes(t))) {
-                  matchCount++;
-                }
-              }
-              
-              if (matchCount > 0) {
-                const id = item._id.toString();
-                tagMatchedItems.set(id, { item, matchCount });
-              }
-            }
-            
-            if (tagMatchedItems.size > 0) {
-              // Sort by match count (items matching more tags first)
-              matchingItems = Array.from(tagMatchedItems.values())
-                .sort((a, b) => b.matchCount - a.matchCount)
-                .map(m => m.item);
-              
-              const correctedLabel = spellResult.correctedQuery 
-                ? `🔍 Showing results for "${spellResult.correctedQuery}"`
-                : `🔍 Did you mean`;
-              
-              console.log(`✅ AI tag spell check found ${matchingItems.length} items`);
-              return { 
-                items: matchingItems, 
-                foodType: detected, 
-                searchTerm: spellResult.correctedQuery || primarySearchTerm, 
-                label: correctedLabel,
-                spellCorrected: true 
-              };
-            }
-          }
-        } catch (error) {
-          console.error('AI tag spell check failed:', error.message);
-        }
-      }
-      
-      // ========== AI TAG MATCHING FALLBACK ==========
-      // If still no results, use AI to match search query to tags
-      if (matchingItems.length === 0 && allAvailableTags.length > 0) {
-        try {
-          console.log(`🤖 AI Fallback: Matching "${text}" to available tags...`);
-          const aiMatchedTags = await groqAi.matchSearchToTags(text, allAvailableTags);
-          
-          if (aiMatchedTags && aiMatchedTags.length > 0) {
-            console.log(`🤖 AI matched tags: [${aiMatchedTags.join(', ')}]`);
-            
-            // Search using AI-matched tags
-            const aiSearchItems = new Map();
-            for (const aiTag of aiMatchedTags) {
-              for (const item of menuItems) {
-                const hasTag = item.tags?.some(t => 
-                  t.toLowerCase() === aiTag.toLowerCase() || 
-                  t.toLowerCase().includes(aiTag.toLowerCase()) ||
-                  aiTag.toLowerCase().includes(t.toLowerCase())
-                );
-                if (hasTag) {
-                  const id = item._id.toString();
-                  if (!aiSearchItems.has(id)) {
-                    aiSearchItems.set(id, item);
-                  }
-                }
-              }
-            }
-            
-            if (aiSearchItems.size > 0) {
-              matchingItems = Array.from(aiSearchItems.values());
-              console.log(`✅ AI tag search found ${matchingItems.length} items`);
-            }
-          }
-        } catch (error) {
-          console.error('AI tag matching fallback failed:', error.message);
-        }
-      }
-      
-      // ========== AI SEMANTIC SEARCH - FINAL FALLBACK ==========
-      // If STILL no results, use AI to find semantically related menu items
-      // This handles cases like "pulka" → "chapathi", "rotta" → "roti"
-      if (matchingItems.length === 0) {
-        try {
-          console.log(`🤖 AI Semantic Search: Finding items related to "${text}"...`);
-          const menuItemNames = menuItems.map(item => item.name);
-          const aiMatchedItems = await groqAi.findRelatedMenuItems(text, menuItemNames);
-          
-          if (aiMatchedItems && aiMatchedItems.length > 0) {
-            console.log(`🤖 AI found related items: [${aiMatchedItems.join(', ')}]`);
-            
-            // Find matching menu items by name
-            for (const aiItemName of aiMatchedItems) {
-              const matchedItem = menuItems.find(item => 
-                item.name.toLowerCase() === aiItemName.toLowerCase() ||
-                item.name.toLowerCase().includes(aiItemName.toLowerCase()) ||
-                aiItemName.toLowerCase().includes(item.name.toLowerCase())
-              );
-              if (matchedItem && !matchingItems.find(m => m._id.toString() === matchedItem._id.toString())) {
-                matchingItems.push(matchedItem);
-              }
-            }
-            
-            if (matchingItems.length > 0) {
-              console.log(`✅ AI semantic search found ${matchingItems.length} items`);
-              // Return with a label indicating AI suggestion
-              return { 
-                items: matchingItems, 
-                foodType: detected, 
-                searchTerm: primarySearchTerm, 
-                label: `🤖 Similar to "${primarySearchTerm}"`,
-                aiSuggestion: true 
-              };
-            }
-          }
-        } catch (error) {
-          console.error('AI semantic search fallback failed:', error.message);
-        }
-      }
     } else if (detected?.type === 'specific' && filteredItems.length > 0) {
       matchingItems = filteredItems;
     }
@@ -4165,8 +3945,9 @@ const chatbot = {
         }
       }
       else if (selection === 'checkout' || selection === 'review_pay') {
-        // If user has a selected item they're viewing, add it to cart with qty 1
-        if (state.selectedItem) {
+        // If user has a selected item they're viewing (but hasn't added it yet), add it to cart with qty 1
+        // Only add if user is on 'viewing_item_details' step - otherwise item was already added via quantity selection
+        if (state.selectedItem && state.currentStep === 'viewing_item_details') {
           const item = menuItems.find(m => m._id.toString() === state.selectedItem);
           if (item) {
             // Check if item already in cart
@@ -4184,6 +3965,8 @@ const chatbot = {
             console.log(`✅ Added ${item.name} to cart before checkout`);
           }
         }
+        // Clear selectedItem to prevent duplicate additions on subsequent review_pay clicks
+        state.selectedItem = null;
         
         if (!customer.cart?.length) {
           await whatsapp.sendButtons(phone, 'Your cart is empty! Please add items first.', [
@@ -4570,6 +4353,8 @@ const chatbot = {
           await customer.save();
           console.log('🛒 Cart updated and saved:', customer.cart.length, 'items');
           await this.sendAddedToCart(phone, item, qty, customer.cart);
+          // Clear selectedItem after successful cart addition to prevent duplicate additions
+          state.selectedItem = null;
           state.currentStep = 'item_added';
         } else {
           // Item not found - maybe state was lost, show menu again

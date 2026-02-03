@@ -65,6 +65,39 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
       return [];
     };
     
+    // Auto-generate tags from item properties
+    const generateAutoTags = (itemName, itemFoodType, itemUnit, itemQuantity, itemCategories) => {
+      const autoTags = [];
+      
+      // Add food type tag
+      if (itemFoodType === 'veg') {
+        autoTags.push('veg', 'vegetarian');
+      } else if (itemFoodType === 'nonveg') {
+        autoTags.push('nonveg', 'non-veg', 'non veg');
+      } else if (itemFoodType === 'egg') {
+        autoTags.push('egg', 'eggetarian');
+      }
+      
+      // Add quantity and unit tag (e.g., "5 piece", "250 gram")
+      if (itemQuantity && itemUnit) {
+        autoTags.push(`${itemQuantity} ${itemUnit}`);
+        if (itemQuantity > 1) {
+          autoTags.push(`${itemQuantity} ${itemUnit}s`);
+        }
+      }
+      
+      // Add category tags
+      if (itemCategories && itemCategories.length > 0) {
+        autoTags.push(...itemCategories.map(c => c.toLowerCase()));
+      }
+      
+      // Extract words from item name as tags (split by space, filter short words)
+      const nameWords = itemName.toLowerCase().split(/\s+/).filter(w => w.length >= 3);
+      autoTags.push(...nameWords);
+      
+      return autoTags;
+    };
+    
     let imageUrl = image || null;
     
     // If file uploaded, upload to Cloudinary
@@ -72,15 +105,25 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
       imageUrl = await cloudinaryService.uploadFromBuffer(req.file.buffer, 'restaurant-bot/menu-items');
     }
     
+    const parsedCategory = parseCategory(category);
+    const parsedFoodType = foodType || 'none';
+    const parsedUnit = unit || 'piece';
+    const parsedQuantity = parseFloat(quantity) || 1;
+    
+    // Combine user-provided tags with auto-generated tags
+    const userTags = parseTags(tags);
+    const autoTags = generateAutoTags(trimmedName, parsedFoodType, parsedUnit, parsedQuantity, parsedCategory);
+    const allTags = [...new Set([...userTags, ...autoTags])]; // Remove duplicates
+    
     const itemData = {
-      name: trimmedName, description: trimmedDescription, price: parseFloat(price), category: parseCategory(category),
-      unit: unit || 'piece',
-      quantity: parseFloat(quantity) || 1,
-      foodType: foodType || 'none',
+      name: trimmedName, description: trimmedDescription, price: parseFloat(price), category: parsedCategory,
+      unit: parsedUnit,
+      quantity: parsedQuantity,
+      foodType: parsedFoodType,
       offerType: parseOfferType(offerType),
       available: available !== false && available !== 'false',
       preparationTime: parseInt(preparationTime) || 15,
-      tags: parseTags(tags),
+      tags: allTags,
       image: imageUrl
     };
     
@@ -125,6 +168,39 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
       return [];
     };
     
+    // Auto-generate tags from item properties
+    const generateAutoTags = (itemName, itemFoodType, itemUnit, itemQuantity, itemCategories) => {
+      const autoTags = [];
+      
+      // Add food type tag
+      if (itemFoodType === 'veg') {
+        autoTags.push('veg', 'vegetarian');
+      } else if (itemFoodType === 'nonveg') {
+        autoTags.push('nonveg', 'non-veg', 'non veg');
+      } else if (itemFoodType === 'egg') {
+        autoTags.push('egg', 'eggetarian');
+      }
+      
+      // Add quantity and unit tag (e.g., "5 piece", "250 gram")
+      if (itemQuantity && itemUnit) {
+        autoTags.push(`${itemQuantity} ${itemUnit}`);
+        if (itemQuantity > 1) {
+          autoTags.push(`${itemQuantity} ${itemUnit}s`);
+        }
+      }
+      
+      // Add category tags
+      if (itemCategories && itemCategories.length > 0) {
+        autoTags.push(...itemCategories.map(c => c.toLowerCase()));
+      }
+      
+      // Extract words from item name as tags (split by space, filter short words)
+      const nameWords = itemName.toLowerCase().split(/\s+/).filter(w => w.length >= 3);
+      autoTags.push(...nameWords);
+      
+      return autoTags;
+    };
+    
     // Get existing item to check for old image
     const existingItem = await MenuItem.findById(req.params.id);
     let imageUrl = existingItem?.image || null;
@@ -160,15 +236,26 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
       imageUrl = image;
     }
     
+    const parsedCategory = parseCategory(category);
+    const finalName = trimmedName || existingItem?.name || '';
+    const parsedFoodType = foodType || 'none';
+    const parsedUnit = unit || 'piece';
+    const parsedQuantity = parseFloat(quantity) || 1;
+    
+    // Combine user-provided tags with auto-generated tags
+    const userTags = parseTags(tags);
+    const autoTags = generateAutoTags(finalName, parsedFoodType, parsedUnit, parsedQuantity, parsedCategory);
+    const allTags = [...new Set([...userTags, ...autoTags])]; // Remove duplicates
+    
     const update = {
-      name: trimmedName || existingItem?.name, description: trimmedDescription, price: parseFloat(price), category: parseCategory(category),
-      unit: unit || 'piece',
-      quantity: parseFloat(quantity) || 1,
-      foodType: foodType || 'none',
+      name: finalName, description: trimmedDescription, price: parseFloat(price), category: parsedCategory,
+      unit: parsedUnit,
+      quantity: parsedQuantity,
+      foodType: parsedFoodType,
       offerType: parseOfferType(offerType),
       available: available !== false && available !== 'false',
       preparationTime: parseInt(preparationTime) || 15,
-      tags: parseTags(tags),
+      tags: allTags,
       image: imageUrl
     };
     
