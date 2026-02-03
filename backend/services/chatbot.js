@@ -2616,6 +2616,10 @@ const chatbot = {
   // Example: "veg curry" → finds items with tags containing "veg" AND "curry"
   // Example: "5 piece" → finds items with quantity/unit tag "5 piece"
   async smartSearch(text, menuItems) {
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`🔥 SMART SEARCH CALLED: "${text}"`);
+    console.log(`${'='.repeat(60)}`);
+    
     // Early return for gibberish searches
     if (this.isGibberishSearch(text)) {
       console.log(`🚫 Gibberish search detected: "${text}" - returning no results`);
@@ -3387,6 +3391,17 @@ const chatbot = {
       // For specific ingredient searches (e.g., "chicken"), return filtered items
       matchingItems = searchableItems;
     }
+    
+    // FINAL DEBUG LOG - what are we returning?
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`🎯 SMART SEARCH RESULT for "${text}":`);
+    console.log(`   Detected food type: ${detected ? JSON.stringify(detected) : 'NONE'}`);
+    console.log(`   searchableItems count: ${searchableItems?.length || 0}`);
+    console.log(`   matchingItems count: ${matchingItems?.length || 0}`);
+    if (matchingItems?.length > 0) {
+      console.log(`   Returning items: ${matchingItems.slice(0, 5).map(i => `${i.name}(${i.foodType})`).join(', ')}`);
+    }
+    console.log(`${'='.repeat(60)}\n`);
     
     return matchingItems.length > 0 
       ? { items: matchingItems, foodType: detected, searchTerm: primarySearchTerm, label: foodTypeLabel, exactMatch: true }
