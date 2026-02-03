@@ -1666,6 +1666,7 @@ const chatbot = {
 
   // Dynamic typo correction - finds best matching item/tag for any search term
   // Works for ANY menu item, not just hardcoded ones
+  // IMPORTANT: Only corrects if search term doesn't already match something in menu
   findBestMatchingTerm(searchTerm, menuItems) {
     if (!searchTerm || searchTerm.length < 2) return null;
     
@@ -1693,6 +1694,20 @@ const chatbot = {
       // Add categories
       const cats = Array.isArray(item.category) ? item.category : [item.category];
       cats.forEach(cat => cat && targets.add(cat.toLowerCase()));
+    }
+    
+    // ========== CHECK IF SEARCH TERM ALREADY MATCHES SOMETHING ==========
+    // Don't "correct" valid search terms that already exist in the menu
+    // e.g., "sapota" should NOT be corrected to "apple" if "sapota" exists as a tag
+    const searchWords = searchLower.split(/\s+/).filter(w => w.length >= 2);
+    for (const word of searchWords) {
+      for (const target of targets) {
+        // Check if any search word exactly matches a target, or target contains the word
+        if (target === word || target.includes(word) || word.includes(target)) {
+          console.log(`✅ Search term "${word}" already matches "${target}" - skipping typo correction`);
+          return null; // Don't correct, the term is valid
+        }
+      }
     }
     
     // Find the best matching target for the search term
