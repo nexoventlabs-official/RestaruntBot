@@ -347,143 +347,119 @@ If already standard or you're unsure, return as is.`
       const categories = Array.isArray(category) ? category : [category];
       
       // Food type label
-      const foodTypeLabel = foodType === 'veg' ? 'veg' : foodType === 'nonveg' ? 'non veg' : foodType === 'egg' ? 'egg' : '';
-      
-      // Build quantity info for context (e.g., "2 pieces", "1 plate")
-      const qty = parseInt(quantity) || 1;
-      const unitLabel = unit || 'piece';
+      const foodTypeLabel = foodType === 'veg' ? 'veg' : foodType === 'nonveg' ? 'nonveg' : foodType === 'egg' ? 'egg' : '';
       
       // ========== AUTO-GENERATE BASE TAGS FROM ITEM NAME AND CATEGORY ==========
-      // Split item name into individual words (e.g., "egg masala dosa" → ["egg", "masala", "dosa"])
+      // Split item name into individual words ONLY (e.g., "egg masala dosa" → ["egg", "masala", "dosa"])
+      // NO combined/full name tags
       const nameWords = itemName.toLowerCase().trim()
         .split(/\s+/)
         .filter(word => word.length >= 2)
-        .map(word => word.replace(/[^a-z]/g, ''));
+        .map(word => word.replace(/[^a-z]/g, ''))
+        .filter(word => word.length >= 2);
       
-      // Add category words
+      // Add category words separately (not combined)
       const categoryWords = categories.flatMap(cat => 
         cat.toLowerCase().trim().split(/\s+/).filter(word => word.length >= 2)
       );
       
-      // Base tags from name, categories, food type, quantity
+      // Base tags: ONLY individual words from name + category + food type
+      // NO full item name, NO unit, NO quantity
       const baseTags = [
-        itemName.toLowerCase().trim(), // Full name as first tag
-        ...nameWords,                   // Individual words from name
-        ...categoryWords,               // Category words
-        foodTypeLabel,                  // veg/non veg/egg
-        unitLabel,                      // piece/plate/bowl etc.
+        ...nameWords,                   // Individual words from name only
+        ...categoryWords,               // Individual category words only
+        foodTypeLabel,                  // veg/nonveg/egg
       ].filter(tag => tag && tag.length >= 2);
       
       // Remove duplicates from base tags
       const uniqueBaseTags = [...new Set(baseTags)];
       
-      // Get meal time tags based on category
-      const mealTimeTags = this.getMealTimeTags(categories);
-      const mealTimeHint = mealTimeTags.length > 0 ? `Meal times for this category: ${mealTimeTags.join(', ')}` : '';
+      // ========== SPELLING VARIATIONS MAP ==========
+      // Only add spelling variations for words that exist in the item name
+      const spellingVariations = {
+        'idli': ['idly'],
+        'idly': ['idli'],
+        'dosa': ['dosai', 'dosa'],
+        'dosai': ['dosa'],
+        'biryani': ['biriyani', 'briyani'],
+        'biriyani': ['biryani'],
+        'paratha': ['parotta', 'paratha'],
+        'parotta': ['paratha'],
+        'chapati': ['chapathi', 'roti'],
+        'roti': ['chapati', 'chapathi'],
+        'pulao': ['pulav', 'pilaf'],
+        'pulav': ['pulao'],
+        'sambar': ['sambhar'],
+        'sambhar': ['sambar'],
+        'upma': ['uppma', 'upuma'],
+        'poori': ['puri'],
+        'puri': ['poori'],
+        'vada': ['vade', 'vadai'],
+        'vadai': ['vada'],
+        'halwa': ['halva'],
+        'gulab': ['gulabh'],
+        'jamun': ['jamoon'],
+        'kheer': ['payasam'],
+        'payasam': ['kheer'],
+        'naan': ['nan'],
+        'paneer': ['panner'],
+        'tikka': ['tikki'],
+        'kebab': ['kabab', 'kabob'],
+        'kabab': ['kebab'],
+        'korma': ['kurma'],
+        'kurma': ['korma'],
+        'rasam': ['rasamu'],
+        'curd': ['dahi', 'yogurt'],
+        'dahi': ['curd'],
+        'lassi': ['lasi'],
+        'chai': ['tea'],
+        'coffee': ['kaapi'],
+        'kaapi': ['coffee']
+      };
       
-      const completion = await client.chat.completions.create({
-        messages: [{
-          role: 'system',
-          content: `You are a tag generator for an Indian restaurant food ordering chatbot. Generate additional search tags to complement the base tags.
-
-BASE TAGS ALREADY INCLUDED: ${uniqueBaseTags.join(', ')}
-
-CRITICAL RULES:
-1. DO NOT repeat any of the base tags above
-2. Add ONLY useful additional tags: spelling variations, regional names, meal times
-3. Add common spelling variations people search (idli/idly, dosa/dosai, biryani/biriyani)
-4. Add regional language variations if applicable (Telugu, Hindi names)
-5. Add meal time (breakfast/lunch/dinner/snacks) based on category
-6. Add descriptive words (hot, crispy, spicy, soft) if relevant
-7. Keep tags SHORT (1-2 words max per tag)
-8. NO duplicate tags, all lowercase
-9. NO generic words like "food", "item", "delicious", "tasty"
-10. Return ONLY 5-7 additional tags, not more
-
-EXAMPLES:
-- "Egg Masala Dosa" base tags: egg masala dosa, egg, masala, dosa, tiffin → Add: dosai, morning, breakfast, crispy, spicy
-- "Chicken Biryani" base tags: chicken biryani, chicken, biryani, meals → Add: biriyani, lunch, dinner, hyderabadi, dum, spicy`
-        }, {
-          role: 'user',
-          content: `Generate 5-7 ADDITIONAL search tags for:
-Food Item: "${itemName}"
-Category: ${categories.join(', ')}
-Food Type: ${foodTypeLabel}
-Serving: ${qty} ${unitLabel}${qty > 1 ? 's' : ''}
-${mealTimeHint}
-
-BASE TAGS (already included, DO NOT repeat): ${uniqueBaseTags.join(', ')}
-
-Return ONLY 5-7 comma-separated lowercase additional tags. No explanations, no numbering.`
-        }],
-        model: 'llama-3.1-8b-instant',
-        max_tokens: 100,
-        temperature: 0.3
-      });
-      
-      const aiTagsText = completion.choices[0]?.message?.content?.trim() || '';
-      
-      // Clean and parse AI tags
-      let aiTags = aiTagsText
-        .replace(/[\[\]"\d\.\)\(]/g, '')
-        .replace(/\n/g, ',')
-        .split(',')
-        .map(tag => tag.trim().toLowerCase())
-        .filter(tag => 
-          tag.length >= 2 && 
-          tag.length < 25 && 
-          !tag.includes(':') && 
-          !tag.includes('tag') &&
-          !tag.includes('example') &&
-          !tag.includes('here') &&
-          !tag.includes('food') &&
-          !tag.includes('base') &&
-          !tag.includes('already') &&
-          tag !== 'delicious' &&
-          tag !== 'tasty'
-        );
-      
-      // Remove duplicates and tags already in base
-      aiTags = [...new Set(aiTags)].filter(tag => !uniqueBaseTags.includes(tag));
-      
-      // Add meal time tags
-      const allMealTags = [...mealTimeTags];
-      for (const mt of allMealTags) {
-        if (!uniqueBaseTags.includes(mt) && !aiTags.includes(mt)) {
-          aiTags.unshift(mt);
+      // Get spelling variations ONLY for words in the item name
+      const variationTags = [];
+      for (const word of nameWords) {
+        if (spellingVariations[word]) {
+          variationTags.push(...spellingVariations[word]);
         }
       }
       
-      // Combine: base tags first, then AI tags
-      const finalTags = [...uniqueBaseTags, ...aiTags];
+      // Filter variations - remove if already in base tags
+      const uniqueVariations = variationTags.filter(v => !uniqueBaseTags.includes(v));
       
-      // Limit to 12-15 unique tags
-      return [...new Set(finalTags)].slice(0, 15).join(', ');
+      // Combine base tags + spelling variations (NO AI needed for simple cases)
+      const finalTags = [...uniqueBaseTags, ...uniqueVariations];
+      
+      // Limit to 8-10 unique tags maximum
+      return [...new Set(finalTags)].slice(0, 10).join(', ');
     } catch (error) {
       console.error('Groq AI tags error:', error);
       // Fallback: generate basic tags without AI
       const categories = Array.isArray(category) ? category : [category];
-      const foodTypeLabel = foodType === 'veg' ? 'veg' : foodType === 'nonveg' ? 'non veg' : foodType === 'egg' ? 'egg' : '';
-      const qty = parseInt(quantity) || 1;
-      const unitLabel = unit || 'piece';
-      const mealTimeTags = this.getMealTimeTags(categories);
+      const foodTypeLabel = foodType === 'veg' ? 'veg' : foodType === 'nonveg' ? 'nonveg' : foodType === 'egg' ? 'egg' : '';
       
-      // Split item name into words
+      // Split item name into individual words ONLY (no combined names)
       const nameWords = itemName.toLowerCase().trim()
         .split(/\s+/)
+        .filter(word => word.length >= 2)
+        .map(word => word.replace(/[^a-z]/g, ''))
         .filter(word => word.length >= 2);
       
+      // Split category names into individual words
+      const categoryWords = categories.flatMap(cat => 
+        cat.toLowerCase().trim().split(/\s+/).filter(word => word.length >= 2)
+      );
+      
+      // Fallback tags: individual words only, NO combined names, NO unit/quantity
       const fallbackTags = [
-        itemName.toLowerCase().trim(),
-        ...nameWords,
-        ...categories.map(c => c.toLowerCase().trim()),
-        foodTypeLabel,
-        unitLabel,
-        ...mealTimeTags.slice(0, 2)
+        ...nameWords,           // Individual name words only
+        ...categoryWords,       // Individual category words only
+        foodTypeLabel,          // veg/nonveg/egg
       ].filter(t => t && t.length >= 2);
       
-      // Remove duplicates and limit to 12
-      return [...new Set(fallbackTags)].slice(0, 12).join(', ');
+      // Remove duplicates and limit to 10
+      return [...new Set(fallbackTags)].slice(0, 10).join(', ');
     }
   },
 
