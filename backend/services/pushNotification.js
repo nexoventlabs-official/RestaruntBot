@@ -3,7 +3,30 @@ const { Expo } = require('expo-server-sdk');
 // Create a new Expo SDK client
 const expo = new Expo();
 
+// Store badge counts per user (in production, use Redis or database)
+const badgeCounts = new Map();
+
 const pushNotification = {
+  /**
+   * Get and increment badge count for a user
+   * @param {string} pushToken - User's push token
+   * @returns {number} New badge count
+   */
+  getBadgeCount(pushToken) {
+    const current = badgeCounts.get(pushToken) || 0;
+    const newCount = current + 1;
+    badgeCounts.set(pushToken, newCount);
+    return newCount;
+  },
+
+  /**
+   * Reset badge count for a user
+   * @param {string} pushToken - User's push token
+   */
+  resetBadgeCount(pushToken) {
+    badgeCounts.set(pushToken, 0);
+  },
+
   /**
    * Send push notification to a single device
    * @param {string} pushToken - Expo push token
@@ -18,18 +41,27 @@ const pushNotification = {
       return false;
     }
 
+    // Get incremented badge count
+    const badgeCount = this.getBadgeCount(pushToken);
+
     const message = {
       to: pushToken,
       sound: 'default',
       title,
       body,
-      data,
+      data: {
+        ...data,
+        // Include badge count in data for app to use
+        badgeCount,
+      },
       priority: 'high',
       channelId: channelId,
       // CRITICAL: These settings ensure delivery when app is killed/background
       _displayInForeground: true,
       // TTL of 1 week to ensure delivery
       ttl: 604800,
+      // Badge count for app icon
+      badge: badgeCount,
       // Android specific - high priority for immediate delivery
       android: {
         priority: 'high',
@@ -38,7 +70,6 @@ const pushNotification = {
         vibrate: [0, 500, 250, 500],
       },
       // iOS specific
-      badge: 1,
       mutableContent: true,
       categoryId: channelId === 'new-orders' ? 'new-orders' : undefined,
     };
@@ -81,23 +112,29 @@ const pushNotification = {
         continue;
       }
 
+      // Get incremented badge count for each user
+      const badgeCount = this.getBadgeCount(pushToken);
+
       messages.push({
         to: pushToken,
         sound: 'default',
         title,
         body,
-        data,
+        data: {
+          ...data,
+          badgeCount,
+        },
         priority: 'high',
         channelId: channelId,
         _displayInForeground: true,
         ttl: 604800,
+        badge: badgeCount,
         android: {
           priority: 'high',
           channelId: channelId,
           sound: true,
           vibrate: [0, 500, 250, 500],
         },
-        badge: 1,
         categoryId: channelId === 'new-orders' ? 'new-orders' : undefined,
       });
     }

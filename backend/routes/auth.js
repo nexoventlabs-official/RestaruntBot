@@ -63,4 +63,27 @@ router.post('/push-token', async (req, res) => {
   }
 });
 
+// Reset badge count for admin
+router.post('/reset-badge', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token' });
+  
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Get user's push token and reset badge
+    if (decoded.id) {
+      const user = await User.findById(decoded.id);
+      if (user && user.pushToken) {
+        const pushNotification = require('../services/pushNotification');
+        pushNotification.resetBadgeCount(user.pushToken);
+      }
+    }
+    
+    res.json({ message: 'Badge count reset' });
+  } catch (error) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+});
+
 module.exports = router;

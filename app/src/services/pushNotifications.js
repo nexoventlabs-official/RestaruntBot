@@ -11,6 +11,7 @@ const isExpoGo = Constants.appOwnership === 'expo';
 // Key for storing permission prompt state
 const PERMISSION_PROMPTED_KEY = 'notification_permission_prompted';
 const PUSH_TOKEN_KEY = 'push_token_cached';
+const BADGE_COUNT_KEY = 'notification_badge_count';
 
 // Configure notification handler - THIS IS CRITICAL for showing notifications
 // when app is in foreground AND background
@@ -23,18 +24,79 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// Set background notification handler for when app is killed
-if (Platform.OS === 'android') {
-  Notifications.setNotificationCategoryAsync('new-orders', [
-    {
-      identifier: 'view',
-      buttonTitle: 'View Order',
-      options: {
-        opensAppToForeground: true,
-      },
-    },
-  ]);
-}
+// Initialize notification channels immediately on module load for Android
+// This is CRITICAL - channels must exist BEFORE any notification arrives
+const initializeNotificationChannels = async () => {
+  if (Platform.OS === 'android' && !isExpoGo) {
+    try {
+      // Default channel
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'Default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#267E3E',
+        sound: 'default',
+        enableVibrate: true,
+        enableLights: true,
+        showBadge: true,
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      });
+
+      // New orders channel - highest priority
+      await Notifications.setNotificationChannelAsync('new-orders', {
+        name: 'New Orders',
+        description: 'Notifications for new order assignments',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 500, 250, 500],
+        lightColor: '#FF0000',
+        sound: 'default',
+        enableVibrate: true,
+        enableLights: true,
+        showBadge: true,
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        bypassDnd: true,
+      });
+
+      // Order updates channel
+      await Notifications.setNotificationChannelAsync('order-updates', {
+        name: 'Order Updates',
+        description: 'Notifications for order status changes',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#267E3E',
+        sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        bypassDnd: true,
+      });
+
+      console.log('📱 Notification channels initialized');
+    } catch (error) {
+      console.error('Error initializing notification channels:', error);
+    }
+  }
+
+  // Set notification category for actionable notifications
+  if (Platform.OS === 'android' && !isExpoGo) {
+    try {
+      await Notifications.setNotificationCategoryAsync('new-orders', [
+        {
+          identifier: 'view',
+          buttonTitle: 'View Order',
+          options: {
+            opensAppToForeground: true,
+          },
+        },
+      ]);
+    } catch (error) {
+      console.error('Error setting notification category:', error);
+    }
+  }
+};
+
+// Initialize channels immediately when module loads
+initializeNotificationChannels();
 
 export const pushNotifications = {
   /**
@@ -186,50 +248,8 @@ export const pushNotifications = {
       return { token: null, permissionDenied: false };
     }
 
-    // Configure Android notification channels
-    if (Platform.OS === 'android') {
-      // Default channel
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'Default',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#267E3E',
-        sound: 'default',
-        enableVibrate: true,
-        enableLights: true,
-        showBadge: true,
-        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-      });
-
-      // New orders channel - high priority with bypassing DND
-      await Notifications.setNotificationChannelAsync('new-orders', {
-        name: 'New Orders',
-        description: 'Notifications for new order assignments',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 500, 250, 500],
-        lightColor: '#267E3E',
-        sound: 'default',
-        enableVibrate: true,
-        enableLights: true,
-        showBadge: true,
-        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-        bypassDnd: true, // Bypass Do Not Disturb
-      });
-
-      // Order updates channel
-      await Notifications.setNotificationChannelAsync('order-updates', {
-        name: 'Order Updates',
-        description: 'Notifications for order status changes',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#267E3E',
-        sound: 'default',
-        enableVibrate: true,
-        showBadge: true,
-        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-        bypassDnd: true,
-      });
-    }
+    // Ensure notification channels are set up (they should already be from module init)
+    await initializeNotificationChannels();
 
     return { token, permissionDenied: false };
   },
@@ -296,7 +316,17 @@ export const pushNotifications = {
    */
   async getBadgeCount() {
     if (isExpoGo) return 0;
-    return await Notifications.getBadgeCountAsync();
+    try {
+      // Try to get from system first
+      const systemBadge = await Notifications.getBadgeCountAsync();
+      if (systemBadge > 0) return systemBadge;
+      
+      // Fall back to stored count
+      const stored = await SecureStore.getItemAsync(BADGE_COUNT_KEY);
+      return stored ? parseInt(stored, 10) : 0;
+    } catch (error) {
+      return 0;
+    }
   },
 
   /**
@@ -305,7 +335,25 @@ export const pushNotifications = {
    */
   async setBadgeCount(count) {
     if (isExpoGo) return;
-    await Notifications.setBadgeCountAsync(count);
+    try {
+      await Notifications.setBadgeCountAsync(count);
+      await SecureStore.setItemAsync(BADGE_COUNT_KEY, String(count));
+    } catch (error) {
+      console.error('Error setting badge count:', error);
+    }
+  },
+
+  /**
+   * Increment badge count by 1
+   */
+  async incrementBadgeCount() {
+    if (isExpoGo) return;
+    try {
+      const current = await this.getBadgeCount();
+      await this.setBadgeCount(current + 1);
+    } catch (error) {
+      console.error('Error incrementing badge count:', error);
+    }
   },
 
   /**
@@ -315,6 +363,19 @@ export const pushNotifications = {
     if (isExpoGo) return;
     await Notifications.dismissAllNotificationsAsync();
     await this.setBadgeCount(0);
+  },
+
+  /**
+   * Get count of pending/delivered notifications
+   */
+  async getPendingNotificationsCount() {
+    if (isExpoGo) return 0;
+    try {
+      const notifications = await Notifications.getPresentedNotificationsAsync();
+      return notifications.length;
+    } catch (error) {
+      return 0;
+    }
   },
 
   /**

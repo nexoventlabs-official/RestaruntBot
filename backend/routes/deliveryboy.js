@@ -538,6 +538,31 @@ router.post('/push-token', async (req, res) => {
   }
 });
 
+// Reset badge count (Delivery boy)
+router.post('/reset-badge', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token' });
+  
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    if (decoded.role !== 'delivery') {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    
+    // Get delivery boy's push token and reset badge
+    const deliveryBoy = await DeliveryBoy.findById(decoded.id);
+    if (deliveryBoy && deliveryBoy.pushToken) {
+      const pushNotification = require('../services/pushNotification');
+      pushNotification.resetBadgeCount(deliveryBoy.pushToken);
+    }
+    
+    res.json({ message: 'Badge count reset' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ DELIVERY BOY ORDER ROUTES ============
 
 // Middleware to verify delivery boy token

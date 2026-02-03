@@ -57,6 +57,20 @@ export const AuthProvider = ({ children }) => {
         if (storedRole) {
           // Check permission and prompt if needed
           await checkAndPromptNotificationPermission(storedRole);
+          
+          // Clear badge count and notifications when app opens
+          await pushNotifications.setBadgeCount(0);
+          
+          // Also tell the backend to reset badge count
+          try {
+            if (storedRole === 'admin') {
+              await api.post('/auth/reset-badge');
+            } else {
+              await api.post('/delivery/reset-badge');
+            }
+          } catch (error) {
+            console.log('Could not reset badge on server');
+          }
         }
       }
       appState.current = nextAppState;
