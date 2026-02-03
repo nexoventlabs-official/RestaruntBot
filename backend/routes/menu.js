@@ -342,4 +342,65 @@ router.patch('/bulk-pause', authMiddleware, async (req, res) => {
   }
 });
 
+// Regenerate auto-tags for all menu items (one-time migration)
+router.post('/regenerate-tags', authMiddleware, async (req, res) => {
+  try {
+    const items = await MenuItem.find();
+    let updatedCount = 0;
+    
+    // Auto-generate tags from item properties
+    const generateAutoTags = (itemName, itemFoodType, itemUnit, itemQuantity, itemCategories) => {
+      const autoTags = [];
+      
+      // Add food type tag
+      if (itemFoodType === 'veg') {
+        autoTags.push('veg', 'vegetarian');
+      } else if (itemFoodType === 'nonveg') {
+        autoTags.push('nonveg', 'non-veg', 'non veg');
+      } else if (itemFoodType === 'egg') {
+        autoTags.push('egg', 'eggetarian');
+      }
+      
+      // Add quantity and unit tag (e.g., "5 piece", "250 gram")
+      if (itemQuantity && itemUnit) {
+        autoTags.push(`${itemQuantity} ${itemUnit}`);
+        if (itemQuantity > 1) {
+          autoTags.push(`${itemQuantity} ${itemUnit}s`);
+        }
+      }
+      
+      // Add category tags
+      if (itemCategories && itemCategories.length > 0) {
+        autoTags.push(...itemCategories.map(c => c.toLowerCase()));
+      }
+      
+      // Extract words from item name as tags (split by space, filter short words)
+      const nameWords = itemName.toLowerCase().split(/\s+/).filter(w => w.length >= 3);
+      autoTags.push(...nameWords);
+      
+      return autoTags;
+    };
+    
+    for (const item of items) {
+      const categories = Array.isArray(item.category) ? item.category : [item.category];
+      const autoTags = generateAutoTags(item.name, item.foodType, item.unit, item.quantity, categories);
+      
+      // Combine existing user tags with auto-generated tags
+      const existingTags = item.tags || [];
+      const allTags = [...new Set([...existingTags, ...autoTags])];
+      
+      // Update item with new tags
+      await MenuItem.findByIdAndUpdate(item._id, { tags: allTags });
+      updatedCount++;
+    }
+    
+    // Emit event for real-time updates
+    dataEvents.emit('menu');
+    
+    res.json({ success: true, message: `Regenerated tags for ${updatedCount} items` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

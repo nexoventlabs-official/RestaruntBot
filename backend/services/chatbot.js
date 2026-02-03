@@ -2758,6 +2758,37 @@ const chatbot = {
     // If search term is too short after removing keywords, search by ingredient/type only
     const hasSearchTerm = primarySearchTerm.length >= 2;
     
+    // ========== FILTER ITEMS BY DETECTED FOOD TYPE FIRST ==========
+    // If user searched "veg dosa", filter to only veg items before searching
+    let searchableItems = menuItems;
+    let foodTypeLabel = null;
+    
+    if (detected) {
+      if (detected.type === 'veg') {
+        searchableItems = menuItems.filter(item => item.foodType === 'veg');
+        foodTypeLabel = '🌿 Veg';
+        console.log(`🥬 Filtered to VEG items: ${searchableItems.length} items`);
+      } else if (detected.type === 'egg') {
+        searchableItems = menuItems.filter(item => item.foodType === 'egg');
+        foodTypeLabel = '🥚 Egg';
+        console.log(`🥚 Filtered to EGG items: ${searchableItems.length} items`);
+      } else if (detected.type === 'nonveg') {
+        searchableItems = menuItems.filter(item => item.foodType === 'nonveg' || item.foodType === 'egg');
+        foodTypeLabel = '🍗 Non-Veg';
+        console.log(`🍗 Filtered to NON-VEG items: ${searchableItems.length} items`);
+      } else if (detected.type === 'specific') {
+        // For specific ingredients like "chicken", "mutton"
+        const ingredient = detected.ingredient;
+        searchableItems = menuItems.filter(item => {
+          const inName = item.name.toLowerCase().includes(ingredient);
+          const inTags = item.tags?.some(tag => tag.toLowerCase().includes(ingredient));
+          return inName || inTags;
+        });
+        foodTypeLabel = `🍗 ${ingredient.charAt(0).toUpperCase() + ingredient.slice(1)}`;
+        console.log(`🍖 Filtered by ingredient "${ingredient}": ${searchableItems.length} items`);
+      }
+    }
+    
     // Helper to normalize text for comparison (removes spaces for flexible matching)
     const normalizeForMatch = (text) => text.toLowerCase().replace(/\s+/g, '');
     
@@ -2768,8 +2799,8 @@ const chatbot = {
         const searchLower = searchTerm.toLowerCase();
         const searchNorm = normalizeForMatch(searchTerm);
         
-        // Find ALL items with exact name match (not just first one)
-        const exactMatches = menuItems.filter(item => {
+        // Find ALL items with exact name match (not just first one) - use searchableItems (filtered by food type)
+        const exactMatches = searchableItems.filter(item => {
           const nameLower = item.name.toLowerCase();
           const nameNorm = normalizeForMatch(item.name);
           // Match exact (with spaces) OR normalized (without spaces)
@@ -2782,7 +2813,7 @@ const chatbot = {
             items: exactMatches, 
             foodType: detected, 
             searchTerm: searchTerm, 
-            label: null,
+            label: foodTypeLabel,
             exactMatch: true 
           };
         }
@@ -2835,8 +2866,8 @@ const chatbot = {
         return categoryMatch;
       };
       
-      // First try: Find items where ALL keywords match tags or category exactly
-      const allKeywordsTagMatches = menuItems.filter(item => {
+      // First try: Find items where ALL keywords match tags or category exactly - use searchableItems (filtered by food type)
+      const allKeywordsTagMatches = searchableItems.filter(item => {
         // Check if ALL search keywords match at least one tag or category
         return searchKeywords.every(keyword => itemMatchesKeyword(item, keyword));
       });
@@ -2847,7 +2878,7 @@ const chatbot = {
           items: allKeywordsTagMatches, 
           foodType: detected, 
           searchTerm: primarySearchTerm, 
-          label: null,
+          label: foodTypeLabel,
           exactMatch: true 
         };
       }
@@ -2856,7 +2887,7 @@ const chatbot = {
       // Sort by match count - items matching more keywords appear first
       const anyKeywordTagMatches = new Map();
       for (const keyword of searchKeywords) {
-        for (const item of menuItems) {
+        for (const item of searchableItems) {
           if (itemMatchesKeyword(item, keyword)) {
             const id = item._id.toString();
             if (!anyKeywordTagMatches.has(id)) {
@@ -2891,45 +2922,22 @@ const chatbot = {
             items: filteredMatches, 
             foodType: detected, 
             searchTerm: primarySearchTerm, 
-            label: null,
+            label: foodTypeLabel,
             exactMatch: true // Mark as exact since all keywords matched
           };
         }
       }
     }
     
-    // Filter by detected food type
-    let filteredItems = menuItems;
-    let foodTypeLabel = null;
-    
-    if (detected) {
-      if (detected.type === 'veg') {
-        filteredItems = menuItems.filter(item => item.foodType === 'veg');
-        foodTypeLabel = '🌿 Veg';
-      } else if (detected.type === 'egg') {
-        filteredItems = menuItems.filter(item => item.foodType === 'egg');
-        foodTypeLabel = '🥚 Egg';
-      } else if (detected.type === 'nonveg') {
-        filteredItems = menuItems.filter(item => item.foodType === 'nonveg' || item.foodType === 'egg');
-        foodTypeLabel = '🍗 Non-Veg';
-      } else if (detected.type === 'specific') {
-        const ingredient = detected.ingredient;
-        filteredItems = menuItems.filter(item => {
-          const inName = item.name.toLowerCase().includes(ingredient);
-          const inTags = item.tags?.some(tag => tag.toLowerCase().includes(ingredient));
-          return inName || inTags;
-        });
-        foodTypeLabel = `🍗 ${ingredient.charAt(0).toUpperCase() + ingredient.slice(1)}`;
-        
-        if (!hasSearchTerm) {
-          return filteredItems.length > 0 
-            ? { items: filteredItems, foodType: detected, searchTerm: ingredient, label: foodTypeLabel }
-            : null;
-        }
+    // If only food type specified (e.g., just "veg" or "nonveg"), return all items of that type
+    if (!hasSearchTerm && detected) {
+      if (searchableItems.length > 0) {
+        return { items: searchableItems, foodType: detected, searchTerm: detected.type, label: foodTypeLabel, exactMatch: true };
       }
+      return null;
     }
     
-    if (!hasSearchTerm && detected?.type !== 'specific') return null;
+    if (!hasSearchTerm) return null;
     
     // Helper to normalize text for comparison (removes spaces for flexible matching)
     // "ground nuts" → "groundnuts", "veg biryani" → "vegbiryani"
@@ -3040,7 +3048,7 @@ const chatbot = {
       }
       const uniqueKeywords = [...new Set(allKeywords)];
       
-      console.log(`🔍 Tag search - Primary keywords: [${searchKeywords.join(', ')}], All keywords: [${uniqueKeywords.join(', ')}], foodTypeFilter: ${searchFoodTypeFilter || 'all'}`);
+      console.log(`🔍 Tag search - Primary keywords: [${searchKeywords.join(', ')}], All keywords: [${uniqueKeywords.join(', ')}], foodType: ${detected?.type || 'all'}`);
       
       // Helper to check if item tags OR name OR category match a keyword
       const itemMatchesKeyword = (item, keyword) => {
@@ -3074,19 +3082,9 @@ const chatbot = {
         return categoryMatch;
       };
       
-      // Helper to apply food type filter
-      const passesFilter = (item) => {
-        if (searchFoodTypeFilter === 'nonveg') {
-          return item.foodType === 'nonveg' || item.foodType === 'egg';
-        } else if (searchFoodTypeFilter === 'veg') {
-          return item.foodType === 'veg';
-        }
-        return true;
-      };
-      
       // PRIORITY 1: Items where ALL primary search keywords match (name, tags, or category)
-      const allKeywordsMatch = menuItems.filter(item => {
-        if (!passesFilter(item)) return false;
+      // Uses searchableItems which is already filtered by food type
+      const allKeywordsMatch = searchableItems.filter(item => {
         return searchKeywords.every(kw => itemMatchesKeyword(item, kw));
       });
       
@@ -3096,7 +3094,7 @@ const chatbot = {
           items: allKeywordsMatch, 
           foodType: detected, 
           searchTerm: primarySearchTerm, 
-          label: null,
+          label: foodTypeLabel,
           exactMatch: true 
         };
       }
@@ -3104,9 +3102,7 @@ const chatbot = {
       // PRIORITY 2: Items matching SOME keywords - sorted by match count
       const partialTagMatches = new Map();
       
-      for (const item of menuItems) {
-        if (!passesFilter(item)) continue;
-        
+      for (const item of searchableItems) {
         // Count how many search keywords match this item
         let matchCount = 0;
         const matchedKeywords = [];
@@ -3151,7 +3147,7 @@ const chatbot = {
             items: filteredMatches, 
             foodType: detected, 
             searchTerm: primarySearchTerm, 
-            label: null,
+            label: foodTypeLabel,
             exactMatch: true // Mark as exact since all keywords matched
           };
         }
@@ -3274,15 +3270,15 @@ const chatbot = {
     let matchingItems = [];
     
     if (hasSearchTerm) {
-      // Search using ALL translation variations
+      // Search using ALL translation variations - use searchableItems (filtered by food type)
       console.log(`🔍 Searching with variations: [${uniqueSearchTerms.join(', ')}]`);
-      matchingItems = searchByMultipleTerms(filteredItems, uniqueSearchTerms);
+      matchingItems = searchByMultipleTerms(searchableItems, uniqueSearchTerms);
       
-      // If no results with food type filter, try ALL items
-      if (matchingItems.length === 0 && filteredItems.length < menuItems.length) {
+      // If no results with food type filter, try ALL items as fallback
+      if (matchingItems.length === 0 && searchableItems.length < menuItems.length) {
         matchingItems = searchByMultipleTerms(menuItems, uniqueSearchTerms);
         if (matchingItems.length > 0) {
-          foodTypeLabel = null;
+          foodTypeLabel = null; // Clear food type label since we're showing all items
         }
       }
       
@@ -3291,8 +3287,11 @@ const chatbot = {
         const allKeywords = uniqueSearchTerms.flatMap(term => term.split(/\s+/).filter(k => k.length >= 2));
         if (allKeywords.length > 0) {
           console.log(`🔍 Fallback: finding items matching ANY keyword: [${allKeywords.join(', ')}]`);
-          // Search each keyword and combine all results
-          matchingItems = searchByMultipleTerms(menuItems, allKeywords);
+          // Search each keyword and combine all results - first try searchableItems
+          matchingItems = searchByMultipleTerms(searchableItems, allKeywords);
+          if (matchingItems.length === 0) {
+            matchingItems = searchByMultipleTerms(menuItems, allKeywords);
+          }
         }
       }
       
@@ -3305,14 +3304,19 @@ const chatbot = {
         // Lower threshold (0.45) for better typo tolerance
         const fuzzyThreshold = 0.45;
         
-        // Try fuzzy matching with the primary search term
-        let fuzzyResults = this.fuzzySearchItems(primarySearchTerm, menuItems, fuzzyThreshold);
+        // Try fuzzy matching with the primary search term - use searchableItems first
+        let fuzzyResults = this.fuzzySearchItems(primarySearchTerm, searchableItems, fuzzyThreshold);
+        
+        // If no results, try all menu items
+        if (fuzzyResults.length === 0) {
+          fuzzyResults = this.fuzzySearchItems(primarySearchTerm, menuItems, fuzzyThreshold);
+        }
         
         // Also try fuzzy matching with individual keywords (useful for multi-word typos like "beak fasr")
         if (fuzzyResults.length === 0) {
           const keywords = primarySearchTerm.split(/\s+/).filter(k => k.length >= 2);
           for (const keyword of keywords) {
-            const keywordFuzzy = this.fuzzySearchItems(keyword, menuItems, fuzzyThreshold);
+            const keywordFuzzy = this.fuzzySearchItems(keyword, searchableItems, fuzzyThreshold);
             if (keywordFuzzy.length > 0) {
               // Combine results from all keywords
               const existingIds = new Set(fuzzyResults.map(i => i._id.toString()));
@@ -3366,12 +3370,13 @@ const chatbot = {
       
       console.log(`❌ No matching items found for "${text}" after tag-based and fuzzy search`);
       
-    } else if (detected?.type === 'specific' && filteredItems.length > 0) {
-      matchingItems = filteredItems;
+    } else if (detected?.type === 'specific' && searchableItems.length > 0) {
+      // For specific ingredient searches (e.g., "chicken"), return filtered items
+      matchingItems = searchableItems;
     }
     
     return matchingItems.length > 0 
-      ? { items: matchingItems, foodType: detected, searchTerm: primarySearchTerm, label: foodTypeLabel }
+      ? { items: matchingItems, foodType: detected, searchTerm: primarySearchTerm, label: foodTypeLabel, exactMatch: true }
       : null;
   },
 
