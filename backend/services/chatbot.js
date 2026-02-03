@@ -2626,18 +2626,35 @@ const chatbot = {
       return null;
     }
     
+    // ========== DETECT FOOD TYPE FIRST (before any typo correction) ==========
+    // This prevents "veg curry" from being "corrected" to "egg curry"
+    const originalText = text.toLowerCase().trim();
+    const originalFoodType = this.detectFoodTypeFromMessage(originalText);
+    console.log(`🔎 ORIGINAL food type detection: "${originalText}" → ${originalFoodType ? JSON.stringify(originalFoodType) : 'NONE'}`);
+    
     // First apply common food typo correction (hardcoded + dynamic)
-    let correctedText = text.toLowerCase().trim();
-    const originalText = correctedText;
+    let correctedText = originalText;
     
     // Check hardcoded typos first
     let phraseCorrection = this.correctFoodTypo(correctedText);
     
     // If no hardcoded match, try dynamic matching against actual menu
+    // BUT: Don't allow "veg" to become "egg" or vice versa!
     if (phraseCorrection === correctedText) {
       const dynamicMatch = this.findBestMatchingTerm(correctedText, menuItems);
       if (dynamicMatch) {
-        phraseCorrection = dynamicMatch;
+        // SAFETY CHECK: Don't allow typo correction to change food type keywords
+        const originalHasVeg = /\bveg\b/i.test(correctedText);
+        const correctedHasEgg = /\begg\b/i.test(dynamicMatch);
+        const originalHasEgg = /\begg\b/i.test(correctedText);
+        const correctedHasVeg = /\bveg\b/i.test(dynamicMatch);
+        
+        // Don't allow veg→egg or egg→veg corrections
+        if ((originalHasVeg && correctedHasEgg) || (originalHasEgg && correctedHasVeg)) {
+          console.log(`🛡️ BLOCKED typo correction: "${correctedText}" → "${dynamicMatch}" (would change food type)`);
+        } else {
+          phraseCorrection = dynamicMatch;
+        }
       }
     }
     
@@ -2649,6 +2666,11 @@ const chatbot = {
     // Also check individual words for typos and correct them (hardcoded + dynamic)
     const words = correctedText.split(/\s+/);
     const correctedWords = words.map(word => {
+      // NEVER correct food type keywords (veg, nonveg, egg, vegetarian)
+      if (/^(veg|nonveg|non-veg|egg|vegetarian|veggie|eggless)$/i.test(word)) {
+        return word; // Keep as-is
+      }
+      
       // First check hardcoded
       let corrected = this.correctFoodTypo(word);
       // Then try dynamic matching if no hardcoded match
@@ -2702,16 +2724,23 @@ const chatbot = {
     
     if (primaryText.length < 2) return null;
     
-    // Detect food type preference from primary translation
-    const detected = this.detectFoodTypeFromMessage(primaryText);
+    // USE THE ORIGINAL FOOD TYPE DETECTION (from before typo correction)
+    // This ensures "veg curry" stays as veg even if typo correction tried to change it
+    const detected = originalFoodType || this.detectFoodTypeFromMessage(primaryText);
     console.log(`🔎 SMART SEARCH: text="${text}", primaryText="${primaryText}", detected=`, detected);
+    console.log(`🔎 Using originalFoodType: ${originalFoodType ? 'YES' : 'NO (fell back to primaryText detection)'}`);
     
     // Remove food type keywords to get clean search terms
-    const primarySearchTerm = this.removeFoodTypeKeywords(primaryText);
-    console.log(`🔎 After removing food type keywords: "${primarySearchTerm}"`);
+    // Use ORIGINAL text for removing keywords to preserve user intent
+    const primarySearchTerm = this.removeFoodTypeKeywords(originalText);
+    console.log(`🔎 After removing food type keywords from ORIGINAL: "${primarySearchTerm}"`);
     
     // Get all search variations (cleaned of food type keywords)
     const searchVariations = allVariations.map(v => this.removeFoodTypeKeywords(v.toLowerCase())).filter(v => v.length >= 2);
+    // Also add the original search term
+    if (!searchVariations.includes(primarySearchTerm) && primarySearchTerm.length >= 2) {
+      searchVariations.unshift(primarySearchTerm);
+    }
     
     // Expand search terms with synonyms (e.g., "pulusu" → ["pulusu", "curry", "gravy"])
     const expandedTerms = [];
