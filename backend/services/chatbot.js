@@ -2700,9 +2700,11 @@ const chatbot = {
     
     // Detect food type preference from primary translation
     const detected = this.detectFoodTypeFromMessage(primaryText);
+    console.log(`🔎 SMART SEARCH: text="${text}", primaryText="${primaryText}", detected=`, detected);
     
     // Remove food type keywords to get clean search terms
     const primarySearchTerm = this.removeFoodTypeKeywords(primaryText);
+    console.log(`🔎 After removing food type keywords: "${primarySearchTerm}"`);
     
     // Get all search variations (cleaned of food type keywords)
     const searchVariations = allVariations.map(v => this.removeFoodTypeKeywords(v.toLowerCase())).filter(v => v.length >= 2);
@@ -2763,19 +2765,22 @@ const chatbot = {
     let searchableItems = menuItems;
     let foodTypeLabel = null;
     
+    console.log(`🔎 Total menu items: ${menuItems.length}`);
+    
     if (detected) {
       if (detected.type === 'veg') {
         searchableItems = menuItems.filter(item => item.foodType === 'veg');
         foodTypeLabel = '🌿 Veg';
-        console.log(`🥬 Filtered to VEG items: ${searchableItems.length} items`);
+        console.log(`🥬 FILTERED TO VEG ITEMS: ${searchableItems.length} items out of ${menuItems.length}`);
+        console.log(`🥬 VEG item names: ${searchableItems.slice(0, 5).map(i => i.name).join(', ')}...`);
       } else if (detected.type === 'egg') {
         searchableItems = menuItems.filter(item => item.foodType === 'egg');
         foodTypeLabel = '🥚 Egg';
-        console.log(`🥚 Filtered to EGG items: ${searchableItems.length} items`);
+        console.log(`🥚 FILTERED TO EGG ITEMS: ${searchableItems.length} items out of ${menuItems.length}`);
       } else if (detected.type === 'nonveg') {
         searchableItems = menuItems.filter(item => item.foodType === 'nonveg' || item.foodType === 'egg');
         foodTypeLabel = '🍗 Non-Veg';
-        console.log(`🍗 Filtered to NON-VEG items: ${searchableItems.length} items`);
+        console.log(`🍗 FILTERED TO NON-VEG ITEMS: ${searchableItems.length} items out of ${menuItems.length}`);
       } else if (detected.type === 'specific') {
         // For specific ingredients like "chicken", "mutton"
         const ingredient = detected.ingredient;
@@ -2785,8 +2790,10 @@ const chatbot = {
           return inName || inTags;
         });
         foodTypeLabel = `🍗 ${ingredient.charAt(0).toUpperCase() + ingredient.slice(1)}`;
-        console.log(`🍖 Filtered by ingredient "${ingredient}": ${searchableItems.length} items`);
+        console.log(`🍖 FILTERED BY INGREDIENT "${ingredient}": ${searchableItems.length} items out of ${menuItems.length}`);
       }
+    } else {
+      console.log(`⚠️ NO FOOD TYPE DETECTED - searching all items`);
     }
     
     // Helper to normalize text for comparison (removes spaces for flexible matching)
