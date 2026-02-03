@@ -563,6 +563,33 @@ router.post('/reset-badge', async (req, res) => {
   }
 });
 
+// Test push notification endpoint (for debugging)
+router.post('/test-notification', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token' });
+  
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    if (decoded.role !== 'delivery') {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    
+    // Get delivery boy's push token
+    const deliveryBoy = await DeliveryBoy.findById(decoded.id);
+    if (deliveryBoy && deliveryBoy.pushToken) {
+      const pushNotification = require('../services/pushNotification');
+      const result = await pushNotification.sendTestNotification(deliveryBoy.pushToken);
+      res.json({ message: 'Test notification sent', result, pushToken: deliveryBoy.pushToken });
+    } else {
+      res.status(400).json({ error: 'No push token registered for this user' });
+    }
+  } catch (error) {
+    console.error('Test notification error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ DELIVERY BOY ORDER ROUTES ============
 
 // Middleware to verify delivery boy token

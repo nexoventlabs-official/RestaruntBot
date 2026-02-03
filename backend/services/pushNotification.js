@@ -44,34 +44,35 @@ const pushNotification = {
     // Get incremented badge count
     const badgeCount = this.getBadgeCount(pushToken);
 
+    // CRITICAL: Correct Expo push notification format for FCM background delivery
     const message = {
       to: pushToken,
+      // These are REQUIRED for the notification to show when app is killed
+      title: title,
+      body: body,
+      // Sound settings
       sound: 'default',
-      title,
-      body,
+      // Data payload - app can read this
       data: {
         ...data,
-        // Include badge count in data for app to use
         badgeCount,
-      },
-      priority: 'high',
-      channelId: channelId,
-      // CRITICAL: These settings ensure delivery when app is killed/background
-      _displayInForeground: true,
-      // TTL of 1 week to ensure delivery
-      ttl: 604800,
-      // Badge count for app icon
-      badge: badgeCount,
-      // Android specific - high priority for immediate delivery
-      android: {
-        priority: 'high',
+        // Add these for Android to handle properly
+        title: title,
+        body: body,
         channelId: channelId,
-        sound: true,
-        vibrate: [0, 500, 250, 500],
       },
-      // iOS specific
+      // Priority - 'high' ensures immediate delivery
+      priority: 'high',
+      // Android notification channel
+      channelId: channelId,
+      // Badge count for app icon (iOS mainly, Android uses notification count)
+      badge: badgeCount,
+      // TTL - time to live in seconds (1 week)
+      expiration: Math.floor(Date.now() / 1000) + 604800,
+      // Subtitle for iOS
+      subtitle: undefined,
+      // For iOS - allows notification service extension
       mutableContent: true,
-      categoryId: channelId === 'new-orders' ? 'new-orders' : undefined,
     };
 
     try {
@@ -115,27 +116,24 @@ const pushNotification = {
       // Get incremented badge count for each user
       const badgeCount = this.getBadgeCount(pushToken);
 
+      // CRITICAL: Correct Expo push notification format for FCM background delivery
       messages.push({
         to: pushToken,
+        title: title,
+        body: body,
         sound: 'default',
-        title,
-        body,
         data: {
           ...data,
           badgeCount,
+          title: title,
+          body: body,
+          channelId: channelId,
         },
         priority: 'high',
         channelId: channelId,
-        _displayInForeground: true,
-        ttl: 604800,
         badge: badgeCount,
-        android: {
-          priority: 'high',
-          channelId: channelId,
-          sound: true,
-          vibrate: [0, 500, 250, 500],
-        },
-        categoryId: channelId === 'new-orders' ? 'new-orders' : undefined,
+        expiration: Math.floor(Date.now() / 1000) + 604800,
+        mutableContent: true,
       });
     }
 
@@ -236,6 +234,87 @@ const pushNotification = {
     };
 
     return this.sendNotification(pushToken, title, body, data, 'new-orders');
+  },
+
+  /**
+   * Send a test notification (for debugging)
+   * @param {string} pushToken - Expo push token
+   */
+  async sendTestNotification(pushToken) {
+    console.log('📱 Sending test notification to:', pushToken);
+    
+    if (!Expo.isExpoPushToken(pushToken)) {
+      console.error('Invalid push token:', pushToken);
+      return { error: 'Invalid token' };
+    }
+
+    const message = {
+      to: pushToken,
+      title: '🔔 Test Notification',
+      body: 'This is a test notification from FoodAdmin. If you see this, notifications are working!',
+      sound: 'default',
+      data: {
+        type: 'test',
+        timestamp: new Date().toISOString(),
+      },
+      priority: 'high',
+      channelId: 'default',
+      badge: 1,
+    };
+
+    try {
+      const tickets = await expo.sendPushNotificationsAsync([message]);
+      console.log('📱 Test notification tickets:', JSON.stringify(tickets, null, 2));
+      
+      // Check ticket status
+      for (const ticket of tickets) {
+        if (ticket.status === 'error') {
+          console.error('Ticket error:', ticket.message);
+          if (ticket.details) {
+            console.error('Error details:', ticket.details);
+          }
+          return { error: ticket.message, details: ticket.details };
+        }
+      }
+      
+      return { success: true, tickets };
+    } catch (error) {
+      console.error('Test notification error:', error);
+      return { error: error.message };
+    }
+  },
+
+  /**
+   * Check push notification receipts (for debugging delivery issues)
+   * @param {string[]} ticketIds - Array of ticket IDs from sendPushNotificationsAsync
+   */
+  async checkReceipts(ticketIds) {
+    if (!ticketIds || ticketIds.length === 0) return [];
+    
+    try {
+      const receiptIdChunks = expo.chunkPushNotificationReceiptIds(ticketIds);
+      const receipts = [];
+      
+      for (const chunk of receiptIdChunks) {
+        const receiptChunk = await expo.getPushNotificationReceiptsAsync(chunk);
+        receipts.push(receiptChunk);
+        
+        // Log any errors
+        for (const [receiptId, receipt] of Object.entries(receiptChunk)) {
+          if (receipt.status === 'error') {
+            console.error(`Receipt ${receiptId} error:`, receipt.message);
+            if (receipt.details) {
+              console.error('Details:', receipt.details);
+            }
+          }
+        }
+      }
+      
+      return receipts;
+    } catch (error) {
+      console.error('Error checking receipts:', error);
+      return [];
+    }
   },
 };
 
