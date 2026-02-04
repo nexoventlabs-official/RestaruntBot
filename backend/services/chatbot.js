@@ -2125,8 +2125,8 @@ const chatbot = {
     const corrected = this.findBestMatchingTerm(lowerText, menuItems);
     if (corrected && corrected !== lowerText) {
       const correctedMatch = menuItems.find(item => 
-        item.name.toLowerCase().includes(corrected) || 
-        corrected.includes(item.name.toLowerCase())
+        this.smartIncludes(corrected, item.name) || 
+        item.name.toLowerCase() === corrected
       );
       if (correctedMatch) return correctedMatch;
     }
@@ -2886,8 +2886,8 @@ const chatbot = {
         // For specific ingredients like "chicken", "mutton"
         const ingredient = detected.ingredient;
         searchableItems = menuItems.filter(item => {
-          const inName = item.name.toLowerCase().includes(ingredient);
-          const inTags = item.tags?.some(tag => tag.toLowerCase().includes(ingredient));
+          const inName = this.smartIncludes(ingredient, item.name);
+          const inTags = item.tags?.some(tag => this.smartIncludes(ingredient, tag));
           return inName || inTags;
         });
         foodTypeLabel = `🍗 ${ingredient.charAt(0).toUpperCase() + ingredient.slice(1)}`;
@@ -3057,40 +3057,17 @@ const chatbot = {
     // Helper to check if search term matches tag/name (strict matching)
     // Only allows: exact match OR tag contains search term (not search term contains tag)
     // This prevents "gobi" from matching items with tag "bi" or "go"
+    // strictMatch - uses smartIncludes to prevent "ice" matching "rice"
     const strictMatch = (tagOrName, searchTerm) => {
       if (!tagOrName || !searchTerm) return false;
       const tagLower = tagOrName.toLowerCase().trim();
       const termLower = searchTerm.toLowerCase().trim();
-      const tagNorm = normalizeText(tagOrName);
-      const termNorm = normalizeText(searchTerm);
-      const tagPlural = normalizePluralText(tagOrName);
-      const termPlural = normalizePluralText(searchTerm);
-      const tagPluralNorm = normalizeText(tagPlural);
-      const termPluralNorm = normalizeText(termPlural);
       
-      // Exact matches (with or without spaces/plurals)
-      if (tagLower === termLower || tagNorm === termNorm || 
-          tagPlural === termPlural || tagPluralNorm === termPluralNorm) {
-        return true;
-      }
+      // Exact match
+      if (tagLower === termLower) return true;
       
-      // Tag contains search term (search term is substring of tag)
-      // e.g., search "gobi" matches tag "gobi manchurian"
-      if (tagLower.includes(termLower) || tagNorm.includes(termNorm) ||
-          tagPluralNorm.includes(termPluralNorm)) {
-        return true;
-      }
-      
-      // Search term contains tag ONLY if tag is a complete word in search term
-      // e.g., search "gobi manchurian" matches tag "gobi" (complete word)
-      // but search "gobi" should NOT match tag "go" or "bi" (not complete words)
-      if (termLower.length > tagLower.length && tagLower.length >= 3) {
-        // Check if tag appears as a complete word in search term
-        const wordBoundaryRegex = new RegExp(`\\b${tagLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
-        if (wordBoundaryRegex.test(termLower)) {
-          return true;
-        }
-      }
+      // Use smartIncludes for word boundary checking (prevents "ice" → "rice")
+      if (this.smartIncludes(termLower, tagOrName)) return true;
       
       return false;
     };
@@ -3284,18 +3261,11 @@ const chatbot = {
       for (const term of terms) {
         if (term.length < 2) continue;
         const termLower = term.toLowerCase();
-        const termNorm = normalizeText(term);
-        const termPlural = normalizePluralText(term);
-        const termPluralNorm = normalizeText(termPlural);
         
-        // Check for exact name match first (highest priority) - flexible matching
+        // Check for exact name match first (highest priority)
         for (const item of items) {
           const nameLower = item.name.toLowerCase();
-          const nameNorm = normalizeText(item.name);
-          const namePlural = normalizePluralText(item.name);
-          const namePluralNorm = normalizeText(namePlural);
-          if (nameLower === termLower || nameNorm === termNorm ||
-              namePlural === termPlural || namePluralNorm === termPluralNorm) {
+          if (nameLower === termLower) {
             const id = item._id.toString();
             if (!itemMatches.has(id)) {
               itemMatches.set(id, { item, score: 0 });
@@ -3304,16 +3274,9 @@ const chatbot = {
           }
         }
         
-        // Check for exact tag match (high priority) - flexible matching
+        // Check for exact tag match (high priority)
         for (const item of items) {
-          if (item.tags?.some(tag => {
-            const tagLower = tag.toLowerCase();
-            const tagNorm = normalizeText(tag);
-            const tagPlural = normalizePluralText(tag);
-            const tagPluralNorm = normalizeText(tagPlural);
-            return tagLower === termLower || tagNorm === termNorm ||
-                   tagPlural === termPlural || tagPluralNorm === termPluralNorm;
-          })) {
+          if (item.tags?.some(tag => tag.toLowerCase() === termLower)) {
             const id = item._id.toString();
             if (!itemMatches.has(id)) {
               itemMatches.set(id, { item, score: 0 });
@@ -3322,34 +3285,25 @@ const chatbot = {
           }
         }
         
-        // Search partial term matches using strict matching
-        const matches = searchByTerm(items, term);
-        for (const item of matches) {
-          const id = item._id.toString();
-          if (!itemMatches.has(id)) {
-            itemMatches.set(id, { item, score: 0 });
+        // Check for smart boundary match on name (prevents "ice" → "rice")
+        for (const item of items) {
+          if (this.smartIncludes(termLower, item.name)) {
+            const id = item._id.toString();
+            if (!itemMatches.has(id)) {
+              itemMatches.set(id, { item, score: 0 });
+            }
+            itemMatches.get(id).score += 30; // Smart name match = 30 points
           }
-          itemMatches.get(id).score += 10; // Partial term match = 10 points
         }
         
-        // Also search individual keywords from this term (e.g., "mutton pulusu" → search "mutton" and "pulusu" separately)
-        const keywords = term.split(/\s+/).filter(k => k.length >= 2);
-        if (keywords.length > 1) {
-          // Multi-word search - search each keyword and add matching items
-          for (const keyword of keywords) {
-            for (const item of items) {
-              // Use strict matching for name and tags
-              const nameMatch = strictMatch(item.name, keyword);
-              const tagMatch = item.tags?.some(tag => strictMatch(tag, keyword));
-              
-              if (nameMatch || tagMatch) {
-                const id = item._id.toString();
-                if (!itemMatches.has(id)) {
-                  itemMatches.set(id, { item, score: 0 });
-                }
-                itemMatches.get(id).score += 20; // Keyword match = 20 points
-              }
+        // Check for smart boundary match on tags
+        for (const item of items) {
+          if (item.tags?.some(tag => this.smartIncludes(termLower, tag))) {
+            const id = item._id.toString();
+            if (!itemMatches.has(id)) {
+              itemMatches.set(id, { item, score: 0 });
             }
+            itemMatches.get(id).score += 20; // Smart tag match = 20 points
           }
         }
       }
@@ -3744,7 +3698,7 @@ const chatbot = {
           // If no startsWith matches, try contains but only if search term is significant
           if (partialMatches.length === 0 && searchName.length >= 4) {
             partialMatches = menuItems.filter(item => 
-              item.name.toLowerCase().includes(searchName)
+              this.smartIncludes(searchName, item.name)
             );
           }
           
@@ -3948,11 +3902,11 @@ const chatbot = {
         const addIntent = this.isAddToCartIntent(msg);
         console.log('🛒 Add to cart intent detected:', addIntent);
         
-        // Search for item by name
+        // Search for item by name using smart matching
         const searchTerm = addIntent.itemName.toLowerCase();
         const matchingItems = menuItems.filter(item => 
-          item.name.toLowerCase().includes(searchTerm) ||
-          (item.tags && item.tags.some(tag => tag.toLowerCase().includes(searchTerm)))
+          this.smartIncludes(searchTerm, item.name) ||
+          (item.tags && item.tags.some(tag => this.smartIncludes(searchTerm, tag)))
         );
         
         if (matchingItems.length === 1) {
