@@ -5109,7 +5109,7 @@ const chatbot = {
     msg += `\n\n📝 ${item.description || 'Delicious dish prepared fresh!'}`;
 
     const buttons = [
-      { id: `add_${item._id}`, text: 'Add to Cart' },
+      { id: `confirm_add_${item._id}`, text: 'Add to Cart' },
       { id: 'view_menu', text: 'Back to Menu' },
       { id: 'review_pay', text: 'Review & Order' }
     ];
