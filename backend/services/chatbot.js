@@ -2931,43 +2931,30 @@ const chatbot = {
       // Split search into individual keywords
       const searchKeywords = primarySearchTerm.split(/\s+/).filter(k => k.length >= 2);
       
-      // Helper to check if item matches a keyword using STRICT matching
-      // Prevents "gobi" from matching items with short tags like "bi" or "go"
+      // Helper to check if item matches a keyword using STRICT smart boundary matching
+      // Prevents "ice" from matching "rice", "gobi" from matching "bi" etc.
       const itemMatchesKeyword = (item, keyword) => {
         const kwLower = keyword.toLowerCase().trim();
-        const kwNorm = normalizeForMatch(keyword);
         
-        // Check tags - must be exact match or tag contains keyword (not keyword contains tag)
+        // Check tags using smart boundary matching
         const tagMatch = (item.tags || []).some(tag => {
           const tagLower = tag.toLowerCase().trim();
-          const tagNorm = normalizeForMatch(tag);
           // Exact match
-          if (tagLower === kwLower || tagNorm === kwNorm) return true;
-          // Tag contains keyword (e.g., "gobi manchurian" contains "gobi")
-          if (tagLower.includes(kwLower) || tagNorm.includes(kwNorm)) return true;
-          // Keyword contains tag ONLY if tag is a complete word (3+ chars) in keyword
-          if (kwLower.length > tagLower.length && tagLower.length >= 3) {
-            const wordBoundaryRegex = new RegExp(`\\b${tagLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
-            if (wordBoundaryRegex.test(kwLower)) return true;
-          }
+          if (tagLower === kwLower) return true;
+          // Smart boundary match (prevents "ice" matching "rice")
+          if (this.smartIncludes(kwLower, tag)) return true;
           return false;
         });
         if (tagMatch) return true;
         
-        // Check category names with same strict matching
+        // Check category names with smart boundary matching
         const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
         const categoryMatch = itemCategories.some(cat => {
           const catLower = cat.toLowerCase().trim();
-          const catNorm = normalizeForMatch(cat);
           // Exact match
-          if (catLower === kwLower || catNorm === kwNorm) return true;
-          // Category contains keyword
-          if (catLower.includes(kwLower) || catNorm.includes(kwNorm)) return true;
-          // Keyword contains category ONLY if category is a complete word
-          if (kwLower.length > catLower.length && catLower.length >= 3) {
-            const wordBoundaryRegex = new RegExp(`\\b${catLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
-            if (wordBoundaryRegex.test(kwLower)) return true;
-          }
+          if (catLower === kwLower) return true;
+          // Smart boundary match
+          if (this.smartIncludes(kwLower, cat)) return true;
           return false;
         });
         
@@ -3159,32 +3146,30 @@ const chatbot = {
       console.log(`🔍 Tag search - Primary keywords: [${searchKeywords.join(', ')}], All keywords: [${uniqueKeywords.join(', ')}], foodType: ${detected?.type || 'all'}`);
       
       // Helper to check if item tags OR name OR category match a keyword
+      // Uses smartIncludes to prevent "ice" matching "rice"
       const itemMatchesKeyword = (item, keyword) => {
         const kwLower = keyword.toLowerCase().trim();
         
-        // Check item NAME first (highest priority)
-        const nameLower = item.name.toLowerCase();
-        if (nameLower.includes(kwLower)) return true;
+        // Check item NAME first (highest priority) - use smart boundary matching
+        if (this.smartIncludes(kwLower, item.name)) return true;
         
-        // Check TAGS
+        // Check TAGS - use smart boundary matching
         const tagMatch = (item.tags || []).some(tag => {
           const tagLower = tag.toLowerCase().trim();
           // Exact match
           if (tagLower === kwLower) return true;
-          // Tag contains keyword (e.g., tag "egg dosa" contains keyword "egg")
-          if (tagLower.includes(kwLower)) return true;
-          // Keyword contains tag if tag is complete word (e.g., keyword "eggdosa" contains tag "egg")
-          if (kwLower.includes(tagLower) && tagLower.length >= 3) return true;
+          // Smart boundary match (prevents "ice" matching "rice")
+          if (this.smartIncludes(kwLower, tag)) return true;
           return false;
         });
         if (tagMatch) return true;
         
-        // Check CATEGORY
+        // Check CATEGORY - use smart boundary matching
         const categories = Array.isArray(item.category) ? item.category : [item.category];
         const categoryMatch = categories.some(cat => {
           if (!cat) return false;
-          const catLower = cat.toLowerCase().trim();
-          return catLower.includes(kwLower) || kwLower.includes(catLower);
+          if (this.smartIncludes(kwLower, cat)) return true;
+          return false;
         });
         
         return categoryMatch;
@@ -3404,77 +3389,8 @@ const chatbot = {
         }
       }
       
-      // ========== FUZZY MATCHING FALLBACK ==========
-      // If still no results, use Levenshtein distance to find items with similar names/tags
-      // This handles typos like "manchuya" → "manchurian", "birani" → "biryani", "beak fasr" → "breakfast"
-      if (matchingItems.length === 0) {
-        console.log(`🔤 Fuzzy Search: Finding items similar to "${primarySearchTerm}"...`);
-        
-        // Lower threshold (0.45) for better typo tolerance
-        const fuzzyThreshold = 0.45;
-        
-        // Try fuzzy matching with the primary search term - use searchableItems (respects food type filter)
-        let fuzzyResults = this.fuzzySearchItems(primarySearchTerm, searchableItems, fuzzyThreshold);
-        
-        // Only try all menu items if NO food type was detected
-        if (fuzzyResults.length === 0 && !detected) {
-          console.log(`🔍 No food type detected, trying fuzzy search on all items...`);
-          fuzzyResults = this.fuzzySearchItems(primarySearchTerm, menuItems, fuzzyThreshold);
-        }
-        
-        // Also try fuzzy matching with individual keywords (useful for multi-word typos like "beak fasr")
-        if (fuzzyResults.length === 0) {
-          const keywords = primarySearchTerm.split(/\s+/).filter(k => k.length >= 2);
-          for (const keyword of keywords) {
-            const keywordFuzzy = this.fuzzySearchItems(keyword, searchableItems, fuzzyThreshold);
-            if (keywordFuzzy.length > 0) {
-              // Combine results from all keywords
-              const existingIds = new Set(fuzzyResults.map(i => i._id.toString()));
-              for (const item of keywordFuzzy) {
-                if (!existingIds.has(item._id.toString())) {
-                  fuzzyResults.push(item);
-                  existingIds.add(item._id.toString());
-                }
-              }
-            }
-          }
-        }
-        
-        // Also try with all search variations - respect food type filter
-        if (fuzzyResults.length === 0) {
-          for (const term of uniqueSearchTerms) {
-            if (term.length >= 2) {
-              // Only search all items if no food type was detected
-              const itemsToSearch = detected ? searchableItems : menuItems;
-              fuzzyResults = this.fuzzySearchItems(term, itemsToSearch, fuzzyThreshold);
-              if (fuzzyResults.length > 0) break;
-            }
-          }
-        }
-        
-        // Try combining words that might have been split by accident (e.g., "break fast" → "breakfast")
-        if (fuzzyResults.length === 0 && searchWords.length >= 2) {
-          const combinedWords = searchWords.join('');
-          if (combinedWords.length >= 3) {
-            // Respect food type filter
-            const itemsToSearch = detected ? searchableItems : menuItems;
-            fuzzyResults = this.fuzzySearchItems(combinedWords, itemsToSearch, fuzzyThreshold);
-          }
-        }
-        
-        if (fuzzyResults.length > 0) {
-          matchingItems = fuzzyResults;
-          console.log(`✅ Fuzzy search found ${matchingItems.length} similar items`);
-          // Return with "Did you mean" label for fuzzy matches
-          return { 
-            items: matchingItems, 
-            foodType: detected, 
-            searchTerm: primarySearchTerm, 
-            label: `🔍 Did you mean`,
-            fuzzyMatch: true 
-          };
-        }
-      }
+      // No fuzzy matching - if no exact match found, return null
+      // This prevents mismatches like "ice" showing "rice" items
       
       // ========== SKIP EXCESSIVE AI CALLS ==========
       // The menu items now have auto-generated tags including food type, quantity, and name words
