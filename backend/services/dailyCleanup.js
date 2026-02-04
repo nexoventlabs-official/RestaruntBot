@@ -88,8 +88,8 @@ const dailyCleanup = {
           .slice(0, 5)
           .map(([category, revenue]) => ({ category, revenue }));
         
-        // Save to Google Sheets (new column-based format)
-        await googleSheets.saveDailyReportByDate({
+        // Save to Google Sheets (row-based format - horizontal rows per date)
+        await googleSheets.saveDailyReport({
           date: yesterdayString,
           revenue: stats.todayRevenue,
           orders: stats.todayOrders,

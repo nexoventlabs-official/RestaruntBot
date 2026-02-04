@@ -320,6 +320,10 @@ const googleSheets = {
       const istOptions = { timeZone: 'Asia/Kolkata' };
       const itemsStr = order.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
 
+      // Get delivery address for logging
+      const deliveryAddress = order.serviceType === 'pickup' ? 'Self Pickup' : (order.deliveryAddress?.address || '');
+      console.log(`📊 Adding order ${order.orderId} to sheets - Address: "${deliveryAddress}"`);
+
       // Determine payment method label based on service type
       let paymentMethodLabel = 'UPI/App';
       if (order.paymentMethod === 'cod') {
@@ -1119,23 +1123,36 @@ const googleSheets = {
           resource: { values: [headers] }
         });
         
-        // Format header row
+        // Format header row - Professional blue header
         await sheets.spreadsheets.batchUpdate({
           spreadsheetId: SPREADSHEET_ID,
           resource: {
-            requests: [{
-              repeatCell: {
-                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 7 },
-                cell: {
-                  userEnteredFormat: {
-                    backgroundColor: { red: 0.2, green: 0.4, blue: 0.6 },
-                    textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
-                    horizontalAlignment: 'CENTER'
-                  }
-                },
-                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'
-              }
-            }]
+            requests: [
+              {
+                repeatCell: {
+                  range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 7 },
+                  cell: {
+                    userEnteredFormat: {
+                      backgroundColor: { red: 0.08, green: 0.46, blue: 0.75 },  // Nice blue
+                      textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                      horizontalAlignment: 'CENTER',
+                      verticalAlignment: 'MIDDLE'
+                    }
+                  },
+                  fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+                }
+              },
+              // Set column widths
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 150 }, fields: 'pixelSize' } },
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } },
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 300 }, fields: 'pixelSize' } },
+              // Freeze header row
+              { updateSheetProperties: { properties: { sheetId: sheet.sheetId, gridProperties: { frozenRowCount: 1 } }, fields: 'gridProperties.frozenRowCount' } }
+            ]
           }
         });
         
@@ -1277,12 +1294,7 @@ const googleSheets = {
         }
       });
       
-      // Color the row based on status (green for delivered, red for cancelled)
-      const color = status === 'delivered' 
-        ? { red: 0.9, green: 1, blue: 0.9 }  // Light green
-        : { red: 1, green: 0.9, blue: 0.9 }; // Light red
-      
-      // Only color if this is the most recent order
+      // Apply clean styling - light gray background for data rows
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId: SPREADSHEET_ID,
         resource: {
@@ -1291,10 +1303,12 @@ const googleSheets = {
               range: { sheetId: sheet.sheetId, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: 0, endColumnIndex: 7 },
               cell: {
                 userEnteredFormat: {
-                  backgroundColor: color
+                  backgroundColor: { red: 1, green: 1, blue: 1 },  // White background
+                  horizontalAlignment: 'LEFT',
+                  verticalAlignment: 'MIDDLE'
                 }
               },
-              fields: 'userEnteredFormat.backgroundColor'
+              fields: 'userEnteredFormat(backgroundColor,horizontalAlignment,verticalAlignment)'
             }
           }]
         }
@@ -1510,23 +1524,35 @@ const googleSheets = {
           resource: { values: [headers] }
         });
         
-        // Format header row
+        // Format header row - Professional green header
         await sheets.spreadsheets.batchUpdate({
           spreadsheetId: SPREADSHEET_ID,
           resource: {
-            requests: [{
-              repeatCell: {
-                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 6 },
-                cell: {
-                  userEnteredFormat: {
-                    backgroundColor: { red: 0.2, green: 0.5, blue: 0.3 },
-                    textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
-                    horizontalAlignment: 'CENTER'
-                  }
-                },
-                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'
-              }
-            }]
+            requests: [
+              {
+                repeatCell: {
+                  range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 6 },
+                  cell: {
+                    userEnteredFormat: {
+                      backgroundColor: { red: 0.15, green: 0.5, blue: 0.35 },  // Nice green
+                      textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                      horizontalAlignment: 'CENTER',
+                      verticalAlignment: 'MIDDLE'
+                    }
+                  },
+                  fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+                }
+              },
+              // Set column widths
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 150 }, fields: 'pixelSize' } },
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
+              // Freeze header row
+              { updateSheetProperties: { properties: { sheetId: sheet.sheetId, gridProperties: { frozenRowCount: 1 } }, fields: 'gridProperties.frozenRowCount' } }
+            ]
           }
         });
         console.log('✅ WhatsApp contacts sheet initialized with headers');
@@ -1682,23 +1708,40 @@ const googleSheets = {
           resource: { values: [headers] }
         });
         
-        // Format header row
+        // Format header row - Professional purple header
         await sheets.spreadsheets.batchUpdate({
           spreadsheetId: SPREADSHEET_ID,
           resource: {
-            requests: [{
-              repeatCell: {
-                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 13 },
-                cell: {
-                  userEnteredFormat: {
-                    backgroundColor: { red: 0.4, green: 0.2, blue: 0.6 },
-                    textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
-                    horizontalAlignment: 'CENTER'
-                  }
-                },
-                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'
-              }
-            }]
+            requests: [
+              {
+                repeatCell: {
+                  range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 11 },
+                  cell: {
+                    userEnteredFormat: {
+                      backgroundColor: { red: 0.4, green: 0.2, blue: 0.6 },  // Purple
+                      textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                      horizontalAlignment: 'CENTER',
+                      verticalAlignment: 'MIDDLE'
+                    }
+                  },
+                  fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+                }
+              },
+              // Set column widths for row-based format
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },  // Date
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },  // Revenue
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },  // Total Orders
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },   // Delivered
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },   // Cancelled
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },   // Refunded
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // COD Orders
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 7, endIndex: 8 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // UPI Orders
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 8, endIndex: 9 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // Items Sold
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 9, endIndex: 10 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } }, // Top Items
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 10, endIndex: 11 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } }, // Top Categories
+              // Freeze header row
+              { updateSheetProperties: { properties: { sheetId: sheet.sheetId, gridProperties: { frozenRowCount: 1 } }, fields: 'gridProperties.frozenRowCount' } }
+            ]
           }
         });
         console.log('✅ Daily reports sheet initialized with headers');
@@ -2795,6 +2838,305 @@ const googleSheets = {
       index = Math.floor(index / 26) - 1;
     }
     return letter;
+  },
+
+  // ==================== REFORMAT EXISTING SHEETS ====================
+  
+  // Reformat customers sheet with clean styling
+  async reformatCustomersSheet() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return { success: false, error: 'Auth not configured' };
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'customers');
+      if (!sheet) return { success: false, error: 'Sheet not found' };
+      
+      // Get total rows
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:A`
+      });
+      const totalRows = (response.data.values || []).length;
+      
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+          requests: [
+            // Header row styling - Professional blue
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 7 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.08, green: 0.46, blue: 0.75 },
+                    textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                    horizontalAlignment: 'CENTER',
+                    verticalAlignment: 'MIDDLE'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+              }
+            },
+            // Data rows styling - White background with black text
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 1, endRowIndex: Math.max(totalRows, 100), startColumnIndex: 0, endColumnIndex: 7 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 1, green: 1, blue: 1 },
+                    textFormat: { foregroundColor: { red: 0, green: 0, blue: 0 } },
+                    horizontalAlignment: 'LEFT',
+                    verticalAlignment: 'MIDDLE'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+              }
+            },
+            // Column widths
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 150 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 300 }, fields: 'pixelSize' } },
+            // Freeze header
+            { updateSheetProperties: { properties: { sheetId: sheet.sheetId, gridProperties: { frozenRowCount: 1 } }, fields: 'gridProperties.frozenRowCount' } }
+          ]
+        }
+      });
+      
+      console.log('✅ Customers sheet reformatted');
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error reformatting customers sheet:', error.message);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Reformat WhatsApp contacts sheet with clean styling
+  async reformatWhatsAppContactsSheet() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return { success: false, error: 'Auth not configured' };
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'whatsapp_contacts');
+      if (!sheet) return { success: false, error: 'Sheet not found' };
+      
+      // Get total rows
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:A`
+      });
+      const totalRows = (response.data.values || []).length;
+      
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+          requests: [
+            // Header row styling - Professional green
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 6 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.15, green: 0.5, blue: 0.35 },
+                    textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                    horizontalAlignment: 'CENTER',
+                    verticalAlignment: 'MIDDLE'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+              }
+            },
+            // Data rows styling - White background with black text
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 1, endRowIndex: Math.max(totalRows, 100), startColumnIndex: 0, endColumnIndex: 6 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 1, green: 1, blue: 1 },
+                    textFormat: { foregroundColor: { red: 0, green: 0, blue: 0 } },
+                    horizontalAlignment: 'LEFT',
+                    verticalAlignment: 'MIDDLE'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+              }
+            },
+            // Column widths
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 150 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
+            // Freeze header
+            { updateSheetProperties: { properties: { sheetId: sheet.sheetId, gridProperties: { frozenRowCount: 1 } }, fields: 'gridProperties.frozenRowCount' } }
+          ]
+        }
+      });
+      
+      console.log('✅ WhatsApp contacts sheet reformatted');
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error reformatting WhatsApp contacts sheet:', error.message);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Reformat daily_reports sheet - convert column format to row format
+  async reformatDailyReportsSheet() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) return { success: false, error: 'Auth not configured' };
+      
+      const sheets = google.sheets({ version: 'v4', auth });
+      const sheet = await this.getSheetByType(sheets, 'daily_reports');
+      if (!sheet) return { success: false, error: 'Sheet not found' };
+      
+      // Get existing data to check format
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:ZZ`
+      });
+      
+      const rows = response.data.values || [];
+      
+      // Check if it's in column format (first column has "Metric", "💰 Revenue", etc.)
+      const isColumnFormat = rows.length > 0 && (rows[0]?.[0] === 'Metric' || rows[1]?.[0]?.includes('Revenue'));
+      
+      if (isColumnFormat) {
+        console.log('📊 Converting daily_reports from column format to row format...');
+        
+        // Extract data from column format
+        const extractedReports = [];
+        const headers = rows[0] || [];
+        
+        for (let col = 1; col < headers.length; col++) {
+          const dateHeader = headers[col] || '';
+          const date = dateHeader.replace('📅 ', '').trim();
+          if (!date) continue;
+          
+          extractedReports.push({
+            date,
+            revenue: parseFloat((rows[1]?.[col] || '0').replace(/[₹,]/g, '')) || 0,
+            orders: parseInt(rows[2]?.[col]) || 0,
+            deliveredOrders: parseInt(rows[3]?.[col]) || 0,
+            cancelledOrders: parseInt(rows[4]?.[col]) || 0,
+            refundedOrders: parseInt(rows[5]?.[col]) || 0,
+            codOrders: parseInt(rows[6]?.[col]) || 0,
+            upiOrders: parseInt(rows[7]?.[col]) || 0,
+            itemsSold: parseInt(rows[8]?.[col]) || 0,
+            topItem: rows[9]?.[col] || '-',
+            topCategory: rows[10]?.[col] || '-'
+          });
+        }
+        
+        // Clear sheet
+        await sheets.spreadsheets.values.clear({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheet.sheetName}!A:ZZ`
+        });
+        
+        // Add row-format headers
+        const newHeaders = ['Date', 'Revenue', 'Total Orders', 'Delivered', 'Cancelled', 'Refunded', 'COD Orders', 'UPI Orders', 'Items Sold', 'Top Items', 'Top Categories'];
+        
+        // Prepare all rows
+        const allRows = [newHeaders];
+        for (const report of extractedReports) {
+          allRows.push([
+            report.date,
+            report.revenue,
+            report.orders,
+            report.deliveredOrders,
+            report.cancelledOrders,
+            report.refundedOrders,
+            report.codOrders,
+            report.upiOrders,
+            report.itemsSold,
+            report.topItem,
+            report.topCategory
+          ]);
+        }
+        
+        // Write all data
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheet.sheetName}!A1`,
+          valueInputOption: 'RAW',
+          resource: { values: allRows }
+        });
+      }
+      
+      // Get total rows after conversion
+      const finalResponse = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:A`
+      });
+      const totalRows = (finalResponse.data.values || []).length;
+      
+      // Apply styling
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+          requests: [
+            // Header row styling - Professional purple
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 11 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.4, green: 0.2, blue: 0.6 },
+                    textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                    horizontalAlignment: 'CENTER',
+                    verticalAlignment: 'MIDDLE'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+              }
+            },
+            // Data rows styling - White background with black text
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 1, endRowIndex: Math.max(totalRows, 50), startColumnIndex: 0, endColumnIndex: 11 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 1, green: 1, blue: 1 },
+                    textFormat: { foregroundColor: { red: 0, green: 0, blue: 0 } },
+                    horizontalAlignment: 'CENTER',
+                    verticalAlignment: 'MIDDLE'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+              }
+            },
+            // Column widths
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 7, endIndex: 8 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 8, endIndex: 9 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 9, endIndex: 10 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 10, endIndex: 11 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } },
+            // Freeze header
+            { updateSheetProperties: { properties: { sheetId: sheet.sheetId, gridProperties: { frozenRowCount: 1, frozenColumnCount: 0 } }, fields: 'gridProperties.frozenRowCount,gridProperties.frozenColumnCount' } }
+          ]
+        }
+      });
+      
+      console.log('✅ Daily reports sheet reformatted (row-based format)');
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error reformatting daily reports sheet:', error.message);
+      return { success: false, error: error.message };
+    }
   }
 };
 

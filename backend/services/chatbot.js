@@ -3387,27 +3387,57 @@ const chatbot = {
   // Reverse geocode coordinates to get readable address
   async reverseGeocode(latitude, longitude) {
     try {
+      console.log(`📍 Reverse geocoding coordinates: ${latitude}, ${longitude}`);
       const response = await axios.get(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`,
-        { headers: { 'User-Agent': 'RestaurantBot/1.0' } }
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18`,
+        { 
+          headers: { 'User-Agent': 'RestaurantBot/1.0' },
+          timeout: 5000 // 5 second timeout
+        }
       );
       
       if (response.data && response.data.address) {
         const addr = response.data.address;
-        // Build a readable address
+        // Build a readable address - prioritize specific details
         const parts = [];
+        
+        // Building/complex name
+        if (addr.building || addr.amenity) parts.push(addr.building || addr.amenity);
+        
+        // House number and road
         if (addr.house_number) parts.push(addr.house_number);
-        if (addr.road) parts.push(addr.road);
-        if (addr.neighbourhood || addr.suburb) parts.push(addr.neighbourhood || addr.suburb);
-        if (addr.city || addr.town || addr.village) parts.push(addr.city || addr.town || addr.village);
+        if (addr.road || addr.street) parts.push(addr.road || addr.street);
+        
+        // Area/locality
+        if (addr.neighbourhood) parts.push(addr.neighbourhood);
+        else if (addr.suburb) parts.push(addr.suburb);
+        else if (addr.residential) parts.push(addr.residential);
+        
+        // City
+        if (addr.city) parts.push(addr.city);
+        else if (addr.town) parts.push(addr.town);
+        else if (addr.village) parts.push(addr.village);
+        else if (addr.county) parts.push(addr.county);
+        
+        // State and pincode
         if (addr.state) parts.push(addr.state);
         if (addr.postcode) parts.push(addr.postcode);
         
-        return parts.length > 0 ? parts.join(', ') : response.data.display_name || 'Location shared';
+        const address = parts.length > 0 ? parts.join(', ') : response.data.display_name || null;
+        console.log(`📍 Geocoded address: ${address}`);
+        return address || 'Location shared';
       }
+      
+      // Try display_name as fallback
+      if (response.data && response.data.display_name) {
+        console.log(`📍 Using display_name: ${response.data.display_name}`);
+        return response.data.display_name;
+      }
+      
+      console.log('📍 No address data in geocoding response');
       return 'Location shared';
     } catch (error) {
-      console.error('Reverse geocoding error:', error.message);
+      console.error('❌ Reverse geocoding error:', error.message);
       return 'Location shared';
     }
   },
@@ -3525,10 +3555,31 @@ const chatbot = {
         
         console.log('📍 Location received:', locationData);
         
-        // Get proper address from coordinates using reverse geocoding
+        // Get proper address - prefer WhatsApp's address, fallback to reverse geocoding
         let formattedAddress = 'Location shared';
-        if (locationData.latitude && locationData.longitude) {
-          formattedAddress = await this.reverseGeocode(locationData.latitude, locationData.longitude);
+        
+        // First, try to use the address from WhatsApp location data
+        if (locationData.address && locationData.address.trim() && locationData.address !== 'undefined') {
+          formattedAddress = locationData.address.trim();
+          // If there's also a name/place, prepend it
+          if (locationData.name && locationData.name.trim() && locationData.name !== locationData.address) {
+            formattedAddress = `${locationData.name.trim()}, ${formattedAddress}`;
+          }
+          console.log('📍 Using WhatsApp provided address:', formattedAddress);
+        } else if (locationData.name && locationData.name.trim() && locationData.name !== 'undefined') {
+          // If only name is provided (like a place name)
+          formattedAddress = locationData.name.trim();
+          console.log('📍 Using WhatsApp location name:', formattedAddress);
+        }
+        
+        // If still no address, try reverse geocoding from coordinates
+        if ((formattedAddress === 'Location shared' || !formattedAddress) && locationData.latitude && locationData.longitude) {
+          console.log('📍 No address from WhatsApp, trying reverse geocoding...');
+          const geocodedAddress = await this.reverseGeocode(locationData.latitude, locationData.longitude);
+          if (geocodedAddress && geocodedAddress !== 'Location shared') {
+            formattedAddress = geocodedAddress;
+            console.log('📍 Got address from reverse geocoding:', formattedAddress);
+          }
         }
         
         // Check delivery radius BEFORE saving location
@@ -5281,15 +5332,30 @@ const chatbot = {
     const unitLabel = item.unit || 'piece';
     const qtyLabel = item.quantity || 1;
     const priceDisplay = formatPriceWithOffer(item);
-    const selectQtyImageUrl = await chatbotImagesService.getImageUrl('select_quantity');
+    const effectivePrice = item.offerPrice || item.price;
     
-    await sendWithOptionalImage(phone, selectQtyImageUrl,
-      `*${item.name}*\n💰 ${priceDisplay} / ${qtyLabel} ${unitLabel}\n\nHow many would you like?`,
-      [
-        { id: 'qty_1', text: '1' },
-        { id: 'qty_2', text: '2' },
-        { id: 'qty_3', text: '3' }
-      ]
+    // Create quantity options from 1 to 10 using list message
+    const rows = [];
+    for (let i = 1; i <= 10; i++) {
+      rows.push({
+        id: `qty_${i}`,
+        title: `${i} ${i === 1 ? unitLabel : (unitLabel === 'piece' ? 'pieces' : unitLabel)}`,
+        description: `₹${effectivePrice * i}`
+      });
+    }
+    
+    const sections = [{
+      title: 'Select Quantity',
+      rows: rows
+    }];
+    
+    await whatsapp.sendList(
+      phone,
+      `*${item.name}*`,
+      `💰 ${priceDisplay} / ${qtyLabel} ${unitLabel}\n\nHow many would you like to add?`,
+      'Select Quantity',
+      sections,
+      'Choose quantity'
     );
   },
 
