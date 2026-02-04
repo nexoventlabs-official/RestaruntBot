@@ -1650,9 +1650,23 @@ const chatbot = {
 
   // Calculate similarity with keyboard typo tolerance
   // Gives partial credit for keyboard-adjacent character substitutions
+  // Also handles common typo patterns: missing letters, swapped letters, extra letters
   similarityWithTypoTolerance(str1, str2) {
     const s1 = str1.toLowerCase();
     const s2 = str2.toLowerCase();
+    
+    // Exact match
+    if (s1 === s2) return 1;
+    
+    // One is prefix of other (e.g., "biryan" vs "biryani")
+    if (s1.startsWith(s2) || s2.startsWith(s1)) {
+      const shorter = Math.min(s1.length, s2.length);
+      const longer = Math.max(s1.length, s2.length);
+      // High score if only 1-2 chars difference
+      if (longer - shorter <= 2) {
+        return 0.85 + (shorter / longer) * 0.1;
+      }
+    }
     
     // Standard Levenshtein for base score
     const baseScore = this.similarityRatio(s1, s2);
@@ -1665,16 +1679,54 @@ const chatbot = {
     // Only give bonus if lengths are similar (within 2 chars)
     if (Math.abs(s1.length - s2.length) <= 2) {
       let adjacentTypos = 0;
+      let swappedChars = 0;
+      
       for (let i = 0; i < minLen; i++) {
-        if (s1[i] !== s2[i] && this.isKeyboardAdjacent(s1[i], s2[i])) {
-          adjacentTypos++;
+        if (s1[i] !== s2[i]) {
+          // Check for keyboard-adjacent typos
+          if (this.isKeyboardAdjacent(s1[i], s2[i])) {
+            adjacentTypos++;
+          }
+          // Check for swapped adjacent characters (e.g., "teh" vs "the")
+          if (i < minLen - 1 && s1[i] === s2[i + 1] && s1[i + 1] === s2[i]) {
+            swappedChars++;
+          }
         }
       }
       // Each keyboard-adjacent typo adds a small bonus (max 0.15 bonus)
-      typoBonus = Math.min(0.15, adjacentTypos * 0.05);
+      typoBonus = Math.min(0.20, adjacentTypos * 0.05 + swappedChars * 0.08);
     }
     
-    return Math.min(1, baseScore + typoBonus);
+    // Check for single missing vowel (common typo: "biyani" vs "biryani")
+    const vowelBonus = this.checkMissingVowelSimilarity(s1, s2);
+    
+    return Math.min(1, baseScore + typoBonus + vowelBonus);
+  },
+
+  // Check if strings are similar with a single missing/extra vowel
+  checkMissingVowelSimilarity(s1, s2) {
+    const vowels = 'aeiou';
+    const lenDiff = Math.abs(s1.length - s2.length);
+    
+    // Only check if exactly 1 character difference
+    if (lenDiff !== 1) return 0;
+    
+    const longer = s1.length > s2.length ? s1 : s2;
+    const shorter = s1.length > s2.length ? s2 : s1;
+    
+    // Try removing each character from longer and check if it matches shorter
+    for (let i = 0; i < longer.length; i++) {
+      const charRemoved = longer.slice(0, i) + longer.slice(i + 1);
+      if (charRemoved === shorter) {
+        // Extra bonus if the missing char is a vowel (common typo)
+        if (vowels.includes(longer[i])) {
+          return 0.12;
+        }
+        return 0.08;
+      }
+    }
+    
+    return 0;
   },
 
   // Normalize common typos and phonetic variations
@@ -1729,7 +1781,10 @@ const chatbot = {
     const searchLower = searchTerm.toLowerCase().trim();
     let bestMatch = null;
     let bestScore = 0;
-    const threshold = 0.55; // 55% similarity minimum
+    // Dynamic threshold based on word length - shorter words need higher similarity
+    // "dal" (3 chars) needs 60%+, "biryani" (7 chars) needs 50%+
+    const threshold = searchLower.length <= 3 ? 0.60 : 
+                      searchLower.length <= 5 ? 0.50 : 0.45;
     
     // Collect all possible targets from menu items
     const targets = new Set();
