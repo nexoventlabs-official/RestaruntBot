@@ -5345,17 +5345,19 @@ const chatbot = {
     }
     
     const sections = [{
-      title: 'Select Quantity',
+      title: 'Quantity',
       rows: rows
     }];
     
+    // Remove markdown from title for interactive list
+    const cleanTitle = item.name.replace(/\*/g, '');
+    
     await whatsapp.sendList(
       phone,
-      `*${item.name}*`,
+      cleanTitle,
       `💰 ${priceDisplay} / ${qtyLabel} ${unitLabel}\n\nHow many would you like to add?`,
       'Select Quantity',
-      sections,
-      'Choose quantity'
+      sections
     );
   },
 

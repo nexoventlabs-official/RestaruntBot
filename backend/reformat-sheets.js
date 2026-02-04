@@ -9,10 +9,8 @@ async function reformatAllSheets() {
   const customersResult = await googleSheets.reformatCustomersSheet();
   console.log(customersResult.success ? '   ✅ Done' : `   ❌ Failed: ${customersResult.error}\n`);
   
-  // Reformat WhatsApp Contacts sheet
-  console.log('📊 Reformatting WhatsApp Contacts sheet...');
-  const contactsResult = await googleSheets.reformatWhatsAppContactsSheet();
-  console.log(contactsResult.success ? '   ✅ Done' : `   ❌ Failed: ${contactsResult.error}\n`);
+  // Skip WhatsApp Contacts sheet - no longer needed, data is in customers sheet
+  console.log('📊 Skipping WhatsApp Contacts sheet (no longer needed)');
   
   // Reformat Daily Reports sheet
   console.log('📊 Reformatting Daily Reports sheet...');
@@ -20,6 +18,7 @@ async function reformatAllSheets() {
   console.log(reportsResult.success ? '   ✅ Done' : `   ❌ Failed: ${reportsResult.error}\n`);
   
   console.log('\n✅ All sheets reformatted!');
+  console.log('\n💡 You can now delete the whatsapp_contacts sheet from Google Sheets - all data is in customers sheet.');
   process.exit(0);
 }
 

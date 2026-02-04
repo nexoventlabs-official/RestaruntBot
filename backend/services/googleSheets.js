@@ -1110,15 +1110,15 @@ const googleSheets = {
       // Check if headers exist
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A1:G1`
+        range: `${sheet.sheetName}!A1:F1`
       });
       
       if (!response.data.values || response.data.values.length === 0) {
-        // Add headers: Phone, Name, Location, Orders Count, Total Spent, Last Order, Order History
-        const headers = ['Phone', 'Name', 'Location', 'Orders Count', 'Total Spent', 'Last Order Date', 'Order History'];
+        // Add headers: Phone, Name, Orders Count, Total Spent, First Order Date, Last Order Date (no location - stored in order sheets)
+        const headers = ['Phone', 'Name', 'Orders Count', 'Total Spent', 'First Order', 'Last Order'];
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${sheet.sheetName}!A1:G1`,
+          range: `${sheet.sheetName}!A1:F1`,
           valueInputOption: 'RAW',
           resource: { values: [headers] }
         });
@@ -1130,7 +1130,7 @@ const googleSheets = {
             requests: [
               {
                 repeatCell: {
-                  range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 7 },
+                  range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 6 },
                   cell: {
                     userEnteredFormat: {
                       backgroundColor: { red: 0.08, green: 0.46, blue: 0.75 },  // Nice blue
@@ -1143,13 +1143,12 @@ const googleSheets = {
                 }
               },
               // Set column widths
-              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
-              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 150 }, fields: 'pixelSize' } },
-              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } },
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 130 }, fields: 'pixelSize' } },
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 180 }, fields: 'pixelSize' } },
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 110 }, fields: 'pixelSize' } },
               { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
-              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
-              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
-              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 300 }, fields: 'pixelSize' } },
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 110 }, fields: 'pixelSize' } },
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 110 }, fields: 'pixelSize' } },
               // Freeze header row
               { updateSheetProperties: { properties: { sheetId: sheet.sheetId, gridProperties: { frozenRowCount: 1 } }, fields: 'gridProperties.frozenRowCount' } }
             ]
@@ -1186,32 +1185,20 @@ const googleSheets = {
       // Check if customer already exists
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A:G`
+        range: `${sheet.sheetName}!A:F`
       });
       
       const rows = response.data.values || [];
       const existingRowIndex = rows.findIndex((row, index) => index > 0 && row[0] === phone);
       
       if (existingRowIndex !== -1) {
-        // Update existing customer's name and location if provided
-        const updates = [];
+        // Update existing customer's name if provided
         if (name && name.trim()) {
-          updates.push({
-            range: `${sheet.sheetName}!B${existingRowIndex + 1}`,
-            values: [[name]]
-          });
-        }
-        if (location && location.trim()) {
-          updates.push({
-            range: `${sheet.sheetName}!C${existingRowIndex + 1}`,
-            values: [[location]]
-          });
-        }
-        
-        if (updates.length > 0) {
-          await sheets.spreadsheets.values.batchUpdate({
+          await sheets.spreadsheets.values.update({
             spreadsheetId: SPREADSHEET_ID,
-            resource: { valueInputOption: 'RAW', data: updates }
+            range: `${sheet.sheetName}!B${existingRowIndex + 1}`,
+            valueInputOption: 'RAW',
+            resource: { values: [[name]] }
           });
         }
         
@@ -1219,11 +1206,13 @@ const googleSheets = {
         return true;
       }
       
-      // Add new customer
-      const newRow = [phone, name || '', location || '', 0, 0, '', ''];
+      // Add new customer with first order date (no location column)
+      const date = new Date();
+      const dateStr = date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
+      const newRow = [phone, name || '', 0, 0, dateStr, ''];
       await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A:G`,
+        range: `${sheet.sheetName}!A:F`,
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
         resource: { values: [newRow] }
@@ -1254,7 +1243,7 @@ const googleSheets = {
       // Get customer row
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A:G`
+        range: `${sheet.sheetName}!A:F`
       });
       
       const rows = response.data.values || [];
@@ -1262,53 +1251,49 @@ const googleSheets = {
       
       if (rowIndex === -1) {
         // Customer not found, add them first
-        await this.addOrUpdateCustomer(phone, order.customer?.name, order.deliveryAddress?.address);
+        await this.addOrUpdateCustomer(phone, order.customer?.name);
         return this.updateCustomerOrder(phone, order, status);
       }
       
       const currentRow = rows[rowIndex];
-      const currentOrdersCount = parseInt(currentRow[3]) || 0;
-      const currentTotalSpent = parseFloat(currentRow[4]) || 0;
-      const currentOrderHistory = currentRow[6] || '';
+      const currentOrdersCount = parseInt(currentRow[2]) || 0;
+      const currentTotalSpent = parseFloat(currentRow[3]) || 0;
+      const firstOrderDate = currentRow[4] || ''; // Preserve first order date
       
-      // Format order entry: OrderID|Items|Amount|Status|Date
+      // Format date
       const date = new Date();
       const dateStr = date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
-      const itemsStr = order.items?.map(i => `${i.name}x${i.quantity}`).join(', ') || '';
-      const orderEntry = `${order.orderId}|${itemsStr}|₹${order.totalAmount}|${status}|${dateStr}`;
-      
-      // Append to order history
-      const newOrderHistory = currentOrderHistory ? `${currentOrderHistory} || ${orderEntry}` : orderEntry;
       
       // Update totals (only add to total if delivered)
       const newOrdersCount = currentOrdersCount + 1;
       const newTotalSpent = status === 'delivered' ? currentTotalSpent + (order.totalAmount || 0) : currentTotalSpent;
       
-      // Update the row
+      // Update the row - preserve first order date, update last order date
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!D${rowIndex + 1}:G${rowIndex + 1}`,
+        range: `${sheet.sheetName}!C${rowIndex + 1}:F${rowIndex + 1}`,
         valueInputOption: 'RAW',
         resource: { 
-          values: [[newOrdersCount, newTotalSpent, dateStr, newOrderHistory]] 
+          values: [[newOrdersCount, newTotalSpent, firstOrderDate || dateStr, dateStr]] 
         }
       });
       
-      // Apply clean styling - light gray background for data rows
+      // Apply clean styling
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId: SPREADSHEET_ID,
         resource: {
           requests: [{
             repeatCell: {
-              range: { sheetId: sheet.sheetId, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: 0, endColumnIndex: 7 },
+              range: { sheetId: sheet.sheetId, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: 0, endColumnIndex: 6 },
               cell: {
                 userEnteredFormat: {
                   backgroundColor: { red: 1, green: 1, blue: 1 },  // White background
+                  textFormat: { foregroundColor: { red: 0, green: 0, blue: 0 } },
                   horizontalAlignment: 'LEFT',
                   verticalAlignment: 'MIDDLE'
                 }
               },
-              fields: 'userEnteredFormat(backgroundColor,horizontalAlignment,verticalAlignment)'
+              fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
             }
           }]
         }
@@ -1337,7 +1322,7 @@ const googleSheets = {
       
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A:G`
+        range: `${sheet.sheetName}!A:F`
       });
       
       const rows = response.data.values || [];
@@ -1351,11 +1336,10 @@ const googleSheets = {
         customers.push({
           phone: row[0] || '',
           name: row[1] || '',
-          location: row[2] || '',
-          ordersCount: parseInt(row[3]) || 0,
-          totalSpent: parseFloat(row[4]) || 0,
+          ordersCount: parseInt(row[2]) || 0,
+          totalSpent: parseFloat(row[3]) || 0,
+          firstOrderDate: row[4] || '',
           lastOrderDate: row[5] || '',
-          orderHistory: row[6] || '',
           rowIndex: i
         });
       }
@@ -2842,7 +2826,7 @@ const googleSheets = {
 
   // ==================== REFORMAT EXISTING SHEETS ====================
   
-  // Reformat customers sheet with clean styling
+  // Reformat customers sheet - remove Location column, 6 columns now
   async reformatCustomersSheet() {
     try {
       const auth = getAuthClient();
@@ -2852,12 +2836,70 @@ const googleSheets = {
       const sheet = await this.getSheetByType(sheets, 'customers');
       if (!sheet) return { success: false, error: 'Sheet not found' };
       
-      // Get total rows
+      // Get all data from customers (old format had 7 columns with Location)
       const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A:G`
+      });
+      const rows = response.data.values || [];
+      
+      // Check if we need to migrate from old 7-column format to new 6-column format
+      const hasLocationColumn = rows[0] && rows[0][2] === 'Location';
+      
+      if (hasLocationColumn && rows.length > 1) {
+        console.log('📊 Migrating customers from 7-column to 6-column format (removing Location)...');
+        
+        // Prepare new data without Location column
+        const newData = [];
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          if (i === 0) {
+            // New headers
+            newData.push(['Phone', 'Name', 'Orders Count', 'Total Spent', 'First Order', 'Last Order']);
+          } else {
+            // Data row: skip column C (Location), shift everything left
+            newData.push([
+              row[0] || '',  // Phone
+              row[1] || '',  // Name
+              row[3] || 0,   // Orders Count (was column D)
+              row[4] || 0,   // Total Spent (was column E)
+              row[5] || '',  // First Order (was column F)
+              row[6] || ''   // Last Order (was column G)
+            ]);
+          }
+        }
+        
+        // Clear old data
+        await sheets.spreadsheets.values.clear({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheet.sheetName}!A:G`
+        });
+        
+        // Write new data
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheet.sheetName}!A1`,
+          valueInputOption: 'RAW',
+          resource: { values: newData }
+        });
+        
+        console.log(`📊 Migrated ${newData.length - 1} customers to new format`);
+      } else {
+        // Just update header if needed
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheet.sheetName}!A1:F1`,
+          valueInputOption: 'RAW',
+          resource: { values: [['Phone', 'Name', 'Orders Count', 'Total Spent', 'First Order', 'Last Order']] }
+        });
+      }
+      
+      // Get updated row count
+      const updatedResponse = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
         range: `${sheet.sheetName}!A:A`
       });
-      const totalRows = (response.data.values || []).length;
+      const totalRows = (updatedResponse.data.values || []).length;
       
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId: SPREADSHEET_ID,
@@ -2866,7 +2908,7 @@ const googleSheets = {
             // Header row styling - Professional blue
             {
               repeatCell: {
-                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 7 },
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 6 },
                 cell: {
                   userEnteredFormat: {
                     backgroundColor: { red: 0.08, green: 0.46, blue: 0.75 },
@@ -2881,7 +2923,7 @@ const googleSheets = {
             // Data rows styling - White background with black text
             {
               repeatCell: {
-                range: { sheetId: sheet.sheetId, startRowIndex: 1, endRowIndex: Math.max(totalRows, 100), startColumnIndex: 0, endColumnIndex: 7 },
+                range: { sheetId: sheet.sheetId, startRowIndex: 1, endRowIndex: Math.max(totalRows, 100), startColumnIndex: 0, endColumnIndex: 6 },
                 cell: {
                   userEnteredFormat: {
                     backgroundColor: { red: 1, green: 1, blue: 1 },
@@ -2894,20 +2936,19 @@ const googleSheets = {
               }
             },
             // Column widths
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 150 }, fields: 'pixelSize' } },
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 130 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 180 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 110 }, fields: 'pixelSize' } },
             { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 300 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 110 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 110 }, fields: 'pixelSize' } },
             // Freeze header
             { updateSheetProperties: { properties: { sheetId: sheet.sheetId, gridProperties: { frozenRowCount: 1 } }, fields: 'gridProperties.frozenRowCount' } }
           ]
         }
       });
       
-      console.log('✅ Customers sheet reformatted');
+      console.log('✅ Customers sheet reformatted (6 columns, no Location)');
       return { success: true };
     } catch (error) {
       console.error('❌ Error reformatting customers sheet:', error.message);
