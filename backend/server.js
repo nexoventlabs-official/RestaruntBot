@@ -62,7 +62,6 @@ mongoose.connect(process.env.MONGODB_URI)
     
     // Initialize Google Sheets (cost-saving sheets)
     console.log('📊 Initializing Google Sheets...');
-    await googleSheets.initializeWhatsAppContactsSheet();
     await googleSheets.initializeDailyReportsSheet();
     await googleSheets.initializeDashboardStatsSheet();
     await googleSheets.initializeCustomersSheet();

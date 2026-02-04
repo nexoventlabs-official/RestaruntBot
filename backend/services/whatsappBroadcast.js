@@ -93,7 +93,7 @@ const whatsappBroadcast = {
     }
   },
 
-  // Get all active WhatsApp contacts from Google Sheets (cost-saving)
+  // Get all active WhatsApp contacts from Google Sheets customers sheet
   async getAllContacts(includeOldCustomers = true) {
     try {
       if (includeOldCustomers) {
@@ -101,12 +101,18 @@ const whatsappBroadcast = {
         await this.syncExistingCustomers();
       }
       
-      // Fetch from Google Sheets (primary source)
-      const sheetContacts = await googleSheets.getActiveWhatsAppContacts();
+      // Fetch from Google Sheets customers sheet (primary source)
+      const { customers, error } = await googleSheets.getAllCustomers();
       
-      if (sheetContacts.length > 0) {
-        console.log(`[WhatsApp Broadcast] Found ${sheetContacts.length} active contacts from Google Sheets`);
-        return sheetContacts;
+      if (!error && customers.length > 0) {
+        console.log(`[WhatsApp Broadcast] Found ${customers.length} customers from Google Sheets`);
+        // Map to expected format
+        return customers.map(c => ({
+          phone: c.phone,
+          name: c.name,
+          totalOrders: c.ordersCount,
+          isActive: true
+        }));
       }
       
       // Fallback to MongoDB if sheets fail
@@ -174,9 +180,14 @@ const whatsappBroadcast = {
       }
       message += `Order now and enjoy this amazing deal! 🍽️`;
 
-      const websiteUrl = 'https://restarunt-bot.vercel.app/offers';
+      // Website URL - for targeted offers, use special claim page with offerId
+      const baseWebsiteUrl = 'https://restarunt-bot.vercel.app';
+      const websiteUrl = (isTargetedOffer && offerId) 
+        ? `${baseWebsiteUrl}/offer/${offerId}` 
+        : `${baseWebsiteUrl}/offers`;
 
       console.log(`[WhatsApp Broadcast] Sending offer to ${contacts.length} contacts...`);
+      console.log(`[WhatsApp Broadcast] Offer URL: ${websiteUrl}`);
       console.log(`[WhatsApp Broadcast] Note: Customers outside 24h window will receive via template`);
       console.log(`[WhatsApp Broadcast] Template configured: ${OFFER_TEMPLATE_NAME || 'None'}`);
 
@@ -240,56 +251,31 @@ const whatsappBroadcast = {
             console.log(`[WhatsApp Broadcast] ✅ Sent via template to ${contact.phone} (${contact.name || 'Unknown'})`);
             
           } else {
-            // Customer is within 24h window, try sending interactive message directly
-            // For targeted offers, use reply buttons for eligibility check
-            // For non-targeted offers, use CTA URL to website
-            if (isTargetedOffer && offerId) {
-              // Targeted offer - use buttons so chatbot can verify eligibility when shared
-              if (offerImageUrl) {
-                await whatsapp.sendImageWithButtons(
-                  contact.phone, 
-                  offerImageUrl, 
-                  message, 
-                  [
-                    { id: `claim_offer_${offerId}`, text: '🎁 Claim Offer' },
-                    { id: 'view_menu', text: '📋 View Menu' }
-                  ]
-                );
-              } else {
-                await whatsapp.sendButtons(
-                  contact.phone, 
-                  message, 
-                  [
-                    { id: `claim_offer_${offerId}`, text: '🎁 Claim Offer' },
-                    { id: 'view_menu', text: '📋 View Menu' }
-                  ]
-                );
-              }
+            // Customer is within 24h window, send interactive message with CTA URL
+            // Both targeted and non-targeted offers now use CTA URL to website
+            // Eligibility check happens when they try to checkout via WhatsApp
+            if (offerImageUrl) {
+              await whatsapp.sendImageWithCtaUrlOriginal(
+                contact.phone, 
+                offerImageUrl, 
+                message, 
+                '🎁 Claim Offer', 
+                websiteUrl,
+                'Tap to order now!'
+              );
             } else {
-              // Non-targeted offer - use CTA URL to website
-              if (offerImageUrl) {
-                await whatsapp.sendImageWithCtaUrlOriginal(
-                  contact.phone, 
-                  offerImageUrl, 
-                  message, 
-                  'View Offer', 
-                  websiteUrl,
-                  'Tap to order now!'
-                );
-              } else {
-                await whatsapp.sendCtaUrl(
-                  contact.phone, 
-                  message, 
-                  'View Offer', 
-                  websiteUrl,
-                  'Tap to order now!'
-                );
-              }
+              await whatsapp.sendCtaUrl(
+                contact.phone, 
+                message, 
+                '🎁 Claim Offer', 
+                websiteUrl,
+                'Tap to order now!'
+              );
             }
             sent++;
             sentViaInteractive++;
             successContacts.push({ phone: contact.phone, method: 'interactive', name: contact.name });
-            console.log(`[WhatsApp Broadcast] ✅ Sent interactive to ${contact.phone} (${contact.name || 'Unknown'})`);
+            console.log(`[WhatsApp Broadcast] ✅ Sent CTA to ${contact.phone} (${contact.name || 'Unknown'})`);
           }
         } catch (error) {
           const errorMessage = error.response?.data?.error?.message || error.message || '';

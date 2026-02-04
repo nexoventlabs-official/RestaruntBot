@@ -115,6 +115,45 @@ router.get('/popup-offers', async (req, res) => {
   }
 });
 
+// Get a specific offer by ID (public)
+// This is used by the special offer claim page
+router.get('/offers/:offerId', async (req, res) => {
+  try {
+    const { offerId } = req.params;
+    const now = new Date();
+    
+    const offer = await Offer.findById(offerId);
+    
+    if (!offer) {
+      return res.status(404).json({ error: 'Offer not found' });
+    }
+    
+    // Check if offer is still active and valid
+    if (!offer.isActive) {
+      return res.status(410).json({ error: 'This offer is no longer active' });
+    }
+    
+    if (offer.validUntil && new Date(offer.validUntil) < now) {
+      return res.status(410).json({ error: 'This offer has expired' });
+    }
+    
+    if (offer.validFrom && new Date(offer.validFrom) > now) {
+      return res.status(425).json({ error: 'This offer is not yet active' });
+    }
+    
+    // Return the offer (but hide targetedCustomers list for privacy)
+    const offerData = offer.toObject();
+    delete offerData.targetedCustomers;
+    
+    // Add flag to indicate if this is a targeted offer
+    offerData.isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(offer.targetType);
+    
+    res.json(offerData);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Check if customer is eligible for a specific offer
 // Used by chatbot to validate targeted offers
 router.get('/offers/:offerId/check-eligibility', async (req, res) => {

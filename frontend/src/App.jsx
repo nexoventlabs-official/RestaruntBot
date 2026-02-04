@@ -79,6 +79,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/menu" element={<UserMenuPage />} />
           <Route path="/offers" element={<OffersPage />} />
+          <Route path="/offer/:offerId" element={<OffersPage />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
         </Route>

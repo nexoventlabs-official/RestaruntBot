@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSearchParams, useOutletContext } from 'react-router-dom';
+import { useSearchParams, useParams, useOutletContext } from 'react-router-dom';
 import axios from 'axios';
-import { Tag, ShoppingCart, Plus, Minus, Heart, Star, X, Clock, Package, Search } from 'lucide-react';
+import { Tag, ShoppingCart, Plus, Minus, Heart, Star, X, Clock, Package, Search, Gift, AlertCircle } from 'lucide-react';
 
 const API_URL = 'https://restaruntbot.onrender.com/api/public';
 const WHATSAPP_NUMBER = '15551858897';
@@ -14,9 +14,12 @@ const WhatsAppIcon = ({ className }) => (
 );
 
 export default function OffersPage() {
+  const { offerId } = useParams(); // For /offer/:offerId route
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState([]);
   const [offers, setOffers] = useState([]);
+  const [specificOffer, setSpecificOffer] = useState(null); // For targeted offer from URL
+  const [offerError, setOfferError] = useState(null); // For offer loading errors
   const [loading, setLoading] = useState(true);
   const [selectedOfferType, setSelectedOfferType] = useState(searchParams.get('offerType') || '');
   const [currentOfferIndex, setCurrentOfferIndex] = useState(0);
@@ -43,7 +46,7 @@ export default function OffersPage() {
         eventSourceRef.current.close();
       }
     };
-  }, []);
+  }, [offerId]); // Re-fetch when offerId changes
 
   // When offers are loaded, check if we need to show a specific offer from URL
   useEffect(() => {
@@ -110,12 +113,42 @@ export default function OffersPage() {
 
   const loadData = async () => {
     try {
-      const [itemsRes, offersRes] = await Promise.all([
-        axios.get(`${API_URL}/menu`),
-        axios.get(`${API_URL}/offers`)
-      ]);
-      setItems(itemsRes.data);
-      setOffers(offersRes.data.filter(o => o.isActive));
+      // If we have a specific offerId, fetch that offer
+      if (offerId) {
+        try {
+          const [itemsRes, offerRes] = await Promise.all([
+            axios.get(`${API_URL}/menu`),
+            axios.get(`${API_URL}/offers/${offerId}`)
+          ]);
+          setItems(itemsRes.data);
+          setSpecificOffer(offerRes.data);
+          setOffers([offerRes.data]); // Put specific offer in offers array for banner
+          // Auto-select the offer type from this specific offer
+          if (offerRes.data.offerType) {
+            setSelectedOfferType(offerRes.data.offerType);
+          }
+        } catch (err) {
+          console.error('Error loading specific offer:', err);
+          if (err.response?.status === 404) {
+            setOfferError('This offer could not be found.');
+          } else if (err.response?.status === 410) {
+            setOfferError(err.response?.data?.error || 'This offer has expired or is no longer available.');
+          } else {
+            setOfferError('Unable to load this offer. Please try again later.');
+          }
+          // Still load items and general offers as fallback
+          const itemsRes = await axios.get(`${API_URL}/menu`);
+          setItems(itemsRes.data);
+        }
+      } else {
+        // Normal flow - load all offers
+        const [itemsRes, offersRes] = await Promise.all([
+          axios.get(`${API_URL}/menu`),
+          axios.get(`${API_URL}/offers`)
+        ]);
+        setItems(itemsRes.data);
+        setOffers(offersRes.data.filter(o => o.isActive));
+      }
     } catch (err) {
       console.error('Error loading data:', err);
     } finally {
@@ -123,10 +156,41 @@ export default function OffersPage() {
     }
   };
 
-  // Calculate discount percentage
+  // Calculate discount percentage from item's offerPrice
   const getDiscountPercentage = (item) => {
     if (!item.offerPrice || item.offerPrice >= item.price) return 0;
     return Math.round(((item.price - item.offerPrice) / item.price) * 100);
+  };
+
+  // Calculate offer price for an item based on the specific offer (for targeted offers)
+  const getOfferPriceFromOffer = (item) => {
+    // If item already has an offer price, use that
+    if (item.offerPrice && item.offerPrice < item.price) {
+      return item.offerPrice;
+    }
+    
+    // If we have a specific targeted offer with discount, calculate the offer price
+    if (specificOffer && specificOffer.isTargeted) {
+      if (specificOffer.discountType === 'percentage' && specificOffer.discountValue > 0) {
+        const discount = (item.price * specificOffer.discountValue) / 100;
+        return Math.round(item.price - discount);
+      } else if (specificOffer.discountType === 'fixed' && specificOffer.discountValue > 0) {
+        return Math.max(0, item.price - specificOffer.discountValue);
+      } else if (specificOffer.percentage && specificOffer.percentage > 0) {
+        // Fallback to percentage field
+        const discount = (item.price * specificOffer.percentage) / 100;
+        return Math.round(item.price - discount);
+      }
+    }
+    
+    return null; // No offer price available
+  };
+
+  // Get discount percentage for display (handles both offerPrice and offer-based discounts)
+  const getDisplayDiscount = (item) => {
+    const offerPrice = getOfferPriceFromOffer(item);
+    if (!offerPrice || offerPrice >= item.price) return 0;
+    return Math.round(((item.price - offerPrice) / item.price) * 100);
   };
 
   // Filter items that have at least one offer type
@@ -339,6 +403,33 @@ export default function OffersPage() {
             <p className="text-gray-600 text-lg font-medium">Loading offers...</p>
           </div>
         </div>
+      ) : offerError ? (
+        // Offer Error State (expired, not found, etc.)
+        <div className="min-h-screen flex items-center justify-center px-4">
+          <div className="text-center max-w-md">
+            <div className="mb-6">
+              <AlertCircle className="w-24 h-24 text-orange-400 mx-auto mb-4" />
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Offer Unavailable</h2>
+            <p className="text-gray-600 text-lg mb-8">
+              {offerError}
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <a 
+                href="/offers" 
+                className="inline-flex items-center justify-center px-6 py-3 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition-colors"
+              >
+                View All Offers
+              </a>
+              <a 
+                href="/menu" 
+                className="inline-flex items-center justify-center px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+              >
+                Browse Menu
+              </a>
+            </div>
+          </div>
+        </div>
       ) : offers.length === 0 ? (
         // No Offers Available State - Without Header
         <div className="min-h-screen flex items-center justify-center px-4">
@@ -498,6 +589,38 @@ export default function OffersPage() {
               </button>
             </div>
           )}
+
+          {/* Special Offer Banner - For targeted offers accessed via direct link */}
+          {specificOffer && specificOffer.isTargeted && (
+            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
+              <div className="flex items-start gap-4">
+                <div className="bg-white/20 rounded-full p-3">
+                  <Gift className="w-8 h-8" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold mb-2">🎁 Exclusive Offer For You!</h3>
+                  <p className="text-white/90 mb-3">
+                    {specificOffer.description || 'You have been selected for this special offer. Add items to your cart and order via WhatsApp to claim your discount!'}
+                  </p>
+                  <div className="flex flex-wrap gap-2 text-sm">
+                    <span className="bg-white/20 px-3 py-1 rounded-full flex items-center gap-1">
+                      <Tag className="w-4 h-4" />
+                      {specificOffer.offerType}
+                    </span>
+                    {specificOffer.validUntil && (
+                      <span className="bg-white/20 px-3 py-1 rounded-full flex items-center gap-1">
+                        <Clock className="w-4 h-4" />
+                        Valid until {new Date(specificOffer.validUntil).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-white/70 text-sm mt-3 italic">
+                    💡 Tip: Order via WhatsApp after adding items to cart. Your eligibility will be verified automatically.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Items Grid - Same style as Menu Page */}
@@ -520,7 +643,8 @@ export default function OffersPage() {
             {filteredItems.map(item => {
               const inCart = isInCart ? isInCart(item._id) : false;
               const cartItem = cart?.find(c => c._id === item._id);
-              const discount = getDiscountPercentage(item);
+              const itemOfferPrice = getOfferPriceFromOffer(item);
+              const discount = getDisplayDiscount(item);
               const rating = item.avgRating || 0;
               const totalRatings = item.totalRatings || 0;
 
@@ -604,9 +728,9 @@ export default function OffersPage() {
                     {/* Price Section with more spacing */}
                     <div className="flex items-center gap-3 mb-4 flex-wrap">
                       <span className="text-xl sm:text-2xl font-bold text-orange-600">
-                        ₹{item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}
+                        ₹{itemOfferPrice && itemOfferPrice < item.price ? itemOfferPrice : item.price}
                       </span>
-                      {item.offerPrice && item.offerPrice < item.price && (
+                      {itemOfferPrice && itemOfferPrice < item.price && (
                         <>
                           <span className="text-sm text-gray-400 line-through">₹{item.price}</span>
                           <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2.5 py-1 rounded-full text-xs font-bold shadow-md">
@@ -748,18 +872,24 @@ export default function OffersPage() {
               <div className="flex items-center gap-3 mb-3 flex-wrap">
                 {/* Current Price - Large and prominent */}
                 <div className="text-3xl sm:text-4xl lg:text-5xl font-bold text-orange-500">
-                  ₹{selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price ? selectedItem.offerPrice : selectedItem.price}
+                  ₹{(() => {
+                    const dialogOfferPrice = getOfferPriceFromOffer(selectedItem);
+                    return dialogOfferPrice && dialogOfferPrice < selectedItem.price ? dialogOfferPrice : selectedItem.price;
+                  })()}
                 </div>
                 
                 {/* Original Price & Discount Badge - Only if there's a discount */}
-                {selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price && (
-                  <>
-                    <span className="text-lg sm:text-xl text-gray-400 line-through">₹{selectedItem.price}</span>
-                    <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold">
-                      {Math.round(((selectedItem.price - selectedItem.offerPrice) / selectedItem.price) * 100)}% OFF
-                    </div>
-                  </>
-                )}
+                {(() => {
+                  const dialogOfferPrice = getOfferPriceFromOffer(selectedItem);
+                  return dialogOfferPrice && dialogOfferPrice < selectedItem.price && (
+                    <>
+                      <span className="text-lg sm:text-xl text-gray-400 line-through">₹{selectedItem.price}</span>
+                      <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold">
+                        {Math.round(((selectedItem.price - dialogOfferPrice) / selectedItem.price) * 100)}% OFF
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Offer Type Tags */}
