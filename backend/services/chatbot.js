@@ -934,7 +934,7 @@ const chatbot = {
 
   // Helper to detect website CART order format (multiple items)
   // Detects: "🛒 Order from Website\n1. Item x2 - ₹XXX\n2. Item x1 - ₹XXX\nTotal: ₹XXX"
-  // Returns: { items: [{ name, quantity, price }], total: number } or null
+  // Returns: { items: [{ name, quantity, price }], total: number, offerIds: [] } or null
   isWebsiteCartOrderIntent(text) {
     if (!text || typeof text !== 'string') return null;
     
@@ -949,19 +949,21 @@ const chatbot = {
     
     const items = [];
     let total = null;
+    const offerIds = [];
     
     // Parse each line looking for item patterns like "1. Item Name x2 - ₹398"
     const lines = text.split('\n').map(l => l.trim()).filter(l => l);
     
     for (const line of lines) {
-      // Pattern: "1. Item Name x2 - ₹398" or "1. Item Name x2 - Rs398"
+      // Pattern: "1. Item Name x2 - ₹398" or "1. Item Name x2 - Rs398" (may have 🎁 at end)
       const itemMatch = line.match(/^\d+\.\s*(.+?)\s*x(\d+)\s*[-–]\s*₹?(\d+)/i);
       if (itemMatch) {
         const name = itemMatch[1].trim();
         const quantity = parseInt(itemMatch[2]);
         const price = parseInt(itemMatch[3]);
-        items.push({ name, quantity, price });
-        console.log('📦 Found cart item:', { name, quantity, price });
+        const hasOffer = line.includes('🎁');
+        items.push({ name, quantity, price, hasOffer });
+        console.log('📦 Found cart item:', { name, quantity, price, hasOffer });
       }
       
       // Extract total
@@ -969,11 +971,18 @@ const chatbot = {
       if (totalMatch) {
         total = parseInt(totalMatch[1]);
       }
+      
+      // Extract offer IDs - Pattern: "(ID: 507f1f77bcf86cd799439011)"
+      const offerIdMatch = line.match(/\(ID:\s*([a-f0-9]{24})\)/i);
+      if (offerIdMatch) {
+        offerIds.push(offerIdMatch[1]);
+        console.log('🎁 Found offer ID:', offerIdMatch[1]);
+      }
     }
     
     if (items.length > 0) {
-      console.log('✅ Website cart order extracted:', { items, total });
-      return { items, total };
+      console.log('✅ Website cart order extracted:', { items, total, offerIds });
+      return { items, total, offerIds };
     }
     
     return null;
@@ -3687,10 +3696,90 @@ const chatbot = {
         const cartOrder = this.isWebsiteCartOrderIntent(message);
         console.log('🛒 Website CART order detected:', cartOrder);
         
+        // Check for offer eligibility if offer IDs are present
+        let eligibleOffers = [];
+        let ineligibleOffers = [];
+        
+        if (cartOrder.offerIds && cartOrder.offerIds.length > 0) {
+          console.log('🎁 Checking offer eligibility for:', cartOrder.offerIds);
+          
+          for (const offerId of cartOrder.offerIds) {
+            try {
+              const offer = await Offer.findById(offerId);
+              if (!offer) {
+                console.log(`❌ Offer not found: ${offerId}`);
+                continue;
+              }
+              
+              // Check if offer is still active
+              const now = new Date();
+              if (!offer.isActive || (offer.validUntil && new Date(offer.validUntil) < now)) {
+                console.log(`❌ Offer expired/inactive: ${offerId}`);
+                ineligibleOffers.push({ offer, reason: 'expired' });
+                continue;
+              }
+              
+              // Check targeting eligibility
+              const isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(offer.targetType);
+              if (isTargeted && offer.targetedCustomers && offer.targetedCustomers.length > 0) {
+                const normalizedPhone = phone.replace(/[^0-9]/g, '');
+                const isEligible = offer.targetedCustomers.some(targetPhone => {
+                  const normalizedTarget = targetPhone.replace(/[^0-9]/g, '');
+                  return normalizedTarget.includes(normalizedPhone) || normalizedPhone.includes(normalizedTarget);
+                });
+                
+                if (!isEligible) {
+                  console.log(`❌ Customer not eligible for offer: ${offerId}`);
+                  let reason = 'not_eligible';
+                  if (offer.targetType === 'min_spent') {
+                    reason = `Requires ₹${offer.targetMinSpent}+ total spending`;
+                  } else if (offer.targetType === 'min_orders') {
+                    reason = `Requires ${offer.targetMinOrders}+ orders`;
+                  } else if (offer.targetType === 'top_percentage') {
+                    reason = 'For top customers only';
+                  }
+                  ineligibleOffers.push({ offer, reason });
+                  continue;
+                }
+              }
+              
+              // Customer is eligible for this offer
+              console.log(`✅ Customer eligible for offer: ${offer.title || offer.offerType}`);
+              eligibleOffers.push(offer);
+              
+            } catch (err) {
+              console.error(`Error checking offer ${offerId}:`, err);
+            }
+          }
+        }
+        
+        // If there are ineligible offers, inform customer
+        if (ineligibleOffers.length > 0 && eligibleOffers.length === 0) {
+          let ineligibleMsg = `❌ *Offer Not Available*\n\nSorry, you're not eligible for the following offer(s):\n\n`;
+          ineligibleOffers.forEach(({ offer, reason }) => {
+            ineligibleMsg += `• *${offer.title || offer.offerType}*\n  Reason: ${reason}\n`;
+          });
+          ineligibleMsg += `\nYou can still order at regular prices, or browse other offers!`;
+          
+          await whatsapp.sendButtons(phone, ineligibleMsg, [
+            { id: 'proceed_without_offer', text: '📦 Order Anyway' },
+            { id: 'view_menu', text: '📋 Browse Menu' },
+            { id: 'home', text: '🏠 Main Menu' }
+          ]);
+          
+          // Store cart order in state for "proceed_without_offer"
+          state.pendingCartOrder = cartOrder;
+          state.currentStep = 'offer_not_eligible';
+          customer.conversationState = state;
+          await customer.save();
+          return;
+        }
+        
         // Add all items to customer's cart
         customer.cart = customer.cart || [];
         let addedCount = 0;
         let notFoundItems = [];
+        let totalDiscount = 0;
         
         for (const cartItem of cartOrder.items) {
           // Find exact match for each item
@@ -3699,6 +3788,40 @@ const chatbot = {
           );
           
           if (menuItem) {
+            // Calculate offer discount if item has offer and customer is eligible
+            let offerDiscount = 0;
+            let appliedOffer = null;
+            
+            if (cartItem.hasOffer && eligibleOffers.length > 0) {
+              // Find matching offer that applies to this item
+              for (const offer of eligibleOffers) {
+                // Check if offer applies to this item (by appliedItems or appliedCategories)
+                const appliesToItem = (offer.appliedItems && offer.appliedItems.some(id => id.toString() === menuItem._id.toString())) ||
+                                     (offer.appliedCategories && offer.appliedCategories.includes(menuItem.category));
+                
+                // If offer has offerType, check if item's offerType matches
+                const matchesOfferType = offer.offerType && menuItem.offerType && 
+                  (Array.isArray(menuItem.offerType) ? menuItem.offerType.includes(offer.offerType) : menuItem.offerType === offer.offerType);
+                
+                if (appliesToItem || matchesOfferType) {
+                  appliedOffer = offer;
+                  
+                  // Calculate discount
+                  if (offer.discountType === 'percentage' && offer.discountValue > 0) {
+                    offerDiscount = Math.round((menuItem.price * offer.discountValue) / 100) * cartItem.quantity;
+                  } else if (offer.discountType === 'fixed' && offer.discountValue > 0) {
+                    offerDiscount = offer.discountValue * cartItem.quantity;
+                  } else if (offer.percentage && offer.percentage > 0) {
+                    offerDiscount = Math.round((menuItem.price * offer.percentage) / 100) * cartItem.quantity;
+                  }
+                  
+                  totalDiscount += offerDiscount;
+                  console.log(`🎁 Applied offer ${offer.title} to ${menuItem.name}: -₹${offerDiscount}`);
+                  break;
+                }
+              }
+            }
+            
             // Check if already in cart
             const existingIndex = customer.cart.findIndex(c => 
               c.menuItem?.toString() === menuItem._id.toString()
@@ -3706,22 +3829,55 @@ const chatbot = {
             
             if (existingIndex >= 0) {
               customer.cart[existingIndex].quantity += cartItem.quantity;
-              customer.cart[existingIndex].addedAt = new Date(); // Update timestamp when quantity changes
+              customer.cart[existingIndex].addedAt = new Date();
+              if (appliedOffer) {
+                customer.cart[existingIndex].appliedOffer = {
+                  offerId: appliedOffer._id,
+                  title: appliedOffer.title || appliedOffer.offerType,
+                  discount: offerDiscount
+                };
+              }
             } else {
-              customer.cart.push({ menuItem: menuItem._id, quantity: cartItem.quantity, addedAt: new Date() });
+              const cartEntry = { 
+                menuItem: menuItem._id, 
+                quantity: cartItem.quantity, 
+                addedAt: new Date() 
+              };
+              if (appliedOffer) {
+                cartEntry.appliedOffer = {
+                  offerId: appliedOffer._id,
+                  title: appliedOffer.title || appliedOffer.offerType,
+                  discount: offerDiscount
+                };
+              }
+              customer.cart.push(cartEntry);
             }
             addedCount++;
-            console.log(`✅ Added to cart: ${menuItem.name} x${cartItem.quantity}`);
+            console.log(`✅ Added to cart: ${menuItem.name} x${cartItem.quantity}${appliedOffer ? ` (offer: -₹${offerDiscount})` : ''}`);
           } else {
             notFoundItems.push(cartItem.name);
             console.log(`❌ Item not found: ${cartItem.name}`);
           }
         }
         
+        // Store applied offers info for order
+        if (eligibleOffers.length > 0) {
+          customer.pendingOffers = eligibleOffers.map(o => ({
+            offerId: o._id,
+            title: o.title || o.offerType,
+            discountType: o.discountType,
+            discountValue: o.discountValue || o.percentage
+          }));
+          customer.totalOfferDiscount = totalDiscount;
+        }
+        
         await customer.save();
         
         if (addedCount > 0) {
-          // Show cart summary and proceed to checkout
+          // Show cart summary with offer discount info
+          if (totalDiscount > 0) {
+            await whatsapp.sendText(phone, `🎁 *Offer Applied!*\n\nYou've saved ₹${totalDiscount} with ${eligibleOffers.map(o => o.title || o.offerType).join(', ')}!`);
+          }
           await this.sendCart(phone, customer);
           state.currentStep = 'viewing_cart';
         } else {
@@ -3846,6 +4002,55 @@ const chatbot = {
       else if (selection === 'view_cart') {
         await this.sendCart(phone, customer);
         state.currentStep = 'viewing_cart';
+      }
+      // Handle proceed without offer - add items to cart without discount
+      else if (selection === 'proceed_without_offer') {
+        const pendingCartOrder = state.pendingCartOrder;
+        if (pendingCartOrder && pendingCartOrder.items) {
+          customer.cart = customer.cart || [];
+          let addedCount = 0;
+          
+          for (const cartItem of pendingCartOrder.items) {
+            const menuItem = menuItems.find(m => 
+              m.name.toLowerCase().trim() === cartItem.name.toLowerCase().trim()
+            );
+            
+            if (menuItem) {
+              const existingIndex = customer.cart.findIndex(c => 
+                c.menuItem?.toString() === menuItem._id.toString()
+              );
+              
+              if (existingIndex >= 0) {
+                customer.cart[existingIndex].quantity += cartItem.quantity;
+                customer.cart[existingIndex].addedAt = new Date();
+              } else {
+                customer.cart.push({ menuItem: menuItem._id, quantity: cartItem.quantity, addedAt: new Date() });
+              }
+              addedCount++;
+            }
+          }
+          
+          // Clear pending order
+          state.pendingCartOrder = null;
+          await customer.save();
+          
+          if (addedCount > 0) {
+            await this.sendCart(phone, customer);
+            state.currentStep = 'viewing_cart';
+          } else {
+            await whatsapp.sendButtons(phone, 
+              `❌ Sorry, we couldn't find the items.\n\nPlease browse our menu to add items.`,
+              [
+                { id: 'view_menu', text: 'View Menu' },
+                { id: 'home', text: 'Main Menu' }
+              ]
+            );
+            state.currentStep = 'main_menu';
+          }
+        } else {
+          await this.sendMainMenu(phone);
+          state.currentStep = 'main_menu';
+        }
       }
       // Handle simple cart keyword (just "cart") - show cart options menu
       else if (!selectedId && this.isSimpleCartKeyword(msg)) {

@@ -285,7 +285,20 @@ export default function OffersPage() {
 
   const handleAddToCart = (item) => {
     if (!addToCart) return;
-    addToCart(item);
+    // If viewing a specific targeted offer, include offer info
+    if (specificOffer && specificOffer.isTargeted) {
+      const offerInfo = {
+        offerId: specificOffer._id,
+        offerType: specificOffer.offerType,
+        title: specificOffer.title,
+        discountType: specificOffer.discountType,
+        discountValue: specificOffer.discountValue,
+        percentage: specificOffer.percentage
+      };
+      addToCart(item, 1, offerInfo);
+    } else {
+      addToCart(item);
+    }
   };
 
   const handleToggleWishlist = (item) => {
@@ -293,7 +306,20 @@ export default function OffersPage() {
     if (isInWishlist(item._id)) {
       removeFromWishlist(item._id);
     } else {
-      addToWishlist(item);
+      // If viewing a specific targeted offer, include offer info
+      if (specificOffer && specificOffer.isTargeted) {
+        const offerInfo = {
+          offerId: specificOffer._id,
+          offerType: specificOffer.offerType,
+          title: specificOffer.title,
+          discountType: specificOffer.discountType,
+          discountValue: specificOffer.discountValue,
+          percentage: specificOffer.percentage
+        };
+        addToWishlist(item, offerInfo);
+      } else {
+        addToWishlist(item);
+      }
     }
   };
 
@@ -353,9 +379,22 @@ export default function OffersPage() {
   // Add to cart from dialog
   const handleDialogAddToCart = () => {
     if (!selectedItem || !addToCart) return;
-    for (let i = 0; i < dialogQuantity; i++) {
-      addToCart(selectedItem);
+    
+    // If viewing a specific targeted offer, include offer info
+    let offerInfo = null;
+    if (specificOffer && specificOffer.isTargeted) {
+      offerInfo = {
+        offerId: specificOffer._id,
+        offerType: specificOffer.offerType,
+        title: specificOffer.title,
+        discountType: specificOffer.discountType,
+        discountValue: specificOffer.discountValue,
+        percentage: specificOffer.percentage
+      };
     }
+    
+    // Add with quantity and offer info
+    addToCart(selectedItem, dialogQuantity, offerInfo);
     closeItemDialog();
   };
 

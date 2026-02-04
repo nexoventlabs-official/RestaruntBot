@@ -1,4 +1,4 @@
-import { X, Minus, Plus, Trash2, Heart, ShoppingCart, AlertCircle } from 'lucide-react';
+import { X, Minus, Plus, Trash2, Heart, ShoppingCart, AlertCircle, Gift, Tag } from 'lucide-react';
 
 // WhatsApp Icon Component
 const WhatsAppIcon = ({ className }) => (
@@ -36,14 +36,35 @@ export default function CartSidebar({
   const unavailableWishlistItems = wishlist.filter(item => !isItemAvailable(item._id));
   const hasUnavailableWishlistItems = unavailableWishlistItems.length > 0;
 
+  // Check if any cart items have offer info
+  const hasOfferItems = cart.some(item => item.offerInfo);
+  const offerIds = [...new Set(cart.filter(item => item.offerInfo).map(item => item.offerInfo.offerId))];
+
   // Generate WhatsApp message for available cart items only
   const generateWhatsAppMessage = () => {
     if (availableCartItems.length === 0) return '';
     let msg = '🛒 *Order from Website*\n\n';
     availableCartItems.forEach((item, i) => {
-      msg += `${i + 1}. ${item.name} x${item.quantity} - ₹${item.price * item.quantity}\n`;
+      msg += `${i + 1}. ${item.name} x${item.quantity} - ₹${item.price * item.quantity}`;
+      if (item.offerInfo) {
+        msg += ` 🎁`;
+      }
+      msg += `\n`;
     });
-    msg += `\n💰 *Total: ₹${availableCartTotal}*\n\nPlease confirm my order!`;
+    msg += `\n💰 *Total: ₹${availableCartTotal}*`;
+    
+    // Include offer IDs for validation
+    if (hasOfferItems) {
+      msg += `\n\n🎁 *Offer Applied:*`;
+      offerIds.forEach(offerId => {
+        const offerItem = cart.find(item => item.offerInfo?.offerId === offerId);
+        if (offerItem?.offerInfo) {
+          msg += `\n• ${offerItem.offerInfo.title || offerItem.offerInfo.offerType} (ID: ${offerId})`;
+        }
+      });
+    }
+    
+    msg += `\n\nPlease confirm my order!`;
     return encodeURIComponent(msg);
   };
 
@@ -111,16 +132,31 @@ export default function CartSidebar({
                 {/* Available items */}
                 {availableCartItems.map(item => (
                   <div key={item._id} className="flex gap-3 bg-gray-50 rounded-xl p-3">
-                    {item.image ? (
-                      <img src={item.image} alt={item.name} className="w-20 h-20 rounded-lg object-cover" />
-                    ) : (
-                      <div className="w-20 h-20 rounded-lg bg-gray-200 flex items-center justify-center">
-                        <span className="text-2xl">🍽️</span>
-                      </div>
-                    )}
+                    <div className="relative">
+                      {item.image ? (
+                        <img src={item.image} alt={item.name} className="w-20 h-20 rounded-lg object-cover" />
+                      ) : (
+                        <div className="w-20 h-20 rounded-lg bg-gray-200 flex items-center justify-center">
+                          <span className="text-2xl">🍽️</span>
+                        </div>
+                      )}
+                      {/* Offer badge on image */}
+                      {item.offerInfo && (
+                        <div className="absolute -top-1 -right-1 bg-purple-600 text-white p-1 rounded-full">
+                          <Gift className="w-3 h-3" />
+                        </div>
+                      )}
+                    </div>
                     <div className="flex-1">
                       <h4 className="font-medium text-gray-900">{item.name}</h4>
                       <p className="text-sm text-gray-500">{item.quantity || 1} {item.unit}</p>
+                      {/* Show offer info if present */}
+                      {item.offerInfo && (
+                        <p className="text-xs text-purple-600 flex items-center gap-1 mt-0.5">
+                          <Tag className="w-3 h-3" />
+                          {item.offerInfo.offerType || item.offerInfo.title}
+                        </p>
+                      )}
                       <p className="text-orange-600 font-semibold">₹{item.price * item.quantity}</p>
                       <div className="flex items-center gap-2 mt-2">
                         <button onClick={() => updateQuantity(item._id, item.quantity - 1)} className="p-1 bg-white rounded-full shadow hover:bg-gray-50">
@@ -200,13 +236,21 @@ export default function CartSidebar({
                   const isSoldOut = status === 'soldout';
                   return (
                     <div key={item._id} className={`flex gap-3 rounded-xl p-3 ${available ? 'bg-gray-50' : 'bg-gray-100 opacity-60'}`}>
-                      {item.image ? (
-                        <img src={item.image} alt={item.name} className={`w-20 h-20 rounded-lg object-cover ${!available ? 'grayscale' : ''}`} />
-                      ) : (
-                        <div className="w-20 h-20 rounded-lg bg-gray-200 flex items-center justify-center">
-                          <span className="text-2xl">🍽️</span>
-                        </div>
-                      )}
+                      <div className="relative">
+                        {item.image ? (
+                          <img src={item.image} alt={item.name} className={`w-20 h-20 rounded-lg object-cover ${!available ? 'grayscale' : ''}`} />
+                        ) : (
+                          <div className="w-20 h-20 rounded-lg bg-gray-200 flex items-center justify-center">
+                            <span className="text-2xl">🍽️</span>
+                          </div>
+                        )}
+                        {/* Offer badge on image */}
+                        {item.offerInfo && (
+                          <div className="absolute -top-1 -right-1 bg-purple-600 text-white p-1 rounded-full">
+                            <Gift className="w-3 h-3" />
+                          </div>
+                        )}
+                      </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <h4 className={`font-medium ${available ? 'text-gray-900' : 'text-gray-600'}`}>{item.name}</h4>
@@ -217,10 +261,17 @@ export default function CartSidebar({
                           )}
                         </div>
                         <p className="text-sm text-gray-500">{item.quantity || 1} {item.unit}</p>
+                        {/* Show offer info if present */}
+                        {item.offerInfo && (
+                          <p className="text-xs text-purple-600 flex items-center gap-1">
+                            <Tag className="w-3 h-3" />
+                            {item.offerInfo.offerType || item.offerInfo.title}
+                          </p>
+                        )}
                         <p className={available ? 'text-orange-600 font-semibold' : 'text-gray-400'}>₹{item.price}</p>
                         <div className="flex gap-2 mt-2">
                           {available ? (
-                            <button onClick={() => { addToCart(item); removeFromWishlist(item._id); }} className="px-3 py-1 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600">
+                            <button onClick={() => { addToCart(item, 1, item.offerInfo); removeFromWishlist(item._id); }} className="px-3 py-1 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600">
                               Add to Cart
                             </button>
                           ) : (

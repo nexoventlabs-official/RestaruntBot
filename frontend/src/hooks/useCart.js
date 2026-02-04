@@ -78,13 +78,26 @@ export function useCart() {
     }));
   }, []);
 
-  const addToCart = (item, qty = 1) => {
+  const addToCart = (item, qty = 1, offerInfo = null) => {
     setCart(prev => {
       const existing = prev.find(c => c._id === item._id);
       if (existing) {
+        // If adding with offer info, update offer info too
+        if (offerInfo) {
+          return prev.map(c => c._id === item._id ? { ...c, quantity: c.quantity + qty, offerInfo } : c);
+        }
         return prev.map(c => c._id === item._id ? { ...c, quantity: c.quantity + qty } : c);
       }
-      return [...prev, { _id: item._id, name: item.name, price: item.price, image: item.image, quantity: qty, unit: item.unit || 'piece', unitQty: item.quantity || 1 }];
+      return [...prev, { 
+        _id: item._id, 
+        name: item.name, 
+        price: item.price, 
+        image: item.image, 
+        quantity: qty, 
+        unit: item.unit || 'piece', 
+        unitQty: item.quantity || 1,
+        offerInfo: offerInfo // Store offer info with cart item
+      }];
     });
   };
 
@@ -106,10 +119,18 @@ export function useCart() {
   const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
 
   // Wishlist functions
-  const addToWishlist = (item) => {
+  const addToWishlist = (item, offerInfo = null) => {
     setWishlist(prev => {
       if (prev.find(w => w._id === item._id)) return prev;
-      return [...prev, { _id: item._id, name: item.name, price: item.price, image: item.image, unit: item.unit || 'piece', unitQty: item.quantity || 1 }];
+      return [...prev, { 
+        _id: item._id, 
+        name: item.name, 
+        price: item.price, 
+        image: item.image, 
+        unit: item.unit || 'piece', 
+        unitQty: item.quantity || 1,
+        offerInfo: offerInfo // Store offer info with wishlist item
+      }];
     });
   };
 
