@@ -1053,6 +1053,58 @@ const chatbot = {
     return null;
   },
 
+  // Smart word boundary matching - prevents "ice" from matching "rice"
+  // Short search terms (3 chars or less) must match at word boundary (start of word or exact match)
+  // Longer terms can match anywhere but with lower priority for mid-word matches
+  smartIncludes(searchTerm, targetText) {
+    if (!searchTerm || !targetText) return false;
+    
+    const search = searchTerm.toLowerCase().trim();
+    const target = targetText.toLowerCase();
+    
+    // Exact match - always valid
+    if (target === search) return true;
+    
+    // For very short search terms (1-3 chars), require word boundary matching
+    if (search.length <= 3) {
+      // Create regex that matches search term at word boundary
+      // This matches: "ice cream" when searching "ice", but NOT "rice" when searching "ice"
+      const wordBoundaryRegex = new RegExp(`(^|\\s|-)${this.escapeRegex(search)}(\\s|$|-)`, 'i');
+      const startsWithRegex = new RegExp(`(^|\\s|-)${this.escapeRegex(search)}`, 'i');
+      
+      // Check if it matches as a complete word or at start of a word
+      if (wordBoundaryRegex.test(target)) return true;
+      if (startsWithRegex.test(target)) return true;
+      
+      return false;
+    }
+    
+    // For longer search terms (4+ chars), check if it appears at word start
+    // This allows "biryani" to match "chicken biryani" and also "bir" at start
+    const wordStartRegex = new RegExp(`(^|\\s|-)${this.escapeRegex(search)}`, 'i');
+    if (wordStartRegex.test(target)) return true;
+    
+    // Also allow if search term contains the target (e.g., "chicken biryani" contains "chicken")
+    if (search.includes(target)) return true;
+    
+    // For 4+ char terms, allow substring match but only if it's substantial (>50% of a word)
+    const targetWords = target.split(/\s+/);
+    for (const word of targetWords) {
+      if (word.startsWith(search)) return true;
+      // Allow if search is at least 60% of the word length and matches from start
+      if (search.length >= 4 && word.length >= 4 && word.includes(search) && search.length >= word.length * 0.6) {
+        return true;
+      }
+    }
+    
+    return false;
+  },
+
+  // Helper to escape special regex characters
+  escapeRegex(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  },
+
   // Helper to detect show menu/items intent from text/voice
   // Returns: { showMenu: true, foodType: 'veg'|'nonveg'|'both'|null, searchTerm: string|null }
   // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
@@ -1997,12 +2049,18 @@ const chatbot = {
   findItem(text, menuItems) {
     const lowerText = text.toLowerCase().trim();
     
-    // First try exact/substring match
+    // First try exact match
     const exactMatch = menuItems.find(item => 
-      item.name.toLowerCase().includes(lowerText) || 
-      lowerText.includes(item.name.toLowerCase())
+      item.name.toLowerCase() === lowerText
     );
     if (exactMatch) return exactMatch;
+    
+    // Then try smart word boundary matching (prevents "ice" → "rice")
+    const smartMatch = menuItems.find(item => 
+      this.smartIncludes(lowerText, item.name) || 
+      this.smartIncludes(item.name.toLowerCase(), lowerText)
+    );
+    if (smartMatch) return smartMatch;
     
     // Try dynamic typo correction first
     const corrected = this.findBestMatchingTerm(lowerText, menuItems);
@@ -2040,13 +2098,20 @@ const chatbot = {
     const lowerText = text.toLowerCase().trim();
     if (lowerText.length < 2) return null;
     
-    // First try exact/substring match
+    // First try exact match on tags
     let matchingItems = menuItems.filter(item => 
-      item.tags?.some(tag => 
-        tag.toLowerCase().includes(lowerText) || 
-        lowerText.includes(tag.toLowerCase())
-      )
+      item.tags?.some(tag => tag.toLowerCase() === lowerText)
     );
+    
+    // Then try smart word boundary matching (prevents "ice" → "rice")
+    if (matchingItems.length === 0) {
+      matchingItems = menuItems.filter(item => 
+        item.tags?.some(tag => 
+          this.smartIncludes(lowerText, tag) || 
+          this.smartIncludes(tag.toLowerCase(), lowerText)
+        )
+      );
+    }
     
     // Try dynamic typo correction
     if (matchingItems.length === 0) {
@@ -2089,23 +2154,37 @@ const chatbot = {
     const corrected = this.findBestMatchingTerm(lowerText, menuItems);
     const searchTerms = corrected && corrected !== lowerText ? [lowerText, corrected] : [lowerText];
     
-    // First try exact/substring matches with all search terms
+    // First try exact matches
     let matchingItems = menuItems.filter(item => {
       for (const term of searchTerms) {
-        // Check if name matches
-        const nameMatch = item.name.toLowerCase().includes(term) || 
-          term.includes(item.name.toLowerCase());
+        // Check exact name match
+        if (item.name.toLowerCase() === term) return true;
         
-        // Check if any tag matches
-        const tagMatch = item.tags?.some(tag => 
-          tag.toLowerCase().includes(term) || 
-          term.includes(tag.toLowerCase())
-        );
-        
-        if (nameMatch || tagMatch) return true;
+        // Check exact tag match
+        if (item.tags?.some(tag => tag.toLowerCase() === term)) return true;
       }
       return false;
     });
+    
+    // Then try smart word boundary matching (prevents "ice" → "rice")
+    if (matchingItems.length === 0) {
+      matchingItems = menuItems.filter(item => {
+        for (const term of searchTerms) {
+          // Check if name matches using smart boundary check
+          const nameMatch = this.smartIncludes(term, item.name) || 
+            this.smartIncludes(item.name.toLowerCase(), term);
+          
+          // Check if any tag matches using smart boundary check
+          const tagMatch = item.tags?.some(tag => 
+            this.smartIncludes(term, tag) || 
+            this.smartIncludes(tag.toLowerCase(), term)
+          );
+          
+          if (nameMatch || tagMatch) return true;
+        }
+        return false;
+      });
+    }
     
     // Fuzzy fallback if no exact matches (lowered threshold to 0.5)
     if (matchingItems.length === 0 && lowerText.length >= 2) {
