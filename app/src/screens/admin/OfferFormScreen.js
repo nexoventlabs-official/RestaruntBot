@@ -59,6 +59,7 @@ export default function OfferFormScreen({ route, navigation }) {
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
+  const statsDebounceRef = useRef(null);
 
   useEffect(() => {
     Animated.parallel([
@@ -68,15 +69,34 @@ export default function OfferFormScreen({ route, navigation }) {
     fetchCategoriesAndItems();
   }, []);
 
-  // Fetch customer stats when targeting changes
+  // Fetch customer stats when targeting changes (debounced to avoid rapid API calls)
   useEffect(() => {
-    if (targetType === 'top_percentage') {
-      fetchCustomerStats('top', parseInt(targetPercentage) || 10);
-    } else if (targetType === 'min_spent') {
-      fetchCustomerStats('min-spent', parseFloat(targetMinSpent) || 1000);
-    } else if (targetType === 'min_orders') {
-      fetchCustomerStats('min-orders', parseInt(targetMinOrders) || 3);
+    // Clear previous timeout
+    if (statsDebounceRef.current) {
+      clearTimeout(statsDebounceRef.current);
     }
+    
+    // Set loading state immediately for responsiveness
+    if (targetType !== 'all') {
+      setLoadingCustomerStats(true);
+    }
+    
+    // Debounce the API call by 800ms
+    statsDebounceRef.current = setTimeout(() => {
+      if (targetType === 'top_percentage') {
+        fetchCustomerStats('top', parseInt(targetPercentage) || 10);
+      } else if (targetType === 'min_spent') {
+        fetchCustomerStats('min-spent', parseFloat(targetMinSpent) || 1000);
+      } else if (targetType === 'min_orders') {
+        fetchCustomerStats('min-orders', parseInt(targetMinOrders) || 3);
+      }
+    }, 800);
+    
+    return () => {
+      if (statsDebounceRef.current) {
+        clearTimeout(statsDebounceRef.current);
+      }
+    };
   }, [targetType, targetPercentage, targetMinSpent, targetMinOrders]);
 
   const fetchCustomerStats = async (type, value) => {
@@ -91,7 +111,8 @@ export default function OfferFormScreen({ route, navigation }) {
         endpoint = `/offers/customers/min-orders/${value}`;
       }
       
-      const response = await api.get(endpoint);
+      // Use a shorter timeout for stats preview (10 seconds)
+      const response = await api.get(endpoint, { timeout: 10000 });
       if (response.data.success) {
         setCustomerStats({
           total: response.data.totalCustomers || 0,
@@ -99,7 +120,9 @@ export default function OfferFormScreen({ route, navigation }) {
         });
       }
     } catch (error) {
-      console.error('Error fetching customer stats:', error);
+      console.error('Error fetching customer stats:', error.message);
+      // Don't show error to user, just keep showing loading or last known value
+      // Stats are optional preview, not critical
     } finally {
       setLoadingCustomerStats(false);
     }

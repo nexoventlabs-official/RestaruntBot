@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
   RefreshControl, TouchableOpacity, Alert, ActivityIndicator, Linking,
-  Modal, Image, Animated, Platform, StatusBar, ImageBackground, AppState
+  Modal, Animated, Platform, StatusBar, ImageBackground, AppState, Easing
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,8 +17,181 @@ const POLL_INTERVAL = 5000; // 5 seconds for real-time updates
 // Background image
 const MY_ORDERS_BG = require('../../../assets/backgrounds/deliverymyorders.jpg');
 
-// Success GIF
-const ORDER_COMPLETE_GIF = require('../../../assets/backgrounds/ordercomplete.gif');
+// Animated Success Checkmark Component (PhonePe style)
+const AnimatedCheckmark = ({ visible }) => {
+  const circleScale = useRef(new Animated.Value(0)).current;
+  const circleOpacity = useRef(new Animated.Value(0)).current;
+  const checkScale = useRef(new Animated.Value(0)).current;
+  const checkOpacity = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const rippleScale = useRef(new Animated.Value(0.8)).current;
+  const rippleOpacity = useRef(new Animated.Value(0.5)).current;
+
+  useEffect(() => {
+    if (visible) {
+      // Reset animations
+      circleScale.setValue(0);
+      circleOpacity.setValue(0);
+      checkScale.setValue(0);
+      checkOpacity.setValue(0);
+      pulseAnim.setValue(1);
+      rippleScale.setValue(0.8);
+      rippleOpacity.setValue(0.5);
+
+      // Sequence: Circle appears -> Checkmark pops in -> Pulse effect
+      Animated.sequence([
+        // Circle scales up with bounce
+        Animated.parallel([
+          Animated.spring(circleScale, {
+            toValue: 1,
+            tension: 50,
+            friction: 7,
+            useNativeDriver: true,
+          }),
+          Animated.timing(circleOpacity, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+        ]),
+        // Checkmark pops in with delay
+        Animated.parallel([
+          Animated.spring(checkScale, {
+            toValue: 1,
+            tension: 100,
+            friction: 6,
+            useNativeDriver: true,
+          }),
+          Animated.timing(checkOpacity, {
+            toValue: 1,
+            duration: 150,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start();
+
+      // Ripple animation
+      Animated.loop(
+        Animated.sequence([
+          Animated.parallel([
+            Animated.timing(rippleScale, {
+              toValue: 1.3,
+              duration: 1000,
+              easing: Easing.out(Easing.ease),
+              useNativeDriver: true,
+            }),
+            Animated.timing(rippleOpacity, {
+              toValue: 0,
+              duration: 1000,
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.timing(rippleScale, {
+            toValue: 0.8,
+            duration: 0,
+            useNativeDriver: true,
+          }),
+          Animated.timing(rippleOpacity, {
+            toValue: 0.5,
+            duration: 0,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+
+      // Gentle pulse
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.05,
+            duration: 800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    }
+  }, [visible]);
+
+  return (
+    <View style={checkmarkStyles.container}>
+      {/* Ripple effect */}
+      <Animated.View
+        style={[
+          checkmarkStyles.ripple,
+          {
+            transform: [{ scale: rippleScale }],
+            opacity: rippleOpacity,
+          },
+        ]}
+      />
+      
+      {/* Main circle */}
+      <Animated.View
+        style={[
+          checkmarkStyles.circle,
+          {
+            transform: [{ scale: Animated.multiply(circleScale, pulseAnim) }],
+            opacity: circleOpacity,
+          },
+        ]}
+      >
+        {/* Checkmark icon */}
+        <Animated.View
+          style={[
+            checkmarkStyles.checkContainer,
+            {
+              transform: [{ scale: checkScale }],
+              opacity: checkOpacity,
+            },
+          ]}
+        >
+          <Ionicons name="checkmark" size={60} color="#fff" />
+        </Animated.View>
+      </Animated.View>
+    </View>
+  );
+};
+
+const checkmarkStyles = StyleSheet.create({
+  container: {
+    width: 140,
+    height: 140,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  ripple: {
+    position: 'absolute',
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: DELIVERY_GREEN,
+  },
+  circle: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: DELIVERY_GREEN,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: DELIVERY_GREEN,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  checkContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
 
 const ProgressSteps = ({ status, cancelledAtStep }) => {
   const steps = [
@@ -447,12 +620,12 @@ export default function MyOrdersScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* Success Modal with GIF */}
+      {/* Success Modal with Animated Checkmark */}
       <Modal visible={successModal.visible} animationType="fade" transparent={true} onRequestClose={() => setSuccessModal({ visible: false, orderId: null })}>
         <View style={styles.successModalOverlay}>
           <View style={styles.successModalContent}>
-            <Image source={ORDER_COMPLETE_GIF} style={styles.successGif} resizeMode="contain" />
-            <Text style={styles.successTitle}>Order Delivered! 🎉</Text>
+            <AnimatedCheckmark visible={successModal.visible} />
+            <Text style={styles.successTitle}>Order Delivered!</Text>
             <Text style={styles.successOrderId}>#{successModal.orderId}</Text>
             <Text style={styles.successMessage}>Great job! The order has been delivered successfully.</Text>
             <TouchableOpacity 
@@ -806,11 +979,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     maxWidth: 340,
-  },
-  successGif: {
-    width: 180,
-    height: 180,
-    marginBottom: spacing.md,
   },
   successTitle: {
     fontSize: 24,

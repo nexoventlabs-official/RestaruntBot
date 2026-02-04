@@ -16,6 +16,13 @@ const SHEET_NAMES = {
   dashboard_stats: 'dashboard_stats'
 };
 
+// Customer cache for performance (avoids repeated slow Google Sheets API calls)
+let customerCache = {
+  data: null,
+  timestamp: 0,
+  TTL: 60000 // Cache for 60 seconds
+};
+
 // Status colors (RGB values 0-1)
 const STATUS_COLORS = {
   pending: { red: 1, green: 0.95, blue: 0.8 },
@@ -1363,9 +1370,16 @@ const googleSheets = {
     }
   },
 
-  // Get all customers from Google Sheets (for offers/broadcast)
-  async getAllCustomers() {
+  // Get all customers from Google Sheets (for offers/broadcast) - with caching
+  async getAllCustomers(forceRefresh = false) {
     try {
+      // Check cache first (unless force refresh is requested)
+      const now = Date.now();
+      if (!forceRefresh && customerCache.data && (now - customerCache.timestamp) < customerCache.TTL) {
+        console.log(`📊 Returning ${customerCache.data.length} customers from cache`);
+        return { customers: customerCache.data, error: null };
+      }
+      
       const auth = getAuthClient();
       if (!auth) return { customers: [], error: 'Auth not configured' };
       
@@ -1400,7 +1414,11 @@ const googleSheets = {
         });
       }
       
-      console.log(`📊 Fetched ${customers.length} customers from Google Sheets`);
+      // Update cache
+      customerCache.data = customers;
+      customerCache.timestamp = now;
+      
+      console.log(`📊 Fetched ${customers.length} customers from Google Sheets (cached)`);
       return { customers, error: null };
     } catch (error) {
       console.error('❌ Error fetching customers from sheets:', error.message);
