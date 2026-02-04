@@ -121,6 +121,14 @@ dataEvents.on('dashboard', () => broadcast('dashboard'));
 dataEvents.on('customers', () => broadcast('customers'));
 dataEvents.on('menu', () => broadcast('menu'));
 dataEvents.on('deliveryboys', () => broadcast('deliveryboys'));
+dataEvents.on('offers', () => broadcast('offers'));
+
+// Also listen for dataUpdate events (alternative format used in some routes)
+dataEvents.on('dataUpdate', (data) => {
+  if (data && data.type) {
+    broadcast(data.type);
+  }
+});
 
 // Test endpoint for Google Sheets sync
 app.get('/api/test-sheets/:orderId/:status', async (req, res) => {

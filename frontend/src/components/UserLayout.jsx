@@ -41,6 +41,7 @@ export default function UserLayout() {
   const [holidayMode, setHolidayMode] = useState(false);
   const searchInputRef = useRef(null);
   const eventSourceRef = useRef(null);
+  const validateOfferItemsRef = useRef(null);
   const lenisRef = useLenis();
 
   const { 
@@ -58,6 +59,11 @@ export default function UserLayout() {
       window.scrollTo(0, 0);
     }
   }, [location.pathname]);
+
+  // Keep ref updated with latest validateOfferItems function
+  useEffect(() => {
+    validateOfferItemsRef.current = validateOfferItems;
+  }, [validateOfferItems]);
 
   // Fetch available items and categories
   const loadAvailableItems = async () => {
@@ -90,18 +96,18 @@ export default function UserLayout() {
   };
 
   // Validate cart/wishlist items against current active offers
+  // Called when offers are deleted/changed to remove items with invalid offers
   const validateCartOffers = async () => {
     try {
-      // Check if cart or wishlist has any items with offer info
-      const hasOfferItems = [...cart, ...wishlist].some(item => item.offerInfo?.offerId);
-      if (!hasOfferItems) return;
-      
       // Fetch all active offers
       const offersRes = await api.get('/public/offers');
       const activeOfferIds = offersRes.data.map(offer => offer._id);
       
-      // Remove items whose offers no longer exist
-      validateOfferItems(activeOfferIds);
+      // Remove cart/wishlist items whose offers no longer exist
+      // Use ref to get the latest function
+      if (validateOfferItemsRef.current) {
+        validateOfferItemsRef.current(activeOfferIds);
+      }
     } catch (err) {
       console.error('Error validating cart offers:', err);
     }

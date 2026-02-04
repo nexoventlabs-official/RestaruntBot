@@ -38,50 +38,151 @@ export function useCart() {
     isInitialized.current = true;
   }, []);
 
-  // Sync cart and wishlist with latest menu data (update images, names, units - NOT prices for offer items)
+  // Sync cart and wishlist with latest menu data
+  // Updates images, names, units, and handles offer price changes
   const syncWithMenuData = useCallback((menuItems) => {
     if (!menuItems || menuItems.length === 0) return;
 
     // Create a map for quick lookup
     const menuMap = new Map(menuItems.map(item => [item._id, item]));
 
-    // Update cart items with latest data (preserve offer prices)
+    // Update cart items with latest data
     setCart(prev => prev.map(cartItem => {
       const latestItem = menuMap.get(cartItem._id);
       if (latestItem) {
-        // If item has offer, keep its price and originalPrice, otherwise sync price from menu
-        const hasOffer = cartItem.offerInfo || cartItem.originalPrice;
+        // Check if this is a regular offer item (not targeted)
+        const isRegularOffer = cartItem.offerInfo?.isRegularOffer;
+        const isTargetedOffer = cartItem.offerInfo && !cartItem.offerInfo.isRegularOffer;
+        
+        // For regular offers, sync with menu's offerPrice
+        if (isRegularOffer) {
+          // If menu item still has offer, update to latest offer price
+          if (latestItem.offerPrice && latestItem.offerPrice < latestItem.price) {
+            return {
+              ...cartItem,
+              name: latestItem.name,
+              price: latestItem.offerPrice,
+              originalPrice: latestItem.price,
+              image: latestItem.image,
+              unit: latestItem.unit || 'piece',
+              unitQty: latestItem.quantity || 1,
+              offerInfo: {
+                offerType: Array.isArray(latestItem.offerType) ? latestItem.offerType.join(', ') : latestItem.offerType,
+                title: Array.isArray(latestItem.offerType) ? latestItem.offerType.join(', ') : latestItem.offerType,
+                isRegularOffer: true
+              }
+            };
+          } else {
+            // Offer removed from menu item - update to regular price and remove offer info
+            return {
+              ...cartItem,
+              name: latestItem.name,
+              price: latestItem.price,
+              originalPrice: undefined,
+              image: latestItem.image,
+              unit: latestItem.unit || 'piece',
+              unitQty: latestItem.quantity || 1,
+              offerInfo: undefined
+            };
+          }
+        }
+        
+        // For targeted offers, keep the offer price (don't sync from menu)
+        if (isTargetedOffer) {
+          return {
+            ...cartItem,
+            name: latestItem.name,
+            image: latestItem.image,
+            unit: latestItem.unit || 'piece',
+            unitQty: latestItem.quantity || 1
+          };
+        }
+        
+        // For items without any offer, sync everything including price
         return {
           ...cartItem,
           name: latestItem.name,
-          // Only update price if there's no offer applied
-          price: hasOffer ? cartItem.price : latestItem.price,
-          // Keep originalPrice if it exists
-          originalPrice: hasOffer ? (cartItem.originalPrice || latestItem.price) : undefined,
+          price: latestItem.offerPrice && latestItem.offerPrice < latestItem.price ? latestItem.offerPrice : latestItem.price,
+          originalPrice: latestItem.offerPrice && latestItem.offerPrice < latestItem.price ? latestItem.price : undefined,
           image: latestItem.image,
           unit: latestItem.unit || 'piece',
-          unitQty: latestItem.quantity || 1
+          unitQty: latestItem.quantity || 1,
+          offerInfo: latestItem.offerPrice && latestItem.offerPrice < latestItem.price ? {
+            offerType: Array.isArray(latestItem.offerType) ? latestItem.offerType.join(', ') : latestItem.offerType,
+            title: Array.isArray(latestItem.offerType) ? latestItem.offerType.join(', ') : latestItem.offerType,
+            isRegularOffer: true
+          } : undefined
         };
       }
       return cartItem;
     }));
 
-    // Update wishlist items with latest data (preserve offer prices)
+    // Update wishlist items with latest data
     setWishlist(prev => prev.map(wishlistItem => {
       const latestItem = menuMap.get(wishlistItem._id);
       if (latestItem) {
-        // If item has offer, keep its price and originalPrice, otherwise sync price from menu
-        const hasOffer = wishlistItem.offerInfo || wishlistItem.originalPrice;
+        // Check if this is a regular offer item (not targeted)
+        const isRegularOffer = wishlistItem.offerInfo?.isRegularOffer;
+        const isTargetedOffer = wishlistItem.offerInfo && !wishlistItem.offerInfo.isRegularOffer;
+        
+        // For regular offers, sync with menu's offerPrice
+        if (isRegularOffer) {
+          // If menu item still has offer, update to latest offer price
+          if (latestItem.offerPrice && latestItem.offerPrice < latestItem.price) {
+            return {
+              ...wishlistItem,
+              name: latestItem.name,
+              price: latestItem.offerPrice,
+              originalPrice: latestItem.price,
+              image: latestItem.image,
+              unit: latestItem.unit || 'piece',
+              unitQty: latestItem.quantity || 1,
+              offerInfo: {
+                offerType: Array.isArray(latestItem.offerType) ? latestItem.offerType.join(', ') : latestItem.offerType,
+                title: Array.isArray(latestItem.offerType) ? latestItem.offerType.join(', ') : latestItem.offerType,
+                isRegularOffer: true
+              }
+            };
+          } else {
+            // Offer removed from menu item - update to regular price and remove offer info
+            return {
+              ...wishlistItem,
+              name: latestItem.name,
+              price: latestItem.price,
+              originalPrice: undefined,
+              image: latestItem.image,
+              unit: latestItem.unit || 'piece',
+              unitQty: latestItem.quantity || 1,
+              offerInfo: undefined
+            };
+          }
+        }
+        
+        // For targeted offers, keep the offer price (don't sync from menu)
+        if (isTargetedOffer) {
+          return {
+            ...wishlistItem,
+            name: latestItem.name,
+            image: latestItem.image,
+            unit: latestItem.unit || 'piece',
+            unitQty: latestItem.quantity || 1
+          };
+        }
+        
+        // For items without any offer, sync everything including price
         return {
           ...wishlistItem,
           name: latestItem.name,
-          // Only update price if there's no offer applied
-          price: hasOffer ? wishlistItem.price : latestItem.price,
-          // Keep originalPrice if it exists
-          originalPrice: hasOffer ? (wishlistItem.originalPrice || latestItem.price) : undefined,
+          price: latestItem.offerPrice && latestItem.offerPrice < latestItem.price ? latestItem.offerPrice : latestItem.price,
+          originalPrice: latestItem.offerPrice && latestItem.offerPrice < latestItem.price ? latestItem.price : undefined,
           image: latestItem.image,
           unit: latestItem.unit || 'piece',
-          unitQty: latestItem.quantity || 1
+          unitQty: latestItem.quantity || 1,
+          offerInfo: latestItem.offerPrice && latestItem.offerPrice < latestItem.price ? {
+            offerType: Array.isArray(latestItem.offerType) ? latestItem.offerType.join(', ') : latestItem.offerType,
+            title: Array.isArray(latestItem.offerType) ? latestItem.offerType.join(', ') : latestItem.offerType,
+            isRegularOffer: true
+          } : undefined
         };
       }
       return wishlistItem;
@@ -89,17 +190,39 @@ export function useCart() {
   }, []);
 
   const addToCart = (item, qty = 1, offerInfo = null) => {
+    // Auto-detect offer info from item if not provided
+    let finalOfferInfo = offerInfo;
+    let finalPrice = item.price;
+    let finalOriginalPrice = item.originalPrice;
+    
+    // If item has offerPrice (from "all customers" offers), auto-create offer info
+    if (!offerInfo && item.offerPrice && item.offerPrice < item.price) {
+      finalOfferInfo = {
+        offerType: Array.isArray(item.offerType) ? item.offerType.join(', ') : item.offerType,
+        title: Array.isArray(item.offerType) ? item.offerType.join(', ') : item.offerType,
+        isRegularOffer: true
+      };
+      finalPrice = item.offerPrice;
+      finalOriginalPrice = item.price;
+    }
+    
+    // If item already has originalPrice set (from targeted offers), use it
+    if (item.originalPrice && item.originalPrice > item.price) {
+      finalOriginalPrice = item.originalPrice;
+      finalPrice = item.price;
+    }
+    
     setCart(prev => {
       const existing = prev.find(c => c._id === item._id);
       if (existing) {
         // If adding with offer info, update offer info and price too
-        if (offerInfo) {
+        if (finalOfferInfo) {
           return prev.map(c => c._id === item._id ? { 
             ...c, 
             quantity: c.quantity + qty, 
-            offerInfo,
-            price: item.price,
-            originalPrice: item.originalPrice 
+            offerInfo: finalOfferInfo,
+            price: finalPrice,
+            originalPrice: finalOriginalPrice 
           } : c);
         }
         return prev.map(c => c._id === item._id ? { ...c, quantity: c.quantity + qty } : c);
@@ -107,13 +230,13 @@ export function useCart() {
       return [...prev, { 
         _id: item._id, 
         name: item.name, 
-        price: item.price, 
-        originalPrice: item.originalPrice, // Store original price if exists
+        price: finalPrice, 
+        originalPrice: finalOriginalPrice, // Store original price if exists
         image: item.image, 
         quantity: qty, 
         unit: item.unit || 'piece', 
         unitQty: item.quantity || 1,
-        offerInfo: offerInfo // Store offer info with cart item
+        offerInfo: finalOfferInfo // Store offer info with cart item
       }];
     });
   };
@@ -137,17 +260,39 @@ export function useCart() {
 
   // Wishlist functions
   const addToWishlist = (item, offerInfo = null) => {
+    // Auto-detect offer info from item if not provided
+    let finalOfferInfo = offerInfo;
+    let finalPrice = item.price;
+    let finalOriginalPrice = item.originalPrice;
+    
+    // If item has offerPrice (from "all customers" offers), auto-create offer info
+    if (!offerInfo && item.offerPrice && item.offerPrice < item.price) {
+      finalOfferInfo = {
+        offerType: Array.isArray(item.offerType) ? item.offerType.join(', ') : item.offerType,
+        title: Array.isArray(item.offerType) ? item.offerType.join(', ') : item.offerType,
+        isRegularOffer: true
+      };
+      finalPrice = item.offerPrice;
+      finalOriginalPrice = item.price;
+    }
+    
+    // If item already has originalPrice set (from targeted offers), use it
+    if (item.originalPrice && item.originalPrice > item.price) {
+      finalOriginalPrice = item.originalPrice;
+      finalPrice = item.price;
+    }
+    
     setWishlist(prev => {
       if (prev.find(w => w._id === item._id)) return prev;
       return [...prev, { 
         _id: item._id, 
         name: item.name, 
-        price: item.price, 
-        originalPrice: item.originalPrice, // Store original price if exists
+        price: finalPrice, 
+        originalPrice: finalOriginalPrice, // Store original price if exists
         image: item.image, 
         unit: item.unit || 'piece', 
         unitQty: item.quantity || 1,
-        offerInfo: offerInfo // Store offer info with wishlist item
+        offerInfo: finalOfferInfo // Store offer info with wishlist item
       }];
     });
   };
