@@ -749,15 +749,30 @@ const googleSheets = {
 
   // Fetch order history from Google Sheets (delivered, cancelled, selfpick sheets)
   // This is the cost-saving method - fetches from sheets instead of MongoDB
+  // Cache for order history to avoid repeated API calls
+  _historyCache: null,
+  _historyCacheTime: null,
+  _historyCacheDuration: 60000, // Cache for 60 seconds
+
   async getOrderHistory(options = {}) {
     try {
       const auth = getAuthClient();
       if (!auth) return { orders: [], error: 'Google auth not configured' };
       
       const sheets = google.sheets({ version: 'v4', auth });
-      const { deliveryBoyName, startDate, endDate, searchQuery, status } = options;
+      const { deliveryBoyName, startDate, endDate, searchQuery, status, forceRefresh } = options;
       
       let allOrders = [];
+      
+      // Check cache first (only for non-filtered requests or if cache is still valid)
+      const now = Date.now();
+      const cacheValid = this._historyCache && this._historyCacheTime && 
+                         (now - this._historyCacheTime) < this._historyCacheDuration;
+      
+      if (cacheValid && !forceRefresh && !searchQuery && !deliveryBoyName && !status) {
+        console.log('📦 Using cached order history');
+        return { orders: this._historyCache, error: null, fromCache: true };
+      }
       
       // Determine which sheets to fetch from based on status filter
       let sheetsToFetch = [];
@@ -865,9 +880,10 @@ const googleSheets = {
         }
       }
       
-      // Sort orders by time - parse time from format like "2:30:15 pm" or "2:30 PM"
+      // Sort orders by DATE + TIME descending (most recent first)
+      // This ensures all orders (delivery, cancelled, selfpick) are sorted properly
       allOrders.sort((a, b) => {
-        // Parse time strings to comparable values
+        // Helper to parse time string to seconds
         const parseTime = (timeStr) => {
           if (!timeStr) return 0;
           const str = timeStr.toString().toLowerCase().trim();
@@ -892,11 +908,27 @@ const googleSheets = {
           return 0;
         };
         
-        // Sort by time descending (most recent first)
+        // First compare by date (orderDate), then by time
+        const dateA = a.orderDate ? new Date(a.orderDate).getTime() : 0;
+        const dateB = b.orderDate ? new Date(b.orderDate).getTime() : 0;
+        
+        // If dates are different, sort by date first (descending = recent first)
+        if (dateA !== dateB) {
+          return dateB - dateA;
+        }
+        
+        // If same date, sort by time descending (most recent first)
         return parseTime(b.time) - parseTime(a.time);
       });
       
-      console.log(`📊 Fetched ${allOrders.length} orders from Google Sheets history (sorted by time)`);
+      // Update cache (only cache full unfiltered results)
+      if (!searchQuery && !deliveryBoyName && !status) {
+        this._historyCache = allOrders;
+        this._historyCacheTime = Date.now();
+        console.log(`📦 Cached ${allOrders.length} orders for 60 seconds`);
+      }
+      
+      console.log(`📊 Fetched ${allOrders.length} orders from Google Sheets history (sorted by date+time)`);
       return { orders: allOrders, error: null };
     } catch (error) {
       console.error('❌ Error fetching order history from sheets:', error.message);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
+  InteractionManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -41,18 +42,54 @@ const PAYMENT_STATUS_CONFIG = {
   'cancelled': { color: '#e74c3c', label: 'Cancelled', icon: 'close-circle' },
 };
 
+// Static cache to persist data across screen navigation
+let historyCache = [];
+let cacheTimestamp = 0;
+const CACHE_DURATION = 60000; // 60 seconds
+
 const OrderHistoryScreen = ({ navigation }) => {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [allOrders, setAllOrders] = useState(historyCache); // Full data from API
+  const [displayCount, setDisplayCount] = useState(15); // How many to show (for virtual pagination)
+  const [loading, setLoading] = useState(historyCache.length === 0);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [page, setPage] = useState(1);
   const [menuItems, setMenuItems] = useState([]);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   
   const shineAnim = useRef(new Animated.Value(-1)).current;
+  const flatListRef = useRef(null);
+  
+  // Filter orders based on search and status
+  const filteredOrders = useMemo(() => {
+    let filtered = allOrders;
+    
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(order => order.status === statusFilter);
+    }
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(order => 
+        order.orderId?.toLowerCase().includes(query) ||
+        order.customerName?.toLowerCase().includes(query) ||
+        order.phone?.includes(query) ||
+        order.items?.toLowerCase().includes(query)
+      );
+    }
+    
+    return filtered;
+  }, [allOrders, statusFilter, searchQuery]);
+  
+  // Get visible orders for display (virtual pagination)
+  const visibleOrders = useMemo(() => {
+    return filteredOrders.slice(0, displayCount);
+  }, [filteredOrders, displayCount]);
+  
+  const hasMore = displayCount < filteredOrders.length;
   
   // Fetch menu items for image matching
   useEffect(() => {
@@ -88,64 +125,80 @@ const OrderHistoryScreen = ({ navigation }) => {
     runShineAnimation();
   }, []);
 
-  const fetchHistory = useCallback(async (isRefresh = false, isLoadMore = false) => {
+  // Fetch all history data from API (with caching)
+  const fetchHistory = useCallback(async (forceRefresh = false) => {
     try {
-      if (!isLoadMore) {
-        if (!isRefresh) setLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
-
-      const currentPage = isRefresh ? 1 : (isLoadMore ? page + 1 : page);
+      // Check if we have valid cached data
+      const now = Date.now();
+      const cacheValid = historyCache.length > 0 && (now - cacheTimestamp) < CACHE_DURATION;
       
-      const params = new URLSearchParams({
-        page: currentPage,
-        limit: 30,
-        ...(searchQuery && { search: searchQuery }),
-        ...(statusFilter !== 'all' && { status: statusFilter }),
-      });
-
-      const response = await api.get(`/orders/history?${params}`);
+      if (cacheValid && !forceRefresh) {
+        console.log('Using cached history data');
+        setAllOrders(historyCache);
+        setLoading(false);
+        setIsInitialLoad(false);
+        return;
+      }
+      
+      // Only show loading spinner on initial load (not refresh)
+      if (isInitialLoad && historyCache.length === 0) {
+        setLoading(true);
+      }
+      
+      // Fetch all orders (backend handles the heavy lifting and caching)
+      const response = await api.get('/orders/history?limit=1000');
       
       if (response.data.success) {
-        const newOrders = response.data.orders || [];
-        
-        if (isRefresh || !isLoadMore) {
-          setOrders(newOrders);
-          setPage(1);
-        } else {
-          setOrders(prev => [...prev, ...newOrders]);
-          setPage(currentPage);
-        }
-        
-        setHasMore(newOrders.length === 30);
+        const orders = response.data.orders || [];
+        // Update cache
+        historyCache = orders;
+        cacheTimestamp = Date.now();
+        setAllOrders(orders);
       }
     } catch (error) {
       console.error('Error fetching order history:', error);
+      // If we have cached data, use it even if fetch failed
+      if (historyCache.length > 0) {
+        setAllOrders(historyCache);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
-      setLoadingMore(false);
+      setIsInitialLoad(false);
     }
-  }, [searchQuery, statusFilter, page]);
+  }, [isInitialLoad]);
 
+  // Initial data load
   useEffect(() => {
-    setPage(1);
-    fetchHistory(true);
+    // Use InteractionManager to defer fetch until after screen transition
+    const task = InteractionManager.runAfterInteractions(() => {
+      fetchHistory();
+    });
+    return () => task.cancel();
+  }, []);
+  
+  // Reset display count when filters change
+  useEffect(() => {
+    setDisplayCount(15);
   }, [searchQuery, statusFilter]);
 
-  const onRefresh = () => {
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchHistory(true);
-  };
+    setDisplayCount(15);
+    fetchHistory(true); // Force refresh
+  }, [fetchHistory]);
 
-  const onLoadMore = () => {
+  // Load more items (virtual pagination - just increase display count)
+  const onLoadMore = useCallback(() => {
     if (!loadingMore && hasMore && !loading) {
-      fetchHistory(false, true);
+      setLoadingMore(true);
+      // Simulate slight delay for smooth UX
+      setTimeout(() => {
+        setDisplayCount(prev => prev + 20);
+        setLoadingMore(false);
+      }, 100);
     }
-  };
-
-  const filteredOrders = orders;
+  }, [loadingMore, hasMore, loading]);
 
   // Navigate to order detail with constructed order object
   const handleOrderPress = (item) => {
@@ -360,7 +413,7 @@ const OrderHistoryScreen = ({ navigation }) => {
                 <Text style={styles.title}>Order History</Text>
               </View>
               <Text style={styles.subtitle}>
-                {orders.length} orders from sheets
+                {filteredOrders.length} orders{searchQuery || statusFilter !== 'all' ? ' (filtered)' : ''}
               </Text>
             </View>
             
@@ -422,15 +475,16 @@ const OrderHistoryScreen = ({ navigation }) => {
       </View>
 
       {/* Orders List */}
-      {loading ? (
+      {loading && allOrders.length === 0 ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#E23744" />
           <Text style={styles.loadingText}>Loading order history...</Text>
         </View>
       ) : (
         <FlatList
-          data={filteredOrders}
-          keyExtractor={(item, index) => `${item.orderId}-${index}`}
+          ref={flatListRef}
+          data={visibleOrders}
+          keyExtractor={(item, index) => `${item.orderId}-${item.sheetType}-${index}`}
           renderItem={renderOrderItem}
           contentContainerStyle={styles.listContainer}
           refreshControl={
@@ -442,9 +496,19 @@ const OrderHistoryScreen = ({ navigation }) => {
             />
           }
           onEndReached={onLoadMore}
-          onEndReachedThreshold={0.5}
+          onEndReachedThreshold={0.3}
           ListFooterComponent={renderFooter}
           ListEmptyComponent={renderEmpty}
+          // Performance optimizations
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          initialNumToRender={10}
+          getItemLayout={(data, index) => ({
+            length: 180, // Approximate item height
+            offset: 180 * index,
+            index,
+          })}
         />
       )}
     </View>
