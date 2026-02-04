@@ -23,7 +23,6 @@ router.get('/hero-sections', async (req, res) => {
 router.get('/offers', async (req, res) => {
   try {
     const now = new Date();
-    const { customerPhone } = req.query;
     
     const offers = await Offer.find({ 
       isActive: true,
@@ -34,33 +33,20 @@ router.get('/offers', async (req, res) => {
       validFrom: { $lte: now }
     }).sort({ createdAt: -1 });
     
-    // Filter offers based on targeting
-    const filteredOffers = offers.filter(offer => {
-      // If offer targets all customers, show it
-      if (!offer.targetType || offer.targetType === 'all') {
-        return true;
-      }
+    // Transform offers - add isTargeted flag and hide targetedCustomers list
+    const transformedOffers = offers.map(offer => {
+      const offerObj = offer.toObject();
       
-      // If targeting is set (top_percentage, min_spent, min_orders), check eligibility
-      const isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(offer.targetType);
-      if (isTargeted) {
-        // If no customer phone provided, don't show targeted offers
-        if (!customerPhone) {
-          return false;
-        }
-        
-        // Check if customer phone is in targetedCustomers array
-        const normalizedPhone = customerPhone.replace(/[^0-9]/g, '');
-        return offer.targetedCustomers && offer.targetedCustomers.some(phone => {
-          const normalizedTargetPhone = phone.replace(/[^0-9]/g, '');
-          return normalizedTargetPhone.includes(normalizedPhone) || normalizedPhone.includes(normalizedTargetPhone);
-        });
-      }
+      // Add isTargeted flag
+      offerObj.isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(offer.targetType);
       
-      return true;
+      // Remove targetedCustomers list for privacy
+      delete offerObj.targetedCustomers;
+      
+      return offerObj;
     });
     
-    res.json(filteredOffers);
+    res.json(transformedOffers);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -71,7 +57,6 @@ router.get('/offers', async (req, res) => {
 router.get('/popup-offers', async (req, res) => {
   try {
     const now = new Date();
-    const { customerPhone } = req.query;
     
     let offers = await Offer.find({ 
       isActive: true,
@@ -83,33 +68,15 @@ router.get('/popup-offers', async (req, res) => {
       validFrom: { $lte: now }
     }).sort({ createdAt: -1 });
     
-    // Filter offers based on targeting
-    offers = offers.filter(offer => {
-      // If offer targets all customers, show it
-      if (!offer.targetType || offer.targetType === 'all') {
-        return true;
-      }
-      
-      // If targeting is set (top_percentage, min_spent, min_orders), check eligibility
-      const isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(offer.targetType);
-      if (isTargeted) {
-        // If no customer phone provided, don't show targeted offers
-        if (!customerPhone) {
-          return false;
-        }
-        
-        // Check if customer phone is in targetedCustomers array
-        const normalizedPhone = customerPhone.replace(/[^0-9]/g, '');
-        return offer.targetedCustomers && offer.targetedCustomers.some(phone => {
-          const normalizedTargetPhone = phone.replace(/[^0-9]/g, '');
-          return normalizedTargetPhone.includes(normalizedPhone) || normalizedPhone.includes(normalizedTargetPhone);
-        });
-      }
-      
-      return true;
+    // Transform offers - add isTargeted flag and hide targetedCustomers list
+    const transformedOffers = offers.map(offer => {
+      const offerObj = offer.toObject();
+      offerObj.isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(offer.targetType);
+      delete offerObj.targetedCustomers;
+      return offerObj;
     });
     
-    res.json(offers[0] || null);
+    res.json(transformedOffers[0] || null);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
