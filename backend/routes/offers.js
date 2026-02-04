@@ -189,32 +189,14 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       parsedAppliedCategories = typeof appliedCategories === 'string' ? JSON.parse(appliedCategories) : appliedCategories;
     }
 
-    // Handle targeting - get targeted customers from Google Sheets
-    let targetedCustomerPhones = [];
+    // Handle targeting - we'll fetch customers in background after saving offer
     const finalTargetType = targetType || 'all';
     const finalTargetPercentage = parseInt(targetPercentage) || 100;
     const finalTargetMinSpent = parseFloat(targetMinSpent) || 0;
     const finalTargetMinOrders = parseInt(targetMinOrders) || 0;
     
-    if (finalTargetType === 'top_percentage' && finalTargetPercentage < 100) {
-      const result = await googleSheets.getTopCustomersBySpent(finalTargetPercentage);
-      if (result.customers && result.customers.length > 0) {
-        targetedCustomerPhones = result.customers.map(c => c.phone);
-        console.log(`🎯 Targeting top ${finalTargetPercentage}% customers: ${targetedCustomerPhones.length} customers`);
-      }
-    } else if (finalTargetType === 'min_spent' && finalTargetMinSpent > 0) {
-      const result = await googleSheets.getCustomersByMinSpent(finalTargetMinSpent);
-      if (result.customers && result.customers.length > 0) {
-        targetedCustomerPhones = result.customers.map(c => c.phone);
-        console.log(`🎯 Targeting customers with min spent ₹${finalTargetMinSpent}: ${targetedCustomerPhones.length} customers`);
-      }
-    } else if (finalTargetType === 'min_orders' && finalTargetMinOrders > 0) {
-      const result = await googleSheets.getCustomersByMinOrders(finalTargetMinOrders);
-      if (result.customers && result.customers.length > 0) {
-        targetedCustomerPhones = result.customers.map(c => c.phone);
-        console.log(`🎯 Targeting customers with min ${finalTargetMinOrders} orders: ${targetedCustomerPhones.length} customers`);
-      }
-    }
+    // Determine if this is a targeted offer (customers will be fetched in background)
+    const isTargetedOffer = ['top_percentage', 'min_spent', 'min_orders'].includes(finalTargetType);
 
     const offer = new Offer({
       title,
@@ -241,10 +223,46 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       targetPercentage: finalTargetPercentage,
       targetMinSpent: finalTargetMinSpent,
       targetMinOrders: finalTargetMinOrders,
-      targetedCustomers: targetedCustomerPhones
+      targetedCustomers: [] // Will be populated in background
     });
 
     await offer.save();
+    
+    // Fetch targeted customers in background (don't block response)
+    if (isTargetedOffer) {
+      console.log(`🎯 Fetching targeted customers in background for offer ${offer._id}...`);
+      (async () => {
+        try {
+          let targetedCustomerPhones = [];
+          
+          if (finalTargetType === 'top_percentage' && finalTargetPercentage < 100) {
+            const result = await googleSheets.getTopCustomersBySpent(finalTargetPercentage);
+            if (result.customers && result.customers.length > 0) {
+              targetedCustomerPhones = result.customers.map(c => c.phone);
+              console.log(`🎯 Found top ${finalTargetPercentage}% customers: ${targetedCustomerPhones.length} customers`);
+            }
+          } else if (finalTargetType === 'min_spent' && finalTargetMinSpent > 0) {
+            const result = await googleSheets.getCustomersByMinSpent(finalTargetMinSpent);
+            if (result.customers && result.customers.length > 0) {
+              targetedCustomerPhones = result.customers.map(c => c.phone);
+              console.log(`🎯 Found customers with min spent ₹${finalTargetMinSpent}: ${targetedCustomerPhones.length} customers`);
+            }
+          } else if (finalTargetType === 'min_orders' && finalTargetMinOrders > 0) {
+            const result = await googleSheets.getCustomersByMinOrders(finalTargetMinOrders);
+            if (result.customers && result.customers.length > 0) {
+              targetedCustomerPhones = result.customers.map(c => c.phone);
+              console.log(`🎯 Found customers with min ${finalTargetMinOrders} orders: ${targetedCustomerPhones.length} customers`);
+            }
+          }
+          
+          // Update offer with targeted customers
+          await Offer.findByIdAndUpdate(offer._id, { targetedCustomers: targetedCustomerPhones });
+          console.log(`✅ Updated offer ${offer._id} with ${targetedCustomerPhones.length} targeted customers`);
+        } catch (bgError) {
+          console.error(`❌ Background customer fetch failed for offer ${offer._id}:`, bgError.message);
+        }
+      })();
+    }
     
     console.log('Offer saved:', {
       offerType,
@@ -255,7 +273,6 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     
     // Apply offer to selected items and categories (if any items/categories are selected)
     // NOTE: For targeted offers, we DON'T apply offerPrice to items (discount is calculated at order time for eligible customers only)
-    const isTargetedOffer = ['top_percentage', 'min_spent', 'min_orders'].includes(finalTargetType);
     
     if (parsedAppliedItems.length > 0 || parsedAppliedCategories.length > 0) {
       const MenuItem = require('../models/MenuItem');
@@ -350,32 +367,14 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
       parsedAppliedCategories = typeof appliedCategories === 'string' ? JSON.parse(appliedCategories) : appliedCategories;
     }
     
-    // Handle targeting - get targeted customers from Google Sheets
-    let targetedCustomerPhones = [];
+    // Handle targeting - fetch customers in background after saving
     const finalTargetType = targetType || existingOffer.targetType || 'all';
     const finalTargetPercentage = parseInt(targetPercentage) || existingOffer.targetPercentage || 100;
     const finalTargetMinSpent = parseFloat(targetMinSpent) || existingOffer.targetMinSpent || 0;
     const finalTargetMinOrders = parseInt(targetMinOrders) || existingOffer.targetMinOrders || 0;
     
-    if (finalTargetType === 'top_percentage' && finalTargetPercentage < 100) {
-      const result = await googleSheets.getTopCustomersBySpent(finalTargetPercentage);
-      if (result.customers && result.customers.length > 0) {
-        targetedCustomerPhones = result.customers.map(c => c.phone);
-        console.log(`🎯 Updating targeting: top ${finalTargetPercentage}% customers: ${targetedCustomerPhones.length} customers`);
-      }
-    } else if (finalTargetType === 'min_spent' && finalTargetMinSpent > 0) {
-      const result = await googleSheets.getCustomersByMinSpent(finalTargetMinSpent);
-      if (result.customers && result.customers.length > 0) {
-        targetedCustomerPhones = result.customers.map(c => c.phone);
-        console.log(`🎯 Updating targeting: customers with min spent ₹${finalTargetMinSpent}: ${targetedCustomerPhones.length} customers`);
-      }
-    } else if (finalTargetType === 'min_orders' && finalTargetMinOrders > 0) {
-      const result = await googleSheets.getCustomersByMinOrders(finalTargetMinOrders);
-      if (result.customers && result.customers.length > 0) {
-        targetedCustomerPhones = result.customers.map(c => c.phone);
-        console.log(`🎯 Updating targeting: customers with min ${finalTargetMinOrders} orders: ${targetedCustomerPhones.length} customers`);
-      }
-    }
+    // Determine if this is a targeted offer
+    const isTargetedOffer = ['top_percentage', 'min_spent', 'min_orders'].includes(finalTargetType);
     
     const updateData = {
       title,
@@ -398,7 +397,8 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
       targetPercentage: finalTargetPercentage,
       targetMinSpent: finalTargetMinSpent,
       targetMinOrders: finalTargetMinOrders,
-      targetedCustomers: targetedCustomerPhones
+      // Keep existing customers for now, will update in background if needed
+      targetedCustomers: isTargetedOffer ? (existingOffer.targetedCustomers || []) : []
     };
 
     // Helper function to delete old image
@@ -510,7 +510,6 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
       
       // Then, apply offer to newly selected items
       // NOTE: For targeted offers, we DON'T apply offerPrice to items
-      const isTargetedOffer = ['top_percentage', 'min_spent', 'min_orders'].includes(finalTargetType);
       
       for (const itemId of allItemIds) {
         const item = await MenuItem.findById(itemId);
@@ -574,6 +573,42 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
     const eventEmitter = require('../services/eventEmitter');
     eventEmitter.emit('dataUpdate', { type: 'offers' });
     eventEmitter.emit('dataUpdate', { type: 'menu' });
+    
+    // Fetch targeted customers in background (don't block response)
+    if (isTargetedOffer) {
+      console.log(`🎯 Fetching targeted customers in background for offer ${offer._id}...`);
+      (async () => {
+        try {
+          let targetedCustomerPhones = [];
+          
+          if (finalTargetType === 'top_percentage' && finalTargetPercentage < 100) {
+            const result = await googleSheets.getTopCustomersBySpent(finalTargetPercentage);
+            if (result.customers && result.customers.length > 0) {
+              targetedCustomerPhones = result.customers.map(c => c.phone);
+              console.log(`🎯 Found top ${finalTargetPercentage}% customers: ${targetedCustomerPhones.length} customers`);
+            }
+          } else if (finalTargetType === 'min_spent' && finalTargetMinSpent > 0) {
+            const result = await googleSheets.getCustomersByMinSpent(finalTargetMinSpent);
+            if (result.customers && result.customers.length > 0) {
+              targetedCustomerPhones = result.customers.map(c => c.phone);
+              console.log(`🎯 Found customers with min spent ₹${finalTargetMinSpent}: ${targetedCustomerPhones.length} customers`);
+            }
+          } else if (finalTargetType === 'min_orders' && finalTargetMinOrders > 0) {
+            const result = await googleSheets.getCustomersByMinOrders(finalTargetMinOrders);
+            if (result.customers && result.customers.length > 0) {
+              targetedCustomerPhones = result.customers.map(c => c.phone);
+              console.log(`🎯 Found customers with min ${finalTargetMinOrders} orders: ${targetedCustomerPhones.length} customers`);
+            }
+          }
+          
+          // Update offer with targeted customers
+          await Offer.findByIdAndUpdate(offer._id, { targetedCustomers: targetedCustomerPhones });
+          console.log(`✅ Updated offer ${offer._id} with ${targetedCustomerPhones.length} targeted customers`);
+        } catch (bgError) {
+          console.error(`❌ Background customer fetch failed for offer ${offer._id}:`, bgError.message);
+        }
+      })();
+    }
     
     res.json(offer);
   } catch (err) {
