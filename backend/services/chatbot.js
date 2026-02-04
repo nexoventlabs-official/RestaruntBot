@@ -2641,109 +2641,32 @@ const chatbot = {
       return null;
     }
     
-    // ========== DETECT FOOD TYPE FIRST (before any typo correction) ==========
-    // This prevents "veg curry" from being "corrected" to "egg curry"
+    // ========== DETECT FOOD TYPE FIRST ==========
     const originalText = text.toLowerCase().trim();
     const originalFoodType = this.detectFoodTypeFromMessage(originalText);
     console.log(`🔎 ORIGINAL food type detection: "${originalText}" → ${originalFoodType ? JSON.stringify(originalFoodType) : 'NONE'}`);
     
-    // First apply common food typo correction (hardcoded + dynamic)
+    // ========== NO TYPO CORRECTION - USE ORIGINAL TEXT DIRECTLY ==========
+    // Typo correction was causing issues like "liver" → "liter", "bread" → "cream"
+    // Just use the original text as-is
     let correctedText = originalText;
+    const words = originalText.split(/\s+/);
     
-    // Check hardcoded typos first
-    let phraseCorrection = this.correctFoodTypo(correctedText);
-    
-    // If no hardcoded match, try dynamic matching against actual menu
-    // BUT: Don't allow "veg" to become "egg" or vice versa!
-    if (phraseCorrection === correctedText) {
-      const dynamicMatch = this.findBestMatchingTerm(correctedText, menuItems);
-      if (dynamicMatch) {
-        // SAFETY CHECK: Don't allow typo correction to change food type keywords
-        const originalHasVeg = /\bveg\b/i.test(correctedText);
-        const correctedHasEgg = /\begg\b/i.test(dynamicMatch);
-        const originalHasEgg = /\begg\b/i.test(correctedText);
-        const correctedHasVeg = /\bveg\b/i.test(dynamicMatch);
-        
-        // Don't allow veg→egg or egg→veg corrections
-        if ((originalHasVeg && correctedHasEgg) || (originalHasEgg && correctedHasVeg)) {
-          console.log(`🛡️ BLOCKED typo correction: "${correctedText}" → "${dynamicMatch}" (would change food type)`);
-        } else {
-          phraseCorrection = dynamicMatch;
-        }
-      }
-    }
-    
-    if (phraseCorrection !== correctedText) {
-      console.log(`📝 Typo correction: "${correctedText}" → "${phraseCorrection}"`);
-      correctedText = phraseCorrection;
-    }
-    
-    // Also check individual words for typos and correct them (hardcoded + dynamic)
-    const words = correctedText.split(/\s+/);
-    const correctedWords = words.map(word => {
-      // NEVER correct food type keywords (veg, nonveg, egg, vegetarian)
-      if (/^(veg|nonveg|non-veg|egg|vegetarian|veggie|eggless)$/i.test(word)) {
-        return word; // Keep as-is
-      }
-      
-      // First check hardcoded
-      let corrected = this.correctFoodTypo(word);
-      // Then try dynamic matching if no hardcoded match
-      if (corrected === word && word.length >= 3) {
-        const dynamicWordMatch = this.findBestMatchingTerm(word, menuItems);
-        if (dynamicWordMatch) {
-          corrected = dynamicWordMatch;
-        }
-      }
-      if (corrected !== word) {
-        console.log(`📝 Word typo correction: "${word}" → "${corrected}"`);
-      }
-      return corrected;
-    });
-    const wordCorrectedText = correctedWords.join(' ');
-    if (wordCorrectedText !== correctedText) {
-      correctedText = wordCorrectedText;
-    }
-    
-    // Check if words combined form a common term (e.g., "beak fast" → "breakfast")
-    if (words.length >= 2) {
-      const combinedWords = words.join('');
-      let combinedCorrection = this.correctFoodTypo(combinedWords);
-      // Also try dynamic matching for combined words
-      if (combinedCorrection === combinedWords) {
-        const dynamicCombined = this.findBestMatchingTerm(combinedWords, menuItems);
-        if (dynamicCombined) {
-          combinedCorrection = dynamicCombined;
-        }
-      }
-      if (combinedCorrection !== combinedWords) {
-        console.log(`📝 Combined typo correction: "${words.join(' ')}" → "${combinedCorrection}"`);
-        // Add this as a variation but keep the corrected text too
-      }
-    }
-    
-    // Use corrected text for translation
+    // Use original text for translation (no typo correction)
     const translationResult = await this.translateWithAI(correctedText);
     const primaryText = translationResult.primary.toLowerCase().trim();
     let allVariations = translationResult.variations || [primaryText];
     
-    // Add original text variations if different from corrected
-    if (originalText !== correctedText) {
+    // Add original text if different from translation
+    if (originalText !== primaryText && !allVariations.includes(originalText)) {
       allVariations.push(originalText);
-      // Also add original translation
-      const origTranslation = await this.translateWithAI(originalText);
-      if (origTranslation.primary !== primaryText) {
-        allVariations.push(...origTranslation.variations);
-      }
     }
     
     if (primaryText.length < 2) return null;
     
-    // USE THE ORIGINAL FOOD TYPE DETECTION (from before typo correction)
-    // This ensures "veg curry" stays as veg even if typo correction tried to change it
+    // Use the original food type detection
     const detected = originalFoodType || this.detectFoodTypeFromMessage(primaryText);
     console.log(`🔎 SMART SEARCH: text="${text}", primaryText="${primaryText}", detected=`, detected);
-    console.log(`🔎 Using originalFoodType: ${originalFoodType ? 'YES' : 'NO (fell back to primaryText detection)'}`);
     
     // Remove food type keywords to get clean search terms
     // Use ORIGINAL text for removing keywords to preserve user intent
