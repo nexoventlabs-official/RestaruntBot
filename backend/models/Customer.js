@@ -21,6 +21,19 @@ const customerSchema = new mongoose.Schema({
     quantity: Number,
     addedAt: { type: Date, default: Date.now }
   }],
+  // Active offers applied to this customer (from targeted broadcasts)
+  activeOffers: [{
+    offerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Offer' },
+    offerType: String,
+    title: String,
+    discountType: String,
+    discountValue: Number,
+    percentage: Number,
+    appliedItems: [{ type: mongoose.Schema.Types.ObjectId, ref: 'MenuItem' }],
+    appliedCategories: [String],
+    validUntil: Date,
+    appliedAt: { type: Date, default: Date.now }
+  }],
   conversationState: {
     currentStep: { type: String, default: 'welcome' },
     selectedService: String,

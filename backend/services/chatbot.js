@@ -361,6 +361,70 @@ const formatOfferTypes = (item) => {
   return '';
 };
 
+// Helper to calculate offer discounts from customer's activeOffers
+// Returns: { discountedPrice, discountAmount, appliedOffer } for an item
+const calculateOfferDiscount = (menuItem, activeOffers) => {
+  if (!activeOffers || activeOffers.length === 0) {
+    return { discountedPrice: null, discountAmount: 0, appliedOffer: null };
+  }
+  
+  const now = new Date();
+  
+  // Find applicable offer for this item
+  for (const offer of activeOffers) {
+    // Skip expired offers
+    if (offer.validUntil && new Date(offer.validUntil) < now) {
+      continue;
+    }
+    
+    // Check if item is applicable to this offer
+    let isApplicable = false;
+    
+    // Check by appliedItems
+    if (offer.appliedItems && offer.appliedItems.length > 0) {
+      isApplicable = offer.appliedItems.some(itemId => 
+        itemId.toString() === menuItem._id.toString()
+      );
+    }
+    
+    // Check by appliedCategories
+    if (!isApplicable && offer.appliedCategories && offer.appliedCategories.length > 0) {
+      isApplicable = offer.appliedCategories.includes(menuItem.category);
+    }
+    
+    // Check by offerType matching item's offerType
+    if (!isApplicable && offer.offerType && menuItem.offerType) {
+      const itemOfferTypes = Array.isArray(menuItem.offerType) ? menuItem.offerType : [menuItem.offerType];
+      isApplicable = itemOfferTypes.includes(offer.offerType);
+    }
+    
+    if (isApplicable) {
+      const price = menuItem.price;
+      let discountedPrice = price;
+      let discountAmount = 0;
+      
+      // Calculate discount based on type
+      if (offer.discountType === 'percentage' && offer.discountValue > 0) {
+        discountAmount = Math.round((price * offer.discountValue) / 100);
+        discountedPrice = price - discountAmount;
+      } else if (offer.discountType === 'fixed' && offer.discountValue > 0) {
+        discountAmount = Math.min(offer.discountValue, price);
+        discountedPrice = price - discountAmount;
+      } else if (offer.percentage && offer.percentage > 0) {
+        // Fallback to percentage field
+        discountAmount = Math.round((price * offer.percentage) / 100);
+        discountedPrice = price - discountAmount;
+      }
+      
+      if (discountAmount > 0) {
+        return { discountedPrice, discountAmount, appliedOffer: offer };
+      }
+    }
+  }
+  
+  return { discountedPrice: null, discountAmount: 0, appliedOffer: null };
+};
+
 const chatbot = {
   // Helper to detect cancel order intent from text/voice
   // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
@@ -6117,17 +6181,48 @@ const chatbot = {
     }
 
     let total = 0;
+    let totalDiscount = 0;
     let cartMsg = '🛒 *Your Cart*\n\n';
     let validItems = 0;
+    let appliedOfferNames = new Set();
+    
+    // Get customer's active offers
+    const activeOffers = freshCustomer.activeOffers || [];
     
     freshCustomer.cart.forEach((item, i) => {
       if (item.menuItem) {
-        const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+        // First check if item has built-in offerPrice
+        let effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+        let itemDiscount = 0;
+        let offerApplied = null;
+        
+        // If no offerPrice, check customer's activeOffers for applicable discount
+        if (!item.menuItem.offerPrice && activeOffers.length > 0) {
+          const offerResult = calculateOfferDiscount(item.menuItem, activeOffers);
+          if (offerResult.discountedPrice !== null) {
+            effectivePrice = offerResult.discountedPrice;
+            itemDiscount = offerResult.discountAmount * item.quantity;
+            offerApplied = offerResult.appliedOffer;
+            if (offerApplied) {
+              appliedOfferNames.add(offerApplied.offerType || offerApplied.title || 'Special Offer');
+            }
+          }
+        }
+        
         const subtotal = effectivePrice * item.quantity;
         total += subtotal;
+        totalDiscount += itemDiscount;
         validItems++;
         const unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
-        const priceDisplay = formatPriceWithOffer(item.menuItem);
+        
+        // Show price with discount if applicable
+        let priceDisplay;
+        if (offerApplied && itemDiscount > 0) {
+          priceDisplay = `~₹${item.menuItem.price}~ ➜ *₹${effectivePrice}* 🎁`;
+        } else {
+          priceDisplay = formatPriceWithOffer(item.menuItem);
+        }
+        
         cartMsg += `${validItems}. *${item.menuItem.name}* (${unitInfo})\n`;
         cartMsg += `   ${item.quantity} × ${priceDisplay} = ₹${subtotal}\n\n`;
       }
@@ -6151,6 +6246,14 @@ const chatbot = {
     }
     
     cartMsg += `━━━━━━━━━━━━━━━\n`;
+    
+    // Show offer applied message if discounts were applied
+    if (totalDiscount > 0 && appliedOfferNames.size > 0) {
+      const offersList = Array.from(appliedOfferNames).join(', ');
+      cartMsg += `🎁 *Offer Applied:* ${offersList}\n`;
+      cartMsg += `💰 *You Save:* ₹${totalDiscount}\n`;
+    }
+    
     cartMsg += `*Total: ₹${total}*`;
 
     const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
@@ -6176,18 +6279,45 @@ const chatbot = {
     const serviceType = state.serviceType || state.selectedService || 'delivery';
     const orderId = generateOrderId(serviceType);
     let itemsTotal = 0;
+    let totalDiscount = 0;
+    let appliedOfferIds = new Set();
+    
+    // Get customer's active offers
+    const activeOffers = freshCustomer.activeOffers || [];
+    
     const items = freshCustomer.cart.filter(item => item.menuItem).map(item => {
-      const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+      // First check if item has built-in offerPrice
+      let effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+      let itemDiscount = 0;
+      let appliedOfferId = null;
+      
+      // If no offerPrice, check customer's activeOffers for applicable discount
+      if (!item.menuItem.offerPrice && activeOffers.length > 0) {
+        const offerResult = calculateOfferDiscount(item.menuItem, activeOffers);
+        if (offerResult.discountedPrice !== null) {
+          effectivePrice = offerResult.discountedPrice;
+          itemDiscount = offerResult.discountAmount * item.quantity;
+          if (offerResult.appliedOffer?.offerId) {
+            appliedOfferId = offerResult.appliedOffer.offerId;
+            appliedOfferIds.add(offerResult.appliedOffer.offerId.toString());
+          }
+        }
+      }
+      
       const subtotal = effectivePrice * item.quantity;
       itemsTotal += subtotal;
+      totalDiscount += itemDiscount;
+      
       return {
         menuItem: item.menuItem._id,
         name: item.menuItem.name,
         quantity: item.quantity,
         price: effectivePrice,
+        originalPrice: item.menuItem.price, // Store original price for reference
         unit: item.menuItem.unit || 'piece',
         unitQty: item.menuItem.quantity || 1,
-        image: item.menuItem.image
+        image: item.menuItem.image,
+        appliedOfferId // Track which offer was applied to this item
       };
     });
 
@@ -6221,6 +6351,9 @@ const chatbot = {
       deliveryCharge,
       deliveryDistance,
       totalAmount: total,
+      // Store discount info
+      discountAmount: totalDiscount,
+      appliedOfferIds: Array.from(appliedOfferIds),
       serviceType: state.serviceType || state.selectedService || 'delivery',
       deliveryAddress: freshCustomer.deliveryAddress ? {
         address: freshCustomer.deliveryAddress.address,
@@ -6230,6 +6363,14 @@ const chatbot = {
       trackingUpdates: [{ status: 'pending', message: 'Order created, awaiting payment' }]
     });
     await order.save();
+    
+    // Remove applied offers from customer's activeOffers (one-time use)
+    if (appliedOfferIds.size > 0) {
+      freshCustomer.activeOffers = (freshCustomer.activeOffers || []).filter(
+        offer => !appliedOfferIds.has(offer.offerId?.toString())
+      );
+      await freshCustomer.save();
+    }
 
     // Add to WhatsApp broadcast contacts
     const whatsappBroadcast = require('./whatsappBroadcast');

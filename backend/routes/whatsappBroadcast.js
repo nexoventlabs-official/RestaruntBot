@@ -53,6 +53,7 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
     // Get targeting info if offerId is provided
     let targetedCustomers = null;
     let targetType = 'all';
+    let offerData = null; // Full offer data for applying to customers
     
     if (offerId) {
       const Offer = require('../models/Offer');
@@ -64,6 +65,19 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
         if (isTargeted && offer.targetedCustomers && offer.targetedCustomers.length > 0) {
           targetedCustomers = offer.targetedCustomers;
           console.log(`[WhatsApp Broadcast] Targeting ${targetedCustomers.length} specific customers (${targetType})`);
+          
+          // Store full offer data for applying to customers
+          offerData = {
+            offerId: offer._id,
+            offerType: offer.offerType,
+            title: offer.title,
+            discountType: offer.discountType,
+            discountValue: offer.discountValue,
+            percentage: offer.percentage,
+            appliedItems: offer.appliedItems || [],
+            appliedCategories: offer.appliedCategories || [],
+            validUntil: offer.validUntil
+          };
         } else if (isTargeted && (!offer.targetedCustomers || offer.targetedCustomers.length === 0)) {
           // Targeted offer but no eligible customers
           console.log(`[WhatsApp Broadcast] No eligible customers for ${targetType} targeting`);
@@ -85,7 +99,8 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
       offerDescription, 
       offerType,
       targetedCustomers,
-      offerId // Pass offerId for claim button
+      offerId, // Pass offerId for claim button
+      offerData // Pass full offer data to apply to customers
     );
     
     console.log('[WhatsApp Broadcast] Offer sending completed:', {

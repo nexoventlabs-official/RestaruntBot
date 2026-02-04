@@ -18,13 +18,17 @@ const orderSchema = new mongoose.Schema({
     name: String,
     quantity: Number,
     price: Number,
+    originalPrice: Number, // Original price before any discounts
     unit: { type: String, default: 'piece' },
     unitQty: { type: Number, default: 1 },
-    image: String
+    image: String,
+    appliedOfferId: { type: mongoose.Schema.Types.ObjectId, ref: 'Offer' } // Offer applied to this item
   }],
   itemsTotal: { type: Number }, // Total of items before delivery charge
   deliveryCharge: { type: Number, default: 0 }, // Extra delivery charge for distances beyond free radius
   deliveryDistance: { type: Number }, // Distance in KM from restaurant to delivery address
+  discountAmount: { type: Number, default: 0 }, // Total discount from applied offers
+  appliedOfferIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Offer' }], // Offers used in this order
   totalAmount: { type: Number, required: true },
   status: {
     type: String,

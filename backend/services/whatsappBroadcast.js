@@ -17,6 +17,51 @@ const isTestNumber = () => {
 };
 
 const whatsappBroadcast = {
+  // Apply an offer to a customer's activeOffers list
+  // This is called when a targeted offer is broadcast to the customer
+  async applyOfferToCustomer(phone, offerData) {
+    try {
+      // Find customer by phone
+      const customer = await Customer.findOne({ phone });
+      if (!customer) {
+        console.log(`[WhatsApp Broadcast] Customer not found for phone: ${phone}, skipping offer apply`);
+        return false;
+      }
+      
+      // Initialize activeOffers if not exists
+      if (!customer.activeOffers) {
+        customer.activeOffers = [];
+      }
+      
+      // Check if offer already exists
+      const existingOfferIndex = customer.activeOffers.findIndex(
+        o => o.offerId?.toString() === offerData.offerId?.toString()
+      );
+      
+      if (existingOfferIndex >= 0) {
+        // Update existing offer
+        customer.activeOffers[existingOfferIndex] = {
+          ...offerData,
+          appliedAt: new Date()
+        };
+        console.log(`[WhatsApp Broadcast] Updated existing offer for ${phone}`);
+      } else {
+        // Add new offer
+        customer.activeOffers.push({
+          ...offerData,
+          appliedAt: new Date()
+        });
+        console.log(`[WhatsApp Broadcast] Applied new offer to ${phone}`);
+      }
+      
+      await customer.save();
+      return true;
+    } catch (error) {
+      console.error(`[WhatsApp Broadcast] Error applying offer to ${phone}:`, error);
+      return false;
+    }
+  },
+
   // Add or update a WhatsApp contact - Now saves to Google Sheets (cost-saving)
   async addContact(phone, name = null, orderDate = new Date()) {
     try {
@@ -131,7 +176,8 @@ const whatsappBroadcast = {
   // Falls back to template messages for users outside 24-hour window (even if they sent "hi" months ago)
   // targetedCustomers: array of phone numbers to send to (null = send to all)
   // offerId: optional offer ID to include claim button for eligibility check
-  async sendOfferToAll(offerImageUrl, offerTitle, offerDescription, offerType, targetedCustomers = null, offerId = null) {
+  // offerData: full offer data to apply to targeted customers' activeOffers
+  async sendOfferToAll(offerImageUrl, offerTitle, offerDescription, offerType, targetedCustomers = null, offerId = null, offerData = null) {
     try {
       // Ensure all customers are synced before sending (includes old customers who sent "hi" or any message)
       console.log('[WhatsApp Broadcast] Syncing ALL customers (including old customers) before sending...');
@@ -250,6 +296,11 @@ const whatsappBroadcast = {
             successContacts.push({ phone: contact.phone, method: 'template', name: contact.name });
             console.log(`[WhatsApp Broadcast] ✅ Sent via template to ${contact.phone} (${contact.name || 'Unknown'})`);
             
+            // Apply offer to customer's activeOffers if this is a targeted offer
+            if (isTargetedOffer && offerData) {
+              await this.applyOfferToCustomer(contact.phone, offerData);
+            }
+            
           } else {
             // Customer is within 24h window, send interactive message with CTA URL
             // Both targeted and non-targeted offers now use CTA URL to website
@@ -276,6 +327,11 @@ const whatsappBroadcast = {
             sentViaInteractive++;
             successContacts.push({ phone: contact.phone, method: 'interactive', name: contact.name });
             console.log(`[WhatsApp Broadcast] ✅ Sent CTA to ${contact.phone} (${contact.name || 'Unknown'})`);
+            
+            // Apply offer to customer's activeOffers if this is a targeted offer
+            if (isTargetedOffer && offerData) {
+              await this.applyOfferToCustomer(contact.phone, offerData);
+            }
           }
         } catch (error) {
           const errorMessage = error.response?.data?.error?.message || error.message || '';
