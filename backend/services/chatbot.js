@@ -4345,9 +4345,9 @@ const chatbot = {
           // Save state immediately to ensure selectedItem persists
           customer.conversationState = state;
           await customer.save();
-          // Go directly to quantity selection (skip showing item details again)
-          await this.sendQuantitySelection(phone, item);
-          state.currentStep = 'select_quantity';
+          // Show item details first, then user can click "Add to Cart" to select quantity
+          await this.sendItemDetails(phone, menuItems, itemId);
+          state.currentStep = 'viewing_item_details';
         } else {
           console.log('❌ Item not found for add_:', itemId);
           await whatsapp.sendButtons(phone,
@@ -4514,17 +4514,10 @@ const chatbot = {
         
         if (itemNum >= 1 && itemNum <= itemsList.length) {
           const item = itemsList[itemNum - 1];
-          if (state.currentStep === 'selecting_item') {
-            // For ordering - go to quantity selection
-            state.selectedItem = item._id.toString();
-            await this.sendQuantitySelection(phone, item);
-            state.currentStep = 'select_quantity';
-          } else {
-            // For browsing - show item details
-            await this.sendItemDetails(phone, menuItems, item._id.toString());
-            state.selectedItem = item._id.toString();
-            state.currentStep = 'viewing_item_details';
-          }
+          // Always show item details first, then user can click "Add to Cart"
+          await this.sendItemDetails(phone, menuItems, item._id.toString());
+          state.selectedItem = item._id.toString();
+          state.currentStep = 'viewing_item_details';
         } else {
           await whatsapp.sendButtons(phone, `❌ Invalid number. Please enter a number between 1 and ${itemsList.length}.`, [
             { id: 'home', text: 'Main Menu' }
