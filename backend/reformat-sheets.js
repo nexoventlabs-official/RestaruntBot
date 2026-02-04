@@ -2,23 +2,24 @@ require('dotenv').config();
 const googleSheets = require('./services/googleSheets');
 
 async function reformatAllSheets() {
-  console.log('🔄 Starting sheet reformatting...\n');
+  console.log('🔄 Starting sheet reformatting (Bold + Center styling)...\n');
   
   // Reformat Customers sheet
   console.log('📊 Reformatting Customers sheet...');
   const customersResult = await googleSheets.reformatCustomersSheet();
   console.log(customersResult.success ? '   ✅ Done' : `   ❌ Failed: ${customersResult.error}\n`);
   
-  // Skip WhatsApp Contacts sheet - no longer needed, data is in customers sheet
-  console.log('📊 Skipping WhatsApp Contacts sheet (no longer needed)');
-  
   // Reformat Daily Reports sheet
   console.log('📊 Reformatting Daily Reports sheet...');
   const reportsResult = await googleSheets.reformatDailyReportsSheet();
   console.log(reportsResult.success ? '   ✅ Done' : `   ❌ Failed: ${reportsResult.error}\n`);
   
-  console.log('\n✅ All sheets reformatted!');
-  console.log('\n💡 You can now delete the whatsapp_contacts sheet from Google Sheets - all data is in customers sheet.');
+  // Reformat Dashboard Stats sheet
+  console.log('📊 Reformatting Dashboard Stats sheet...');
+  const dashboardResult = await googleSheets.reformatDashboardStatsSheet();
+  console.log(dashboardResult.success ? '   ✅ Done' : `   ❌ Failed: ${dashboardResult.error}\n`);
+  
+  console.log('\n✅ All 3 sheets reformatted with Bold + Center styling!');
   process.exit(0);
 }
 

@@ -16,10 +16,10 @@ const dailyCleanup = {
     return hours === 0 && minutes === 0;
   },
 
-  // Get today's date string
+  // Get today's date string (dd/mm/yyyy format)
   getTodayString() {
     const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
   },
 
   // Get or create dashboard stats document
@@ -45,7 +45,7 @@ const dailyCleanup = {
         // Save yesterday's stats to Google Sheets daily_reports before resetting
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayString = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+        const yesterdayString = `${String(yesterday.getDate()).padStart(2, '0')}/${String(yesterday.getMonth() + 1).padStart(2, '0')}/${yesterday.getFullYear()}`;
         
         // Get yesterday's detailed stats from orders before they're cleaned
         const yesterdayStart = new Date(yesterday);
