@@ -1619,14 +1619,14 @@ const googleSheets = {
       // Check if headers exist
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A1:J1`
+        range: `${sheet.sheetName}!A1:K1`
       });
       
       if (!response.data.values || response.data.values.length === 0) {
-        const headers = ['Date', 'Revenue', 'Total Orders', 'Delivered', 'Cancelled', 'COD Orders', 'UPI Orders', 'Items Sold', 'Top Items'];
+        const headers = ['Date', 'Revenue', 'Total Orders', 'Delivered', 'Cancelled', 'Self Pickup', 'COD Orders', 'UPI Orders', 'Items Sold', 'Top Items'];
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${sheet.sheetName}!A1:I1`,
+          range: `${sheet.sheetName}!A1:J1`,
           valueInputOption: 'RAW',
           resource: { values: [headers] }
         });
@@ -1638,7 +1638,7 @@ const googleSheets = {
             requests: [
               {
                 repeatCell: {
-                  range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 9 },
+                  range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 10 },
                   cell: {
                     userEnteredFormat: {
                       backgroundColor: { red: 0.4, green: 0.2, blue: 0.6 },  // Purple
@@ -1656,10 +1656,11 @@ const googleSheets = {
               { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },  // Total Orders
               { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },   // Delivered
               { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },   // Cancelled
-              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // COD Orders
-              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // UPI Orders
-              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 7, endIndex: 8 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // Items Sold
-              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 8, endIndex: 9 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } }, // Top Items
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // Self Pickup
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // COD Orders
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 7, endIndex: 8 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // UPI Orders
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 8, endIndex: 9 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // Items Sold
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 9, endIndex: 10 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } }, // Top Items
               // Freeze header row
               { updateSheetProperties: { properties: { sheetId: sheet.sheetId, gridProperties: { frozenRowCount: 1 } }, fields: 'gridProperties.frozenRowCount' } }
             ]
@@ -1685,7 +1686,7 @@ const googleSheets = {
       const sheet = await this.getSheetByType(sheets, 'daily_reports');
       if (!sheet) return false;
       
-      const { date, revenue, orders, deliveredOrders, cancelledOrders, refundedOrders, codOrders, upiOrders, itemsSold, items, categories } = report;
+      const { date, revenue, orders, deliveredOrders, cancelledOrders, selfPickupOrders, refundedOrders, codOrders, upiOrders, itemsSold, items, categories } = report;
       
       // Get all rows to find existing date
       const response = await sheets.spreadsheets.values.get({
@@ -1715,6 +1716,7 @@ const googleSheets = {
         orders || 0,
         deliveredOrders || 0,
         cancelledOrders || 0,
+        selfPickupOrders || 0,
         codOrders || 0,
         upiOrders || 0,
         itemsSold || 0,
@@ -1725,7 +1727,7 @@ const googleSheets = {
         // Update existing row
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${sheet.sheetName}!A${existingRowIndex + 1}:I${existingRowIndex + 1}`,
+          range: `${sheet.sheetName}!A${existingRowIndex + 1}:J${existingRowIndex + 1}`,
           valueInputOption: 'RAW',
           resource: { values: [rowData] }
         });
@@ -1748,7 +1750,7 @@ const googleSheets = {
                   startRowIndex: existingRowIndex, 
                   endRowIndex: existingRowIndex + 1, 
                   startColumnIndex: 0, 
-                  endColumnIndex: 9 
+                  endColumnIndex: 10 
                 },
                 cell: {
                   userEnteredFormat: {
@@ -1782,7 +1784,7 @@ const googleSheets = {
         
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${sheet.sheetName}!A2:I2`,
+          range: `${sheet.sheetName}!A2:J2`,
           valueInputOption: 'RAW',
           resource: { values: [rowData] }
         });
@@ -1805,7 +1807,7 @@ const googleSheets = {
                   startRowIndex: 1, 
                   endRowIndex: 2, 
                   startColumnIndex: 0, 
-                  endColumnIndex: 9 
+                  endColumnIndex: 10 
                 },
                 cell: {
                   userEnteredFormat: {
@@ -1858,7 +1860,8 @@ const googleSheets = {
                 }
               },
               deliveredOrders: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
-              cancelledOrders: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } }
+              cancelledOrders: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } },
+              selfPickupOrders: { $sum: { $cond: [{ $eq: ['$deliveryType', 'pickup'] }, 1, 0] } }
             }
           }
         ]),
@@ -1875,7 +1878,7 @@ const googleSheets = {
         ])
       ]);
       
-      const currentStats = orderStats[0] || { totalOrders: 0, totalRevenue: 0, deliveredOrders: 0, cancelledOrders: 0 };
+      const currentStats = orderStats[0] || { totalOrders: 0, totalRevenue: 0, deliveredOrders: 0, cancelledOrders: 0, selfPickupOrders: 0 };
       const totalItemsSold = itemStats.reduce((sum, item) => sum + item.quantity, 0);
       const codOrders = paymentStats.find(p => p._id === 'cod')?.count || 0;
       const upiOrders = paymentStats.find(p => p._id === 'upi')?.count || 0;
@@ -1886,6 +1889,7 @@ const googleSheets = {
         orders: currentStats.totalOrders,
         deliveredOrders: currentStats.deliveredOrders,
         cancelledOrders: currentStats.cancelledOrders,
+        selfPickupOrders: currentStats.selfPickupOrders,
         codOrders,
         upiOrders,
         itemsSold: totalItemsSold,
@@ -1926,9 +1930,10 @@ const googleSheets = {
             orders: parseInt(rows[i][2]) || 0,
             deliveredOrders: parseInt(rows[i][3]) || 0,
             cancelledOrders: parseInt(rows[i][4]) || 0,
-            codOrders: parseInt(rows[i][5]) || 0,
-            upiOrders: parseInt(rows[i][6]) || 0,
-            itemsSold: parseInt(rows[i][7]) || 0
+            selfPickupOrders: parseInt(rows[i][5]) || 0,
+            codOrders: parseInt(rows[i][6]) || 0,
+            upiOrders: parseInt(rows[i][7]) || 0,
+            itemsSold: parseInt(rows[i][8]) || 0
           };
         }
       }
@@ -1970,9 +1975,10 @@ const googleSheets = {
             orders: parseInt(rows[i][2]) || 0,
             deliveredOrders: parseInt(rows[i][3]) || 0,
             cancelledOrders: parseInt(rows[i][4]) || 0,
-            codOrders: parseInt(rows[i][5]) || 0,
-            upiOrders: parseInt(rows[i][6]) || 0,
-            itemsSold: parseInt(rows[i][7]) || 0
+            selfPickupOrders: parseInt(rows[i][5]) || 0,
+            codOrders: parseInt(rows[i][6]) || 0,
+            upiOrders: parseInt(rows[i][7]) || 0,
+            itemsSold: parseInt(rows[i][8]) || 0
           });
         }
       }
@@ -2461,11 +2467,11 @@ const googleSheets = {
       });
       
       // ROW FORMAT: Metrics as column headers, each date is a row
-      const headers = ['Date', 'Revenue', 'Total Orders', 'Delivered', 'Cancelled', 'COD Orders', 'UPI Orders', 'Items Sold', 'Top Items'];
+      const headers = ['Date', 'Revenue', 'Total Orders', 'Delivered', 'Cancelled', 'Self Pickup', 'COD Orders', 'UPI Orders', 'Items Sold', 'Top Items'];
       
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A1:I1`,
+        range: `${sheet.sheetName}!A1:J1`,
         valueInputOption: 'RAW',
         resource: { values: [headers] }
       });
@@ -2478,7 +2484,7 @@ const googleSheets = {
             // Header row formatting - Professional purple
             {
               repeatCell: {
-                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 9 },
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 10 },
                 cell: {
                   userEnteredFormat: {
                     backgroundColor: { red: 0.4, green: 0.2, blue: 0.6 },
@@ -2491,15 +2497,16 @@ const googleSheets = {
               }
             },
             // Column widths
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 7, endIndex: 8 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 8, endIndex: 9 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },  // Date
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },  // Revenue
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },  // Total Orders
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },   // Delivered
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },   // Cancelled
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // Self Pickup
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // COD Orders
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 7, endIndex: 8 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // UPI Orders
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 8, endIndex: 9 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // Items Sold
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 9, endIndex: 10 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } }, // Top Items
             // Freeze header row
             {
               updateSheetProperties: {
@@ -2522,7 +2529,7 @@ const googleSheets = {
     }
   },
 
-  // Clear and reset dashboard stats sheet
+  // Clear and reset dashboard stats sheet (keeps default metrics with values reset to 0)
   async clearDashboardStatsSheet() {
     try {
       const auth = getAuthClient();
@@ -2539,7 +2546,7 @@ const googleSheets = {
         range: `${sheet.sheetName}!A:Z`
       });
       
-      // Only add headers - no data rows
+      // Add headers
       const headers = ['Metric', 'Value', 'Last Updated', 'Notes'];
       
       await sheets.spreadsheets.values.update({
@@ -2549,12 +2556,31 @@ const googleSheets = {
         resource: { values: [headers] }
       });
       
+      // Add default metrics with values reset to 0
+      const timestamp = formatDateTimeDDMMYYYY();
+      const todayDate = formatDateDDMMYYYY();
+      const defaultMetrics = [
+        ['Total Orders', '0', timestamp, 'Lifetime total'],
+        ['Total Revenue', '0', timestamp, 'Lifetime total'],
+        ['Total Customers', '0', timestamp, 'Lifetime total'],
+        ['Today Orders', '0', timestamp, 'Resets daily'],
+        ['Today Revenue', '0', timestamp, 'Resets daily'],
+        ['Today Date', todayDate, timestamp, 'Current date']
+      ];
+      
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A2:D7`,
+        valueInputOption: 'RAW',
+        resource: { values: defaultMetrics }
+      });
+      
       // Apply formatting
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId: SPREADSHEET_ID,
         resource: {
           requests: [
-            // Header formatting
+            // Header formatting - dark blue background with white bold text
             {
               repeatCell: {
                 range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 4 },
@@ -2562,6 +2588,36 @@ const googleSheets = {
                   userEnteredFormat: {
                     backgroundColor: { red: 0.1, green: 0.3, blue: 0.5 },
                     textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                    horizontalAlignment: 'CENTER',
+                    verticalAlignment: 'MIDDLE'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+              }
+            },
+            // First row (Total Orders) - bold with light orange background
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 4 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 1, green: 0.92, blue: 0.85 },
+                    textFormat: { bold: true, foregroundColor: { red: 0, green: 0, blue: 0 } },
+                    horizontalAlignment: 'CENTER',
+                    verticalAlignment: 'MIDDLE'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+              }
+            },
+            // All other data rows (rows 3-7) - light gray background with centered text
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 2, endRowIndex: 7, startColumnIndex: 0, endColumnIndex: 4 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.95, green: 0.95, blue: 0.95 },
+                    textFormat: { bold: false, foregroundColor: { red: 0.2, green: 0.2, blue: 0.2 } },
                     horizontalAlignment: 'CENTER',
                     verticalAlignment: 'MIDDLE'
                   }
@@ -2580,8 +2636,8 @@ const googleSheets = {
         }
       });
       
-      console.log('🧹 Dashboard stats sheet cleared (headers only)');
-      return { success: true, message: 'Sheet reset with headers only' };
+      console.log('🧹 Dashboard stats sheet reset with default metrics (values set to 0)');
+      return { success: true, message: 'Sheet reset with default metrics' };
     } catch (error) {
       console.error('❌ Error clearing dashboard_stats sheet:', error.message);
       return { success: false, error: error.message };
