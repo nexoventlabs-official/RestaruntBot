@@ -38,21 +38,26 @@ export function useCart() {
     isInitialized.current = true;
   }, []);
 
-  // Sync cart and wishlist with latest menu data (update images, prices, names)
+  // Sync cart and wishlist with latest menu data (update images, names, units - NOT prices for offer items)
   const syncWithMenuData = useCallback((menuItems) => {
     if (!menuItems || menuItems.length === 0) return;
 
     // Create a map for quick lookup
     const menuMap = new Map(menuItems.map(item => [item._id, item]));
 
-    // Update cart items with latest data
+    // Update cart items with latest data (preserve offer prices)
     setCart(prev => prev.map(cartItem => {
       const latestItem = menuMap.get(cartItem._id);
       if (latestItem) {
+        // If item has offer, keep its price and originalPrice, otherwise sync price from menu
+        const hasOffer = cartItem.offerInfo || cartItem.originalPrice;
         return {
           ...cartItem,
           name: latestItem.name,
-          price: latestItem.price,
+          // Only update price if there's no offer applied
+          price: hasOffer ? cartItem.price : latestItem.price,
+          // Keep originalPrice if it exists
+          originalPrice: hasOffer ? (cartItem.originalPrice || latestItem.price) : undefined,
           image: latestItem.image,
           unit: latestItem.unit || 'piece',
           unitQty: latestItem.quantity || 1
@@ -61,14 +66,19 @@ export function useCart() {
       return cartItem;
     }));
 
-    // Update wishlist items with latest data
+    // Update wishlist items with latest data (preserve offer prices)
     setWishlist(prev => prev.map(wishlistItem => {
       const latestItem = menuMap.get(wishlistItem._id);
       if (latestItem) {
+        // If item has offer, keep its price and originalPrice, otherwise sync price from menu
+        const hasOffer = wishlistItem.offerInfo || wishlistItem.originalPrice;
         return {
           ...wishlistItem,
           name: latestItem.name,
-          price: latestItem.price,
+          // Only update price if there's no offer applied
+          price: hasOffer ? wishlistItem.price : latestItem.price,
+          // Keep originalPrice if it exists
+          originalPrice: hasOffer ? (wishlistItem.originalPrice || latestItem.price) : undefined,
           image: latestItem.image,
           unit: latestItem.unit || 'piece',
           unitQty: latestItem.quantity || 1
@@ -82,9 +92,15 @@ export function useCart() {
     setCart(prev => {
       const existing = prev.find(c => c._id === item._id);
       if (existing) {
-        // If adding with offer info, update offer info too
+        // If adding with offer info, update offer info and price too
         if (offerInfo) {
-          return prev.map(c => c._id === item._id ? { ...c, quantity: c.quantity + qty, offerInfo } : c);
+          return prev.map(c => c._id === item._id ? { 
+            ...c, 
+            quantity: c.quantity + qty, 
+            offerInfo,
+            price: item.price,
+            originalPrice: item.originalPrice 
+          } : c);
         }
         return prev.map(c => c._id === item._id ? { ...c, quantity: c.quantity + qty } : c);
       }
@@ -92,6 +108,7 @@ export function useCart() {
         _id: item._id, 
         name: item.name, 
         price: item.price, 
+        originalPrice: item.originalPrice, // Store original price if exists
         image: item.image, 
         quantity: qty, 
         unit: item.unit || 'piece', 
@@ -126,6 +143,7 @@ export function useCart() {
         _id: item._id, 
         name: item.name, 
         price: item.price, 
+        originalPrice: item.originalPrice, // Store original price if exists
         image: item.image, 
         unit: item.unit || 'piece', 
         unitQty: item.quantity || 1,
@@ -138,6 +156,34 @@ export function useCart() {
     setWishlist(prev => prev.filter(w => w._id !== itemId));
   };
 
+  // Remove all items associated with a specific offer
+  const removeItemsByOfferId = useCallback((offerId) => {
+    setCart(prev => prev.filter(c => c.offerInfo?.offerId !== offerId));
+    setWishlist(prev => prev.filter(w => w.offerInfo?.offerId !== offerId));
+  }, []);
+
+  // Validate cart/wishlist items against active offers
+  // Remove items whose offers have been deleted
+  const validateOfferItems = useCallback((activeOfferIds) => {
+    if (!activeOfferIds || !Array.isArray(activeOfferIds)) return;
+    
+    // Filter out cart items whose offer no longer exists
+    setCart(prev => prev.filter(c => {
+      // Keep items without offer info
+      if (!c.offerInfo || !c.offerInfo.offerId) return true;
+      // Keep items whose offer still exists
+      return activeOfferIds.includes(c.offerInfo.offerId);
+    }));
+    
+    // Filter out wishlist items whose offer no longer exists
+    setWishlist(prev => prev.filter(w => {
+      // Keep items without offer info
+      if (!w.offerInfo || !w.offerInfo.offerId) return true;
+      // Keep items whose offer still exists
+      return activeOfferIds.includes(w.offerInfo.offerId);
+    }));
+  }, []);
+
   const isInWishlist = (itemId) => wishlist.some(w => w._id === itemId);
   const isInCart = (itemId) => cart.some(c => c._id === itemId);
 
@@ -145,6 +191,6 @@ export function useCart() {
     cart, wishlist, cartTotal, cartCount,
     addToCart, removeFromCart, updateQuantity, clearCart,
     addToWishlist, removeFromWishlist, isInWishlist, isInCart,
-    syncWithMenuData
+    syncWithMenuData, removeItemsByOfferId, validateOfferItems
   };
 }

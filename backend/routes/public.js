@@ -220,6 +220,125 @@ router.get('/offers/:offerId/check-eligibility', async (req, res) => {
   }
 });
 
+// Get customer's active offers and calculate discounted prices for items
+// Used by frontend to show targeted offer prices in cart/wishlist
+router.post('/customer/active-offers', async (req, res) => {
+  try {
+    const { customerPhone, itemIds } = req.body;
+    
+    if (!customerPhone) {
+      return res.json({ success: true, activeOffers: [], discountedPrices: {} });
+    }
+    
+    // Normalize phone number
+    const normalizedPhone = customerPhone.replace(/[^0-9]/g, '');
+    
+    // Find customer by phone
+    const Customer = require('../models/Customer');
+    const customer = await Customer.findOne({ 
+      phone: { $regex: normalizedPhone.slice(-10) } 
+    });
+    
+    if (!customer || !customer.activeOffers || customer.activeOffers.length === 0) {
+      return res.json({ success: true, activeOffers: [], discountedPrices: {} });
+    }
+    
+    const now = new Date();
+    
+    // Filter valid (non-expired) active offers
+    const validOffers = customer.activeOffers.filter(offer => {
+      if (offer.validUntil && new Date(offer.validUntil) < now) {
+        return false;
+      }
+      return true;
+    });
+    
+    // Calculate discounted prices for requested items
+    const discountedPrices = {};
+    
+    if (itemIds && itemIds.length > 0) {
+      const MenuItem = require('../models/MenuItem');
+      const menuItems = await MenuItem.find({ _id: { $in: itemIds } });
+      
+      for (const menuItem of menuItems) {
+        // Find applicable offer for this item
+        for (const offer of validOffers) {
+          let isApplicable = false;
+          
+          // Check by appliedItems
+          if (offer.appliedItems && offer.appliedItems.length > 0) {
+            isApplicable = offer.appliedItems.some(itemId => 
+              itemId.toString() === menuItem._id.toString()
+            );
+          }
+          
+          // Check by appliedCategories
+          if (!isApplicable && offer.appliedCategories && offer.appliedCategories.length > 0) {
+            const itemCategories = Array.isArray(menuItem.category) ? menuItem.category : [menuItem.category];
+            isApplicable = offer.appliedCategories.some(cat => itemCategories.includes(cat));
+          }
+          
+          // Check by offerType matching item's offerType
+          if (!isApplicable && offer.offerType && menuItem.offerType) {
+            const itemOfferTypes = Array.isArray(menuItem.offerType) ? menuItem.offerType : [menuItem.offerType];
+            isApplicable = itemOfferTypes.includes(offer.offerType);
+          }
+          
+          if (isApplicable) {
+            const price = menuItem.price;
+            let discountedPrice = price;
+            let discountAmount = 0;
+            
+            // Calculate discount based on type
+            if (offer.discountType === 'percentage' && offer.discountValue > 0) {
+              discountAmount = Math.round((price * offer.discountValue) / 100);
+              discountedPrice = price - discountAmount;
+            } else if (offer.discountType === 'fixed' && offer.discountValue > 0) {
+              discountAmount = Math.min(offer.discountValue, price);
+              discountedPrice = price - discountAmount;
+            } else if (offer.percentage && offer.percentage > 0) {
+              // Fallback to percentage field
+              discountAmount = Math.round((price * offer.percentage) / 100);
+              discountedPrice = price - discountAmount;
+            }
+            
+            if (discountAmount > 0) {
+              discountedPrices[menuItem._id.toString()] = {
+                originalPrice: price,
+                discountedPrice,
+                discountAmount,
+                discountPercent: Math.round((discountAmount / price) * 100),
+                offerTitle: offer.title || offer.offerType,
+                offerId: offer.offerId?.toString()
+              };
+              break; // Use first applicable offer
+            }
+          }
+        }
+      }
+    }
+    
+    res.json({ 
+      success: true, 
+      activeOffers: validOffers.map(o => ({
+        offerId: o.offerId,
+        title: o.title,
+        offerType: o.offerType,
+        discountType: o.discountType,
+        discountValue: o.discountValue,
+        percentage: o.percentage,
+        appliedItems: o.appliedItems,
+        appliedCategories: o.appliedCategories,
+        validUntil: o.validUntil
+      })),
+      discountedPrices 
+    });
+  } catch (error) {
+    console.error('Error fetching customer active offers:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Get all categories (public)
 // Returns all active categories with status information
 router.get('/categories', async (req, res) => {

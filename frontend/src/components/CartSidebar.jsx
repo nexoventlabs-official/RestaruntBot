@@ -157,7 +157,17 @@ export default function CartSidebar({
                           {item.offerInfo.offerType || item.offerInfo.title}
                         </p>
                       )}
-                      <p className="text-orange-600 font-semibold">₹{item.price * item.quantity}</p>
+                      {/* Price display with original price strikethrough for discounted items */}
+                      <div className="flex items-center gap-2">
+                        {item.originalPrice && item.originalPrice > item.price ? (
+                          <>
+                            <p className="text-gray-400 line-through text-sm">₹{item.originalPrice * item.quantity}</p>
+                            <p className="text-orange-600 font-semibold">₹{item.price * item.quantity}</p>
+                          </>
+                        ) : (
+                          <p className="text-orange-600 font-semibold">₹{item.price * item.quantity}</p>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2 mt-2">
                         <button onClick={() => updateQuantity(item._id, item.quantity - 1)} className="p-1 bg-white rounded-full shadow hover:bg-gray-50">
                           <Minus className="w-4 h-4" />
@@ -268,7 +278,17 @@ export default function CartSidebar({
                             {item.offerInfo.offerType || item.offerInfo.title}
                           </p>
                         )}
-                        <p className={available ? 'text-orange-600 font-semibold' : 'text-gray-400'}>₹{item.price}</p>
+                        {/* Price display with original price strikethrough for discounted items */}
+                        <div className="flex items-center gap-2">
+                          {item.originalPrice && item.originalPrice > item.price ? (
+                            <>
+                              <p className={available ? 'text-gray-400 line-through text-sm' : 'text-gray-400 line-through text-sm'}>₹{item.originalPrice}</p>
+                              <p className={available ? 'text-orange-600 font-semibold' : 'text-gray-400'}>₹{item.price}</p>
+                            </>
+                          ) : (
+                            <p className={available ? 'text-orange-600 font-semibold' : 'text-gray-400'}>₹{item.price}</p>
+                          )}
+                        </div>
                         <div className="flex gap-2 mt-2">
                           {available ? (
                             <button onClick={() => { addToCart(item, 1, item.offerInfo); removeFromWishlist(item._id); }} className="px-3 py-1 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600">

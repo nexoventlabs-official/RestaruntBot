@@ -226,14 +226,15 @@ const whatsappBroadcast = {
       }
       message += `Order now and enjoy this amazing deal! 🍽️`;
 
-      // Website URL - for targeted offers, use special claim page with offerId
+      // Website URL - for targeted offers, use special claim page with offerId and phone for discount
       const baseWebsiteUrl = 'https://restarunt-bot.vercel.app';
-      const websiteUrl = (isTargetedOffer && offerId) 
+      // We'll add phone to URL in the loop per-customer for targeted offers
+      const defaultWebsiteUrl = (isTargetedOffer && offerId) 
         ? `${baseWebsiteUrl}/offer/${offerId}` 
         : `${baseWebsiteUrl}/offers`;
 
       console.log(`[WhatsApp Broadcast] Sending offer to ${contacts.length} contacts...`);
-      console.log(`[WhatsApp Broadcast] Offer URL: ${websiteUrl}`);
+      console.log(`[WhatsApp Broadcast] Offer URL: ${defaultWebsiteUrl}`);
       console.log(`[WhatsApp Broadcast] Note: Customers outside 24h window will receive via template`);
       console.log(`[WhatsApp Broadcast] Template configured: ${OFFER_TEMPLATE_NAME || 'None'}`);
 
@@ -241,6 +242,14 @@ const whatsappBroadcast = {
       // For customers within 24h window: sends interactive message directly
       // For customers outside 24h window: uses hello_world template to re-open conversation, then sends offer
       for (const contact of contacts) {
+        // Generate per-customer URL with phone for targeted offers
+        let websiteUrl = defaultWebsiteUrl;
+        if (isTargetedOffer && offerId && contact.phone) {
+          // Encode phone number for URL (remove + and spaces)
+          const encodedPhone = encodeURIComponent(contact.phone.replace(/[^0-9]/g, ''));
+          websiteUrl = `${baseWebsiteUrl}/offer/${offerId}?p=${encodedPhone}`;
+        }
+        
         // Check if customer is outside 24h window based on lastOrderDate
         const hoursSinceLastInteraction = Math.floor((new Date() - new Date(contact.lastOrderDate)) / (1000 * 60 * 60));
         const isOutside24h = hoursSinceLastInteraction >= 24;

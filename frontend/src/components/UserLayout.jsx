@@ -47,7 +47,7 @@ export default function UserLayout() {
     cart, wishlist, cartTotal, cartCount, 
     addToCart, removeFromCart, updateQuantity, clearCart, 
     addToWishlist, removeFromWishlist, isInWishlist, isInCart,
-    syncWithMenuData
+    syncWithMenuData, validateOfferItems
   } = useCart();
 
   // Scroll to top on route change with Lenis
@@ -89,6 +89,24 @@ export default function UserLayout() {
     }
   };
 
+  // Validate cart/wishlist items against current active offers
+  const validateCartOffers = async () => {
+    try {
+      // Check if cart or wishlist has any items with offer info
+      const hasOfferItems = [...cart, ...wishlist].some(item => item.offerInfo?.offerId);
+      if (!hasOfferItems) return;
+      
+      // Fetch all active offers
+      const offersRes = await api.get('/public/offers');
+      const activeOfferIds = offersRes.data.map(offer => offer._id);
+      
+      // Remove items whose offers no longer exist
+      validateOfferItems(activeOfferIds);
+    } catch (err) {
+      console.error('Error validating cart offers:', err);
+    }
+  };
+
   // Setup SSE for real-time updates
   const setupSSE = () => {
     try {
@@ -97,6 +115,8 @@ export default function UserLayout() {
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'menu') loadAvailableItems();
+          // When offers change, validate cart/wishlist items
+          if (data.type === 'offers') validateCartOffers();
         } catch (e) {}
       };
       eventSourceRef.current.onerror = () => {
@@ -113,6 +133,7 @@ export default function UserLayout() {
   // Load available items on mount and setup SSE
   useEffect(() => {
     loadAvailableItems();
+    validateCartOffers(); // Validate cart/wishlist offers on initial load
     setupSSE();
     return () => {
       if (eventSourceRef.current) {

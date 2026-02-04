@@ -29,14 +29,62 @@ export default function OffersPage() {
   const itemsGridRef = useRef(null);
   const [selectedItem, setSelectedItem] = useState(null);
   const [dialogQuantity, setDialogQuantity] = useState(1);
+  const [customerPhone, setCustomerPhone] = useState(null);
+  const [activeOffers, setActiveOffers] = useState([]);
+  const [discountedPrices, setDiscountedPrices] = useState({});
 
   // Get cart functions from UserLayout context
   const context = useOutletContext();
   const { 
     cart, addToCart, updateQuantity, 
     addToWishlist, removeFromWishlist, isInWishlist, isInCart,
-    setSidebarOpen, setActiveTab
+    setSidebarOpen, setActiveTab,
+    setCustomerPhoneGlobal // To share phone with cart
   } = context || {};
+
+  // Get customer phone from URL parameter and store it
+  useEffect(() => {
+    const phoneFromUrl = searchParams.get('p');
+    if (phoneFromUrl) {
+      setCustomerPhone(phoneFromUrl);
+      // Store in localStorage for persistence across pages
+      localStorage.setItem('customer_phone', phoneFromUrl);
+      // Share with parent layout if available
+      if (setCustomerPhoneGlobal) {
+        setCustomerPhoneGlobal(phoneFromUrl);
+      }
+    } else {
+      // Try to get from localStorage
+      const storedPhone = localStorage.getItem('customer_phone');
+      if (storedPhone) {
+        setCustomerPhone(storedPhone);
+      }
+    }
+  }, [searchParams, setCustomerPhoneGlobal]);
+
+  // Fetch customer's active offers when phone is available
+  useEffect(() => {
+    const fetchActiveOffers = async () => {
+      if (!customerPhone || items.length === 0) return;
+      
+      try {
+        const itemIds = items.map(item => item._id);
+        const response = await axios.post(`${API_URL}/customer/active-offers`, {
+          customerPhone,
+          itemIds
+        });
+        
+        if (response.data.success) {
+          setActiveOffers(response.data.activeOffers || []);
+          setDiscountedPrices(response.data.discountedPrices || {});
+        }
+      } catch (error) {
+        console.error('Error fetching active offers:', error);
+      }
+    };
+    
+    fetchActiveOffers();
+  }, [customerPhone, items]);
 
   useEffect(() => {
     loadData();
@@ -285,8 +333,66 @@ export default function OffersPage() {
 
   const handleAddToCart = (item) => {
     if (!addToCart) return;
-    // If viewing a specific targeted offer, include offer info
-    if (specificOffer && specificOffer.isTargeted) {
+    
+    // Check if item has a customer-specific discounted price from activeOffers
+    const targetedDiscount = discountedPrices[item._id];
+    const regularOfferPrice = getOfferPriceFromOffer(item);
+    
+    // Determine the best price to use
+    let bestPrice = item.price;
+    let useTargetedOffer = false;
+    let useRegularOffer = false;
+    
+    if (targetedDiscount && regularOfferPrice) {
+      // Both offers exist, use the better one
+      if (targetedDiscount.discountedPrice <= regularOfferPrice) {
+        bestPrice = targetedDiscount.discountedPrice;
+        useTargetedOffer = true;
+      } else {
+        bestPrice = regularOfferPrice;
+        useRegularOffer = true;
+      }
+    } else if (targetedDiscount) {
+      bestPrice = targetedDiscount.discountedPrice;
+      useTargetedOffer = true;
+    } else if (regularOfferPrice && regularOfferPrice < item.price) {
+      bestPrice = regularOfferPrice;
+      useRegularOffer = true;
+    }
+    
+    if (useTargetedOffer) {
+      // Create item with discounted price and offer info
+      const discountedItem = {
+        ...item,
+        originalPrice: targetedDiscount.originalPrice,
+        price: targetedDiscount.discountedPrice
+      };
+      const offerInfo = {
+        offerId: targetedDiscount.offerId,
+        offerType: targetedDiscount.offerTitle,
+        title: targetedDiscount.offerTitle,
+        discountPercent: targetedDiscount.discountPercent,
+        isTargetedOffer: true
+      };
+      addToCart(discountedItem, 1, offerInfo);
+    } else if (useRegularOffer && specificOffer) {
+      // Use regular offer price
+      const discountedItem = {
+        ...item,
+        originalPrice: item.price,
+        price: regularOfferPrice
+      };
+      const offerInfo = {
+        offerId: specificOffer._id,
+        offerType: specificOffer.offerType,
+        title: specificOffer.title,
+        discountType: specificOffer.discountType,
+        discountValue: specificOffer.discountValue,
+        percentage: specificOffer.percentage
+      };
+      addToCart(discountedItem, 1, offerInfo);
+    } else if (specificOffer && specificOffer.isTargeted) {
+      // Fallback to specific offer if viewing targeted offer page
       const offerInfo = {
         offerId: specificOffer._id,
         offerType: specificOffer.offerType,
@@ -306,8 +412,60 @@ export default function OffersPage() {
     if (isInWishlist(item._id)) {
       removeFromWishlist(item._id);
     } else {
-      // If viewing a specific targeted offer, include offer info
-      if (specificOffer && specificOffer.isTargeted) {
+      // Check if item has a customer-specific discounted price from activeOffers
+      const targetedDiscount = discountedPrices[item._id];
+      const regularOfferPrice = getOfferPriceFromOffer(item);
+      
+      // Determine the best price to use
+      let useTargetedOffer = false;
+      let useRegularOffer = false;
+      
+      if (targetedDiscount && regularOfferPrice) {
+        // Both offers exist, use the better one
+        if (targetedDiscount.discountedPrice <= regularOfferPrice) {
+          useTargetedOffer = true;
+        } else {
+          useRegularOffer = true;
+        }
+      } else if (targetedDiscount) {
+        useTargetedOffer = true;
+      } else if (regularOfferPrice && regularOfferPrice < item.price) {
+        useRegularOffer = true;
+      }
+      
+      if (useTargetedOffer) {
+        // Create item with discounted price and offer info
+        const discountedItem = {
+          ...item,
+          originalPrice: targetedDiscount.originalPrice,
+          price: targetedDiscount.discountedPrice
+        };
+        const offerInfo = {
+          offerId: targetedDiscount.offerId,
+          offerType: targetedDiscount.offerTitle,
+          title: targetedDiscount.offerTitle,
+          discountPercent: targetedDiscount.discountPercent,
+          isTargetedOffer: true
+        };
+        addToWishlist(discountedItem, offerInfo);
+      } else if (useRegularOffer && specificOffer) {
+        // Use regular offer price
+        const discountedItem = {
+          ...item,
+          originalPrice: item.price,
+          price: regularOfferPrice
+        };
+        const offerInfo = {
+          offerId: specificOffer._id,
+          offerType: specificOffer.offerType,
+          title: specificOffer.title,
+          discountType: specificOffer.discountType,
+          discountValue: specificOffer.discountValue,
+          percentage: specificOffer.percentage
+        };
+        addToWishlist(discountedItem, offerInfo);
+      } else if (specificOffer && specificOffer.isTargeted) {
+        // Fallback to specific offer if viewing targeted offer page
         const offerInfo = {
           offerId: specificOffer._id,
           offerType: specificOffer.offerType,
@@ -711,7 +869,28 @@ export default function OffersPage() {
               const inCart = isInCart ? isInCart(item._id) : false;
               const cartItem = cart?.find(c => c._id === item._id);
               const itemOfferPrice = getOfferPriceFromOffer(item);
-              const discount = getDisplayDiscount(item);
+              
+              // Check for targeted offer discount from customer's activeOffers
+              const targetedDiscount = discountedPrices[item._id];
+              const targetedOfferPrice = targetedDiscount ? targetedDiscount.discountedPrice : null;
+              
+              // Use the best discount (lowest price) between regular offer and targeted offer
+              let displayPrice = item.price;
+              let showDiscount = false;
+              let discountPercent = null;
+              
+              if (targetedOfferPrice && (!itemOfferPrice || targetedOfferPrice < itemOfferPrice)) {
+                // Targeted offer has better price
+                displayPrice = targetedOfferPrice;
+                showDiscount = true;
+                discountPercent = targetedDiscount.discountPercent;
+              } else if (itemOfferPrice && itemOfferPrice < item.price) {
+                // Regular offer price is better
+                displayPrice = itemOfferPrice;
+                showDiscount = true;
+                discountPercent = getDisplayDiscount(item);
+              }
+              
               const rating = item.avgRating || 0;
               const totalRatings = item.totalRatings || 0;
 
@@ -795,13 +974,13 @@ export default function OffersPage() {
                     {/* Price Section with more spacing */}
                     <div className="flex items-center gap-3 mb-4 flex-wrap">
                       <span className="text-xl sm:text-2xl font-bold text-orange-600">
-                        ₹{itemOfferPrice && itemOfferPrice < item.price ? itemOfferPrice : item.price}
+                        ₹{displayPrice}
                       </span>
-                      {itemOfferPrice && itemOfferPrice < item.price && (
+                      {showDiscount && (
                         <>
                           <span className="text-sm text-gray-400 line-through">₹{item.price}</span>
                           <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2.5 py-1 rounded-full text-xs font-bold shadow-md">
-                            {discount}% OFF
+                            {discountPercent}% OFF
                           </span>
                         </>
                       )}
