@@ -120,20 +120,33 @@ const whatsappBroadcast = {
     }
   },
 
-  // Send offer image to all WhatsApp contacts (including old customers)
+  // Send offer image to WhatsApp contacts (supports targeting)
   // Uses interactive messages for users within 24-hour window
   // Falls back to template messages for users outside 24-hour window (even if they sent "hi" months ago)
-  // This ensures ALL customers who ever interacted get the offer, regardless of when they last messaged
-  async sendOfferToAll(offerImageUrl, offerTitle, offerDescription, offerType) {
+  // targetedCustomers: array of phone numbers to send to (null = send to all)
+  // offerId: optional offer ID to include claim button for eligibility check
+  async sendOfferToAll(offerImageUrl, offerTitle, offerDescription, offerType, targetedCustomers = null, offerId = null) {
     try {
       // Ensure all customers are synced before sending (includes old customers who sent "hi" or any message)
       console.log('[WhatsApp Broadcast] Syncing ALL customers (including old customers) before sending...');
       await this.syncExistingCustomers();
       
-      const contacts = await this.getAllContacts(true); // Include old customers
+      let contacts = await this.getAllContacts(true); // Include old customers
+      
+      // Filter contacts if targeting specific customers
+      const isTargetedOffer = targetedCustomers && Array.isArray(targetedCustomers) && targetedCustomers.length > 0;
+      if (isTargetedOffer) {
+        console.log(`[WhatsApp Broadcast] Filtering to ${targetedCustomers.length} targeted customers...`);
+        const targetSet = new Set(targetedCustomers.map(p => p.replace(/\D/g, ''))); // Normalize phone numbers
+        contacts = contacts.filter(contact => {
+          const normalizedPhone = contact.phone.replace(/\D/g, '');
+          return targetSet.has(normalizedPhone);
+        });
+        console.log(`[WhatsApp Broadcast] Found ${contacts.length} matching contacts for targeting`);
+      }
       
       if (contacts.length === 0) {
-        return { success: false, message: 'No contacts found', sent: 0, failed: 0 };
+        return { success: false, message: 'No contacts found', sent: 0, failed: 0, total: 0 };
       }
 
       let sent = 0;
@@ -153,6 +166,11 @@ const whatsappBroadcast = {
       }
       if (offerDescription) {
         message += `${offerDescription}\n\n`;
+      }
+      
+      // Add exclusive tag for targeted offers
+      if (isTargetedOffer) {
+        message += `✨ *Exclusive offer for you!* ✨\n\n`;
       }
       message += `Order now and enjoy this amazing deal! 🍽️`;
 
@@ -223,23 +241,50 @@ const whatsappBroadcast = {
             
           } else {
             // Customer is within 24h window, try sending interactive message directly
-            if (offerImageUrl) {
-              await whatsapp.sendImageWithCtaUrlOriginal(
-                contact.phone, 
-                offerImageUrl, 
-                message, 
-                'View Offer', 
-                websiteUrl,
-                'Tap to order now!'
-              );
+            // For targeted offers, use reply buttons for eligibility check
+            // For non-targeted offers, use CTA URL to website
+            if (isTargetedOffer && offerId) {
+              // Targeted offer - use buttons so chatbot can verify eligibility when shared
+              if (offerImageUrl) {
+                await whatsapp.sendImageWithButtons(
+                  contact.phone, 
+                  offerImageUrl, 
+                  message, 
+                  [
+                    { id: `claim_offer_${offerId}`, text: '🎁 Claim Offer' },
+                    { id: 'view_menu', text: '📋 View Menu' }
+                  ]
+                );
+              } else {
+                await whatsapp.sendButtons(
+                  contact.phone, 
+                  message, 
+                  [
+                    { id: `claim_offer_${offerId}`, text: '🎁 Claim Offer' },
+                    { id: 'view_menu', text: '📋 View Menu' }
+                  ]
+                );
+              }
             } else {
-              await whatsapp.sendCtaUrl(
-                contact.phone, 
-                message, 
-                'View Offer', 
-                websiteUrl,
-                'Tap to order now!'
-              );
+              // Non-targeted offer - use CTA URL to website
+              if (offerImageUrl) {
+                await whatsapp.sendImageWithCtaUrlOriginal(
+                  contact.phone, 
+                  offerImageUrl, 
+                  message, 
+                  'View Offer', 
+                  websiteUrl,
+                  'Tap to order now!'
+                );
+              } else {
+                await whatsapp.sendCtaUrl(
+                  contact.phone, 
+                  message, 
+                  'View Offer', 
+                  websiteUrl,
+                  'Tap to order now!'
+                );
+              }
             }
             sent++;
             sentViaInteractive++;

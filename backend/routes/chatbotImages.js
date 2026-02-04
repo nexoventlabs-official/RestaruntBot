@@ -236,6 +236,12 @@ const defaultImages = [
     name: 'Delivery Order Cancelled by Restaurant',
     description: 'Shown when admin cancels a COD delivery order from the app',
     imageUrl: ''
+  },
+  {
+    key: 'offer_not_eligible',
+    name: 'Offer Not Eligible',
+    description: 'Shown when customer tries to claim a targeted offer they are not eligible for (shared link)',
+    imageUrl: ''
   }
 ];
 

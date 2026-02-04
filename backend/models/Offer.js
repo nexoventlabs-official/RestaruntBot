@@ -22,13 +22,15 @@ const offerSchema = new mongoose.Schema({
   buttonText: { type: String, default: 'Order Now' },
   buttonLink: { type: String, default: '/menu' },
   
-  // Targeting options for top customers
+  // Targeting options for customers
   targetType: { 
     type: String, 
-    enum: ['all', 'top_percentage'], 
+    enum: ['all', 'top_percentage', 'min_spent', 'min_orders'], 
     default: 'all' 
-  }, // 'all' = all customers, 'top_percentage' = top X% customers by spending
-  targetPercentage: { type: Number, default: 100 }, // e.g., 10 = top 10% customers
+  }, // 'all' = all customers, 'top_percentage' = top X%, 'min_spent' = spent > X, 'min_orders' = ordered > X times
+  targetPercentage: { type: Number, default: 100 }, // For top_percentage: e.g., 10 = top 10% customers
+  targetMinSpent: { type: Number, default: 0 }, // For min_spent: minimum amount spent (e.g., 500 = customers who spent ₹500+)
+  targetMinOrders: { type: Number, default: 0 }, // For min_orders: minimum order count (e.g., 5 = customers with 5+ orders)
   targetedCustomers: [{ type: String }], // Phone numbers of targeted customers (populated when offer is created)
   
   createdAt: { type: Date, default: Date.now },

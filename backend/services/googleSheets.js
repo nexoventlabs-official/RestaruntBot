@@ -1446,6 +1446,56 @@ const googleSheets = {
     }
   },
 
+  // Get customers who spent more than a minimum amount (for targeted offers)
+  async getCustomersByMinSpent(minAmount) {
+    try {
+      const { customers, error } = await this.getAllCustomers();
+      
+      if (error || customers.length === 0) {
+        return { customers: [], error: error || 'No customers found' };
+      }
+      
+      // Filter customers who have spent more than the minimum amount
+      const qualifiedCustomers = customers.filter(c => c.totalSpent >= minAmount);
+      
+      console.log(`📊 Customers with ₹${minAmount}+ spent: ${qualifiedCustomers.length} out of ${customers.length}`);
+      return { 
+        customers: qualifiedCustomers, 
+        totalCustomers: customers.length,
+        selectedCount: qualifiedCustomers.length,
+        error: null 
+      };
+    } catch (error) {
+      console.error('❌ Error getting customers by min spent:', error.message);
+      return { customers: [], error: error.message };
+    }
+  },
+
+  // Get customers who ordered more than X times (for targeted offers)
+  async getCustomersByMinOrders(minOrders) {
+    try {
+      const { customers, error } = await this.getAllCustomers();
+      
+      if (error || customers.length === 0) {
+        return { customers: [], error: error || 'No customers found' };
+      }
+      
+      // Filter customers who have ordered more than the minimum times
+      const qualifiedCustomers = customers.filter(c => c.ordersCount >= minOrders);
+      
+      console.log(`📊 Customers with ${minOrders}+ orders: ${qualifiedCustomers.length} out of ${customers.length}`);
+      return { 
+        customers: qualifiedCustomers, 
+        totalCustomers: customers.length,
+        selectedCount: qualifiedCustomers.length,
+        error: null 
+      };
+    } catch (error) {
+      console.error('❌ Error getting customers by min orders:', error.message);
+      return { customers: [], error: error.message };
+    }
+  },
+
   // Clean up empty date headers from all sheets
   async cleanupEmptyDateHeaders() {
     try {

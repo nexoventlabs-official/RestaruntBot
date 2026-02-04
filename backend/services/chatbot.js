@@ -3811,6 +3811,12 @@ const chatbot = {
         await this.sendWelcome(phone);
         state.currentStep = 'main_menu';
       }
+      // ========== OFFER CLAIM CHECK (handle claim_offer_OFFERID button) ==========
+      else if (selection?.startsWith('claim_offer_')) {
+        const offerId = selection.replace('claim_offer_', '');
+        await this.handleOfferClaim(phone, offerId, customer);
+        state.currentStep = 'main_menu';
+      }
       else if (selection === 'home' || selection === 'back' || msg === 'home' || msg === 'back') {
         await this.sendWelcome(phone);
         state.currentStep = 'main_menu';
@@ -4740,6 +4746,109 @@ const chatbot = {
       }
     } catch (saveErr) {
       console.error('Error saving conversation state:', saveErr.message);
+    }
+  },
+
+  // ============ OFFER ELIGIBILITY CHECK ============
+  async handleOfferClaim(phone, offerId, customer) {
+    try {
+      const Offer = require('../models/Offer');
+      const offer = await Offer.findById(offerId);
+      
+      if (!offer) {
+        await whatsapp.sendButtons(phone, '❌ This offer is no longer available.', [
+          { id: 'view_menu', text: '📋 Browse Menu' },
+          { id: 'home', text: '🏠 Main Menu' }
+        ]);
+        return;
+      }
+      
+      // Check if offer is active and valid
+      const now = new Date();
+      if (!offer.isActive) {
+        await whatsapp.sendButtons(phone, '❌ This offer is no longer active.', [
+          { id: 'view_menu', text: '📋 Browse Menu' },
+          { id: 'home', text: '🏠 Main Menu' }
+        ]);
+        return;
+      }
+      
+      if (offer.validUntil && new Date(offer.validUntil) < now) {
+        await whatsapp.sendButtons(phone, '⏰ This offer has expired.', [
+          { id: 'view_menu', text: '📋 Browse Menu' },
+          { id: 'home', text: '🏠 Main Menu' }
+        ]);
+        return;
+      }
+      
+      // Check targeting - applies to all targeted offer types
+      const isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(offer.targetType);
+      if (isTargeted && offer.targetedCustomers && offer.targetedCustomers.length > 0) {
+        // Normalize customer phone for comparison
+        const normalizedPhone = phone.replace(/[^0-9]/g, '');
+        const isEligible = offer.targetedCustomers.some(targetPhone => {
+          const normalizedTarget = targetPhone.replace(/[^0-9]/g, '');
+          return normalizedTarget.includes(normalizedPhone) || normalizedPhone.includes(normalizedTarget);
+        });
+        
+        if (!isEligible) {
+          // Customer is NOT eligible for this targeted offer
+          const notEligibleImage = await chatbotImagesService.getImageUrl('offer_not_eligible');
+          
+          // Build contextual message based on targeting type
+          let eligibilityHint = 'This is a special offer for selected customers only.';
+          if (offer.targetType === 'min_spent') {
+            eligibilityHint = `This offer is for customers who have spent ₹${offer.targetMinSpent || 0}+ with us.`;
+          } else if (offer.targetType === 'min_orders') {
+            eligibilityHint = `This offer is for customers who have placed ${offer.targetMinOrders || 0}+ orders with us.`;
+          } else if (offer.targetType === 'top_percentage') {
+            eligibilityHint = 'This is an exclusive offer for our top customers.';
+          }
+          
+          const message = `❌ *Offer Not Available*\n\n` +
+            `Sorry, your number is not eligible for this exclusive offer.\n\n` +
+            `${eligibilityHint}\n\n` +
+            `Keep ordering to unlock more exclusive offers! 🍽️`;
+          
+          if (notEligibleImage) {
+            await whatsapp.sendImageWithButtons(phone, notEligibleImage, message, [
+              { id: 'view_menu', text: '📋 Browse Menu' },
+              { id: 'home', text: '🏠 Main Menu' }
+            ]);
+          } else {
+            await whatsapp.sendButtons(phone, message, [
+              { id: 'view_menu', text: '📋 Browse Menu' },
+              { id: 'home', text: '🏠 Main Menu' }
+            ]);
+          }
+          return;
+        }
+      }
+      
+      // Customer IS eligible - show offer and menu
+      const successMessage = `🎉 *${offer.title || 'Special Offer'}*\n\n` +
+        (offer.offerType ? `🏷️ *${offer.offerType}*\n\n` : '') +
+        (offer.description ? `${offer.description}\n\n` : '') +
+        `✅ You're eligible for this offer!\n\n` +
+        `Browse our menu to claim your offer. 🍽️`;
+      
+      if (offer.image) {
+        await whatsapp.sendImageWithButtons(phone, offer.image, successMessage, [
+          { id: 'view_menu', text: '📋 Browse Menu' },
+          { id: 'view_cart', text: '🛒 View Cart' }
+        ]);
+      } else {
+        await whatsapp.sendButtons(phone, successMessage, [
+          { id: 'view_menu', text: '📋 Browse Menu' },
+          { id: 'view_cart', text: '🛒 View Cart' }
+        ]);
+      }
+    } catch (error) {
+      console.error('Error handling offer claim:', error);
+      await whatsapp.sendButtons(phone, '❌ Something went wrong. Please try again.', [
+        { id: 'view_menu', text: '📋 Browse Menu' },
+        { id: 'home', text: '🏠 Main Menu' }
+      ]);
     }
   },
 

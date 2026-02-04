@@ -1,17 +1,28 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, FlatList,
-  RefreshControl, TouchableOpacity, Image, Alert, ActivityIndicator, Animated, Platform, StatusBar, ImageBackground, Switch
+  RefreshControl, TouchableOpacity, Image, Alert, ActivityIndicator, Animated, Platform, StatusBar, ImageBackground, Switch, ToastAndroid
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../config/api';
 import { colors, spacing, radius, typography, shadows } from '../../theme';
 
+// Toast helper for cross-platform
+const showToast = (message) => {
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(message, ToastAndroid.SHORT);
+  } else {
+    // iOS doesn't have native toast, use Alert for now
+    Alert.alert('✓', message);
+  }
+};
+
 export default function AdminOffersScreen({ navigation }) {
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sendingOffer, setSendingOffer] = useState(null); // Track which offer is being sent
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const shineAnim = useRef(new Animated.Value(-1)).current;
 
@@ -62,72 +73,50 @@ export default function AdminOffersScreen({ navigation }) {
   };
 
   const sendToWhatsApp = async (offer) => {
+    // Build confirmation message based on targeting
+    const isTargeted = offer.targetType === 'top_percentage' && offer.targetedCustomers && offer.targetedCustomers.length > 0;
+    const confirmMessage = isTargeted 
+      ? `Send this offer to ${offer.targetedCustomers.length} targeted customers (Top ${offer.targetPercentage || 10}% spenders)?`
+      : 'Send this offer to ALL customers (including old customers) who have phone numbers?';
+    
     Alert.alert(
       'Send to WhatsApp',
-      'Send this offer to ALL customers (including old customers) who have phone numbers?',
+      confirmMessage,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Send',
           onPress: async () => {
             try {
-              setLoading(true);
+              // Show instant success toast and start background send
+              setSendingOffer(offer._id);
+              showToast('📤 Sending offer in background...');
               
-              const response = await api.post('/whatsapp-broadcast/send-offer', {
+              // Send in background - don't wait for response
+              api.post('/whatsapp-broadcast/send-offer', {
                 offerImageUrl: offer.image,
                 offerTitle: offer.title,
                 offerDescription: offer.description,
-                offerType: offer.offerType
+                offerType: offer.offerType,
+                offerId: offer._id // Pass offerId for targeting
+              }).then(response => {
+                setSendingOffer(null);
+                if (response.data.success || response.data.sent > 0) {
+                  const { sent, failed, targetType } = response.data;
+                  const targetLabel = targetType === 'top_percentage' ? '🎯 Targeted: ' : '';
+                  showToast(`${targetLabel}✅ Sent to ${sent} customers${failed > 0 ? `, ${failed} failed` : ''}`);
+                } else {
+                  Alert.alert('Error', response.data.message || response.data.error || 'Failed to send offer');
+                }
+              }).catch(error => {
+                setSendingOffer(null);
+                const errorMsg = error.response?.data?.error || error.message || 'Failed to send offer to WhatsApp';
+                Alert.alert('Error', errorMsg);
+                console.error('WhatsApp broadcast error:', error);
               });
-
-              setLoading(false);
-
-              if (response.data.success || response.data.sent > 0) {
-                const { sent, sentViaInteractive, sentViaTemplate, failed, total, message } = response.data;
-                
-                let alertMessage = `Total customers: ${total}\n\n`;
-                alertMessage += `✅ Successfully sent: ${sent}\n`;
-                
-                if (sentViaInteractive > 0) {
-                  alertMessage += `  • ${sentViaInteractive} via interactive message\n`;
-                }
-                if (sentViaTemplate > 0) {
-                  alertMessage += `  • ${sentViaTemplate} via template\n`;
-                }
-                
-                if (failed > 0) {
-                  alertMessage += `\n❌ Failed: ${failed}\n`;
-                  
-                  // Show failure reasons if available
-                  if (response.data.failedContacts && response.data.failedContacts.length > 0) {
-                    const reasons = {};
-                    response.data.failedContacts.forEach(fc => {
-                      const reason = fc.reason || 'unknown';
-                      reasons[reason] = (reasons[reason] || 0) + 1;
-                    });
-                    
-                    Object.entries(reasons).forEach(([reason, count]) => {
-                      if (reason === '24h_no_template') {
-                        alertMessage += `  • ${count} outside 24h window\n`;
-                      } else if (reason === 'test_recipient_restriction') {
-                        alertMessage += `  • ${count} test restrictions\n`;
-                      } else {
-                        alertMessage += `  • ${count} ${reason}\n`;
-                      }
-                    });
-                  }
-                }
-                
-                if (!response.data.templateConfigured && failed > 0) {
-                  alertMessage += `\n💡 Tip: Configure WhatsApp template to reach more customers`;
-                }
-                
-                Alert.alert('Broadcast Complete', alertMessage);
-              } else {
-                Alert.alert('Error', response.data.message || response.data.error || 'Failed to send offer');
-              }
+              
             } catch (error) {
-              setLoading(false);
+              setSendingOffer(null);
               const errorMsg = error.response?.data?.error || error.message || 'Failed to send offer to WhatsApp';
               Alert.alert('Error', errorMsg);
               console.error('WhatsApp broadcast error:', error);
@@ -179,11 +168,18 @@ export default function AdminOffersScreen({ navigation }) {
         <View style={styles.offerActions}>
           <View style={styles.actionButtons}>
             <TouchableOpacity 
-              style={styles.whatsappButton} 
+              style={[styles.whatsappButton, sendingOffer === item._id && styles.whatsappButtonSending]} 
               onPress={(e) => { e.stopPropagation(); sendToWhatsApp(item); }}
+              disabled={sendingOffer === item._id}
             >
-              <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
-              <Text style={styles.actionButtonText}>Send</Text>
+              {sendingOffer === item._id ? (
+                <ActivityIndicator size={16} color="#25D366" />
+              ) : (
+                <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+              )}
+              <Text style={styles.actionButtonText}>
+                {sendingOffer === item._id ? 'Sending...' : (item.targetType === 'top_percentage' ? '🎯 Send' : 'Send')}
+              </Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -349,6 +345,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10, 
     backgroundColor: '#D1FAE5', 
+  },
+  whatsappButtonSending: {
+    opacity: 0.7,
   },
   deleteButton: { 
     flexDirection: 'row',

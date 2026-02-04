@@ -33,10 +33,10 @@ router.post('/sync', authMiddleware, async (req, res) => {
   }
 });
 
-// Send offer to all WhatsApp contacts
+// Send offer to WhatsApp contacts (supports targeting)
 router.post('/send-offer', authMiddleware, async (req, res) => {
   try {
-    const { offerImageUrl, offerTitle, offerDescription, offerType } = req.body;
+    const { offerImageUrl, offerTitle, offerDescription, offerType, offerId } = req.body;
     
     if (!offerImageUrl && !offerTitle && !offerDescription) {
       return res.status(400).json({ 
@@ -48,22 +48,50 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
     console.log(`[WhatsApp Broadcast] Starting offer broadcast...`);
     console.log(`[WhatsApp Broadcast] Offer: ${offerTitle || 'No title'}`);
     console.log(`[WhatsApp Broadcast] Type: ${offerType || 'No type'}`);
+    console.log(`[WhatsApp Broadcast] Offer ID: ${offerId || 'None (all customers)'}`);
 
-    // Send offers and wait for actual results
-    const result = await whatsappBroadcast.sendOfferToAll(offerImageUrl, offerTitle, offerDescription, offerType);
+    // Get targeting info if offerId is provided
+    let targetedCustomers = null;
+    let targetType = 'all';
+    
+    if (offerId) {
+      const Offer = require('../models/Offer');
+      const offer = await Offer.findById(offerId);
+      if (offer) {
+        targetType = offer.targetType || 'all';
+        if (targetType === 'top_percentage' && offer.targetedCustomers && offer.targetedCustomers.length > 0) {
+          targetedCustomers = offer.targetedCustomers;
+          console.log(`[WhatsApp Broadcast] Targeting ${targetedCustomers.length} specific customers`);
+        }
+      }
+    }
+
+    // Send offers (with optional targeting)
+    const result = await whatsappBroadcast.sendOfferToAll(
+      offerImageUrl, 
+      offerTitle, 
+      offerDescription, 
+      offerType,
+      targetedCustomers,
+      offerId // Pass offerId for claim button
+    );
     
     console.log('[WhatsApp Broadcast] Offer sending completed:', {
       total: result.total,
       sent: result.sent,
       sentViaInteractive: result.sentViaInteractive,
       sentViaTemplate: result.sentViaTemplate,
-      failed: result.failed
+      failed: result.failed,
+      targetType
     });
     
     // Build detailed message for admin
     let message = '';
+    if (targetedCustomers && targetedCustomers.length > 0) {
+      message = `🎯 Targeted offer sent!\n`;
+    }
     if (result.sent > 0) {
-      message = `Successfully sent to ${result.sent} customers!\n`;
+      message += `Successfully sent to ${result.sent} customers!\n`;
       if (result.sentViaInteractive > 0) {
         message += `• ${result.sentViaInteractive} via interactive message\n`;
       }
@@ -109,7 +137,8 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
       failed: result.failed,
       failedContacts: result.failedContacts || [],
       successContacts: result.successContacts || [],
-      templateConfigured: result.templateConfigured
+      templateConfigured: result.templateConfigured,
+      targetType
     });
 
   } catch (error) {

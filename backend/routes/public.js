@@ -113,6 +113,93 @@ router.get('/popup-offers', async (req, res) => {
   }
 });
 
+// Check if customer is eligible for a specific offer
+// Used by chatbot to validate targeted offers
+router.get('/offers/:offerId/check-eligibility', async (req, res) => {
+  try {
+    const { offerId } = req.params;
+    const { customerPhone } = req.query;
+    
+    if (!customerPhone) {
+      return res.status(400).json({ 
+        success: false, 
+        eligible: false, 
+        error: 'Customer phone is required' 
+      });
+    }
+    
+    const offer = await Offer.findById(offerId);
+    
+    if (!offer) {
+      return res.status(404).json({ 
+        success: false, 
+        eligible: false, 
+        error: 'Offer not found' 
+      });
+    }
+    
+    // Check if offer is still active
+    const now = new Date();
+    if (!offer.isActive) {
+      return res.json({ 
+        success: true, 
+        eligible: false, 
+        reason: 'offer_inactive',
+        message: 'This offer is no longer active' 
+      });
+    }
+    
+    if (offer.validUntil && new Date(offer.validUntil) < now) {
+      return res.json({ 
+        success: true, 
+        eligible: false, 
+        reason: 'offer_expired',
+        message: 'This offer has expired' 
+      });
+    }
+    
+    // If offer targets all customers, they are eligible
+    if (!offer.targetType || offer.targetType === 'all') {
+      return res.json({ 
+        success: true, 
+        eligible: true, 
+        offer: {
+          title: offer.title,
+          description: offer.description,
+          offerType: offer.offerType
+        }
+      });
+    }
+    
+    // If targeting top percentage, check if customer is in targeted list
+    if (offer.targetType === 'top_percentage') {
+      const normalizedPhone = customerPhone.replace(/[^0-9]/g, '');
+      const isEligible = offer.targetedCustomers && offer.targetedCustomers.some(phone => {
+        const normalizedTargetPhone = phone.replace(/[^0-9]/g, '');
+        return normalizedTargetPhone.includes(normalizedPhone) || normalizedPhone.includes(normalizedTargetPhone);
+      });
+      
+      return res.json({ 
+        success: true, 
+        eligible: isEligible, 
+        reason: isEligible ? 'targeted_customer' : 'not_targeted',
+        message: isEligible 
+          ? 'You are eligible for this exclusive offer!' 
+          : 'Sorry, your number is not eligible for this exclusive offer',
+        offer: isEligible ? {
+          title: offer.title,
+          description: offer.description,
+          offerType: offer.offerType
+        } : null
+      });
+    }
+    
+    res.json({ success: true, eligible: true });
+  } catch (error) {
+    res.status(500).json({ success: false, eligible: false, error: error.message });
+  }
+});
+
 // Get all categories (public)
 // Returns all active categories with status information
 router.get('/categories', async (req, res) => {

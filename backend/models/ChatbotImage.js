@@ -41,7 +41,8 @@ const chatbotImageSchema = new mongoose.Schema({
       'pickup_cancel_restricted',
       'pickup_order_summary',
       'pickup_cancelled_by_restaurant',
-      'order_cancelled_by_restaurant'
+      'order_cancelled_by_restaurant',
+      'offer_not_eligible'
     ]
   },
   name: {

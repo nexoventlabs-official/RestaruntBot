@@ -72,6 +72,60 @@ router.get('/customers/top/:percentage', auth, async (req, res) => {
   }
 });
 
+// Get customers by minimum spent amount
+router.get('/customers/min-spent/:amount', auth, async (req, res) => {
+  try {
+    const minAmount = parseFloat(req.params.amount);
+    
+    if (isNaN(minAmount) || minAmount <= 0) {
+      return res.status(400).json({ error: 'Minimum amount must be greater than 0' });
+    }
+    
+    const result = await googleSheets.getCustomersByMinSpent(minAmount);
+    
+    if (result.error) {
+      return res.status(500).json({ error: result.error });
+    }
+    
+    res.json({
+      success: true,
+      customers: result.customers,
+      totalCustomers: result.totalCustomers,
+      selectedCount: result.selectedCount,
+      minAmount
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get customers by minimum order count
+router.get('/customers/min-orders/:count', auth, async (req, res) => {
+  try {
+    const minOrders = parseInt(req.params.count);
+    
+    if (isNaN(minOrders) || minOrders <= 0) {
+      return res.status(400).json({ error: 'Minimum orders must be greater than 0' });
+    }
+    
+    const result = await googleSheets.getCustomersByMinOrders(minOrders);
+    
+    if (result.error) {
+      return res.status(500).json({ error: result.error });
+    }
+    
+    res.json({
+      success: true,
+      customers: result.customers,
+      totalCustomers: result.totalCustomers,
+      selectedCount: result.selectedCount,
+      minOrders
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Create offer
 router.post('/', auth, uploadMultiple, async (req, res) => {
   try {
@@ -79,7 +133,7 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       title, description, offerType, code, discountType, discountValue, 
       minOrderAmount, validFrom, validUntil, isActive, showAsPopup,
       buttonText, buttonLink, percentage, appliedItems, appliedCategories,
-      targetType, targetPercentage
+      targetType, targetPercentage, targetMinSpent, targetMinOrders
     } = req.body;
     
     let imageMobileUrl = '';
@@ -139,12 +193,26 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     let targetedCustomerPhones = [];
     const finalTargetType = targetType || 'all';
     const finalTargetPercentage = parseInt(targetPercentage) || 100;
+    const finalTargetMinSpent = parseFloat(targetMinSpent) || 0;
+    const finalTargetMinOrders = parseInt(targetMinOrders) || 0;
     
     if (finalTargetType === 'top_percentage' && finalTargetPercentage < 100) {
       const result = await googleSheets.getTopCustomersBySpent(finalTargetPercentage);
       if (result.customers && result.customers.length > 0) {
         targetedCustomerPhones = result.customers.map(c => c.phone);
         console.log(`🎯 Targeting top ${finalTargetPercentage}% customers: ${targetedCustomerPhones.length} customers`);
+      }
+    } else if (finalTargetType === 'min_spent' && finalTargetMinSpent > 0) {
+      const result = await googleSheets.getCustomersByMinSpent(finalTargetMinSpent);
+      if (result.customers && result.customers.length > 0) {
+        targetedCustomerPhones = result.customers.map(c => c.phone);
+        console.log(`🎯 Targeting customers with min spent ₹${finalTargetMinSpent}: ${targetedCustomerPhones.length} customers`);
+      }
+    } else if (finalTargetType === 'min_orders' && finalTargetMinOrders > 0) {
+      const result = await googleSheets.getCustomersByMinOrders(finalTargetMinOrders);
+      if (result.customers && result.customers.length > 0) {
+        targetedCustomerPhones = result.customers.map(c => c.phone);
+        console.log(`🎯 Targeting customers with min ${finalTargetMinOrders} orders: ${targetedCustomerPhones.length} customers`);
       }
     }
 
@@ -171,6 +239,8 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       buttonLink: buttonLink || '/menu',
       targetType: finalTargetType,
       targetPercentage: finalTargetPercentage,
+      targetMinSpent: finalTargetMinSpent,
+      targetMinOrders: finalTargetMinOrders,
       targetedCustomers: targetedCustomerPhones
     });
 
@@ -253,7 +323,8 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
     const { 
       title, description, offerType, code, discountType, discountValue, 
       minOrderAmount, validFrom, validUntil, isActive, showAsPopup,
-      buttonText, buttonLink, percentage, appliedItems, appliedCategories
+      buttonText, buttonLink, percentage, appliedItems, appliedCategories,
+      targetType, targetPercentage, targetMinSpent, targetMinOrders
     } = req.body;
     
     // Get existing offer to check for old images
@@ -272,6 +343,33 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
       parsedAppliedCategories = typeof appliedCategories === 'string' ? JSON.parse(appliedCategories) : appliedCategories;
     }
     
+    // Handle targeting - get targeted customers from Google Sheets
+    let targetedCustomerPhones = [];
+    const finalTargetType = targetType || existingOffer.targetType || 'all';
+    const finalTargetPercentage = parseInt(targetPercentage) || existingOffer.targetPercentage || 100;
+    const finalTargetMinSpent = parseFloat(targetMinSpent) || existingOffer.targetMinSpent || 0;
+    const finalTargetMinOrders = parseInt(targetMinOrders) || existingOffer.targetMinOrders || 0;
+    
+    if (finalTargetType === 'top_percentage' && finalTargetPercentage < 100) {
+      const result = await googleSheets.getTopCustomersBySpent(finalTargetPercentage);
+      if (result.customers && result.customers.length > 0) {
+        targetedCustomerPhones = result.customers.map(c => c.phone);
+        console.log(`🎯 Updating targeting: top ${finalTargetPercentage}% customers: ${targetedCustomerPhones.length} customers`);
+      }
+    } else if (finalTargetType === 'min_spent' && finalTargetMinSpent > 0) {
+      const result = await googleSheets.getCustomersByMinSpent(finalTargetMinSpent);
+      if (result.customers && result.customers.length > 0) {
+        targetedCustomerPhones = result.customers.map(c => c.phone);
+        console.log(`🎯 Updating targeting: customers with min spent ₹${finalTargetMinSpent}: ${targetedCustomerPhones.length} customers`);
+      }
+    } else if (finalTargetType === 'min_orders' && finalTargetMinOrders > 0) {
+      const result = await googleSheets.getCustomersByMinOrders(finalTargetMinOrders);
+      if (result.customers && result.customers.length > 0) {
+        targetedCustomerPhones = result.customers.map(c => c.phone);
+        console.log(`🎯 Updating targeting: customers with min ${finalTargetMinOrders} orders: ${targetedCustomerPhones.length} customers`);
+      }
+    }
+    
     const updateData = {
       title,
       description,
@@ -288,7 +386,12 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
       isActive: isActive !== 'false',
       showAsPopup: showAsPopup !== 'false',
       buttonText,
-      buttonLink
+      buttonLink,
+      targetType: finalTargetType,
+      targetPercentage: finalTargetPercentage,
+      targetMinSpent: finalTargetMinSpent,
+      targetMinOrders: finalTargetMinOrders,
+      targetedCustomers: targetedCustomerPhones
     };
 
     // Helper function to delete old image

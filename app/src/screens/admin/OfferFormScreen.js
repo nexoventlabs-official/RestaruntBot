@@ -45,6 +45,12 @@ export default function OfferFormScreen({ route, navigation }) {
   const [targetPercentage, setTargetPercentage] = useState(
     existingOffer?.targetPercentage?.toString() || '10'
   );
+  const [targetMinSpent, setTargetMinSpent] = useState(
+    existingOffer?.targetMinSpent?.toString() || '1000'
+  );
+  const [targetMinOrders, setTargetMinOrders] = useState(
+    existingOffer?.targetMinOrders?.toString() || '3'
+  );
   const [customerStats, setCustomerStats] = useState({ total: 0, selected: 0 });
   const [loadingCustomerStats, setLoadingCustomerStats] = useState(false);
   
@@ -65,15 +71,27 @@ export default function OfferFormScreen({ route, navigation }) {
   // Fetch customer stats when targeting changes
   useEffect(() => {
     if (targetType === 'top_percentage') {
-      fetchCustomerStats();
+      fetchCustomerStats('top', parseInt(targetPercentage) || 10);
+    } else if (targetType === 'min_spent') {
+      fetchCustomerStats('min-spent', parseFloat(targetMinSpent) || 1000);
+    } else if (targetType === 'min_orders') {
+      fetchCustomerStats('min-orders', parseInt(targetMinOrders) || 3);
     }
-  }, [targetType, targetPercentage]);
+  }, [targetType, targetPercentage, targetMinSpent, targetMinOrders]);
 
-  const fetchCustomerStats = async () => {
+  const fetchCustomerStats = async (type, value) => {
     try {
       setLoadingCustomerStats(true);
-      const pct = parseInt(targetPercentage) || 10;
-      const response = await api.get(`/offers/customers/top/${pct}`);
+      let endpoint = '';
+      if (type === 'top') {
+        endpoint = `/offers/customers/top/${value}`;
+      } else if (type === 'min-spent') {
+        endpoint = `/offers/customers/min-spent/${value}`;
+      } else if (type === 'min-orders') {
+        endpoint = `/offers/customers/min-orders/${value}`;
+      }
+      
+      const response = await api.get(endpoint);
       if (response.data.success) {
         setCustomerStats({
           total: response.data.totalCustomers || 0,
@@ -286,6 +304,8 @@ export default function OfferFormScreen({ route, navigation }) {
       console.log('- Selected Categories:', selectedCategories.length, selectedCategories);
       console.log('- Target Type:', targetType);
       console.log('- Target Percentage:', targetPercentage);
+      console.log('- Target Min Spent:', targetMinSpent);
+      console.log('- Target Min Orders:', targetMinOrders);
       
       if (percentage && percentage.trim()) {
         formData.append('percentage', percentage);
@@ -303,6 +323,10 @@ export default function OfferFormScreen({ route, navigation }) {
       formData.append('targetType', targetType);
       if (targetType === 'top_percentage') {
         formData.append('targetPercentage', targetPercentage);
+      } else if (targetType === 'min_spent') {
+        formData.append('targetMinSpent', targetMinSpent);
+      } else if (targetType === 'min_orders') {
+        formData.append('targetMinOrders', targetMinOrders);
       }
 
       // Add the universal image for all three device types
@@ -564,7 +588,45 @@ export default function OfferFormScreen({ route, navigation }) {
                     <Text style={[
                       styles.targetTypeText,
                       targetType === 'top_percentage' && styles.targetTypeTextActive
-                    ]}>Top Spenders Only</Text>
+                    ]}>Top Spenders (%)</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[
+                      styles.targetTypeOption,
+                      targetType === 'min_spent' && styles.targetTypeOptionActive
+                    ]}
+                    onPress={() => setTargetType('min_spent')}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons 
+                      name={targetType === 'min_spent' ? 'radio-button-on' : 'radio-button-off'} 
+                      size={20} 
+                      color={targetType === 'min_spent' ? ZOMATO_RED : '#9CA3AF'} 
+                    />
+                    <Text style={[
+                      styles.targetTypeText,
+                      targetType === 'min_spent' && styles.targetTypeTextActive
+                    ]}>Min Spent (₹)</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[
+                      styles.targetTypeOption,
+                      targetType === 'min_orders' && styles.targetTypeOptionActive
+                    ]}
+                    onPress={() => setTargetType('min_orders')}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons 
+                      name={targetType === 'min_orders' ? 'radio-button-on' : 'radio-button-off'} 
+                      size={20} 
+                      color={targetType === 'min_orders' ? ZOMATO_RED : '#9CA3AF'} 
+                    />
+                    <Text style={[
+                      styles.targetTypeText,
+                      targetType === 'min_orders' && styles.targetTypeTextActive
+                    ]}>Min Orders</Text>
                   </TouchableOpacity>
                 </View>
                 
@@ -608,6 +670,93 @@ export default function OfferFormScreen({ route, navigation }) {
                     
                     <Text style={styles.targetPercentageHint}>
                       Based on total spending from Google Sheets data
+                    </Text>
+                  </View>
+                )}
+                
+                {/* Min Spent Input - Only show when targeting by minimum spent */}
+                {targetType === 'min_spent' && (
+                  <View style={styles.targetPercentageSection}>
+                    <Text style={styles.targetPercentageLabel}>
+                      Customers who spent ≥ <Text style={{ color: ZOMATO_RED, fontWeight: '700' }}>₹{targetMinSpent}</Text>
+                    </Text>
+                    <View style={styles.targetPercentageInputContainer}>
+                      <Text style={[styles.targetPercentageSymbol, { marginRight: 4, marginLeft: 0 }]}>₹</Text>
+                      <TextInput
+                        style={[styles.targetPercentageInput, { flex: 1 }]}
+                        value={targetMinSpent}
+                        onChangeText={(text) => {
+                          const num = parseFloat(text) || 0;
+                          if (num >= 0) {
+                            setTargetMinSpent(text);
+                          }
+                        }}
+                        placeholder="1000"
+                        placeholderTextColor="#9CA3AF"
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    
+                    {/* Customer Stats Preview */}
+                    <View style={styles.customerStatsContainer}>
+                      {loadingCustomerStats ? (
+                        <ActivityIndicator size="small" color={ZOMATO_RED} />
+                      ) : (
+                        <>
+                          <Ionicons name="analytics" size={16} color="#6B7280" />
+                          <Text style={styles.customerStatsText}>
+                            {customerStats.selected} of {customerStats.total} customers will see this offer
+                          </Text>
+                        </>
+                      )}
+                    </View>
+                    
+                    <Text style={styles.targetPercentageHint}>
+                      Only customers with total spending ≥ ₹{targetMinSpent} will be eligible
+                    </Text>
+                  </View>
+                )}
+                
+                {/* Min Orders Input - Only show when targeting by minimum orders */}
+                {targetType === 'min_orders' && (
+                  <View style={styles.targetPercentageSection}>
+                    <Text style={styles.targetPercentageLabel}>
+                      Customers with ≥ <Text style={{ color: ZOMATO_RED, fontWeight: '700' }}>{targetMinOrders}</Text> orders
+                    </Text>
+                    <View style={styles.targetPercentageInputContainer}>
+                      <TextInput
+                        style={[styles.targetPercentageInput, { flex: 1 }]}
+                        value={targetMinOrders}
+                        onChangeText={(text) => {
+                          const num = parseInt(text) || 0;
+                          if (num >= 0) {
+                            setTargetMinOrders(text);
+                          }
+                        }}
+                        placeholder="3"
+                        placeholderTextColor="#9CA3AF"
+                        keyboardType="numeric"
+                        maxLength={4}
+                      />
+                      <Text style={styles.targetPercentageSymbol}>orders</Text>
+                    </View>
+                    
+                    {/* Customer Stats Preview */}
+                    <View style={styles.customerStatsContainer}>
+                      {loadingCustomerStats ? (
+                        <ActivityIndicator size="small" color={ZOMATO_RED} />
+                      ) : (
+                        <>
+                          <Ionicons name="analytics" size={16} color="#6B7280" />
+                          <Text style={styles.customerStatsText}>
+                            {customerStats.selected} of {customerStats.total} customers will see this offer
+                          </Text>
+                        </>
+                      )}
+                    </View>
+                    
+                    <Text style={styles.targetPercentageHint}>
+                      Only customers with {targetMinOrders}+ completed orders will be eligible
                     </Text>
                   </View>
                 )}
