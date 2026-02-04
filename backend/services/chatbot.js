@@ -348,6 +348,27 @@ const formatPriceWithOffer = (item) => {
   return `₹${item.price}`;
 };
 
+// Helper to format price with active offers from customer (for targeted offers)
+// This checks both item.offerPrice AND customer's activeOffers
+const formatPriceWithActiveOffers = (item, activeOffers) => {
+  // First check if item has built-in offerPrice
+  if (item.offerPrice && item.offerPrice < item.price) {
+    const discount = Math.round(((item.price - item.offerPrice) / item.price) * 100);
+    return `~₹${item.price}~ ➜ *₹${item.offerPrice}* (${discount}% OFF)`;
+  }
+  
+  // Then check customer's activeOffers for targeted discounts
+  if (activeOffers && activeOffers.length > 0) {
+    const offerResult = calculateOfferDiscount(item, activeOffers);
+    if (offerResult.discountedPrice !== null && offerResult.discountAmount > 0) {
+      const discount = Math.round((offerResult.discountAmount / item.price) * 100);
+      return `~₹${item.price}~ ➜ *₹${offerResult.discountedPrice}* (${discount}% OFF 🎁)`;
+    }
+  }
+  
+  return `₹${item.price}`;
+};
+
 // Helper to format offer types
 const formatOfferTypes = (item) => {
   if (item.offerType && Array.isArray(item.offerType) && item.offerType.length > 0) {
@@ -4003,12 +4024,13 @@ const chatbot = {
           } else if (partialMatches.length > 1) {
             // Multiple matches - show options as list
             console.log('⚠️ Multiple matches found:', partialMatches.map(i => i.name));
+            const activeOffers = customer.activeOffers || [];
             const sections = [{
               title: `Items matching "${websiteOrder.itemName}"`,
               rows: partialMatches.slice(0, 10).map(item => ({
                 id: `view_${item._id}`,
                 title: item.name.substring(0, 24),
-                description: `${formatPriceWithOffer(item)} • ${item.foodType === 'veg' ? '🟢 Veg' : item.foodType === 'nonveg' ? '🔴 Non-Veg' : '🟡 Egg'}`
+                description: `${formatPriceWithActiveOffers(item, activeOffers)} • ${item.foodType === 'veg' ? '🟢 Veg' : item.foodType === 'nonveg' ? '🔴 Non-Veg' : '🟡 Egg'}`
               }))
             }];
             await whatsapp.sendList(phone, '🔍 Select Item', `Found ${partialMatches.length} items. Please select one:`, 'View Items', sections, 'Tap to view details');
@@ -4269,12 +4291,13 @@ const chatbot = {
           state.currentStep = 'item_added';
         } else if (matchingItems.length > 1) {
           // Multiple matches - show options
+          const activeOffers = customer.activeOffers || [];
           const sections = [{
             title: `Items matching "${addIntent.itemName}"`,
             rows: matchingItems.slice(0, 10).map(item => ({
               id: `add_${item._id}`,
               title: item.name.substring(0, 24),
-              description: `${formatPriceWithOffer(item)} • ${item.foodType === 'veg' ? '🟢 Veg' : item.foodType === 'nonveg' ? '🔴 Non-Veg' : '🟡 Egg'}`
+              description: `${formatPriceWithActiveOffers(item, activeOffers)} • ${item.foodType === 'veg' ? '🟢 Veg' : item.foodType === 'nonveg' ? '🔴 Non-Veg' : '🟡 Egg'}`
             }))
           }];
           await whatsapp.sendList(phone, '🔍 Multiple Items Found', `Found ${matchingItems.length} items matching "${addIntent.itemName}"`, 'Select Item', sections, 'Tap to add to cart');
@@ -5288,6 +5311,10 @@ const chatbot = {
       return;
     }
 
+    // Get customer's activeOffers for targeted discounts
+    const customer = await Customer.findOne({ phone });
+    const activeOffers = customer?.activeOffers || [];
+
     const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
     const ITEMS_PER_PAGE = 10;
     const totalPages = Math.ceil(items.length / ITEMS_PER_PAGE);
@@ -5297,7 +5324,7 @@ const chatbot = {
     // Build rows for the list
     const rows = pageItems.map(item => {
       const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
-      const priceDisplay = formatPriceWithOffer(item);
+      const priceDisplay = formatPriceWithActiveOffers(item, activeOffers);
       return {
         rowId: `view_${item._id}`,
         title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
@@ -5338,6 +5365,10 @@ const chatbot = {
       return;
     }
 
+    // Get customer's activeOffers for targeted discounts
+    const customer = await Customer.findOne({ phone });
+    const activeOffers = customer?.activeOffers || [];
+
     const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
     const ITEMS_PER_PAGE = 10;
     const totalPages = Math.ceil(menuItems.length / ITEMS_PER_PAGE);
@@ -5347,7 +5378,7 @@ const chatbot = {
     // Build rows for the list
     const rows = pageItems.map(item => {
       const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
-      const priceDisplay = formatPriceWithOffer(item);
+      const priceDisplay = formatPriceWithActiveOffers(item, activeOffers);
       return {
         rowId: `view_${item._id}`,
         title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
@@ -5390,6 +5421,10 @@ const chatbot = {
       return;
     }
 
+    // Get customer's activeOffers for targeted discounts
+    const customer = await Customer.findOne({ phone });
+    const activeOffers = customer?.activeOffers || [];
+
     const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
     const ITEMS_PER_PAGE = 10;
     const totalPages = Math.ceil(items.length / ITEMS_PER_PAGE);
@@ -5399,7 +5434,7 @@ const chatbot = {
     // Build rows for the list - use view_ prefix so user can see details first
     const rows = pageItems.map(item => {
       const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
-      const priceDisplay = formatPriceWithOffer(item);
+      const priceDisplay = formatPriceWithActiveOffers(item, activeOffers);
       return {
         rowId: `view_${item._id}`,
         title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
@@ -5466,6 +5501,10 @@ const chatbot = {
       return;
     }
 
+    // Get customer's activeOffers for targeted discounts
+    const customer = await Customer.findOne({ phone });
+    const activeOffers = customer?.activeOffers || [];
+
     const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
     
     // Rating display
@@ -5480,7 +5519,7 @@ const chatbot = {
     
     let msg = `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n\n`;
     msg += `${ratingDisplay}\n\n`;
-    msg += `💰 *Price:* ${formatPriceWithOffer(item)} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
+    msg += `💰 *Price:* ${formatPriceWithActiveOffers(item, activeOffers)} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
     msg += `⏱️ *Prep Time:* ${item.preparationTime || 15} mins\n`;
     if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
     msg += formatOfferTypes(item);
@@ -5503,6 +5542,10 @@ const chatbot = {
 
   // Send item details for order flow (with Add to Cart focus)
   async sendItemDetailsForOrder(phone, item) {
+    // Get customer's activeOffers for targeted discounts
+    const customer = await Customer.findOne({ phone });
+    const activeOffers = customer?.activeOffers || [];
+
     const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
     
     // Rating display
@@ -5517,7 +5560,7 @@ const chatbot = {
     
     let msg = `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n\n`;
     msg += `${ratingDisplay}\n\n`;
-    msg += `💰 *Price:* ${formatPriceWithOffer(item)} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
+    msg += `💰 *Price:* ${formatPriceWithActiveOffers(item, activeOffers)} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
     msg += `⏱️ *Prep Time:* ${item.preparationTime || 15} mins\n`;
     if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
     msg += formatOfferTypes(item);
@@ -5630,6 +5673,10 @@ const chatbot = {
       return;
     }
 
+    // Get customer's activeOffers for targeted discounts
+    const customer = await Customer.findOne({ phone });
+    const activeOffers = customer?.activeOffers || [];
+
     const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
     const ITEMS_PER_PAGE = 10;
     const totalPages = Math.ceil(items.length / ITEMS_PER_PAGE);
@@ -5639,7 +5686,7 @@ const chatbot = {
     // Build rows for the list
     const rows = pageItems.map(item => {
       const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
-      const priceDisplay = formatPriceWithOffer(item);
+      const priceDisplay = formatPriceWithActiveOffers(item, activeOffers);
       return {
         rowId: `add_${item._id}`,
         title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
@@ -5679,6 +5726,10 @@ const chatbot = {
       return;
     }
 
+    // Get customer's activeOffers for targeted discounts
+    const customer = await Customer.findOne({ phone });
+    const activeOffers = customer?.activeOffers || [];
+
     const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
     const ITEMS_PER_PAGE = 10;
     const totalPages = Math.ceil(menuItems.length / ITEMS_PER_PAGE);
@@ -5688,7 +5739,7 @@ const chatbot = {
     // Build rows for the list
     const rows = pageItems.map(item => {
       const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
-      const priceDisplay = formatPriceWithOffer(item);
+      const priceDisplay = formatPriceWithActiveOffers(item, activeOffers);
       return {
         rowId: `add_${item._id}`,
         title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
@@ -5718,10 +5769,22 @@ const chatbot = {
   },
 
   async sendQuantitySelection(phone, item) {
+    // Get customer's activeOffers for targeted discounts
+    const customer = await Customer.findOne({ phone });
+    const activeOffers = customer?.activeOffers || [];
+    
     const unitLabel = item.unit || 'piece';
     const baseQty = item.quantity || 1; // Base quantity per unit (e.g., 2 for "2 piece", 500 for "500ml")
-    const priceDisplay = formatPriceWithOffer(item);
-    const effectivePrice = item.offerPrice || item.price;
+    const priceDisplay = formatPriceWithActiveOffers(item, activeOffers);
+    
+    // Calculate effective price considering activeOffers
+    let effectivePrice = item.offerPrice || item.price;
+    if (!item.offerPrice && activeOffers.length > 0) {
+      const offerResult = calculateOfferDiscount(item, activeOffers);
+      if (offerResult.discountedPrice !== null) {
+        effectivePrice = offerResult.discountedPrice;
+      }
+    }
     
     // Create quantity options - show multiples of base quantity
     // e.g., if item is "2 piece" → show 2, 4, 6, 8... pieces
@@ -5765,10 +5828,23 @@ const chatbot = {
   },
 
   async sendAddedToCart(phone, item, qty, cart) {
+    // Get customer's activeOffers for targeted discounts
+    const customer = await Customer.findOne({ phone });
+    const activeOffers = customer?.activeOffers || [];
+    
     const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
     const unitInfo = `${item.quantity || 1} ${item.unit || 'piece'}`;
-    const priceDisplay = formatPriceWithOffer(item);
-    const effectivePrice = item.offerPrice || item.price;
+    const priceDisplay = formatPriceWithActiveOffers(item, activeOffers);
+    
+    // Calculate effective price considering activeOffers
+    let effectivePrice = item.offerPrice || item.price;
+    if (!item.offerPrice && activeOffers.length > 0) {
+      const offerResult = calculateOfferDiscount(item, activeOffers);
+      if (offerResult.discountedPrice !== null) {
+        effectivePrice = offerResult.discountedPrice;
+      }
+    }
+    
     const addedToCartImageUrl = await chatbotImagesService.getImageUrl('added_to_cart');
     
     await sendWithOptionalImage(phone, addedToCartImageUrl,
@@ -5794,18 +5870,28 @@ const chatbot = {
       return;
     }
 
+    // Get customer's activeOffers for targeted discounts
+    const activeOffers = freshCustomer.activeOffers || [];
+
     let total = 0;
     let cartMsg = '🛒 *Your Cart*\n\n';
     let validItems = 0;
     
     freshCustomer.cart.forEach((item, i) => {
       if (item.menuItem) {
-        const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+        // Check activeOffers for discount
+        let effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+        if (!item.menuItem.offerPrice && activeOffers.length > 0) {
+          const offerResult = calculateOfferDiscount(item.menuItem, activeOffers);
+          if (offerResult.discountedPrice !== null) {
+            effectivePrice = offerResult.discountedPrice;
+          }
+        }
         const subtotal = effectivePrice * item.quantity;
         total += subtotal;
         validItems++;
         const unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
-        const priceDisplay = formatPriceWithOffer(item.menuItem);
+        const priceDisplay = formatPriceWithActiveOffers(item.menuItem, activeOffers);
         cartMsg += `${validItems}. *${item.menuItem.name}* (${unitInfo})\n`;
         cartMsg += `   Qty: ${item.quantity} × ${priceDisplay} = ₹${subtotal}\n\n`;
       }
@@ -5853,18 +5939,28 @@ const chatbot = {
       return;
     }
 
+    // Get customer's activeOffers for targeted discounts
+    const activeOffers = freshCustomer.activeOffers || [];
+
     let itemsTotal = 0;
     let cartMsg = '🛒 *Order Summary*\n\n';
     let validItems = 0;
     
     freshCustomer.cart.forEach((item, i) => {
       if (item.menuItem) {
-        const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+        // Check activeOffers for discount
+        let effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+        if (!item.menuItem.offerPrice && activeOffers.length > 0) {
+          const offerResult = calculateOfferDiscount(item.menuItem, activeOffers);
+          if (offerResult.discountedPrice !== null) {
+            effectivePrice = offerResult.discountedPrice;
+          }
+        }
         const subtotal = effectivePrice * item.quantity;
         itemsTotal += subtotal;
         validItems++;
         const unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
-        const priceDisplay = formatPriceWithOffer(item.menuItem);
+        const priceDisplay = formatPriceWithActiveOffers(item.menuItem, activeOffers);
         cartMsg += `${validItems}. *${item.menuItem.name}* (${unitInfo})\n`;
         cartMsg += `   Qty: ${item.quantity} × ${priceDisplay} = ₹${subtotal}\n\n`;
       }
@@ -6112,18 +6208,28 @@ const chatbot = {
       return;
     }
 
+    // Get customer's activeOffers for targeted discounts
+    const activeOffers = freshCustomer.activeOffers || [];
+
     let total = 0;
     let reviewMsg = '📋 *Review Your Order*\n\n';
     let validItems = 0;
     
     freshCustomer.cart.forEach((item, i) => {
       if (item.menuItem) {
-        const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+        // Check activeOffers for discount
+        let effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+        if (!item.menuItem.offerPrice && activeOffers.length > 0) {
+          const offerResult = calculateOfferDiscount(item.menuItem, activeOffers);
+          if (offerResult.discountedPrice !== null) {
+            effectivePrice = offerResult.discountedPrice;
+          }
+        }
         const subtotal = effectivePrice * item.quantity;
         total += subtotal;
         validItems++;
         const unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
-        const priceDisplay = formatPriceWithOffer(item.menuItem);
+        const priceDisplay = formatPriceWithActiveOffers(item.menuItem, activeOffers);
         reviewMsg += `${validItems}. *${item.menuItem.name}* (${unitInfo})\n`;
         reviewMsg += `   Qty: ${item.quantity} × ${priceDisplay} = ₹${subtotal}\n\n`;
       }
@@ -6220,7 +6326,7 @@ const chatbot = {
         if (offerApplied && itemDiscount > 0) {
           priceDisplay = `~₹${item.menuItem.price}~ ➜ *₹${effectivePrice}* 🎁`;
         } else {
-          priceDisplay = formatPriceWithOffer(item.menuItem);
+          priceDisplay = formatPriceWithActiveOffers(item.menuItem, activeOffers);
         }
         
         cartMsg += `${validItems}. *${item.menuItem.name}* (${unitInfo})\n`;
