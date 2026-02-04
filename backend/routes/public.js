@@ -33,20 +33,17 @@ router.get('/offers', async (req, res) => {
       validFrom: { $lte: now }
     }).sort({ createdAt: -1 });
     
-    // Transform offers - add isTargeted flag and hide targetedCustomers list
-    const transformedOffers = offers.map(offer => {
-      const offerObj = offer.toObject();
-      
-      // Add isTargeted flag
-      offerObj.isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(offer.targetType);
-      
-      // Remove targetedCustomers list for privacy
-      delete offerObj.targetedCustomers;
-      
-      return offerObj;
+    // Filter out targeted offers - they are only accessible via direct link (/offer/:offerId)
+    const filteredOffers = offers.filter(offer => {
+      // Only show offers that target all customers
+      if (!offer.targetType || offer.targetType === 'all') {
+        return true;
+      }
+      // Hide targeted offers (top_percentage, min_spent, min_orders)
+      return false;
     });
     
-    res.json(transformedOffers);
+    res.json(filteredOffers);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -68,15 +65,17 @@ router.get('/popup-offers', async (req, res) => {
       validFrom: { $lte: now }
     }).sort({ createdAt: -1 });
     
-    // Transform offers - add isTargeted flag and hide targetedCustomers list
-    const transformedOffers = offers.map(offer => {
-      const offerObj = offer.toObject();
-      offerObj.isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(offer.targetType);
-      delete offerObj.targetedCustomers;
-      return offerObj;
+    // Filter out targeted offers - they are only accessible via direct link (/offer/:offerId)
+    offers = offers.filter(offer => {
+      // Only show offers that target all customers
+      if (!offer.targetType || offer.targetType === 'all') {
+        return true;
+      }
+      // Hide targeted offers (top_percentage, min_spent, min_orders)
+      return false;
     });
     
-    res.json(transformedOffers[0] || null);
+    res.json(offers[0] || null);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
