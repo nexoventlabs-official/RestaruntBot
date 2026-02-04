@@ -1680,14 +1680,14 @@ const googleSheets = {
       // Check if headers exist
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A1:K1`
+        range: `${sheet.sheetName}!A1:J1`
       });
       
       if (!response.data.values || response.data.values.length === 0) {
-        const headers = ['Date', 'Revenue', 'Total Orders', 'Delivered', 'Cancelled', 'Refunded', 'COD Orders', 'UPI Orders', 'Items Sold', 'Top Items', 'Top Categories'];
+        const headers = ['Date', 'Revenue', 'Total Orders', 'Delivered', 'Cancelled', 'Refunded', 'COD Orders', 'UPI Orders', 'Items Sold', 'Top Items'];
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${sheet.sheetName}!A1:K1`,
+          range: `${sheet.sheetName}!A1:J1`,
           valueInputOption: 'RAW',
           resource: { values: [headers] }
         });
@@ -1699,7 +1699,7 @@ const googleSheets = {
             requests: [
               {
                 repeatCell: {
-                  range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 11 },
+                  range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 10 },
                   cell: {
                     userEnteredFormat: {
                       backgroundColor: { red: 0.4, green: 0.2, blue: 0.6 },  // Purple
@@ -1722,7 +1722,6 @@ const googleSheets = {
               { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 7, endIndex: 8 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // UPI Orders
               { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 8, endIndex: 9 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // Items Sold
               { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 9, endIndex: 10 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } }, // Top Items
-              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 10, endIndex: 11 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } }, // Top Categories
               // Freeze header row
               { updateSheetProperties: { properties: { sheetId: sheet.sheetId, gridProperties: { frozenRowCount: 1 } }, fields: 'gridProperties.frozenRowCount' } }
             ]
@@ -1767,12 +1766,9 @@ const googleSheets = {
         }
       }
       
-      // Format top items and categories for display
+      // Format top items for display
       const topItems = items && items.length > 0 
         ? items.slice(0, 5).map(i => `${i.name} (${i.quantity})`).join(', ')
-        : '';
-      const topCategories = categories && categories.length > 0
-        ? categories.slice(0, 5).map(c => `${c.category} (₹${c.revenue})`).join(', ')
         : '';
       
       const rowData = [
@@ -1785,15 +1781,14 @@ const googleSheets = {
         codOrders || 0,
         upiOrders || 0,
         itemsSold || 0,
-        topItems,
-        topCategories
+        topItems
       ];
       
       if (existingRowIndex > -1) {
         // Update existing row
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${sheet.sheetName}!A${existingRowIndex + 1}:K${existingRowIndex + 1}`,
+          range: `${sheet.sheetName}!A${existingRowIndex + 1}:J${existingRowIndex + 1}`,
           valueInputOption: 'RAW',
           resource: { values: [rowData] }
         });
@@ -1813,7 +1808,7 @@ const googleSheets = {
         
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${sheet.sheetName}!A2:K2`,
+          range: `${sheet.sheetName}!A2:J2`,
           valueInputOption: 'RAW',
           resource: { values: [rowData] }
         });
@@ -3049,17 +3044,23 @@ const googleSheets = {
       // Check if it's in column format (first column has "Metric", "💰 Revenue", etc.)
       const isColumnFormat = rows.length > 0 && (rows[0]?.[0] === 'Metric' || rows[1]?.[0]?.includes('Revenue'));
       
-      if (isColumnFormat) {
+      // Check if there's old column data beyond column K (columns L onwards have dates like "📅 2026-02-02")
+      const hasOldColumnData = rows[0]?.length > 11 && rows[0].some((cell, idx) => idx > 10 && cell && cell.includes('📅'));
+      
+      if (isColumnFormat || hasOldColumnData) {
         console.log('📊 Converting daily_reports from column format to row format...');
         
-        // Extract data from column format
+        // Extract data from column format (dates in columns L, M, N, etc.)
         const extractedReports = [];
         const headers = rows[0] || [];
         
-        for (let col = 1; col < headers.length; col++) {
+        // Start from column 11 (L) if old column data exists there, else column 1
+        const startCol = hasOldColumnData ? 11 : 1;
+        
+        for (let col = startCol; col < headers.length; col++) {
           const dateHeader = headers[col] || '';
           const date = dateHeader.replace('📅 ', '').trim();
-          if (!date) continue;
+          if (!date || date === '') continue;
           
           extractedReports.push({
             date,
@@ -3076,14 +3077,14 @@ const googleSheets = {
           });
         }
         
-        // Clear sheet
+        // Clear sheet completely
         await sheets.spreadsheets.values.clear({
           spreadsheetId: SPREADSHEET_ID,
           range: `${sheet.sheetName}!A:ZZ`
         });
         
         // Add row-format headers
-        const newHeaders = ['Date', 'Revenue', 'Total Orders', 'Delivered', 'Cancelled', 'Refunded', 'COD Orders', 'UPI Orders', 'Items Sold', 'Top Items', 'Top Categories'];
+        const newHeaders = ['Date', 'Revenue', 'Total Orders', 'Delivered', 'Cancelled', 'Refunded', 'COD Orders', 'UPI Orders', 'Items Sold', 'Top Items'];
         
         // Prepare all rows
         const allRows = [newHeaders];
@@ -3098,8 +3099,7 @@ const googleSheets = {
             report.codOrders,
             report.upiOrders,
             report.itemsSold,
-            report.topItem,
-            report.topCategory
+            report.topItem
           ]);
         }
         
@@ -3110,7 +3110,15 @@ const googleSheets = {
           valueInputOption: 'RAW',
           resource: { values: allRows }
         });
+        
+        console.log(`📊 Migrated ${extractedReports.length} daily reports to row format`);
       }
+      
+      // Clear any extra columns beyond J (old Top Categories column)
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!K:ZZ`
+      });
       
       // Get total rows after conversion
       const finalResponse = await sheets.spreadsheets.values.get({
@@ -3127,7 +3135,7 @@ const googleSheets = {
             // Header row styling - Professional purple
             {
               repeatCell: {
-                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 11 },
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 10 },
                 cell: {
                   userEnteredFormat: {
                     backgroundColor: { red: 0.4, green: 0.2, blue: 0.6 },
@@ -3142,7 +3150,7 @@ const googleSheets = {
             // Data rows styling - White background with black text
             {
               repeatCell: {
-                range: { sheetId: sheet.sheetId, startRowIndex: 1, endRowIndex: Math.max(totalRows, 50), startColumnIndex: 0, endColumnIndex: 11 },
+                range: { sheetId: sheet.sheetId, startRowIndex: 1, endRowIndex: Math.max(totalRows, 50), startColumnIndex: 0, endColumnIndex: 10 },
                 cell: {
                   userEnteredFormat: {
                     backgroundColor: { red: 1, green: 1, blue: 1 },
@@ -3165,7 +3173,6 @@ const googleSheets = {
             { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 7, endIndex: 8 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },
             { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 8, endIndex: 9 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },
             { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 9, endIndex: 10 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } },
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 10, endIndex: 11 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } },
             // Freeze header
             { updateSheetProperties: { properties: { sheetId: sheet.sheetId, gridProperties: { frozenRowCount: 1, frozenColumnCount: 0 } }, fields: 'gridProperties.frozenRowCount,gridProperties.frozenColumnCount' } }
           ]
