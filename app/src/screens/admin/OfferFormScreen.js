@@ -99,33 +99,30 @@ export default function OfferFormScreen({ route, navigation }) {
     };
   }, [targetType, targetPercentage, targetMinSpent, targetMinOrders]);
 
-  const fetchCustomerStats = async (type, value) => {
-    try {
-      setLoadingCustomerStats(true);
-      let endpoint = '';
-      if (type === 'top') {
-        endpoint = `/offers/customers/top/${value}`;
-      } else if (type === 'min-spent') {
-        endpoint = `/offers/customers/min-spent/${value}`;
-      } else if (type === 'min-orders') {
-        endpoint = `/offers/customers/min-orders/${value}`;
-      }
-      
-      // No timeout - let it run in background while UI updates
-      const response = await api.get(endpoint);
-      if (response.data.success) {
-        setCustomerStats({
-          total: response.data.totalCustomers || 0,
-          selected: response.data.selectedCount || 0
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching customer stats:', error.message);
-      // Don't show error to user, just keep showing loading or last known value
-      // Stats are optional preview, not critical
-    } finally {
-      setLoadingCustomerStats(false);
+  const fetchCustomerStats = (type, value) => {
+    let endpoint = '';
+    if (type === 'top') {
+      endpoint = `/offers/customers/top/${value}`;
+    } else if (type === 'min-spent') {
+      endpoint = `/offers/customers/min-spent/${value}`;
+    } else if (type === 'min-orders') {
+      endpoint = `/offers/customers/min-orders/${value}`;
     }
+    
+    // Fire and forget - no timeout, runs completely in background
+    api.get(endpoint, { timeout: 0 })
+      .then(response => {
+        if (response.data.success) {
+          setCustomerStats({
+            total: response.data.totalCustomers || 0,
+            selected: response.data.selectedCount || 0
+          });
+        }
+      })
+      .catch(error => {
+        console.log('Customer stats fetch in background:', error.message);
+        // Silent fail - stats are optional preview
+      });
   };
 
   useEffect(() => {
