@@ -95,7 +95,8 @@ async function resetAllData() {
     console.log('\n📋 Summary:');
     console.log(`   - MongoDB collections cleared`);
     console.log(`   - Google Sheets reset with fresh headers`);
-    console.log(`   - Daily reports sheet reformatted (dates as columns)`);
+    console.log(`   - Customers: Phone | Name | Orders Count | Total Spent | First Order | Last Order`);
+    console.log(`   - Daily reports: Date | Revenue | Total Orders | Delivered | Cancelled | Refunded | COD Orders | UPI Orders | Items Sold | Top Items`);
     console.log('\n💡 You can now start fresh with new data.\n');
 
   } catch (error) {

@@ -2504,26 +2504,39 @@ const googleSheets = {
         range: `${sheet.sheetName}!A:Z`
       });
       
-      // Re-initialize with headers and formatting
-      const headers = ['Phone', 'Name', 'Location', 'Orders Count', 'Total Spent', 'Last Order Date', 'Order History'];
+      // Re-initialize with headers and formatting (matches initializeCustomersSheet)
+      const headers = ['Phone', 'Name', 'Orders Count', 'Total Spent', 'First Order', 'Last Order'];
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A1:G1`,
+        range: `${sheet.sheetName}!A1:F1`,
         valueInputOption: 'RAW',
         resource: { values: [headers] }
       });
       
-      // Apply header formatting
+      // Apply header formatting - Professional blue header
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId: SPREADSHEET_ID,
         resource: {
           requests: [
+            // Clear formatting from extra columns (G onwards) that may have old header color
             {
               repeatCell: {
-                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 7 },
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 6, endColumnIndex: 20 },
                 cell: {
                   userEnteredFormat: {
-                    backgroundColor: { red: 0.2, green: 0.4, blue: 0.6 },
+                    backgroundColor: { red: 1, green: 1, blue: 1 },
+                    textFormat: { bold: false, foregroundColor: { red: 0, green: 0, blue: 0 } }
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat)'
+              }
+            },
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 6 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.08, green: 0.46, blue: 0.75 },  // Nice blue
                     textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
                     horizontalAlignment: 'CENTER',
                     verticalAlignment: 'MIDDLE'
@@ -2532,20 +2545,15 @@ const googleSheets = {
                 fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
               }
             },
-            {
-              updateDimensionProperties: {
-                range: { sheetId: sheet.sheetId, dimension: 'ROWS', startIndex: 0, endIndex: 1 },
-                properties: { pixelSize: 35 },
-                fields: 'pixelSize'
-              }
-            },
-            {
-              updateDimensionProperties: {
-                range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 7 },
-                properties: { pixelSize: 130 },
-                fields: 'pixelSize'
-              }
-            }
+            // Set column widths
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 130 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 180 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 110 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 110 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 110 }, fields: 'pixelSize' } },
+            // Freeze header row
+            { updateSheetProperties: { properties: { sheetId: sheet.sheetId, gridProperties: { frozenRowCount: 1 } }, fields: 'gridProperties.frozenRowCount' } }
           ]
         }
       });
@@ -2636,7 +2644,7 @@ const googleSheets = {
     }
   },
 
-  // Clear and reset daily reports sheet - NEW FORMAT: dates as columns
+  // Clear and reset daily reports sheet - ROW FORMAT: dates as rows, metrics as columns
   async clearDailyReportsSheet() {
     try {
       const auth = getAuthClient();
@@ -2653,27 +2661,14 @@ const googleSheets = {
         range: `${sheet.sheetName}!A:ZZ`
       });
       
-      // NEW FORMAT: Metrics as rows, dates as columns
-      // Column A = Metric names, subsequent columns = dates
-      const metricHeaders = [
-        ['Metric'],  // A1 - will be followed by date columns
-        ['💰 Revenue'],
-        ['📦 Total Orders'],
-        ['✅ Delivered'],
-        ['❌ Cancelled'],
-        ['💸 Refunded'],
-        ['💵 COD Orders'],
-        ['📱 UPI Orders'],
-        ['🍽️ Items Sold'],
-        ['🏆 Top Item'],
-        ['📂 Top Category']
-      ];
+      // ROW FORMAT: Metrics as column headers, each date is a row
+      const headers = ['Date', 'Revenue', 'Total Orders', 'Delivered', 'Cancelled', 'Refunded', 'COD Orders', 'UPI Orders', 'Items Sold', 'Top Items'];
       
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A1:A11`,
+        range: `${sheet.sheetName}!A1:J1`,
         valueInputOption: 'RAW',
-        resource: { values: metricHeaders }
+        resource: { values: [headers] }
       });
       
       // Apply formatting
@@ -2681,14 +2676,14 @@ const googleSheets = {
         spreadsheetId: SPREADSHEET_ID,
         resource: {
           requests: [
-            // Header row (A1) formatting
+            // Header row formatting - Professional purple
             {
               repeatCell: {
-                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 1 },
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 10 },
                 cell: {
                   userEnteredFormat: {
                     backgroundColor: { red: 0.4, green: 0.2, blue: 0.6 },
-                    textFormat: { bold: true, fontSize: 12, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                    textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
                     horizontalAlignment: 'CENTER',
                     verticalAlignment: 'MIDDLE'
                   }
@@ -2696,53 +2691,33 @@ const googleSheets = {
                 fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
               }
             },
-            // Metric names column formatting (A2:A11)
-            {
-              repeatCell: {
-                range: { sheetId: sheet.sheetId, startRowIndex: 1, endRowIndex: 11, startColumnIndex: 0, endColumnIndex: 1 },
-                cell: {
-                  userEnteredFormat: {
-                    backgroundColor: { red: 0.95, green: 0.95, blue: 0.98 },
-                    textFormat: { bold: true, fontSize: 11 },
-                    horizontalAlignment: 'LEFT',
-                    verticalAlignment: 'MIDDLE'
-                  }
-                },
-                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
-              }
-            },
-            // Set column A width
-            {
-              updateDimensionProperties: {
-                range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 },
-                properties: { pixelSize: 150 },
-                fields: 'pixelSize'
-              }
-            },
-            // Set row heights
-            {
-              updateDimensionProperties: {
-                range: { sheetId: sheet.sheetId, dimension: 'ROWS', startIndex: 0, endIndex: 11 },
-                properties: { pixelSize: 30 },
-                fields: 'pixelSize'
-              }
-            },
-            // Freeze first column
+            // Column widths
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 7, endIndex: 8 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 8, endIndex: 9 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 9, endIndex: 10 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } },
+            // Freeze header row
             {
               updateSheetProperties: {
                 properties: {
                   sheetId: sheet.sheetId,
-                  gridProperties: { frozenColumnCount: 1 }
+                  gridProperties: { frozenRowCount: 1, frozenColumnCount: 0 }
                 },
-                fields: 'gridProperties.frozenColumnCount'
+                fields: 'gridProperties.frozenRowCount,gridProperties.frozenColumnCount'
               }
             }
           ]
         }
       });
       
-      console.log('🧹 Daily reports sheet cleared and reformatted (dates as columns)');
-      return { success: true, message: 'Sheet reset with new date-column format' };
+      console.log('🧹 Daily reports sheet cleared and reformatted (row-based format)');
+      return { success: true, message: 'Sheet reset with row-based format' };
     } catch (error) {
       console.error('❌ Error clearing daily_reports sheet:', error.message);
       return { success: false, error: error.message };
@@ -2766,22 +2741,14 @@ const googleSheets = {
         range: `${sheet.sheetName}!A:Z`
       });
       
-      // Re-initialize with headers and default values
+      // Only add headers - no data rows
       const headers = ['Metric', 'Value', 'Last Updated', 'Notes'];
-      const defaultMetrics = [
-        ['Total Orders', '0', formatDateTimeDDMMYYYY(), 'Lifetime total'],
-        ['Total Revenue', '0', formatDateTimeDDMMYYYY(), 'Lifetime total'],
-        ['Total Customers', '0', formatDateTimeDDMMYYYY(), 'Lifetime total'],
-        ['Today Orders', '0', formatDateTimeDDMMYYYY(), 'Resets daily'],
-        ['Today Revenue', '0', formatDateTimeDDMMYYYY(), 'Resets daily'],
-        ['Today Date', formatDateDDMMYYYY(), formatDateTimeDDMMYYYY(), 'Current date']
-      ];
       
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A1:D7`,
+        range: `${sheet.sheetName}!A1:D1`,
         valueInputOption: 'RAW',
-        resource: { values: [headers, ...defaultMetrics] }
+        resource: { values: [headers] }
       });
       
       // Apply formatting
@@ -2804,74 +2771,19 @@ const googleSheets = {
                 fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
               }
             },
-            // Data rows formatting
-            {
-              repeatCell: {
-                range: { sheetId: sheet.sheetId, startRowIndex: 1, endRowIndex: 7, startColumnIndex: 0, endColumnIndex: 4 },
-                cell: {
-                  userEnteredFormat: {
-                    horizontalAlignment: 'CENTER',
-                    verticalAlignment: 'MIDDLE'
-                  }
-                },
-                fields: 'userEnteredFormat(horizontalAlignment,verticalAlignment)'
-              }
-            },
             // Column widths
-            {
-              updateDimensionProperties: {
-                range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 },
-                properties: { pixelSize: 140 },
-                fields: 'pixelSize'
-              }
-            },
-            {
-              updateDimensionProperties: {
-                range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 },
-                properties: { pixelSize: 120 },
-                fields: 'pixelSize'
-              }
-            },
-            {
-              updateDimensionProperties: {
-                range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 },
-                properties: { pixelSize: 180 },
-                fields: 'pixelSize'
-              }
-            },
-            {
-              updateDimensionProperties: {
-                range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 },
-                properties: { pixelSize: 120 },
-                fields: 'pixelSize'
-              }
-            },
-            // Row heights
-            {
-              updateDimensionProperties: {
-                range: { sheetId: sheet.sheetId, dimension: 'ROWS', startIndex: 0, endIndex: 7 },
-                properties: { pixelSize: 32 },
-                fields: 'pixelSize'
-              }
-            },
-            // Add borders
-            {
-              updateBorders: {
-                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 7, startColumnIndex: 0, endColumnIndex: 4 },
-                top: { style: 'SOLID', color: { red: 0.8, green: 0.8, blue: 0.8 } },
-                bottom: { style: 'SOLID', color: { red: 0.8, green: 0.8, blue: 0.8 } },
-                left: { style: 'SOLID', color: { red: 0.8, green: 0.8, blue: 0.8 } },
-                right: { style: 'SOLID', color: { red: 0.8, green: 0.8, blue: 0.8 } },
-                innerHorizontal: { style: 'SOLID', color: { red: 0.9, green: 0.9, blue: 0.9 } },
-                innerVertical: { style: 'SOLID', color: { red: 0.9, green: 0.9, blue: 0.9 } }
-              }
-            }
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 140 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 180 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
+            // Freeze header row
+            { updateSheetProperties: { properties: { sheetId: sheet.sheetId, gridProperties: { frozenRowCount: 1 } }, fields: 'gridProperties.frozenRowCount' } }
           ]
         }
       });
       
-      console.log('🧹 Dashboard stats sheet cleared and reset');
-      return { success: true, message: 'Sheet reset with default metrics' };
+      console.log('🧹 Dashboard stats sheet cleared (headers only)');
+      return { success: true, message: 'Sheet reset with headers only' };
     } catch (error) {
       console.error('❌ Error clearing dashboard_stats sheet:', error.message);
       return { success: false, error: error.message };
