@@ -1529,9 +1529,13 @@ const chatbot = {
     'coffe': 'coffee', 'cofee': 'coffee', 'cofe': 'coffee', 'coffie': 'coffee',
     'caffe': 'coffee', 'koffee': 'coffee', 'coffy': 'coffee',
     'tee': 'tea', 'tae': 'tea', 'chai': 'tea',
-    // Common foods
+    // Common foods - Biryani variations (very common typos)
     'biryni': 'biryani', 'biriyani': 'biryani', 'birani': 'biryani', 'bryani': 'biryani',
     'briyani': 'biryani', 'biriani': 'biryani', 'biriany': 'biryani',
+    'biyani': 'biryani', 'biyrani': 'biryani', 'byrani': 'biryani', 'byriani': 'biryani',
+    'birynai': 'biryani', 'biryain': 'biryani', 'biryanai': 'biryani', 'beryani': 'biryani',
+    'beriyani': 'biryani', 'briynai': 'biryani', 'biryan': 'biryani', 'biryanii': 'biryani',
+    'biriyanai': 'biryani', 'biriyni': 'biryani', 'briani': 'biryani', 'birni': 'biryani',
     'dosa': 'dosa', 'dosai': 'dosa', 'dhosa': 'dosa', 'thosai': 'dosa',
     'idli': 'idly', 'idly': 'idli', 'iddly': 'idli', 'idlee': 'idli',
     'samosa': 'samosa', 'samsa': 'samosa', 'samossa': 'samosa',
