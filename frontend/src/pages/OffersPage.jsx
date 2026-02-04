@@ -193,8 +193,31 @@ export default function OffersPage() {
     return Math.round(((item.price - offerPrice) / item.price) * 100);
   };
 
-  // Filter items that have at least one offer type
+  // Filter items that have at least one offer type OR are in specificOffer's appliedItems/appliedCategories
   const itemsWithOfferTypes = items.filter(item => {
+    // If we have a specific offer, check if item is in appliedItems or appliedCategories
+    if (specificOffer) {
+      const hasAppliedItems = specificOffer.appliedItems && specificOffer.appliedItems.length > 0;
+      const hasAppliedCategories = specificOffer.appliedCategories && specificOffer.appliedCategories.length > 0;
+      
+      if (hasAppliedItems || hasAppliedCategories) {
+        // Check if item is in appliedItems
+        if (hasAppliedItems && specificOffer.appliedItems.includes(item._id)) {
+          return true;
+        }
+        // Check if item's category is in appliedCategories
+        if (hasAppliedCategories && specificOffer.appliedCategories.includes(item.category)) {
+          return true;
+        }
+        return false;
+      }
+      // If offer has no appliedItems/appliedCategories but has offerType, filter by offerType
+      if (specificOffer.offerType) {
+        const itemOfferTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
+        return itemOfferTypes.includes(specificOffer.offerType);
+      }
+    }
+    // Otherwise, check if item has offer types (for normal offers page)
     const itemOfferTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
     return itemOfferTypes.length > 0;
   });
@@ -202,6 +225,11 @@ export default function OffersPage() {
   // Apply offer type filter and search filter
   const filteredItems = (selectedOfferType 
     ? itemsWithOfferTypes.filter(item => {
+        // If we have a specific offer, items are already filtered above
+        if (specificOffer) {
+          return true; // Already filtered by appliedItems/appliedCategories/offerType
+        }
+        // Otherwise filter by offerType
         const itemOfferTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
         return itemOfferTypes.includes(selectedOfferType);
       })
