@@ -2204,28 +2204,16 @@ const chatbot = {
     return matchingItems.length > 0 ? matchingItems : null;
   },
 
-  // Helper to find items by name OR tag keyword (with dynamic fuzzy matching - works for ANY item)
+  // Helper to find items by name OR tag keyword (exact matching only - no fuzzy/typo)
   // Multi-keyword search priority:
   // 1. ALL keywords match in same item (AND logic) - exact match
-  // 2. ANY keyword matches exactly (OR logic) - exact match
-  // 3. Fuzzy/typo matching as fallback
+  // 2. ANY keyword matches exactly (OR logic) - shows all items matching any keyword
   findItemsByNameOrTag(text, menuItems) {
     const lowerText = text.toLowerCase().trim();
     if (lowerText.length < 2) return null;
     
-    // Split into keywords
+    // Split into keywords (no typo correction)
     const keywords = lowerText.split(/\s+/).filter(k => k.length >= 2);
-    
-    // Try dynamic typo correction for full text
-    const corrected = this.findBestMatchingTerm(lowerText, menuItems);
-    const searchTerms = corrected && corrected !== lowerText ? [lowerText, corrected] : [lowerText];
-    
-    // Also correct individual keywords
-    const correctedKeywords = keywords.map(kw => {
-      const correctedKw = this.findBestMatchingTerm(kw, menuItems);
-      return correctedKw && correctedKw !== kw ? [kw, correctedKw] : [kw];
-    }).flat();
-    const uniqueKeywords = [...new Set([...keywords, ...correctedKeywords])];
     
     // Helper to check if item matches a keyword (exact or smart boundary)
     const itemMatchesKeyword = (item, keyword) => {
@@ -2234,7 +2222,7 @@ const chatbot = {
       if (nameLower === keyword) return true;
       // Exact tag match
       if (item.tags?.some(tag => tag.toLowerCase() === keyword)) return true;
-      // Smart boundary match on name
+      // Smart boundary match on name (prevents "ice" → "rice")
       if (this.smartIncludes(keyword, item.name)) return true;
       // Smart boundary match on tags
       if (item.tags?.some(tag => this.smartIncludes(keyword, tag))) return true;
@@ -2245,13 +2233,7 @@ const chatbot = {
     if (keywords.length >= 2) {
       const andMatches = menuItems.filter(item => {
         // Every keyword must match this item
-        return uniqueKeywords.some(kw => itemMatchesKeyword(item, kw)) &&
-               keywords.every(kw => {
-                 // Check if original keyword OR its corrected version matches
-                 const correctedKw = this.findBestMatchingTerm(kw, menuItems);
-                 return itemMatchesKeyword(item, kw) || 
-                        (correctedKw && itemMatchesKeyword(item, correctedKw));
-               });
+        return keywords.every(kw => itemMatchesKeyword(item, kw));
       });
       
       if (andMatches.length > 0) {
@@ -2260,86 +2242,28 @@ const chatbot = {
       }
     }
     
-    // ========== STEP 2: ANY keyword matches exactly (OR logic) ==========
-    // First try exact matches on full text
+    // ========== STEP 2: ANY keyword matches (OR logic) ==========
+    // Find all items that match ANY of the keywords
     let matchingItems = menuItems.filter(item => {
-      for (const term of searchTerms) {
-        // Check exact name match
-        if (item.name.toLowerCase() === term) return true;
-        // Check exact tag match
-        if (item.tags?.some(tag => tag.toLowerCase() === term)) return true;
-      }
-      return false;
-    });
-    
-    if (matchingItems.length > 0) {
-      return matchingItems;
-    }
-    
-    // Try smart word boundary matching for each keyword (OR logic)
-    matchingItems = menuItems.filter(item => {
-      for (const keyword of uniqueKeywords) {
+      for (const keyword of keywords) {
         if (itemMatchesKeyword(item, keyword)) return true;
       }
       return false;
     });
     
     if (matchingItems.length > 0) {
-      console.log(`🔍 Multi-keyword OR match: "${text}" → ${matchingItems.length} items`);
+      console.log(`🔍 Multi-keyword OR match: "${text}" → ${matchingItems.length} items (keywords: ${keywords.join(', ')})`);
       return matchingItems;
     }
     
-    // ========== STEP 3: Fuzzy/typo matching as fallback ==========
-    if (lowerText.length >= 2) {
-      matchingItems = menuItems.filter(item => {
-        const nameLower = item.name.toLowerCase();
-        
-        // Fuzzy match on full search text
-        if (this.similarityWithTypoTolerance(lowerText, nameLower) >= 0.55) return true;
-        
-        // Fuzzy name word match
-        const nameWords = nameLower.split(/\s+/);
-        if (nameWords.some(word => word.length >= 3 && this.similarityWithTypoTolerance(lowerText, word) >= 0.6)) {
-          return true;
-        }
-        
-        // Fuzzy match on individual keywords
-        for (const keyword of keywords) {
-          if (keyword.length >= 3) {
-            // Check against item name
-            if (this.similarityWithTypoTolerance(keyword, nameLower) >= 0.55) return true;
-            if (nameWords.some(word => word.length >= 3 && this.similarityWithTypoTolerance(keyword, word) >= 0.55)) {
-              return true;
-            }
-            // Check against tags
-            if (item.tags?.some(tag => {
-              const tagLower = tag.toLowerCase();
-              if (this.similarityWithTypoTolerance(keyword, tagLower) >= 0.55) return true;
-              const tagWords = tagLower.split(/\s+/);
-              return tagWords.some(word => 
-                word.length >= 3 && this.similarityWithTypoTolerance(keyword, word) >= 0.55
-              );
-            })) return true;
-          }
-        }
-        
-        // Fuzzy tag match on full text
-        return item.tags?.some(tag => {
-          const tagLower = tag.toLowerCase();
-          if (this.similarityWithTypoTolerance(lowerText, tagLower) >= 0.55) return true;
-          const tagWords = tagLower.split(/\s+/);
-          return tagWords.some(word => 
-            word.length >= 3 && this.similarityWithTypoTolerance(lowerText, word) >= 0.6
-          );
-        });
-      });
-      
-      if (matchingItems.length > 0) {
-        console.log(`🔍 Fuzzy match: "${text}" → ${matchingItems.length} items`);
-      }
+    // Also check full text as single term (for multi-word item names like "ice cream")
+    const fullTextMatch = menuItems.filter(item => itemMatchesKeyword(item, lowerText));
+    if (fullTextMatch.length > 0) {
+      console.log(`🔍 Full text match: "${text}" → ${fullTextMatch.length} items`);
+      return fullTextMatch;
     }
     
-    return matchingItems.length > 0 ? matchingItems : null;
+    return null;
   },
 
   // Helper to detect food type preference from message text
