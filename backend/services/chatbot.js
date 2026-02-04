@@ -5658,6 +5658,9 @@ const chatbot = {
 
     // Sync to Google Sheets
     googleSheets.addOrder(order).catch(err => console.error('Google Sheets sync error:', err));
+    
+    // Update daily report in real-time
+    googleSheets.syncTodayDailyReport().catch(err => console.error('Daily report sync error:', err));
 
     // Send push notification to admin for new COD order
     try {
@@ -5948,6 +5951,9 @@ const chatbot = {
 
     // Sync to Google Sheets
     googleSheets.addOrder(order).catch(err => console.error('Google Sheets sync error:', err));
+    
+    // Update daily report in real-time
+    googleSheets.syncTodayDailyReport().catch(err => console.error('Daily report sync error:', err));
 
     // Send push notification to admin for new UPI order
     try {
@@ -6585,6 +6591,9 @@ const chatbot = {
       googleSheets.addOrder(order).catch(err =>
         console.error('Google Sheets sync error:', err)
       );
+      
+      // Update daily report in real-time
+      googleSheets.syncTodayDailyReport().catch(err => console.error('Daily report sync error:', err));
 
       return { success: true, orderId };
     } catch (error) {

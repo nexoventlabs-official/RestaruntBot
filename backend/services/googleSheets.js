@@ -1952,6 +1952,76 @@ const googleSheets = {
     }
   },
 
+  // Real-time sync of daily report - aggregates current day's order data and saves to sheet
+  async syncTodayDailyReport() {
+    try {
+      const Order = require('../models/Order');
+      
+      const today = formatDateDDMMYYYY();
+      const dateFilter = { createdAt: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) } };
+      
+      const [orderStats, itemStats, paymentStats] = await Promise.all([
+        Order.aggregate([
+          { $match: dateFilter },
+          {
+            $group: {
+              _id: null,
+              totalOrders: { $sum: 1 },
+              totalRevenue: { 
+                $sum: { 
+                  $cond: [
+                    { $and: [{ $eq: ['$paymentStatus', 'paid'] }, { $not: { $in: ['$status', ['cancelled', 'refunded']] } }] },
+                    '$totalAmount',
+                    0
+                  ]
+                }
+              },
+              deliveredOrders: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
+              cancelledOrders: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } },
+              refundedOrders: { $sum: { $cond: [{ $eq: ['$status', 'refunded'] }, 1, 0] } }
+            }
+          }
+        ]),
+        Order.aggregate([
+          { $match: { ...dateFilter, status: { $nin: ['cancelled', 'refunded'] } } },
+          { $unwind: '$items' },
+          { $group: { _id: '$items.name', name: { $first: '$items.name' }, quantity: { $sum: '$items.quantity' }, revenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } } } },
+          { $sort: { quantity: -1 } },
+          { $limit: 5 }
+        ]),
+        Order.aggregate([
+          { $match: dateFilter },
+          { $group: { _id: '$paymentMethod', count: { $sum: 1 } } }
+        ])
+      ]);
+      
+      const currentStats = orderStats[0] || { totalOrders: 0, totalRevenue: 0, deliveredOrders: 0, cancelledOrders: 0, refundedOrders: 0 };
+      const totalItemsSold = itemStats.reduce((sum, item) => sum + item.quantity, 0);
+      const codOrders = paymentStats.find(p => p._id === 'cod')?.count || 0;
+      const upiOrders = paymentStats.find(p => p._id === 'upi')?.count || 0;
+      
+      const report = {
+        date: today,
+        revenue: currentStats.totalRevenue,
+        orders: currentStats.totalOrders,
+        deliveredOrders: currentStats.deliveredOrders,
+        cancelledOrders: currentStats.cancelledOrders,
+        refundedOrders: currentStats.refundedOrders,
+        codOrders,
+        upiOrders,
+        itemsSold: totalItemsSold,
+        items: itemStats
+      };
+      
+      await this.saveDailyReport(report);
+      console.log('📊 Daily report synced in real-time');
+      return true;
+    } catch (error) {
+      console.error('❌ Error syncing daily report:', error.message);
+      return false;
+    }
+  },
+
   // Get daily report from sheet
   async getDailyReport(date) {
     try {

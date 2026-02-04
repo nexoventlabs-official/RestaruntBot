@@ -6,10 +6,10 @@ const DashboardStats = require('../models/DashboardStats');
 const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
-// Helper to get today's date string
+// Helper to get today's date string (dd/mm/yyyy format)
 const getTodayString = () => {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
 };
 
 // Helper to get or create stats

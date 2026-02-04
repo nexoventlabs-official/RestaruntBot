@@ -265,62 +265,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             await googleSheets.incrementDashboardStat('Total Orders', 1);
             await googleSheets.incrementDashboardStat('Total Revenue', order.totalAmount || 0);
             
-            // Update today's daily report in real-time
-            const dateFilter = { createdAt: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) } };
-            const [orderStats, itemStats, paymentStats] = await Promise.all([
-              Order.aggregate([
-                { $match: dateFilter },
-                {
-                  $group: {
-                    _id: null,
-                    totalOrders: { $sum: 1 },
-                    totalRevenue: { 
-                      $sum: { 
-                        $cond: [
-                          { $and: [{ $eq: ['$paymentStatus', 'paid'] }, { $not: { $in: ['$status', ['cancelled', 'refunded']] } }] },
-                          '$totalAmount',
-                          0
-                        ]
-                      }
-                    },
-                    deliveredOrders: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
-                    cancelledOrders: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } },
-                    refundedOrders: { $sum: { $cond: [{ $eq: ['$status', 'refunded'] }, 1, 0] } }
-                  }
-                }
-              ]),
-              Order.aggregate([
-                { $match: { ...dateFilter, status: { $nin: ['cancelled', 'refunded'] } } },
-                { $unwind: '$items' },
-                { $group: { _id: '$items.name', name: { $first: '$items.name' }, quantity: { $sum: '$items.quantity' }, revenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } } } },
-                { $sort: { quantity: -1 } },
-                { $limit: 5 }
-              ]),
-              Order.aggregate([
-                { $match: dateFilter },
-                { $group: { _id: '$paymentMethod', count: { $sum: 1 } } }
-              ])
-            ]);
-            
-            const currentStats = orderStats[0] || { totalOrders: 0, totalRevenue: 0, deliveredOrders: 0, cancelledOrders: 0, refundedOrders: 0 };
-            const totalItemsSold = itemStats.reduce((sum, item) => sum + item.quantity, 0);
-            const codOrders = paymentStats.find(p => p._id === 'cod')?.count || 0;
-            const upiOrders = paymentStats.find(p => p._id === 'upi')?.count || 0;
-            
-            const report = {
-              date: today,
-              revenue: currentStats.totalRevenue,
-              orders: currentStats.totalOrders,
-              deliveredOrders: currentStats.deliveredOrders,
-              cancelledOrders: currentStats.cancelledOrders,
-              refundedOrders: currentStats.refundedOrders,
-              codOrders,
-              upiOrders,
-              itemsSold: totalItemsSold,
-              items: itemStats
-            };
-            
-            await googleSheets.saveDailyReport(report);
+            // Update today's daily report in real-time using helper function
+            await googleSheets.syncTodayDailyReport();
             console.log('📊 Google Sheets dashboard and daily report updated in real-time');
           } catch (sheetsErr) {
             console.error('Google Sheets update error:', sheetsErr.message);
@@ -334,6 +280,16 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     // Mark COD orders as cancelled payment status when order is cancelled
     if (status === 'cancelled' && order.paymentMethod === 'cod' && order.paymentStatus === 'pending') {
       order.paymentStatus = 'cancelled';
+    }
+    
+    // Update Google Sheets daily report in real-time for cancelled orders
+    if (status === 'cancelled') {
+      try {
+        await googleSheets.syncTodayDailyReport();
+        console.log('📊 Google Sheets daily report updated for cancelled order');
+      } catch (sheetsErr) {
+        console.error('Google Sheets update error for cancelled order:', sheetsErr.message);
+      }
     }
     
     // Send push notification to delivery partner if order is cancelled and was assigned
