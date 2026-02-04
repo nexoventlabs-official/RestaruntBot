@@ -5330,17 +5330,31 @@ const chatbot = {
 
   async sendQuantitySelection(phone, item) {
     const unitLabel = item.unit || 'piece';
-    const qtyLabel = item.quantity || 1;
+    const baseQty = item.quantity || 1; // Base quantity per unit (e.g., 2 for "2 piece", 500 for "500ml")
     const priceDisplay = formatPriceWithOffer(item);
     const effectivePrice = item.offerPrice || item.price;
     
-    // Create quantity options from 1 to 10 using list message
+    // Create quantity options - show multiples of base quantity
+    // e.g., if item is "2 piece" → show 2, 4, 6, 8... pieces
+    // e.g., if item is "500ml" → show 500, 1000, 1500... ml
     const rows = [];
     for (let i = 1; i <= 10; i++) {
+      const totalQty = baseQty * i;
+      const totalPrice = effectivePrice * i;
+      
+      // Format display based on unit type
+      let displayText;
+      if (unitLabel === 'piece' || unitLabel === 'pieces') {
+        displayText = `${totalQty} ${totalQty === 1 ? 'piece' : 'pieces'}`;
+      } else {
+        // For ml, liter, kg, g, etc. - just show number + unit
+        displayText = `${totalQty} ${unitLabel}`;
+      }
+      
       rows.push({
         id: `qty_${i}`,
-        title: `${i} ${i === 1 ? unitLabel : (unitLabel === 'piece' ? 'pieces' : unitLabel)}`,
-        description: `₹${effectivePrice * i}`
+        title: displayText,
+        description: `₹${totalPrice}`
       });
     }
     
@@ -5355,7 +5369,7 @@ const chatbot = {
     await whatsapp.sendList(
       phone,
       cleanTitle,
-      `💰 ${priceDisplay} / ${qtyLabel} ${unitLabel}\n\nHow many would you like to add?`,
+      `💰 ${priceDisplay} / ${baseQty} ${unitLabel}\n\nHow many would you like to add?`,
       'Select Quantity',
       sections
     );
