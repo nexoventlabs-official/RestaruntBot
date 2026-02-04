@@ -254,6 +254,9 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     });
     
     // Apply offer to selected items and categories (if any items/categories are selected)
+    // NOTE: For targeted offers, we DON'T apply offerPrice to items (discount is calculated at order time for eligible customers only)
+    const isTargetedOffer = ['top_percentage', 'min_spent', 'min_orders'].includes(finalTargetType);
+    
     if (parsedAppliedItems.length > 0 || parsedAppliedCategories.length > 0) {
       const MenuItem = require('../models/MenuItem');
       
@@ -272,6 +275,7 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       }
       
       console.log('Total items to apply offer:', allItemIds.length);
+      console.log('Is targeted offer:', isTargetedOffer, '- offerPrice will', isTargetedOffer ? 'NOT' : '', 'be applied to items');
       
       // Apply offer to all collected items
       for (const itemId of allItemIds) {
@@ -285,12 +289,15 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
           
           const updateFields = { offerType: offerTypes };
           
-          // If percentage is provided, calculate and apply discount
-          if (percentage) {
+          // If percentage is provided AND it's NOT a targeted offer, calculate and apply discount
+          // For targeted offers, discount is applied at order time for eligible customers only
+          if (percentage && !isTargetedOffer) {
             const discountPercent = parseFloat(percentage);
             const offerPrice = Math.round(item.price * (1 - discountPercent / 100));
             updateFields.offerPrice = offerPrice;
             console.log(`Applying to ${item.name}: ${item.price} -> ${offerPrice} (${discountPercent}% OFF)`);
+          } else if (percentage && isTargetedOffer) {
+            console.log(`Targeted offer - NOT applying offerPrice to ${item.name} (${percentage}% discount for eligible customers only)`);
           } else {
             console.log(`Adding offer type to ${item.name}: ${offerType}`);
           }
@@ -502,6 +509,9 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
       }
       
       // Then, apply offer to newly selected items
+      // NOTE: For targeted offers, we DON'T apply offerPrice to items
+      const isTargetedOffer = ['top_percentage', 'min_spent', 'min_orders'].includes(finalTargetType);
+      
       for (const itemId of allItemIds) {
         const item = await MenuItem.findById(itemId);
         if (item) {
@@ -513,8 +523,8 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
           
           const updateFields = { offerType: offerTypes };
           
-          // If percentage is provided, calculate and apply discount
-          if (percentage) {
+          // If percentage is provided AND it's NOT a targeted offer, calculate and apply discount
+          if (percentage && !isTargetedOffer) {
             const discountPercent = parseFloat(percentage);
             const offerPrice = Math.round(item.price * (1 - discountPercent / 100));
             updateFields.offerPrice = offerPrice;

@@ -41,8 +41,9 @@ router.get('/offers', async (req, res) => {
         return true;
       }
       
-      // If targeting top percentage, check if customer is in targeted list
-      if (offer.targetType === 'top_percentage') {
+      // If targeting is set (top_percentage, min_spent, min_orders), check eligibility
+      const isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(offer.targetType);
+      if (isTargeted) {
         // If no customer phone provided, don't show targeted offers
         if (!customerPhone) {
           return false;
@@ -89,8 +90,9 @@ router.get('/popup-offers', async (req, res) => {
         return true;
       }
       
-      // If targeting top percentage, check if customer is in targeted list
-      if (offer.targetType === 'top_percentage') {
+      // If targeting is set (top_percentage, min_spent, min_orders), check eligibility
+      const isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(offer.targetType);
+      if (isTargeted) {
         // If no customer phone provided, don't show targeted offers
         if (!customerPhone) {
           return false;
@@ -171,13 +173,26 @@ router.get('/offers/:offerId/check-eligibility', async (req, res) => {
       });
     }
     
-    // If targeting top percentage, check if customer is in targeted list
-    if (offer.targetType === 'top_percentage') {
+    // If targeting is set (top_percentage, min_spent, min_orders), check if customer is in targeted list
+    const isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(offer.targetType);
+    if (isTargeted) {
       const normalizedPhone = customerPhone.replace(/[^0-9]/g, '');
       const isEligible = offer.targetedCustomers && offer.targetedCustomers.some(phone => {
         const normalizedTargetPhone = phone.replace(/[^0-9]/g, '');
         return normalizedTargetPhone.includes(normalizedPhone) || normalizedPhone.includes(normalizedTargetPhone);
       });
+      
+      // Build contextual message based on targeting type
+      let notEligibleMessage = 'Sorry, your number is not eligible for this exclusive offer';
+      if (!isEligible) {
+        if (offer.targetType === 'min_spent') {
+          notEligibleMessage = `This offer is for customers who have spent ₹${offer.targetMinSpent || 0}+ with us. Keep ordering!`;
+        } else if (offer.targetType === 'min_orders') {
+          notEligibleMessage = `This offer is for customers who have placed ${offer.targetMinOrders || 0}+ orders. Keep ordering!`;
+        } else if (offer.targetType === 'top_percentage') {
+          notEligibleMessage = 'This is an exclusive offer for our top customers';
+        }
+      }
       
       return res.json({ 
         success: true, 
@@ -185,7 +200,7 @@ router.get('/offers/:offerId/check-eligibility', async (req, res) => {
         reason: isEligible ? 'targeted_customer' : 'not_targeted',
         message: isEligible 
           ? 'You are eligible for this exclusive offer!' 
-          : 'Sorry, your number is not eligible for this exclusive offer',
+          : notEligibleMessage,
         offer: isEligible ? {
           title: offer.title,
           description: offer.description,
@@ -261,7 +276,7 @@ router.get('/categories', async (req, res) => {
 // Returns ALL items including sold out and scheduled locked items with status
 router.get('/menu', async (req, res) => {
   try {
-    const { category, foodType } = req.query;
+    const { category, foodType, customerPhone } = req.query;
     const query = {};
     if (category) query.category = category;
     if (foodType && foodType !== 'all') query.foodType = foodType;
@@ -287,9 +302,31 @@ router.get('/menu', async (req, res) => {
       .filter(c => c.isSoldOut)
       .map(c => c.name);
     
-    // Get all active offer types
-    const activeOffers = await Offer.find({ isActive: true }).select('offerType');
+    // Get all active offers with targeting info
+    const activeOffers = await Offer.find({ isActive: true }).select('offerType targetType targetedCustomers');
     const activeOfferTypes = activeOffers.map(o => o.offerType).filter(Boolean);
+    
+    // Identify targeted offer types that the customer is NOT eligible for
+    const targetedOfferTypesToHide = [];
+    for (const offer of activeOffers) {
+      const isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(offer.targetType);
+      if (isTargeted) {
+        if (!customerPhone) {
+          // No customer phone - hide all targeted offers
+          if (offer.offerType) targetedOfferTypesToHide.push(offer.offerType);
+        } else {
+          // Check if customer is eligible
+          const normalizedPhone = customerPhone.replace(/[^0-9]/g, '');
+          const isEligible = offer.targetedCustomers && offer.targetedCustomers.some(phone => {
+            const normalizedTargetPhone = phone.replace(/[^0-9]/g, '');
+            return normalizedTargetPhone.includes(normalizedPhone) || normalizedPhone.includes(normalizedTargetPhone);
+          });
+          if (!isEligible && offer.offerType) {
+            targetedOfferTypesToHide.push(offer.offerType);
+          }
+        }
+      }
+    }
     
     // Helper to get schedule info for an item
     const getItemScheduleInfo = (item) => {
@@ -362,8 +399,10 @@ router.get('/menu', async (req, res) => {
     const allItems = items.map(item => {
       const itemObj = item.toObject();
       if (itemObj.offerType && itemObj.offerType.length > 0) {
-        // Only keep offer types that are active
-        itemObj.offerType = itemObj.offerType.filter(ot => activeOfferTypes.includes(ot));
+        // Only keep offer types that are active AND not targeted (for non-eligible customers)
+        itemObj.offerType = itemObj.offerType.filter(ot => 
+          activeOfferTypes.includes(ot) && !targetedOfferTypesToHide.includes(ot)
+        );
       }
       // Add item status for frontend display
       itemObj.itemStatus = getItemStatus(item);

@@ -59,9 +59,21 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
       const offer = await Offer.findById(offerId);
       if (offer) {
         targetType = offer.targetType || 'all';
-        if (targetType === 'top_percentage' && offer.targetedCustomers && offer.targetedCustomers.length > 0) {
+        // Check for any targeted offer type (not just top_percentage)
+        const isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(targetType);
+        if (isTargeted && offer.targetedCustomers && offer.targetedCustomers.length > 0) {
           targetedCustomers = offer.targetedCustomers;
-          console.log(`[WhatsApp Broadcast] Targeting ${targetedCustomers.length} specific customers`);
+          console.log(`[WhatsApp Broadcast] Targeting ${targetedCustomers.length} specific customers (${targetType})`);
+        } else if (isTargeted && (!offer.targetedCustomers || offer.targetedCustomers.length === 0)) {
+          // Targeted offer but no eligible customers
+          console.log(`[WhatsApp Broadcast] No eligible customers for ${targetType} targeting`);
+          return res.json({
+            success: false,
+            message: 'No eligible customers found for this targeting criteria. Please adjust your targeting settings.',
+            total: 0,
+            sent: 0,
+            failed: 0
+          });
         }
       }
     }
