@@ -282,13 +282,13 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
       order.paymentStatus = 'cancelled';
     }
     
-    // Update Google Sheets daily report in real-time for cancelled orders
-    if (status === 'cancelled') {
+    // Update Google Sheets daily report in real-time for delivered/cancelled orders
+    if (status === 'delivered' || status === 'cancelled') {
       try {
         await googleSheets.syncTodayDailyReport();
-        console.log('📊 Google Sheets daily report updated for cancelled order');
+        console.log(`📊 Google Sheets daily report updated for ${status} order`);
       } catch (sheetsErr) {
-        console.error('Google Sheets update error for cancelled order:', sheetsErr.message);
+        console.error(`Google Sheets update error for ${status} order:`, sheetsErr.message);
       }
     }
     

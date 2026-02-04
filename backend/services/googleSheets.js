@@ -1623,10 +1623,10 @@ const googleSheets = {
       });
       
       if (!response.data.values || response.data.values.length === 0) {
-        const headers = ['Date', 'Revenue', 'Total Orders', 'Delivered', 'Cancelled', 'Refunded', 'COD Orders', 'UPI Orders', 'Items Sold', 'Top Items'];
+        const headers = ['Date', 'Revenue', 'Total Orders', 'Delivered', 'Cancelled', 'COD Orders', 'UPI Orders', 'Items Sold', 'Top Items'];
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${sheet.sheetName}!A1:J1`,
+          range: `${sheet.sheetName}!A1:I1`,
           valueInputOption: 'RAW',
           resource: { values: [headers] }
         });
@@ -1638,7 +1638,7 @@ const googleSheets = {
             requests: [
               {
                 repeatCell: {
-                  range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 10 },
+                  range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 9 },
                   cell: {
                     userEnteredFormat: {
                       backgroundColor: { red: 0.4, green: 0.2, blue: 0.6 },  // Purple
@@ -1656,11 +1656,10 @@ const googleSheets = {
               { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },  // Total Orders
               { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },   // Delivered
               { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },   // Cancelled
-              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },   // Refunded
-              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // COD Orders
-              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 7, endIndex: 8 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // UPI Orders
-              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 8, endIndex: 9 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // Items Sold
-              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 9, endIndex: 10 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } }, // Top Items
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // COD Orders
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // UPI Orders
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 7, endIndex: 8 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },   // Items Sold
+              { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 8, endIndex: 9 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } }, // Top Items
               // Freeze header row
               { updateSheetProperties: { properties: { sheetId: sheet.sheetId, gridProperties: { frozenRowCount: 1 } }, fields: 'gridProperties.frozenRowCount' } }
             ]
@@ -1716,7 +1715,6 @@ const googleSheets = {
         orders || 0,
         deliveredOrders || 0,
         cancelledOrders || 0,
-        refundedOrders || 0,
         codOrders || 0,
         upiOrders || 0,
         itemsSold || 0,
@@ -1727,7 +1725,7 @@ const googleSheets = {
         // Update existing row
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${sheet.sheetName}!A${existingRowIndex + 1}:J${existingRowIndex + 1}`,
+          range: `${sheet.sheetName}!A${existingRowIndex + 1}:I${existingRowIndex + 1}`,
           valueInputOption: 'RAW',
           resource: { values: [rowData] }
         });
@@ -1750,7 +1748,7 @@ const googleSheets = {
                   startRowIndex: existingRowIndex, 
                   endRowIndex: existingRowIndex + 1, 
                   startColumnIndex: 0, 
-                  endColumnIndex: 10 
+                  endColumnIndex: 9 
                 },
                 cell: {
                   userEnteredFormat: {
@@ -1784,7 +1782,7 @@ const googleSheets = {
         
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${sheet.sheetName}!A2:J2`,
+          range: `${sheet.sheetName}!A2:I2`,
           valueInputOption: 'RAW',
           resource: { values: [rowData] }
         });
@@ -1807,7 +1805,7 @@ const googleSheets = {
                   startRowIndex: 1, 
                   endRowIndex: 2, 
                   startColumnIndex: 0, 
-                  endColumnIndex: 10 
+                  endColumnIndex: 9 
                 },
                 cell: {
                   userEnteredFormat: {
@@ -1860,8 +1858,7 @@ const googleSheets = {
                 }
               },
               deliveredOrders: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
-              cancelledOrders: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } },
-              refundedOrders: { $sum: { $cond: [{ $eq: ['$status', 'refunded'] }, 1, 0] } }
+              cancelledOrders: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } }
             }
           }
         ]),
@@ -1878,7 +1875,7 @@ const googleSheets = {
         ])
       ]);
       
-      const currentStats = orderStats[0] || { totalOrders: 0, totalRevenue: 0, deliveredOrders: 0, cancelledOrders: 0, refundedOrders: 0 };
+      const currentStats = orderStats[0] || { totalOrders: 0, totalRevenue: 0, deliveredOrders: 0, cancelledOrders: 0 };
       const totalItemsSold = itemStats.reduce((sum, item) => sum + item.quantity, 0);
       const codOrders = paymentStats.find(p => p._id === 'cod')?.count || 0;
       const upiOrders = paymentStats.find(p => p._id === 'upi')?.count || 0;
@@ -1889,7 +1886,6 @@ const googleSheets = {
         orders: currentStats.totalOrders,
         deliveredOrders: currentStats.deliveredOrders,
         cancelledOrders: currentStats.cancelledOrders,
-        refundedOrders: currentStats.refundedOrders,
         codOrders,
         upiOrders,
         itemsSold: totalItemsSold,
@@ -1930,10 +1926,9 @@ const googleSheets = {
             orders: parseInt(rows[i][2]) || 0,
             deliveredOrders: parseInt(rows[i][3]) || 0,
             cancelledOrders: parseInt(rows[i][4]) || 0,
-            refundedOrders: parseInt(rows[i][5]) || 0,
-            codOrders: parseInt(rows[i][6]) || 0,
-            upiOrders: parseInt(rows[i][7]) || 0,
-            itemsSold: parseInt(rows[i][8]) || 0
+            codOrders: parseInt(rows[i][5]) || 0,
+            upiOrders: parseInt(rows[i][6]) || 0,
+            itemsSold: parseInt(rows[i][7]) || 0
           };
         }
       }
@@ -1975,10 +1970,9 @@ const googleSheets = {
             orders: parseInt(rows[i][2]) || 0,
             deliveredOrders: parseInt(rows[i][3]) || 0,
             cancelledOrders: parseInt(rows[i][4]) || 0,
-            refundedOrders: parseInt(rows[i][5]) || 0,
-            codOrders: parseInt(rows[i][6]) || 0,
-            upiOrders: parseInt(rows[i][7]) || 0,
-            itemsSold: parseInt(rows[i][8]) || 0
+            codOrders: parseInt(rows[i][5]) || 0,
+            upiOrders: parseInt(rows[i][6]) || 0,
+            itemsSold: parseInt(rows[i][7]) || 0
           });
         }
       }
@@ -2467,11 +2461,11 @@ const googleSheets = {
       });
       
       // ROW FORMAT: Metrics as column headers, each date is a row
-      const headers = ['Date', 'Revenue', 'Total Orders', 'Delivered', 'Cancelled', 'Refunded', 'COD Orders', 'UPI Orders', 'Items Sold', 'Top Items'];
+      const headers = ['Date', 'Revenue', 'Total Orders', 'Delivered', 'Cancelled', 'COD Orders', 'UPI Orders', 'Items Sold', 'Top Items'];
       
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheet.sheetName}!A1:J1`,
+        range: `${sheet.sheetName}!A1:I1`,
         valueInputOption: 'RAW',
         resource: { values: [headers] }
       });
@@ -2484,7 +2478,7 @@ const googleSheets = {
             // Header row formatting - Professional purple
             {
               repeatCell: {
-                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 10 },
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 9 },
                 cell: {
                   userEnteredFormat: {
                     backgroundColor: { red: 0.4, green: 0.2, blue: 0.6 },
@@ -2502,11 +2496,10 @@ const googleSheets = {
             { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
             { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
             { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },
             { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },
             { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 7, endIndex: 8 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 8, endIndex: 9 }, properties: { pixelSize: 90 }, fields: 'pixelSize' } },
-            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 9, endIndex: 10 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } },
+            { updateDimensionProperties: { range: { sheetId: sheet.sheetId, dimension: 'COLUMNS', startIndex: 8, endIndex: 9 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } },
             // Freeze header row
             {
               updateSheetProperties: {
