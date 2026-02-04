@@ -6384,10 +6384,12 @@ const chatbot = {
     msg += '🏪 *Pickup Location:* Restaurant\n\n';
     msg += '💳 *Choose Payment Method:*';
 
-    await whatsapp.sendButtons(phone, msg, [
+    // Get pickup order summary image
+    const pickupOrderSummaryImageUrl = await chatbotImagesService.getImageUrl('pickup_order_summary');
+    await sendWithOptionalImage(phone, pickupOrderSummaryImageUrl, msg, [
       { id: 'pickup_pay_hotel', text: 'Pay at Hotel' },
       { id: 'pickup_pay_upi', text: 'UPI/App' }
-    ], 'Select payment method');
+    ]);
   },
 
   // ============ PROCESS PICKUP CHECKOUT ============
@@ -6478,8 +6480,9 @@ const chatbot = {
         msg += 'Please complete the payment to confirm your order.';
       }
 
-      // Add cancel button for pickup orders (can only cancel before confirmation)
-      await whatsapp.sendButtons(phone, msg, [
+      // Get pickup confirmed image and send with buttons
+      const pickupConfirmedImageUrl = await chatbotImagesService.getImageUrl('pickup_confirmed');
+      await sendWithOptionalImage(phone, pickupConfirmedImageUrl, msg, [
         { id: 'track_order', text: 'Track Order' },
         { id: `cancel_${orderId}`, text: 'Cancel Order' },
         { id: 'home', text: 'Main Menu' }

@@ -527,13 +527,49 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             msg += `\n\n⚠️ *Refund Issue*\nWe couldn't process your refund automatically.\nAmount: ₹${order.totalAmount}\n\nOur team will contact you within 24 hours to resolve this.`;
           }
           
-          // Use pickup-specific cancelled image if it's a pickup order
-          const cancelledImageKey = isPickupOrder ? 'pickup_cancelled' : 'order_cancelled';
-          const cancelledImageUrl = await chatbotImagesService.getImageUrl(cancelledImageKey);
-          if (cancelledImageUrl) {
-            await whatsapp.sendImage(order.customer.phone, cancelledImageUrl, msg);
+          // Use pickup-specific cancelled by restaurant image for pay-at-hotel pickup orders
+          if (isPickupOrder && order.paymentMethod === 'cod') {
+            // Pickup order cancelled by restaurant (pay at hotel)
+            const cancelledByRestaurantImageUrl = await chatbotImagesService.getImageUrl('pickup_cancelled_by_restaurant');
+            const cancelMsg = `❌ *Order Cancelled by Restaurant*\n\nOrder ID: *${order.orderId}*\n\nWe're sorry, but your self-pickup order has been cancelled by the restaurant.\n\nIf you have any questions, please contact us.`;
+            
+            await sendWithOptionalImage(
+              order.customer.phone,
+              cancelledByRestaurantImageUrl,
+              cancelMsg,
+              [
+                { id: 'view_menu', text: '📋 Menu' },
+                { id: 'help', text: '❓ Help' }
+              ]
+            );
+          } else if (!isPickupOrder && order.paymentMethod === 'cod') {
+            // Delivery COD order cancelled by restaurant
+            const cancelledByRestaurantImageUrl = await chatbotImagesService.getImageUrl('order_cancelled_by_restaurant');
+            const cancelMsg = `❌ *Order Cancelled by Restaurant*\n\nOrder ID: *${order.orderId}*\n\nWe're sorry, but your order has been cancelled by the restaurant.\n\nIf you have any questions, please contact us.`;
+            
+            await sendWithOptionalImage(
+              order.customer.phone,
+              cancelledByRestaurantImageUrl,
+              cancelMsg,
+              [
+                { id: 'view_menu', text: '📋 Menu' },
+                { id: 'help', text: '❓ Help' }
+              ]
+            );
           } else {
-            await whatsapp.sendMessage(order.customer.phone, msg);
+            // Use regular cancelled image for other orders (UPI cancelled, etc.)
+            const cancelledImageKey = isPickupOrder ? 'pickup_cancelled' : 'order_cancelled';
+            const cancelledImageUrl = await chatbotImagesService.getImageUrl(cancelledImageKey);
+            
+            await sendWithOptionalImage(
+              order.customer.phone,
+              cancelledImageUrl,
+              msg,
+              [
+                { id: 'view_menu', text: '📋 Menu' },
+                { id: 'help', text: '❓ Help' }
+              ]
+            );
           }
         } else {
           // Other statuses (confirmed, etc.)

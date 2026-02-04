@@ -218,6 +218,24 @@ const defaultImages = [
     name: 'Pickup Cancel Restricted',
     description: 'Shown when customer tries to cancel pickup order after confirmation',
     imageUrl: ''
+  },
+  {
+    key: 'pickup_order_summary',
+    name: 'Pickup Order Summary',
+    description: 'Shown when displaying order summary for self-pickup before payment selection',
+    imageUrl: ''
+  },
+  {
+    key: 'pickup_cancelled_by_restaurant',
+    name: 'Pickup Order Cancelled by Restaurant',
+    description: 'Shown when admin cancels a self-pickup pay-at-hotel order from the app',
+    imageUrl: ''
+  },
+  {
+    key: 'order_cancelled_by_restaurant',
+    name: 'Delivery Order Cancelled by Restaurant',
+    description: 'Shown when admin cancels a COD delivery order from the app',
+    imageUrl: ''
   }
 ];
 
