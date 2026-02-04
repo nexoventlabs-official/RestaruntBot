@@ -2900,19 +2900,37 @@ const chatbot = {
     // Helper to normalize text for comparison (removes spaces for flexible matching)
     const normalizeForMatch = (text) => text.toLowerCase().replace(/\s+/g, '');
     
+    // Helper to check if words match in any order (e.g., "idli sambar" matches "sambar idli")
+    const matchesInAnyOrder = (searchWords, targetText) => {
+      const targetLower = targetText.toLowerCase();
+      const targetNorm = normalizeForMatch(targetText);
+      // Check if all search words appear in the target (in any order)
+      return searchWords.every(word => {
+        const wordLower = word.toLowerCase();
+        // Check both normal and normalized versions
+        return targetLower.includes(wordLower) || targetNorm.includes(wordLower);
+      });
+    };
+    
     // ========== CHECK FOR EXACT NAME MATCH FIRST ==========
     // If search term exactly matches item name(s) (with or without spaces), return ALL exact matches
     if (hasSearchTerm) {
+      const searchWords = primarySearchTerm.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
+      
       for (const searchTerm of uniqueSearchTerms) {
         const searchLower = searchTerm.toLowerCase();
         const searchNorm = normalizeForMatch(searchTerm);
+        const termWords = searchLower.split(/\s+/).filter(w => w.length >= 2);
         
         // Find ALL items with exact name match (not just first one) - use searchableItems (filtered by food type)
         const exactMatches = searchableItems.filter(item => {
           const nameLower = item.name.toLowerCase();
           const nameNorm = normalizeForMatch(item.name);
           // Match exact (with spaces) OR normalized (without spaces)
-          return nameLower === searchLower || nameNorm === searchNorm;
+          if (nameLower === searchLower || nameNorm === searchNorm) return true;
+          // Match words in any order (e.g., "idli sambar" matches "sambar idli")
+          if (termWords.length > 1 && matchesInAnyOrder(termWords, item.name)) return true;
+          return false;
         });
         
         if (exactMatches.length > 0) {

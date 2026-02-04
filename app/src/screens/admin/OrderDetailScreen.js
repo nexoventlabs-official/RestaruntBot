@@ -148,12 +148,23 @@ export default function OrderDetailScreen({ route, navigation }) {
     return null;
   };
 
+  const confirmAssignPartner = (partner) => {
+    Alert.alert(
+      'Assign Delivery Partner',
+      `Assign this order to ${partner.name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Proceed', onPress: () => updateStatus('preparing', partner._id) }
+      ]
+    );
+  };
+
   const renderDeliveryPartner = ({ item }) => {
     const isAssigning = assigningPartnerId === item._id;
     return (
       <TouchableOpacity
         style={[styles.partnerCard, !item.isActive && styles.partnerCardDisabled, isAssigning && styles.partnerCardSelected]}
-        onPress={() => item.isActive && !assigningPartnerId && updateStatus('preparing', item._id)}
+        onPress={() => item.isActive && !assigningPartnerId && confirmAssignPartner(item)}
         disabled={!item.isActive || loading || assigningPartnerId}
         activeOpacity={0.7}
       >
