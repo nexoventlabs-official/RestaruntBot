@@ -111,8 +111,8 @@ export default function OfferFormScreen({ route, navigation }) {
         endpoint = `/offers/customers/min-orders/${value}`;
       }
       
-      // Use a shorter timeout for stats preview (10 seconds)
-      const response = await api.get(endpoint, { timeout: 10000 });
+      // No timeout - let it run in background while UI updates
+      const response = await api.get(endpoint);
       if (response.data.success) {
         setCustomerStats({
           total: response.data.totalCustomers || 0,
@@ -679,16 +679,10 @@ export default function OfferFormScreen({ route, navigation }) {
                     
                     {/* Customer Stats Preview */}
                     <View style={styles.customerStatsContainer}>
-                      {loadingCustomerStats ? (
-                        <ActivityIndicator size="small" color={ZOMATO_RED} />
-                      ) : (
-                        <>
-                          <Ionicons name="analytics" size={16} color="#6B7280" />
-                          <Text style={styles.customerStatsText}>
-                            {customerStats.selected} of {customerStats.total} customers will see this offer
-                          </Text>
-                        </>
-                      )}
+                      <Ionicons name="analytics" size={16} color="#6B7280" />
+                      <Text style={styles.customerStatsText}>
+                        {customerStats.selected} of {customerStats.total} customers will see this offer
+                      </Text>
                     </View>
                     
                     <Text style={styles.targetPercentageHint}>
@@ -722,16 +716,10 @@ export default function OfferFormScreen({ route, navigation }) {
                     
                     {/* Customer Stats Preview */}
                     <View style={styles.customerStatsContainer}>
-                      {loadingCustomerStats ? (
-                        <ActivityIndicator size="small" color={ZOMATO_RED} />
-                      ) : (
-                        <>
-                          <Ionicons name="analytics" size={16} color="#6B7280" />
-                          <Text style={styles.customerStatsText}>
-                            {customerStats.selected} of {customerStats.total} customers will see this offer
-                          </Text>
-                        </>
-                      )}
+                      <Ionicons name="analytics" size={16} color="#6B7280" />
+                      <Text style={styles.customerStatsText}>
+                        {customerStats.selected} of {customerStats.total} customers will see this offer
+                      </Text>
                     </View>
                     
                     <Text style={styles.targetPercentageHint}>
@@ -766,16 +754,10 @@ export default function OfferFormScreen({ route, navigation }) {
                     
                     {/* Customer Stats Preview */}
                     <View style={styles.customerStatsContainer}>
-                      {loadingCustomerStats ? (
-                        <ActivityIndicator size="small" color={ZOMATO_RED} />
-                      ) : (
-                        <>
-                          <Ionicons name="analytics" size={16} color="#6B7280" />
-                          <Text style={styles.customerStatsText}>
-                            {customerStats.selected} of {customerStats.total} customers will see this offer
-                          </Text>
-                        </>
-                      )}
+                      <Ionicons name="analytics" size={16} color="#6B7280" />
+                      <Text style={styles.customerStatsText}>
+                        {customerStats.selected} of {customerStats.total} customers will see this offer
+                      </Text>
                     </View>
                     
                     <Text style={styles.targetPercentageHint}>
