@@ -186,7 +186,13 @@ const defaultImages = [
   {
     key: 'pickup_confirmed',
     name: 'Pickup Order Confirmed',
-    description: 'Shown when pickup order is confirmed by admin',
+    description: 'Shown when pickup order is confirmed by admin from dashboard',
+    imageUrl: ''
+  },
+  {
+    key: 'pickup_order_requested',
+    name: 'Pickup Order Requested',
+    description: 'Shown when customer places a self-pickup pay-at-hotel order request',
     imageUrl: ''
   },
   {

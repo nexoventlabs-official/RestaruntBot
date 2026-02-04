@@ -34,6 +34,7 @@ const chatbotImageSchema = new mongoose.Schema({
       'cart_expiry_warning',
       'cart_items_removed',
       'pickup_confirmed',
+      'pickup_order_requested',
       'pickup_ready',
       'pickup_completed',
       'pickup_tracking',

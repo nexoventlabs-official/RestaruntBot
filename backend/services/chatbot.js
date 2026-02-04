@@ -6480,9 +6480,9 @@ const chatbot = {
         msg += 'Please complete the payment to confirm your order.';
       }
 
-      // Get pickup confirmed image and send with buttons
-      const pickupConfirmedImageUrl = await chatbotImagesService.getImageUrl('pickup_confirmed');
-      await sendWithOptionalImage(phone, pickupConfirmedImageUrl, msg, [
+      // Get pickup order requested image and send with buttons
+      const pickupOrderRequestedImageUrl = await chatbotImagesService.getImageUrl('pickup_order_requested');
+      await sendWithOptionalImage(phone, pickupOrderRequestedImageUrl, msg, [
         { id: 'track_order', text: 'Track Order' },
         { id: `cancel_${orderId}`, text: 'Cancel Order' },
         { id: 'home', text: 'Main Menu' }
