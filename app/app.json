@@ -55,7 +55,19 @@
           "defaultChannel": "default",
           "enableBackgroundRemoteNotifications": true
         }
-      ]
+      ],
+      [
+        "@react-native-firebase/app",
+        {
+          "ios": {
+            "googleServicesFile": "./ios/GoogleService-Info.plist"
+          },
+          "android": {
+            "googleServicesFile": "./android/app/google-services.json"
+          }
+        }
+      ],
+      "@react-native-firebase/messaging"
     ],
     "extra": {
       "eas": {
