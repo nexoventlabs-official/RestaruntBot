@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">5.83% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/137</span>
+                <span class='fraction'>8/137</span>
             </div>
         
             
@@ -37,16 +37,16 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">4.54% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/22</span>
+                <span class='fraction'>1/22</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">5.92% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/135</span>
+                <span class='fraction'>8/135</span>
             </div>
         
             
@@ -573,16 +573,16 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -765,7 +765,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1022,7 +1022,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1062,16 +1062,16 @@
  * Lines: 524 (comprehensive menu logic)
  */
 &nbsp;
-const MenuItem = <span class="cstat-no" title="statement not covered" >require('../../models/MenuItem');</span>
-const Category = <span class="cstat-no" title="statement not covered" >require('../../models/Category');</span>
-const conversationState = <span class="cstat-no" title="statement not covered" >require('../conversationState');</span>
-const whatsapp = <span class="cstat-no" title="statement not covered" >require('../whatsapp');</span>
-const chatbotImagesService = <span class="cstat-no" title="statement not covered" >require('../chatbotImages');</span>
+const MenuItem = require('../../models/MenuItem');
+const Category = require('../../models/Category');
+const conversationState = require('../conversationState');
+const whatsapp = require('../whatsapp');
+const chatbotImagesService = require('../chatbotImages');
 &nbsp;
 /**
  * Food type constants
  */
-const FOOD_TYPES = <span class="cstat-no" title="statement not covered" >{</span>
+const FOOD_TYPES = {
   VEG: 'veg',
   NON_VEG: 'nonveg',
   EGG: 'egg',
@@ -1253,8 +1253,8 @@ async function <span class="fstat-no" title="function not covered" >showCategory
 /**
  * Show item details with full information
  */
-async function <span class="fstat-no" title="function not covered" >showItemDetails(</span>customer, phone, params) {
-  const { itemId } = <span class="cstat-no" title="statement not covered" >params;</span>
+async function showItemDetails(customer, phone, params) {
+  const { itemId } = params;
   
   const item = <span class="cstat-no" title="statement not covered" >await MenuItem.findById(itemId);</span>
   
@@ -1511,7 +1511,7 @@ function <span class="fstat-no" title="function not covered" >formatPrice(</span
 <span class="cstat-no" title="statement not covered" >  return `₹${item.price}`;</span>
 }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >module.exports = {</span>
+module.exports = {
   // Main functions (13 exported)
   showMainMenu,
   showFoodTypeSelection,
@@ -1537,7 +1537,7 @@ function <span class="fstat-no" title="function not covered" >formatPrice(</span
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T07:11:37.908Z
+                at 2026-02-05T11:07:48.076Z
             </div>
         <script src="../../prettify.js"></script>
         <script>
