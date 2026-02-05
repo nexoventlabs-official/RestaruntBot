@@ -2,7 +2,11 @@ const express = require('express');
 const Customer = require('../models/Customer');
 const Order = require('../models/Order');
 const authMiddleware = require('../middleware/auth');
+const { adminRateLimiter } = require('../middleware/rateLimiter');
 const router = express.Router();
+
+// Apply admin rate limiting
+router.use(adminRateLimiter);
 
 router.get('/', authMiddleware, async (req, res) => {
   try {

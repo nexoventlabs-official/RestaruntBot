@@ -4,7 +4,11 @@ const Customer = require('../models/Customer');
 const MenuItem = require('../models/MenuItem');
 const DashboardStats = require('../models/DashboardStats');
 const authMiddleware = require('../middleware/auth');
+const { adminRateLimiter } = require('../middleware/rateLimiter');
 const router = express.Router();
+
+// Apply admin rate limiting
+router.use(adminRateLimiter);
 
 // Helper to get today's date string (dd/mm/yyyy format)
 const getTodayString = () => {

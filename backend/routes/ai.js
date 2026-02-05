@@ -1,7 +1,11 @@
 const express = require('express');
 const groqAi = require('../services/groqAi');
 const authMiddleware = require('../middleware/auth');
+const { adminRateLimiter } = require('../middleware/rateLimiter');
 const router = express.Router();
+
+// Apply admin rate limiting
+router.use(adminRateLimiter);
 
 router.post('/generate-description', authMiddleware, async (req, res) => {
   try {

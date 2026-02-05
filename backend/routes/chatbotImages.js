@@ -4,7 +4,11 @@ const ChatbotImage = require('../models/ChatbotImage');
 const cloudinaryService = require('../services/cloudinary');
 const chatbotImagesService = require('../services/chatbotImages');
 const auth = require('../middleware/auth');
+const { adminRateLimiter } = require('../middleware/rateLimiter');
 const multer = require('multer');
+
+// Apply admin rate limiting
+router.use(adminRateLimiter);
 
 // Configure multer for memory storage
 const upload = multer({

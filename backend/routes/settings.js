@@ -1,10 +1,15 @@
 const express = require('express');
 const Settings = require('../models/Settings');
 const authMiddleware = require('../middleware/auth');
+const { authorizeAdmin } = require('../middleware/authorize');
+const { adminRateLimiter } = require('../middleware/rateLimiter');
 const router = express.Router();
 
+// Apply admin rate limiting
+router.use(adminRateLimiter);
+
 // Get all settings (admin only)
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const settings = await Settings.find();
     const settingsObj = {};
@@ -30,7 +35,7 @@ router.get('/:key', async (req, res) => {
 });
 
 // Update a setting (admin only)
-router.put('/:key', authMiddleware, async (req, res) => {
+router.put('/:key', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const { value } = req.body;
     const setting = await Settings.setValue(req.params.key, value, req.user?.username);
@@ -43,7 +48,7 @@ router.put('/:key', authMiddleware, async (req, res) => {
 });
 
 // Toggle holiday mode (admin only)
-router.post('/holiday/toggle', authMiddleware, async (req, res) => {
+router.post('/holiday/toggle', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const currentValue = await Settings.getValue('holidayMode', false);
     const newValue = !currentValue;

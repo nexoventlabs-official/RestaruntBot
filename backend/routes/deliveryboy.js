@@ -10,8 +10,12 @@ const whatsapp = require('../services/whatsapp');
 const chatbotImagesService = require('../services/chatbotImages');
 const dataEvents = require('../services/eventEmitter');
 const razorpayService = require('../services/razorpay');
+const { adminRateLimiter, authRateLimiter } = require('../middleware/rateLimiter');
 const multer = require('multer');
 const router = express.Router();
+
+// Apply admin rate limiting (most routes are admin)
+router.use(adminRateLimiter);
 
 // Configure multer for memory storage
 const upload = multer({

@@ -4,10 +4,19 @@ const whatsapp = require('../services/whatsapp');
 const googleSheets = require('../services/googleSheets');
 const metaCloud = require('../services/metaCloud');
 const groqAi = require('../services/groqAi');
+const messageProcessor = require('../services/messageProcessor');
+const messageQueue = require('../services/messageQueue'); // Phase 6.4: Message queue
+const { webhookRateLimiter } = require('../middleware/rateLimiterRedis'); // Phase 6.4: Redis rate limiter
+const { verifyWebhookSignature } = require('../middleware/webhookVerification');
+const { authenticate } = require('../middleware/authenticate');
+const { authorizeAdmin } = require('../middleware/authorize');
 const router = express.Router();
 
-// Test Google Sheets connection
-router.get('/test-sheets', async (req, res) => {
+// Apply rate limiting to webhook routes
+router.use(webhookRateLimiter);
+
+// Test Google Sheets connection (admin only)
+router.get('/test-sheets', authenticate, authorizeAdmin, async (req, res) => {
   try {
     const testOrder = {
       orderId: 'TEST' + Date.now(),
@@ -29,8 +38,8 @@ router.get('/test-sheets', async (req, res) => {
   }
 });
 
-// Test endpoint - send a test message
-router.get('/test/:phone', async (req, res) => {
+// Test endpoint - send a test message (admin only)
+router.get('/test/:phone', authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { phone } = req.params;
     await whatsapp.sendMessage(phone, '✅ Test message from your Restaurant Bot!');
@@ -41,11 +50,28 @@ router.get('/test/:phone', async (req, res) => {
   }
 });
 
-// Test endpoint - send welcome menu with buttons
-router.get('/test-menu/:phone', async (req, res) => {
+// Test endpoint - send welcome menu with buttons (admin only)
+router.get('/test-menu/:phone', authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { phone } = req.params;
-    await chatbot.handleMessage(phone, 'hi', 'text', null);
+    
+    // Generate unique test message ID
+    const messageId = `test_menu_${Date.now()}_${phone}`;
+    
+    // Process through envelope layer
+    await messageProcessor.processInboundMessage(
+      messageId,
+      phone,
+      'hi',
+      'text',
+      null,
+      'Test User',
+      {
+        source: 'test_endpoint',
+        timestamp: Date.now()
+      }
+    );
+    
     res.json({ success: true, message: 'Welcome menu sent to ' + phone });
   } catch (error) {
     console.error('Test menu error:', error);
@@ -53,13 +79,31 @@ router.get('/test-menu/:phone', async (req, res) => {
   }
 });
 
-// Simulate incoming message (for testing when Meta test number doesn't forward messages)
-router.post('/simulate', async (req, res) => {
+// Simulate incoming message (admin only - for testing)
+router.post('/simulate', authenticate, authorizeAdmin, async (req, res) => {
   try {
     const { phone, message, selectedId } = req.body;
     const messageType = selectedId ? 'list' : 'text';
+    
     console.log('🧪 Simulating message:', { phone, message, messageType, selectedId });
-    await chatbot.handleMessage(phone, message || '', messageType, selectedId || null);
+    
+    // Generate unique simulation message ID
+    const messageId = `sim_${Date.now()}_${phone}`;
+    
+    // Process through envelope layer
+    await messageProcessor.processInboundMessage(
+      messageId,
+      phone,
+      message || '',
+      messageType,
+      selectedId || null,
+      'Simulated User',
+      {
+        source: 'simulation',
+        timestamp: Date.now()
+      }
+    );
+    
     res.json({ success: true, message: 'Simulated message processed' });
   } catch (error) {
     console.error('Simulate error:', error);
@@ -67,8 +111,8 @@ router.post('/simulate', async (req, res) => {
   }
 });
 
-// Debug endpoint to check customer state
-router.get('/debug/:phone', async (req, res) => {
+// Debug endpoint to check customer state (admin only)
+router.get('/debug/:phone', authenticate, authorizeAdmin, async (req, res) => {
   try {
     const Customer = require('../models/Customer');
     const customer = await Customer.findOne({ phone: req.params.phone }).populate('cart.menuItem');
@@ -80,6 +124,28 @@ router.get('/debug/:phone', async (req, res) => {
       cart: customer.cart,
       conversationState: customer.conversationState
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Message processing statistics endpoint (admin only)
+router.get('/stats', authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { hours = 24 } = req.query;
+    const stats = await messageProcessor.getStats(parseInt(hours));
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Manual retry trigger endpoint (admin only)
+router.post('/retry-failed', authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { maxRetries = 3, batchSize = 10 } = req.body;
+    const result = await messageProcessor.retryFailedMessages(maxRetries, batchSize);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -114,7 +180,7 @@ router.get('/meta', (req, res) => {
 });
 
 // Meta WhatsApp Cloud API webhook endpoint
-router.post('/meta', async (req, res) => {
+router.post('/meta', verifyWebhookSignature, async (req, res) => {
   console.log('📥 Webhook POST received');
   console.log('📥 Body:', JSON.stringify(req.body, null, 2));
   
@@ -126,9 +192,12 @@ router.post('/meta', async (req, res) => {
 
     if (body.object === 'whatsapp_business_account') {
       for (const entry of body.entry || []) {
+        const entryId = entry.id;
+        
         for (const change of entry.changes || []) {
           if (change.field === 'messages') {
             const value = change.value;
+            const changeId = change.id;
 
             // Skip status updates (delivery receipts, read receipts)
             if (value.statuses) {
@@ -146,6 +215,7 @@ router.post('/meta', async (req, res) => {
 
             for (const message of value.messages || []) {
               const phone = message.from;
+              const messageId = message.id; // ✅ CRITICAL: Extract message ID for idempotency
               const senderName = contactsMap[phone] || null;
               let text = '';
               let messageType = 'text';
@@ -173,7 +243,7 @@ router.post('/meta', async (req, res) => {
                 };
               } else if (message.type === 'audio') {
                 // Handle voice message
-                messageType = 'voice';
+                messageType = 'audio';
                 const audioId = message.audio?.id;
                 console.log('🎤 Voice message received, audio ID:', audioId);
                 
@@ -218,10 +288,43 @@ router.post('/meta', async (req, res) => {
               }
 
               const hasContent = text || selectedId || messageType === 'location';
-              if (phone && hasContent) {
-                // Process message in the background
-                chatbot.handleMessage(phone, text, messageType, selectedId, senderName)
-                  .catch(err => console.error('❌ Async Chatbot Error:', err));
+              if (phone && messageId && hasContent) {
+                // ✅ Phase 6.4: Add message to queue instead of direct processing
+                // Benefits:
+                // - No message loss on server crash (persisted in Redis)
+                // - Automatic retry with exponential backoff
+                // - Better handling of traffic spikes
+                messageQueue.addMessage({
+                  messageId,
+                  phone,
+                  message: text,
+                  messageType,
+                  selectedId,
+                  senderName,
+                  webhookMeta: {
+                    entryId,
+                    changeId,
+                    timestamp: message.timestamp
+                  }
+                }).catch(err => {
+                  console.error('❌ Failed to add message to queue:', err);
+                  // Fallback to direct processing if queue fails
+                  messageProcessor.processInboundMessage(
+                    messageId,
+                    phone,
+                    text,
+                    messageType,
+                    selectedId,
+                    senderName,
+                    {
+                      entryId,
+                      changeId,
+                      timestamp: message.timestamp
+                    }
+                  ).catch(procErr => {
+                    console.error('❌ Fallback processing also failed:', procErr);
+                  });
+                });
               }
             }
           }
@@ -230,6 +333,77 @@ router.post('/meta', async (req, res) => {
     }
   } catch (error) {
     console.error('❌ Meta webhook async processing error:', error);
+  }
+});
+
+// ========== Phase 6.4: Queue Management Endpoints ==========
+
+// Get queue statistics (admin only)
+router.get('/queue/stats', authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const stats = await messageQueue.getQueueStats();
+    res.json({ success: true, stats });
+  } catch (error) {
+    console.error('Queue stats error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get failed jobs (admin only)
+router.get('/queue/failed', authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+    const jobs = await messageQueue.getFailedJobs(limit);
+    res.json({ success: true, jobs });
+  } catch (error) {
+    console.error('Failed jobs error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Retry failed job (admin only)
+router.post('/queue/retry/:jobId', authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const result = await messageQueue.retryFailedJob(jobId);
+    res.json({ success: true, result });
+  } catch (error) {
+    console.error('Retry job error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Clean old jobs (admin only)
+router.post('/queue/clean', authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    const grace = parseInt(req.body.grace) || 24 * 60 * 60 * 1000; // 24 hours default
+    const result = await messageQueue.cleanOldJobs(grace);
+    res.json({ success: true, result });
+  } catch (error) {
+    console.error('Clean jobs error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Pause queue (admin only)
+router.post('/queue/pause', authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    await messageQueue.pauseQueue();
+    res.json({ success: true, message: 'Queue paused' });
+  } catch (error) {
+    console.error('Pause queue error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Resume queue (admin only)
+router.post('/queue/resume', authenticate, authorizeAdmin, async (req, res) => {
+  try {
+    await messageQueue.resumeQueue();
+    res.json({ success: true, message: 'Queue resumed' });
+  } catch (error) {
+    console.error('Resume queue error:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

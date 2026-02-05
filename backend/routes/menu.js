@@ -3,8 +3,14 @@ const MenuItem = require('../models/MenuItem');
 const authMiddleware = require('../middleware/auth');
 const cloudinaryService = require('../services/cloudinary');
 const dataEvents = require('../services/eventEmitter');
+const { adminRateLimiter } = require('../middleware/rateLimiter');
+const { validators, sanitizeInputs } = require('../middleware/inputValidation');
 const multer = require('multer');
 const router = express.Router();
+
+// Apply admin rate limiting and input sanitization
+router.use(adminRateLimiter);
+router.use(sanitizeInputs);
 
 // Configure multer for memory storage
 const upload = multer({

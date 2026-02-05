@@ -8,7 +8,12 @@ const razorpayService = require('../services/razorpay');
 const googleSheets = require('../services/googleSheets');
 const chatbotImagesService = require('../services/chatbotImages');
 const authMiddleware = require('../middleware/auth');
+const { authorizeAdmin } = require('../middleware/authorize');
+const { publicRateLimiter, strictRateLimiter } = require('../middleware/rateLimiter');
 const router = express.Router();
+
+// Apply public rate limiting to payment routes (they're public endpoints)
+router.use(publicRateLimiter);
 
 // Create Razorpay order for UPI intent payment (no auth required - public endpoint)
 router.post('/create-upi-order', async (req, res) => {
@@ -460,7 +465,7 @@ router.get('/callback', async (req, res) => {
   }
 });
 
-router.post('/refund/:orderId', authMiddleware, async (req, res) => {
+router.post('/refund/:orderId', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const order = await Order.findOne({ orderId: req.params.orderId });
     if (!order) return res.status(404).json({ error: 'Order not found' });
@@ -540,8 +545,8 @@ router.post('/refund/:orderId', authMiddleware, async (req, res) => {
   }
 });
 
-// Process refund for pending refund orders (admin can trigger this)
-router.post('/process-refund/:orderId', authMiddleware, async (req, res) => {
+// Process refund for pending refund orders (admin only)
+router.post('/process-refund/:orderId', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const order = await Order.findOne({ orderId: req.params.orderId });
     if (!order) return res.status(404).json({ error: 'Order not found' });

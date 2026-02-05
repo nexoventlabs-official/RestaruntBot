@@ -2,7 +2,7 @@
 // This polls for new messages every few seconds
 
 const axios = require('axios');
-const chatbot = require('./chatbot');
+const messageProcessor = require('./messageProcessor');
 
 let isPolling = false;
 let pollInterval = null;
@@ -65,7 +65,25 @@ const polling = {
 
       if (phone && (message || selectedId)) {
         console.log('📱 Processing message:', { phone, message, messageType, selectedId });
-        await chatbot.handleMessage(phone, message, messageType, selectedId);
+        
+        // Generate unique message ID for Green API messages
+        const messageId = `green_${notification.receiptId || Date.now()}_${phone}`;
+        
+        // Process through envelope layer with idempotency
+        await messageProcessor.processInboundMessage(
+          messageId,
+          phone,
+          message,
+          messageType,
+          selectedId,
+          null, // senderName not available in Green API
+          {
+            source: 'green_api',
+            receiptId: notification.receiptId,
+            timestamp: Date.now()
+          }
+        );
+        
         console.log('✅ Message handled');
       }
     }

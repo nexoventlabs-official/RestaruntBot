@@ -3,7 +3,11 @@ const router = express.Router();
 const HeroSection = require('../models/HeroSection');
 const auth = require('../middleware/auth');
 const cloudinary = require('../services/cloudinary');
+const { adminRateLimiter } = require('../middleware/rateLimiter');
 const multer = require('multer');
+
+// Apply admin rate limiting
+router.use(adminRateLimiter);
 
 const upload = multer({ storage: multer.memoryStorage() });
 

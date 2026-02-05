@@ -1,7 +1,13 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { authRateLimiter, strictRateLimiter } = require('../middleware/rateLimiter');
+const jwtRefresh = require('../services/jwtRefresh');
+const { validators } = require('../middleware/inputValidation');
 const router = express.Router();
+
+// Apply rate limiting to all auth routes
+router.use(authRateLimiter);
 
 // Public test endpoint - send test notification to any push token (for debugging)
 router.post('/test-push', async (req, res) => {
@@ -43,8 +49,16 @@ router.post('/login', async (req, res) => {
       }
       
       // Include user ID in token so push token can be saved
-      const token = jwt.sign({ id: adminUser._id, username, role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '24h' });
-      return res.json({ token, user: { username, role: 'admin' } });
+      const tokens = jwtRefresh.generateTokenPair(adminUser._id.toString(), 'admin');
+      
+      return res.json({ 
+        ...tokens,
+        user: { 
+          id: adminUser._id,
+          username, 
+          role: 'admin' 
+        } 
+      });
     }
 
     const user = await User.findOne({ username });
@@ -52,8 +66,16 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = jwt.sign({ id: user._id, username: user.username, role: user.role }, process.env.JWT_SECRET, { expiresIn: '24h' });
-    res.json({ token, user: { username: user.username, role: user.role } });
+    const tokens = jwtRefresh.generateTokenPair(user._id.toString(), user.role);
+    
+    res.json({ 
+      ...tokens,
+      user: { 
+        id: user._id,
+        username: user.username, 
+        role: user.role 
+      } 
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

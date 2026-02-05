@@ -8,7 +8,12 @@ const googleSheets = require('../services/googleSheets');
 const razorpayService = require('../services/razorpay');
 const chatbotImagesService = require('../services/chatbotImages');
 const authMiddleware = require('../middleware/auth');
+const { authorizeAdmin } = require('../middleware/authorize');
+const { adminRateLimiter } = require('../middleware/rateLimiter');
 const router = express.Router();
+
+// Apply admin rate limiting to all order routes
+router.use(adminRateLimiter);
 
 // Helper to get Google Maps navigation URL
 const getGoogleMapsNavigationUrl = async () => {
@@ -42,8 +47,8 @@ const sendWithOptionalImage = async (phone, imageUrl, message, buttons, footer =
   }
 };
 
-// Lightweight endpoint to check for updates (returns hash only)
-router.get('/check-updates', authMiddleware, async (req, res) => {
+// Lightweight endpoint to check for updates (admin only)
+router.get('/check-updates', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const { status, lastHash } = req.query;
     const query = { isHidden: { $ne: true } };
@@ -70,7 +75,7 @@ router.get('/check-updates', authMiddleware, async (req, res) => {
   }
 });
 
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
     const query = { isHidden: { $ne: true } };
@@ -92,8 +97,8 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
-// Get order history from Google Sheets (cost-saving - not from MongoDB)
-router.get('/history', authMiddleware, async (req, res) => {
+// Get order history from Google Sheets (admin only)
+router.get('/history', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const { page = 1, limit = 30, search, status } = req.query;
     
@@ -124,8 +129,8 @@ router.get('/history', authMiddleware, async (req, res) => {
   }
 });
 
-// Get refunds with filter - MUST be before /:id route
-router.get('/refunds', authMiddleware, async (req, res) => {
+// Get refunds with filter (admin only)
+router.get('/refunds', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const { status } = req.query;
     let query = { refundStatus: { $ne: 'none' } };
@@ -148,8 +153,8 @@ router.get('/refunds', authMiddleware, async (req, res) => {
   }
 });
 
-// Get pending refund requests - MUST be before /:id route
-router.get('/refunds/pending', authMiddleware, async (req, res) => {
+// Get pending refund requests (admin only)
+router.get('/refunds/pending', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const orders = await Order.find({ refundStatus: 'pending' }).sort({ createdAt: -1 });
     res.json(orders);
@@ -158,7 +163,7 @@ router.get('/refunds/pending', authMiddleware, async (req, res) => {
   }
 });
 
-router.get('/:id', authMiddleware, async (req, res) => {
+router.get('/:id', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     let order;
@@ -184,7 +189,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-router.put('/:id/status', authMiddleware, async (req, res) => {
+router.put('/:id/status', authMiddleware, authorizeAdmin, async (req, res) => {
   console.log('🔄 PUT /orders/:id/status called with id:', req.params.id, 'body:', req.body);
   try {
     const { status, message, actualPaymentMethod } = req.body;
@@ -636,8 +641,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
   }
 });
 
-// Assign delivery partner to order
-router.put('/:id/assign-delivery', authMiddleware, async (req, res) => {
+// Assign delivery partner to order (admin only)
+router.put('/:id/assign-delivery', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const { deliveryBoyId } = req.body;
     const DeliveryBoy = require('../models/DeliveryBoy');
@@ -715,7 +720,7 @@ router.put('/:id/assign-delivery', authMiddleware, async (req, res) => {
   }
 });
 
-router.put('/:id/delivery-time', authMiddleware, async (req, res) => {
+router.put('/:id/delivery-time', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const { estimatedDeliveryTime } = req.body;
     const order = await Order.findByIdAndUpdate(
@@ -737,8 +742,8 @@ router.put('/:id/delivery-time', authMiddleware, async (req, res) => {
   }
 });
 
-// Approve refund by orderId
-router.post('/:orderId/refund/approve', authMiddleware, async (req, res) => {
+// Approve refund by orderId (admin only)
+router.post('/:orderId/refund/approve', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const order = await Order.findOne({ orderId: req.params.orderId });
     if (!order) return res.status(404).json({ error: 'Order not found' });

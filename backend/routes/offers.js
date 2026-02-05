@@ -4,7 +4,11 @@ const Offer = require('../models/Offer');
 const auth = require('../middleware/auth');
 const cloudinary = require('../services/cloudinary');
 const googleSheets = require('../services/googleSheets');
+const { adminRateLimiter } = require('../middleware/rateLimiter');
 const multer = require('multer');
+
+// Apply admin rate limiting
+router.use(adminRateLimiter);
 
 const upload = multer({ storage: multer.memoryStorage() });
 

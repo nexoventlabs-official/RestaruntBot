@@ -2,9 +2,14 @@ const express = require('express');
 const router = express.Router();
 const whatsappBroadcast = require('../services/whatsappBroadcast');
 const authMiddleware = require('../middleware/auth');
+const { authorizeAdmin } = require('../middleware/authorize');
+const { adminRateLimiter } = require('../middleware/rateLimiter');
+
+// Apply admin rate limiting
+router.use(adminRateLimiter);
 
 // Get all WhatsApp contacts
-router.get('/contacts', authMiddleware, async (req, res) => {
+router.get('/contacts', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const contacts = await whatsappBroadcast.getAllContacts();
     res.json({ success: true, contacts });
@@ -13,8 +18,8 @@ router.get('/contacts', authMiddleware, async (req, res) => {
   }
 });
 
-// Get WhatsApp contacts statistics
-router.get('/stats', authMiddleware, async (req, res) => {
+// Get WhatsApp contacts statistics (admin only)
+router.get('/stats', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const stats = await whatsappBroadcast.getStats();
     res.json({ success: true, stats });
@@ -23,8 +28,8 @@ router.get('/stats', authMiddleware, async (req, res) => {
   }
 });
 
-// Sync existing customers to WhatsApp contacts
-router.post('/sync', authMiddleware, async (req, res) => {
+// Sync existing customers to WhatsApp contacts (admin only)
+router.post('/sync', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const result = await whatsappBroadcast.syncExistingCustomers();
     res.json(result);
@@ -33,8 +38,8 @@ router.post('/sync', authMiddleware, async (req, res) => {
   }
 });
 
-// Send offer to WhatsApp contacts (supports targeting)
-router.post('/send-offer', authMiddleware, async (req, res) => {
+// Send offer to WhatsApp contacts (admin only - supports targeting)
+router.post('/send-offer', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const { offerImageUrl, offerTitle, offerDescription, offerType, offerId } = req.body;
     
@@ -174,8 +179,8 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
   }
 });
 
-// Test send offer to a single phone number
-router.post('/test-send', authMiddleware, async (req, res) => {
+// Test send offer to a single phone number (admin only)
+router.post('/test-send', authMiddleware, authorizeAdmin, async (req, res) => {
   try {
     const { phone, offerImageUrl, offerTitle, offerDescription, offerType } = req.body;
     

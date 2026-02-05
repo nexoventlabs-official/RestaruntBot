@@ -4,8 +4,12 @@ const MenuItem = require('../models/MenuItem');
 const authMiddleware = require('../middleware/auth');
 const cloudinaryService = require('../services/cloudinary');
 const dataEvents = require('../services/eventEmitter');
+const { adminRateLimiter } = require('../middleware/rateLimiter');
 const multer = require('multer');
 const router = express.Router();
+
+// Apply admin rate limiting
+router.use(adminRateLimiter);
 
 // Configure multer for memory storage
 const upload = multer({

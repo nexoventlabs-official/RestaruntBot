@@ -6,7 +6,11 @@ const DeliveryBoy = require('../models/DeliveryBoy');
 const HeroSection = require('../models/HeroSection');
 const Offer = require('../models/Offer');
 const whatsapp = require('../services/whatsapp');
+const { publicRateLimiter } = require('../middleware/rateLimiter');
 const router = express.Router();
+
+// Apply rate limiting to all public routes
+router.use(publicRateLimiter);
 
 // Get active hero sections (public)
 router.get('/hero-sections', async (req, res) => {
