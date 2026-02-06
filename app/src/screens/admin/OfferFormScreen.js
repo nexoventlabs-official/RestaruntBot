@@ -370,11 +370,23 @@ export default function OfferFormScreen({ route, navigation }) {
           { text: 'OK', onPress: () => navigation.goBack() }
         ]);
       } else {
-        await api.post('/offers', formData, {
+        const response = await api.post('/offers', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
           timeout: 90000 // 90 seconds for image uploads
         });
-        Alert.alert('Success', 'Offer created successfully', [
+        
+        // Show template status in success message
+        const tplStatus = response.data?.templateStatus;
+        let successMsg = 'Offer created successfully!';
+        if (tplStatus === 'pending') {
+          successMsg += '\n\n📤 WhatsApp template submitted to Meta for review.\n\n⏳ You can send this offer to customers once the template is approved (usually takes a few minutes).';
+        } else if (tplStatus === 'rejected') {
+          successMsg += `\n\n❌ Template submission failed: ${response.data?.templateRejectionReason || 'Unknown error'}\n\nYou can retry from the offers list.`;
+        } else if (!tplStatus || tplStatus === 'none') {
+          successMsg += '\n\n⚠️ No WhatsApp template created (META_WABA_ID may not be configured).';
+        }
+        
+        Alert.alert('Success', successMsg, [
           { text: 'OK' }
         ]);
         // Don't navigate back - keep the form with data

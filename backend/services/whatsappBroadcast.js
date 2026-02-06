@@ -275,10 +275,10 @@ const whatsappBroadcast = {
           logger.info('[WhatsApp Broadcast] Customer outside 24h window, using template', { phone: contact.phone, name: contact.name || 'Unknown', hoursSinceLastInteraction });
         }
         
+        // Determine which template to use for outside-24h customers (declared outside try so catch can access it)
+        const templateToUse = approvedTemplateName || (OFFER_TEMPLATE_NAME !== 'hello_world' ? OFFER_TEMPLATE_NAME : null);
+        
         try {
-          // Determine which template to use for outside-24h customers
-          const templateToUse = approvedTemplateName || (OFFER_TEMPLATE_NAME !== 'hello_world' ? OFFER_TEMPLATE_NAME : null);
-          
           // If customer is outside 24h window, use approved template directly
           if (isOutside24h && templateToUse) {
             logger.info('[WhatsApp Broadcast] Sending approved template to old customer', { phone: contact.phone, name: contact.name || 'Unknown', template: templateToUse });

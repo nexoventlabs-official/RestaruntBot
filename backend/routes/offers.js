@@ -940,6 +940,16 @@ router.delete('/:id', auth, async (req, res) => {
       
     }
     
+    // Delete the Meta WhatsApp template (best-effort, don't block deletion)
+    if (offer.templateName) {
+      try {
+        await whatsapp.deleteMessageTemplate(offer.templateName);
+        logger.info('Deleted Meta template', { templateName: offer.templateName });
+      } catch (tplErr) {
+        logger.warn('Could not delete Meta template (may already be removed)', { templateName: offer.templateName, error: tplErr.message });
+      }
+    }
+    
     await Offer.findByIdAndDelete(req.params.id);
     
     // Emit SSE event to notify clients

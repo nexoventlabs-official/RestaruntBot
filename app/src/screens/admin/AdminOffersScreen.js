@@ -23,8 +23,11 @@ export default function AdminOffersScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sendingOffer, setSendingOffer] = useState(null); // Track which offer is being sent
+  const [pollingIds, setPollingIds] = useState(new Set()); // Track offers being polled for template status
+  const [retryingTemplate, setRetryingTemplate] = useState(null); // Track which offer template is being retried
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const shineAnim = useRef(new Animated.Value(-1)).current;
+  const pollIntervalRef = useRef(null);
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
@@ -45,8 +48,37 @@ export default function AdminOffersScreen({ navigation }) {
   useEffect(() => {
     fetchOffers();
     const unsubscribe = navigation.addListener('focus', fetchOffers);
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
   }, [navigation]);
+
+  // Auto-poll template status for pending offers every 30 seconds
+  useEffect(() => {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    
+    const pendingOffers = offers.filter(o => o.templateStatus === 'pending');
+    if (pendingOffers.length === 0) return;
+    
+    const pollPending = async () => {
+      let updated = false;
+      for (const offer of pendingOffers) {
+        try {
+          const res = await api.get(`/offers/${offer._id}/template-status`);
+          if (res.data.templateStatus && res.data.templateStatus !== offer.templateStatus) {
+            updated = true;
+          }
+        } catch (e) { /* silent */ }
+      }
+      if (updated) fetchOffers(); // Refresh if any status changed
+    };
+    
+    pollPending(); // Poll immediately
+    pollIntervalRef.current = setInterval(pollPending, 30000); // Then every 30s
+    
+    return () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current); };
+  }, [offers.map(o => `${o._id}:${o.templateStatus}`).join(',')]);
 
   const onRefresh = useCallback(() => { setRefreshing(true); fetchOffers(); }, []);
 
@@ -72,12 +104,72 @@ export default function AdminOffersScreen({ navigation }) {
     ]);
   };
 
+  const retryTemplate = async (offer) => {
+    Alert.alert(
+      'Retry Template',
+      'Re-submit this offer template to Meta for approval?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Retry', onPress: async () => {
+          try {
+            setRetryingTemplate(offer._id);
+            await api.post(`/offers/${offer._id}/retry-template`);
+            showToast('📤 Template re-submitted for review');
+            fetchOffers();
+          } catch (error) {
+            const msg = error.response?.data?.error || 'Failed to retry template';
+            Alert.alert('Error', msg);
+          } finally {
+            setRetryingTemplate(null);
+          }
+        }}
+      ]
+    );
+  };
+
   const sendToWhatsApp = async (offer) => {
+    // Check template status first
+    if (offer.templateStatus !== 'approved') {
+      if (offer.templateStatus === 'pending') {
+        Alert.alert(
+          'Template Pending',
+          'This offer template is still waiting for Meta approval. Old customers (24h+) can only receive approved templates.\n\nPlease wait for approval before sending.',
+          [{ text: 'OK' }]
+        );
+      } else if (offer.templateStatus === 'rejected') {
+        Alert.alert(
+          'Template Rejected',
+          `Meta rejected this template${offer.templateRejectionReason ? ': ' + offer.templateRejectionReason : ''}.\n\nWould you like to retry submission?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Retry', onPress: () => retryTemplate(offer) }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Template Not Submitted',
+          'No WhatsApp template was created for this offer. This may happen if META_WABA_ID is not configured.\n\nWould you like to submit now?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Submit', onPress: () => retryTemplate(offer) }
+          ]
+        );
+      }
+      return;
+    }
+
     // Build confirmation message based on targeting
-    const isTargeted = offer.targetType === 'top_percentage' && offer.targetedCustomers && offer.targetedCustomers.length > 0;
+    const isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(offer.targetType) 
+      && offer.targetedCustomers && offer.targetedCustomers.length > 0;
+    
+    let targetLabel = '';
+    if (offer.targetType === 'top_percentage') targetLabel = `Top ${offer.targetPercentage || 10}% spenders`;
+    else if (offer.targetType === 'min_spent') targetLabel = `Customers with min ₹${offer.targetMinSpent} spent`;
+    else if (offer.targetType === 'min_orders') targetLabel = `Customers with ${offer.targetMinOrders}+ orders`;
+    
     const confirmMessage = isTargeted 
-      ? `Send this offer to ${offer.targetedCustomers.length} targeted customers (Top ${offer.targetPercentage || 10}% spenders)?`
-      : 'Send this offer to ALL customers (including old customers) who have phone numbers?';
+      ? `Send this offer to ${offer.targetedCustomers.length} targeted customers (${targetLabel})?\n\n✅ Template approved by Meta\n• Recent customers → Interactive message\n• Old customers (24h+) → Approved template`
+      : 'Send this offer to ALL customers?\n\n✅ Template approved by Meta\n• Recent customers → Interactive message\n• Old customers (24h+) → Approved template';
     
     Alert.alert(
       'Send to WhatsApp',
@@ -88,38 +180,34 @@ export default function AdminOffersScreen({ navigation }) {
           text: 'Send',
           onPress: async () => {
             try {
-              // Show instant success toast and start background send
               setSendingOffer(offer._id);
               showToast('📤 Sending offer in background...');
               
-              // Send in background - don't wait for response
-              api.post('/whatsapp-broadcast/send-offer', {
-                offerImageUrl: offer.image,
-                offerTitle: offer.title,
-                offerDescription: offer.description,
-                offerType: offer.offerType,
-                offerId: offer._id // Pass offerId for targeting
-              }).then(response => {
+              // Use the proper offers/:id/send endpoint (enforces template approval)
+              api.post(`/offers/${offer._id}/send`).then(response => {
                 setSendingOffer(null);
                 if (response.data.success || response.data.sent > 0) {
-                  const { sent, failed, targetType } = response.data;
-                  const targetLabel = targetType === 'top_percentage' ? '🎯 Targeted: ' : '';
-                  showToast(`${targetLabel}✅ Sent to ${sent} customers${failed > 0 ? `, ${failed} failed` : ''}`);
+                  const { sent, failed, sentViaInteractive, sentViaTemplate } = response.data;
+                  const targetTag = isTargeted ? '🎯 ' : '';
+                  let msg = `${targetTag}✅ Sent to ${sent} customers`;
+                  if (sentViaInteractive > 0) msg += `\n• ${sentViaInteractive} interactive`;
+                  if (sentViaTemplate > 0) msg += `\n• ${sentViaTemplate} via template`;
+                  if (failed > 0) msg += `\n• ${failed} failed`;
+                  showToast(msg);
+                  fetchOffers(); // Refresh to show broadcastSentAt
                 } else {
                   Alert.alert('Error', response.data.message || response.data.error || 'Failed to send offer');
                 }
               }).catch(error => {
                 setSendingOffer(null);
-                const errorMsg = error.response?.data?.error || error.message || 'Failed to send offer to WhatsApp';
+                const errorMsg = error.response?.data?.error || error.message || 'Failed to send offer';
                 Alert.alert('Error', errorMsg);
-                console.error('WhatsApp broadcast error:', error);
               });
               
             } catch (error) {
               setSendingOffer(null);
-              const errorMsg = error.response?.data?.error || error.message || 'Failed to send offer to WhatsApp';
+              const errorMsg = error.response?.data?.error || error.message || 'Failed to send offer';
               Alert.alert('Error', errorMsg);
-              console.error('WhatsApp broadcast error:', error);
             }
           }
         }
@@ -127,7 +215,24 @@ export default function AdminOffersScreen({ navigation }) {
     );
   };
 
-  const renderOffer = ({ item }) => (
+  // Helper to get template status display info
+  const getTemplateStatusInfo = (offer) => {
+    switch (offer.templateStatus) {
+      case 'approved': return { color: '#22C55E', bg: '#D1FAE5', icon: 'checkmark-circle', label: 'Approved' };
+      case 'pending': return { color: '#F59E0B', bg: '#FEF3C7', icon: 'time', label: 'Pending Review' };
+      case 'rejected': return { color: '#EF4444', bg: '#FEE2E2', icon: 'close-circle', label: 'Rejected' };
+      default: return { color: '#6B7280', bg: '#F3F4F6', icon: 'help-circle', label: 'No Template' };
+    }
+  };
+
+  const renderOffer = ({ item }) => {
+    const tplInfo = getTemplateStatusInfo(item);
+    const isApproved = item.templateStatus === 'approved';
+    const isPending = item.templateStatus === 'pending';
+    const isRejected = item.templateStatus === 'rejected';
+    const wasSent = !!item.broadcastSentAt;
+    
+    return (
     <Animated.View style={{ opacity: fadeAnim }}>
       <TouchableOpacity 
         style={styles.offerCard}
@@ -165,20 +270,63 @@ export default function AdminOffersScreen({ navigation }) {
           </View>
         </View>
         
+        {/* Template Status Bar */}
+        <View style={[styles.templateStatusBar, { backgroundColor: tplInfo.bg }]}>
+          <View style={styles.templateStatusLeft}>
+            <Ionicons name={tplInfo.icon} size={16} color={tplInfo.color} />
+            <Text style={[styles.templateStatusText, { color: tplInfo.color }]}>
+              Meta Template: {tplInfo.label}
+            </Text>
+            {isPending && <ActivityIndicator size={12} color={tplInfo.color} style={{ marginLeft: 6 }} />}
+          </View>
+          {wasSent && (
+            <View style={styles.sentBadge}>
+              <Ionicons name="checkmark-done" size={14} color="#22C55E" />
+              <Text style={styles.sentBadgeText}>Sent</Text>
+            </View>
+          )}
+          {isRejected && (
+            <TouchableOpacity 
+              style={styles.retryBadge} 
+              onPress={(e) => { e.stopPropagation(); retryTemplate(item); }}
+              disabled={retryingTemplate === item._id}
+            >
+              {retryingTemplate === item._id ? (
+                <ActivityIndicator size={12} color="#F59E0B" />
+              ) : (
+                <Ionicons name="refresh" size={14} color="#F59E0B" />
+              )}
+              <Text style={styles.retryBadgeText}>Retry</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        
         <View style={styles.offerActions}>
           <View style={styles.actionButtons}>
             <TouchableOpacity 
-              style={[styles.whatsappButton, sendingOffer === item._id && styles.whatsappButtonSending]} 
+              style={[
+                styles.whatsappButton, 
+                sendingOffer === item._id && styles.whatsappButtonSending,
+                !isApproved && styles.whatsappButtonDisabled
+              ]} 
               onPress={(e) => { e.stopPropagation(); sendToWhatsApp(item); }}
               disabled={sendingOffer === item._id}
             >
               {sendingOffer === item._id ? (
                 <ActivityIndicator size={16} color="#25D366" />
+              ) : isPending ? (
+                <Ionicons name="time-outline" size={18} color="#F59E0B" />
+              ) : isRejected ? (
+                <Ionicons name="alert-circle-outline" size={18} color="#EF4444" />
               ) : (
-                <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+                <Ionicons name="logo-whatsapp" size={18} color={isApproved ? "#25D366" : "#9CA3AF"} />
               )}
-              <Text style={styles.actionButtonText}>
-                {sendingOffer === item._id ? 'Sending...' : (item.targetType === 'top_percentage' ? '🎯 Send' : 'Send')}
+              <Text style={[styles.actionButtonText, !isApproved && { color: '#9CA3AF' }]}>
+                {sendingOffer === item._id ? 'Sending...' 
+                  : isPending ? 'Awaiting Approval' 
+                  : isRejected ? 'Template Rejected'
+                  : !item.templateStatus || item.templateStatus === 'none' ? 'No Template'
+                  : item.targetType && item.targetType !== 'all' ? '🎯 Send' : 'Send'}
               </Text>
             </TouchableOpacity>
             
@@ -193,7 +341,7 @@ export default function AdminOffersScreen({ navigation }) {
         </View>
       </TouchableOpacity>
     </Animated.View>
-  );
+  )};
 
   return (
     <View style={styles.container}>
@@ -349,6 +497,9 @@ const styles = StyleSheet.create({
   whatsappButtonSending: {
     opacity: 0.7,
   },
+  whatsappButtonDisabled: {
+    backgroundColor: '#F3F4F6',
+  },
   deleteButton: { 
     flexDirection: 'row',
     alignItems: 'center',
@@ -361,6 +512,50 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  templateStatusBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  templateStatusLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  templateStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  sentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  sentBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#22C55E',
+  },
+  retryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  retryBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#F59E0B',
   },
   statusBadge: {
     position: 'absolute',
