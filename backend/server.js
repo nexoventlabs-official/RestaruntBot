@@ -105,8 +105,9 @@ const connectMongoDB = async () => {
     orderCleanup.start();
     cartCleanup.startCartCleanupScheduler();
     
-    // Initialize Google Sheets
+    // Initialize Google Sheets - auto-create missing sheets, then initialize headers
     logger.info('Initializing Google Sheets...');
+    await googleSheets.ensureAllSheetsExist();
     await googleSheets.initializeDailyReportsSheet();
     await googleSheets.initializeDashboardStatsSheet();
     await googleSheets.initializeCustomersSheet();

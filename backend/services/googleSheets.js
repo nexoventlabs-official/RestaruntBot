@@ -93,6 +93,198 @@ const getAuthClient = () => {
 };
 
 const googleSheets = {
+  // Ensure all required sheet tabs exist in the spreadsheet, creating any that are missing
+  async ensureAllSheetsExist() {
+    try {
+      const auth = getAuthClient();
+      if (!auth) {
+        console.log('⚠️ Google Sheets auth not available, skipping sheet auto-creation');
+        return false;
+      }
+
+      if (!SPREADSHEET_ID) {
+        console.log('⚠️ GOOGLE_SHEET_ID not set, skipping sheet auto-creation');
+        return false;
+      }
+
+      const sheets = google.sheets({ version: 'v4', auth });
+
+      // Get all existing sheets in the spreadsheet
+      const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+      const existingSheets = spreadsheet.data.sheets.map(s => s.properties.title.toLowerCase());
+
+      console.log('📋 Existing sheets:', existingSheets.join(', '));
+
+      // Sheet tab colors for visual organization
+      const SHEET_COLORS = {
+        neworders:          { red: 0.2, green: 0.66, blue: 0.33 },  // Green
+        delivered:          { red: 0.08, green: 0.46, blue: 0.75 },  // Blue
+        cancelled:          { red: 0.86, green: 0.2, blue: 0.18 },   // Red
+        selfpick:           { red: 0.61, green: 0.35, blue: 0.71 },  // Purple
+        customers:          { red: 0.96, green: 0.65, blue: 0.14 },  // Orange
+        whatsapp_contacts:  { red: 0.15, green: 0.68, blue: 0.38 },  // WhatsApp green
+        daily_reports:      { red: 0.4, green: 0.2, blue: 0.6 },     // Purple
+        dashboard_stats:    { red: 0.1, green: 0.3, blue: 0.5 }      // Dark blue
+      };
+
+      // Find which sheets need to be created
+      const sheetsToCreate = [];
+      for (const [type, name] of Object.entries(SHEET_NAMES)) {
+        if (!existingSheets.includes(name.toLowerCase())) {
+          sheetsToCreate.push({ type, name });
+        }
+      }
+
+      if (sheetsToCreate.length === 0) {
+        console.log('✅ All required sheets already exist');
+        return true;
+      }
+
+      console.log('🔧 Creating missing sheets:', sheetsToCreate.map(s => s.name).join(', '));
+
+      // Create all missing sheets in a single batch request
+      const requests = sheetsToCreate.map(({ name }) => ({
+        addSheet: {
+          properties: {
+            title: name,
+            tabColor: SHEET_COLORS[name] || { red: 0.5, green: 0.5, blue: 0.5 }
+          }
+        }
+      }));
+
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: { requests }
+      });
+
+      console.log(`✅ Created ${sheetsToCreate.length} sheet(s): ${sheetsToCreate.map(s => s.name).join(', ')}`);
+
+      // Now initialize headers for each newly created sheet
+      for (const { type } of sheetsToCreate) {
+        try {
+          switch (type) {
+            case 'new':
+            case 'delivered':
+            case 'cancelled':
+            case 'selfpick':
+              await this._initializeOrderSheet(sheets, type);
+              break;
+            case 'customers':
+              await this.initializeCustomersSheet();
+              break;
+            case 'whatsapp_contacts':
+              await this._initializeWhatsAppContactsSheet(sheets);
+              break;
+            case 'daily_reports':
+              await this.initializeDailyReportsSheet();
+              break;
+            case 'dashboard_stats':
+              await this.initializeDashboardStatsSheet();
+              break;
+          }
+        } catch (initErr) {
+          console.error(`⚠️ Error initializing ${type} sheet headers:`, initErr.message);
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error('❌ Error ensuring sheets exist:', error.message);
+      return false;
+    }
+  },
+
+  // Initialize an order sheet (neworders, delivered, cancelled, selfpick) with standard headers
+  async _initializeOrderSheet(sheets, sheetType) {
+    try {
+      const sheet = await this.getSheetByType(sheets, sheetType);
+      if (!sheet) return false;
+
+      const headers = ['Order ID', 'Time', 'Customer Phone', 'Customer Name', 'Items', 'Items Total', 'Delivery Charge', 'Total Amount', 'Payment Method', 'Payment Status', 'Order Status', 'Delivery Address', 'Delivery Partner'];
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A1:M1`,
+        valueInputOption: 'RAW',
+        resource: { values: [headers] }
+      });
+
+      // Format header row
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+          requests: [
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 13 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.08, green: 0.46, blue: 0.75 },
+                    textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                    horizontalAlignment: 'CENTER',
+                    verticalAlignment: 'MIDDLE'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+              }
+            },
+            { updateSheetProperties: { properties: { sheetId: sheet.sheetId, gridProperties: { frozenRowCount: 1 } }, fields: 'gridProperties.frozenRowCount' } }
+          ]
+        }
+      });
+
+      console.log(`✅ ${sheetType} order sheet initialized with headers`);
+      return true;
+    } catch (error) {
+      console.error(`❌ Error initializing ${sheetType} order sheet:`, error.message);
+      return false;
+    }
+  },
+
+  // Initialize whatsapp_contacts sheet with headers
+  async _initializeWhatsAppContactsSheet(sheets) {
+    try {
+      const sheet = await this.getSheetByType(sheets, 'whatsapp_contacts');
+      if (!sheet) return false;
+
+      const headers = ['Phone', 'Name', 'First Order', 'Last Order', 'Total Orders', 'Active'];
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheet.sheetName}!A1:F1`,
+        valueInputOption: 'RAW',
+        resource: { values: [headers] }
+      });
+
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+          requests: [
+            {
+              repeatCell: {
+                range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 6 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.15, green: 0.68, blue: 0.38 },
+                    textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                    horizontalAlignment: 'CENTER',
+                    verticalAlignment: 'MIDDLE'
+                  }
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+              }
+            },
+            { updateSheetProperties: { properties: { sheetId: sheet.sheetId, gridProperties: { frozenRowCount: 1 } }, fields: 'gridProperties.frozenRowCount' } }
+          ]
+        }
+      });
+
+      console.log('✅ WhatsApp contacts sheet initialized with headers');
+      return true;
+    } catch (error) {
+      console.error('❌ Error initializing whatsapp_contacts sheet:', error.message);
+      return false;
+    }
+  },
+
   // Get sheet info by type
   async getSheetByType(sheets, sheetType) {
     try {
