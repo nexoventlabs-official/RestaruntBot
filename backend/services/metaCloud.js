@@ -5,7 +5,7 @@ const logger = require('./logger');
 const getConfig = () => ({
   phoneNumberId: process.env.META_PHONE_NUMBER_ID,
   accessToken: process.env.META_ACCESS_TOKEN,
-  businessId: process.env.META_BUSINESS_ID,
+  wabaId: process.env.META_WABA_ID,
   apiVersion: 'v24.0',
   baseUrl: `https://graph.facebook.com/v24.0/${process.env.META_PHONE_NUMBER_ID}`
 });

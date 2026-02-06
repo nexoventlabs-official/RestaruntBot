@@ -14,7 +14,7 @@ describe('Environment Validation', () => {
       JWT_SECRET: 'a-very-long-jwt-secret-key-minimum-32-chars!!',
       META_PHONE_NUMBER_ID: '1234567890',
       META_ACCESS_TOKEN: 'EAAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-      META_BUSINESS_ID: '9876543210',
+      META_WABA_ID: '9876543210',
       META_APP_SECRET: 'a-very-long-app-secret-key-minimum-32-chars!!',
       META_VERIFY_TOKEN: 'my-verify-token-8chars'
     };

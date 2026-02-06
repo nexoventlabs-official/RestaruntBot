@@ -39,12 +39,12 @@ const envSchema = {
     error: 'META_ACCESS_TOKEN appears invalid (too short)'
   },
   
-  META_BUSINESS_ID: {
+  META_WABA_ID: {
     required: true,
     validate: (value) => /^\d+$/.test(value),
-    error: 'META_BUSINESS_ID must be numeric'
+    error: 'META_WABA_ID must be numeric (your WhatsApp Business Account ID)'
   },
-  
+
   META_APP_SECRET: {
     required: true,
     validate: (value) => value.length >= 32,
@@ -55,12 +55,6 @@ const envSchema = {
     required: true,
     validate: (value) => value.length >= 8,
     error: 'META_VERIFY_TOKEN must be at least 8 characters long'
-  },
-
-  META_WABA_ID: {
-    required: true,
-    validate: (value) => /^\d+$/.test(value),
-    error: 'META_WABA_ID must be numeric (your WhatsApp Business Account ID)'
   },
 
   META_APP_ID: {
