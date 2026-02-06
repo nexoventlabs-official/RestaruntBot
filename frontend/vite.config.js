@@ -16,7 +16,6 @@ export default defineConfig({
           // Vendor chunks for better caching
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
           'ui-vendor': ['lucide-react', 'gsap', '@studio-freight/lenis', 'lenis'],
-          'form-vendor': ['react-hook-form', '@hookform/resolvers', 'zod'],
           'state-vendor': ['zustand', 'immer', 'axios']
         }
       }

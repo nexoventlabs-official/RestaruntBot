@@ -26,7 +26,7 @@ describe('Auth Middleware', () => {
     authMiddleware(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Authentication required' });
+    expect(res.json).toHaveBeenCalledWith({ error: 'Authentication required', code: 'NO_TOKEN' });
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -44,7 +44,7 @@ describe('Auth Middleware', () => {
     authMiddleware(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid token' });
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid token', code: 'INVALID_TOKEN' });
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -58,7 +58,9 @@ describe('Auth Middleware', () => {
     authMiddleware(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid token' });
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'Token has expired', code: 'TOKEN_EXPIRED' })
+    );
     expect(next).not.toHaveBeenCalled();
   });
 
