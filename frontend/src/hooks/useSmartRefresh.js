@@ -16,7 +16,9 @@ const connectSSE = () => {
   }
   
   const baseUrl = api.defaults.baseURL || '/api';
-  eventSource = new EventSource(`${baseUrl}/events`);
+  const token = localStorage.getItem('token') || localStorage.getItem('deliveryToken');
+  const url = token ? `${baseUrl}/events?token=${token}` : `${baseUrl}/events`;
+  eventSource = new EventSource(url);
   
   eventSource.onmessage = (event) => {
     try {

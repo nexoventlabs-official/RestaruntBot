@@ -28,7 +28,9 @@ export default function DeliveryPersons() {
     
     // Setup SSE for real-time updates
     const baseUrl = api.defaults.baseURL?.replace('/api', '') || '';
-    eventSourceRef.current = new EventSource(`${baseUrl}/api/events`);
+    const token = localStorage.getItem('token');
+    const sseUrl = token ? `${baseUrl}/api/events?token=${token}` : `${baseUrl}/api/events`;
+    eventSourceRef.current = new EventSource(sseUrl);
     
     eventSourceRef.current.onmessage = (event) => {
       try {
@@ -43,7 +45,9 @@ export default function DeliveryPersons() {
       eventSourceRef.current?.close();
       setTimeout(() => {
         const baseUrl = api.defaults.baseURL?.replace('/api', '') || '';
-        eventSourceRef.current = new EventSource(`${baseUrl}/api/events`);
+        const token = localStorage.getItem('token');
+        const sseUrl = token ? `${baseUrl}/api/events?token=${token}` : `${baseUrl}/api/events`;
+        eventSourceRef.current = new EventSource(sseUrl);
       }, 3000);
     };
     

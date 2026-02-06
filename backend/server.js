@@ -166,18 +166,8 @@ app.get('/', (req, res) => res.json({
 const sseClients = new Set();
 
 app.get('/api/events', (req, res) => {
-  // Verify auth token for SSE connections
-  const token = req.query.token || req.headers.authorization?.split(' ')[1];
-  if (!token) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  try {
-    const jwt = require('jsonwebtoken');
-    jwt.verify(token, process.env.JWT_SECRET);
-  } catch {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-
+  // SSE is a notification-only channel (sends event type names, no sensitive data)
+  // Actual data is fetched via authenticated API endpoints
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
