@@ -8,10 +8,33 @@ import api from '../config/api';
 // Check if running in Expo Go
 const isExpoGo = Constants.appOwnership === 'expo';
 
-// Key for storing permission prompt state
-const PERMISSION_PROMPTED_KEY = 'notification_permission_prompted';
+// Storage keys
 const PUSH_TOKEN_KEY = 'push_token_cached';
 const BADGE_COUNT_KEY = 'notification_badge_count';
+const TOKEN_ROLE_KEY = 'push_token_role'; // track which role registered the token
+
+// Max retries for getting FCM token (network can be flaky at cold start)
+const GET_TOKEN_MAX_RETRIES = 3;
+const GET_TOKEN_RETRY_DELAY = 1500; // ms
+
+/**
+ * Get native FCM device token from @react-native-firebase/messaging.
+ * Lazily initialised and cached.
+ */
+let _firebaseMessaging = null;
+function getFirebaseMessaging() {
+  if (!_firebaseMessaging && !isExpoGo) {
+    try {
+      _firebaseMessaging = require('@react-native-firebase/messaging').default;
+    } catch (e) {
+      console.warn('⚠️ @react-native-firebase/messaging not available:', e.message);
+    }
+  }
+  return _firebaseMessaging;
+}
+
+/** Simple sleep helper */
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 // Configure notification handler - THIS IS CRITICAL for showing notifications
 // when app is in foreground AND background
@@ -29,31 +52,30 @@ Notifications.setNotificationHandler({
 const initializeNotificationChannels = async () => {
   if (Platform.OS === 'android' && !isExpoGo) {
     try {
-      // Default channel
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'Default',
+      const channelDefaults = {
         importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#267E3E',
         sound: 'default',
         enableVibrate: true,
         enableLights: true,
         showBadge: true,
         lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      };
+
+      // Default channel
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'Default',
+        ...channelDefaults,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#267E3E',
       });
 
       // New orders channel - highest priority
       await Notifications.setNotificationChannelAsync('new-orders', {
         name: 'New Orders',
         description: 'Notifications for new order assignments',
-        importance: Notifications.AndroidImportance.MAX,
+        ...channelDefaults,
         vibrationPattern: [0, 500, 250, 500],
         lightColor: '#FF0000',
-        sound: 'default',
-        enableVibrate: true,
-        enableLights: true,
-        showBadge: true,
-        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
         bypassDnd: true,
       });
 
@@ -61,14 +83,27 @@ const initializeNotificationChannels = async () => {
       await Notifications.setNotificationChannelAsync('order-updates', {
         name: 'Order Updates',
         description: 'Notifications for order status changes',
-        importance: Notifications.AndroidImportance.MAX,
+        ...channelDefaults,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#267E3E',
-        sound: 'default',
-        enableVibrate: true,
-        showBadge: true,
-        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
         bypassDnd: true,
+      });
+
+      // General orders channel
+      await Notifications.setNotificationChannelAsync('orders', {
+        name: 'Order Notifications',
+        ...channelDefaults,
+        vibrationPattern: [0, 500, 250, 500],
+        lightColor: '#FF0000',
+        bypassDnd: true,
+      });
+
+      // Delivery channel
+      await Notifications.setNotificationChannelAsync('delivery', {
+        name: 'Delivery Notifications',
+        ...channelDefaults,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#267E3E',
       });
 
       console.log('📱 Notification channels initialized');
@@ -174,54 +209,38 @@ export const pushNotifications = {
   },
 
   /**
-   * Register for push notifications and get the Expo push token
+   * Register for push notifications and get the FCM device token.
+   * Includes retry logic for getToken (network may not be ready at cold start).
+   *
    * @param {boolean} showAlert - Whether to show alert if permission denied
    * @param {boolean} forcePrompt - Whether to force showing the permission prompt
+   * @param {string}  role - 'admin' | 'delivery' — determines which backend endpoint receives the token
    * @returns {Promise<{token: string|null, permissionDenied: boolean}>}
    */
-  async registerForPushNotifications(showAlert = false, forcePrompt = false) {
-    // Push notifications don't work in Expo Go for SDK 53+
+  async registerForPushNotifications(showAlert = false, forcePrompt = false, role = null) {
     if (isExpoGo) {
-      console.log('⚠️ Push notifications are not supported in Expo Go. Use a development build.');
+      console.log('⚠️ Push notifications not supported in Expo Go.');
       return { token: null, permissionDenied: false };
     }
-
-    let token = null;
-
-    // Check if it's a physical device
     if (!Device.isDevice) {
       console.log('Push notifications require a physical device');
       return { token: null, permissionDenied: false };
     }
 
-    // Check existing permissions
+    // ---- permissions ----
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
-    // Request permissions if not granted
     if (existingStatus !== 'granted') {
       if (forcePrompt) {
-        // Show custom prompt first
         const userAccepted = await this.showPermissionPrompt();
-        if (!userAccepted) {
-          return { token: null, permissionDenied: true };
-        }
-        // Check again after prompt
+        if (!userAccepted) return { token: null, permissionDenied: true };
         const { status: newStatus } = await Notifications.getPermissionsAsync();
         finalStatus = newStatus;
       } else {
         const { status } = await Notifications.requestPermissionsAsync({
-          ios: {
-            allowAlert: true,
-            allowBadge: true,
-            allowSound: true,
-            allowAnnouncements: true,
-          },
-          android: {
-            allowAlert: true,
-            allowBadge: true,
-            allowSound: true,
-          },
+          ios: { allowAlert: true, allowBadge: true, allowSound: true, allowAnnouncements: true },
+          android: { allowAlert: true, allowBadge: true, allowSound: true },
         });
         finalStatus = status;
       }
@@ -232,23 +251,75 @@ export const pushNotifications = {
       return { token: null, permissionDenied: true };
     }
 
-    // Get the Expo push token
+    // Also request Firebase messaging permission (Android 13+)
+    const messaging = getFirebaseMessaging();
+    if (messaging) {
+      try {
+        const authStatus = await messaging().requestPermission();
+        const enabled = authStatus === 1 || authStatus === 2;
+        if (!enabled) console.log('⚠️ Firebase messaging permission not granted');
+      } catch (e) {
+        console.warn('⚠️ Firebase permission request failed:', e.message);
+      }
+    }
+
+    // ---- get FCM token with retries ----
+    let token = null;
     try {
-      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-      const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId: projectId,
-      });
-      token = tokenData.data;
-      console.log('📱 Expo Push Token:', token);
-      
-      // Cache the token for re-registration when app comes to foreground
-      await SecureStore.setItemAsync(PUSH_TOKEN_KEY, token);
+      if (messaging) {
+        for (let attempt = 1; attempt <= GET_TOKEN_MAX_RETRIES; attempt++) {
+          try {
+            token = await messaging().getToken();
+            if (token) {
+              console.log(`📱 FCM Token obtained (attempt ${attempt}):`, token.substring(0, 20) + '...');
+              break;
+            }
+          } catch (e) {
+            console.warn(`⚠️ FCM getToken attempt ${attempt} failed:`, e.message);
+            if (attempt < GET_TOKEN_MAX_RETRIES) await sleep(GET_TOKEN_RETRY_DELAY);
+          }
+        }
+
+        if (!token) {
+          console.error('❌ Failed to get FCM token after retries');
+          return { token: null, permissionDenied: false };
+        }
+
+        // Listen for token refresh — re-send to the correct backend endpoint
+        messaging().onTokenRefresh(async (newToken) => {
+          console.log('📱 FCM Token refreshed');
+          await SecureStore.setItemAsync(PUSH_TOKEN_KEY, newToken);
+          try {
+            const savedRole = role || (await SecureStore.getItemAsync(TOKEN_ROLE_KEY));
+            if (savedRole === 'admin') {
+              await api.post('/auth/push-token', { pushToken: newToken });
+            } else {
+              await api.post('/delivery/push-token', { pushToken: newToken });
+            }
+            console.log('📱 Refreshed token sent to server');
+          } catch (e) {
+            console.warn('Failed to update refreshed FCM token on server:', e.message);
+          }
+        });
+      } else {
+        // Fallback: Expo push token (dev builds without Firebase)
+        const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+        const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+        token = tokenData.data;
+        console.log('📱 Expo Push Token (fallback):', token);
+      }
+
+      // Cache token + role
+      if (token) {
+        await SecureStore.setItemAsync(PUSH_TOKEN_KEY, token);
+        if (role) await SecureStore.setItemAsync(TOKEN_ROLE_KEY, role);
+      }
     } catch (error) {
       console.error('Error getting push token:', error);
       return { token: null, permissionDenied: false };
     }
 
-    // Ensure notification channels are set up (they should already be from module init)
+    // Ensure notification channels exist
     await initializeNotificationChannels();
 
     return { token, permissionDenied: false };
@@ -267,13 +338,20 @@ export const pushNotifications = {
   },
 
   /**
-   * Send push token to backend for delivery partner
-   * @param {string} pushToken - Expo push token
+   * Send push token to backend.
+   * Automatically picks the right endpoint based on cached role.
+   * @param {string} pushToken - FCM device token
+   * @param {string} [role] - 'admin' | 'delivery'
    */
-  async updatePushToken(pushToken) {
+  async updatePushToken(pushToken, role = null) {
     try {
-      await api.post('/delivery/push-token', { pushToken });
-      console.log('📱 Push token sent to server');
+      const savedRole = role || (await SecureStore.getItemAsync(TOKEN_ROLE_KEY)) || 'delivery';
+      if (savedRole === 'admin') {
+        await api.post('/auth/push-token', { pushToken });
+      } else {
+        await api.post('/delivery/push-token', { pushToken });
+      }
+      console.log(`📱 Push token sent to server (${savedRole})`);
       return true;
     } catch (error) {
       console.error('Error updating push token:', error);
@@ -386,11 +464,18 @@ export const pushNotifications = {
   },
 
   /**
-   * Schedule a local notification (for testing)
+   * Schedule a local notification immediately.
+   * Picks the notification channel from data.channelId or falls back to 'default'.
+   * @param {string}  title
+   * @param {string}  body
+   * @param {object}  data   Extra data (readable on tap)
+   * @param {string}  [channelId] Override channel id
    */
-  async scheduleLocalNotification(title, body, data = {}) {
+  async scheduleLocalNotification(title, body, data = {}, channelId = null) {
     if (isExpoGo) return null;
-    
+
+    const channel = channelId || data.channelId || 'default';
+
     return await Notifications.scheduleNotificationAsync({
       content: {
         title,
@@ -398,6 +483,7 @@ export const pushNotifications = {
         data,
         sound: 'default',
         priority: Notifications.AndroidNotificationPriority.MAX,
+        ...(Platform.OS === 'android' ? { channelId: channel } : {}),
       },
       trigger: null, // Immediate
     });

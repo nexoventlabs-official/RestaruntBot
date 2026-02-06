@@ -152,6 +152,25 @@ const envSchema = {
       });
     },
     error: 'ALLOWED_ORIGINS must be comma-separated valid URLs'
+  },
+
+  // Firebase Admin SDK (for FCM push notifications)
+  FIREBASE_PROJECT_ID: {
+    required: false,
+    validate: (value) => !value || value.length > 0,
+    error: 'FIREBASE_PROJECT_ID cannot be empty if set'
+  },
+
+  FIREBASE_CLIENT_EMAIL: {
+    required: false,
+    validate: (value) => !value || value.includes('@'),
+    error: 'FIREBASE_CLIENT_EMAIL must be a valid service account email'
+  },
+
+  FIREBASE_PRIVATE_KEY: {
+    required: false,
+    validate: (value) => !value || value.includes('PRIVATE KEY'),
+    error: 'FIREBASE_PRIVATE_KEY must be a valid PEM private key'
   }
 };
 

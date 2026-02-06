@@ -9,21 +9,9 @@ const admin = require('firebase-admin');
 const { authenticate } = require('../middleware/authenticate');
 const { publicRateLimiter } = require('../middleware/rateLimiter');
 
-// Initialize Firebase Admin (if not already initialized)
-if (!admin.apps.length) {
-  try {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
-    logger.info('✅ [Firebase Admin] Initialized');
-  } catch (error) {
-    logger.error('❌ [Firebase Admin] Initialization error:', error.message);
-  }
-}
+// Firebase Admin is initialized in services/pushNotification.js (singleton)
+// Just require it here to ensure it's initialized
+require('../services/pushNotification');
 
 // In-memory storage for FCM tokens (use database in production)
 const fcmTokens = new Map();

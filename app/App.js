@@ -1,7 +1,7 @@
 import 'react-native-gesture-handler';
 import React, { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -25,6 +25,7 @@ function AppNavigator() {
   useEffect(() => {
     let responseSubscription = null;
     let receivedSubscription = null;
+    let fcmUnsubscribe = null;
 
     // Only set up listeners if push notifications are supported
     if (pushNotifications.isSupported()) {
@@ -36,7 +37,6 @@ function AppNavigator() {
         // Navigate to Notifications screen based on user role
         if (navigationRef.current) {
           if (role === 'delivery') {
-            // Navigate to Home tab, then to Notifications screen
             navigationRef.current.navigate('DeliveryMain', {
               screen: 'Home',
               params: {
@@ -44,7 +44,6 @@ function AppNavigator() {
               },
             });
           } else if (role === 'admin') {
-            // Navigate to Home tab, then to Notifications screen
             navigationRef.current.navigate('AdminMain', {
               screen: 'Home',
               params: {
@@ -55,13 +54,53 @@ function AppNavigator() {
         }
       });
 
-      // Handle notification received while app is open (foreground)
-      // When user taps the banner, it will trigger responseSubscription above
+      // Handle expo-notifications received while app is open (foreground)
       receivedSubscription = pushNotifications.addNotificationReceivedListener(notification => {
         console.log('📱 Notification received in foreground:', notification.request.content);
-        // The notification will automatically show as a banner because of setNotificationHandler
-        // User can tap the banner to navigate to Notifications screen
       });
+
+      /**
+       * FCM foreground message handler.
+       * When app is in foreground, Firebase SDK intercepts the notification
+       * payload and does NOT show it in the notification tray automatically.
+       * We create a local notification via expo-notifications to display it,
+       * using the correct channel from the data payload so the notification
+       * inherits the right sound / vibration / priority settings.
+       */
+      try {
+        const messaging = require('@react-native-firebase/messaging').default;
+        fcmUnsubscribe = messaging().onMessage(async remoteMessage => {
+          console.log('📱 [FCM] Foreground message:', JSON.stringify(remoteMessage));
+          
+          const { notification, data } = remoteMessage;
+          if (notification) {
+            const channelId = data?.channelId || 'default';
+
+            // Display as local notification via expo-notifications
+            const Notifications = require('expo-notifications');
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: notification.title || 'New Notification',
+                body: notification.body || '',
+                data: data || {},
+                sound: 'default',
+                priority: Notifications.AndroidNotificationPriority.MAX,
+                ...(Platform.OS === 'android' ? { channelId } : {}),
+              },
+              trigger: null, // Immediate
+            });
+
+            // Update badge count
+            if (data?.badgeCount) {
+              try {
+                await Notifications.setBadgeCountAsync(parseInt(data.badgeCount, 10));
+              } catch (_) { /* non-critical */ }
+            }
+          }
+        });
+      } catch (e) {
+        console.warn('⚠️ FCM onMessage not available:', e.message);
+      }
 
       // Check if app was opened from a notification
       checkInitialNotification();
@@ -74,39 +113,57 @@ function AppNavigator() {
       if (receivedSubscription) {
         pushNotifications.removeNotificationListener(receivedSubscription);
       }
+      if (fcmUnsubscribe) {
+        fcmUnsubscribe();
+      }
     };
   }, [role]);
 
   // Check if app was opened from a notification tap
   const checkInitialNotification = async () => {
+    // First check expo-notifications (for local notifications)
     const response = await pushNotifications.getLastNotificationResponse();
     if (response) {
       const data = response.notification.request.content.data;
-      console.log('📱 App opened from notification:', data);
-      
-      // Navigate to Notifications screen based on user role
-      setTimeout(() => {
-        if (navigationRef.current) {
-          if (role === 'delivery') {
-            // Navigate to Home tab, then to Notifications screen
-            navigationRef.current.navigate('DeliveryMain', {
-              screen: 'Home',
-              params: {
-                screen: 'Notifications',
-              },
-            });
-          } else if (role === 'admin') {
-            // Navigate to Home tab, then to Notifications screen
-            navigationRef.current.navigate('AdminMain', {
-              screen: 'Home',
-              params: {
-                screen: 'Notifications',
-              },
-            });
-          }
-        }
-      }, 500);
+      console.log('📱 App opened from expo notification:', data);
+      navigateToNotifications();
+      return;
     }
+
+    // Then check Firebase initial notification (for FCM notifications when app was killed)
+    try {
+      const messaging = require('@react-native-firebase/messaging').default;
+      const remoteMessage = await messaging().getInitialNotification();
+      if (remoteMessage) {
+        console.log('📱 App opened from FCM notification (killed state):', remoteMessage.data);
+        navigateToNotifications();
+      }
+    } catch (e) {
+      // Firebase not available
+    }
+  };
+
+  // Navigate to notifications screen based on role
+  const navigateToNotifications = () => {
+    setTimeout(() => {
+      if (navigationRef.current) {
+        if (role === 'delivery') {
+          navigationRef.current.navigate('DeliveryMain', {
+            screen: 'Home',
+            params: {
+              screen: 'Notifications',
+            },
+          });
+        } else if (role === 'admin') {
+          navigationRef.current.navigate('AdminMain', {
+            screen: 'Home',
+            params: {
+              screen: 'Notifications',
+            },
+          });
+        }
+      }
+    }, 500);
   };
 
   if (loading) {
