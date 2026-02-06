@@ -85,7 +85,11 @@ function getClient() {
  * Create a new Redis client (for Bull queues)
  */
 function createClient() {
-  return new Redis(REDIS_CONFIG);
+  return new Redis({
+    ...REDIS_CONFIG,
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false
+  });
 }
 
 /**
