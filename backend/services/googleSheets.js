@@ -11,6 +11,7 @@ const SHEET_NAMES = {
   cancelled: 'cancelled',
   selfpick: 'selfpick',
   customers: 'customers',
+  whatsapp_contacts: 'whatsapp_contacts',
   daily_reports: 'daily_reports',
   dashboard_stats: 'dashboard_stats'
 };
@@ -1285,6 +1286,133 @@ const googleSheets = {
       return true;
     } catch (error) {
       console.error('❌ Error adding customer to sheets:', error.message);
+      return false;
+    }
+  },
+
+  // Add or update a WhatsApp contact in the whatsapp_contacts sheet
+  async addOrUpdateWhatsAppContact({ phone, name, firstOrderDate, lastOrderDate, totalOrders, isActive }) {
+    try {
+      const auth = getAuthClient();
+      if (!auth) {
+        console.log('⚠️ Google Sheets auth not available, skipping WhatsApp contact sync');
+        return false;
+      }
+
+      const sheets = google.sheets({ version: 'v4', auth });
+
+      // Try to get the whatsapp_contacts sheet, fall back to customers sheet
+      let sheet = await this.getSheetByType(sheets, 'whatsapp_contacts');
+
+      if (!sheet) {
+        // If no dedicated whatsapp_contacts sheet, use customers sheet as fallback
+        sheet = await this.getSheetByType(sheets, 'customers');
+        if (!sheet) {
+          console.log('⚠️ No whatsapp_contacts or customers sheet found, skipping contact sync');
+          return false;
+        }
+      }
+
+      const sheetName = sheet.sheetName;
+
+      // Check if headers exist, initialize if needed
+      const headerResponse = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheetName}!A1:F1`
+      });
+
+      if (!headerResponse.data.values || headerResponse.data.values.length === 0) {
+        const headers = ['Phone', 'Name', 'First Order', 'Last Order', 'Total Orders', 'Active'];
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheetName}!A1:F1`,
+          valueInputOption: 'RAW',
+          resource: { values: [headers] }
+        });
+
+        // Format header row
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: SPREADSHEET_ID,
+          resource: {
+            requests: [
+              {
+                repeatCell: {
+                  range: { sheetId: sheet.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 6 },
+                  cell: {
+                    userEnteredFormat: {
+                      backgroundColor: { red: 0.08, green: 0.46, blue: 0.75 },
+                      textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                      horizontalAlignment: 'CENTER',
+                      verticalAlignment: 'MIDDLE'
+                    }
+                  },
+                  fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+                }
+              },
+              { updateSheetProperties: { properties: { sheetId: sheet.sheetId, gridProperties: { frozenRowCount: 1 } }, fields: 'gridProperties.frozenRowCount' } }
+            ]
+          }
+        });
+        console.log('✅ WhatsApp contacts sheet initialized with headers');
+      }
+
+      // Check if contact already exists by phone
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheetName}!A:F`
+      });
+
+      const rows = response.data.values || [];
+      const existingRowIndex = rows.findIndex((row, index) => index > 0 && row[0] === phone);
+
+      const firstDateStr = firstOrderDate ? formatDateDDMMYYYY(firstOrderDate) : formatDateDDMMYYYY();
+      const lastDateStr = lastOrderDate ? formatDateDDMMYYYY(lastOrderDate) : formatDateDDMMYYYY();
+
+      if (existingRowIndex !== -1) {
+        // Update existing contact
+        const existingRow = rows[existingRowIndex];
+        const updatedRow = [
+          phone,
+          name || existingRow[1] || '',
+          existingRow[2] || firstDateStr,  // Keep original first order date
+          lastDateStr,
+          String(totalOrders || (parseInt(existingRow[4] || '0') + 1)),
+          isActive !== undefined ? (isActive ? 'Yes' : 'No') : (existingRow[5] || 'Yes')
+        ];
+
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheetName}!A${existingRowIndex + 1}:F${existingRowIndex + 1}`,
+          valueInputOption: 'RAW',
+          resource: { values: [updatedRow] }
+        });
+
+        console.log(`📱 WhatsApp contact ${phone} updated in Google Sheets`);
+        return true;
+      }
+
+      // Add new contact
+      const newRow = [
+        phone,
+        name || '',
+        firstDateStr,
+        lastDateStr,
+        String(totalOrders || 1),
+        isActive !== undefined ? (isActive ? 'Yes' : 'No') : 'Yes'
+      ];
+
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${sheetName}!A:F`,
+        valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
+        resource: { values: [newRow] }
+      });
+
+      console.log(`✅ WhatsApp contact ${phone} added to Google Sheets`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error adding/updating WhatsApp contact in sheets:', error.message);
       return false;
     }
   },
