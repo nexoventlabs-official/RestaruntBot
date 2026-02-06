@@ -38,7 +38,7 @@ services:
     environment:
       NODE_ENV: development
       PORT: 5000
-      MONGODB_URI: mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-change_this_in_production}@mongodb:27017/restaurant?authSource=admin
+      MONGODB_URI: "mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-change_this_in_production}@mongodb:27017/restaurant?authSource=admin"
       # Add other environment variables from .env file
     env_file:
       - ./backend/.env
