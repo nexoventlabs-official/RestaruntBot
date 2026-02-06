@@ -22,6 +22,11 @@ const { isProduction, isDevelopment } = require('./envValidation');
  * @returns {string[]} Array of allowed origin URLs
  */
 function getAllowedOrigins() {
+  // Always allow the production frontend
+  const productionOrigins = [
+    'https://restarunt-bot.vercel.app'
+  ];
+
   if (isProduction()) {
     // Production: Use explicit origins from environment
     const envOrigins = process.env.ALLOWED_ORIGINS || '';
@@ -41,15 +46,19 @@ function getAllowedOrigins() {
       return true;
     });
     
-    if (validOrigins.length === 0) {
+    // Merge with hardcoded production origins (deduplicate)
+    const allOrigins = [...new Set([...productionOrigins, ...validOrigins])];
+    
+    if (allOrigins.length === 0) {
       console.warn('⚠️ CORS: No valid origins configured for production!');
       console.warn('   Set ALLOWED_ORIGINS in .env (comma-separated HTTPS URLs)');
     }
     
-    return validOrigins;
+    return allOrigins;
   } else {
-    // Development: Allow common localhost ports
+    // Development: Allow common localhost ports + production frontend
     return [
+      ...productionOrigins,
       'http://localhost:3000',  // React default
       'http://localhost:5173',  // Vite default
       'http://localhost:5000',  // Backend default
