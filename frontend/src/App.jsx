@@ -25,6 +25,7 @@ import Offers from './pages/Offers';
 import Settings from './pages/Settings';
 import api from './api';
 import { useImagePreloader } from './hooks/useImagePreloader';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
   const [auth, setAuth] = useState(null);
@@ -72,47 +73,49 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Public User Routes with UserLayout */}
-        <Route element={<UserLayout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/menu" element={<UserMenuPage />} />
-          <Route path="/offers" element={<OffersPage />} />
-          <Route path="/offer/:offerId" element={<OffersPage />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/contact" element={<Contact />} />
-        </Route>
-        
-        {/* Other Public Routes */}
-        <Route path="/review/:phone/:orderId" element={<Review />} />
-        <Route path="/track/:orderId" element={<Track />} />
-        <Route path="/pay/:orderId" element={<Payment />} />
-        <Route path="/payment-success/:orderId" element={<PaymentSuccess />} />
-        
-        {/* Admin Routes */}
-        <Route path="/admin/login" element={auth ? <Navigate to="/admin" /> : <Login setAuth={setAuth} />} />
-        <Route path="/admin" element={auth ? <Layout /> : <Navigate to="/admin/login" />}>
-          <Route index element={<Dashboard />} />
-          <Route path="orders" element={<Orders />} />
-          <Route path="menu" element={<Menu />} />
-          <Route path="offers" element={<Offers />} />
-          <Route path="reports" element={<Reports />} />
-          <Route path="chatbot-images" element={<ChatbotImages />} />
-          <Route path="delivery-persons" element={<DeliveryPersons />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
-        
-        {/* Delivery Boy Routes */}
-        <Route path="/delivery/login" element={<DeliveryLogin />} />
-        <Route path="/delivery" element={<DeliveryDashboard />} />
-        
-        {/* Legacy redirect - old login to new admin login */}
-        <Route path="/login" element={<Navigate to="/admin/login" />} />
-        
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Routes>
+          {/* Public User Routes with UserLayout */}
+          <Route element={<UserLayout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/menu" element={<UserMenuPage />} />
+            <Route path="/offers" element={<OffersPage />} />
+            <Route path="/offer/:offerId" element={<OffersPage />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/contact" element={<Contact />} />
+          </Route>
+          
+          {/* Other Public Routes */}
+          <Route path="/review/:phone/:orderId" element={<Review />} />
+          <Route path="/track/:orderId" element={<Track />} />
+          <Route path="/pay/:orderId" element={<Payment />} />
+          <Route path="/payment-success/:orderId" element={<PaymentSuccess />} />
+          
+          {/* Admin Routes */}
+          <Route path="/admin/login" element={auth ? <Navigate to="/admin" /> : <Login setAuth={setAuth} />} />
+          <Route path="/admin" element={auth ? <Layout /> : <Navigate to="/admin/login" />}>
+            <Route index element={<Dashboard />} />
+            <Route path="orders" element={<Orders />} />
+            <Route path="menu" element={<Menu />} />
+            <Route path="offers" element={<Offers />} />
+            <Route path="reports" element={<Reports />} />
+            <Route path="chatbot-images" element={<ChatbotImages />} />
+            <Route path="delivery-persons" element={<DeliveryPersons />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
+          
+          {/* Delivery Boy Routes */}
+          <Route path="/delivery/login" element={<DeliveryLogin />} />
+          <Route path="/delivery" element={<DeliveryDashboard />} />
+          
+          {/* Legacy redirect - old login to new admin login */}
+          <Route path="/login" element={<Navigate to="/admin/login" />} />
+          
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

@@ -8,6 +8,9 @@ const auth = require('../middleware/auth');
 const { adminRateLimiter } = require('../middleware/rateLimiter');
 const multer = require('multer');
 
+// Apply admin rate limiting
+router.use(adminRateLimiter);
+
 // Configure multer for memory storage
 const upload = multer({
   storage: multer.memoryStorage(),

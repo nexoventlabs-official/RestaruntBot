@@ -1089,8 +1089,7 @@ export default function OffersPage() {
               className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8" 
               style={{ 
                 WebkitOverflowScrolling: 'touch',
-                overscrollBehavior: 'contain',
-                WebkitOverflowScrolling: 'touch'
+                overscrollBehavior: 'contain'
               }}
               onTouchStart={(e) => e.stopPropagation()}
               onTouchMove={(e) => e.stopPropagation()}
