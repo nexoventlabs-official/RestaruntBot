@@ -1,4 +1,6 @@
-const { withAndroidManifest } = require('expo/config-plugins');
+const { withDangerousMod } = require('expo/config-plugins');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * Fix Android Manifest merger conflict between expo-notifications 
@@ -8,35 +10,41 @@ const { withAndroidManifest } = require('expo/config-plugins');
  * so we add tools:replace to let expo-notifications values win.
  */
 module.exports = function withFirebaseMessagingFix(config) {
-  return withAndroidManifest(config, (config) => {
-    const mainApplication = config.modResults.manifest.application?.[0];
-    if (!mainApplication) return config;
+  return withDangerousMod(config, [
+    'android',
+    async (config) => {
+      const manifestPath = path.join(
+        config.modRequest.platformProjectRoot,
+        'app',
+        'src',
+        'main',
+        'AndroidManifest.xml'
+      );
 
-    // Ensure tools namespace is declared
-    if (!config.modResults.manifest.$) {
-      config.modResults.manifest.$ = {};
-    }
-    config.modResults.manifest.$['xmlns:tools'] = 'http://schemas.android.com/tools';
+      let manifest = fs.readFileSync(manifestPath, 'utf-8');
 
-    // Find and fix conflicting meta-data entries
-    const metaData = mainApplication['meta-data'] || [];
-    
-    for (const entry of metaData) {
-      const name = entry.$?.['android:name'];
-      if (
-        name === 'com.google.firebase.messaging.default_notification_channel_id' ||
-        name === 'com.google.firebase.messaging.default_notification_color'
-      ) {
-        // Add tools:replace for the conflicting attribute
-        if (entry.$['android:value'] !== undefined) {
-          entry.$['tools:replace'] = 'android:value';
-        }
-        if (entry.$['android:resource'] !== undefined) {
-          entry.$['tools:replace'] = 'android:resource';
-        }
+      // Add tools namespace if not present
+      if (!manifest.includes('xmlns:tools=')) {
+        manifest = manifest.replace(
+          '<manifest xmlns:android="http://schemas.android.com/apk/res/android"',
+          '<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n    xmlns:tools="http://schemas.android.com/tools"'
+        );
       }
-    }
 
-    return config;
-  });
+      // Add tools:replace="android:value" to default_notification_channel_id
+      manifest = manifest.replace(
+        /(<meta-data\s+android:name="com\.google\.firebase\.messaging\.default_notification_channel_id"\s+)/g,
+        '$1tools:replace="android:value" '
+      );
+
+      // Add tools:replace="android:resource" to default_notification_color
+      manifest = manifest.replace(
+        /(<meta-data\s+android:name="com\.google\.firebase\.messaging\.default_notification_color"\s+)/g,
+        '$1tools:replace="android:resource" '
+      );
+
+      fs.writeFileSync(manifestPath, manifest);
+      return config;
+    },
+  ]);
 };
