@@ -33,14 +33,14 @@ module.exports = function withFirebaseMessagingFix(config) {
 
       // Add tools:replace="android:value" to default_notification_channel_id
       manifest = manifest.replace(
-        /(<meta-data\s+android:name="com\.google\.firebase\.messaging\.default_notification_channel_id"\s+)/g,
-        '$1tools:replace="android:value" '
+        /<meta-data\s+android:name="com\.google\.firebase\.messaging\.default_notification_channel_id"\s+android:value="([^"]*)"/g,
+        '<meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" tools:replace="android:value" android:value="$1"'
       );
 
       // Add tools:replace="android:resource" to default_notification_color
       manifest = manifest.replace(
-        /(<meta-data\s+android:name="com\.google\.firebase\.messaging\.default_notification_color"\s+)/g,
-        '$1tools:replace="android:resource" '
+        /<meta-data\s+android:name="com\.google\.firebase\.messaging\.default_notification_color"\s+android:resource="([^"]*)"/g,
+        '<meta-data android:name="com.google.firebase.messaging.default_notification_color" tools:replace="android:resource" android:resource="$1"'
       );
 
       fs.writeFileSync(manifestPath, manifest);
