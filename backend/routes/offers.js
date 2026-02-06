@@ -946,6 +946,8 @@ router.delete('/:id', auth, async (req, res) => {
     const eventEmitter = require('../services/eventEmitter');
     eventEmitter.emit('dataUpdate', { type: 'menu' });
     eventEmitter.emit('dataUpdate', { type: 'offers' });
+    // Emit specific offer-deleted event with offerId so frontend can remove items from cart/wishlist
+    eventEmitter.emit('dataUpdate', { type: 'offer-deleted', offerId: req.params.id });
     
     res.json({ message: 'Offer deleted and removed from all items' });
   } catch (err) {
@@ -1040,6 +1042,11 @@ router.patch('/:id/toggle', auth, async (req, res) => {
     // Emit SSE event to notify clients
     const eventEmitter = require('../services/eventEmitter');
     eventEmitter.emit('dataUpdate', { type: 'offers' });
+    
+    // If offer was deactivated, emit offer-deleted so frontend removes items from cart/wishlist
+    if (wasActive && !offer.isActive) {
+      eventEmitter.emit('dataUpdate', { type: 'offer-deleted', offerId: req.params.id });
+    }
     
     res.json(offer);
   } catch (err) {

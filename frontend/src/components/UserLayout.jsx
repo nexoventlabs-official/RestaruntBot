@@ -42,13 +42,14 @@ export default function UserLayout() {
   const searchInputRef = useRef(null);
   const eventSourceRef = useRef(null);
   const validateOfferItemsRef = useRef(null);
+  const removeItemsByOfferIdRef = useRef(null);
   const lenisRef = useLenis();
 
   const { 
     cart, wishlist, cartTotal, cartCount, 
     addToCart, removeFromCart, updateQuantity, clearCart, 
     addToWishlist, removeFromWishlist, isInWishlist, isInCart,
-    syncWithMenuData, validateOfferItems
+    syncWithMenuData, validateOfferItems, removeItemsByOfferId
   } = useCart();
 
   // Scroll to top on route change with Lenis
@@ -64,6 +65,11 @@ export default function UserLayout() {
   useEffect(() => {
     validateOfferItemsRef.current = validateOfferItems;
   }, [validateOfferItems]);
+
+  // Keep ref updated with latest removeItemsByOfferId function
+  useEffect(() => {
+    removeItemsByOfferIdRef.current = removeItemsByOfferId;
+  }, [removeItemsByOfferId]);
 
   // Fetch available items and categories
   const loadAvailableItems = async () => {
@@ -99,12 +105,35 @@ export default function UserLayout() {
   // Called when offers are deleted/changed to remove items with invalid offers
   const validateCartOffers = async () => {
     try {
-      // Fetch all active offers
-      const offersRes = await api.get('/public/offers');
+      // Fetch all active public offers (non-targeted)
+      const offersRes = await axios.get(`${API_URL}/offers`);
       const activeOfferIds = offersRes.data.map(offer => offer._id);
       
+      // Collect unique targeted offer IDs from cart and wishlist
+      const currentCart = JSON.parse(localStorage.getItem('restaurant_cart') || '[]');
+      const currentWishlist = JSON.parse(localStorage.getItem('restaurant_wishlist') || '[]');
+      const allItems = [...currentCart, ...currentWishlist];
+      const targetedOfferIds = [...new Set(
+        allItems
+          .filter(item => item.offerInfo?.offerId && !item.offerInfo?.isRegularOffer)
+          .map(item => item.offerInfo.offerId)
+      )];
+      
+      // Check each targeted offer individually to see if it still exists
+      const targetedChecks = await Promise.allSettled(
+        targetedOfferIds.map(id => 
+          axios.get(`${API_URL}/offers/${id}`).then(() => id).catch(() => null)
+        )
+      );
+      
+      // Add still-active targeted offer IDs to the active list
+      targetedChecks.forEach(result => {
+        if (result.status === 'fulfilled' && result.value) {
+          activeOfferIds.push(result.value);
+        }
+      });
+      
       // Remove cart/wishlist items whose offers no longer exist
-      // Use ref to get the latest function
       if (validateOfferItemsRef.current) {
         validateOfferItemsRef.current(activeOfferIds);
       }
@@ -123,6 +152,12 @@ export default function UserLayout() {
           if (data.type === 'menu') loadAvailableItems();
           // When offers change, validate cart/wishlist items
           if (data.type === 'offers') validateCartOffers();
+          // When a specific offer is deleted, immediately remove its items from cart/wishlist
+          if (data.type === 'offer-deleted' && data.offerId) {
+            if (removeItemsByOfferIdRef.current) {
+              removeItemsByOfferIdRef.current(data.offerId);
+            }
+          }
         } catch (e) {}
       };
       eventSourceRef.current.onerror = () => {

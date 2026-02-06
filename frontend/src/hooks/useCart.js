@@ -88,6 +88,7 @@ export function useCart() {
         }
         
         // For targeted offers, keep the offer price (don't sync from menu)
+        // The offer price will be validated/cleaned by validateOfferItems
         if (isTargetedOffer) {
           return {
             ...cartItem,
@@ -159,6 +160,7 @@ export function useCart() {
         }
         
         // For targeted offers, keep the offer price (don't sync from menu)
+        // The offer price will be validated/cleaned by validateOfferItems
         if (isTargetedOffer) {
           return {
             ...wishlistItem,
@@ -309,22 +311,29 @@ export function useCart() {
 
   // Validate cart/wishlist items against active offers
   // Remove items whose offers have been deleted
+  // Note: Only validates regular (non-targeted) offer items against the public offers list
+  // Targeted offer items are validated separately via SSE events or individual API checks
   const validateOfferItems = useCallback((activeOfferIds) => {
     if (!activeOfferIds || !Array.isArray(activeOfferIds)) return;
     
-    // Filter out cart items whose offer no longer exists
+    // Filter out cart items whose regular offer no longer exists
     setCart(prev => prev.filter(c => {
       // Keep items without offer info
       if (!c.offerInfo || !c.offerInfo.offerId) return true;
-      // Keep items whose offer still exists
+      // Skip targeted offer items - they're not in the public offers list
+      // They get cleaned up via offer-deleted SSE events or individual checks
+      if (c.offerInfo.isTargetedOffer) return true;
+      // Keep regular offer items whose offer still exists
       return activeOfferIds.includes(c.offerInfo.offerId);
     }));
     
-    // Filter out wishlist items whose offer no longer exists
+    // Filter out wishlist items whose regular offer no longer exists
     setWishlist(prev => prev.filter(w => {
       // Keep items without offer info
       if (!w.offerInfo || !w.offerInfo.offerId) return true;
-      // Keep items whose offer still exists
+      // Skip targeted offer items
+      if (w.offerInfo.isTargetedOffer) return true;
+      // Keep regular offer items whose offer still exists
       return activeOfferIds.includes(w.offerInfo.offerId);
     }));
   }, []);

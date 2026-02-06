@@ -183,7 +183,10 @@ app.get('/api/events', (req, res) => {
 });
 
 // Broadcast to all SSE clients
-const broadcast = (type) => sseClients.forEach(c => c.write(`data: ${JSON.stringify({ type })}\n\n`));
+const broadcast = (data) => {
+  const payload = typeof data === 'string' ? { type: data } : data;
+  sseClients.forEach(c => c.write(`data: ${JSON.stringify(payload)}\n\n`));
+};
 
 dataEvents.on('orders', () => broadcast('orders'));
 dataEvents.on('dashboard', () => broadcast('dashboard'));
@@ -195,7 +198,7 @@ dataEvents.on('offers', () => broadcast('offers'));
 // Also listen for dataUpdate events (alternative format used in some routes)
 dataEvents.on('dataUpdate', (data) => {
   if (data && data.type) {
-    broadcast(data.type);
+    broadcast(data);
   }
 });
 
