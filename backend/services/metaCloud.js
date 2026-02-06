@@ -705,9 +705,89 @@ const metaCloud = {
   // ========== TEMPLATE MANAGEMENT (Meta Business Management API) ==========
 
   /**
+   * Upload an image to Meta's Resumable Upload API to get a handle
+   * for use in template creation (header_handle).
+   * Requires META_APP_ID environment variable.
+   *
+   * @param {string} imageUrl - Public URL of the image to upload
+   * @returns {string|null} The file handle (e.g. "4:aW1h..."), or null on failure
+   */
+  async uploadMediaForTemplate(imageUrl) {
+    try {
+      const { accessToken } = getConfig();
+      const appId = process.env.META_APP_ID;
+
+      if (!appId) {
+        logger.warn('META_APP_ID not set — cannot upload image for template header');
+        return null;
+      }
+
+      if (!imageUrl) return null;
+
+      logger.info('Uploading image for template header', { imageUrl: imageUrl.substring(0, 80) });
+
+      // Step 1: Download the image from our server / CDN
+      const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 30000 });
+      const imageBuffer = Buffer.from(imageResponse.data);
+      const contentType = imageResponse.headers['content-type'] || 'image/jpeg';
+
+      // Step 2: Create an upload session
+      const sessionResponse = await axios.post(
+        `https://graph.facebook.com/v24.0/${appId}/uploads`,
+        null,
+        {
+          params: {
+            file_length: imageBuffer.length,
+            file_type: contentType,
+            access_token: accessToken
+          }
+        }
+      );
+
+      const uploadSessionId = sessionResponse.data.id;
+      if (!uploadSessionId) {
+        logger.error('No upload session ID returned from Meta');
+        return null;
+      }
+
+      logger.info('Upload session created', { sessionId: uploadSessionId });
+
+      // Step 3: Upload the actual file bytes
+      const uploadResponse = await axios.post(
+        `https://graph.facebook.com/v24.0/${uploadSessionId}`,
+        imageBuffer,
+        {
+          headers: {
+            Authorization: `OAuth ${accessToken}`,
+            file_offset: '0',
+            'Content-Type': 'application/octet-stream'
+          }
+        }
+      );
+
+      const fileHandle = uploadResponse.data.h;
+      if (!fileHandle) {
+        logger.error('No file handle returned from Meta upload', { data: uploadResponse.data });
+        return null;
+      }
+
+      logger.info('Image uploaded to Meta successfully', { handle: fileHandle.substring(0, 30) + '...' });
+      return fileHandle;
+    } catch (error) {
+      const errData = error.response?.data?.error || error.response?.data || error.message;
+      logger.error('Meta image upload error (will create template without image)', { error: errData });
+      return null; // Graceful fallback — template will be created without image
+    }
+  },
+
+  /**
    * Create a marketing message template for an offer.
    * Requires META_WABA_ID (WhatsApp Business Account ID).
    * Template goes through Meta review (PENDING → APPROVED / REJECTED).
+   *
+   * If headerImageUrl is provided and META_APP_ID is set, the image is uploaded
+   * to Meta's Resumable Upload API first. If upload fails, template is created
+   * without an image header (graceful fallback).
    *
    * @param {string} templateName - Unique lowercase name (a-z, 0-9, underscore)
    * @param {string} headerImageUrl - Public image URL for template header
@@ -730,13 +810,19 @@ const metaCloud = {
 
       const components = [];
 
-      // Header with image
+      // Header with image (requires uploading to Meta first)
       if (headerImageUrl) {
-        components.push({
-          type: 'HEADER',
-          format: 'IMAGE',
-          example: { header_handle: [headerImageUrl] }
-        });
+        const fileHandle = await this.uploadMediaForTemplate(headerImageUrl);
+        if (fileHandle) {
+          components.push({
+            type: 'HEADER',
+            format: 'IMAGE',
+            example: { header_handle: [fileHandle] }
+          });
+          logger.info('Template will include IMAGE header');
+        } else {
+          logger.warn('Image upload failed — template will be created without image header');
+        }
       }
 
       // Body with variable placeholders
@@ -778,6 +864,8 @@ const metaCloud = {
         category: 'MARKETING',
         components
       };
+
+      logger.info('Submitting template to Meta', { templateName, componentTypes: components.map(c => c.type) });
 
       const response = await axios.post(
         `https://graph.facebook.com/v24.0/${wabaId}/message_templates`,

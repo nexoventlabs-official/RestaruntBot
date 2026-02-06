@@ -56,6 +56,18 @@ const envSchema = {
     validate: (value) => value.length >= 8,
     error: 'META_VERIFY_TOKEN must be at least 8 characters long'
   },
+
+  META_WABA_ID: {
+    required: true,
+    validate: (value) => /^\d+$/.test(value),
+    error: 'META_WABA_ID must be numeric (your WhatsApp Business Account ID)'
+  },
+
+  META_APP_ID: {
+    required: false,
+    validate: (value) => !value || /^\d+$/.test(value),
+    error: 'META_APP_ID must be numeric (needed for template image uploads)'
+  },
   
   // Razorpay Payment
   RAZORPAY_KEY_ID: {
