@@ -98,6 +98,9 @@ const corsOptions = {
     // Check if origin is in whitelist
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
+    } else if (origin.endsWith('.vercel.app') && origin.includes('nexovent-labs')) {
+      // Allow Vercel preview deployments for the project
+      callback(null, true);
     } else {
       // Log blocked origin for security monitoring
       console.warn(`⚠️ CORS blocked origin: ${origin}`);
