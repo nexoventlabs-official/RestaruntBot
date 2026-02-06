@@ -61,6 +61,19 @@ const whatsapp = {
 
   async sendSimpleTemplate(phone, templateName = 'hello_world', languageCode = 'en_US') {
     return metaCloud.sendSimpleTemplate(phone, templateName, languageCode);
+  },
+
+  // Template management - Meta Business API
+  async createMessageTemplate(templateName, headerImageUrl, bodyText, footerText, ctaUrl, ctaLabel) {
+    return metaCloud.createMessageTemplate(templateName, headerImageUrl, bodyText, footerText, ctaUrl, ctaLabel);
+  },
+
+  async getTemplateStatus(templateName) {
+    return metaCloud.getTemplateStatus(templateName);
+  },
+
+  async deleteMessageTemplate(templateName) {
+    return metaCloud.deleteMessageTemplate(templateName);
   }
 };
 

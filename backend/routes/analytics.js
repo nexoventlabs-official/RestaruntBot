@@ -1,10 +1,15 @@
 const express = require('express');
+const logger = require('../services/logger');
 const Order = require('../models/Order');
 const Customer = require('../models/Customer');
 const MenuItem = require('../models/MenuItem');
 const DashboardStats = require('../models/DashboardStats');
 const authMiddleware = require('../middleware/auth');
+const { adminRateLimiter } = require('../middleware/rateLimiter');
 const router = express.Router();
+
+// Apply admin rate limiting
+router.use(adminRateLimiter);
 
 // Helper to get today's date string (dd/mm/yyyy format)
 const getTodayString = () => {
@@ -42,7 +47,7 @@ const trackTodayRevenue = async (amount) => {
     
     return stats;
   } catch (error) {
-    console.error('Error tracking today revenue:', error.message);
+    logger.error('Error tracking today revenue:', error.message);
   }
 };
 
@@ -528,7 +533,7 @@ router.get('/report', authMiddleware, async (req, res) => {
       revenueTrend
     });
   } catch (error) {
-    console.error('Report error:', error);
+    logger.error('Report error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -598,7 +603,7 @@ router.post('/report/download-pdf', authMiddleware, async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(pdfBuffer);
   } catch (error) {
-    console.error('PDF generation error:', error);
+    logger.error('PDF generation error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -638,7 +643,7 @@ router.post('/report/send-email', authMiddleware, async (req, res) => {
     
     res.json({ success: true, message: `Report sent to ${reportEmail}` });
   } catch (error) {
-    console.error('Email send error:', error);
+    logger.error('Email send error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -712,7 +717,7 @@ router.get('/storage', authMiddleware, async (req, res) => {
         plan: cloudinaryUsage.plan || 'Free'
       };
     } catch (cloudinaryError) {
-      console.error('Cloudinary usage fetch error:', cloudinaryError.message);
+      logger.error('Cloudinary usage fetch error:', cloudinaryError.message);
       cloudinaryStats = { error: 'Unable to fetch Cloudinary stats' };
     }
     
@@ -731,7 +736,7 @@ router.get('/storage', authMiddleware, async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Storage stats error:', error);
+    logger.error('Storage stats error:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -1,4 +1,5 @@
 const SibApiV3Sdk = require('sib-api-v3-sdk');
+const logger = require('./logger');
 
 const defaultClient = SibApiV3Sdk.ApiClient.instance;
 const apiKey = defaultClient.authentications['api-key'];
@@ -27,7 +28,7 @@ const brevoMail = {
       await apiInstance.sendTransacEmail(sendSmtpEmail);
       return true;
     } catch (error) {
-      console.error('Brevo email error:', error.message);
+      logger.error('Brevo email error:', error.message);
       return false;
     }
   },
@@ -98,10 +99,10 @@ const brevoMail = {
 
     try {
       await apiInstance.sendTransacEmail(sendSmtpEmail);
-      console.log(`📧 Delivery notification email sent to ${email}`);
+      logger.info(`📧 Delivery notification email sent to ${email}`);
       return true;
     } catch (error) {
-      console.error('Brevo delivery notification email error:', error.message);
+      logger.error('Brevo delivery notification email error:', error.message);
       return false;
     }
   },
@@ -122,7 +123,7 @@ const brevoMail = {
       await apiInstance.sendTransacEmail(sendSmtpEmail);
       return true;
     } catch (error) {
-      console.error('Brevo email error:', error.message);
+      logger.error('Brevo email error:', error.message);
       return false;
     }
   },
@@ -198,10 +199,10 @@ const brevoMail = {
 
     try {
       await apiInstance.sendTransacEmail(sendSmtpEmail);
-      console.log(`📧 Report email sent to ${email}`);
+      logger.info(`📧 Report email sent to ${email}`);
       return true;
     } catch (error) {
-      console.error('Brevo report email error:', error.message);
+      logger.error('Brevo report email error:', error.message);
       throw error;
     }
   }

@@ -57,4 +57,11 @@ customerSchema.pre('save', function(next) {
   next();
 });
 
+// Indexes for performance
+customerSchema.index({ createdAt: -1 });
+customerSchema.index({ totalOrders: -1 });
+customerSchema.index({ totalSpent: -1 });
+customerSchema.index({ 'conversationState.lastInteraction': -1 });
+customerSchema.index({ name: 'text', phone: 'text' });
+
 module.exports = mongoose.model('Customer', customerSchema);

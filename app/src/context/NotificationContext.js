@@ -9,11 +9,14 @@ const NotificationContext = createContext();
 const STORAGE_KEY = 'admin_notifications';
 const LAST_CHECK_KEY = 'admin_last_check_time';
 const SEEN_ORDERS_KEY = 'admin_seen_orders';
+const OFFER_TEMPLATE_ALERTS_KEY = 'admin_offer_template_alerts';
 
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
+  // Offer template notification: null = none, 'approved' = green dot, 'rejected' = red dot
+  const [offerTemplateAlert, setOfferTemplateAlert] = useState(null);
   const lastCheckTime = useRef(null);
   const seenOrderStatuses = useRef({});
   const isInitialized = useRef(false);
@@ -25,9 +28,24 @@ export function NotificationProvider({ children }) {
     
     // Listen for app state changes to show notifications when app is in background
     const subscription = AppState.addEventListener('change', handleAppStateChange);
-    
+
+    // Listen for push notifications that arrive while app is running
+    let notifListener;
+    try {
+      notifListener = pushNotifications.addNotificationReceivedListener((notification) => {
+        const data = notification?.request?.content?.data;
+        if (data?.type === 'offer_template_status' && (data.status === 'approved' || data.status === 'rejected')) {
+          setOfferTemplateAlert(data.status);
+          SecureStore.setItemAsync(OFFER_TEMPLATE_ALERTS_KEY, data.status).catch(() => {});
+        }
+      });
+    } catch (e) {
+      // Not critical if listener fails
+    }
+
     return () => {
       subscription?.remove();
+      notifListener?.remove?.();
     };
   }, []);
 
@@ -59,6 +77,12 @@ export function NotificationProvider({ children }) {
       
       if (storedSeenOrders) {
         seenOrderStatuses.current = JSON.parse(storedSeenOrders);
+      }
+
+      // Load offer template alert
+      const storedOfferAlert = await SecureStore.getItemAsync(OFFER_TEMPLATE_ALERTS_KEY);
+      if (storedOfferAlert) {
+        setOfferTemplateAlert(storedOfferAlert);
       }
       
       isInitialized.current = true;
@@ -319,6 +343,12 @@ export function NotificationProvider({ children }) {
     await pushNotifications.clearAllNotifications();
   }, []);
 
+  // Clear offer template alert (called when Offers tab is viewed)
+  const clearOfferTemplateAlert = useCallback(async () => {
+    setOfferTemplateAlert(null);
+    await SecureStore.deleteItemAsync(OFFER_TEMPLATE_ALERTS_KEY).catch(() => {});
+  }, []);
+
   // Reset tracking (useful for testing)
   const resetTracking = useCallback(async () => {
     lastCheckTime.current = new Date();
@@ -328,7 +358,9 @@ export function NotificationProvider({ children }) {
     setNotifications([]);
     setUnreadCount(0);
     setNewOrdersCount(0);
+    setOfferTemplateAlert(null);
     await SecureStore.deleteItemAsync(STORAGE_KEY);
+    await SecureStore.deleteItemAsync(OFFER_TEMPLATE_ALERTS_KEY);
     await pushNotifications.clearAllNotifications();
   }, []);
 
@@ -342,12 +374,14 @@ export function NotificationProvider({ children }) {
       notifications,
       unreadCount,
       newOrdersCount,
+      offerTemplateAlert,
       checkForUpdates,
       markAllAsRead,
       markAsRead,
       clearAll,
       resetTracking,
-      clearNewOrdersCount
+      clearNewOrdersCount,
+      clearOfferTemplateAlert
     }}>
       {children}
     </NotificationContext.Provider>

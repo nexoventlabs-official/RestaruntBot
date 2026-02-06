@@ -2,6 +2,7 @@ const WhatsAppContact = require('../models/WhatsAppContact');
 const Customer = require('../models/Customer');
 const whatsapp = require('./whatsapp');
 const googleSheets = require('./googleSheets');
+const logger = require('./logger');
 
 // Template name for broadcast offers - must be created in WhatsApp Business Manager
 // If you don't have a custom template, we'll use 'hello_world' which is pre-approved for all accounts
@@ -24,7 +25,7 @@ const whatsappBroadcast = {
       // Find customer by phone
       const customer = await Customer.findOne({ phone });
       if (!customer) {
-        console.log(`[WhatsApp Broadcast] Customer not found for phone: ${phone}, skipping offer apply`);
+        logger.info('[WhatsApp Broadcast] Customer not found for phone, skipping offer apply', { phone });
         return false;
       }
       
@@ -44,20 +45,20 @@ const whatsappBroadcast = {
           ...offerData,
           appliedAt: new Date()
         };
-        console.log(`[WhatsApp Broadcast] Updated existing offer for ${phone}`);
+        logger.info('[WhatsApp Broadcast] Updated existing offer', { phone });
       } else {
         // Add new offer
         customer.activeOffers.push({
           ...offerData,
           appliedAt: new Date()
         });
-        console.log(`[WhatsApp Broadcast] Applied new offer to ${phone}`);
+        logger.info('[WhatsApp Broadcast] Applied new offer', { phone });
       }
       
       await customer.save();
       return true;
     } catch (error) {
-      console.error(`[WhatsApp Broadcast] Error applying offer to ${phone}:`, error);
+      logger.error(`[WhatsApp Broadcast] Error applying offer to ${phone}`, { error: error.message, stack: error.stack });
       return false;
     }
   },
@@ -96,7 +97,7 @@ const whatsappBroadcast = {
         return newContact;
       }
     } catch (error) {
-      console.error('[WhatsApp Broadcast] Error adding contact:', error);
+      logger.error('[WhatsApp Broadcast] Error adding contact', { error: error.message, stack: error.stack });
       return null;
     }
   },
@@ -104,14 +105,14 @@ const whatsappBroadcast = {
   // Sync all existing customers to WhatsApp contacts (both MongoDB and Sheets)
   async syncExistingCustomers() {
     try {
-      console.log('[WhatsApp Broadcast] Syncing existing customers to Google Sheets...');
+      logger.info('[WhatsApp Broadcast] Syncing existing customers to Google Sheets...');
       
       // Get all customers with phone numbers from MongoDB
       const customers = await Customer.find({ 
         phone: { $exists: true, $ne: null, $ne: '' } 
       });
       
-      console.log(`[WhatsApp Broadcast] Found ${customers.length} customers with phone numbers`);
+      logger.info('[WhatsApp Broadcast] Found customers with phone numbers', { count: customers.length });
       
       let synced = 0;
       
@@ -130,10 +131,10 @@ const whatsappBroadcast = {
         }
       }
       
-      console.log(`[WhatsApp Broadcast] Synced ${synced} customers to Google Sheets`);
+      logger.info('[WhatsApp Broadcast] Synced customers to Google Sheets', { synced, total: customers.length });
       return { success: true, synced, total: customers.length };
     } catch (error) {
-      console.error('[WhatsApp Broadcast] Error syncing customers:', error);
+      logger.error('[WhatsApp Broadcast] Error syncing customers', { error: error.message, stack: error.stack });
       return { success: false, error: error.message };
     }
   },
@@ -150,7 +151,7 @@ const whatsappBroadcast = {
       const { customers, error } = await googleSheets.getAllCustomers();
       
       if (!error && customers.length > 0) {
-        console.log(`[WhatsApp Broadcast] Found ${customers.length} customers from Google Sheets`);
+        logger.info('[WhatsApp Broadcast] Found customers from Google Sheets', { count: customers.length });
         // Map to expected format
         return customers.map(c => ({
           phone: c.phone,
@@ -161,12 +162,12 @@ const whatsappBroadcast = {
       }
       
       // Fallback to MongoDB if sheets fail
-      console.log('[WhatsApp Broadcast] Falling back to MongoDB for contacts...');
+      logger.info('[WhatsApp Broadcast] Falling back to MongoDB for contacts...');
       const contacts = await WhatsAppContact.find({ isActive: true }).sort({ lastOrderDate: -1 });
-      console.log(`[WhatsApp Broadcast] Found ${contacts.length} active contacts from MongoDB`);
+      logger.info('[WhatsApp Broadcast] Found active contacts from MongoDB', { count: contacts.length });
       return contacts;
     } catch (error) {
-      console.error('[WhatsApp Broadcast] Error getting contacts:', error);
+      logger.error('[WhatsApp Broadcast] Error getting contacts', { error: error.message, stack: error.stack });
       return [];
     }
   },
@@ -179,8 +180,23 @@ const whatsappBroadcast = {
   // offerData: full offer data to apply to targeted customers' activeOffers
   async sendOfferToAll(offerImageUrl, offerTitle, offerDescription, offerType, targetedCustomers = null, offerId = null, offerData = null) {
     try {
+      // Look up the offer to get its approved template name (if any)
+      let approvedTemplateName = null;
+      if (offerId) {
+        try {
+          const Offer = require('../models/Offer');
+          const offer = await Offer.findById(offerId);
+          if (offer && offer.templateStatus === 'approved' && offer.templateName) {
+            approvedTemplateName = offer.templateName;
+            logger.info('[WhatsApp Broadcast] Using approved template for old customers', { template: approvedTemplateName });
+          }
+        } catch (e) {
+          logger.warn('[WhatsApp Broadcast] Could not fetch offer template info', { error: e.message });
+        }
+      }
+
       // Ensure all customers are synced before sending (includes old customers who sent "hi" or any message)
-      console.log('[WhatsApp Broadcast] Syncing ALL customers (including old customers) before sending...');
+      logger.info('[WhatsApp Broadcast] Syncing ALL customers (including old customers) before sending...');
       await this.syncExistingCustomers();
       
       let contacts = await this.getAllContacts(true); // Include old customers
@@ -188,13 +204,13 @@ const whatsappBroadcast = {
       // Filter contacts if targeting specific customers
       const isTargetedOffer = targetedCustomers && Array.isArray(targetedCustomers) && targetedCustomers.length > 0;
       if (isTargetedOffer) {
-        console.log(`[WhatsApp Broadcast] Filtering to ${targetedCustomers.length} targeted customers...`);
+        logger.info('[WhatsApp Broadcast] Filtering to targeted customers', { count: targetedCustomers.length });
         const targetSet = new Set(targetedCustomers.map(p => p.replace(/\D/g, ''))); // Normalize phone numbers
         contacts = contacts.filter(contact => {
           const normalizedPhone = contact.phone.replace(/\D/g, '');
           return targetSet.has(normalizedPhone);
         });
-        console.log(`[WhatsApp Broadcast] Found ${contacts.length} matching contacts for targeting`);
+        logger.info('[WhatsApp Broadcast] Found matching contacts for targeting', { count: contacts.length });
       }
       
       if (contacts.length === 0) {
@@ -233,14 +249,15 @@ const whatsappBroadcast = {
         ? `${baseWebsiteUrl}/offer/${offerId}` 
         : `${baseWebsiteUrl}/offers`;
 
-      console.log(`[WhatsApp Broadcast] Sending offer to ${contacts.length} contacts...`);
-      console.log(`[WhatsApp Broadcast] Offer URL: ${defaultWebsiteUrl}`);
-      console.log(`[WhatsApp Broadcast] Note: Customers outside 24h window will receive via template`);
-      console.log(`[WhatsApp Broadcast] Template configured: ${OFFER_TEMPLATE_NAME || 'None'}`);
+      logger.info('[WhatsApp Broadcast] Sending offer to contacts', { count: contacts.length });
+      logger.info('[WhatsApp Broadcast] Offer URL', { url: defaultWebsiteUrl });
+      logger.info('[WhatsApp Broadcast] Note: Customers outside 24h window will receive via approved template');
+      logger.info('[WhatsApp Broadcast] Approved template', { template: approvedTemplateName || 'None' });
+      logger.info('[WhatsApp Broadcast] Fallback template', { template: OFFER_TEMPLATE_NAME || 'None' });
 
       // Send to each contact with delay to avoid rate limiting
       // For customers within 24h window: sends interactive message directly
-      // For customers outside 24h window: uses hello_world template to re-open conversation, then sends offer
+      // For customers outside 24h window: uses approved marketing template directly (no hello_world needed)
       for (const contact of contacts) {
         // Generate per-customer URL with phone for targeted offers
         let websiteUrl = defaultWebsiteUrl;
@@ -255,55 +272,29 @@ const whatsappBroadcast = {
         const isOutside24h = hoursSinceLastInteraction >= 24;
         
         if (isOutside24h) {
-          console.log(`[WhatsApp Broadcast] ${contact.phone} (${contact.name || 'Unknown'}) is outside 24h window (${hoursSinceLastInteraction}h ago), using template...`);
+          logger.info('[WhatsApp Broadcast] Customer outside 24h window, using template', { phone: contact.phone, name: contact.name || 'Unknown', hoursSinceLastInteraction });
         }
         
         try {
-          // If customer is outside 24h window, use template directly
-          if (isOutside24h && OFFER_TEMPLATE_NAME) {
-            console.log(`[WhatsApp Broadcast] Sending template to ${contact.phone} (${contact.name || 'Unknown'})...`);
+          // Determine which template to use for outside-24h customers
+          const templateToUse = approvedTemplateName || (OFFER_TEMPLATE_NAME !== 'hello_world' ? OFFER_TEMPLATE_NAME : null);
+          
+          // If customer is outside 24h window, use approved template directly
+          if (isOutside24h && templateToUse) {
+            logger.info('[WhatsApp Broadcast] Sending approved template to old customer', { phone: contact.phone, name: contact.name || 'Unknown', template: templateToUse });
             
-            if (OFFER_TEMPLATE_NAME === 'hello_world') {
-              // Use the pre-approved hello_world template first to re-open the conversation
-              await whatsapp.sendSimpleTemplate(contact.phone, 'hello_world', 'en_US');
-              console.log(`[WhatsApp Broadcast] Template sent to ${contact.phone}`);
-              
-              // Wait a moment then send the actual offer (now within 24h window)
-              await new Promise(resolve => setTimeout(resolve, 1500));
-              
-              // Now send the actual offer content
-              if (offerImageUrl) {
-                await whatsapp.sendImageWithCtaUrlOriginal(
-                  contact.phone, 
-                  offerImageUrl, 
-                  message, 
-                  'View Offer', 
-                  websiteUrl,
-                  'Tap to order now!'
-                );
-              } else {
-                await whatsapp.sendCtaUrl(
-                  contact.phone, 
-                  message, 
-                  'View Offer', 
-                  websiteUrl,
-                  'Tap to order now!'
-                );
-              }
-            } else {
-              // Send using custom marketing template
-              await whatsapp.sendMarketingTemplate(
-                contact.phone,
-                OFFER_TEMPLATE_NAME,
-                offerImageUrl,
-                [offerTitle || 'Special Offer', offerDescription || 'Check out our latest deals!'],
-                null
-              );
-            }
+            // Send the approved marketing template directly — no hello_world hack needed
+            await whatsapp.sendMarketingTemplate(
+              contact.phone,
+              templateToUse,
+              offerImageUrl,
+              [offerTitle || 'Special Offer', offerDescription || 'Check out our latest deals!'],
+              null
+            );
             sent++;
             sentViaTemplate++;
             successContacts.push({ phone: contact.phone, method: 'template', name: contact.name });
-            console.log(`[WhatsApp Broadcast] ✅ Sent via template to ${contact.phone} (${contact.name || 'Unknown'})`);
+            logger.info('[WhatsApp Broadcast] Sent via template', { phone: contact.phone, name: contact.name || 'Unknown' });
             
             // Apply offer to customer's activeOffers if this is a targeted offer
             if (isTargetedOffer && offerData) {
@@ -335,7 +326,7 @@ const whatsappBroadcast = {
             sent++;
             sentViaInteractive++;
             successContacts.push({ phone: contact.phone, method: 'interactive', name: contact.name });
-            console.log(`[WhatsApp Broadcast] ✅ Sent CTA to ${contact.phone} (${contact.name || 'Unknown'})`);
+            logger.info('[WhatsApp Broadcast] Sent CTA', { phone: contact.phone, name: contact.name || 'Unknown' });
             
             // Apply offer to customer's activeOffers if this is a targeted offer
             if (isTargetedOffer && offerData) {
@@ -362,51 +353,22 @@ const whatsappBroadcast = {
                                        errorMessage.includes('not a valid');
           
           // For test numbers, if recipient is not added, try template method
-          if (isTestRecipientError && OFFER_TEMPLATE_NAME) {
-            // Try sending via template (templates work even for non-test recipients on test numbers)
+          if (isTestRecipientError && templateToUse) {
+            // Try sending via approved template
             try {
-              console.log(`[WhatsApp Broadcast] Test recipient restriction for ${contact.phone} (${contact.name || 'Unknown'}), trying template "${OFFER_TEMPLATE_NAME}"...`);
+              logger.info('[WhatsApp Broadcast] Test recipient restriction, trying approved template', { phone: contact.phone, name: contact.name || 'Unknown', template: templateToUse });
               
-              if (OFFER_TEMPLATE_NAME === 'hello_world') {
-                // Use the pre-approved hello_world template first to re-open the conversation
-                await whatsapp.sendSimpleTemplate(contact.phone, 'hello_world', 'en_US');
-                
-                // Wait a moment then send the actual offer (now within 24h window)
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                
-                // Now send the actual offer content
-                if (offerImageUrl) {
-                  await whatsapp.sendImageWithCtaUrlOriginal(
-                    contact.phone, 
-                    offerImageUrl, 
-                    message, 
-                    'View Offer', 
-                    websiteUrl,
-                    'Tap to order now!'
-                  );
-                } else {
-                  await whatsapp.sendCtaUrl(
-                    contact.phone, 
-                    message, 
-                    'View Offer', 
-                    websiteUrl,
-                    'Tap to order now!'
-                  );
-                }
-              } else {
-                // Send using custom marketing template
-                await whatsapp.sendMarketingTemplate(
-                  contact.phone,
-                  OFFER_TEMPLATE_NAME,
-                  offerImageUrl,
-                  [offerTitle || 'Special Offer', offerDescription || 'Check out our latest deals!'],
-                  null
-                );
-              }
+              await whatsapp.sendMarketingTemplate(
+                contact.phone,
+                templateToUse,
+                offerImageUrl,
+                [offerTitle || 'Special Offer', offerDescription || 'Check out our latest deals!'],
+                null
+              );
               sent++;
               sentViaTemplate++;
               successContacts.push({ phone: contact.phone, method: 'template', name: contact.name });
-              console.log(`[WhatsApp Broadcast] ✅ Sent via template to ${contact.phone} (${contact.name || 'Unknown'})`);
+              logger.info('[WhatsApp Broadcast] Sent via template', { phone: contact.phone, name: contact.name || 'Unknown' });
             } catch (templateError) {
               failed++;
               const templateErrorMsg = templateError.response?.data?.error?.message || templateError.message;
@@ -416,54 +378,24 @@ const whatsappBroadcast = {
                 error: templateErrorMsg,
                 reason: 'test_recipient_template_failed'
               });
-              console.error(`[WhatsApp Broadcast] ❌ Template also failed for ${contact.phone} (${contact.name || 'Unknown'}):`, templateErrorMsg);
+              logger.error('[WhatsApp Broadcast] Template also failed', { phone: contact.phone, name: contact.name || 'Unknown', error: templateErrorMsg });
             }
-          } else if ((is24HourError || isTemplateRequiredError) && OFFER_TEMPLATE_NAME) {
-            // Try sending via template (works outside 24-hour window)
+          } else if ((is24HourError || isTemplateRequiredError) && templateToUse) {
+            // Try sending via approved template (works outside 24-hour window)
             try {
-              console.log(`[WhatsApp Broadcast] 24h window expired for ${contact.phone} (${contact.name || 'Unknown'}), trying template "${OFFER_TEMPLATE_NAME}"...`);
+              logger.info('[WhatsApp Broadcast] 24h window expired, trying approved template', { phone: contact.phone, name: contact.name || 'Unknown', template: templateToUse });
               
-              if (OFFER_TEMPLATE_NAME === 'hello_world') {
-                // Use the pre-approved hello_world template first to re-open the conversation
-                await whatsapp.sendSimpleTemplate(contact.phone, 'hello_world', 'en_US');
-                
-                // Wait a moment then send the actual offer (now within 24h window)
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                
-                // Now send the actual offer content
-                if (offerImageUrl) {
-                  await whatsapp.sendImageWithCtaUrlOriginal(
-                    contact.phone, 
-                    offerImageUrl, 
-                    message, 
-                    'View Offer', 
-                    websiteUrl,
-                    'Tap to order now!'
-                  );
-                } else {
-                  await whatsapp.sendCtaUrl(
-                    contact.phone, 
-                    message, 
-                    'View Offer', 
-                    websiteUrl,
-                    'Tap to order now!'
-                  );
-                }
-              } else {
-                // Send using custom marketing template
-                // Template should have: header image, body with {{1}} for title, {{2}} for description
-                await whatsapp.sendMarketingTemplate(
-                  contact.phone,
-                  OFFER_TEMPLATE_NAME,
-                  offerImageUrl,
-                  [offerTitle || 'Special Offer', offerDescription || 'Check out our latest deals!'],
-                  null // buttonUrl if template has dynamic URL
-                );
-              }
+              await whatsapp.sendMarketingTemplate(
+                contact.phone,
+                templateToUse,
+                offerImageUrl,
+                [offerTitle || 'Special Offer', offerDescription || 'Check out our latest deals!'],
+                null
+              );
               sent++;
               sentViaTemplate++;
               successContacts.push({ phone: contact.phone, method: 'template', name: contact.name });
-              console.log(`[WhatsApp Broadcast] ✅ Sent via template to ${contact.phone} (${contact.name || 'Unknown'})`);
+              logger.info('[WhatsApp Broadcast] Sent via template', { phone: contact.phone, name: contact.name || 'Unknown' });
             } catch (templateError) {
               failed++;
               const templateErrorMsg = templateError.response?.data?.error?.message || templateError.message;
@@ -473,19 +405,19 @@ const whatsappBroadcast = {
                 error: templateErrorMsg,
                 reason: 'template_failed'
               });
-              console.error(`[WhatsApp Broadcast] ❌ Template also failed for ${contact.phone} (${contact.name || 'Unknown'}):`, templateErrorMsg);
+              logger.error('[WhatsApp Broadcast] Template also failed', { phone: contact.phone, name: contact.name || 'Unknown', error: templateErrorMsg });
             }
-          } else if ((is24HourError || isTemplateRequiredError) && !OFFER_TEMPLATE_NAME) {
-            // No template configured, log the 24-hour issue
+          } else if ((is24HourError || isTemplateRequiredError) && !templateToUse) {
+            // No approved template available
             failed++;
             failedContacts.push({ 
               phone: contact.phone,
               name: contact.name,
-              error: '24-hour window expired and no template configured. Set WHATSAPP_OFFER_TEMPLATE env var with your approved template name.',
+              error: '24-hour window expired and no approved template available. Create an offer first — the template will be auto-submitted to Meta for approval.',
               reason: '24h_no_template'
             });
-            console.log(`[WhatsApp Broadcast] ⚠️ 24h window expired for ${contact.phone} (${contact.name || 'Unknown'}), no template configured`);
-          } else if (isTestRecipientError && !OFFER_TEMPLATE_NAME) {
+            logger.warn('[WhatsApp Broadcast] 24h window expired, no approved template', { phone: contact.phone, name: contact.name || 'Unknown' });
+          } else if (isTestRecipientError && !templateToUse) {
             // Test number restriction and no template to try
             failed++;
             failedContacts.push({ 
@@ -494,7 +426,7 @@ const whatsappBroadcast = {
               error: 'Test number restriction: Can only send to registered test recipients. Add this number as a test recipient in Meta Business Manager or switch to a production WhatsApp number.',
               reason: 'test_recipient_restriction'
             });
-            console.log(`[WhatsApp Broadcast] ⚠️ Test recipient restriction for ${contact.phone} (${contact.name || 'Unknown'}), no template to try`);
+            logger.warn('[WhatsApp Broadcast] Test recipient restriction, no template to try', { phone: contact.phone, name: contact.name || 'Unknown' });
           } else {
             // Other error
             failed++;
@@ -504,7 +436,7 @@ const whatsappBroadcast = {
               error: errorMessage,
               reason: 'other_error'
             });
-            console.error(`[WhatsApp Broadcast] ❌ Failed to send to ${contact.phone} (${contact.name || 'Unknown'}):`, errorMessage);
+            logger.error('[WhatsApp Broadcast] Failed to send', { phone: contact.phone, name: contact.name || 'Unknown', error: errorMessage });
           }
         }
         
@@ -512,12 +444,15 @@ const whatsappBroadcast = {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
 
-      console.log(`[WhatsApp Broadcast] ========== BROADCAST SUMMARY ==========`);
-      console.log(`[WhatsApp Broadcast] Total contacts: ${contacts.length}`);
-      console.log(`[WhatsApp Broadcast] Successfully sent: ${sent} (${sentViaInteractive} interactive, ${sentViaTemplate} via template)`);
-      console.log(`[WhatsApp Broadcast] Failed: ${failed}`);
-      console.log(`[WhatsApp Broadcast] Template configured: ${OFFER_TEMPLATE_NAME || 'None'}`);
-      console.log(`[WhatsApp Broadcast] =====================================`);
+      logger.info('[WhatsApp Broadcast] BROADCAST SUMMARY', {
+        totalContacts: contacts.length,
+        sent,
+        sentViaInteractive,
+        sentViaTemplate,
+        failed,
+        approvedTemplate: approvedTemplateName || 'None',
+        fallbackTemplate: OFFER_TEMPLATE_NAME || 'None'
+      });
       
       return {
         success: true,
@@ -528,10 +463,10 @@ const whatsappBroadcast = {
         failed,
         failedContacts,
         successContacts,
-        templateConfigured: !!OFFER_TEMPLATE_NAME
+        templateUsed: approvedTemplateName || OFFER_TEMPLATE_NAME || null
       };
     } catch (error) {
-      console.error('[WhatsApp Broadcast] Error sending offer:', error);
+      logger.error('[WhatsApp Broadcast] Error sending offer', { error: error.message, stack: error.stack });
       return { success: false, error: error.message, sent: 0, failed: 0 };
     }
   },
@@ -548,7 +483,7 @@ const whatsappBroadcast = {
         inactive: totalInactive
       };
     } catch (error) {
-      console.error('[WhatsApp Broadcast] Error getting stats:', error);
+      logger.error('[WhatsApp Broadcast] Error getting stats', { error: error.message, stack: error.stack });
       return { total: 0, active: 0, inactive: 0 };
     }
   },
@@ -571,7 +506,7 @@ const whatsappBroadcast = {
 
       const websiteUrl = 'https://restarunt-bot.vercel.app/offers';
 
-      console.log(`[WhatsApp Broadcast] Testing send to ${phone}...`);
+      logger.info('[WhatsApp Broadcast] Testing send', { phone });
 
       try {
         // Try sending interactive message first
@@ -594,7 +529,7 @@ const whatsappBroadcast = {
           );
         }
         
-        console.log(`[WhatsApp Broadcast] ✅ Test send successful to ${phone}`);
+        logger.info('[WhatsApp Broadcast] Test send successful', { phone });
         return {
           success: true,
           message: 'Offer sent successfully',
@@ -605,10 +540,10 @@ const whatsappBroadcast = {
         const errorMessage = error.response?.data?.error?.message || error.message || '';
         const errorCode = error.response?.data?.error?.code;
         
-        console.error(`[WhatsApp Broadcast] ❌ Test send failed:`, {
+        logger.error('[WhatsApp Broadcast] Test send failed', {
           phone,
           errorCode,
-          errorMessage,
+          error: errorMessage,
           fullError: error.response?.data
         });
 
@@ -624,51 +559,50 @@ const whatsappBroadcast = {
         let suggestion = '';
         
         if (is24HourError || isTemplateRequiredError) {
-          // Try using hello_world template to re-open conversation
-          console.log(`[WhatsApp Broadcast] 24h window expired, trying hello_world template for ${phone}...`);
+          // Try using approved template to send directly
+          const templateName = OFFER_TEMPLATE_NAME !== 'hello_world' ? OFFER_TEMPLATE_NAME : null;
           
-          try {
-            // Send hello_world template first
-            await whatsapp.sendSimpleTemplate(phone, 'hello_world', 'en_US');
+          if (templateName) {
+            logger.info('[WhatsApp Broadcast] 24h window expired, trying approved template', { phone, template: templateName });
             
-            // Wait then send the actual offer
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            if (offerImageUrl) {
-              await whatsapp.sendImageWithCtaUrlOriginal(
-                phone, 
-                offerImageUrl, 
-                message, 
-                'View Offer', 
-                websiteUrl,
-                'Tap to order now!'
+            try {
+              await whatsapp.sendMarketingTemplate(
+                phone,
+                templateName,
+                offerImageUrl,
+                [offerTitle || 'Special Offer', offerDescription || 'Check out our latest deals!'],
+                null
               );
-            } else {
-              await whatsapp.sendCtaUrl(
-                phone, 
-                message, 
-                'View Offer', 
-                websiteUrl,
-                'Tap to order now!'
-              );
+              
+              logger.info('[WhatsApp Broadcast] Test send successful via approved template', { phone });
+              return {
+                success: true,
+                message: 'Offer sent successfully using approved template',
+                phone,
+                method: 'approved_template'
+              };
+            } catch (templateErr) {
+              reason = '24_hour_window';
+              suggestion = 'Failed to send via approved template. Ensure the offer template is approved by Meta before sending.';
+              return {
+                success: false,
+                message: 'Failed to send offer',
+                phone,
+                error: templateErr.response?.data?.error?.message || templateErr.message,
+                errorCode: templateErr.response?.data?.error?.code,
+                reason,
+                suggestion
+              };
             }
-            
-            console.log(`[WhatsApp Broadcast] ✅ Test send successful via template to ${phone}`);
-            return {
-              success: true,
-              message: 'Offer sent successfully using hello_world template',
-              phone,
-              method: 'template_then_interactive'
-            };
-          } catch (templateErr) {
+          } else {
             reason = '24_hour_window';
-            suggestion = 'Failed to send via template. The hello_world template may not be available or there is another issue. Check Meta Business Manager for approved templates.';
+            suggestion = 'Customer is outside the 24-hour messaging window and no approved template is available. Create an offer first — the template will be auto-submitted to Meta for approval.';
             return {
               success: false,
-              message: 'Failed to send offer',
+              message: 'Failed to send offer — no approved template',
               phone,
-              error: templateErr.response?.data?.error?.message || templateErr.message,
-              errorCode: templateErr.response?.data?.error?.code,
+              error: errorMessage,
+              errorCode,
               reason,
               suggestion
             };
@@ -692,7 +626,7 @@ const whatsappBroadcast = {
         };
       }
     } catch (error) {
-      console.error('[WhatsApp Broadcast] Test send error:', error);
+      logger.error('[WhatsApp Broadcast] Test send error', { error: error.message, stack: error.stack });
       return { success: false, error: error.message, phone };
     }
   }

@@ -2,6 +2,7 @@
 // This polls for new messages every few seconds
 
 const axios = require('axios');
+const logger = require('./logger');
 const chatbot = require('./chatbot');
 
 let isPolling = false;
@@ -23,7 +24,7 @@ const polling = {
       return response.data;
     } catch (error) {
       if (error.code !== 'ECONNABORTED') {
-        console.error('Polling error:', error.message);
+        logger.error('Polling error:', error.message);
       }
       return null;
     }
@@ -34,7 +35,7 @@ const polling = {
       const { baseUrl, token } = getConfig();
       await axios.delete(`${baseUrl}/deleteNotification/${token}/${receiptId}`);
     } catch (error) {
-      console.error('Delete notification error:', error.message);
+      logger.error('Delete notification error:', error.message);
     }
   },
 
@@ -64,9 +65,9 @@ const polling = {
       }
 
       if (phone && (message || selectedId)) {
-        console.log('📱 Processing message:', { phone, message, messageType, selectedId });
+        logger.info('📱 Processing message:', { phone, message, messageType, selectedId });
         await chatbot.handleMessage(phone, message, messageType, selectedId);
-        console.log('✅ Message handled');
+        logger.info('✅ Message handled');
       }
     }
   },
@@ -79,25 +80,25 @@ const polling = {
       const notification = await this.receiveNotification();
       
       if (notification && notification.receiptId) {
-        console.log('📩 Received notification:', notification.body?.typeWebhook);
+        logger.info('📩 Received notification:', notification.body?.typeWebhook);
         await this.processNotification(notification);
         await this.deleteNotification(notification.receiptId);
       }
     } catch (error) {
-      console.error('Poll cycle error:', error.message);
+      logger.error('Poll cycle error:', error.message);
     } finally {
       isPolling = false;
     }
   },
 
   start(intervalMs = 3000) {
-    console.log('🔄 Starting polling service...');
+    logger.info('🔄 Starting polling service...');
     
     // Clear webhook URL to enable polling
     this.clearWebhook().then(() => {
       // Start polling loop
       pollInterval = setInterval(() => this.poll(), intervalMs);
-      console.log(`✅ Polling active (every ${intervalMs}ms)`);
+      logger.info(`✅ Polling active (every ${intervalMs}ms)`);
     });
   },
 
@@ -105,7 +106,7 @@ const polling = {
     if (pollInterval) {
       clearInterval(pollInterval);
       pollInterval = null;
-      console.log('⏹️ Polling stopped');
+      logger.info('⏹️ Polling stopped');
     }
   },
 
@@ -116,11 +117,11 @@ const polling = {
         webhookUrl: '',
         incomingWebhook: 'no'
       });
-      console.log('🔧 Webhook URL cleared for polling mode');
+      logger.info('🔧 Webhook URL cleared for polling mode');
       // Wait for settings to apply
       await new Promise(resolve => setTimeout(resolve, 2000));
     } catch (error) {
-      console.error('Clear webhook error:', error.message);
+      logger.error('Clear webhook error:', error.message);
     }
   }
 };

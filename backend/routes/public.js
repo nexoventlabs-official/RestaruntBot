@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../services/logger');
 const MenuItem = require('../models/MenuItem');
 const Category = require('../models/Category');
 const Order = require('../models/Order');
@@ -6,7 +7,11 @@ const DeliveryBoy = require('../models/DeliveryBoy');
 const HeroSection = require('../models/HeroSection');
 const Offer = require('../models/Offer');
 const whatsapp = require('../services/whatsapp');
+const { publicRateLimiter } = require('../middleware/rateLimiter');
 const router = express.Router();
+
+// Apply public rate limiting to all public routes
+router.use(publicRateLimiter);
 
 // Get active hero sections (public)
 router.get('/hero-sections', async (req, res) => {
@@ -334,7 +339,7 @@ router.post('/customer/active-offers', async (req, res) => {
       discountedPrices 
     });
   } catch (error) {
-    console.error('Error fetching customer active offers:', error);
+    logger.error('Error fetching customer active offers:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -849,7 +854,7 @@ router.post('/whatsapp-item/:itemId', async (req, res) => {
     
     res.json({ success: true, message: 'Item details sent to WhatsApp' });
   } catch (error) {
-    console.error('Error sending item to WhatsApp:', error);
+    logger.error('Error sending item to WhatsApp:', error);
     res.status(500).json({ error: error.message });
   }
 });

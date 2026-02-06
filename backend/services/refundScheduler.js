@@ -1,5 +1,6 @@
 // Refund Scheduler - Processes refund after delay and sends success message
 const Order = require('../models/Order');
+const logger = require('./logger');
 const whatsapp = require('./whatsapp');
 const googleSheets = require('./googleSheets');
 const razorpayService = require('./razorpay');
@@ -9,7 +10,7 @@ const pendingRefunds = new Map();
 const refundScheduler = {
   // Schedule refund to be processed after delay (default 5 minutes)
   scheduleRefund(orderId, delayMs = 5 * 60 * 1000) {
-    console.log(`⏰ Scheduling refund for ${orderId} in ${delayMs / 1000} seconds`);
+    logger.info(`⏰ Scheduling refund for ${orderId} in ${delayMs / 1000} seconds`);
     
     // Cancel any existing scheduled refund for this order
     this.cancelScheduledRefund(orderId);
@@ -27,32 +28,32 @@ const refundScheduler = {
       const order = await Order.findOne({ orderId });
       
       if (!order) {
-        console.log(`❌ Order ${orderId} not found for refund`);
+        logger.info(`❌ Order ${orderId} not found for refund`);
         return;
       }
       
       // Check if refund should be processed
       if (order.refundStatus === 'completed') {
-        console.log(`⚠️ Order ${orderId} already refunded, skipping`);
+        logger.info(`⚠️ Order ${orderId} already refunded, skipping`);
         return;
       }
       
       if (order.refundStatus !== 'scheduled' && order.refundStatus !== 'pending') {
-        console.log(`⚠️ Order ${orderId} refund status is ${order.refundStatus}, skipping`);
+        logger.info(`⚠️ Order ${orderId} refund status is ${order.refundStatus}, skipping`);
         return;
       }
       
       if (order.status !== 'cancelled') {
-        console.log(`⚠️ Order ${orderId} is not cancelled (status: ${order.status}), skipping refund`);
+        logger.info(`⚠️ Order ${orderId} is not cancelled (status: ${order.status}), skipping refund`);
         return;
       }
       
       if (!order.razorpayPaymentId) {
-        console.log(`⚠️ Order ${orderId} has no payment ID, skipping refund`);
+        logger.info(`⚠️ Order ${orderId} has no payment ID, skipping refund`);
         return;
       }
       
-      console.log(`💰 Processing scheduled refund for order ${orderId}`);
+      logger.info(`💰 Processing scheduled refund for order ${orderId}`);
       
       try {
         // Process the actual refund via Razorpay
@@ -76,7 +77,7 @@ const refundScheduler = {
         dataEvents.emit('orders');
         dataEvents.emit('dashboard');
         
-        console.log(`✅ Refund completed for order ${orderId}, Refund ID: ${refund.id}`);
+        logger.info(`✅ Refund completed for order ${orderId}, Refund ID: ${refund.id}`);
         
         // Send WhatsApp success message
         await this.sendRefundSuccessMessage(order);
@@ -85,11 +86,11 @@ const refundScheduler = {
         try {
           await googleSheets.updateOrderStatus(order.orderId, 'refunded', 'refunded');
         } catch (err) {
-          console.error('Google Sheets sync error:', err.message);
+          logger.error('Google Sheets sync error:', err.message);
         }
         
       } catch (refundError) {
-        console.error(`❌ Refund failed for order ${orderId}:`, refundError.message);
+        logger.error(`❌ Refund failed for order ${orderId}:`, refundError.message);
         
         // Update order with failure status
         order.refundStatus = 'failed';
@@ -111,7 +112,7 @@ const refundScheduler = {
         try {
           await googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed');
         } catch (err) {
-          console.error('Google Sheets sync error for failed refund:', err.message);
+          logger.error('Google Sheets sync error for failed refund:', err.message);
         }
         
         // Send failure notification
@@ -119,7 +120,7 @@ const refundScheduler = {
       }
       
     } catch (error) {
-      console.error(`❌ Error processing refund for ${orderId}:`, error.message);
+      logger.error(`❌ Error processing refund for ${orderId}:`, error.message);
     }
   },
 
@@ -136,9 +137,9 @@ const refundScheduler = {
         { id: 'place_order', text: 'New Order' },
         { id: 'home', text: 'Main Menu' }
       ]);
-      console.log(`📱 Refund success message sent to ${order.customer.phone}`);
+      logger.info(`📱 Refund success message sent to ${order.customer.phone}`);
     } catch (whatsappError) {
-      console.error('WhatsApp refund notification failed:', whatsappError.message);
+      logger.error('WhatsApp refund notification failed:', whatsappError.message);
     }
   },
 
@@ -155,9 +156,9 @@ const refundScheduler = {
         { id: 'place_order', text: 'New Order' },
         { id: 'home', text: 'Main Menu' }
       ]);
-      console.log(`📱 Refund failure message sent to ${order.customer.phone}`);
+      logger.info(`📱 Refund failure message sent to ${order.customer.phone}`);
     } catch (whatsappError) {
-      console.error('WhatsApp refund failure notification failed:', whatsappError.message);
+      logger.error('WhatsApp refund failure notification failed:', whatsappError.message);
     }
   },
 
@@ -166,7 +167,7 @@ const refundScheduler = {
     if (timeoutId) {
       clearTimeout(timeoutId);
       pendingRefunds.delete(orderId);
-      console.log(`🚫 Cancelled scheduled refund for ${orderId}`);
+      logger.info(`🚫 Cancelled scheduled refund for ${orderId}`);
     }
   }
 };

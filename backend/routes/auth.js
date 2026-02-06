@@ -1,29 +1,54 @@
 const express = require('express');
+const logger = require('../services/logger');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { authRateLimiter, strictRateLimiter } = require('../middleware/rateLimiter');
+const { body, validationResult } = require('express-validator');
 const router = express.Router();
 
-// Public test endpoint - send test notification to any push token (for debugging)
+// Apply rate limiting to all auth routes
+router.use(authRateLimiter);
+
+// Validation helper
+const handleValidation = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ success: false, errors: errors.array().map(e => ({ field: e.path, message: e.msg })) });
+  }
+  next();
+};
+
+// Test push notification - admin only (requires auth token)
 router.post('/test-push', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Authentication required' });
+
   try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
     const { pushToken } = req.body;
-    
     if (!pushToken) {
       return res.status(400).json({ error: 'pushToken is required in request body' });
     }
     
     const pushNotification = require('../services/pushNotification');
-    console.log('📱 Testing push notification to:', pushToken);
-    
     const result = await pushNotification.sendTestNotification(pushToken);
     res.json({ message: 'Test notification sent', result });
   } catch (error) {
-    console.error('Test push error:', error);
+    logger.error('Test push error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', 
+  strictRateLimiter,
+  body('username').trim().notEmpty().withMessage('Username is required').isLength({ max: 100 }),
+  body('password').trim().notEmpty().withMessage('Password is required').isLength({ max: 128 }),
+  handleValidation,
+  async (req, res) => {
   try {
     const { username, password } = req.body;
     
@@ -39,7 +64,7 @@ router.post('/login', async (req, res) => {
           role: 'admin' 
         });
         await adminUser.save();
-        console.log('📱 Created admin user in database for push notifications');
+        logger.info('📱 Created admin user in database for push notifications');
       }
       
       // Include user ID in token so push token can be saved
@@ -87,7 +112,7 @@ router.post('/push-token', async (req, res) => {
     // If user has an ID (database user), update their push token
     if (decoded.id) {
       await User.findByIdAndUpdate(decoded.id, { pushToken });
-      console.log(`📱 Admin push token saved for ${decoded.username}: ${pushToken.substring(0, 30)}...`);
+      logger.info(`📱 Admin push token saved for ${decoded.username}: ${pushToken.substring(0, 30)}...`);
     } else {
       // Try to find user by username and update (for legacy tokens without ID)
       const user = await User.findOneAndUpdate(
@@ -96,15 +121,15 @@ router.post('/push-token', async (req, res) => {
         { new: true }
       );
       if (user) {
-        console.log(`📱 Admin push token saved (by username) for ${decoded.username}: ${pushToken.substring(0, 30)}...`);
+        logger.info(`📱 Admin push token saved (by username) for ${decoded.username}: ${pushToken.substring(0, 30)}...`);
       } else {
-        console.warn(`⚠️ No database user found for ${decoded.username} - push token not saved!`);
+        logger.warn(`⚠️ No database user found for ${decoded.username} - push token not saved!`);
       }
     }
     
     res.json({ message: 'Push token updated' });
   } catch (error) {
-    console.error('Push token error:', error);
+    logger.error('Push token error:', error);
     res.status(401).json({ error: 'Invalid token' });
   }
 });
@@ -154,7 +179,7 @@ router.post('/test-notification', async (req, res) => {
       res.status(400).json({ error: 'User ID not found' });
     }
   } catch (error) {
-    console.error('Test notification error:', error);
+    logger.error('Test notification error:', error);
     res.status(500).json({ error: error.message });
   }
 });

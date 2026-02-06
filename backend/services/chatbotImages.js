@@ -1,5 +1,6 @@
 // Chatbot Images Service - Get dynamic images for WhatsApp messages
 const ChatbotImage = require('../models/ChatbotImage');
+const logger = require('./logger');
 
 // Cache for images (refresh every 5 minutes)
 let imageCache = {};
@@ -32,7 +33,7 @@ const chatbotImagesService = {
       // No fallback - return null if not configured
       return null;
     } catch (error) {
-      console.error(`Error fetching chatbot image ${key}:`, error.message);
+      logger.error(`Error fetching chatbot image ${key}:`, error.message);
       return null;
     }
   },
@@ -66,7 +67,7 @@ const chatbotImagesService = {
       
       return result;
     } catch (error) {
-      console.error('Error fetching all chatbot images:', error.message);
+      logger.error('Error fetching all chatbot images:', error.message);
       return {};
     }
   }

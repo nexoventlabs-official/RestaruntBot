@@ -1,4 +1,5 @@
 const { google } = require('googleapis');
+const logger = require('../logger');
 
 // Google Sheets configuration
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
@@ -77,7 +78,7 @@ const getAuthClient = () => {
   try {
     const keyData = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
     if (!keyData) {
-      console.error('❌ GOOGLE_SERVICE_ACCOUNT_KEY not set');
+      logger.error('❌ GOOGLE_SERVICE_ACCOUNT_KEY not set');
       return null;
     }
     const credentials = JSON.parse(keyData);
@@ -86,7 +87,7 @@ const getAuthClient = () => {
       scopes: ['https://www.googleapis.com/auth/spreadsheets']
     });
   } catch (error) {
-    console.error('❌ Error parsing Google credentials:', error.message);
+    logger.error('❌ Error parsing Google credentials:', error.message);
     return null;
   }
 };
@@ -105,7 +106,7 @@ const googleSheets = {
       
       return sheet ? { sheetId: sheet.properties.sheetId, sheetName: sheet.properties.title } : null;
     } catch (error) {
-      console.error('Error getting sheet:', error.message);
+      logger.error('Error getting sheet:', error.message);
       return null;
     }
   },
@@ -123,7 +124,7 @@ const googleSheets = {
       
       return rowIndex === -1 ? null : { rowIndex, rowData: rows[rowIndex] };
     } catch (error) {
-      console.error(`Error finding order in ${sheetName}:`, error.message);
+      logger.error(`Error finding order in ${sheetName}:`, error.message);
       return null;
     }
   },
@@ -192,7 +193,7 @@ const googleSheets = {
         });
       }
     } catch (error) {
-      console.error('Error adding date header:', error.message);
+      logger.error('Error adding date header:', error.message);
     }
   },
 
@@ -218,7 +219,7 @@ const googleSheets = {
         }
       });
     } catch (error) {
-      console.error('Error updating row color:', error.message);
+      logger.error('Error updating row color:', error.message);
     }
   },
 
@@ -233,7 +234,7 @@ const googleSheets = {
       // Check if order already exists in this sheet
       const existingOrder = await this.findOrderInSheet(sheets, sheet.sheetName, orderId);
       if (existingOrder) {
-        console.log(`⏭️ Order ${orderId} already exists in ${sheet.sheetName}, skipping add`);
+        logger.info(`⏭️ Order ${orderId} already exists in ${sheet.sheetName}, skipping add`);
         return true; // Return true since order is already there
       }
 
@@ -301,10 +302,10 @@ const googleSheets = {
         await this.updateRowColor(sheets, sheet.sheetId, newRowIndex, colorStatus);
       }
 
-      console.log(`✅ Order added to ${sheet.sheetName}:`, newRowData[0]);
+      logger.info(`✅ Order added to ${sheet.sheetName}:`, newRowData[0]);
       return true;
     } catch (error) {
-      console.error(`Error adding order to ${sheetType}:`, error.message);
+      logger.error(`Error adding order to ${sheetType}:`, error.message);
       return false;
     }
   },
@@ -324,7 +325,7 @@ const googleSheets = {
       });
       return true;
     } catch (error) {
-      console.error('Error deleting row:', error.message);
+      logger.error('Error deleting row:', error.message);
       return false;
     }
   },
@@ -349,7 +350,7 @@ const googleSheets = {
 
       // Get delivery address for logging
       const deliveryAddress = order.serviceType === 'pickup' ? 'Self Pickup' : (order.deliveryAddress?.address || '');
-      console.log(`📊 Adding order ${order.orderId} to sheets - Address: "${deliveryAddress}"`);
+      logger.info(`📊 Adding order ${order.orderId} to sheets - Address: "${deliveryAddress}"`);
 
       // Determine payment method label based on service type
       let paymentMethodLabel = 'UPI/App';
@@ -411,10 +412,10 @@ const googleSheets = {
         }
       }
 
-      console.log(`✅ Order added to Google Sheet (${sheet.sheetName}):`, order.orderId);
+      logger.info(`✅ Order added to Google Sheet (${sheet.sheetName}):`, order.orderId);
       return true;
     } catch (error) {
-      console.error('❌ Google Sheets add order error:', error.message);
+      logger.error('❌ Google Sheets add order error:', error.message);
       return false;
     }
   },
@@ -422,7 +423,7 @@ const googleSheets = {
   // Main function to update order status
   async updateOrderStatus(orderId, status, paymentStatus = null, actualPaymentMethod = null) {
     try {
-      console.log('📊 updateOrderStatus:', { orderId, status, paymentStatus, actualPaymentMethod });
+      logger.info('📊 updateOrderStatus:', { orderId, status, paymentStatus, actualPaymentMethod });
       
       const auth = getAuthClient();
       if (!auth) return false;
@@ -436,7 +437,7 @@ const googleSheets = {
         
         const orderData = await this.findOrderInSheet(sheets, newSheet.sheetName, orderId);
         if (!orderData) {
-          console.log('❌ Order not found in neworders sheet');
+          logger.info('❌ Order not found in neworders sheet');
           return false;
         }
 
@@ -478,7 +479,7 @@ const googleSheets = {
         
         if (isPickupOrder) {
           // Pickup orders go to selfpick sheet when completed
-          console.log('📦 Moving completed pickup order to selfpick sheet:', orderId, 'Method:', finalPaymentMethod, 'Status:', finalPaymentStatus);
+          logger.info('📦 Moving completed pickup order to selfpick sheet:', orderId, 'Method:', finalPaymentMethod, 'Status:', finalPaymentStatus);
           await this.addOrderToSheet(sheets, 'selfpick', orderData.rowData, finalPaymentStatus, 'picked_up', 'picked_up');
         } else {
           // Delivery orders go to delivered sheet
@@ -489,7 +490,7 @@ const googleSheets = {
           } else if (isPrepaidOnline) {
             finalPaymentStatus = 'Paid';
           }
-          console.log('🚚 Moving completed delivery order to delivered sheet:', orderId, 'Status:', finalPaymentStatus);
+          logger.info('🚚 Moving completed delivery order to delivered sheet:', orderId, 'Status:', finalPaymentStatus);
           await this.addOrderToSheet(sheets, 'delivered', orderData.rowData, finalPaymentStatus, 'delivered', 'delivered');
         }
         
@@ -508,10 +509,10 @@ const googleSheets = {
         }
         
         if (!orderData) {
-          console.log('⚠️ Order not found in neworders sheet, trying to fetch from database...');
+          logger.info('⚠️ Order not found in neworders sheet, trying to fetch from database...');
           // Try to get order data from database
           try {
-            const Order = require('../models/Order');
+            const Order = require('../../models/Order');
             const dbOrder = await Order.findOne({ orderId });
             
             if (dbOrder) {
@@ -544,15 +545,15 @@ const googleSheets = {
                 ],
                 rowIndex: -1
               };
-              console.log('✅ Created order data from database for:', orderId);
+              logger.info('✅ Created order data from database for:', orderId);
             }
           } catch (dbErr) {
-            console.error('Error fetching order from database:', dbErr.message);
+            logger.error('Error fetching order from database:', dbErr.message);
           }
         }
         
         if (!orderData) {
-          console.log('❌ Order not found in neworders sheet or database');
+          logger.info('❌ Order not found in neworders sheet or database');
           return false;
         }
 
@@ -575,7 +576,7 @@ const googleSheets = {
       
       const orderData = await this.findOrderInSheet(sheets, newSheet.sheetName, orderId);
       if (!orderData) {
-        console.log('❌ Order not found in neworders sheet');
+        logger.info('❌ Order not found in neworders sheet');
         return false;
       }
 
@@ -599,10 +600,10 @@ const googleSheets = {
       }
       await this.updateRowColor(sheets, newSheet.sheetId, orderData.rowIndex, status);
       
-      console.log('✅ Order status updated:', orderId, status);
+      logger.info('✅ Order status updated:', orderId, status);
       return true;
     } catch (error) {
-      console.error('❌ Google Sheets update error:', error.message);
+      logger.error('❌ Google Sheets update error:', error.message);
       return false;
     }
   },
@@ -629,7 +630,7 @@ const googleSheets = {
       }
       return true;
     } catch (error) {
-      console.error('❌ Google Sheets init error:', error.message);
+      logger.error('❌ Google Sheets init error:', error.message);
       return false;
     }
   },
@@ -646,7 +647,7 @@ const googleSheets = {
       
       const orderData = await this.findOrderInSheet(sheets, newSheet.sheetName, orderId);
       if (!orderData) {
-        console.log('❌ Order not found in neworders sheet for delivery partner update');
+        logger.info('❌ Order not found in neworders sheet for delivery partner update');
         return false;
       }
       
@@ -660,10 +661,10 @@ const googleSheets = {
         resource: { values: [[deliveryPartnerName]] }
       });
       
-      console.log('✅ Delivery partner updated in Google Sheet:', orderId, deliveryPartnerName);
+      logger.info('✅ Delivery partner updated in Google Sheet:', orderId, deliveryPartnerName);
       return true;
     } catch (error) {
-      console.error('❌ Google Sheets delivery partner update error:', error.message);
+      logger.error('❌ Google Sheets delivery partner update error:', error.message);
       return false;
     }
   },
@@ -693,7 +694,7 @@ const googleSheets = {
       }
       
       if (!orderData) {
-        console.log('❌ Order not found in neworders or selfpick sheet for actual payment method update');
+        logger.info('❌ Order not found in neworders or selfpick sheet for actual payment method update');
         return false;
       }
       
@@ -715,10 +716,10 @@ const googleSheets = {
         resource: { values: [[paymentStatusLabel]] }
       });
       
-      console.log('✅ Actual payment method updated in Google Sheet:', orderId, paymentLabel);
+      logger.info('✅ Actual payment method updated in Google Sheet:', orderId, paymentLabel);
       return true;
     } catch (error) {
-      console.error('❌ Google Sheets actual payment method update error:', error.message);
+      logger.error('❌ Google Sheets actual payment method update error:', error.message);
       return false;
     }
   },
@@ -756,7 +757,7 @@ const googleSheets = {
       }
       
       if (!orderData) {
-        console.log('❌ Order not found for payment method update');
+        logger.info('❌ Order not found for payment method update');
         return false;
       }
       
@@ -770,10 +771,10 @@ const googleSheets = {
         resource: { values: [[paymentMethodLabel]] }
       });
       
-      console.log('✅ Payment method updated in Google Sheet:', orderId, paymentMethodLabel);
+      logger.info('✅ Payment method updated in Google Sheet:', orderId, paymentMethodLabel);
       return true;
     } catch (error) {
-      console.error('❌ Google Sheets payment method update error:', error.message);
+      logger.error('❌ Google Sheets payment method update error:', error.message);
       return false;
     }
   },
@@ -801,7 +802,7 @@ const googleSheets = {
                          (now - this._historyCacheTime) < this._historyCacheDuration;
       
       if (cacheValid && !forceRefresh && !searchQuery && !deliveryBoyName && !status) {
-        console.log('📦 Using cached order history');
+        logger.info('📦 Using cached order history');
         return { orders: this._historyCache, error: null, fromCache: true };
       }
       
@@ -849,7 +850,7 @@ const googleSheets = {
                   currentDate = new Date(parseInt(year), month, parseInt(day));
                 }
               } catch (e) {
-                console.log('Failed to parse date header:', dateText);
+                logger.info('Failed to parse date header:', dateText);
               }
               continue;
             }
@@ -907,7 +908,7 @@ const googleSheets = {
             allOrders.push(order);
           }
         } catch (sheetError) {
-          console.error(`Error fetching from ${sheet.sheetName}:`, sheetError.message);
+          logger.error(`Error fetching from ${sheet.sheetName}:`, sheetError.message);
         }
       }
       
@@ -956,13 +957,13 @@ const googleSheets = {
       if (!searchQuery && !deliveryBoyName && !status) {
         this._historyCache = allOrders;
         this._historyCacheTime = Date.now();
-        console.log(`📦 Cached ${allOrders.length} orders for 60 seconds`);
+        logger.info(`📦 Cached ${allOrders.length} orders for 60 seconds`);
       }
       
-      console.log(`📊 Fetched ${allOrders.length} orders from Google Sheets history (sorted by date+time)`);
+      logger.info(`📊 Fetched ${allOrders.length} orders from Google Sheets history (sorted by date+time)`);
       return { orders: allOrders, error: null };
     } catch (error) {
-      console.error('❌ Error fetching order history from sheets:', error.message);
+      logger.error('❌ Error fetching order history from sheets:', error.message);
       return { orders: [], error: error.message };
     }
   },
@@ -1059,7 +1060,7 @@ const googleSheets = {
             allOrders.push(order);
           }
         } catch (sheetError) {
-          console.error(`Error fetching from ${sheetType}:`, sheetError.message);
+          logger.error(`Error fetching from ${sheetType}:`, sheetError.message);
         }
       }
       
@@ -1102,7 +1103,7 @@ const googleSheets = {
       const cancelledOrders = filteredOrders.filter(o => o.status === 'cancelled');
       const totalEarnings = deliveredOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
       
-      console.log(`📊 Fetched ${filteredOrders.length} orders for delivery partner "${deliveryBoyName}" (filter: ${filter})`);
+      logger.info(`📊 Fetched ${filteredOrders.length} orders for delivery partner "${deliveryBoyName}" (filter: ${filter})`);
       
       return { 
         orders: filteredOrders, 
@@ -1114,7 +1115,7 @@ const googleSheets = {
         error: null 
       };
     } catch (error) {
-      console.error('❌ Error fetching delivery partner history from sheets:', error.message);
+      logger.error('❌ Error fetching delivery partner history from sheets:', error.message);
       return { orders: [], stats: { delivered: 0, cancelled: 0, earnings: 0 }, error: error.message };
     }
   },
@@ -1130,7 +1131,7 @@ const googleSheets = {
       const sheet = await this.getSheetByType(sheets, 'customers');
       
       if (!sheet) {
-        console.log('⚠️ Customers sheet not found. Please create a sheet named "customers" in your Google Spreadsheet');
+        logger.info('⚠️ Customers sheet not found. Please create a sheet named "customers" in your Google Spreadsheet');
         return false;
       }
       
@@ -1182,12 +1183,12 @@ const googleSheets = {
           }
         });
         
-        console.log('✅ Customers sheet initialized with headers');
+        logger.info('✅ Customers sheet initialized with headers');
       }
       
       return true;
     } catch (error) {
-      console.error('❌ Error initializing customers sheet:', error.message);
+      logger.error('❌ Error initializing customers sheet:', error.message);
       return false;
     }
   },
@@ -1202,7 +1203,7 @@ const googleSheets = {
       const sheet = await this.getSheetByType(sheets, 'customers');
       
       if (!sheet) {
-        console.log('⚠️ Customers sheet not found');
+        logger.info('⚠️ Customers sheet not found');
         return false;
       }
       
@@ -1229,7 +1230,7 @@ const googleSheets = {
           });
         }
         
-        console.log(`📱 Customer ${phone} already exists, updated info`);
+        logger.info(`📱 Customer ${phone} already exists, updated info`);
         return true;
       }
       
@@ -1281,10 +1282,10 @@ const googleSheets = {
       // Update Total Customers in dashboard_stats
       await this.incrementDashboardStat('Total Customers', 1);
       
-      console.log(`✅ Customer ${phone} added to Google Sheets`);
+      logger.info(`✅ Customer ${phone} added to Google Sheets`);
       return true;
     } catch (error) {
-      console.error('❌ Error adding customer to sheets:', error.message);
+      logger.error('❌ Error adding customer to sheets:', error.message);
       return false;
     }
   },
@@ -1361,10 +1362,10 @@ const googleSheets = {
         }
       });
       
-      console.log(`✅ Customer ${phone} order history updated in Google Sheets`);
+      logger.info(`✅ Customer ${phone} order history updated in Google Sheets`);
       return true;
     } catch (error) {
-      console.error('❌ Error updating customer order in sheets:', error.message);
+      logger.error('❌ Error updating customer order in sheets:', error.message);
       return false;
     }
   },
@@ -1375,7 +1376,7 @@ const googleSheets = {
       // Check cache first (unless force refresh is requested)
       const now = Date.now();
       if (!forceRefresh && customerCache.data && (now - customerCache.timestamp) < customerCache.TTL) {
-        console.log(`📊 Returning ${customerCache.data.length} customers from cache`);
+        logger.info(`📊 Returning ${customerCache.data.length} customers from cache`);
         return { customers: customerCache.data, error: null };
       }
       
@@ -1417,10 +1418,10 @@ const googleSheets = {
       customerCache.data = customers;
       customerCache.timestamp = now;
       
-      console.log(`📊 Fetched ${customers.length} customers from Google Sheets (cached)`);
+      logger.info(`📊 Fetched ${customers.length} customers from Google Sheets (cached)`);
       return { customers, error: null };
     } catch (error) {
-      console.error('❌ Error fetching customers from sheets:', error.message);
+      logger.error('❌ Error fetching customers from sheets:', error.message);
       return { customers: [], error: error.message };
     }
   },
@@ -1450,7 +1451,7 @@ const googleSheets = {
       // Get top customers
       const topCustomers = orderedCustomers.slice(0, topCount);
       
-      console.log(`📊 Top ${percentage}% customers: ${topCustomers.length} out of ${orderedCustomers.length}`);
+      logger.info(`📊 Top ${percentage}% customers: ${topCustomers.length} out of ${orderedCustomers.length}`);
       return { 
         customers: topCustomers, 
         totalCustomers: orderedCustomers.length,
@@ -1458,7 +1459,7 @@ const googleSheets = {
         error: null 
       };
     } catch (error) {
-      console.error('❌ Error getting top customers:', error.message);
+      logger.error('❌ Error getting top customers:', error.message);
       return { customers: [], error: error.message };
     }
   },
@@ -1475,7 +1476,7 @@ const googleSheets = {
       // Filter customers who have spent more than the minimum amount
       const qualifiedCustomers = customers.filter(c => c.totalSpent >= minAmount);
       
-      console.log(`📊 Customers with ₹${minAmount}+ spent: ${qualifiedCustomers.length} out of ${customers.length}`);
+      logger.info(`📊 Customers with ₹${minAmount}+ spent: ${qualifiedCustomers.length} out of ${customers.length}`);
       return { 
         customers: qualifiedCustomers, 
         totalCustomers: customers.length,
@@ -1483,7 +1484,7 @@ const googleSheets = {
         error: null 
       };
     } catch (error) {
-      console.error('❌ Error getting customers by min spent:', error.message);
+      logger.error('❌ Error getting customers by min spent:', error.message);
       return { customers: [], error: error.message };
     }
   },
@@ -1500,7 +1501,7 @@ const googleSheets = {
       // Filter customers who have ordered more than the minimum times
       const qualifiedCustomers = customers.filter(c => c.ordersCount >= minOrders);
       
-      console.log(`📊 Customers with ${minOrders}+ orders: ${qualifiedCustomers.length} out of ${customers.length}`);
+      logger.info(`📊 Customers with ${minOrders}+ orders: ${qualifiedCustomers.length} out of ${customers.length}`);
       return { 
         customers: qualifiedCustomers, 
         totalCustomers: customers.length,
@@ -1508,7 +1509,7 @@ const googleSheets = {
         error: null 
       };
     } catch (error) {
-      console.error('❌ Error getting customers by min orders:', error.message);
+      logger.error('❌ Error getting customers by min orders:', error.message);
       return { customers: [], error: error.message };
     }
   },
@@ -1579,22 +1580,22 @@ const googleSheets = {
               totalRemoved++;
             }
             
-            console.log(`🗑️ Removed ${rowsToDelete.length} empty date headers from ${sheet.sheetName}`);
+            logger.info(`🗑️ Removed ${rowsToDelete.length} empty date headers from ${sheet.sheetName}`);
           }
         } catch (sheetError) {
-          console.error(`Error cleaning ${sheet.sheetName}:`, sheetError.message);
+          logger.error(`Error cleaning ${sheet.sheetName}:`, sheetError.message);
         }
       }
       
       if (totalRemoved > 0) {
-        console.log(`✅ Total empty date headers removed: ${totalRemoved}`);
+        logger.info(`✅ Total empty date headers removed: ${totalRemoved}`);
       } else {
-        console.log('📅 No empty date headers to remove');
+        logger.info('📅 No empty date headers to remove');
       }
       
       return true;
     } catch (error) {
-      console.error('❌ Error cleaning up empty date headers:', error.message);
+      logger.error('❌ Error cleaning up empty date headers:', error.message);
       return false;
     }
   },
@@ -1612,7 +1613,7 @@ const googleSheets = {
       const sheet = await this.getSheetByType(sheets, 'daily_reports');
       
       if (!sheet) {
-        console.log('⚠️ daily_reports sheet not found. Please create it in your Google Spreadsheet');
+        logger.info('⚠️ daily_reports sheet not found. Please create it in your Google Spreadsheet');
         return false;
       }
       
@@ -1666,12 +1667,12 @@ const googleSheets = {
             ]
           }
         });
-        console.log('✅ Daily reports sheet initialized with headers');
+        logger.info('✅ Daily reports sheet initialized with headers');
       }
       
       return true;
     } catch (error) {
-      console.error('❌ Error initializing daily_reports sheet:', error.message);
+      logger.error('❌ Error initializing daily_reports sheet:', error.message);
       return false;
     }
   },
@@ -1827,10 +1828,10 @@ const googleSheets = {
         });
       }
       
-      console.log(`📊 Daily report saved for ${date}`);
+      logger.info(`📊 Daily report saved for ${date}`);
       return true;
     } catch (error) {
-      console.error('❌ Error saving daily report to sheet:', error.message);
+      logger.error('❌ Error saving daily report to sheet:', error.message);
       return false;
     }
   },
@@ -1838,7 +1839,7 @@ const googleSheets = {
   // Real-time sync of daily report - aggregates current day's order data and saves to sheet
   async syncTodayDailyReport() {
     try {
-      const Order = require('../models/Order');
+      const Order = require('../../models/Order');
       
       const today = formatDateDDMMYYYY();
       const dateFilter = { createdAt: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) } };
@@ -1897,10 +1898,10 @@ const googleSheets = {
       };
       
       await this.saveDailyReport(report);
-      console.log('📊 Daily report synced in real-time');
+      logger.info('📊 Daily report synced in real-time');
       return true;
     } catch (error) {
-      console.error('❌ Error syncing daily report:', error.message);
+      logger.error('❌ Error syncing daily report:', error.message);
       return false;
     }
   },
@@ -1940,7 +1941,7 @@ const googleSheets = {
       
       return null;
     } catch (error) {
-      console.error('❌ Error fetching daily report from sheet:', error.message);
+      logger.error('❌ Error fetching daily report from sheet:', error.message);
       return null;
     }
   },
@@ -1985,7 +1986,7 @@ const googleSheets = {
       
       return reports;
     } catch (error) {
-      console.error('❌ Error fetching reports in range from sheet:', error.message);
+      logger.error('❌ Error fetching reports in range from sheet:', error.message);
       return [];
     }
   },
@@ -2003,7 +2004,7 @@ const googleSheets = {
       const sheet = await this.getSheetByType(sheets, 'dashboard_stats');
       
       if (!sheet) {
-        console.log('⚠️ dashboard_stats sheet not found. Please create it in your Google Spreadsheet');
+        logger.info('⚠️ dashboard_stats sheet not found. Please create it in your Google Spreadsheet');
         return false;
       }
       
@@ -2058,12 +2059,12 @@ const googleSheets = {
             }]
           }
         });
-        console.log('✅ Dashboard stats sheet initialized with headers');
+        logger.info('✅ Dashboard stats sheet initialized with headers');
       }
       
       return true;
     } catch (error) {
-      console.error('❌ Error initializing dashboard_stats sheet:', error.message);
+      logger.error('❌ Error initializing dashboard_stats sheet:', error.message);
       return false;
     }
   },
@@ -2187,7 +2188,7 @@ const googleSheets = {
       
       return true;
     } catch (error) {
-      console.error('❌ Error updating dashboard stat in sheet:', error.message);
+      logger.error('❌ Error updating dashboard stat in sheet:', error.message);
       return false;
     }
   },
@@ -2221,7 +2222,7 @@ const googleSheets = {
       
       return stats;
     } catch (error) {
-      console.error('❌ Error fetching dashboard stats from sheet:', error.message);
+      logger.error('❌ Error fetching dashboard stats from sheet:', error.message);
       return {};
     }
   },
@@ -2234,7 +2235,7 @@ const googleSheets = {
       await this.updateDashboardStat(metric, currentValue + amount);
       return true;
     } catch (error) {
-      console.error('❌ Error incrementing dashboard stat:', error.message);
+      logger.error('❌ Error incrementing dashboard stat:', error.message);
       return false;
     }
   },
@@ -2355,10 +2356,10 @@ const googleSheets = {
         }
       }
       
-      console.log('🧹 Order sheets cleared:', results);
+      logger.info('🧹 Order sheets cleared:', results);
       return { success: true, results };
     } catch (error) {
-      console.error('❌ Error clearing order sheets:', error.message);
+      logger.error('❌ Error clearing order sheets:', error.message);
       return { success: false, error: error.message };
     }
   },
@@ -2441,10 +2442,10 @@ const googleSheets = {
         }
       });
       
-      console.log(`🧹 Customers sheet cleared: ${rowCount - 1} rows removed`);
+      logger.info(`🧹 Customers sheet cleared: ${rowCount - 1} rows removed`);
       return { success: true, clearedRows: rowCount - 1 };
     } catch (error) {
-      console.error('❌ Error clearing customers sheet:', error.message);
+      logger.error('❌ Error clearing customers sheet:', error.message);
       return { success: false, error: error.message };
     }
   },
@@ -2521,10 +2522,10 @@ const googleSheets = {
         }
       });
       
-      console.log('🧹 Daily reports sheet cleared and reformatted (row-based format)');
+      logger.info('🧹 Daily reports sheet cleared and reformatted (row-based format)');
       return { success: true, message: 'Sheet reset with row-based format' };
     } catch (error) {
-      console.error('❌ Error clearing daily_reports sheet:', error.message);
+      logger.error('❌ Error clearing daily_reports sheet:', error.message);
       return { success: false, error: error.message };
     }
   },
@@ -2636,17 +2637,17 @@ const googleSheets = {
         }
       });
       
-      console.log('🧹 Dashboard stats sheet reset with default metrics (values set to 0)');
+      logger.info('🧹 Dashboard stats sheet reset with default metrics (values set to 0)');
       return { success: true, message: 'Sheet reset with default metrics' };
     } catch (error) {
-      console.error('❌ Error clearing dashboard_stats sheet:', error.message);
+      logger.error('❌ Error clearing dashboard_stats sheet:', error.message);
       return { success: false, error: error.message };
     }
   },
 
   // Clear all sheets at once
   async clearAllSheets() {
-    console.log('\n🧹 Clearing all Google Sheets data...\n');
+    logger.info('\n🧹 Clearing all Google Sheets data...\n');
     
     const results = {
       orders: await this.clearAllOrderSheets(),
@@ -2655,7 +2656,7 @@ const googleSheets = {
       dashboardStats: await this.clearDashboardStatsSheet()
     };
     
-    console.log('\n✅ All sheets cleared!\n');
+    logger.info('\n✅ All sheets cleared!\n');
     return results;
   },
 
@@ -2785,10 +2786,10 @@ const googleSheets = {
         }
       });
       
-      console.log(`📊 Daily report saved for ${date} in column ${columnLetter}`);
+      logger.info(`📊 Daily report saved for ${date} in column ${columnLetter}`);
       return true;
     } catch (error) {
-      console.error('❌ Error saving daily report by date:', error.message);
+      logger.error('❌ Error saving daily report by date:', error.message);
       return false;
     }
   },
@@ -2839,7 +2840,7 @@ const googleSheets = {
       
       return reports;
     } catch (error) {
-      console.error('❌ Error fetching all daily reports:', error.message);
+      logger.error('❌ Error fetching all daily reports:', error.message);
       return [];
     }
   },
@@ -2877,7 +2878,7 @@ const googleSheets = {
       const hasLocationColumn = rows[0] && rows[0][2] === 'Location';
       
       if (hasLocationColumn && rows.length > 1) {
-        console.log('📊 Migrating customers from 7-column to 6-column format (removing Location)...');
+        logger.info('📊 Migrating customers from 7-column to 6-column format (removing Location)...');
         
         // Prepare new data without Location column
         const newData = [];
@@ -2913,7 +2914,7 @@ const googleSheets = {
           resource: { values: newData }
         });
         
-        console.log(`📊 Migrated ${newData.length - 1} customers to new format`);
+        logger.info(`📊 Migrated ${newData.length - 1} customers to new format`);
       } else {
         // Just update header if needed
         await sheets.spreadsheets.values.update({
@@ -2988,10 +2989,10 @@ const googleSheets = {
         range: `${sheet.sheetName}!G:ZZ`
       });
       
-      console.log('✅ Customers sheet reformatted (6 columns, no Location)');
+      logger.info('✅ Customers sheet reformatted (6 columns, no Location)');
       return { success: true };
     } catch (error) {
-      console.error('❌ Error reformatting customers sheet:', error.message);
+      logger.error('❌ Error reformatting customers sheet:', error.message);
       return { success: false, error: error.message };
     }
   },
@@ -3021,7 +3022,7 @@ const googleSheets = {
       const hasOldColumnData = rows[0]?.length > 11 && rows[0].some((cell, idx) => idx > 10 && cell && cell.includes('📅'));
       
       if (isColumnFormat || hasOldColumnData) {
-        console.log('📊 Converting daily_reports from column format to row format...');
+        logger.info('📊 Converting daily_reports from column format to row format...');
         
         // Extract data from column format (dates in columns L, M, N, etc.)
         const extractedReports = [];
@@ -3084,7 +3085,7 @@ const googleSheets = {
           resource: { values: allRows }
         });
         
-        console.log(`📊 Migrated ${extractedReports.length} daily reports to row format`);
+        logger.info(`📊 Migrated ${extractedReports.length} daily reports to row format`);
       }
       
       // Clear any extra columns beyond J (old Top Categories column)
@@ -3121,7 +3122,7 @@ const googleSheets = {
           valueInputOption: 'RAW',
           resource: { values: convertedDates }
         });
-        console.log(`📅 Converted dates to dd/mm/yyyy format`);
+        logger.info(`📅 Converted dates to dd/mm/yyyy format`);
       }
       
       // Get total rows after conversion
@@ -3205,7 +3206,7 @@ const googleSheets = {
             fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
           }
         });
-        console.log(`📅 Today's row (${todayDate}) highlighted in green`);
+        logger.info(`📅 Today's row (${todayDate}) highlighted in green`);
       }
       
       // Apply styling
@@ -3214,10 +3215,10 @@ const googleSheets = {
         resource: { requests }
       });
       
-      console.log('✅ Daily reports sheet reformatted (row-based format)');
+      logger.info('✅ Daily reports sheet reformatted (row-based format)');
       return { success: true };
     } catch (error) {
-      console.error('❌ Error reformatting daily reports sheet:', error.message);
+      logger.error('❌ Error reformatting daily reports sheet:', error.message);
       return { success: false, error: error.message };
     }
   },
@@ -3304,10 +3305,10 @@ const googleSheets = {
         }
       });
       
-      console.log('✅ Dashboard stats sheet reformatted (bold + center)');
+      logger.info('✅ Dashboard stats sheet reformatted (bold + center)');
       return { success: true };
     } catch (error) {
-      console.error('❌ Error reformatting dashboard stats sheet:', error.message);
+      logger.error('❌ Error reformatting dashboard stats sheet:', error.message);
       return { success: false, error: error.message };
     }
   }

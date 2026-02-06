@@ -1,10 +1,16 @@
 const express = require('express');
+const logger = require('../services/logger');
 const MenuItem = require('../models/MenuItem');
 const authMiddleware = require('../middleware/auth');
 const cloudinaryService = require('../services/cloudinary');
 const dataEvents = require('../services/eventEmitter');
 const multer = require('multer');
+const { publicRateLimiter } = require('../middleware/rateLimiter');
+const { validators } = require('../middleware/inputValidation');
 const router = express.Router();
+
+// Rate limiting for public menu routes
+router.use(publicRateLimiter);
 
 // Configure multer for memory storage
 const upload = multer({
@@ -213,7 +219,7 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
           const publicId = cloudinaryService.extractPublicId(existingItem.image);
           if (publicId) await cloudinaryService.deleteImage(publicId);
         } catch (e) {
-          console.log('Could not delete old image:', e.message);
+          logger.info('Could not delete old image:', e.message);
         }
       }
       imageUrl = null;
@@ -226,7 +232,7 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
           const publicId = cloudinaryService.extractPublicId(existingItem.image);
           if (publicId) await cloudinaryService.deleteImage(publicId);
         } catch (e) {
-          console.log('Could not delete old image:', e.message);
+          logger.info('Could not delete old image:', e.message);
         }
       }
       imageUrl = await cloudinaryService.uploadFromBuffer(req.file.buffer, 'restaurant-bot/menu-items');
@@ -286,7 +292,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         const publicId = cloudinaryService.extractPublicId(item.image);
         if (publicId) await cloudinaryService.deleteImage(publicId);
       } catch (e) {
-        console.log('Could not delete image:', e.message);
+        logger.info('Could not delete image:', e.message);
       }
     }
     

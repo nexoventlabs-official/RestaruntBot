@@ -8,10 +8,12 @@ const razorpayService = require('../services/razorpay');
 const googleSheets = require('../services/googleSheets');
 const chatbotImagesService = require('../services/chatbotImages');
 const authMiddleware = require('../middleware/auth');
+const { publicRateLimiter, webhookRateLimiter } = require('../middleware/rateLimiter');
+const logger = require('../services/logger');
 const router = express.Router();
 
 // Create Razorpay order for UPI intent payment (no auth required - public endpoint)
-router.post('/create-upi-order', async (req, res) => {
+router.post('/create-upi-order', publicRateLimiter, async (req, res) => {
   try {
     const { orderId, amount } = req.body;
     
@@ -41,17 +43,16 @@ router.post('/create-upi-order', async (req, res) => {
       amount: razorpayOrder.amount,
       currency: razorpayOrder.currency,
       keyId: process.env.RAZORPAY_KEY_ID,
-      configId: process.env.RAZORPAY_CONFIG_ID || null,
       merchantName: process.env.MERCHANT_NAME || 'Restaurant'
     });
   } catch (error) {
-    console.error('Create UPI order error:', error);
+    logger.error('Create UPI order error', { error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
 
 // Verify UPI payment (no auth required - public endpoint)
-router.post('/verify-upi', async (req, res) => {
+router.post('/verify-upi', publicRateLimiter, async (req, res) => {
   try {
     const { orderId, razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
 
@@ -90,7 +91,7 @@ router.post('/verify-upi', async (req, res) => {
 
     // Update Google Sheets
     googleSheets.updateOrderStatus(order.orderId, 'confirmed', 'paid').catch(err =>
-      console.error('Google Sheets sync error:', err)
+      logger.error('Google Sheets sync error', { error: err.message })
     );
 
     // Build detailed order confirmation message
@@ -131,7 +132,7 @@ router.post('/verify-upi', async (req, res) => {
         ]);
       }
     } catch (whatsappErr) {
-      console.error('WhatsApp notification failed:', whatsappErr.message);
+      logger.error('WhatsApp notification failed', { error: whatsappErr.message });
     }
 
     // Send email if available
@@ -139,7 +140,7 @@ router.post('/verify-upi', async (req, res) => {
       try {
         await brevoMail.sendOrderConfirmation(order.customer.email, order);
       } catch (emailErr) {
-        console.error('Email error:', emailErr.message);
+        logger.error('Email error', { error: emailErr.message });
       }
     }
 
@@ -151,16 +152,16 @@ router.post('/verify-upi', async (req, res) => {
       await customer.save();
     }
 
-    console.log(`✅ UPI Payment verified for order ${order.orderId}`);
+    logger.info(`UPI Payment verified for order ${order.orderId}`);
     res.json({ success: true, message: 'Payment verified successfully' });
   } catch (error) {
-    console.error('Verify UPI payment error:', error);
+    logger.error('Verify UPI payment error', { error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
 
 // Razorpay Webhook - receives payment and refund events
-router.post('/razorpay-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+router.post('/razorpay-webhook', webhookRateLimiter, express.raw({ type: 'application/json' }), async (req, res) => {
   try {
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
     
@@ -175,13 +176,13 @@ router.post('/razorpay-webhook', express.raw({ type: 'application/json' }), asyn
         .digest('hex');
       
       if (signature !== expectedSignature) {
-        console.log('❌ Razorpay webhook signature mismatch');
+        logger.info('Razorpay webhook signature mismatch');
         return res.status(400).json({ error: 'Invalid signature' });
       }
     }
     
     const event = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-    console.log('📥 Razorpay webhook event:', event.event);
+    logger.info('Razorpay webhook event', { event: event.event });
     
     const payload = event.payload;
     
@@ -191,11 +192,11 @@ router.post('/razorpay-webhook', express.raw({ type: 'application/json' }), asyn
       const paymentId = refund?.payment_id;
       
       if (!paymentId) {
-        console.log('⚠️ No payment ID in refund webhook');
+        logger.warn('No payment ID in refund webhook');
         return res.json({ status: 'ok' });
       }
       
-      console.log('💰 Refund webhook received:', { refundId: refund.id, paymentId, amount: refund.amount / 100, status: refund.status });
+      logger.info('Refund webhook received', { refundId: refund.id, paymentId, amount: refund.amount / 100, status: refund.status });
       
       // Find order by payment ID
       const order = await Order.findOne({ 
@@ -206,7 +207,7 @@ router.post('/razorpay-webhook', express.raw({ type: 'application/json' }), asyn
       });
       
       if (!order) {
-        console.log('⚠️ Order not found for payment:', paymentId);
+        logger.warn('Order not found for payment', { paymentId });
         return res.json({ status: 'ok' });
       }
       
@@ -225,7 +226,7 @@ router.post('/razorpay-webhook', express.raw({ type: 'application/json' }), asyn
         });
         await order.save();
         
-        console.log('✅ Order updated with refund:', order.orderId);
+        logger.info('Order updated with refund', { orderId: order.orderId });
         
         // Emit event for real-time updates
         const dataEvents = require('../services/eventEmitter');
@@ -234,7 +235,7 @@ router.post('/razorpay-webhook', express.raw({ type: 'application/json' }), asyn
         
         // Update Google Sheets - move to refunded sheet
         googleSheets.updateOrderStatus(order.orderId, 'refunded', 'refunded').catch(err =>
-          console.error('Google Sheets sync error:', err)
+          logger.error('Google Sheets sync error', { error: err.message })
         );
         
         // Notify customer
@@ -247,7 +248,7 @@ router.post('/razorpay-webhook', express.raw({ type: 'application/json' }), asyn
             ]
           );
         } catch (whatsappErr) {
-          console.error('WhatsApp notification failed:', whatsappErr.message);
+          logger.error('WhatsApp notification failed', { error: whatsappErr.message });
         }
       }
       
@@ -263,7 +264,7 @@ router.post('/razorpay-webhook', express.raw({ type: 'application/json' }), asyn
         return res.json({ status: 'ok' });
       }
       
-      console.log('❌ Refund failed webhook:', { refundId: refund.id, paymentId, reason: refund.failure_reason });
+      logger.info('Refund failed webhook', { refundId: refund.id, paymentId, reason: refund.failure_reason });
       
       const order = await Order.findOne({ 
         $or: [
@@ -295,7 +296,7 @@ router.post('/razorpay-webhook', express.raw({ type: 'application/json' }), asyn
       
       // Update Google Sheets - move to refundfailed sheet
       googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed').catch(err =>
-        console.error('Google Sheets sync error:', err)
+        logger.error('Google Sheets sync error', { error: err.message })
       );
       
       // Notify customer
@@ -308,7 +309,7 @@ router.post('/razorpay-webhook', express.raw({ type: 'application/json' }), asyn
           ]
         );
       } catch (whatsappErr) {
-        console.error('WhatsApp notification failed:', whatsappErr.message);
+        logger.error('WhatsApp notification failed', { error: whatsappErr.message });
       }
       
       return res.json({ status: 'ok' });
@@ -328,7 +329,7 @@ router.post('/razorpay-webhook', express.raw({ type: 'application/json' }), asyn
           order.trackingUpdates.push({ status: 'confirmed', message: 'Payment received via webhook', timestamp: new Date() });
           await order.save();
           
-          console.log('✅ Payment captured via webhook:', order.orderId);
+          logger.info('Payment captured via webhook', { orderId: order.orderId });
           
           // Emit event for real-time updates
           const dataEvents = require('../services/eventEmitter');
@@ -337,7 +338,7 @@ router.post('/razorpay-webhook', express.raw({ type: 'application/json' }), asyn
           
           // Update Google Sheets
           googleSheets.updateOrderStatus(order.orderId, 'confirmed', 'paid').catch(err =>
-            console.error('Google Sheets sync error:', err)
+            logger.error('Google Sheets sync error', { error: err.message })
           );
         }
       }
@@ -347,7 +348,7 @@ router.post('/razorpay-webhook', express.raw({ type: 'application/json' }), asyn
     
     res.json({ status: 'ok' });
   } catch (error) {
-    console.error('❌ Razorpay webhook error:', error);
+    logger.error('Razorpay webhook error', { error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
@@ -373,7 +374,7 @@ router.get('/callback', async (req, res) => {
 
         // Update Google Sheets
         googleSheets.updateOrderStatus(order.orderId, 'confirmed', 'paid').catch(err =>
-          console.error('Google Sheets sync error:', err)
+          logger.error('Google Sheets sync error', { error: err.message })
         );
 
         // Build detailed order confirmation message
@@ -418,7 +419,7 @@ router.get('/callback', async (req, res) => {
           try {
             await brevoMail.sendOrderConfirmation(order.customer.email, order);
           } catch (emailErr) {
-            console.error('Email error:', emailErr.message);
+            logger.error('Email error', { error: emailErr.message });
           }
         }
 
@@ -430,7 +431,7 @@ router.get('/callback', async (req, res) => {
           await customer.save();
         }
         
-        console.log(`✅ Payment confirmed for order ${order.orderId}`);
+        logger.info(`Payment confirmed for order ${order.orderId}`);
       }
     }
     
@@ -455,7 +456,7 @@ router.get('/callback', async (req, res) => {
       </html>
     `);
   } catch (error) {
-    console.error('Payment callback error:', error);
+    logger.error('Payment callback error', { error: error.message });
     res.send('<html><body><h1>Payment Error</h1><p>Please contact support.</p></body></html>');
   }
 });
@@ -490,7 +491,7 @@ router.post('/refund/:orderId', authMiddleware, async (req, res) => {
 
       // Update Google Sheets - move to refunded sheet
       googleSheets.updateOrderStatus(order.orderId, 'refunded', 'refunded').catch(err =>
-        console.error('Google Sheets sync error:', err)
+        logger.error('Google Sheets sync error', { error: err.message })
       );
 
       await whatsapp.sendButtons(order.customer.phone,
@@ -503,7 +504,7 @@ router.post('/refund/:orderId', authMiddleware, async (req, res) => {
 
       res.json({ success: true, message: 'Refund processed', refundId: refund.id, orderId: order.orderId });
     } catch (refundError) {
-      console.error('Refund failed:', refundError.message);
+      logger.error('Refund failed', { error: refundError.message });
       
       order.status = 'cancelled';
       order.refundStatus = 'failed';
@@ -522,7 +523,7 @@ router.post('/refund/:orderId', authMiddleware, async (req, res) => {
 
       // Update Google Sheets - move to refundfailed sheet
       googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed').catch(err =>
-        console.error('Google Sheets sync error:', err)
+        logger.error('Google Sheets sync error', { error: err.message })
       );
 
       await whatsapp.sendButtons(order.customer.phone,
@@ -574,7 +575,7 @@ router.post('/process-refund/:orderId', authMiddleware, async (req, res) => {
 
       // Update Google Sheets - move to refunded sheet
       googleSheets.updateOrderStatus(order.orderId, 'refunded', 'refunded').catch(err =>
-        console.error('Google Sheets sync error:', err)
+        logger.error('Google Sheets sync error', { error: err.message })
       );
 
       await whatsapp.sendButtons(order.customer.phone,
@@ -587,7 +588,7 @@ router.post('/process-refund/:orderId', authMiddleware, async (req, res) => {
 
       res.json({ success: true, message: 'Refund processed', refundId: refund.id });
     } catch (refundError) {
-      console.error('Refund processing failed:', refundError.message);
+      logger.error('Refund processing failed', { error: refundError.message });
       
       order.refundStatus = 'failed';
       order.refundError = refundError.message;
@@ -604,7 +605,7 @@ router.post('/process-refund/:orderId', authMiddleware, async (req, res) => {
 
       // Update Google Sheets - move to refundfailed sheet
       googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed').catch(err =>
-        console.error('Google Sheets sync error:', err)
+        logger.error('Google Sheets sync error', { error: err.message })
       );
 
       res.status(500).json({ success: false, error: refundError.message });

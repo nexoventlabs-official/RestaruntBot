@@ -33,6 +33,20 @@ const offerSchema = new mongoose.Schema({
   targetMinOrders: { type: Number, default: 0 }, // For min_orders: minimum order count (e.g., 5 = customers with 5+ orders)
   targetedCustomers: [{ type: String }], // Phone numbers of targeted customers (populated when offer is created)
   
+  // WhatsApp template fields (Meta Business API)
+  templateName: { type: String, default: null }, // Unique template name submitted to Meta (e.g. offer_abc123)
+  templateStatus: { 
+    type: String, 
+    enum: ['none', 'pending', 'approved', 'rejected'], 
+    default: 'none' 
+  }, // Meta template review status
+  metaTemplateId: { type: String, default: null }, // Template ID returned by Meta
+  templateRejectionReason: { type: String, default: null }, // Reason if Meta rejects
+  templateSubmittedAt: { type: Date, default: null }, // When template was submitted for review
+  templateApprovedAt: { type: Date, default: null }, // When template was approved
+  broadcastSentAt: { type: Date, default: null }, // When offer was broadcast to customers
+  broadcastResult: { type: mongoose.Schema.Types.Mixed, default: null }, // Result of last broadcast
+  
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
@@ -44,5 +58,6 @@ offerSchema.pre('save', function(next) {
 
 offerSchema.index({ isActive: 1, showAsPopup: 1 });
 offerSchema.index({ validFrom: 1, validUntil: 1 });
+offerSchema.index({ templateName: 1 }, { sparse: true });
 
 module.exports = mongoose.model('Offer', offerSchema);

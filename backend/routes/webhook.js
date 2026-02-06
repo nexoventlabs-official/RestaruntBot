@@ -1,13 +1,24 @@
 const express = require('express');
+const logger = require('../services/logger');
 const chatbot = require('../services/chatbot');
 const whatsapp = require('../services/whatsapp');
 const googleSheets = require('../services/googleSheets');
 const metaCloud = require('../services/metaCloud');
 const groqAi = require('../services/groqAi');
+const pushNotification = require('../services/pushNotification');
+const authMiddleware = require('../middleware/auth');
+const { webhookRateLimiter } = require('../middleware/rateLimiter');
 const router = express.Router();
 
-// Test Google Sheets connection
-router.get('/test-sheets', async (req, res) => {
+// ============================================================
+// TEST/DEBUG ROUTES - Protected with auth, disabled in production
+// ============================================================
+
+// Test Google Sheets connection (admin only)
+router.get('/test-sheets', authMiddleware, async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'Test endpoints disabled in production' });
+  }
   try {
     const testOrder = {
       orderId: 'TEST' + Date.now(),
@@ -24,51 +35,62 @@ router.get('/test-sheets', async (req, res) => {
     const result = await googleSheets.addOrder(testOrder);
     res.json({ success: result, message: result ? 'Test order added to Google Sheet!' : 'Failed to add order' });
   } catch (error) {
-    console.error('Google Sheets test error:', error);
+    logger.error('Google Sheets test error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Test endpoint - send a test message
-router.get('/test/:phone', async (req, res) => {
+// Test endpoint - send a test message (admin only)
+router.get('/test/:phone', authMiddleware, async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'Test endpoints disabled in production' });
+  }
   try {
     const { phone } = req.params;
     await whatsapp.sendMessage(phone, '✅ Test message from your Restaurant Bot!');
     res.json({ success: true, message: 'Test message sent to ' + phone });
   } catch (error) {
-    console.error('Test error:', error);
+    logger.error('Test error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Test endpoint - send welcome menu with buttons
-router.get('/test-menu/:phone', async (req, res) => {
+// Test endpoint - send welcome menu with buttons (admin only)
+router.get('/test-menu/:phone', authMiddleware, async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'Test endpoints disabled in production' });
+  }
   try {
     const { phone } = req.params;
     await chatbot.handleMessage(phone, 'hi', 'text', null);
     res.json({ success: true, message: 'Welcome menu sent to ' + phone });
   } catch (error) {
-    console.error('Test menu error:', error);
+    logger.error('Test menu error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Simulate incoming message (for testing when Meta test number doesn't forward messages)
-router.post('/simulate', async (req, res) => {
+// Simulate incoming message (admin only, dev only)
+router.post('/simulate', authMiddleware, async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'Test endpoints disabled in production' });
+  }
   try {
     const { phone, message, selectedId } = req.body;
     const messageType = selectedId ? 'list' : 'text';
-    console.log('🧪 Simulating message:', { phone, message, messageType, selectedId });
     await chatbot.handleMessage(phone, message || '', messageType, selectedId || null);
     res.json({ success: true, message: 'Simulated message processed' });
   } catch (error) {
-    console.error('Simulate error:', error);
+    logger.error('Simulate error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Debug endpoint to check customer state
-router.get('/debug/:phone', async (req, res) => {
+// Debug endpoint to check customer state (admin only, dev only)
+router.get('/debug/:phone', authMiddleware, async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'Debug endpoints disabled in production' });
+  }
   try {
     const Customer = require('../models/Customer');
     const customer = await Customer.findOne({ phone: req.params.phone }).populate('cart.menuItem');
@@ -96,27 +118,32 @@ router.get('/meta', (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
-  // Verify token should match what you set in Meta dashboard
-  const verifyToken = process.env.META_VERIFY_TOKEN || 'restaurant_bot_verify';
+  // Verify token MUST come from env - no insecure fallback
+  const verifyToken = process.env.META_VERIFY_TOKEN;
+  if (!verifyToken) {
+    logger.error('❌ META_VERIFY_TOKEN not configured');
+    return res.sendStatus(500);
+  }
 
-  console.log('🔐 Webhook verification attempt:', { mode, token, expectedToken: verifyToken, challenge: challenge ? 'present' : 'missing' });
+  logger.info('🔐 Webhook verification attempt:', { mode, token, expectedToken: verifyToken, challenge: challenge ? 'present' : 'missing' });
 
   if (mode === 'subscribe' && token === verifyToken) {
-    console.log('✅ Meta webhook verified');
+    logger.info('✅ Meta webhook verified');
     res.status(200).send(challenge);
   } else if (!mode && !token) {
     // Simple health check (no verification params)
     res.json({ status: 'Webhook endpoint active', timestamp: new Date().toISOString() });
   } else {
-    console.log('❌ Meta webhook verification failed - token mismatch');
+    logger.info('❌ Meta webhook verification failed - token mismatch');
     res.sendStatus(403);
   }
 });
 
-// Meta WhatsApp Cloud API webhook endpoint
-router.post('/meta', async (req, res) => {
-  console.log('📥 Webhook POST received');
-  console.log('📥 Body:', JSON.stringify(req.body, null, 2));
+// Meta WhatsApp Cloud API webhook endpoint (rate limited)
+router.post('/meta', webhookRateLimiter, async (req, res) => {
+  if (process.env.NODE_ENV !== 'production') {
+    logger.info('📥 Webhook POST received');
+  }
   
   // 1. Respond to Meta IMMEDIATELY to avoid timeouts (prevents 'single tick' issue)
   res.sendStatus(200);
@@ -127,6 +154,64 @@ router.post('/meta', async (req, res) => {
     if (body.object === 'whatsapp_business_account') {
       for (const entry of body.entry || []) {
         for (const change of entry.changes || []) {
+          // ========== TEMPLATE STATUS UPDATES ==========
+          if (change.field === 'message_template_status_update') {
+            const value = change.value || {};
+            const event = (value.event || '').toUpperCase(); // APPROVED, REJECTED, PENDING, etc.
+            const tplName = value.message_template_name;
+            const tplId = value.message_template_id;
+            const reason = value.reason || value.rejected_reason || null;
+
+            logger.info('Template status webhook received', { event, tplName, tplId, reason });
+
+            if (tplName) {
+              try {
+                const Offer = require('../models/Offer');
+                const statusMap = { 'APPROVED': 'approved', 'REJECTED': 'rejected', 'PENDING': 'pending' };
+                const mappedStatus = statusMap[event] || 'pending';
+
+                const updateFields = { templateStatus: mappedStatus };
+                if (mappedStatus === 'approved') updateFields.templateApprovedAt = new Date();
+                if (mappedStatus === 'rejected') updateFields.templateRejectionReason = reason || 'Rejected by Meta';
+
+                const updated = await Offer.findOneAndUpdate(
+                  { templateName: tplName },
+                  updateFields,
+                  { new: true }
+                );
+
+                if (updated) {
+                  logger.info('Offer template status updated via webhook', { offerId: updated._id, tplName, status: mappedStatus });
+                  // Emit SSE event so frontend can refresh
+                  const eventEmitter = require('../services/eventEmitter');
+                  eventEmitter.emit('dataUpdate', { type: 'offers', templateUpdate: { offerId: updated._id, status: mappedStatus } });
+
+                  // Send push notification to all admin users
+                  try {
+                    const User = require('../models/User');
+                    const admins = await User.find({ role: 'admin', pushToken: { $ne: null } }).select('pushToken');
+                    for (const admin of admins) {
+                      await pushNotification.sendOfferTemplateNotification(admin.pushToken, {
+                        offerId: updated._id.toString(),
+                        offerTitle: updated.title,
+                        status: mappedStatus,
+                        reason: reason || updated.templateRejectionReason
+                      });
+                    }
+                    logger.info('Push notifications sent to admins for template status', { adminCount: admins.length, status: mappedStatus });
+                  } catch (pushErr) {
+                    logger.error('Failed to send push notification for template status', { error: pushErr.message });
+                  }
+                } else {
+                  logger.warn('No offer found for template name', { tplName });
+                }
+              } catch (tplErr) {
+                logger.error('Error handling template status webhook', { error: tplErr.message });
+              }
+            }
+            continue;
+          }
+
           if (change.field === 'messages') {
             const value = change.value;
 
@@ -175,7 +260,7 @@ router.post('/meta', async (req, res) => {
                 // Handle voice message
                 messageType = 'voice';
                 const audioId = message.audio?.id;
-                console.log('🎤 Voice message received, audio ID:', audioId);
+                logger.info('🎤 Voice message received, audio ID:', audioId);
                 
                 if (audioId) {
                   try {
@@ -190,8 +275,8 @@ router.post('/meta', async (req, res) => {
                       
                       text = transcription;
                       messageType = 'text'; // Treat as text after transcription
-                      console.log('🎤 Voice transcribed:', rawTranscription);
-                      console.log('🎤 Normalized to:', text);
+                      logger.info('🎤 Voice transcribed:', rawTranscription);
+                      logger.info('🎤 Normalized to:', text);
                     } else {
                       // Transcription failed, send error message
                       await whatsapp.sendButtons(phone, 
@@ -204,7 +289,7 @@ router.post('/meta', async (req, res) => {
                       continue;
                     }
                   } catch (err) {
-                    console.error('❌ Voice processing error:', err.message);
+                    logger.error('❌ Voice processing error:', err.message);
                     await whatsapp.sendButtons(phone,
                       "🎤 Sorry, I couldn't process your voice message. Please type your message instead.",
                       [
@@ -221,7 +306,7 @@ router.post('/meta', async (req, res) => {
               if (phone && hasContent) {
                 // Process message in the background
                 chatbot.handleMessage(phone, text, messageType, selectedId, senderName)
-                  .catch(err => console.error('❌ Async Chatbot Error:', err));
+                  .catch(err => logger.error('❌ Async Chatbot Error:', err));
               }
             }
           }
@@ -229,7 +314,7 @@ router.post('/meta', async (req, res) => {
       }
     }
   } catch (error) {
-    console.error('❌ Meta webhook async processing error:', error);
+    logger.error('❌ Meta webhook async processing error:', error);
   }
 });
 

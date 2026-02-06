@@ -5,7 +5,12 @@ const authMiddleware = require('../middleware/auth');
 const cloudinaryService = require('../services/cloudinary');
 const dataEvents = require('../services/eventEmitter');
 const multer = require('multer');
+const { publicRateLimiter } = require('../middleware/rateLimiter');
+const logger = require('../services/logger');
 const router = express.Router();
+
+// Rate limiting for category routes
+router.use(publicRateLimiter);
 
 // Configure multer for memory storage
 const upload = multer({
@@ -86,7 +91,7 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
           const publicId = cloudinaryService.extractPublicId(existingCategory.image);
           if (publicId) await cloudinaryService.deleteImage(publicId);
         } catch (e) {
-          console.log('Could not delete old image:', e.message);
+          logger.warn('Could not delete old image', { error: e.message });
         }
       }
       imageUrl = null;
@@ -98,7 +103,7 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
           const publicId = cloudinaryService.extractPublicId(existingCategory.image);
           if (publicId) await cloudinaryService.deleteImage(publicId);
         } catch (e) {
-          console.log('Could not delete old image:', e.message);
+          logger.warn('Could not delete old image', { error: e.message });
         }
       }
       imageUrl = await cloudinaryService.uploadFromBuffer(req.file.buffer, 'restaurant-bot/categories');
@@ -147,15 +152,15 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
   try {
     const { enabled, type, startTime, endTime, days, customDays } = req.body;
     
-    console.log(`[Schedule API] Updating schedule for category ${req.params.id}`);
-    console.log(`[Schedule API] Data:`, { enabled, type, startTime, endTime, days, customDays });
+    logger.info(`[Schedule API] Updating schedule for category ${req.params.id}`);
+    logger.info('[Schedule API] Data', { enabled, type, startTime, endTime, days, customDays });
     
     const category = await Category.findById(req.params.id);
     if (!category) {
       return res.status(404).json({ error: 'Category not found' });
     }
 
-    console.log(`[Schedule API] Category: ${category.name}, Current isPaused: ${category.isPaused}`);
+    logger.info(`[Schedule API] Category: ${category.name}, Current isPaused: ${category.isPaused}`);
 
     // Update schedule
     category.schedule = {
@@ -169,24 +174,24 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
     };
 
     await category.save();
-    console.log(`[Schedule API] Schedule saved to database`);
+    logger.info('[Schedule API] Schedule saved to database');
 
     // Immediately check if category should be paused based on new schedule
     if (enabled) {
-      console.log(`[Schedule API] Running scheduler to update category status...`);
+      logger.info('[Schedule API] Running scheduler to update category status...');
       const categoryScheduler = require('../services/categoryScheduler');
       
       try {
         await categoryScheduler.updateCategoryStatus(category._id);
-        console.log(`[Schedule API] Scheduler completed successfully`);
+        logger.info('[Schedule API] Scheduler completed successfully');
       } catch (schedulerError) {
-        console.error(`[Schedule API] Scheduler error:`, schedulerError);
+        logger.error('[Schedule API] Scheduler error', { error: schedulerError.message });
       }
       
       // Fetch fresh data after scheduler update
       const updatedCategory = await Category.findById(category._id);
-      console.log(`[Schedule API] After scheduler: isPaused = ${updatedCategory.isPaused}`);
-      console.log(`[Schedule API] Returning updated category to client`);
+      logger.info(`[Schedule API] After scheduler: isPaused = ${updatedCategory.isPaused}`);
+      logger.info('[Schedule API] Returning updated category to client');
       
       // Emit event for real-time updates
       dataEvents.emit('menu');
@@ -194,12 +199,12 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
       return res.json(updatedCategory);
     } else {
       // Schedule disabled - unpause category and make all items available
-      console.log(`[Schedule API] Schedule disabled - unpausing category and making items available`);
-      console.log(`[Schedule API] Category ${category.name} was isPaused: ${category.isPaused}, isSoldOut: ${category.isSoldOut}`);
+      logger.info('[Schedule API] Schedule disabled - unpausing category and making items available');
+      logger.info(`[Schedule API] Category ${category.name} was isPaused: ${category.isPaused}, isSoldOut: ${category.isSoldOut}`);
       
       category.isPaused = false;
       await category.save();
-      console.log(`[Schedule API] Category ${category.name} isPaused set to: false`);
+      logger.info(`[Schedule API] Category ${category.name} isPaused set to: false`);
       
       // Make all items in this category available
       const MenuItem = require('../models/MenuItem');
@@ -209,14 +214,14 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
       );
       
       if (updateResult.modifiedCount > 0) {
-        console.log(`[Schedule API] Made ${updateResult.modifiedCount} item(s) available in ${category.name}`);
+        logger.info(`[Schedule API] Made ${updateResult.modifiedCount} item(s) available in ${category.name}`);
       } else {
-        console.log(`[Schedule API] No items needed availability update in ${category.name}`);
+        logger.info(`[Schedule API] No items needed availability update in ${category.name}`);
       }
       
       // Fetch fresh data
       const updatedCategory = await Category.findById(category._id);
-      console.log(`[Schedule API] Returning category with isPaused: ${updatedCategory.isPaused}`);
+      logger.info(`[Schedule API] Returning category with isPaused: ${updatedCategory.isPaused}`);
       
       // Emit event for real-time updates
       dataEvents.emit('menu');
@@ -224,7 +229,7 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
       return res.json(updatedCategory);
     }
   } catch (error) {
-    console.error('[Schedule API] Error:', error);
+    logger.error('[Schedule API] Error', { error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
@@ -256,14 +261,14 @@ router.patch('/:id/toggle-soldout', authMiddleware, async (req, res) => {
         { category: category.name },
         { $set: { available: false } }
       );
-      console.log(`[Category] "${category.name}" marked SOLD OUT - ${result.modifiedCount} item(s) marked out of stock`);
+      logger.info(`[Category] "${category.name}" marked SOLD OUT - ${result.modifiedCount} item(s) marked out of stock`);
     } else {
       // Mark all items in this category as available
       const result = await MenuItem.updateMany(
         { category: category.name },
         { $set: { available: true } }
       );
-      console.log(`[Category] "${category.name}" RESUMED - ${result.modifiedCount} item(s) marked available`);
+      logger.info(`[Category] "${category.name}" RESUMED - ${result.modifiedCount} item(s) marked available`);
     }
     
     // Emit event for real-time updates
@@ -282,8 +287,8 @@ router.patch('/:id/schedule-soldout', authMiddleware, async (req, res) => {
   try {
     const { enabled, endTime } = req.body;
     
-    console.log(`[SoldOut Schedule API] Updating sold out schedule for category ${req.params.id}`);
-    console.log(`[SoldOut Schedule API] Data:`, { enabled, endTime });
+    logger.info(`[SoldOut Schedule API] Updating sold out schedule for category ${req.params.id}`);
+    logger.info('[SoldOut Schedule API] Data', { enabled, endTime });
     
     const category = await Category.findById(req.params.id);
     if (!category) {
@@ -306,7 +311,7 @@ router.patch('/:id/schedule-soldout', authMiddleware, async (req, res) => {
         { category: category.name },
         { $set: { available: false } }
       );
-      console.log(`[Category] "${category.name}" scheduled SOLD OUT until ${endTime} - ${result.modifiedCount} item(s) marked out of stock`);
+      logger.info(`[Category] "${category.name}" scheduled SOLD OUT until ${endTime} - ${result.modifiedCount} item(s) marked out of stock`);
     }
     
     await category.save();
@@ -316,7 +321,7 @@ router.patch('/:id/schedule-soldout', authMiddleware, async (req, res) => {
     
     res.json(category);
   } catch (error) {
-    console.error('[SoldOut Schedule API] Error:', error);
+    logger.error('[SoldOut Schedule API] Error', { error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
@@ -338,7 +343,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         const publicId = cloudinaryService.extractPublicId(category.image);
         if (publicId) await cloudinaryService.deleteImage(publicId);
       } catch (e) {
-        console.log('Could not delete category image:', e.message);
+        logger.warn('Could not delete category image', { error: e.message });
       }
     }
 
@@ -357,7 +362,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
             const publicId = cloudinaryService.extractPublicId(item.image);
             if (publicId) await cloudinaryService.deleteImage(publicId);
           } catch (e) {
-            console.log('Could not delete item image:', e.message);
+            logger.warn('Could not delete item image', { error: e.message });
           }
         }
         await MenuItem.findByIdAndDelete(item._id);

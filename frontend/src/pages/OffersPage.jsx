@@ -3,7 +3,7 @@ import { useSearchParams, useParams, useOutletContext } from 'react-router-dom';
 import axios from 'axios';
 import { Tag, ShoppingCart, Plus, Minus, Heart, Star, X, Clock, Package, Search, Gift, AlertCircle } from 'lucide-react';
 
-const API_URL = 'https://restaruntbot.onrender.com/api/public';
+const API_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api') + '/public';
 const WHATSAPP_NUMBER = '15551858897';
 
 // WhatsApp Icon Component

@@ -1,4 +1,5 @@
 const Groq = require('groq-sdk');
+const logger = require('./logger');
 
 let groq = null;
 const getGroq = () => {
@@ -27,10 +28,10 @@ const groqAi = {
         prompt: 'Food ordering: dosa, idli, vada, sambar, rasam, biryani, pulao, curry, rice, roti, parotta, chapati, naan, paneer, chicken, mutton, fish, prawn, egg, masala, butter, ghee, curd, dal, fry, gravy, soup, juice, coffee, tea, lassi, buttermilk, payasam, halwa, gulab jamun, jalebi, pongal, upma, pesarattu, uttapam, appam, puttu, poori, bonda, bajji, pakora, manchurian, fried rice, noodles, gobi, aloo, palak, mushroom, tomato, onion, gongura, pulihora, curd rice, lemon rice, tamarind rice, coconut rice, veg, non-veg, spicy, mild, hot, cold, sweet, order, cart, menu, cancel, status, track, delivery, pickup, dine-in'
       });
       
-      console.log('🎤 Transcription result:', transcription);
+      logger.info('Transcription result', { data: transcription });
       return transcription || '';
     } catch (error) {
-      console.error('❌ Groq transcription error:', error.message);
+      logger.error('Groq transcription error', { error: error.message });
       return null;
     }
   },
@@ -175,10 +176,10 @@ EXAMPLES:
       // Remove duplicates
       variations = [...new Set(variations)];
       
-      console.log(`🌐 Translated "${text}" to variations: [${variations.join(', ')}]`);
+      logger.info('Translated text', { original: text, variations });
       return { primary: variations[0], variations };
     } catch (error) {
-      console.error('Groq translation error:', error.message);
+      logger.error('Groq translation error', { error: error.message });
       return { primary: text, variations: [text] };
     }
   },
@@ -245,10 +246,10 @@ If already standard or you're unsure, return as is.`
         return text;
       }
       
-      console.log(`🔤 Romanized "${text}" → "${translated}"`);
+      logger.info('Romanized translation', { original: text, translated });
       return translated;
     } catch (error) {
-      console.error('Groq romanized translation error:', error.message);
+      logger.error('Groq romanized translation error', { error: error.message });
       return text;
     }
   },
@@ -267,7 +268,7 @@ If already standard or you're unsure, return as is.`
       });
       return completion.choices[0]?.message?.content?.trim() || '';
     } catch (error) {
-      console.error('Groq AI error:', error);
+      logger.error('Groq AI error', { error: error.message, stack: error.stack });
       throw new Error('Failed to generate description: ' + error.message);
     }
   },
@@ -434,7 +435,7 @@ If already standard or you're unsure, return as is.`
       // Limit to 8-10 unique tags maximum
       return [...new Set(finalTags)].slice(0, 10).join(', ');
     } catch (error) {
-      console.error('Groq AI tags error:', error);
+      logger.error('Groq AI tags error', { error: error.message, stack: error.stack });
       // Fallback: generate basic tags without AI
       const categories = Array.isArray(category) ? category : [category];
       const foodTypeLabel = foodType === 'veg' ? 'veg' : foodType === 'nonveg' ? 'nonveg' : foodType === 'egg' ? 'egg' : '';
@@ -469,7 +470,7 @@ If already standard or you're unsure, return as is.`
     try {
       // Check for gibberish search - don't waste AI call
       if (this.isGibberishSearch(searchQuery)) {
-        console.log(`🚫 Gibberish search detected: "${searchQuery}" - skipping tag matching`);
+        logger.info('Gibberish search detected, skipping tag matching', { query: searchQuery });
         return [];
       }
       
@@ -517,7 +518,7 @@ Return ONLY comma-separated matching tags from the available list. No explanatio
       
       // Check if no match found
       if (matchedTagsText.toUpperCase() === 'NONE' || matchedTagsText.toLowerCase().includes('no match')) {
-        console.log(`🤖 AI tag match: "${searchQuery}" → No matches found`);
+        logger.info('AI tag match: No matches found', { query: searchQuery });
         return [];
       }
       
@@ -528,10 +529,10 @@ Return ONLY comma-separated matching tags from the available list. No explanatio
         .map(tag => tag.trim().toLowerCase())
         .filter(tag => tag.length > 0 && tag.length < 30 && uniqueTags.includes(tag));
       
-      console.log(`🤖 AI tag match: "${searchQuery}" → [${matchedTags.join(', ')}]`);
+      logger.info('AI tag match', { query: searchQuery, matchedTags });
       return matchedTags;
     } catch (error) {
-      console.error('Groq AI tag matching error:', error.message);
+      logger.error('Groq AI tag matching error', { error: error.message });
       return [];
     }
   },
@@ -542,7 +543,7 @@ Return ONLY comma-separated matching tags from the available list. No explanatio
     try {
       // Skip gibberish
       if (this.isGibberishSearch(misspelledQuery)) {
-        console.log(`🚫 Gibberish search: "${misspelledQuery}" - skipping spell check`);
+        logger.info('Gibberish search, skipping spell check', { query: misspelledQuery });
         return { correctedQuery: null, matchedTags: [] };
       }
       
@@ -591,7 +592,7 @@ Find closest matching tags for this misspelled search.`
       
       // Check for NONE
       if (response.toUpperCase().includes('NONE')) {
-        console.log(`🔤 No close match for: "${misspelledQuery}"`);
+        logger.info('No close match found', { query: misspelledQuery });
         return { correctedQuery: null, matchedTags: [] };
       }
       
@@ -611,10 +612,10 @@ Find closest matching tags for this misspelled search.`
           .filter(tag => tag.length > 0 && uniqueTags.map(t => t.toLowerCase()).includes(tag));
       }
       
-      console.log(`🔤 Spell correction: "${misspelledQuery}" → "${correctedQuery}" → [${matchedTags.join(', ')}]`);
+      logger.info('Spell correction', { original: misspelledQuery, corrected: correctedQuery, matchedTags });
       return { correctedQuery, matchedTags };
     } catch (error) {
-      console.error('Groq spell correction error:', error.message);
+      logger.error('Groq spell correction error', { error: error.message });
       return { correctedQuery: null, matchedTags: [] };
     }
   },
@@ -658,7 +659,7 @@ Find closest matching tags for this misspelled search.`
     try {
       // Check for gibberish search - don't waste AI call
       if (this.isGibberishSearch(searchQuery)) {
-        console.log(`🚫 Gibberish search detected: "${searchQuery}" - skipping AI`);
+        logger.info('Gibberish search detected, skipping AI', { query: searchQuery });
         return [];
       }
       
@@ -722,7 +723,7 @@ Return ONLY comma-separated item names from the menu that match or are related t
       
       // Check if no match
       if (responseText.toUpperCase() === 'NONE' || responseText.toLowerCase().includes('no match') || responseText.toLowerCase().includes('not found')) {
-        console.log(`🤖 AI semantic search: "${searchQuery}" → No matches found`);
+        logger.info(`AI semantic search: "${searchQuery}" → No matches found`);
         return [];
       }
       
@@ -741,10 +742,10 @@ Return ONLY comma-separated item names from the menu that match or are related t
           );
         });
       
-      console.log(`🤖 AI semantic search: "${searchQuery}" → [${matchedItems.join(', ')}]`);
+      logger.info(`AI semantic search: "${searchQuery}" → [${matchedItems.join(', ')}]`);
       return matchedItems;
     } catch (error) {
-      console.error('Groq AI semantic search error:', error.message);
+      logger.error('Groq AI semantic search error', { error: error.message });
       return [];
     }
   },
@@ -755,7 +756,7 @@ Return ONLY comma-separated item names from the menu that match or are related t
     try {
       // Check for gibberish search - return as-is (will fail matching anyway)
       if (this.isGibberishSearch(searchQuery)) {
-        console.log(`🚫 Gibberish search detected: "${searchQuery}" - skipping typo correction`);
+        logger.info(`Gibberish search detected: "${searchQuery}" - skipping typo correction`);
         return searchQuery;
       }
       
@@ -827,14 +828,14 @@ Return ONLY the corrected search term. If it's gibberish or no correction needed
       
       if (cleanCorrected && cleanCorrected.length > 0 && cleanCorrected.length < 50) {
         if (cleanCorrected.toLowerCase() !== searchQuery.toLowerCase()) {
-          console.log(`🤖 AI typo correction: "${searchQuery}" → "${cleanCorrected}"`);
+          logger.info(`AI typo correction: "${searchQuery}" → "${cleanCorrected}"`);
         }
         return cleanCorrected;
       }
       
       return searchQuery;
     } catch (error) {
-      console.error('Groq AI typo correction error:', error.message);
+      logger.error('Groq AI typo correction error', { error: error.message });
       return searchQuery;
     }
   },
@@ -844,7 +845,7 @@ Return ONLY the corrected search term. If it's gibberish or no correction needed
     try {
       // Check for gibberish search - don't waste AI call
       if (this.isGibberishSearch(searchQuery)) {
-        console.log(`🚫 Gibberish search detected: "${searchQuery}" - skipping AI fuzzy search`);
+        logger.info(`Gibberish search detected: "${searchQuery}" - skipping AI fuzzy search`);
         return [];
       }
       
@@ -914,10 +915,10 @@ Find ALL menu items that match this search (consider spelling mistakes). Return 
           );
         });
       
-      console.log(`🤖 AI fuzzy search: "${searchQuery}" → [${matchedItems.join(', ')}]`);
+      logger.info(`AI fuzzy search: "${searchQuery}" → [${matchedItems.join(', ')}]`);
       return matchedItems;
     } catch (error) {
-      console.error('Groq AI fuzzy search error:', error.message);
+      logger.error('Groq AI fuzzy search error', { error: error.message });
       return [];
     }
   },
@@ -953,7 +954,7 @@ Actions: view_menu, add_to_cart, view_cart, checkout, check_status, cancel_order
       });
       return completion.choices[0]?.message?.content || "I'm sorry, I couldn't understand that. Please try again.";
     } catch (error) {
-      console.error('Groq AI chat error:', error.message);
+      logger.error('Groq AI chat error', { error: error.message });
       return "I'm having trouble processing your request. Please try again.";
     }
   }

@@ -1,4 +1,5 @@
 const Order = require('../models/Order');
+const logger = require('./logger');
 const whatsapp = require('./whatsapp');
 const googleSheets = require('./googleSheets');
 const chatbotImagesService = require('./chatbotImages');
@@ -23,7 +24,7 @@ const orderScheduler = {
         ]
       });
       
-      console.log(`🔍 Found ${expiredOrders.length} expired pending orders (excluding pickup COD orders)`);
+      logger.info(`🔍 Found ${expiredOrders.length} expired pending orders (excluding pickup COD orders)`);
       
       for (const order of expiredOrders) {
         await this.cancelOrder(order);
@@ -31,7 +32,7 @@ const orderScheduler = {
       
       return expiredOrders.length;
     } catch (error) {
-      console.error('❌ Error checking expired orders:', error.message);
+      logger.error('❌ Error checking expired orders:', error.message);
       return 0;
     }
   },
@@ -39,7 +40,7 @@ const orderScheduler = {
   // Cancel a single order and notify customer
   async cancelOrder(order) {
     try {
-      console.log(`⏰ Auto-cancelling order ${order.orderId} (pending for >15 mins)`);
+      logger.info(`⏰ Auto-cancelling order ${order.orderId} (pending for >15 mins)`);
       
       // Update order status
       order.status = 'cancelled';
@@ -54,7 +55,7 @@ const orderScheduler = {
       
       // Update Google Sheets
       googleSheets.updateOrderStatus(order.orderId, 'cancelled', 'pending').catch(err =>
-        console.error('Google Sheets sync error:', err)
+        logger.error('Google Sheets sync error:', err)
       );
       
       // Build order details message
@@ -93,17 +94,17 @@ const orderScheduler = {
         ]);
       }
       
-      console.log(`✅ Order ${order.orderId} cancelled and customer notified`);
+      logger.info(`✅ Order ${order.orderId} cancelled and customer notified`);
       return true;
     } catch (error) {
-      console.error(`❌ Error cancelling order ${order.orderId}:`, error.message);
+      logger.error(`❌ Error cancelling order ${order.orderId}:`, error.message);
       return false;
     }
   },
 
   // Start the scheduler (runs every minute)
   start() {
-    console.log('⏰ Order scheduler started - checking for expired orders every minute');
+    logger.info('⏰ Order scheduler started - checking for expired orders every minute');
     
     // Run immediately on start
     this.cancelExpiredOrders();

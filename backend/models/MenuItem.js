@@ -33,4 +33,11 @@ menuItemSchema.pre('save', function(next) {
   next();
 });
 
+// Indexes for performance
+menuItemSchema.index({ category: 1, available: 1 });
+menuItemSchema.index({ available: 1, isPaused: 1 });
+menuItemSchema.index({ name: 'text', tags: 'text' });
+menuItemSchema.index({ foodType: 1 });
+menuItemSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.model('MenuItem', menuItemSchema);

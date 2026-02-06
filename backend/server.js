@@ -2,8 +2,16 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const helmet = require('helmet');
+const compression = require('compression');
 const path = require('path');
 const dataEvents = require('./services/eventEmitter');
+const { validateEnv } = require('./config/envValidation');
+const { corsOptions } = require('./config/corsConfig');
+const errorHandler = require('./middleware/errorHandler');
+const { sanitizeInputs } = require('./middleware/inputValidation');
+const logger = require('./services/logger');
+const { swaggerUi, swaggerSpec } = require('./swagger');
 
 const authRoutes = require('./routes/auth');
 const menuRoutes = require('./routes/menu');
@@ -21,6 +29,7 @@ const heroSectionRoutes = require('./routes/heroSection');
 const offersRoutes = require('./routes/offers');
 const whatsappBroadcastRoutes = require('./routes/whatsappBroadcast');
 const settingsRoutes = require('./routes/settings');
+const healthRoutes = require('./routes/health');
 const orderScheduler = require('./services/orderScheduler');
 const dailyCleanup = require('./services/dailyCleanup');
 const categoryScheduler = require('./services/categoryScheduler');
@@ -28,31 +37,67 @@ const orderCleanup = require('./services/orderCleanup');
 const cartCleanup = require('./services/cartCleanup');
 const googleSheets = require('./services/googleSheets');
 
+// Validate environment variables at startup
+validateEnv(process.env.NODE_ENV === 'production');
+
 const app = express();
 
-// CORS configuration
-const corsOptions = {
-  origin: ['http://localhost:5173', 'https://restarunt-bot.vercel.app'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-};
+// Trust proxy (required behind nginx/load balancer for correct req.ip)
+app.set('trust proxy', 1);
 
-// Handle preflight requests for all routes
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP for API server (frontend handles its own)
+  crossOriginEmbedderPolicy: false
+}));
+
+// Response compression
+app.use(compression());
+
+// CORS configuration (using environment-aware config)
 app.options('*', cors(corsOptions));
 app.use(cors(corsOptions));
-app.use(express.json());
+
+// Body parsing with size limits
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+
+// Global input sanitization
+app.use(sanitizeInputs);
+
+// Static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Log all API requests for debugging
+// Request logging with structured logger
 app.use('/api', (req, res, next) => {
-  console.log(`📥 ${req.method} ${req.originalUrl}`);
+  logger.info(`${req.method} ${req.originalUrl}`, {
+    method: req.method,
+    path: req.originalUrl,
+    ip: req.ip,
+    type: 'request'
+  });
   next();
 });
 
-mongoose.connect(process.env.MONGODB_URI)
-  .then(async () => {
-    console.log('MongoDB connected');
+// Swagger API documentation (disabled in production if preferred)
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    explorer: true,
+    customSiteTitle: 'FoodAdmin API Docs'
+  }));
+}
+// Swagger JSON spec always available for tools
+app.get('/api-docs.json', (req, res) => res.json(swaggerSpec));
+
+// MongoDB connection with reconnection handling
+const connectMongoDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+      heartbeatFrequencyMS: 10000,
+    });
+    logger.info('MongoDB connected successfully');
+    
     // Start schedulers after DB connection
     orderScheduler.start();
     dailyCleanup.start();
@@ -60,14 +105,34 @@ mongoose.connect(process.env.MONGODB_URI)
     orderCleanup.start();
     cartCleanup.startCartCleanupScheduler();
     
-    // Initialize Google Sheets (cost-saving sheets)
-    console.log('📊 Initializing Google Sheets...');
+    // Initialize Google Sheets
+    logger.info('Initializing Google Sheets...');
     await googleSheets.initializeDailyReportsSheet();
     await googleSheets.initializeDashboardStatsSheet();
     await googleSheets.initializeCustomersSheet();
-    console.log('✅ Google Sheets initialized');
-  })
-  .catch(err => console.error('MongoDB connection error:', err));
+    logger.info('Google Sheets initialized');
+  } catch (err) {
+    logger.error('MongoDB connection error', { error: err.message, stack: err.stack });
+    // Retry after 5 seconds
+    logger.info('Retrying MongoDB connection in 5 seconds...');
+    setTimeout(connectMongoDB, 5000);
+  }
+};
+
+// MongoDB connection event handlers
+mongoose.connection.on('disconnected', () => {
+  logger.warn('MongoDB disconnected. Attempting reconnect...');
+});
+
+mongoose.connection.on('reconnected', () => {
+  logger.info('MongoDB reconnected successfully');
+});
+
+mongoose.connection.on('error', (err) => {
+  logger.error('MongoDB connection error', { error: err.message });
+});
+
+connectMongoDB();
 
 app.use('/api/auth', authRoutes);
 app.use('/api/menu', menuRoutes);
@@ -86,7 +151,8 @@ app.use('/api/offers', offersRoutes);
 app.use('/api/whatsapp-broadcast', whatsappBroadcastRoutes);
 app.use('/api/settings', settingsRoutes);
 
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
+// Health check routes (comprehensive readiness/liveness checks)
+app.use('/health', healthRoutes);
 
 // Root route - API status
 app.get('/', (req, res) => res.json({ 
@@ -95,10 +161,22 @@ app.get('/', (req, res) => res.json({
   version: '1.0.0'
 }));
 
-// SSE endpoint for real-time updates
+// SSE endpoint for real-time updates (authenticated)
 const sseClients = new Set();
 
 app.get('/api/events', (req, res) => {
+  // Verify auth token for SSE connections
+  const token = req.query.token || req.headers.authorization?.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  try {
+    const jwt = require('jsonwebtoken');
+    jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -130,11 +208,11 @@ dataEvents.on('dataUpdate', (data) => {
   }
 });
 
-// Test endpoint for Google Sheets sync
-app.get('/api/test-sheets/:orderId/:status', async (req, res) => {
-  const googleSheets = require('./services/googleSheets');
+// Admin-only Google Sheets sync routes (protected)
+const authMiddleware = require('./middleware/auth');
+
+app.get('/api/admin/test-sheets/:orderId/:status', authMiddleware, async (req, res) => {
   const { orderId, status } = req.params;
-  console.log('🧪 Test sheets update:', orderId, status);
   try {
     const result = await googleSheets.updateOrderStatus(orderId, status, status === 'cancelled' ? 'cancelled' : null);
     res.json({ success: result, orderId, status });
@@ -143,11 +221,8 @@ app.get('/api/test-sheets/:orderId/:status', async (req, res) => {
   }
 });
 
-// Sync all cancelled orders to Google Sheets
-app.get('/api/sync-cancelled', async (req, res) => {
+app.get('/api/admin/sync-cancelled', authMiddleware, async (req, res) => {
   const Order = require('./models/Order');
-  const googleSheets = require('./services/googleSheets');
-  console.log('🔄 Syncing all cancelled orders to Google Sheets...');
   try {
     const cancelledOrders = await Order.find({ status: 'cancelled' });
     let synced = 0;
@@ -161,10 +236,7 @@ app.get('/api/sync-cancelled', async (req, res) => {
   }
 });
 
-// Sync pending refund orders to refundprocessing sheet
-app.get('/api/sync-pending-refunds', async (req, res) => {
-  const googleSheets = require('./services/googleSheets');
-  console.log('🔄 Syncing pending refund orders to Google Sheets...');
+app.get('/api/admin/sync-pending-refunds', authMiddleware, async (req, res) => {
   try {
     const result = await googleSheets.syncPendingRefunds();
     res.json({ success: result });
@@ -173,7 +245,89 @@ app.get('/api/sync-pending-refunds', async (req, res) => {
   }
 });
 
+// Global error handler (must be LAST middleware)
+app.use(errorHandler);
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+const server = app.listen(PORT, () => {
+  logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
 });
+
+// ============ GRACEFUL SHUTDOWN ============
+const SHUTDOWN_TIMEOUT = 15000; // 15 seconds max
+let isShuttingDown = false;
+
+const gracefulShutdown = async (signal) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  logger.info(`${signal} received. Starting graceful shutdown...`);
+
+  // Stop accepting new connections
+  server.close(() => {
+    logger.info('HTTP server closed - no longer accepting connections');
+  });
+
+  // Close SSE connections
+  sseClients.forEach(client => {
+    try { client.end(); } catch (e) { /* ignore */ }
+  });
+  sseClients.clear();
+  logger.info('SSE clients disconnected');
+
+  // Stop schedulers
+  try {
+    if (orderScheduler.stop) orderScheduler.stop();
+    if (dailyCleanup.stop) dailyCleanup.stop();
+    if (categoryScheduler.stop) categoryScheduler.stop();
+    if (orderCleanup.stop) orderCleanup.stop();
+    if (cartCleanup.stopCartCleanupScheduler) cartCleanup.stopCartCleanupScheduler();
+    logger.info('Schedulers stopped');
+  } catch (err) {
+    logger.error('Error stopping schedulers', { error: err.message });
+  }
+
+  // Close MongoDB connection
+  try {
+    await mongoose.connection.close();
+    logger.info('MongoDB connection closed');
+  } catch (err) {
+    logger.error('Error closing MongoDB', { error: err.message });
+  }
+
+  // Close Redis connection
+  try {
+    const redis = require('./services/redis');
+    if (redis.quit) await redis.quit();
+    logger.info('Redis connection closed');
+  } catch (err) {
+    // Redis might not be initialized
+    logger.warn('Redis close skipped', { error: err.message });
+  }
+
+  logger.info('Graceful shutdown complete');
+  process.exit(0);
+};
+
+// Force exit after timeout
+const forceShutdown = (signal) => {
+  setTimeout(() => {
+    logger.error(`Forced shutdown after ${SHUTDOWN_TIMEOUT}ms timeout`);
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT).unref();
+  gracefulShutdown(signal);
+};
+
+process.on('SIGTERM', () => forceShutdown('SIGTERM'));
+process.on('SIGINT', () => forceShutdown('SIGINT'));
+
+// Handle uncaught errors
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception', { error: err.message, stack: err.stack });
+  forceShutdown('uncaughtException');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection', { reason: reason?.message || reason, stack: reason?.stack });
+});
+
+module.exports = { app, server };

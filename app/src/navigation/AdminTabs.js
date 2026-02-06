@@ -103,7 +103,7 @@ const CenterTabButton = ({ children, onPress }) => (
 
 // Custom Tab Bar Component
 const CustomTabBar = ({ state, descriptors, navigation }) => {
-  const { newOrdersCount, clearNewOrdersCount } = useNotifications();
+  const { newOrdersCount, clearNewOrdersCount, offerTemplateAlert, clearOfferTemplateAlert } = useNotifications();
   
   // Check if we should hide the tab bar on detail screens
   const currentRoute = state.routes[state.index];
@@ -128,6 +128,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
           const isFocused = state.index === index;
           const isCenter = index === 2; // Menu is the center tab
           const isOrders = route.name === 'Orders';
+          const isOffers = route.name === 'Offers';
 
           const onPress = () => {
             const event = navigation.emit({
@@ -157,6 +158,10 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
             // Clear new orders count when Orders tab is pressed
             if (isOrders && newOrdersCount > 0) {
               clearNewOrdersCount();
+            }
+            // Clear offer template alert when Offers tab is pressed
+            if (isOffers && offerTemplateAlert) {
+              clearOfferTemplateAlert();
             }
           };
 
@@ -194,6 +199,12 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                       {newOrdersCount > 99 ? '99+' : newOrdersCount}
                     </Text>
                   </View>
+                )}
+                {isOffers && offerTemplateAlert && (
+                  <View style={[
+                    styles.statusDot,
+                    { backgroundColor: offerTemplateAlert === 'approved' ? '#22C55E' : '#EF4444' }
+                  ]} />
                 )}
               </View>
               <View style={[styles.labelContainer, isFocused && styles.labelContainerActive]}>
@@ -313,5 +324,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: '700',
+  },
+  statusDot: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: '#fff',
   },
 });

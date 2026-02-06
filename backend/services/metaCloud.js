@@ -1,5 +1,6 @@
 const axios = require('axios');
 const cloudinaryService = require('./cloudinary');
+const logger = require('./logger');
 
 const getConfig = () => ({
   phoneNumberId: process.env.META_PHONE_NUMBER_ID,
@@ -38,7 +39,7 @@ const metaCloud = {
       });
       
       const mediaUrl = mediaResponse.data.url;
-      console.log('📥 Media URL retrieved:', mediaUrl);
+      logger.info('Media URL retrieved', { data: mediaUrl });
       
       // Step 2: Download the actual file
       const fileResponse = await axios.get(mediaUrl, {
@@ -46,10 +47,10 @@ const metaCloud = {
         responseType: 'arraybuffer'
       });
       
-      console.log('✅ Media downloaded, size:', fileResponse.data.length, 'bytes');
+      logger.info('Media downloaded', { size: fileResponse.data.length });
       return Buffer.from(fileResponse.data);
     } catch (error) {
-      console.error('❌ Media download error:', error.response?.data || error.message);
+      logger.error('Media download error', { error: error.response?.data || error.message });
       throw error;
     }
   },
@@ -59,7 +60,7 @@ const metaCloud = {
       const { baseUrl, accessToken, phoneNumberId } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
       
-      console.log('📤 Meta sendMessage to:', to, 'message length:', message.length);
+      logger.info('Meta sendMessage', { to, messageLength: message.length });
       
       const response = await axios.post(`${baseUrl}/messages`, {
         messaging_product: 'whatsapp',
@@ -69,11 +70,11 @@ const metaCloud = {
       }, {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
       });
-      console.log('✅ Meta sendMessage success:', response.data?.messages?.[0]?.id || 'sent');
+      logger.info('Meta sendMessage success', { messageId: response.data?.messages?.[0]?.id || 'sent' });
       return response.data;
     } catch (error) {
       const errorData = error.response?.data?.error;
-      console.error('❌ Meta Cloud send error:', {
+      logger.error('Meta Cloud send error', {
         code: errorData?.code,
         message: errorData?.message,
         type: errorData?.type,
@@ -88,7 +89,7 @@ const metaCloud = {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
       
-      console.log('📤 Meta sendButtons to:', to);
+      logger.info('Meta sendButtons', { to });
       
       const payload = {
         messaging_product: 'whatsapp',
@@ -113,11 +114,11 @@ const metaCloud = {
       const response = await axios.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
       });
-      console.log('✅ Meta sendButtons success');
+      logger.info('Meta sendButtons success');
       return response.data;
     } catch (error) {
       const errorData = error.response?.data?.error;
-      console.error('❌ Meta buttons error:', errorData?.message || error.message);
+      logger.error('Meta buttons error', { error: errorData?.message || error.message });
       return this.sendMessage(phone, message + '\n\n' + buttons.map((b, i) => `${i + 1}. ${b.text || b}`).join('\n'));
     }
   },
@@ -126,7 +127,7 @@ const metaCloud = {
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
-      console.log('📤 Sending Meta list to:', to);
+      logger.info('Sending Meta list', { to });
       
       const payload = {
         messaging_product: 'whatsapp',
@@ -154,11 +155,11 @@ const metaCloud = {
       const response = await axios.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
       });
-      console.log('✅ Meta list success');
+      logger.info('Meta list success');
       return response.data;
     } catch (error) {
       const errorData = error.response?.data?.error;
-      console.error('❌ Meta list error:', errorData?.message || error.message);
+      logger.error('Meta list error', { error: errorData?.message || error.message });
       let fallback = `*${title}*\n\n${description}\n`;
       sections.forEach(s => {
         fallback += `\n*${s.title}*\n`;
@@ -188,7 +189,7 @@ const metaCloud = {
         return this.sendButtons(phone, message, buttons, footer);
       }
     } catch (error) {
-      console.error('Meta Cloud template error:', error.message);
+      logger.error('Meta Cloud template error', { error: error.message });
       throw error;
     }
   },
@@ -245,14 +246,14 @@ const metaCloud = {
         }
       };
 
-      console.log('📤 Sending order with CTA:', JSON.stringify(ctaPayload, null, 2));
+      logger.info('Sending order with CTA', { payload: ctaPayload });
       const response = await axios.post(`${baseUrl}/messages`, ctaPayload, {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
       });
-      console.log('✅ Order sent:', response.data);
+      logger.info('Order sent', { data: response.data });
       return response.data;
     } catch (error) {
-      console.error('Meta Cloud order error:', error.response?.data || error.message);
+      logger.error('Meta Cloud order error', { error: error.response?.data || error.message });
       
       // Fallback: simple text message with link
       let orderMsg = `🧾 *ORDER #${order.orderId}*\n⏳ Order pending\n\n`;
@@ -292,7 +293,7 @@ const metaCloud = {
       });
       return response.data;
     } catch (error) {
-      console.error('Meta Cloud image error:', error.response?.data || error.message);
+      logger.error('Meta Cloud image error', { error: error.response?.data || error.message });
       // Fallback to text message
       return this.sendMessage(phone, caption);
     }
@@ -303,7 +304,7 @@ const metaCloud = {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
       
-      console.log('📤 Meta sendImageWithButtons to:', to);
+      logger.info('Meta sendImageWithButtons', { to });
       
       // Transform to square image for consistent display
       const squareImageUrl = getSquareImageUrl(imageUrl);
@@ -335,10 +336,10 @@ const metaCloud = {
       const response = await axios.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
       });
-      console.log('✅ Meta sendImageWithButtons response:', JSON.stringify(response.data));
+      logger.info('Meta sendImageWithButtons response', { data: response.data });
       return response.data;
     } catch (error) {
-      console.error('❌ Meta Cloud image buttons error:', error.response?.data || error.message);
+      logger.error('Meta Cloud image buttons error', { error: error.response?.data || error.message });
       // Fallback to regular buttons
       return this.sendButtons(phone, message, buttons, footer);
     }
@@ -350,7 +351,7 @@ const metaCloud = {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
       
-      console.log('📤 Meta sendLocationRequest to:', to);
+      logger.info('Meta sendLocationRequest', { to });
       
       // Use location_request_message type - this opens the location picker directly!
       const payload = {
@@ -371,10 +372,10 @@ const metaCloud = {
       const response = await axios.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
       });
-      console.log('✅ Meta location request response:', JSON.stringify(response.data));
+      logger.info('Meta location request response', { data: response.data });
       return response.data;
     } catch (error) {
-      console.error('❌ Meta Cloud location request error:', error.response?.data || error.message);
+      logger.error('Meta Cloud location request error', { error: error.response?.data || error.message });
       // Fallback to buttons if location_request_message not supported
       return this.sendButtons(phone, message, [
         { id: 'share_location', text: 'Share Location' },
@@ -390,7 +391,7 @@ const metaCloud = {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
       
-      console.log('📤 Meta sendImageWithCtaUrl to:', to);
+      logger.info('Meta sendImageWithCtaUrl', { to });
       
       // Transform to square image for consistent display
       const squareImageUrl = getSquareImageUrl(imageUrl);
@@ -422,10 +423,10 @@ const metaCloud = {
       const response = await axios.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
       });
-      console.log('✅ Meta sendImageWithCtaUrl success');
+      logger.info('Meta sendImageWithCtaUrl success');
       return response.data;
     } catch (error) {
-      console.error('❌ Meta Cloud image CTA URL error:', error.response?.data || error.message);
+      logger.error('Meta Cloud image CTA URL error', { error: error.response?.data || error.message });
       // Fallback to CTA URL without image
       return this.sendCtaUrl(phone, message, buttonText, url, footer);
     }
@@ -437,7 +438,7 @@ const metaCloud = {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
       
-      console.log('📤 Meta sendImageWithCtaUrlOriginal to:', to);
+      logger.info('Meta sendImageWithCtaUrlOriginal', { to });
       
       // Use original image URL without transformation
       const payload = {
@@ -467,10 +468,10 @@ const metaCloud = {
       const response = await axios.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
       });
-      console.log('✅ Meta sendImageWithCtaUrlOriginal success');
+      logger.info('Meta sendImageWithCtaUrlOriginal success');
       return response.data;
     } catch (error) {
-      console.error('❌ Meta Cloud image CTA URL original error:', error.response?.data || error.message);
+      logger.error('Meta Cloud image CTA URL original error', { error: error.response?.data || error.message });
       // Fallback to CTA URL without image
       return this.sendCtaUrl(phone, message, buttonText, url, footer);
     }
@@ -482,7 +483,7 @@ const metaCloud = {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
       
-      console.log('📤 Meta sendCtaUrl to:', to);
+      logger.info('Meta sendCtaUrl', { to });
       
       const payload = {
         messaging_product: 'whatsapp',
@@ -507,10 +508,10 @@ const metaCloud = {
       const response = await axios.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
       });
-      console.log('✅ Meta sendCtaUrl success');
+      logger.info('Meta sendCtaUrl success');
       return response.data;
     } catch (error) {
-      console.error('❌ Meta Cloud CTA URL error:', error.response?.data || error.message);
+      logger.error('Meta Cloud CTA URL error', { error: error.response?.data || error.message });
       // Fallback to text message with link
       return this.sendMessage(phone, `${message}\n\n🔗 ${buttonText}: ${url}`);
     }
@@ -522,7 +523,7 @@ const metaCloud = {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
       
-      console.log('📤 Meta sendCtaPhone to:', to);
+      logger.info('Meta sendCtaPhone', { to });
       
       const payload = {
         messaging_product: 'whatsapp',
@@ -547,10 +548,10 @@ const metaCloud = {
       const response = await axios.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
       });
-      console.log('✅ Meta sendCtaPhone success');
+      logger.info('Meta sendCtaPhone success');
       return response.data;
     } catch (error) {
-      console.error('❌ Meta Cloud CTA Phone error:', error.response?.data || error.message);
+      logger.error('Meta Cloud CTA Phone error', { error: error.response?.data || error.message });
       // Fallback to text message with phone number
       return this.sendMessage(phone, `${message}\n\n📞 ${buttonText}: ${phoneNumber}`);
     }
@@ -562,7 +563,7 @@ const metaCloud = {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
       
-      console.log('📤 Meta sendImageWithCtaPhone to:', to);
+      logger.info('Meta sendImageWithCtaPhone', { to });
       
       const payload = {
         messaging_product: 'whatsapp',
@@ -593,10 +594,10 @@ const metaCloud = {
       const response = await axios.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
       });
-      console.log('✅ Meta sendImageWithCtaPhone success');
+      logger.info('Meta sendImageWithCtaPhone success');
       return response.data;
     } catch (error) {
-      console.error('❌ Meta Cloud image CTA Phone error:', error.response?.data || error.message);
+      logger.error('Meta Cloud image CTA Phone error', { error: error.response?.data || error.message });
       // Fallback to CTA Phone without image
       return this.sendCtaPhone(phone, message, buttonText, phoneNumber, footer);
     }
@@ -610,7 +611,7 @@ const metaCloud = {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
       
-      console.log('📤 Meta sendMarketingTemplate to:', to, 'template:', templateName);
+      logger.info('Meta sendMarketingTemplate', { to, template: templateName });
       
       // Build components array
       const components = [];
@@ -664,10 +665,10 @@ const metaCloud = {
       const response = await axios.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
       });
-      console.log('✅ Meta sendMarketingTemplate success');
+      logger.info('Meta sendMarketingTemplate success');
       return response.data;
     } catch (error) {
-      console.error('❌ Meta Cloud marketing template error:', error.response?.data || error.message);
+      logger.error('Meta Cloud marketing template error', { error: error.response?.data || error.message });
       throw error;
     }
   },
@@ -678,7 +679,7 @@ const metaCloud = {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
       
-      console.log('📤 Meta sendSimpleTemplate to:', to, 'template:', templateName);
+      logger.info('Meta sendSimpleTemplate', { to, template: templateName });
       
       const payload = {
         messaging_product: 'whatsapp',
@@ -693,10 +694,169 @@ const metaCloud = {
       const response = await axios.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
       });
-      console.log('✅ Meta sendSimpleTemplate success');
+      logger.info('Meta sendSimpleTemplate success');
       return response.data;
     } catch (error) {
-      console.error('❌ Meta Cloud simple template error:', error.response?.data || error.message);
+      logger.error('Meta Cloud simple template error', { error: error.response?.data || error.message });
+      throw error;
+    }
+  },
+
+  // ========== TEMPLATE MANAGEMENT (Meta Business Management API) ==========
+
+  /**
+   * Create a marketing message template for an offer.
+   * Requires META_WABA_ID (WhatsApp Business Account ID).
+   * Template goes through Meta review (PENDING → APPROVED / REJECTED).
+   *
+   * @param {string} templateName - Unique lowercase name (a-z, 0-9, underscore)
+   * @param {string} headerImageUrl - Public image URL for template header
+   * @param {string} bodyText - Template body (may contain {{1}}, {{2}}, etc.)
+   * @param {string} footerText - Optional footer
+   * @param {string} ctaUrl - CTA button URL (may contain {{1}} for dynamic suffix)
+   * @param {string} ctaLabel - CTA button text
+   * @returns {Object} Meta API response with template id / status
+   */
+  async createMessageTemplate(templateName, headerImageUrl, bodyText, footerText, ctaUrl, ctaLabel) {
+    try {
+      const { accessToken } = getConfig();
+      const wabaId = process.env.META_WABA_ID;
+
+      if (!wabaId) {
+        throw new Error('META_WABA_ID not configured. Set your WhatsApp Business Account ID in .env');
+      }
+
+      logger.info('Meta createMessageTemplate', { templateName });
+
+      const components = [];
+
+      // Header with image
+      if (headerImageUrl) {
+        components.push({
+          type: 'HEADER',
+          format: 'IMAGE',
+          example: { header_handle: [headerImageUrl] }
+        });
+      }
+
+      // Body with variable placeholders
+      const bodyComponent = { type: 'BODY', text: bodyText };
+      // Count {{n}} placeholders to build example values
+      const placeholders = bodyText.match(/\{\{\d+\}\}/g) || [];
+      if (placeholders.length > 0) {
+        bodyComponent.example = {
+          body_text: [placeholders.map((_, i) => `Sample ${i + 1}`)]
+        };
+      }
+      components.push(bodyComponent);
+
+      // Footer
+      if (footerText) {
+        components.push({ type: 'FOOTER', text: footerText });
+      }
+
+      // CTA button
+      if (ctaUrl) {
+        const btnComponent = {
+          type: 'BUTTONS',
+          buttons: [{
+            type: 'URL',
+            text: ctaLabel || 'Order Now',
+            url: ctaUrl
+          }]
+        };
+        // If ctaUrl contains {{1}}, mark it as dynamic
+        if (ctaUrl.includes('{{1}}')) {
+          btnComponent.buttons[0].example = [ctaUrl.replace('{{1}}', 'sample')];
+        }
+        components.push(btnComponent);
+      }
+
+      const payload = {
+        name: templateName,
+        language: 'en',
+        category: 'MARKETING',
+        components
+      };
+
+      const response = await axios.post(
+        `https://graph.facebook.com/v24.0/${wabaId}/message_templates`,
+        payload,
+        { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
+      );
+
+      logger.info('Meta createMessageTemplate success', { id: response.data.id, status: response.data.status });
+      return response.data;
+    } catch (error) {
+      const errData = error.response?.data?.error || error.response?.data || error.message;
+      logger.error('Meta createMessageTemplate error', { error: errData });
+      throw error;
+    }
+  },
+
+  /**
+   * Get the status of a message template by name.
+   */
+  async getTemplateStatus(templateName) {
+    try {
+      const { accessToken } = getConfig();
+      const wabaId = process.env.META_WABA_ID;
+
+      if (!wabaId) {
+        throw new Error('META_WABA_ID not configured');
+      }
+
+      const response = await axios.get(
+        `https://graph.facebook.com/v24.0/${wabaId}/message_templates`,
+        {
+          params: { name: templateName },
+          headers: { Authorization: `Bearer ${accessToken}` }
+        }
+      );
+
+      const templates = response.data?.data || [];
+      if (templates.length === 0) {
+        return { status: 'NOT_FOUND', templateName };
+      }
+
+      const tpl = templates[0];
+      return {
+        id: tpl.id,
+        name: tpl.name,
+        status: tpl.status, // APPROVED, PENDING, REJECTED
+        category: tpl.category,
+        rejectedReason: tpl.rejected_reason || null
+      };
+    } catch (error) {
+      logger.error('Meta getTemplateStatus error', { error: error.response?.data || error.message });
+      throw error;
+    }
+  },
+
+  /**
+   * Delete a message template by name.
+   */
+  async deleteMessageTemplate(templateName) {
+    try {
+      const { accessToken } = getConfig();
+      const wabaId = process.env.META_WABA_ID;
+
+      if (!wabaId) {
+        throw new Error('META_WABA_ID not configured');
+      }
+
+      const response = await axios.delete(
+        `https://graph.facebook.com/v24.0/${wabaId}/message_templates`,
+        {
+          params: { name: templateName },
+          headers: { Authorization: `Bearer ${accessToken}` }
+        }
+      );
+
+      logger.info('Meta deleteMessageTemplate success', { templateName });
+      return response.data;
+    } catch (error) {
+      logger.error('Meta deleteMessageTemplate error', { error: error.response?.data || error.message });
       throw error;
     }
   }

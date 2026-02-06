@@ -8,7 +8,13 @@ const googleSheets = require('../services/googleSheets');
 const razorpayService = require('../services/razorpay');
 const chatbotImagesService = require('../services/chatbotImages');
 const authMiddleware = require('../middleware/auth');
+const { adminRateLimiter } = require('../middleware/rateLimiter');
+const { validators } = require('../middleware/inputValidation');
+const logger = require('../services/logger');
 const router = express.Router();
+
+// Apply admin rate limiting to all order routes
+router.use(adminRateLimiter);
 
 // Helper to get Google Maps navigation URL
 const getGoogleMapsNavigationUrl = async () => {
@@ -19,7 +25,7 @@ const getGoogleMapsNavigationUrl = async () => {
     }
     return null;
   } catch (error) {
-    console.error('Error getting restaurant location:', error);
+    logger.error('Error getting restaurant location', { error: error.message });
     return null;
   }
 };
@@ -119,7 +125,7 @@ router.get('/history', authMiddleware, async (req, res) => {
       page: parseInt(page),
     });
   } catch (error) {
-    console.error('Error fetching order history:', error);
+    logger.error('Error fetching order history', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -185,12 +191,12 @@ router.get('/:id', authMiddleware, async (req, res) => {
 });
 
 router.put('/:id/status', authMiddleware, async (req, res) => {
-  console.log('🔄 PUT /orders/:id/status called with id:', req.params.id, 'body:', req.body);
+  logger.info('PUT /orders/:id/status called', { id: req.params.id, body: req.body });
   try {
     const { status, message, actualPaymentMethod } = req.body;
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ error: 'Order not found' });
-    console.log('📋 Found order:', order.orderId, 'current status:', order.status, 'new status:', status);
+    logger.info('Found order', { orderId: order.orderId, currentStatus: order.status, newStatus: status });
 
     const statusLabels = {
       pending: 'Pending', confirmed: 'Confirmed', preparing: 'Preparing', ready: 'Ready',
@@ -208,13 +214,13 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
         status: 'paid', 
         message: `Payment collected via ${actualPaymentMethod === 'cash' ? 'Cash' : 'UPI'} at hotel` 
       });
-      console.log(`💰 Pickup order payment: ${actualPaymentMethod}`);
+      logger.info(`Pickup order payment: ${actualPaymentMethod}`);
     }
     
     // Handle actual payment method for delivery COD orders
     if (actualPaymentMethod && order.serviceType === 'delivery' && order.paymentMethod === 'cod') {
       order.actualPaymentMethod = actualPaymentMethod;
-      console.log(`💰 Delivery COD payment: ${actualPaymentMethod}`);
+      logger.info(`Delivery COD payment: ${actualPaymentMethod}`);
     }
     
     // Track when status changed to delivered/cancelled/refunded for auto-cleanup
@@ -256,7 +262,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           stats.lastUpdated = new Date();
           await stats.save();
           
-          console.log(`📊 Today's revenue updated: +₹${order.totalAmount} (Total: ₹${stats.todayRevenue})`);
+          logger.info(`Today's revenue updated: +₹${order.totalAmount} (Total: ₹${stats.todayRevenue})`);
           
           // Also update Google Sheets dashboard in real-time
           try {
@@ -267,12 +273,12 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             
             // Update today's daily report in real-time using helper function
             await googleSheets.syncTodayDailyReport();
-            console.log('📊 Google Sheets dashboard and daily report updated in real-time');
+            logger.info('Google Sheets dashboard and daily report updated in real-time');
           } catch (sheetsErr) {
-            console.error('Google Sheets update error:', sheetsErr.message);
+            logger.error('Google Sheets update error', { error: sheetsErr.message });
           }
         } catch (statsErr) {
-          console.error('Error updating today revenue:', statsErr.message);
+          logger.error('Error updating today revenue', { error: statsErr.message });
         }
       }
     }
@@ -286,9 +292,9 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     if (status === 'delivered' || status === 'cancelled') {
       try {
         await googleSheets.syncTodayDailyReport();
-        console.log(`📊 Google Sheets daily report updated for ${status} order`);
+        logger.info(`Google Sheets daily report updated for ${status} order`);
       } catch (sheetsErr) {
-        console.error(`Google Sheets update error for ${status} order:`, sheetsErr.message);
+        logger.error(`Google Sheets update error for ${status} order`, { error: sheetsErr.message });
       }
     }
     
@@ -304,16 +310,16 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             orderId: order.orderId,
             totalAmount: order.totalAmount
           });
-          console.log(`📱 Cancelled notification sent to ${deliveryBoy.name}`);
+          logger.info(`Cancelled notification sent to ${deliveryBoy.name}`);
         }
       } catch (pushErr) {
-        console.error('Push notification error for cancelled order:', pushErr.message);
+        logger.error('Push notification error for cancelled order', { error: pushErr.message });
       }
     }
     
     // For paid UPI orders that are cancelled, mark refund as pending (wait for Razorpay)
     if (status === 'cancelled' && order.paymentStatus === 'paid' && order.razorpayPaymentId) {
-      console.log('💰 Marking refund as pending for order:', order.orderId);
+      logger.info('Marking refund as pending for order', { orderId: order.orderId });
       
       order.refundStatus = 'pending';
       order.refundAmount = order.totalAmount;
@@ -324,28 +330,28 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
         message: `Refund of ₹${order.totalAmount} is being processed`, 
         timestamp: new Date() 
       });
-      console.log('⏳ Refund pending for order:', order.orderId);
+      logger.info('Refund pending for order', { orderId: order.orderId });
     }
     
     try {
       await order.save();
-      console.log('✅ Order saved to DB:', order.orderId, 'status:', order.status, 'paymentStatus:', order.paymentStatus);
+      logger.info('Order saved to DB', { orderId: order.orderId, status: order.status, paymentStatus: order.paymentStatus });
     } catch (saveErr) {
-      console.error('❌ Order save error:', saveErr.message);
+      logger.error('Order save error', { error: saveErr.message });
       return res.status(500).json({ error: 'Failed to save order: ' + saveErr.message });
     }
 
     // Sync status update to Google Sheets
     try {
-      console.log('📊 Syncing to Google Sheets:', order.orderId, order.status, order.paymentStatus);
+      logger.info('Syncing to Google Sheets', { orderId: order.orderId, status: order.status, paymentStatus: order.paymentStatus });
       const sheetUpdated = await googleSheets.updateOrderStatus(order.orderId, order.status, order.paymentStatus, actualPaymentMethod);
       if (sheetUpdated) {
-        console.log('✅ Google Sheets synced successfully');
+        logger.info('Google Sheets synced successfully');
       } else {
-        console.log('⚠️ Google Sheets update returned false - order may not exist in sheet');
+        logger.warn('Google Sheets update returned false - order may not exist in sheet');
       }
     } catch (err) {
-      console.error('❌ Google Sheets sync error:', err.message);
+      logger.error('Google Sheets sync error', { error: err.message });
     }
 
     // Notify customer via WhatsApp (don't fail if notification fails)
@@ -501,7 +507,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
                 );
               }
             } catch (callErr) {
-              console.error('Failed to send call button:', callErr.message);
+              logger.error('Failed to send call button', { error: callErr.message });
             }
           }
         } else if (status === 'preparing') {
@@ -589,7 +595,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           await whatsapp.sendMessage(order.customer.phone, msg);
         }
       } catch (whatsappError) {
-        console.error('WhatsApp notification failed:', whatsappError.message);
+        logger.error('WhatsApp notification failed', { error: whatsappError.message });
       }
     }
 
@@ -598,7 +604,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
       try {
         await brevoMail.sendStatusUpdate(order.customer.email, order.orderId, status, statusMessages[status] || '');
       } catch (emailError) {
-        console.error('Email notification failed:', emailError.message);
+        logger.error('Email notification failed', { error: emailError.message });
       }
     }
 
@@ -613,7 +619,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
       try {
         // Update customer order history in Google Sheets (non-blocking)
         googleSheets.updateCustomerOrder(order.customer.phone, order, status).catch(err => {
-          console.error('Failed to update customer order in sheets:', err.message);
+          logger.error('Failed to update customer order in sheets', { error: err.message });
         });
         
         // Wait a small delay to ensure Google Sheets sync is complete
@@ -622,11 +628,11 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             { _id: order._id },
             { $set: { isHidden: true } }
           );
-          console.log(`🧹 Order ${order.orderId} hidden from dashboard (status: ${status})`);
+          logger.info(`Order ${order.orderId} hidden from dashboard (status: ${status})`);
           dataEvents.emit('orders');
         }, 3000); // 3 second delay to ensure sheets sync
       } catch (cleanupErr) {
-        console.error('Instant cleanup error:', cleanupErr.message);
+        logger.error('Instant cleanup error', { error: cleanupErr.message });
       }
     }
 
@@ -678,9 +684,9 @@ router.put('/:id/assign-delivery', authMiddleware, async (req, res) => {
     if (deliveryBoy.pushToken) {
       try {
         await pushNotification.sendNewOrderNotification(deliveryBoy.pushToken, orderDetails);
-        console.log(`📱 Push notification sent to ${deliveryBoy.name}`);
+        logger.info(`Push notification sent to ${deliveryBoy.name}`);
       } catch (pushErr) {
-        console.error('Push notification error:', pushErr.message);
+        logger.error('Push notification error', { error: pushErr.message });
       }
     }
     
@@ -692,9 +698,9 @@ router.put('/:id/assign-delivery', authMiddleware, async (req, res) => {
           deliveryBoy.name,
           orderDetails
         );
-        console.log(`📧 Email notification sent to ${deliveryBoy.email}`);
+        logger.info(`Email notification sent to ${deliveryBoy.email}`);
       } catch (emailErr) {
-        console.error('Email notification error:', emailErr.message);
+        logger.error('Email notification error', { error: emailErr.message });
       }
     }
     
@@ -702,7 +708,7 @@ router.put('/:id/assign-delivery', authMiddleware, async (req, res) => {
     try {
       await googleSheets.updateDeliveryPartner(order.orderId, deliveryBoy.name);
     } catch (err) {
-      console.error('Google Sheets delivery partner update error:', err.message);
+      logger.error('Google Sheets delivery partner update error', { error: err.message });
     }
     
     // Emit event for real-time updates
@@ -728,7 +734,7 @@ router.put('/:id/delivery-time', authMiddleware, async (req, res) => {
       await whatsapp.sendMessage(order.customer.phone,
         `⏰ *Delivery Update*\n\nOrder: ${order.orderId}\nEstimated delivery: ${new Date(estimatedDeliveryTime).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}`);
     } catch (whatsappError) {
-      console.error('WhatsApp notification failed:', whatsappError.message);
+      logger.error('WhatsApp notification failed', { error: whatsappError.message });
     }
     
     res.json(order);
@@ -769,10 +775,10 @@ router.post('/:orderId/refund/approve', authMiddleware, async (req, res) => {
             [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
           );
         } catch (e) {
-          console.error('WhatsApp notification failed:', e.message);
+          logger.error('WhatsApp notification failed', { error: e.message });
         }
       } catch (refundError) {
-        console.error('Razorpay refund error:', refundError);
+        logger.error('Razorpay refund error', { error: refundError.message });
         order.refundStatus = 'failed';
         order.status = 'refund_failed';
         order.paymentStatus = 'refund_failed';
@@ -781,7 +787,7 @@ router.post('/:orderId/refund/approve', authMiddleware, async (req, res) => {
         
         // Sync to Google Sheets with failed status
         googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed').catch(err => 
-          console.error('Google Sheets sync error:', err)
+          logger.error('Google Sheets sync error', { error: err.message })
         );
         
         // Emit event for real-time updates
@@ -807,7 +813,7 @@ router.post('/:orderId/refund/approve', authMiddleware, async (req, res) => {
           [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
         );
       } catch (e) {
-        console.error('WhatsApp notification failed:', e.message);
+        logger.error('WhatsApp notification failed', { error: e.message });
       }
     }
     
@@ -820,7 +826,7 @@ router.post('/:orderId/refund/approve', authMiddleware, async (req, res) => {
     
     // Sync to Google Sheets
     googleSheets.updateOrderStatus(order.orderId, order.status, order.paymentStatus).catch(err => 
-      console.error('Google Sheets sync error:', err)
+      logger.error('Google Sheets sync error', { error: err.message })
     );
     
     res.json({ success: true, order });
@@ -856,7 +862,7 @@ router.post('/:orderId/refund/reject', authMiddleware, async (req, res) => {
         [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
       );
     } catch (e) {
-      console.error('WhatsApp notification failed:', e.message);
+      logger.error('WhatsApp notification failed', { error: e.message });
     }
     
     res.json({ success: true, order });

@@ -1,4 +1,5 @@
 const Razorpay = require('razorpay');
+const logger = require('./logger');
 
 let razorpay = null;
 let lastKeyId = null;
@@ -11,7 +12,7 @@ const getRazorpay = () => {
       key_secret: process.env.RAZORPAY_KEY_SECRET
     });
     lastKeyId = process.env.RAZORPAY_KEY_ID;
-    console.log('🔑 Razorpay instance created/refreshed');
+    logger.info('🔑 Razorpay instance created/refreshed');
   }
   return razorpay;
 };
@@ -28,7 +29,7 @@ const razorpayService = {
       const order = await getRazorpay().orders.create(options);
       return order;
     } catch (error) {
-      console.error('Razorpay create order error:', error.message);
+      logger.error('Razorpay create order error:', error.message);
       throw error;
     }
   },
@@ -43,11 +44,11 @@ const razorpayService = {
       }
       // Ensure it's 10 digits
       if (cleanPhone.length !== 10) {
-        console.error('Invalid phone number length:', cleanPhone.length, 'Phone:', customerPhone);
+        logger.error('Invalid phone number length:', cleanPhone.length, 'Phone:', customerPhone);
       }
       const formattedPhone = '+91' + cleanPhone;
       
-      console.log('Creating Razorpay payment link:', { 
+      logger.info('Creating Razorpay payment link:', { 
         amount, 
         orderId, 
         originalPhone: customerPhone,
@@ -71,13 +72,13 @@ const razorpayService = {
         callback_method: 'get'
       };
       
-      console.log('Payment link options:', JSON.stringify(paymentLinkOptions, null, 2));
+      logger.info('Payment link options:', JSON.stringify(paymentLinkOptions, null, 2));
       
       const paymentLink = await getRazorpay().paymentLink.create(paymentLinkOptions);
-      console.log('✅ Payment link created:', paymentLink.short_url, 'ID:', paymentLink.id);
+      logger.info('✅ Payment link created:', paymentLink.short_url, 'ID:', paymentLink.id);
       return paymentLink;
     } catch (error) {
-      console.error('❌ Razorpay payment link error:', {
+      logger.error('❌ Razorpay payment link error:', {
         message: error.message,
         code: error.error?.code,
         description: error.error?.description,
@@ -96,13 +97,13 @@ const razorpayService = {
     const RETRY_DELAY_MS = 5000; // 5 seconds between retries
     
     try {
-      console.log('💰 Attempting refund:', { paymentId, amountInRupees: amount, attempt: retryCount + 1 });
+      logger.info('💰 Attempting refund:', { paymentId, amountInRupees: amount, attempt: retryCount + 1 });
       
       // First fetch payment details to verify it's refundable
       const payment = await getRazorpay().payments.fetch(paymentId);
       const paymentAmountInRupees = payment.amount / 100;
       
-      console.log('💰 Payment details:', { 
+      logger.info('💰 Payment details:', { 
         status: payment.status, 
         amountInPaise: payment.amount,
         amountInRupees: paymentAmountInRupees,
@@ -128,7 +129,7 @@ const razorpayService = {
       
       if (paymentAge < MIN_PAYMENT_AGE_MS) {
         const waitTime = Math.min(MIN_PAYMENT_AGE_MS - paymentAge, 30000); // Wait up to 30 seconds
-        console.log(`⏳ Payment is ${Math.round(paymentAge / 1000)}s old, waiting ${Math.round(waitTime / 1000)}s before refund...`);
+        logger.info(`⏳ Payment is ${Math.round(paymentAge / 1000)}s old, waiting ${Math.round(waitTime / 1000)}s before refund...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       }
       
@@ -136,7 +137,7 @@ const razorpayService = {
       const refundAmountInPaise = Math.round(amount * 100);
       const availableForRefund = payment.amount - (payment.amount_refunded || 0);
       
-      console.log('💰 Refund calculation:', {
+      logger.info('💰 Refund calculation:', {
         requestedRefundInPaise: refundAmountInPaise,
         availableForRefundInPaise: availableForRefund
       });
@@ -149,20 +150,20 @@ const razorpayService = {
       }
       
       // Process refund using payments.refund (Razorpay SDK v2.x method)
-      console.log('💰 Calling Razorpay refund API:', { paymentId, amountInPaise: finalRefundAmount });
+      logger.info('💰 Calling Razorpay refund API:', { paymentId, amountInPaise: finalRefundAmount });
       
       // SDK v2.x: payments.refund(paymentId, options)
       const refund = await getRazorpay().payments.refund(paymentId, {
         amount: finalRefundAmount
       });
       
-      console.log('✅ Refund successful:', refund.id, 'Amount:', finalRefundAmount / 100);
+      logger.info('✅ Refund successful:', refund.id, 'Amount:', finalRefundAmount / 100);
       return refund;
     } catch (error) {
       const errorCode = error.error?.code || error.code;
       const errorDesc = error.error?.description || error.message;
       
-      console.error('❌ Razorpay refund error:', {
+      logger.error('❌ Razorpay refund error:', {
         message: error.message,
         code: errorCode,
         description: errorDesc,
@@ -175,7 +176,7 @@ const razorpayService = {
       if ((errorCode === 'SERVER_ERROR' || errorCode === 'GATEWAY_ERROR' || 
            (errorCode === 'BAD_REQUEST_ERROR' && errorDesc === 'invalid request sent')) && retryCount < MAX_RETRIES) {
         const retryDelay = errorCode === 'BAD_REQUEST_ERROR' ? 30000 : RETRY_DELAY_MS; // 30s for timing issues
-        console.log(`🔄 Retrying refund in ${retryDelay / 1000} seconds... (attempt ${retryCount + 2}/${MAX_RETRIES + 1})`);
+        logger.info(`🔄 Retrying refund in ${retryDelay / 1000} seconds... (attempt ${retryCount + 2}/${MAX_RETRIES + 1})`);
         await new Promise(resolve => setTimeout(resolve, retryDelay));
         return this.refund(paymentId, amount, retryCount + 1);
       }
@@ -188,7 +189,7 @@ const razorpayService = {
     try {
       return await getRazorpay().payments.fetch(paymentId);
     } catch (error) {
-      console.error('Razorpay fetch payment error:', error.message);
+      logger.error('Razorpay fetch payment error:', error.message);
       throw error;
     }
   }

@@ -10,6 +10,7 @@ const groqAi = require('./groqAi');
 const chatbotImagesService = require('./chatbotImages');
 const whatsappBroadcast = require('./whatsappBroadcast');
 const axios = require('axios');
+const logger = require('./logger');
 
 const generateOrderId = (serviceType = 'delivery') => {
   const prefix = serviceType === 'pickup' ? 'S' : 'O';
@@ -39,7 +40,7 @@ const calculateOSRMDistance = async (lat1, lon1, lat2, lon2) => {
     // OSRM public API - Note: format is longitude,latitude (NOT lat,lon!)
     const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=false`;
     
-    console.log(`🗺️ OSRM URL: ${url}`);
+    logger.info(`OSRM URL: ${url}`);
     
     const response = await axios.get(url, { 
       timeout: 10000,
@@ -48,21 +49,21 @@ const calculateOSRMDistance = async (lat1, lon1, lat2, lon2) => {
       }
     });
     
-    console.log(`🗺️ OSRM Response code: ${response.data.code}`);
+    logger.info(`OSRM Response code: ${response.data.code}`);
     
     if (response.data.code === 'Ok' && response.data.routes?.[0]) {
       const distanceInMeters = response.data.routes[0].distance;
       const durationInSeconds = response.data.routes[0].duration;
       const distanceInKm = distanceInMeters / 1000;
       const durationInMins = Math.round(durationInSeconds / 60);
-      console.log(`✅ OSRM road distance: ${distanceInKm.toFixed(2)} KM (approx ${durationInMins} mins drive)`);
+      logger.info(`OSRM road distance: ${distanceInKm.toFixed(2)} KM (approx ${durationInMins} mins drive)`);
       return Math.round(distanceInKm * 100) / 100;
     }
     
-    console.log('⚠️ OSRM API returned no valid route:', response.data);
+    logger.info('OSRM API returned no valid route', { data: response.data });
     return null;
   } catch (error) {
-    console.error('❌ OSRM API error:', error.message);
+    logger.error('OSRM API error', { error: error.message });
     return null;
   }
 };
@@ -83,13 +84,13 @@ const calculateOpenRouteServiceDistance = async (lat1, lon1, lat2, lon2) => {
     if (response.data.features?.[0]?.properties?.segments?.[0]) {
       const distanceInMeters = response.data.features[0].properties.segments[0].distance;
       const distanceInKm = distanceInMeters / 1000;
-      console.log(`✅ OpenRouteService road distance: ${distanceInKm.toFixed(2)} KM`);
+      logger.info(`OpenRouteService road distance: ${distanceInKm.toFixed(2)} KM`);
       return Math.round(distanceInKm * 100) / 100;
     }
     
     return null;
   } catch (error) {
-    console.error('OpenRouteService error:', error.message);
+    logger.error('OpenRouteService error', { error: error.message });
     return null;
   }
 };
@@ -97,7 +98,7 @@ const calculateOpenRouteServiceDistance = async (lat1, lon1, lat2, lon2) => {
 // Main distance calculator - tries multiple free APIs with smart fallback
 const calculateDistance = async (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) {
-    console.log('⚠️ Missing coordinates for distance calculation');
+    logger.info('Missing coordinates for distance calculation');
     return null;
   }
   
@@ -107,25 +108,25 @@ const calculateDistance = async (lat1, lon1, lat2, lon2) => {
   lat2 = parseFloat(lat2);
   lon2 = parseFloat(lon2);
   
-  console.log(`\n📍 ========== DISTANCE CALCULATION ==========`);
-  console.log(`📍 Restaurant: ${lat1}, ${lon1}`);
-  console.log(`📍 Customer: ${lat2}, ${lon2}`);
+  logger.info(`========== DISTANCE CALCULATION`);
+  logger.info(`Restaurant: ${lat1}, ${lon1}`);
+  logger.info(`Customer: ${lat2}, ${lon2}`);
   
   // Calculate straight-line first for reference
   const straightLineDistance = calculateStraightLineDistance(lat1, lon1, lat2, lon2);
-  console.log(`📏 Straight-line distance: ${straightLineDistance} KM`);
+  logger.info(`Straight-line distance: ${straightLineDistance} KM`);
   
   // Try OSRM API first (free, uses OpenStreetMap data)
   const osrmDistance = await calculateOSRMDistance(lat1, lon1, lat2, lon2);
   if (osrmDistance !== null && osrmDistance > 0) {
-    console.log(`📍 =========================================\n`);
+    logger.info('');
     return osrmDistance;
   }
   
   // Try OpenRouteService as backup
   const orsDistance = await calculateOpenRouteServiceDistance(lat1, lon1, lat2, lon2);
   if (orsDistance !== null && orsDistance > 0) {
-    console.log(`📍 =========================================\n`);
+    logger.info('');
     return orsDistance;
   }
   
@@ -134,8 +135,8 @@ const calculateDistance = async (lat1, lon1, lat2, lon2) => {
   if (straightLineDistance === null) return null;
   
   const approximateRoadDistance = straightLineDistance * 1.6;
-  console.log(`⚠️ FALLBACK: Using straight-line × 1.6 = ${approximateRoadDistance.toFixed(2)} KM`);
-  console.log(`📍 =========================================\n`);
+  logger.info(`FALLBACK: Using straight-line × 1.6 = ${approximateRoadDistance.toFixed(2)} KM`);
+  logger.info('');
   
   return Math.round(approximateRoadDistance * 100) / 100;
 };
@@ -149,12 +150,12 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
     
     // If settings not configured, no delivery charge
     if (!restaurantLocation?.latitude || !restaurantLocation?.longitude) {
-      console.log('📍 Restaurant location not configured - no delivery charge');
+      logger.info('Restaurant location not configured - no delivery charge');
       return { charge: 0, distance: null, withinFreeRadius: true, message: null };
     }
     
     if (!deliverySettings) {
-      console.log('🚚 Delivery settings not configured - no delivery charge');
+      logger.info('Delivery settings not configured - no delivery charge');
       return { charge: 0, distance: null, withinFreeRadius: true, message: null };
     }
     
@@ -167,18 +168,18 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
       customerLon
     );
     
-    console.log(`\n📍 ========== RADIUS CHECK ==========`);
-    console.log(`📍 Restaurant: ${restaurantLocation.latitude}, ${restaurantLocation.longitude}`);
-    console.log(`📍 Customer: ${customerLat}, ${customerLon}`);
-    console.log(`📏 Radius distance: ${distance} KM (straight-line)`);
-    console.log(`📍 ===================================\n`);
+    logger.info(`========== RADIUS CHECK`);
+    logger.info(`Restaurant: ${restaurantLocation.latitude}, ${restaurantLocation.longitude}`);
+    logger.info(`Customer: ${customerLat}, ${customerLon}`);
+    logger.info(`Radius distance: ${distance} KM (straight-line)`);
+    logger.info('');
     
     if (distance === null) {
-      console.log('📍 Could not calculate distance - no delivery charge');
+      logger.info('Could not calculate distance - no delivery charge');
       return { charge: 0, distance: null, withinFreeRadius: true, message: null };
     }
     
-    console.log(`📍 Distance from restaurant: ${distance} KM`);
+    logger.info(`Distance from restaurant: ${distance} KM`);
     
     const noFreeDelivery = deliverySettings.noFreeDelivery || false;
     const baseDeliveryCharge = deliverySettings.baseDeliveryCharge || 0;
@@ -189,7 +190,7 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
     
     // Check if beyond max delivery radius first
     if (maxRadius && distance > maxRadius) {
-      console.log(`❌ Beyond max delivery radius (${maxRadius} KM)`);
+      logger.info(`Beyond max delivery radius (${maxRadius} KM)`);
       return { 
         charge: null, 
         distance, 
@@ -202,11 +203,11 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
     
     // If restaurant charges for ALL deliveries (no free delivery)
     if (noFreeDelivery) {
-      console.log(`💰 No free delivery - base charge: ₹${baseDeliveryCharge}`);
+      logger.info(`No free delivery - base charge: ₹${baseDeliveryCharge}`);
       // If outside free radius AND extra charge enabled, add extra on top of base
       if (distance > freeRadius && extraChargeEnabled && extraCharge > 0) {
         const totalCharge = baseDeliveryCharge + extraCharge;
-        console.log(`💰 Beyond ${freeRadius} KM - total charge: ₹${totalCharge}`);
+        logger.info(`Beyond ${freeRadius} KM - total charge: ₹${totalCharge}`);
         return { 
           charge: totalCharge, 
           distance, 
@@ -224,7 +225,7 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
     
     // Check if within free delivery radius
     if (distance <= freeRadius) {
-      console.log(`✅ Within free delivery radius (${freeRadius} KM)`);
+      logger.info(`Within free delivery radius (${freeRadius} KM)`);
       return { 
         charge: 0, 
         distance, 
@@ -235,7 +236,7 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
     
     // Outside free radius - check if extra charge is enabled
     if (extraChargeEnabled && extraCharge > 0) {
-      console.log(`💰 Outside free radius - adding delivery charge: ₹${extraCharge}`);
+      logger.info(`Outside free radius - adding delivery charge: ₹${extraCharge}`);
       return { 
         charge: extraCharge, 
         distance, 
@@ -245,7 +246,7 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
     }
     
     // Extra charge NOT enabled AND customer is outside free radius - REJECT ORDER
-    console.log(`❌ Outside free radius (${freeRadius} KM) - delivery not available`);
+    logger.info(`Outside free radius (${freeRadius} KM) - delivery not available`);
     return { 
       charge: null, 
       distance, 
@@ -256,7 +257,7 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
     };
     
   } catch (error) {
-    console.error('Error calculating delivery charge:', error);
+    logger.error('Error calculating delivery charge', { error: error.message });
     return { charge: 0, distance: null, withinFreeRadius: true, message: null };
   }
 };
@@ -1030,7 +1031,7 @@ const chatbot = {
       return null;
     }
     
-    console.log('🛒 Website CART order check - message:', text);
+    logger.info('Website CART order check - message', { cart: text });
     
     const items = [];
     let total = null;
@@ -1048,7 +1049,7 @@ const chatbot = {
         const price = parseInt(itemMatch[3]);
         const hasOffer = line.includes('🎁');
         items.push({ name, quantity, price, hasOffer });
-        console.log('📦 Found cart item:', { name, quantity, price, hasOffer });
+        logger.info('Found cart item', { name, quantity, price, hasOffer });
       }
       
       // Extract total
@@ -1061,12 +1062,12 @@ const chatbot = {
       const offerIdMatch = line.match(/\(ID:\s*([a-f0-9]{24})\)/i);
       if (offerIdMatch) {
         offerIds.push(offerIdMatch[1]);
-        console.log('🎁 Found offer ID:', offerIdMatch[1]);
+        logger.info('Found offer ID', { offer: offerIdMatch[1] });
       }
     }
     
     if (items.length > 0) {
-      console.log('✅ Website cart order extracted:', { items, total, offerIds });
+      logger.info('Website cart order extracted', { items, total, offerIds });
       return { items, total, offerIds };
     }
     
@@ -1091,14 +1092,14 @@ const chatbot = {
       return null;
     }
     
-    console.log('🔍 Website order check - message:', text);
+    logger.info('Website order check - message', { order: text });
     
     let itemName = null;
     let price = null;
     
     // Method 1: Parse line by line
     const lines = text.split('\n').map(l => l.trim()).filter(l => l);
-    console.log('📝 Lines:', lines);
+    logger.info('Lines', { line: lines });
     
     for (const line of lines) {
       const lowerLine = line.toLowerCase();
@@ -1125,11 +1126,11 @@ const chatbot = {
       // Remove asterisks anywhere
       cleanedLine = cleanedLine.replace(/\*/g, '').trim();
       
-      console.log('🔄 Cleaned line:', `"${line}" -> "${cleanedLine}"`);
+      logger.info('Cleaned line', { line: `"${line}" -> "${cleanedLine}"` });
       
       if (cleanedLine.length > 1) {
         itemName = cleanedLine;
-        console.log('📌 Found item name:', itemName);
+        logger.info('Found item name', { items: itemName });
         break; // Take the first valid line as item name
       }
     }
@@ -1139,11 +1140,11 @@ const chatbot = {
     if (priceMatch) price = parseInt(priceMatch[1]);
     
     if (itemName && itemName.length > 1) {
-      console.log('✅ Website order extracted:', { itemName, price });
+      logger.info('Website order extracted', { itemName, price });
       return { itemName, price };
     }
     
-    console.log('❌ Could not extract item name from website order');
+    logger.info('Could not extract item name from website order');
     return null;
   },
 
@@ -1178,15 +1179,20 @@ const chatbot = {
     const wordStartRegex = new RegExp(`(^|\\s|-)${this.escapeRegex(search)}`, 'i');
     if (wordStartRegex.test(target)) return true;
     
-    // Also allow if search term contains the target (e.g., "chicken biryani" contains "chicken")
-    if (search.includes(target)) return true;
+    // Also allow if search term contains the target as a whole word
+    // e.g., "chicken biryani" contains "chicken" ✓, but "rice" should NOT match "ice" ✗
+    if (search.includes(target)) {
+      // Verify target appears at a word boundary within search
+      const targetBoundaryRegex = new RegExp(`(^|\\s|-)${this.escapeRegex(target)}(\\s|$|-)`, 'i');
+      if (targetBoundaryRegex.test(search)) return true;
+    }
     
-    // For 4+ char terms, allow substring match but only if it's substantial (>50% of a word)
+    // For 4+ char terms, allow substring match but only at word start
     const targetWords = target.split(/\s+/);
     for (const word of targetWords) {
       if (word.startsWith(search)) return true;
-      // Allow if search is at least 60% of the word length and matches from start
-      if (search.length >= 4 && word.length >= 4 && word.includes(search) && search.length >= word.length * 0.6) {
+      // Allow if search is at least 60% of the word length and matches from start of word
+      if (search.length >= 4 && word.length >= 4 && word.startsWith(search) && search.length >= word.length * 0.6) {
         return true;
       }
     }
@@ -1490,10 +1496,18 @@ const chatbot = {
     const categories = [...new Set(menuItems.flatMap(m => Array.isArray(m.category) ? m.category : [m.category]))];
     const lowerText = text.toLowerCase().trim();
     
-    // First try exact match
-    const exactMatch = categories.find(cat => 
-      cat.toLowerCase().includes(lowerText) || lowerText.includes(cat.toLowerCase())
-    );
+    // First try exact match or whole-word match (prevents "ice" matching "Rice Bowls")
+    const exactMatch = categories.find(cat => {
+      const catLower = cat.toLowerCase();
+      if (catLower === lowerText) return true;
+      // Check if search text matches a whole word in category name
+      const searchWordRegex = new RegExp(`(^|\\s|-)${lowerText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$|-)`, 'i');
+      if (searchWordRegex.test(catLower)) return true;
+      // Check if category name matches a whole word in search text
+      const catWordRegex = new RegExp(`(^|\\s|-)${catLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$|-)`, 'i');
+      if (catWordRegex.test(lowerText)) return true;
+      return false;
+    });
     if (exactMatch) return exactMatch;
     
     // Try fuzzy matching with typo tolerance for ANY category (lowered threshold to 0.55)
@@ -1536,7 +1550,7 @@ const chatbot = {
     }
     
     if (bestMatch) {
-      console.log(`🔄 Category fuzzy match: "${text}" → "${bestMatch}" (${Math.round(bestScore * 100)}%)`);
+      logger.info(`Category fuzzy match: "${text}" → "${bestMatch}" (${Math.round(bestScore * 100)}%)`);
     }
     
     return bestMatch;
@@ -1909,7 +1923,7 @@ const chatbot = {
       for (const target of targets) {
         // Check if any search word exactly matches a target, or target contains the word
         if (target === word || target.includes(word) || word.includes(target)) {
-          console.log(`✅ Search term "${word}" already matches "${target}" - skipping typo correction`);
+          logger.info(`Search term "${word}" already matches "${target}" - skipping typo correction`);
           return null; // Don't correct, the term is valid
         }
       }
@@ -1938,7 +1952,7 @@ const chatbot = {
     
     // If we found a match better than the original, return it
     if (bestMatch && bestMatch !== searchLower && bestScore >= threshold) {
-      console.log(`🔄 Dynamic typo match: "${searchTerm}" → "${bestMatch}" (${Math.round(bestScore * 100)}%)`);
+      logger.info(`Dynamic typo match: "${searchTerm}" → "${bestMatch}" (${Math.round(bestScore * 100)}%)`);
       return bestMatch;
     }
     
@@ -2008,7 +2022,7 @@ const chatbot = {
     
     // Skip fuzzy search for gibberish queries
     if (this.isGibberishSearch(searchTerm)) {
-      console.log(`🚫 Gibberish search detected: "${searchTerm}" - skipping fuzzy search`);
+      logger.info(`Gibberish search detected: "${searchTerm}" - skipping fuzzy search`);
       return [];
     }
     
@@ -2331,7 +2345,7 @@ const chatbot = {
       });
       
       if (andMatches.length > 0) {
-        console.log(`🔍 Multi-keyword AND match: "${text}" → ${andMatches.length} items`);
+        logger.info(`Multi-keyword AND match: "${text}" → ${andMatches.length} items`);
         return andMatches;
       }
     }
@@ -2346,14 +2360,14 @@ const chatbot = {
     });
     
     if (matchingItems.length > 0) {
-      console.log(`🔍 Multi-keyword OR match: "${text}" → ${matchingItems.length} items (keywords: ${keywords.join(', ')})`);
+      logger.info(`Multi-keyword OR match: "${text}" → ${matchingItems.length} items (keywords: ${keywords.join(', ')})`);
       return matchingItems;
     }
     
     // Also check full text as single term (for multi-word item names like "ice cream")
     const fullTextMatch = menuItems.filter(item => itemMatchesKeyword(item, lowerText));
     if (fullTextMatch.length > 0) {
-      console.log(`🔍 Full text match: "${text}" → ${fullTextMatch.length} items`);
+      logger.info(`Full text match: "${text}" → ${fullTextMatch.length} items`);
       return fullTextMatch;
     }
     
@@ -2817,7 +2831,7 @@ const chatbot = {
           // Remove duplicates and non-English
           const cleanVariations = [...new Set(allVariations)].filter(v => !/[^\x00-\x7F]/.test(v));
           
-          console.log(`🔤 Word-by-word translation: "${text}" → [${cleanVariations.join(', ')}]`);
+          logger.info(`Word-by-word translation: "${text}" → [${cleanVariations.join(', ')}]`);
           return { primary: combinedTranslation, variations: cleanVariations };
         }
         
@@ -2825,7 +2839,7 @@ const chatbot = {
         const basicTranslated = this.transliterate(text);
         return { primary: basicTranslated, variations: [basicTranslated] };
       } catch (error) {
-        console.error('AI translation failed:', error.message);
+        logger.error('AI translation failed', { error: error.message });
         const basicTranslated = this.transliterate(text);
         return { primary: basicTranslated, variations: [basicTranslated] };
       }
@@ -2855,20 +2869,20 @@ const chatbot = {
   // Example: "veg curry" → finds items with tags containing "veg" AND "curry"
   // Example: "5 piece" → finds items with quantity/unit tag "5 piece"
   async smartSearch(text, menuItems) {
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`🔥 SMART SEARCH CALLED: "${text}"`);
-    console.log(`${'='.repeat(60)}`);
+    logger.info(`${'='.repeat(60)}`);
+    logger.info(`SMART SEARCH CALLED: "${text}"`);
+    logger.info(`${'='.repeat(60)}`);
     
     // Early return for gibberish searches
     if (this.isGibberishSearch(text)) {
-      console.log(`🚫 Gibberish search detected: "${text}" - returning no results`);
+      logger.info(`Gibberish search detected: "${text}" - returning no results`);
       return null;
     }
     
     // ========== DETECT FOOD TYPE FIRST ==========
     const originalText = text.toLowerCase().trim();
     const originalFoodType = this.detectFoodTypeFromMessage(originalText);
-    console.log(`🔎 ORIGINAL food type detection: "${originalText}" → ${originalFoodType ? JSON.stringify(originalFoodType) : 'NONE'}`);
+    logger.info(`ORIGINAL food type detection: "${originalText}" → ${originalFoodType ? JSON.stringify(originalFoodType) : 'NONE'}`);
     
     // ========== NO TYPO CORRECTION - USE ORIGINAL TEXT DIRECTLY ==========
     // Typo correction was causing issues like "liver" → "liter", "bread" → "cream"
@@ -2890,12 +2904,12 @@ const chatbot = {
     
     // Use the original food type detection
     const detected = originalFoodType || this.detectFoodTypeFromMessage(primaryText);
-    console.log(`🔎 SMART SEARCH: text="${text}", primaryText="${primaryText}", detected=`, detected);
+    logger.info(`SMART SEARCH: text="${text}", primaryText="${primaryText}", detected`, { searchTerm: detected });
     
     // Remove food type keywords to get clean search terms
     // Use ORIGINAL text for removing keywords to preserve user intent
     const primarySearchTerm = this.removeFoodTypeKeywords(originalText);
-    console.log(`🔎 After removing food type keywords from ORIGINAL: "${primarySearchTerm}"`);
+    logger.info(`After removing food type keywords from ORIGINAL: "${primarySearchTerm}"`);
     
     // Get all search variations (cleaned of food type keywords)
     const searchVariations = allVariations.map(v => this.removeFoodTypeKeywords(v.toLowerCase())).filter(v => v.length >= 2);
@@ -2943,14 +2957,14 @@ const chatbot = {
         const aiMatchedTags = await groqAi.matchSearchToTags(text, allAvailableTags);
         if (aiMatchedTags && aiMatchedTags.length > 0) {
           uniqueSearchTerms = [...new Set([...uniqueSearchTerms, ...aiMatchedTags])];
-          console.log(`🤖 AI added tags: [${aiMatchedTags.join(', ')}]`);
+          logger.info(`AI added tags: [${aiMatchedTags.join(', ')}]`);
         }
       } catch (error) {
-        console.error('AI tag matching failed:', error.message);
+        logger.error('AI tag matching failed', { error: error.message });
       }
     }
     
-    console.log(`🔍 Search terms with synonyms: [${uniqueSearchTerms.join(', ')}]`);
+    logger.info(`Search terms with synonyms: [${uniqueSearchTerms.join(', ')}]`);
     
     // If search term is too short after removing keywords, search by ingredient/type only
     const hasSearchTerm = primarySearchTerm.length >= 2;
@@ -2960,22 +2974,22 @@ const chatbot = {
     let searchableItems = menuItems;
     let foodTypeLabel = null;
     
-    console.log(`🔎 Total menu items: ${menuItems.length}`);
+    logger.info(`Total menu items: ${menuItems.length}`);
     
     if (detected) {
       if (detected.type === 'veg') {
         searchableItems = menuItems.filter(item => item.foodType === 'veg');
         foodTypeLabel = '🌿 Veg';
-        console.log(`🥬 FILTERED TO VEG ITEMS: ${searchableItems.length} items out of ${menuItems.length}`);
-        console.log(`🥬 VEG item names: ${searchableItems.slice(0, 5).map(i => i.name).join(', ')}...`);
+        logger.info(`FILTERED TO VEG ITEMS: ${searchableItems.length} items out of ${menuItems.length}`);
+        logger.info(`VEG item names: ${searchableItems.slice(0, 5).map(i => i.name).join(', ')}...`);
       } else if (detected.type === 'egg') {
         searchableItems = menuItems.filter(item => item.foodType === 'egg');
         foodTypeLabel = '🥚 Egg';
-        console.log(`🥚 FILTERED TO EGG ITEMS: ${searchableItems.length} items out of ${menuItems.length}`);
+        logger.info(`FILTERED TO EGG ITEMS: ${searchableItems.length} items out of ${menuItems.length}`);
       } else if (detected.type === 'nonveg') {
         searchableItems = menuItems.filter(item => item.foodType === 'nonveg' || item.foodType === 'egg');
         foodTypeLabel = '🍗 Non-Veg';
-        console.log(`🍗 FILTERED TO NON-VEG ITEMS: ${searchableItems.length} items out of ${menuItems.length}`);
+        logger.info(`FILTERED TO NON-VEG ITEMS: ${searchableItems.length} items out of ${menuItems.length}`);
       } else if (detected.type === 'specific') {
         // For specific ingredients like "chicken", "mutton"
         const ingredient = detected.ingredient;
@@ -2985,10 +2999,10 @@ const chatbot = {
           return inName || inTags;
         });
         foodTypeLabel = `🍗 ${ingredient.charAt(0).toUpperCase() + ingredient.slice(1)}`;
-        console.log(`🍖 FILTERED BY INGREDIENT "${ingredient}": ${searchableItems.length} items out of ${menuItems.length}`);
+        logger.info(`FILTERED BY INGREDIENT "${ingredient}": ${searchableItems.length} items out of ${menuItems.length}`);
       }
     } else {
-      console.log(`⚠️ NO FOOD TYPE DETECTED - searching all items`);
+      logger.info(`NO FOOD TYPE DETECTED - searching all items`);
     }
     
     // Helper to normalize text for comparison (removes spaces for flexible matching)
@@ -3028,7 +3042,7 @@ const chatbot = {
         });
         
         if (exactMatches.length > 0) {
-          console.log(`✅ Exact name match found: "${searchTerm}" → ${exactMatches.length} item(s)`);
+          logger.info(`Exact name match found: "${searchTerm}" → ${exactMatches.length} item(s)`);
           return { 
             items: exactMatches, 
             foodType: detected, 
@@ -3080,7 +3094,7 @@ const chatbot = {
       });
       
       if (allKeywordsTagMatches.length > 0) {
-        console.log(`✅ All keywords tag/category match: "${primarySearchTerm}" → ${allKeywordsTagMatches.length} item(s)`);
+        logger.info(`All keywords tag/category match: "${primarySearchTerm}" → ${allKeywordsTagMatches.length} item(s)`);
         return { 
           items: allKeywordsTagMatches, 
           foodType: detected, 
@@ -3124,7 +3138,7 @@ const chatbot = {
           : sortedMatches;
         
         if (filteredMatches.length > 0) {
-          console.log(`✅ Any keyword tag match: "${primarySearchTerm}" → ${filteredMatches.length} item(s) (filtered from ${sortedMatches.length})`);
+          logger.info(`Any keyword tag match: "${primarySearchTerm}" → ${filteredMatches.length} item(s) (filtered from ${sortedMatches.length})`);
           return { 
             items: filteredMatches, 
             foodType: detected, 
@@ -3232,7 +3246,7 @@ const chatbot = {
       }
       const uniqueKeywords = [...new Set(allKeywords)];
       
-      console.log(`🔍 Tag search - Primary keywords: [${searchKeywords.join(', ')}], All keywords: [${uniqueKeywords.join(', ')}], foodType: ${detected?.type || 'all'}`);
+      logger.info(`Tag search - Primary keywords: [${searchKeywords.join(', ')}], All keywords: [${uniqueKeywords.join(', ')}], foodType: ${detected?.type || 'all'}`);
       
       // Helper to check if item tags OR name OR category match a keyword
       // Uses smartIncludes to prevent "ice" matching "rice"
@@ -3271,7 +3285,7 @@ const chatbot = {
       });
       
       if (allKeywordsMatch.length > 0) {
-        console.log(`✅ PRIORITY 1 - ALL keywords match: "${searchKeywords.join(' ')}" → ${allKeywordsMatch.length} item(s): [${allKeywordsMatch.map(i => i.name).slice(0, 5).join(', ')}]`);
+        logger.info(`PRIORITY 1 - ALL keywords match: "${searchKeywords.join(' ')}" → ${allKeywordsMatch.length} item(s): [${allKeywordsMatch.map(i => i.name).slice(0, 5).join(', ')}]`);
         return { 
           items: allKeywordsMatch, 
           foodType: detected, 
@@ -3323,7 +3337,7 @@ const chatbot = {
           const matchCounts = Array.from(partialTagMatches.values())
             .filter(m => filteredMatches.includes(m.item))
             .map(m => `${m.item.name}(${m.matchCount})`);
-          console.log(`✅ PRIORITY 2 - Partial tag matches (sorted by count): ${filteredMatches.length} item(s) - [${matchCounts.slice(0, 5).join(', ')}...]`);
+          logger.info(`PRIORITY 2 - Partial tag matches (sorted by count): ${filteredMatches.length} item(s) - [${matchCounts.slice(0, 5).join(', ')}...]`);
           
           return { 
             items: filteredMatches, 
@@ -3430,13 +3444,13 @@ const chatbot = {
     
     if (hasSearchTerm) {
       // Search using ALL translation variations - use searchableItems (filtered by food type)
-      console.log(`🔍 Searching with variations: [${uniqueSearchTerms.join(', ')}]`);
+      logger.info(`Searching with variations: [${uniqueSearchTerms.join(', ')}]`);
       matchingItems = searchByMultipleTerms(searchableItems, uniqueSearchTerms);
       
       // IMPORTANT: If user explicitly specified food type (e.g., "veg curry"), do NOT fall back to all items
       // Only try all items if no food type was detected (generic search like "curry")
       if (matchingItems.length === 0 && !detected && searchableItems.length < menuItems.length) {
-        console.log(`🔍 No food type detected, falling back to all items...`);
+        logger.info(`No food type detected, falling back to all items...`);
         matchingItems = searchByMultipleTerms(menuItems, uniqueSearchTerms);
       }
       
@@ -3444,12 +3458,12 @@ const chatbot = {
       if (matchingItems.length === 0) {
         const allKeywords = uniqueSearchTerms.flatMap(term => term.split(/\s+/).filter(k => k.length >= 2));
         if (allKeywords.length > 0) {
-          console.log(`🔍 Fallback: finding items matching ANY keyword: [${allKeywords.join(', ')}]`);
+          logger.info(`Fallback: finding items matching ANY keyword: [${allKeywords.join(', ')}]`);
           // Search keywords only in searchableItems (respects food type filter)
           matchingItems = searchByMultipleTerms(searchableItems, allKeywords);
           // Only fall back to all items if NO food type was specified
           if (matchingItems.length === 0 && !detected) {
-            console.log(`🔍 No food type detected, trying all items for keywords...`);
+            logger.info(`No food type detected, trying all items for keywords...`);
             matchingItems = searchByMultipleTerms(menuItems, allKeywords);
           }
         }
@@ -3464,7 +3478,7 @@ const chatbot = {
       // Instead of calling multiple AI services, just return no results
       // This is more honest to the user and reduces API costs
       
-      console.log(`❌ No matching items found for "${text}" after tag-based and fuzzy search`);
+      logger.info(`No matching items found for "${text}" after tag-based and fuzzy search`);
       
     } else if (detected?.type === 'specific' && searchableItems.length > 0) {
       // For specific ingredient searches (e.g., "chicken"), return filtered items
@@ -3472,15 +3486,15 @@ const chatbot = {
     }
     
     // FINAL DEBUG LOG - what are we returning?
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`🎯 SMART SEARCH RESULT for "${text}":`);
-    console.log(`   Detected food type: ${detected ? JSON.stringify(detected) : 'NONE'}`);
-    console.log(`   searchableItems count: ${searchableItems?.length || 0}`);
-    console.log(`   matchingItems count: ${matchingItems?.length || 0}`);
+    logger.info(`${'='.repeat(60)}`);
+    logger.info(`SMART SEARCH RESULT for "${text}":`);
+    logger.info(`Detected food type: ${detected ? JSON.stringify(detected) : 'NONE'}`);
+    logger.info(`searchableItems count: ${searchableItems?.length || 0}`);
+    logger.info(`matchingItems count: ${matchingItems?.length || 0}`);
     if (matchingItems?.length > 0) {
-      console.log(`   Returning items: ${matchingItems.slice(0, 5).map(i => `${i.name}(${i.foodType})`).join(', ')}`);
+      logger.info(`Returning items: ${matchingItems.slice(0, 5).map(i => `${i.name}(${i.foodType})`).join(', ')}`);
     }
-    console.log(`${'='.repeat(60)}\n`);
+    logger.info(`${'='.repeat(60)}\n`);
     
     return matchingItems.length > 0 
       ? { items: matchingItems, foodType: detected, searchTerm: primarySearchTerm, label: foodTypeLabel, exactMatch: true }
@@ -3499,7 +3513,7 @@ const chatbot = {
   // Reverse geocode coordinates to get readable address
   async reverseGeocode(latitude, longitude) {
     try {
-      console.log(`📍 Reverse geocoding coordinates: ${latitude}, ${longitude}`);
+      logger.info(`Reverse geocoding coordinates: ${latitude}, ${longitude}`);
       const response = await axios.get(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18`,
         { 
@@ -3536,20 +3550,20 @@ const chatbot = {
         if (addr.postcode) parts.push(addr.postcode);
         
         const address = parts.length > 0 ? parts.join(', ') : response.data.display_name || null;
-        console.log(`📍 Geocoded address: ${address}`);
+        logger.info(`Geocoded address: ${address}`);
         return address || 'Location shared';
       }
       
       // Try display_name as fallback
       if (response.data && response.data.display_name) {
-        console.log(`📍 Using display_name: ${response.data.display_name}`);
+        logger.info(`Using display_name: ${response.data.display_name}`);
         return response.data.display_name;
       }
       
-      console.log('📍 No address data in geocoding response');
+      logger.info('No address data in geocoding response');
       return 'Location shared';
     } catch (error) {
-      console.error('❌ Reverse geocoding error:', error.message);
+      logger.error('Reverse geocoding error', { error: error.message });
       return 'Location shared';
     }
   },
@@ -3558,7 +3572,7 @@ const chatbot = {
     // Check if holiday mode is enabled
     const holidayMode = await Settings.getValue('holidayMode', false);
     if (holidayMode) {
-      console.log(`🏖️ Holiday mode is ON - sending holiday message to ${phone}`);
+      logger.info(`Holiday mode is ON - sending holiday message to ${phone}`);
       await whatsapp.sendMessage(phone, 
         `🏖️ *Holiday Notice*\n\n` +
         `Dear Customer,\n\n` +
@@ -3586,12 +3600,12 @@ const chatbot = {
 
     // Save WhatsApp contact for broadcast (non-blocking)
     whatsappBroadcast.addContact(phone, customer.name || senderName, new Date()).catch(err => {
-      console.error('[Chatbot] Failed to save WhatsApp contact:', err.message);
+      logger.error('[Chatbot] Failed to save WhatsApp contact', { error: err.message });
     });
 
     // Save customer to Google Sheets for cost-saving (non-blocking)
     googleSheets.addOrUpdateCustomer(phone, customer.name || senderName, customer.deliveryAddress?.address).catch(err => {
-      console.error('[Chatbot] Failed to save customer to Google Sheets:', err.message);
+      logger.error('[Chatbot] Failed to save customer to Google Sheets', { error: err.message });
     });
 
     // Get all categories to check schedule status
@@ -3640,15 +3654,15 @@ const chatbot = {
       });
     
     // Debug log
-    console.log(`✅ Scheduled ACTIVE: [${scheduledActiveCategories.join(', ') || 'none'}]`);
-    console.log(`🔒 Scheduled LOCKED: [${scheduledLockedCategories.join(', ') || 'none'}]`);
-    console.log(`⏸️ Manually LOCKED: [${manuallyLockedCategories.join(', ') || 'none'}]`);
-    console.log(`📦 Items: ${allMenuItems.length} total → ${menuItems.length} available (${allMenuItems.length - menuItems.length} filtered out)`);
+    logger.info(`Scheduled ACTIVE: [${scheduledActiveCategories.join(', ') || 'none'}]`);
+    logger.info(`Scheduled LOCKED: [${scheduledLockedCategories.join(', ') || 'none'}]`);
+    logger.info(`⏸ Manually LOCKED: [${manuallyLockedCategories.join(', ') || 'none'}]`);
+    logger.info(`Items: ${allMenuItems.length} total → ${menuItems.length} available (${allMenuItems.length - menuItems.length} filtered out)`);
     
     // Log filtered out items for debugging
     const filteredOutItems = allMenuItems.filter(item => !menuItems.includes(item));
     if (filteredOutItems.length > 0) {
-      console.log(`❌ Filtered out: [${filteredOutItems.map(i => i.name).join(', ')}]`);
+      logger.info(`Filtered out: [${filteredOutItems.map(i => i.name).join(', ')}]`);
     }
     
     const state = customer.conversationState || { currentStep: 'welcome' };
@@ -3657,7 +3671,7 @@ const chatbot = {
     const msg = typeof message === 'string' ? message.toLowerCase().trim() : '';
     const selection = selectedId || msg;
 
-    console.log('🤖 Chatbot:', { phone, msg, selection, messageType, currentStep: state.currentStep });
+    logger.info('Chatbot', { phone, msg, selection, messageType, currentStep: state.currentStep });
 
     try {
       // ========== HANDLE LOCATION MESSAGE ==========
@@ -3665,7 +3679,7 @@ const chatbot = {
         // message contains location data: { latitude, longitude, name, address }
         const locationData = typeof message === 'object' ? message : {};
         
-        console.log('📍 Location received:', locationData);
+        logger.info('Location received', { location: locationData });
         
         // Get proper address - prefer WhatsApp's address, fallback to reverse geocoding
         let formattedAddress = 'Location shared';
@@ -3677,20 +3691,20 @@ const chatbot = {
           if (locationData.name && locationData.name.trim() && locationData.name !== locationData.address) {
             formattedAddress = `${locationData.name.trim()}, ${formattedAddress}`;
           }
-          console.log('📍 Using WhatsApp provided address:', formattedAddress);
+          logger.info('Using WhatsApp provided address', { address: formattedAddress });
         } else if (locationData.name && locationData.name.trim() && locationData.name !== 'undefined') {
           // If only name is provided (like a place name)
           formattedAddress = locationData.name.trim();
-          console.log('📍 Using WhatsApp location name:', formattedAddress);
+          logger.info('Using WhatsApp location name', { location: formattedAddress });
         }
         
         // If still no address, try reverse geocoding from coordinates
         if ((formattedAddress === 'Location shared' || !formattedAddress) && locationData.latitude && locationData.longitude) {
-          console.log('📍 No address from WhatsApp, trying reverse geocoding...');
+          logger.info('No address from WhatsApp, trying reverse geocoding...');
           const geocodedAddress = await this.reverseGeocode(locationData.latitude, locationData.longitude);
           if (geocodedAddress && geocodedAddress !== 'Location shared') {
             formattedAddress = geocodedAddress;
-            console.log('📍 Got address from reverse geocoding:', formattedAddress);
+            logger.info('Got address from reverse geocoding', { address: formattedAddress });
           }
         }
         
@@ -3779,27 +3793,27 @@ const chatbot = {
       // Detect cart orders from website with format "🛒 Order from Website\n1. Item x2 - ₹XXX"
       else if (!selectedId && message && this.isWebsiteCartOrderIntent(message)) {
         const cartOrder = this.isWebsiteCartOrderIntent(message);
-        console.log('🛒 Website CART order detected:', cartOrder);
+        logger.info('Website CART order detected', { cart: cartOrder });
         
         // Check for offer eligibility if offer IDs are present
         let eligibleOffers = [];
         let ineligibleOffers = [];
         
         if (cartOrder.offerIds && cartOrder.offerIds.length > 0) {
-          console.log('🎁 Checking offer eligibility for:', cartOrder.offerIds);
+          logger.info('Checking offer eligibility for', { offer: cartOrder.offerIds });
           
           for (const offerId of cartOrder.offerIds) {
             try {
               const offer = await Offer.findById(offerId);
               if (!offer) {
-                console.log(`❌ Offer not found: ${offerId}`);
+                logger.info(`Offer not found: ${offerId}`);
                 continue;
               }
               
               // Check if offer is still active
               const now = new Date();
               if (!offer.isActive || (offer.validUntil && new Date(offer.validUntil) < now)) {
-                console.log(`❌ Offer expired/inactive: ${offerId}`);
+                logger.info(`Offer expired/inactive: ${offerId}`);
                 ineligibleOffers.push({ offer, reason: 'expired' });
                 continue;
               }
@@ -3814,7 +3828,7 @@ const chatbot = {
                 });
                 
                 if (!isEligible) {
-                  console.log(`❌ Customer not eligible for offer: ${offerId}`);
+                  logger.info(`Customer not eligible for offer: ${offerId}`);
                   let reason = 'not_eligible';
                   if (offer.targetType === 'min_spent') {
                     reason = `Requires ₹${offer.targetMinSpent}+ total spending`;
@@ -3829,11 +3843,11 @@ const chatbot = {
               }
               
               // Customer is eligible for this offer
-              console.log(`✅ Customer eligible for offer: ${offer.title || offer.offerType}`);
+              logger.info(`Customer eligible for offer: ${offer.title || offer.offerType}`);
               eligibleOffers.push(offer);
               
             } catch (err) {
-              console.error(`Error checking offer ${offerId}:`, err);
+              logger.error(`Error checking offer ${offerId}`, { error: err.message });
             }
           }
         }
@@ -3901,7 +3915,7 @@ const chatbot = {
                   }
                   
                   totalDiscount += offerDiscount;
-                  console.log(`🎁 Applied offer ${offer.title} to ${menuItem.name}: -₹${offerDiscount}`);
+                  logger.info(`Applied offer ${offer.title} to ${menuItem.name}: -₹${offerDiscount}`);
                   break;
                 }
               }
@@ -3938,10 +3952,10 @@ const chatbot = {
               customer.cart.push(cartEntry);
             }
             addedCount++;
-            console.log(`✅ Added to cart: ${menuItem.name} x${cartItem.quantity}${appliedOffer ? ` (offer: -₹${offerDiscount})` : ''}`);
+            logger.info(`Added to cart: ${menuItem.name} x${cartItem.quantity}${appliedOffer ? ` (offer: -₹${offerDiscount})` : ''}`);
           } else {
             notFoundItems.push(cartItem.name);
-            console.log(`❌ Item not found: ${cartItem.name}`);
+            logger.info(`Item not found: ${cartItem.name}`);
           }
         }
         
@@ -3981,7 +3995,7 @@ const chatbot = {
       // Detect orders coming from website with format "Hi! I'd like to order: * ItemName *"
       else if (!selectedId && message && this.isWebsiteOrderIntent(message)) {
         const websiteOrder = this.isWebsiteOrderIntent(message);
-        console.log('🌐 Website order detected:', websiteOrder);
+        logger.info('Website order detected', { order: websiteOrder });
         
         // Try exact match first (case-insensitive, trimmed)
         const searchName = websiteOrder.itemName.toLowerCase().trim();
@@ -3991,7 +4005,7 @@ const chatbot = {
         
         if (exactMatch) {
           // Found exact match - show item details with Add to Cart option
-          console.log('✅ Exact match found:', exactMatch.name);
+          logger.info('Exact match found', { match: exactMatch.name });
           state.selectedItem = exactMatch._id.toString();
           customer.conversationState = state;
           await customer.save();
@@ -4015,7 +4029,7 @@ const chatbot = {
           if (partialMatches.length === 1) {
             // Single partial match - show item details
             const item = partialMatches[0];
-            console.log('✅ Single partial match found:', item.name);
+            logger.info('Single partial match found', { match: item.name });
             state.selectedItem = item._id.toString();
             customer.conversationState = state;
             await customer.save();
@@ -4023,7 +4037,7 @@ const chatbot = {
             state.currentStep = 'viewing_item_details';
           } else if (partialMatches.length > 1) {
             // Multiple matches - show options as list
-            console.log('⚠️ Multiple matches found:', partialMatches.map(i => i.name));
+            logger.info('Multiple matches found', { match: partialMatches.map(i => i.name) });
             const activeOffers = customer.activeOffers || [];
             const sections = [{
               title: `Items matching "${websiteOrder.itemName}"`,
@@ -4037,7 +4051,7 @@ const chatbot = {
             state.currentStep = 'select_item';
           } else {
             // No match found
-            console.log('❌ No match found for:', websiteOrder.itemName);
+            logger.info('No match found for', { match: websiteOrder.itemName });
             const itemNotAvailableImageUrl = await chatbotImagesService.getImageUrl('item_not_available');
             await sendWithOptionalImage(phone, itemNotAvailableImageUrl, `❌ Sorry, "${websiteOrder.itemName}" is not available.\n\nPlease browse our menu!`, [
               { id: 'view_menu', text: 'View Menu' },
@@ -4155,7 +4169,7 @@ const chatbot = {
       // Handle text/voice menu intent with food type detection (only for text messages, not button clicks)
       else if (!selectedId && this.isShowMenuIntent(msg)) {
         const menuIntent = this.isShowMenuIntent(msg);
-        console.log('🍽️ Menu intent detected:', menuIntent);
+        logger.info('Menu intent detected', { data: menuIntent });
         
         if (menuIntent.foodType === 'veg') {
           state.foodTypePreference = 'veg';
@@ -4204,7 +4218,7 @@ const chatbot = {
       }
       else if (selection === 'food_veg' || selection === 'food_nonveg' || selection === 'food_both') {
         state.foodTypePreference = selection.replace('food_', '');
-        console.log('🍽️ Food type selected:', state.foodTypePreference);
+        logger.info('Food type selected', { data: state.foodTypePreference });
         const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference);
         
         const foodTypeLabels = {
@@ -4266,7 +4280,7 @@ const chatbot = {
       // ========== TEXT-BASED ADD TO CART (e.g., "add biryani to cart") ==========
       else if (!selectedId && this.isAddToCartIntent(msg)) {
         const addIntent = this.isAddToCartIntent(msg);
-        console.log('🛒 Add to cart intent detected:', addIntent);
+        logger.info('Add to cart intent detected', { cart: addIntent });
         
         // Search for item by name using smart matching
         const searchTerm = addIntent.itemName.toLowerCase();
@@ -4329,7 +4343,7 @@ const chatbot = {
               customer.cart.push({ menuItem: item._id, quantity: 1, addedAt: new Date() });
             }
             await customer.save();
-            console.log(`✅ Added ${item.name} to cart before checkout`);
+            logger.info(`Added ${item.name} to cart before checkout`);
           }
         }
         // Clear selectedItem to prevent duplicate additions on subsequent review_pay clicks
@@ -4535,7 +4549,7 @@ const chatbot = {
         // Show all items from all categories (within selected food type)
         const preference = state.foodTypePreference || 'both';
         const filteredItems = this.filterByFoodType(menuItems, preference);
-        console.log('🍽️ All items selected - Food preference:', preference, 'Total items:', filteredItems.length);
+        logger.info('All items selected - Food preference', { preference, totalItems: filteredItems.length });
         await this.sendAllItems(phone, filteredItems);
         state.selectedCategory = 'all';
         state.currentStep = 'viewing_items';
@@ -4547,8 +4561,8 @@ const chatbot = {
         // Find original category name from sanitized ID
         const allCategories = [...new Set(filteredItems.flatMap(m => Array.isArray(m.category) ? m.category : [m.category]))];
         const category = allCategories.find(c => c.replace(/[^a-zA-Z0-9_]/g, '_') === sanitizedCat) || sanitizedCat;
-        console.log('🍽️ Category selection - Food preference:', preference, 'Category:', category);
-        console.log('🍽️ After filter - Items:', filteredItems.length, 'In category:', filteredItems.filter(m => Array.isArray(m.category) ? m.category.includes(category) : m.category === category).length);
+        logger.info('Category selection - Food preference', { preference, category });
+        logger.info('After filter', { items: filteredItems.length, inCategory: filteredItems.filter(m => Array.isArray(m.category) ? m.category.includes(category) : m.category === category).length });
         await this.sendCategoryItems(phone, filteredItems, category);
         state.selectedCategory = category;
         state.currentStep = 'viewing_items';
@@ -4556,7 +4570,7 @@ const chatbot = {
       else if (selection === 'order_cat_all') {
         // Show all items for ordering (within selected food type)
         const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
-        console.log('🍽️ All items for order - Total items:', filteredItems.length);
+        logger.info('All items for order - Total items', { items: filteredItems.length });
         await this.sendAllItemsForOrder(phone, filteredItems);
         state.selectedCategory = 'all';
         state.currentStep = 'selecting_item';
@@ -4665,7 +4679,7 @@ const chatbot = {
           await this.sendItemDetails(phone, menuItems, itemId);
           state.currentStep = 'viewing_item_details';
         } else {
-          console.log('❌ Item not found for add_:', itemId);
+          logger.info('Item not found for add_', { items: itemId });
           await whatsapp.sendButtons(phone,
             '⚠️ This item is no longer available. Please select another item.',
             [
@@ -4687,7 +4701,7 @@ const chatbot = {
           await this.sendQuantitySelection(phone, item);
           state.currentStep = 'select_quantity';
         } else {
-          console.log('❌ Item not found for confirm_add_:', itemId);
+          logger.info('Item not found for confirm_add_', { items: itemId });
           await whatsapp.sendButtons(phone,
             '⚠️ This item is no longer available. Please select another item.',
             [
@@ -4702,7 +4716,7 @@ const chatbot = {
       // ========== QUANTITY SELECTION ==========
       else if (selection.startsWith('qty_')) {
         const qty = parseInt(selection.replace('qty_', ''));
-        console.log('🛒 Quantity selected:', { qty, selectedItem: state.selectedItem });
+        logger.info('Quantity selected', { qty, selectedItem: state.selectedItem });
         
         const item = menuItems.find(m => m._id.toString() === state.selectedItem);
         
@@ -4718,14 +4732,14 @@ const chatbot = {
           }
           // Save cart immediately to persist the change
           await customer.save();
-          console.log('🛒 Cart updated and saved:', customer.cart.length, 'items');
+          logger.info('Cart updated and saved', { cartSize: customer.cart.length });
           await this.sendAddedToCart(phone, item, qty, customer.cart);
           // Clear selectedItem after successful cart addition to prevent duplicate additions
           state.selectedItem = null;
           state.currentStep = 'item_added';
         } else {
           // Item not found - maybe state was lost, show menu again
-          console.log('❌ Item not found for qty selection, selectedItem:', state.selectedItem);
+          logger.info('Item not found for qty selection, selectedItem', { items: state.selectedItem });
           await whatsapp.sendButtons(phone,
             '⚠️ Something went wrong. Please select an item again.',
             [
@@ -5021,7 +5035,7 @@ const chatbot = {
         }
       }
     } catch (error) {
-      console.error('Chatbot error:', error);
+      logger.error('Chatbot error', { error: error.message });
       await whatsapp.sendButtons(phone, '❌ Something went wrong. Please try again.', [
         { id: 'home', text: 'Main Menu' },
         { id: 'help', text: 'Help' }
@@ -5037,7 +5051,7 @@ const chatbot = {
         await latestCustomer.save();
       }
     } catch (saveErr) {
-      console.error('Error saving conversation state:', saveErr.message);
+      logger.error('Error saving conversation state', { error: saveErr.message });
     }
   },
 
@@ -5136,7 +5150,7 @@ const chatbot = {
         ]);
       }
     } catch (error) {
-      console.error('Error handling offer claim:', error);
+      logger.error('Error handling offer claim', { error: error.message });
       await whatsapp.sendButtons(phone, '❌ Something went wrong. Please try again.', [
         { id: 'view_menu', text: '📋 Browse Menu' },
         { id: 'home', text: '🏠 Main Menu' }
@@ -6122,7 +6136,7 @@ const chatbot = {
         { upsert: true }
       );
     } catch (statsErr) {
-      console.error('Error tracking today orders:', statsErr.message);
+      logger.error('Error tracking today orders', { error: statsErr.message });
     }
 
     // Emit event for real-time updates
@@ -6131,10 +6145,10 @@ const chatbot = {
     dataEvents.emit('dashboard');
 
     // Sync to Google Sheets
-    googleSheets.addOrder(order).catch(err => console.error('Google Sheets sync error:', err));
+    googleSheets.addOrder(order).catch(err => logger.error('Google Sheets sync error', { error: err.message }));
     
     // Update daily report in real-time
-    googleSheets.syncTodayDailyReport().catch(err => console.error('Daily report sync error:', err));
+    googleSheets.syncTodayDailyReport().catch(err => logger.error('Daily report sync error', { error: err.message }));
 
     // Send push notification to admin for new COD order
     try {
@@ -6152,9 +6166,9 @@ const chatbot = {
           });
         }
       }
-      if (admins.length > 0) console.log(`📱 Admin push sent for COD order ${orderId}`);
+      if (admins.length > 0) logger.info(`Admin push sent for COD order ${orderId}`);
     } catch (pushErr) {
-      console.error('Admin push error:', pushErr.message);
+      logger.error('Admin push error', { error: pushErr.message });
     }
 
     // Clear cart on the fresh customer and save
@@ -6502,7 +6516,7 @@ const chatbot = {
         { upsert: true }
       );
     } catch (statsErr) {
-      console.error('Error tracking today orders:', statsErr.message);
+      logger.error('Error tracking today orders', { error: statsErr.message });
     }
 
     // Emit event for real-time updates
@@ -6511,10 +6525,10 @@ const chatbot = {
     dataEvents.emit('dashboard');
 
     // Sync to Google Sheets
-    googleSheets.addOrder(order).catch(err => console.error('Google Sheets sync error:', err));
+    googleSheets.addOrder(order).catch(err => logger.error('Google Sheets sync error', { error: err.message }));
     
     // Update daily report in real-time
-    googleSheets.syncTodayDailyReport().catch(err => console.error('Daily report sync error:', err));
+    googleSheets.syncTodayDailyReport().catch(err => logger.error('Daily report sync error', { error: err.message }));
 
     // Send push notification to admin for new UPI order
     try {
@@ -6532,9 +6546,9 @@ const chatbot = {
           });
         }
       }
-      if (admins.length > 0) console.log(`📱 Admin push sent for UPI order ${orderId}`);
+      if (admins.length > 0) logger.info(`Admin push sent for UPI order ${orderId}`);
     } catch (pushErr) {
-      console.error('Admin push error:', pushErr.message);
+      logger.error('Admin push error', { error: pushErr.message });
     }
 
     // Clear cart on the fresh customer and save
@@ -6558,7 +6572,7 @@ const chatbot = {
       await whatsapp.sendOrder(phone, order, items, paymentPageUrl, orderDetailsImageUrl);
       return { success: true };
     } catch (err) {
-      console.error('Payment page error:', err);
+      logger.error('Payment page error', { error: err.message });
       await whatsapp.sendButtons(phone,
         `✅ *Order Created!*\n\nOrder ID: ${orderId}\nTotal: ₹${total}\n\n⚠️ Payment link unavailable.\nPlease contact us.`,
         [
@@ -6812,7 +6826,7 @@ const chatbot = {
     
     // Mark refund as pending if already paid via UPI/online (wait for Razorpay webhook)
     if (order.paymentStatus === 'paid' && order.razorpayPaymentId) {
-      console.log('💰 Marking refund as pending for order:', orderId, 'Payment ID:', order.razorpayPaymentId);
+      logger.info('Marking refund as pending for order', { orderId, paymentId: order.razorpayPaymentId });
       
       order.refundStatus = 'pending';
       order.refundAmount = order.totalAmount;
@@ -6825,7 +6839,7 @@ const chatbot = {
       });
       
       msg += `\n\n💰 *Refund Processing*\nAmount: ₹${order.totalAmount}\n\n⏱️ Your refund will be processed within 5-7 business days.`;
-      console.log('⏳ Refund pending for order:', orderId);
+      logger.info('⏳ Refund pending for order', { order: orderId });
     } else if (order.paymentStatus === 'paid' && !order.razorpayPaymentId) {
       // Paid but no payment ID (edge case)
       order.refundStatus = 'pending';
@@ -6843,9 +6857,9 @@ const chatbot = {
     
     // Sync to Google Sheets
     googleSheets.updateOrderStatus(order.orderId, 'cancelled', order.paymentStatus).catch(err => 
-      console.error('Google Sheets sync error:', err)
+      logger.error('Google Sheets sync error', { error: err.message })
     );
-    console.log('📊 Customer cancelled order, syncing to Google Sheets:', order.orderId);
+    logger.info('Customer cancelled order, syncing to Google Sheets', { order: order.orderId });
 
     // Use pickup-specific cancelled image if it's a pickup order
     const imageKey = isPickup ? 'pickup_cancelled' : 'order_cancelled';
@@ -6945,7 +6959,7 @@ const chatbot = {
     
     // Sync to Google Sheets
     googleSheets.updateOrderStatus(order.orderId, 'cancelled', 'refund_processing').catch(err => 
-      console.error('Google Sheets sync error:', err)
+      logger.error('Google Sheets sync error', { error: err.message })
     );
 
     await whatsapp.sendButtons(phone, 
@@ -7105,7 +7119,7 @@ const chatbot = {
       });
 
       await order.save();
-      console.log(`✅ Pickup order created: ${orderId}`);
+      logger.info(`Pickup order created: ${orderId}`);
 
       // Clear cart
       freshCustomer.cart = [];
@@ -7150,15 +7164,15 @@ const chatbot = {
 
       // Sync to Google Sheets
       googleSheets.addOrder(order).catch(err =>
-        console.error('Google Sheets sync error:', err)
+        logger.error('Google Sheets sync error', { error: err.message })
       );
       
       // Update daily report in real-time
-      googleSheets.syncTodayDailyReport().catch(err => console.error('Daily report sync error:', err));
+      googleSheets.syncTodayDailyReport().catch(err => logger.error('Daily report sync error', { error: err.message }));
 
       return { success: true, orderId };
     } catch (error) {
-      console.error('❌ Pickup checkout error:', error);
+      logger.error('Pickup checkout error', { error: error.message });
       await whatsapp.sendButtons(phone, '❌ Failed to process your order. Please try again.', [
         { id: 'view_cart', text: 'View Cart' },
         { id: 'home', text: 'Main Menu' }

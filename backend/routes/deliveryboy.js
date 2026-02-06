@@ -1,8 +1,11 @@
 const express = require('express');
+const logger = require('../services/logger');
 const jwt = require('jsonwebtoken');
 const DeliveryBoy = require('../models/DeliveryBoy');
 const Order = require('../models/Order');
 const auth = require('../middleware/auth');
+const { authenticateDeliveryBoy } = require('../middleware/authenticate');
+const { authRateLimiter, adminRateLimiter } = require('../middleware/rateLimiter');
 const brevoMail = require('../services/brevoMail');
 const cloudinaryService = require('../services/cloudinary');
 const googleSheets = require('../services/googleSheets');
@@ -75,10 +78,10 @@ const sendPasswordEmail = async (email, name, password) => {
 
   try {
     await apiInstance.sendTransacEmail(sendSmtpEmail);
-    console.log(`📧 Password email sent to ${email}`);
+    logger.info(`📧 Password email sent to ${email}`);
     return true;
   } catch (error) {
-    console.error('Brevo email error:', error.message);
+    logger.error('Brevo email error:', error.message);
     return false;
   }
 };
@@ -86,7 +89,7 @@ const sendPasswordEmail = async (email, name, password) => {
 // ============ ADMIN ROUTES (Protected) ============
 
 // Get all delivery boys (Admin) - with real-time online status
-router.get('/', auth, async (req, res) => {
+router.get('/', adminRateLimiter, auth, async (req, res) => {
   try {
     const deliveryBoys = await DeliveryBoy.find().select('-password').sort({ createdAt: -1 });
     
@@ -117,7 +120,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 // Add new delivery boy (Admin)
-router.post('/', auth, upload.single('photo'), async (req, res) => {
+router.post('/', adminRateLimiter, auth, upload.single('photo'), async (req, res) => {
   try {
     const { name, email, phone, dob } = req.body;
     
@@ -192,13 +195,13 @@ router.post('/', auth, upload.single('photo'), async (req, res) => {
     
     res.status(201).json(result);
   } catch (error) {
-    console.error('Add delivery boy error:', error);
+    logger.error('Add delivery boy error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // Update delivery boy (Admin)
-router.put('/:id', auth, upload.single('photo'), async (req, res) => {
+router.put('/:id', adminRateLimiter, auth, upload.single('photo'), async (req, res) => {
   try {
     const { name, phone, dob, isActive } = req.body;
     const deliveryBoy = await DeliveryBoy.findById(req.params.id);
@@ -216,7 +219,7 @@ router.put('/:id', auth, upload.single('photo'), async (req, res) => {
       // If deactivating, increment tokenVersion to invalidate all existing sessions
       if (deliveryBoy.isActive && !newIsActive) {
         deliveryBoy.tokenVersion = (deliveryBoy.tokenVersion || 0) + 1;
-        console.log(`🔒 Deactivated delivery partner ${deliveryBoy.name}, invalidating sessions`);
+        logger.info(`🔒 Deactivated delivery partner ${deliveryBoy.name}, invalidating sessions`);
       }
       deliveryBoy.isActive = newIsActive;
     }
@@ -228,7 +231,7 @@ router.put('/:id', auth, upload.single('photo'), async (req, res) => {
         try {
           await cloudinaryService.deleteImage(deliveryBoy.photoPublicId);
         } catch (e) {
-          console.log('Could not delete old photo:', e.message);
+          logger.info('Could not delete old photo:', e.message);
         }
       }
       
@@ -266,7 +269,7 @@ router.put('/:id', auth, upload.single('photo'), async (req, res) => {
 });
 
 // Delete delivery boy (Admin) - This will invalidate their token
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', adminRateLimiter, auth, async (req, res) => {
   try {
     const deliveryBoy = await DeliveryBoy.findById(req.params.id);
     
@@ -279,7 +282,7 @@ router.delete('/:id', auth, async (req, res) => {
       try {
         await cloudinaryService.deleteImage(deliveryBoy.photoPublicId);
       } catch (e) {
-        console.log('Could not delete photo:', e.message);
+        logger.info('Could not delete photo:', e.message);
       }
     }
     
@@ -292,7 +295,7 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 // Reset password (Admin) - Send new password via email
-router.post('/:id/reset-password', auth, async (req, res) => {
+router.post('/:id/reset-password', adminRateLimiter, auth, async (req, res) => {
   try {
     const deliveryBoy = await DeliveryBoy.findById(req.params.id);
     
@@ -315,10 +318,10 @@ router.post('/:id/reset-password', auth, async (req, res) => {
   }
 });
 
-// ============ DELIVERY BOY AUTH ROUTES (Public) ============
+// ============ DELIVERY BOY AUTH ROUTES (Public, rate limited) ============
 
 // Delivery boy login (supports email or phone)
-router.post('/login', async (req, res) => {
+router.post('/login', authRateLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     
@@ -530,7 +533,7 @@ router.post('/push-token', async (req, res) => {
     
     await DeliveryBoy.findByIdAndUpdate(decoded.id, { pushToken });
     
-    console.log(`📱 Push token updated for delivery partner ${decoded.id}`);
+    logger.info(`📱 Push token updated for delivery partner ${decoded.id}`);
     
     res.json({ message: 'Push token updated' });
   } catch (error) {
@@ -585,48 +588,15 @@ router.post('/test-notification', async (req, res) => {
       res.status(400).json({ error: 'No push token registered for this user' });
     }
   } catch (error) {
-    console.error('Test notification error:', error);
+    logger.error('Test notification error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // ============ DELIVERY BOY ORDER ROUTES ============
 
-// Middleware to verify delivery boy token
-const verifyDeliveryToken = async (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'No token' });
-  
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    if (decoded.role !== 'delivery') {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-    
-    const deliveryBoy = await DeliveryBoy.findById(decoded.id).select('-password');
-    
-    if (!deliveryBoy) {
-      return res.status(401).json({ error: 'Account deleted' });
-    }
-    
-    if (!deliveryBoy.isActive) {
-      return res.status(401).json({ error: 'Account deactivated' });
-    }
-    
-    if (deliveryBoy.tokenVersion !== decoded.tokenVersion) {
-      return res.status(401).json({ error: 'Session expired' });
-    }
-    
-    req.deliveryBoy = deliveryBoy;
-    next();
-  } catch (error) {
-    res.status(401).json({ error: 'Invalid token' });
-  }
-};
-
 // Get available orders (preparing status, not assigned, delivery type only)
-router.get('/orders/available', verifyDeliveryToken, async (req, res) => {
+router.get('/orders/available', authenticateDeliveryBoy, async (req, res) => {
   try {
     const orders = await Order.find({
       status: 'preparing',
@@ -641,7 +611,7 @@ router.get('/orders/available', verifyDeliveryToken, async (req, res) => {
 });
 
 // Get my assigned orders (orders assigned to this delivery boy)
-router.get('/orders/my', verifyDeliveryToken, async (req, res) => {
+router.get('/orders/my', authenticateDeliveryBoy, async (req, res) => {
   try {
     // Include cancelled orders that were cancelled within last 1 hour
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
@@ -664,7 +634,7 @@ router.get('/orders/my', verifyDeliveryToken, async (req, res) => {
 });
 
 // Get delivery history (delivered and cancelled orders by this delivery boy)
-router.get('/orders/history', verifyDeliveryToken, async (req, res) => {
+router.get('/orders/history', authenticateDeliveryBoy, async (req, res) => {
   try {
     const orders = await Order.find({
       assignedTo: req.deliveryBoy._id,
@@ -679,7 +649,7 @@ router.get('/orders/history', verifyDeliveryToken, async (req, res) => {
 
 // Get order history from Google Sheets (cost-saving - fetches completed orders from sheets)
 // This is the main history endpoint that should be used for viewing past orders
-router.get('/orders/history/sheets', verifyDeliveryToken, async (req, res) => {
+router.get('/orders/history/sheets', authenticateDeliveryBoy, async (req, res) => {
   try {
     const { search, status, startDate, endDate } = req.query;
     const deliveryBoyName = req.deliveryBoy.name;
@@ -694,7 +664,7 @@ router.get('/orders/history/sheets', verifyDeliveryToken, async (req, res) => {
     });
     
     if (error) {
-      console.error('Error fetching from sheets:', error);
+      logger.error('Error fetching from sheets:', error);
     }
     
     // Also check MongoDB for any recent orders that might not be in sheets yet
@@ -758,13 +728,13 @@ router.get('/orders/history/sheets', verifyDeliveryToken, async (req, res) => {
       source: sheetOrders.length > 0 ? 'sheets' : 'mongodb'
     });
   } catch (error) {
-    console.error('Error in history/sheets endpoint:', error);
+    logger.error('Error in history/sheets endpoint:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // Get order stats for delivery boy (must be before :orderId route)
-router.get('/orders/stats', verifyDeliveryToken, async (req, res) => {
+router.get('/orders/stats', authenticateDeliveryBoy, async (req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -796,7 +766,7 @@ router.get('/orders/stats', verifyDeliveryToken, async (req, res) => {
 });
 
 // Get profile stats for delivery boy (permanent stats not affected by order cleanup)
-router.get('/profile/stats', verifyDeliveryToken, async (req, res) => {
+router.get('/profile/stats', authenticateDeliveryBoy, async (req, res) => {
   try {
     const deliveryBoy = req.deliveryBoy;
     
@@ -815,7 +785,7 @@ router.get('/profile/stats', verifyDeliveryToken, async (req, res) => {
 
 // Get delivery history with filter (today, this week, this month, all time)
 // Cost-saving: Fetches from Google Sheets instead of MongoDB
-router.get('/orders/history/filtered', verifyDeliveryToken, async (req, res) => {
+router.get('/orders/history/filtered', authenticateDeliveryBoy, async (req, res) => {
   try {
     const { filter = 'week' } = req.query; // 'today', 'week', 'month', 'all'
     const deliveryBoyName = req.deliveryBoy.name;
@@ -827,7 +797,7 @@ router.get('/orders/history/filtered', verifyDeliveryToken, async (req, res) => 
     });
     
     if (error) {
-      console.error('Error fetching from sheets, falling back to MongoDB:', error);
+      logger.error('Error fetching from sheets, falling back to MongoDB:', error);
       
       // Fallback to MongoDB if sheets fail
       let dateFilter = {};
@@ -927,13 +897,13 @@ router.get('/orders/history/filtered', verifyDeliveryToken, async (req, res) => 
       source: 'sheets'
     });
   } catch (error) {
-    console.error('Error in history/filtered endpoint:', error);
+    logger.error('Error in history/filtered endpoint:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // Get single order by orderId (for delivery partner)
-router.get('/orders/:orderId', verifyDeliveryToken, async (req, res) => {
+router.get('/orders/:orderId', authenticateDeliveryBoy, async (req, res) => {
   try {
     const { orderId } = req.params;
     
@@ -954,7 +924,7 @@ router.get('/orders/:orderId', verifyDeliveryToken, async (req, res) => {
 });
 
 // Claim order (Mark as Ready) - First delivery boy to click gets the order
-router.post('/orders/:orderId/claim', verifyDeliveryToken, async (req, res) => {
+router.post('/orders/:orderId/claim', authenticateDeliveryBoy, async (req, res) => {
   try {
     const { orderId } = req.params;
     
@@ -1017,13 +987,13 @@ router.post('/orders/:orderId/claim', verifyDeliveryToken, async (req, res) => {
     
     res.json({ message: 'Order claimed successfully', order });
   } catch (error) {
-    console.error('Claim order error:', error);
+    logger.error('Claim order error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // Mark order as Ready (for orders already assigned by admin)
-router.post('/orders/:orderId/mark-ready', verifyDeliveryToken, async (req, res) => {
+router.post('/orders/:orderId/mark-ready', authenticateDeliveryBoy, async (req, res) => {
   try {
     const { orderId } = req.params;
     
@@ -1079,13 +1049,13 @@ router.post('/orders/:orderId/mark-ready', verifyDeliveryToken, async (req, res)
     
     res.json({ message: 'Order marked as ready', order });
   } catch (error) {
-    console.error('Mark ready error:', error);
+    logger.error('Mark ready error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // Update order status (Out for Delivery)
-router.post('/orders/:orderId/out-for-delivery', verifyDeliveryToken, async (req, res) => {
+router.post('/orders/:orderId/out-for-delivery', authenticateDeliveryBoy, async (req, res) => {
   try {
     const { orderId } = req.params;
     
@@ -1143,7 +1113,7 @@ router.post('/orders/:orderId/out-for-delivery', verifyDeliveryToken, async (req
 });
 
 // Mark order as Delivered
-router.post('/orders/:orderId/delivered', verifyDeliveryToken, async (req, res) => {
+router.post('/orders/:orderId/delivered', authenticateDeliveryBoy, async (req, res) => {
   try {
     const { orderId } = req.params;
     const { collectionMethod } = req.body; // 'cash' or 'upi' for COD orders
@@ -1252,7 +1222,7 @@ router.post('/orders/:orderId/delivered', verifyDeliveryToken, async (req, res) 
     
     // Update customer order history in Google Sheets (non-blocking)
     googleSheets.updateCustomerOrder(order.customer.phone, order, 'delivered').catch(err => {
-      console.error('Failed to update customer order in sheets:', err.message);
+      logger.error('Failed to update customer order in sheets:', err.message);
     });
     
     // INSTANT CLEANUP: Hide delivered order from dashboard immediately
@@ -1263,10 +1233,10 @@ router.post('/orders/:orderId/delivered', verifyDeliveryToken, async (req, res) 
           { orderId: order.orderId },
           { $set: { isHidden: true } }
         );
-        console.log(`🧹 Order ${order.orderId} hidden from dashboard (delivered by delivery partner)`);
+        logger.info(`🧹 Order ${order.orderId} hidden from dashboard (delivered by delivery partner)`);
         dataEvents.emit('orders');
       } catch (cleanupErr) {
-        console.error('Instant cleanup error:', cleanupErr.message);
+        logger.error('Instant cleanup error:', cleanupErr.message);
       }
     }, 3000); // 3 second delay to ensure sheets sync
     
@@ -1277,7 +1247,7 @@ router.post('/orders/:orderId/delivered', verifyDeliveryToken, async (req, res) 
 });
 
 // Generate QR code for COD payment collection
-router.post('/orders/:orderId/generate-qr', verifyDeliveryToken, async (req, res) => {
+router.post('/orders/:orderId/generate-qr', authenticateDeliveryBoy, async (req, res) => {
   try {
     const { orderId } = req.params;
     
@@ -1341,13 +1311,13 @@ router.post('/orders/:orderId/generate-qr', verifyDeliveryToken, async (req, res
       merchantVpa: merchantVpa || null
     });
   } catch (error) {
-    console.error('Generate QR error:', error);
+    logger.error('Generate QR error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // Check COD payment status
-router.get('/orders/:orderId/check-payment', verifyDeliveryToken, async (req, res) => {
+router.get('/orders/:orderId/check-payment', authenticateDeliveryBoy, async (req, res) => {
   try {
     const { orderId } = req.params;
     const { paymentLinkId } = req.query;
@@ -1443,11 +1413,11 @@ router.get('/orders/:orderId/check-payment', verifyDeliveryToken, async (req, re
         message: paymentLinkDetails.status === 'created' ? 'Waiting for payment...' : `Payment status: ${paymentLinkDetails.status}`
       });
     } catch (razorpayError) {
-      console.error('Razorpay fetch error:', razorpayError);
+      logger.error('Razorpay fetch error:', razorpayError);
       res.json({ status: 'pending', message: 'Checking payment status...' });
     }
   } catch (error) {
-    console.error('Check payment error:', error);
+    logger.error('Check payment error:', error);
     res.status(500).json({ error: error.message });
   }
 });

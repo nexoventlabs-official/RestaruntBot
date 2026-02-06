@@ -330,7 +330,8 @@ export default function Orders() {
     
     const connect = () => {
       const baseUrl = api.defaults.baseURL?.replace('/api', '') || '';
-      eventSource = new EventSource(`${baseUrl}/api/events`);
+      const token = localStorage.getItem('token');
+      eventSource = new EventSource(`${baseUrl}/api/events${token ? '?token=' + token : ''}`);
       
       eventSource.onopen = () => {
         sseConnected = true;

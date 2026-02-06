@@ -1,7 +1,12 @@
 const express = require('express');
+const logger = require('../services/logger');
 const router = express.Router();
 const whatsappBroadcast = require('../services/whatsappBroadcast');
 const authMiddleware = require('../middleware/auth');
+const { adminRateLimiter } = require('../middleware/rateLimiter');
+
+// Apply admin rate limiting
+router.use(adminRateLimiter);
 
 // Get all WhatsApp contacts
 router.get('/contacts', authMiddleware, async (req, res) => {
@@ -45,10 +50,10 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
       });
     }
 
-    console.log(`[WhatsApp Broadcast] Starting offer broadcast...`);
-    console.log(`[WhatsApp Broadcast] Offer: ${offerTitle || 'No title'}`);
-    console.log(`[WhatsApp Broadcast] Type: ${offerType || 'No type'}`);
-    console.log(`[WhatsApp Broadcast] Offer ID: ${offerId || 'None (all customers)'}`);
+    logger.info(`[WhatsApp Broadcast] Starting offer broadcast...`);
+    logger.info(`[WhatsApp Broadcast] Offer: ${offerTitle || 'No title'}`);
+    logger.info(`[WhatsApp Broadcast] Type: ${offerType || 'No type'}`);
+    logger.info(`[WhatsApp Broadcast] Offer ID: ${offerId || 'None (all customers)'}`);
 
     // Get targeting info if offerId is provided
     let targetedCustomers = null;
@@ -64,7 +69,7 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
         const isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(targetType);
         if (isTargeted && offer.targetedCustomers && offer.targetedCustomers.length > 0) {
           targetedCustomers = offer.targetedCustomers;
-          console.log(`[WhatsApp Broadcast] Targeting ${targetedCustomers.length} specific customers (${targetType})`);
+          logger.info(`[WhatsApp Broadcast] Targeting ${targetedCustomers.length} specific customers (${targetType})`);
           
           // Store full offer data for applying to customers
           offerData = {
@@ -80,7 +85,7 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
           };
         } else if (isTargeted && (!offer.targetedCustomers || offer.targetedCustomers.length === 0)) {
           // Targeted offer but no eligible customers
-          console.log(`[WhatsApp Broadcast] No eligible customers for ${targetType} targeting`);
+          logger.info(`[WhatsApp Broadcast] No eligible customers for ${targetType} targeting`);
           return res.json({
             success: false,
             message: 'No eligible customers found for this targeting criteria. Please adjust your targeting settings.',
@@ -103,7 +108,7 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
       offerData // Pass full offer data to apply to customers
     );
     
-    console.log('[WhatsApp Broadcast] Offer sending completed:', {
+    logger.info('[WhatsApp Broadcast] Offer sending completed:', {
       total: result.total,
       sent: result.sent,
       sentViaInteractive: result.sentViaInteractive,
@@ -169,7 +174,7 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[WhatsApp Broadcast] Error:', error);
+    logger.error('[WhatsApp Broadcast] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -186,14 +191,14 @@ router.post('/test-send', authMiddleware, async (req, res) => {
       });
     }
 
-    console.log(`[WhatsApp Broadcast] Testing offer send to ${phone}...`);
+    logger.info(`[WhatsApp Broadcast] Testing offer send to ${phone}...`);
 
     const result = await whatsappBroadcast.sendOfferToSingle(phone, offerImageUrl, offerTitle, offerDescription, offerType);
     
     res.json(result);
 
   } catch (error) {
-    console.error('[WhatsApp Broadcast] Test send error:', error);
+    logger.error('[WhatsApp Broadcast] Test send error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
