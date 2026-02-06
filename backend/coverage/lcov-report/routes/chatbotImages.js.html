@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/99</span>
+                <span class='fraction'>0/101</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/93</span>
+                <span class='fraction'>0/95</span>
             </div>
         
             
@@ -498,22 +498,27 @@
 <a name='L433'></a><a href='#L433'>433</a>
 <a name='L434'></a><a href='#L434'>434</a>
 <a name='L435'></a><a href='#L435'>435</a>
-<a name='L436'></a><a href='#L436'>436</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L436'></a><a href='#L436'>436</a>
+<a name='L437'></a><a href='#L437'>437</a>
+<a name='L438'></a><a href='#L438'>438</a>
+<a name='L439'></a><a href='#L439'>439</a>
+<a name='L440'></a><a href='#L440'>440</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -522,6 +527,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -934,6 +942,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const express = <span class="cstat-no" title="statement not covered" >require('express');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('../services/logger');</span>
 const router = <span class="cstat-no" title="statement not covered" >express.Router();</span>
 const ChatbotImage = <span class="cstat-no" title="statement not covered" >require('../models/ChatbotImage');</span>
 const cloudinaryService = <span class="cstat-no" title="statement not covered" >require('../services/cloudinary');</span>
@@ -957,6 +966,9 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
     }
   }
 });
+&nbsp;
+// Rate limiting for chatbot images routes
+<span class="cstat-no" title="statement not covered" >router.use(adminRateLimiter);</span>
 &nbsp;
 // Default images configuration (no URLs - admin must upload)
 const defaultImages = <span class="cstat-no" title="statement not covered" >[</span>
@@ -1207,12 +1219,12 @@ const defaultImages = <span class="cstat-no" title="statement not covered" >[</s
     
     // If no images exist, initialize all defaults
 <span class="cstat-no" title="statement not covered" >    if (images.length === 0) {</span>
-<span class="cstat-no" title="statement not covered" >      console.log('[Chatbot Images] No images found, initializing defaults...');</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('[Chatbot Images] No images found, initializing defaults...');</span>
 <span class="cstat-no" title="statement not covered" >      for (const img of defaultImages) {</span>
 <span class="cstat-no" title="statement not covered" >        try {</span>
 <span class="cstat-no" title="statement not covered" >          await ChatbotImage.create(img);</span>
         } catch (createErr) {
-<span class="cstat-no" title="statement not covered" >          console.error(`[Chatbot Images] Error creating ${img.key}:`, createErr.message);</span>
+<span class="cstat-no" title="statement not covered" >          logger.error(`[Chatbot Images] Error creating ${img.key}:`, createErr.message);</span>
         }
       }
 <span class="cstat-no" title="statement not covered" >      images = await ChatbotImage.find().sort('name');</span>
@@ -1222,13 +1234,13 @@ const defaultImages = <span class="cstat-no" title="statement not covered" >[</s
       const missingImages = <span class="cstat-no" title="statement not covered" >defaultImages.filter(<span class="fstat-no" title="function not covered" >im</span>g =&gt; <span class="cstat-no" title="statement not covered" >!existingKeys.includes(img.key))</span>;</span>
       
 <span class="cstat-no" title="statement not covered" >      if (missingImages.length &gt; 0) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`[Chatbot Images] Found ${missingImages.length} missing images, adding them...`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`[Chatbot Images] Found ${missingImages.length} missing images, adding them...`);</span>
 <span class="cstat-no" title="statement not covered" >        for (const img of missingImages) {</span>
 <span class="cstat-no" title="statement not covered" >          try {</span>
 <span class="cstat-no" title="statement not covered" >            await ChatbotImage.create(img);</span>
-<span class="cstat-no" title="statement not covered" >            console.log(`[Chatbot Images] Added missing image: ${img.key}`);</span>
+<span class="cstat-no" title="statement not covered" >            logger.info(`[Chatbot Images] Added missing image: ${img.key}`);</span>
           } catch (createErr) {
-<span class="cstat-no" title="statement not covered" >            console.error(`[Chatbot Images] Error creating ${img.key}:`, createErr.message);</span>
+<span class="cstat-no" title="statement not covered" >            logger.error(`[Chatbot Images] Error creating ${img.key}:`, createErr.message);</span>
             // Continue with other images even if one fails
           }
         }
@@ -1238,7 +1250,7 @@ const defaultImages = <span class="cstat-no" title="statement not covered" >[</s
     
 <span class="cstat-no" title="statement not covered" >    res.json(images);</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('[Chatbot Images] GET error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('[Chatbot Images] GET error:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
@@ -1278,7 +1290,7 @@ const defaultImages = <span class="cstat-no" title="statement not covered" >[</s
 <span class="cstat-no" title="statement not covered" >      try {</span>
 <span class="cstat-no" title="statement not covered" >        await cloudinaryService.deleteImage(chatbotImage.cloudinaryPublicId);</span>
       } catch (e) {
-<span class="cstat-no" title="statement not covered" >        console.log('Could not delete old image:', e.message);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('Could not delete old image:', e.message);</span>
       }
     }
 &nbsp;
@@ -1321,11 +1333,11 @@ const defaultImages = <span class="cstat-no" title="statement not covered" >[</s
 &nbsp;
     // Clear cache so new image is used immediately
 <span class="cstat-no" title="statement not covered" >    chatbotImagesService.clearCache();</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`[Chatbot Images] Cache cleared after uploading ${key}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`[Chatbot Images] Cache cleared after uploading ${key}`);</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    res.json(chatbotImage);</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Upload error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Upload error:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
@@ -1346,7 +1358,7 @@ const defaultImages = <span class="cstat-no" title="statement not covered" >[</s
 <span class="cstat-no" title="statement not covered" >      try {</span>
 <span class="cstat-no" title="statement not covered" >        await cloudinaryService.deleteImage(existing.cloudinaryPublicId);</span>
       } catch (e) {
-<span class="cstat-no" title="statement not covered" >        console.log('Could not delete image:', e.message);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('Could not delete image:', e.message);</span>
       }
     }
 &nbsp;
@@ -1359,7 +1371,7 @@ const defaultImages = <span class="cstat-no" title="statement not covered" >[</s
 &nbsp;
     // Clear cache so reset takes effect immediately
 <span class="cstat-no" title="statement not covered" >    chatbotImagesService.clearCache();</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`[Chatbot Images] Cache cleared after resetting ${key}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`[Chatbot Images] Cache cleared after resetting ${key}`);</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    res.json(chatbotImage);</span>
   } catch (error) {
@@ -1375,7 +1387,7 @@ const defaultImages = <span class="cstat-no" title="statement not covered" >[</s
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>

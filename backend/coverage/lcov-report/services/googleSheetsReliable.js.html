@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/76</span>
+                <span class='fraction'>0/77</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/75</span>
+                <span class='fraction'>0/76</span>
             </div>
         
             
@@ -292,7 +292,8 @@
 <a name='L227'></a><a href='#L227'>227</a>
 <a name='L228'></a><a href='#L228'>228</a>
 <a name='L229'></a><a href='#L229'>229</a>
-<a name='L230'></a><a href='#L230'>230</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -304,6 +305,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -534,6 +536,7 @@
  */
 &nbsp;
 const googleSheets = <span class="cstat-no" title="statement not covered" >require('./googleSheets');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('./logger');</span>
 const alerting = <span class="cstat-no" title="statement not covered" >require('./alerting');</span>
 const metricsRedis = <span class="cstat-no" title="statement not covered" >require('./metricsRedis');</span>
 &nbsp;
@@ -556,7 +559,7 @@ async function <span class="fstat-no" title="function not covered" >retryWithBac
 <span class="cstat-no" title="statement not covered" >      throw error;</span>
     }
     
-<span class="cstat-no" title="statement not covered" >    console.log(`⚠️ [Sheets Retry] Attempt failed, retrying in ${delay}ms... (${retries} retries left)`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`⚠️ [Sheets Retry] Attempt failed, retrying in ${delay}ms... (${retries} retries left)`);</span>
     
 <span class="cstat-no" title="statement not covered" >    await new Promise(<span class="fstat-no" title="function not covered" >re</span>solve =&gt; <span class="cstat-no" title="statement not covered" >setTimeout(resolve, delay))</span>;</span>
     
@@ -584,7 +587,7 @@ async function <span class="fstat-no" title="function not covered" >addOrderReli
     
 <span class="cstat-no" title="statement not covered" >    return result;</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [Sheets] Failed to add order after retries:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [Sheets] Failed to add order after retries:', error.message);</span>
     
     // Track error
     const errorKey = <span class="cstat-no" title="statement not covered" >`${operation}:${order.orderId}`;</span>
@@ -631,7 +634,7 @@ async function <span class="fstat-no" title="function not covered" >updateOrderR
     
 <span class="cstat-no" title="statement not covered" >    return result;</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [Sheets] Failed to update order after retries:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [Sheets] Failed to update order after retries:', error.message);</span>
     
     const errorKey = <span class="cstat-no" title="statement not covered" >`${operation}:${orderId}`;</span>
 <span class="cstat-no" title="statement not covered" >    syncErrors.set(errorKey, {</span>
@@ -663,7 +666,7 @@ async function <span class="fstat-no" title="function not covered" >addCustomerR
     
 <span class="cstat-no" title="statement not covered" >    return result;</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [Sheets] Failed to add customer after retries:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [Sheets] Failed to add customer after retries:', error.message);</span>
     
 <span class="cstat-no" title="statement not covered" >    await metricsRedis.recordEvent('sheets.customer.failure');</span>
     
@@ -676,11 +679,11 @@ async function <span class="fstat-no" title="function not covered" >addCustomerR
  */
 async function <span class="fstat-no" title="function not covered" >retryFailedSyncs(</span>) {
 <span class="cstat-no" title="statement not covered" >  if (syncErrors.size === 0) {</span>
-<span class="cstat-no" title="statement not covered" >    console.log('✅ [Sheets] No failed syncs to retry');</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('✅ [Sheets] No failed syncs to retry');</span>
 <span class="cstat-no" title="statement not covered" >    return { retried: 0, succeeded: 0, failed: 0 };</span>
   }
   
-<span class="cstat-no" title="statement not covered" >  console.log(`🔄 [Sheets] Retrying ${syncErrors.size} failed syncs...`);</span>
+<span class="cstat-no" title="statement not covered" >  logger.info(`🔄 [Sheets] Retrying ${syncErrors.size} failed syncs...`);</span>
   
   let succeeded = <span class="cstat-no" title="statement not covered" >0;</span>
   let failed = <span class="cstat-no" title="statement not covered" >0;</span>
@@ -690,10 +693,10 @@ async function <span class="fstat-no" title="function not covered" >retryFailedS
       // Retry based on operation type
 <span class="cstat-no" title="statement not covered" >      if (errorInfo.operation === 'addOrder') {</span>
         // Would need to fetch order from database
-<span class="cstat-no" title="statement not covered" >        console.log(`⏭️ [Sheets] Skipping retry for ${errorInfo.orderId} (needs manual intervention)`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`⏭️ [Sheets] Skipping retry for ${errorInfo.orderId} (needs manual intervention)`);</span>
 <span class="cstat-no" title="statement not covered" >        failed++;</span>
       } else <span class="cstat-no" title="statement not covered" >if (errorInfo.operation === 'updateOrder') {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`⏭️ [Sheets] Skipping retry for ${errorInfo.orderId} (needs manual intervention)`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`⏭️ [Sheets] Skipping retry for ${errorInfo.orderId} (needs manual intervention)`);</span>
 <span class="cstat-no" title="statement not covered" >        failed++;</span>
       }
       
@@ -701,7 +704,7 @@ async function <span class="fstat-no" title="function not covered" >retryFailedS
       // syncErrors.delete(key);
       // succeeded++;
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error(`❌ [Sheets] Retry failed for ${errorInfo.orderId}:`, error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error(`❌ [Sheets] Retry failed for ${errorInfo.orderId}:`, error.message);</span>
 <span class="cstat-no" title="statement not covered" >      failed++;</span>
     }
   }
@@ -735,7 +738,7 @@ function <span class="fstat-no" title="function not covered" >getSyncStatus(</sp
 function <span class="fstat-no" title="function not covered" >clearSyncErrors(</span>) {
   const count = <span class="cstat-no" title="statement not covered" >syncErrors.size;</span>
 <span class="cstat-no" title="statement not covered" >  syncErrors.clear();</span>
-<span class="cstat-no" title="statement not covered" >  console.log(`✅ [Sheets] Cleared ${count} sync errors`);</span>
+<span class="cstat-no" title="statement not covered" >  logger.info(`✅ [Sheets] Cleared ${count} sync errors`);</span>
 <span class="cstat-no" title="statement not covered" >  return count;</span>
 }
 &nbsp;
@@ -757,7 +760,7 @@ function <span class="fstat-no" title="function not covered" >clearSyncErrors(</
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>

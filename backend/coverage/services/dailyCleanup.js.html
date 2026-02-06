@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/162</span>
+                <span class='fraction'>0/157</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/154</span>
+                <span class='fraction'>0/149</span>
             </div>
         
             
@@ -377,16 +377,12 @@
 <a name='L312'></a><a href='#L312'>312</a>
 <a name='L313'></a><a href='#L313'>313</a>
 <a name='L314'></a><a href='#L314'>314</a>
-<a name='L315'></a><a href='#L315'>315</a>
-<a name='L316'></a><a href='#L316'>316</a>
-<a name='L317'></a><a href='#L317'>317</a>
-<a name='L318'></a><a href='#L318'>318</a>
-<a name='L319'></a><a href='#L319'>319</a>
-<a name='L320'></a><a href='#L320'>320</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L315'></a><a href='#L315'>315</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -630,14 +626,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -649,9 +642,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -706,6 +696,7 @@ const Customer = <span class="cstat-no" title="statement not covered" >require('
 const DashboardStats = <span class="cstat-no" title="statement not covered" >require('../models/DashboardStats');</span>
 const dataEvents = <span class="cstat-no" title="statement not covered" >require('./eventEmitter');</span>
 const googleSheets = <span class="cstat-no" title="statement not covered" >require('./googleSheets');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('./logger');</span>
 &nbsp;
 const RETENTION_DAYS = <span class="cstat-no" title="statement not covered" >15;</span> // Delete hidden orders after 15 days
 &nbsp;
@@ -743,7 +734,7 @@ const dailyCleanup = <span class="cstat-no" title="statement not covered" >{</sp
       
       // Only reset if it's a new day
 <span class="cstat-no" title="statement not covered" >      if (stats.todayDate !== today) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`🌙 Midnight reset - Previous day revenue: ₹${stats.todayRevenue}, orders: ${stats.todayOrders}`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('Midnight reset - Previous day stats', { revenue: stats.todayRevenue, orders: stats.todayOrders });</span>
         
         // Save yesterday's stats to Google Sheets daily_reports before resetting
         const yesterday = <span class="cstat-no" title="statement not covered" >new Date();</span>
@@ -821,16 +812,16 @@ const dailyCleanup = <span class="cstat-no" title="statement not covered" >{</sp
         
 <span class="cstat-no" title="statement not covered" >        await stats.save();</span>
         
-<span class="cstat-no" title="statement not covered" >        console.log(`✅ Today's stats reset for ${today}`);</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`📊 Yesterday's report saved to Google Sheets`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('Today stats reset', { date: today });</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('Yesterday report saved to Google Sheets');</span>
 <span class="cstat-no" title="statement not covered" >        dataEvents.emit('dashboard');</span>
         
         // Clean up empty date headers from Google Sheets
-<span class="cstat-no" title="statement not covered" >        console.log('📅 Cleaning up empty date headers from Google Sheets...');</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('Cleaning up empty date headers from Google Sheets...');</span>
 <span class="cstat-no" title="statement not covered" >        await googleSheets.cleanupEmptyDateHeaders();</span>
       }
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Error resetting today stats:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Error resetting today stats', { error: error.message });</span>
     }
   },
 &nbsp;
@@ -853,10 +844,10 @@ const dailyCleanup = <span class="cstat-no" title="statement not covered" >{</sp
 <span class="cstat-no" title="statement not covered" >      await googleSheets.updateDashboardStat('Total Orders', stats.totalOrders);</span>
 <span class="cstat-no" title="statement not covered" >      await googleSheets.updateDashboardStat('Total Revenue', stats.totalRevenue);</span>
       
-<span class="cstat-no" title="statement not covered" >      console.log(`📊 Saved stats: ${orders.length} orders, ₹${revenue} revenue`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('Saved stats', { orders: orders.length, revenue });</span>
 <span class="cstat-no" title="statement not covered" >      return stats;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Error saving order stats:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Error saving order stats', { error: error.message });</span>
     }
   },
 &nbsp;
@@ -871,10 +862,10 @@ const dailyCleanup = <span class="cstat-no" title="statement not covered" >{</sp
       // Also sync to Google Sheets
 <span class="cstat-no" title="statement not covered" >      await googleSheets.updateDashboardStat('Total Customers', stats.totalCustomers);</span>
       
-<span class="cstat-no" title="statement not covered" >      console.log(`📊 Saved stats: ${count} customers`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('Saved customer stats', { count });</span>
 <span class="cstat-no" title="statement not covered" >      return stats;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Error saving customer stats:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Error saving customer stats', { error: error.message });</span>
     }
   },
 &nbsp;
@@ -891,14 +882,14 @@ const dailyCleanup = <span class="cstat-no" title="statement not covered" >{</sp
       });
       
 <span class="cstat-no" title="statement not covered" >      if (result.deletedCount &gt; 0) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`🗑️ Permanently deleted ${result.deletedCount} hidden orders older than ${RETENTION_DAYS} days`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('Permanently deleted hidden orders', { count: result.deletedCount, retentionDays: RETENTION_DAYS });</span>
       } else {
-<span class="cstat-no" title="statement not covered" >        console.log(`📦 No hidden orders older than ${RETENTION_DAYS} days to delete`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('No hidden orders to delete', { retentionDays: RETENTION_DAYS });</span>
       }
       
 <span class="cstat-no" title="statement not covered" >      return result.deletedCount;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Error cleaning up old orders:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Error cleaning up old orders', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >      return 0;</span>
     }
   },
@@ -934,29 +925,26 @@ const dailyCleanup = <span class="cstat-no" title="statement not covered" >{</sp
       
 <span class="cstat-no" title="statement not covered" >      if (deletedCount &gt; 0) {</span>
 <span class="cstat-no" title="statement not covered" >        await this.saveCustomerStats(deletedCount);</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`🗑️ Deleted ${deletedCount} inactive customers`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('Deleted inactive customers', { count: deletedCount });</span>
       } else {
-<span class="cstat-no" title="statement not covered" >        console.log('👥 No inactive customers to clean up');</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('No inactive customers to clean up');</span>
       }
       
 <span class="cstat-no" title="statement not covered" >      return deletedCount;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Error cleaning up customers:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Error cleaning up customers', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >      return 0;</span>
     }
   },
 &nbsp;
   // Run daily cleanup
 <span class="fstat-no" title="function not covered" >  as</span>ync runCleanup() {
-<span class="cstat-no" title="statement not covered" >    console.log('🧹 Starting daily cleanup...');</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`📅 Deleting hidden orders older than ${RETENTION_DAYS} days`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('Starting daily cleanup...', { retentionDays: RETENTION_DAYS });</span>
     
     const ordersDeleted = <span class="cstat-no" title="statement not covered" >await this.cleanupOldOrders();</span>
     const customersDeleted = <span class="cstat-no" title="statement not covered" >await this.cleanupInactiveCustomers();</span>
     
-<span class="cstat-no" title="statement not covered" >    console.log('✅ Daily cleanup completed!');</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`   Hidden orders deleted: ${ordersDeleted}`);</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`   Inactive customers deleted: ${customersDeleted}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('Daily cleanup completed', { ordersDeleted, customersDeleted });</span>
     
 <span class="cstat-no" title="statement not covered" >    return { ordersDeleted, customersDeleted };</span>
   },
@@ -968,16 +956,13 @@ const dailyCleanup = <span class="cstat-no" title="statement not covered" >{</sp
 &nbsp;
   // Start the scheduler
 <span class="fstat-no" title="function not covered" >  st</span>art() {
-<span class="cstat-no" title="statement not covered" >    console.log(`📅 Daily cleanup scheduler started`);</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`   - Today's revenue resets at 12:00 AM`);</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`   - Empty date headers cleanup at 12:00 AM`);</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`   - Hidden orders deleted after ${RETENTION_DAYS} days`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('Daily cleanup scheduler started', { retentionDays: RETENTION_DAYS });</span>
     
     // Check every minute
 <span class="cstat-no" title="statement not covered" >    setInterval(<span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {</span>
       // Reset today's stats at midnight
 <span class="cstat-no" title="statement not covered" >      if (this.isMidnight()) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log('⏰ 12:00 AM - Resetting today\'s stats...');</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('12:00 AM - Resetting today stats...');</span>
 <span class="cstat-no" title="statement not covered" >        await this.resetTodayStats();</span>
       }
     }, 60 * 1000); // Check every minute
@@ -986,11 +971,11 @@ const dailyCleanup = <span class="cstat-no" title="statement not covered" >{</sp
 <span class="cstat-no" title="statement not covered" >    setInterval(<span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {</span>
       const now = <span class="cstat-no" title="statement not covered" >new Date();</span>
 <span class="cstat-no" title="statement not covered" >      if (now.getHours() === 2 &amp;&amp; now.getMinutes() === 0) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log('⏰ 2:00 AM - Running data cleanup...');</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('2:00 AM - Running data cleanup...');</span>
 <span class="cstat-no" title="statement not covered" >        try {</span>
 <span class="cstat-no" title="statement not covered" >          await this.runCleanup();</span>
         } catch (error) {
-<span class="cstat-no" title="statement not covered" >          console.error('Daily cleanup failed:', error);</span>
+<span class="cstat-no" title="statement not covered" >          logger.error('Daily cleanup failed', { error: error.message, stack: error.stack });</span>
         }
       }
     }, 60 * 1000);
@@ -1011,10 +996,10 @@ const dailyCleanup = <span class="cstat-no" title="statement not covered" >{</sp
 <span class="cstat-no" title="statement not covered" >        stats.todayOrders = 0;</span>
 <span class="cstat-no" title="statement not covered" >        stats.todayDate = today;</span>
 <span class="cstat-no" title="statement not covered" >        await stats.save();</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`📊 Initialized today's stats for ${today}`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('Initialized today stats', { date: today });</span>
       }
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Error initializing today stats:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Error initializing today stats', { error: error.message });</span>
     }
   }
 };
@@ -1027,7 +1012,7 @@ const dailyCleanup = <span class="cstat-no" title="statement not covered" >{</sp
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.865Z
+                at 2026-02-06T08:02:54.748Z
             </div>
         <script src="../prettify.js"></script>
         <script>

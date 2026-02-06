@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/55</span>
+                <span class='fraction'>0/56</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/55</span>
+                <span class='fraction'>0/56</span>
             </div>
         
             
@@ -273,7 +273,9 @@
 <a name='L208'></a><a href='#L208'>208</a>
 <a name='L209'></a><a href='#L209'>209</a>
 <a name='L210'></a><a href='#L210'>210</a>
-<a name='L211'></a><a href='#L211'>211</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -484,6 +486,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const SibApiV3Sdk = <span class="cstat-no" title="statement not covered" >require('sib-api-v3-sdk');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('./logger');</span>
 &nbsp;
 const defaultClient = <span class="cstat-no" title="statement not covered" >SibApiV3Sdk.ApiClient.instance;</span>
 const apiKey = <span class="cstat-no" title="statement not covered" >defaultClient.authentications['api-key'];</span>
@@ -512,7 +515,7 @@ const brevoMail = <span class="cstat-no" title="statement not covered" >{</span>
 <span class="cstat-no" title="statement not covered" >      await apiInstance.sendTransacEmail(sendSmtpEmail);</span>
 <span class="cstat-no" title="statement not covered" >      return true;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Brevo email error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Brevo email error:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >      return false;</span>
     }
   },
@@ -583,10 +586,10 @@ const brevoMail = <span class="cstat-no" title="statement not covered" >{</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    try {</span>
 <span class="cstat-no" title="statement not covered" >      await apiInstance.sendTransacEmail(sendSmtpEmail);</span>
-<span class="cstat-no" title="statement not covered" >      console.log(`📧 Delivery notification email sent to ${email}`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`📧 Delivery notification email sent to ${email}`);</span>
 <span class="cstat-no" title="statement not covered" >      return true;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Brevo delivery notification email error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Brevo delivery notification email error:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >      return false;</span>
     }
   },
@@ -607,7 +610,7 @@ const brevoMail = <span class="cstat-no" title="statement not covered" >{</span>
 <span class="cstat-no" title="statement not covered" >      await apiInstance.sendTransacEmail(sendSmtpEmail);</span>
 <span class="cstat-no" title="statement not covered" >      return true;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Brevo email error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Brevo email error:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >      return false;</span>
     }
   },
@@ -683,10 +686,10 @@ const brevoMail = <span class="cstat-no" title="statement not covered" >{</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    try {</span>
 <span class="cstat-no" title="statement not covered" >      await apiInstance.sendTransacEmail(sendSmtpEmail);</span>
-<span class="cstat-no" title="statement not covered" >      console.log(`📧 Report email sent to ${email}`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`📧 Report email sent to ${email}`);</span>
 <span class="cstat-no" title="statement not covered" >      return true;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Brevo report email error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Brevo report email error:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >      throw error;</span>
     }
   }
@@ -700,7 +703,7 @@ const brevoMail = <span class="cstat-no" title="statement not covered" >{</span>
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>

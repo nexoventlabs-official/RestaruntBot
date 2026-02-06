@@ -476,17 +476,17 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const express = <span class="cstat-no" title="statement not covered" >require('express');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('../services/logger');</span>
 const router = <span class="cstat-no" title="statement not covered" >express.Router();</span>
 const whatsappBroadcast = <span class="cstat-no" title="statement not covered" >require('../services/whatsappBroadcast');</span>
 const authMiddleware = <span class="cstat-no" title="statement not covered" >require('../middleware/auth');</span>
-const { authorizeAdmin } = <span class="cstat-no" title="statement not covered" >require('../middleware/authorize');</span>
 const { adminRateLimiter } = <span class="cstat-no" title="statement not covered" >require('../middleware/rateLimiter');</span>
 &nbsp;
 // Apply admin rate limiting
 <span class="cstat-no" title="statement not covered" >router.use(adminRateLimiter);</span>
 &nbsp;
 // Get all WhatsApp contacts
-<span class="cstat-no" title="statement not covered" >router.get('/contacts', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >router.get('/contacts', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const contacts = <span class="cstat-no" title="statement not covered" >await whatsappBroadcast.getAllContacts();</span>
 <span class="cstat-no" title="statement not covered" >    res.json({ success: true, contacts });</span>
@@ -495,8 +495,8 @@ const { adminRateLimiter } = <span class="cstat-no" title="statement not covered
   }
 });
 &nbsp;
-// Get WhatsApp contacts statistics (admin only)
-<span class="cstat-no" title="statement not covered" >router.get('/stats', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+// Get WhatsApp contacts statistics
+<span class="cstat-no" title="statement not covered" >router.get('/stats', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const stats = <span class="cstat-no" title="statement not covered" >await whatsappBroadcast.getStats();</span>
 <span class="cstat-no" title="statement not covered" >    res.json({ success: true, stats });</span>
@@ -505,8 +505,8 @@ const { adminRateLimiter } = <span class="cstat-no" title="statement not covered
   }
 });
 &nbsp;
-// Sync existing customers to WhatsApp contacts (admin only)
-<span class="cstat-no" title="statement not covered" >router.post('/sync', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+// Sync existing customers to WhatsApp contacts
+<span class="cstat-no" title="statement not covered" >router.post('/sync', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const result = <span class="cstat-no" title="statement not covered" >await whatsappBroadcast.syncExistingCustomers();</span>
 <span class="cstat-no" title="statement not covered" >    res.json(result);</span>
@@ -515,8 +515,8 @@ const { adminRateLimiter } = <span class="cstat-no" title="statement not covered
   }
 });
 &nbsp;
-// Send offer to WhatsApp contacts (admin only - supports targeting)
-<span class="cstat-no" title="statement not covered" >router.post('/send-offer', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+// Send offer to WhatsApp contacts (supports targeting)
+<span class="cstat-no" title="statement not covered" >router.post('/send-offer', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { offerImageUrl, offerTitle, offerDescription, offerType, offerId } = <span class="cstat-no" title="statement not covered" >req.body;</span>
     
@@ -527,10 +527,10 @@ const { adminRateLimiter } = <span class="cstat-no" title="statement not covered
       });
     }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    console.log(`[WhatsApp Broadcast] Starting offer broadcast...`);</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`[WhatsApp Broadcast] Offer: ${offerTitle || 'No title'}`);</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`[WhatsApp Broadcast] Type: ${offerType || 'No type'}`);</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`[WhatsApp Broadcast] Offer ID: ${offerId || 'None (all customers)'}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`[WhatsApp Broadcast] Starting offer broadcast...`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`[WhatsApp Broadcast] Offer: ${offerTitle || 'No title'}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`[WhatsApp Broadcast] Type: ${offerType || 'No type'}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`[WhatsApp Broadcast] Offer ID: ${offerId || 'None (all customers)'}`);</span>
 &nbsp;
     // Get targeting info if offerId is provided
     let targetedCustomers = <span class="cstat-no" title="statement not covered" >null;</span>
@@ -546,7 +546,7 @@ const { adminRateLimiter } = <span class="cstat-no" title="statement not covered
         const isTargeted = <span class="cstat-no" title="statement not covered" >['top_percentage', 'min_spent', 'min_orders'].includes(targetType);</span>
 <span class="cstat-no" title="statement not covered" >        if (isTargeted &amp;&amp; offer.targetedCustomers &amp;&amp; offer.targetedCustomers.length &gt; 0) {</span>
 <span class="cstat-no" title="statement not covered" >          targetedCustomers = offer.targetedCustomers;</span>
-<span class="cstat-no" title="statement not covered" >          console.log(`[WhatsApp Broadcast] Targeting ${targetedCustomers.length} specific customers (${targetType})`);</span>
+<span class="cstat-no" title="statement not covered" >          logger.info(`[WhatsApp Broadcast] Targeting ${targetedCustomers.length} specific customers (${targetType})`);</span>
           
           // Store full offer data for applying to customers
 <span class="cstat-no" title="statement not covered" >          offerData = {</span>
@@ -562,7 +562,7 @@ const { adminRateLimiter } = <span class="cstat-no" title="statement not covered
           };
         } else <span class="cstat-no" title="statement not covered" >if (isTargeted &amp;&amp; (!offer.targetedCustomers || offer.targetedCustomers.length === 0)) {</span>
           // Targeted offer but no eligible customers
-<span class="cstat-no" title="statement not covered" >          console.log(`[WhatsApp Broadcast] No eligible customers for ${targetType} targeting`);</span>
+<span class="cstat-no" title="statement not covered" >          logger.info(`[WhatsApp Broadcast] No eligible customers for ${targetType} targeting`);</span>
 <span class="cstat-no" title="statement not covered" >          return res.json({</span>
             success: false,
             message: 'No eligible customers found for this targeting criteria. Please adjust your targeting settings.',
@@ -585,7 +585,7 @@ const { adminRateLimiter } = <span class="cstat-no" title="statement not covered
       offerData // Pass full offer data to apply to customers
     );
     
-<span class="cstat-no" title="statement not covered" >    console.log('[WhatsApp Broadcast] Offer sending completed:', {</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('[WhatsApp Broadcast] Offer sending completed:', {</span>
       total: result.total,
       sent: result.sent,
       sentViaInteractive: result.sentViaInteractive,
@@ -651,13 +651,13 @@ const { adminRateLimiter } = <span class="cstat-no" title="statement not covered
     });
 &nbsp;
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('[WhatsApp Broadcast] Error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('[WhatsApp Broadcast] Error:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ success: false, error: error.message });</span>
   }
 });
 &nbsp;
-// Test send offer to a single phone number (admin only)
-<span class="cstat-no" title="statement not covered" >router.post('/test-send', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+// Test send offer to a single phone number
+<span class="cstat-no" title="statement not covered" >router.post('/test-send', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { phone, offerImageUrl, offerTitle, offerDescription, offerType } = <span class="cstat-no" title="statement not covered" >req.body;</span>
     
@@ -668,14 +668,14 @@ const { adminRateLimiter } = <span class="cstat-no" title="statement not covered
       });
     }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    console.log(`[WhatsApp Broadcast] Testing offer send to ${phone}...`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`[WhatsApp Broadcast] Testing offer send to ${phone}...`);</span>
 &nbsp;
     const result = <span class="cstat-no" title="statement not covered" >await whatsappBroadcast.sendOfferToSingle(phone, offerImageUrl, offerTitle, offerDescription, offerType);</span>
     
 <span class="cstat-no" title="statement not covered" >    res.json(result);</span>
 &nbsp;
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('[WhatsApp Broadcast] Test send error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('[WhatsApp Broadcast] Test send error:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ success: false, error: error.message });</span>
   }
 });
@@ -688,7 +688,7 @@ const { adminRateLimiter } = <span class="cstat-no" title="statement not covered
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>

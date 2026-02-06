@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">6.02% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/82</span>
+                <span class='fraction'>5/83</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">6.09% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/81</span>
+                <span class='fraction'>5/82</span>
             </div>
         
             
@@ -320,7 +320,8 @@
 <a name='L255'></a><a href='#L255'>255</a>
 <a name='L256'></a><a href='#L256'>256</a>
 <a name='L257'></a><a href='#L257'>257</a>
-<a name='L258'></a><a href='#L258'>258</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L258'></a><a href='#L258'>258</a>
+<a name='L259'></a><a href='#L259'>259</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -337,6 +338,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -471,9 +473,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -538,11 +540,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -571,7 +573,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -594,6 +596,7 @@
  */
 function <span class="fstat-no" title="function not covered" >validateMetaWebhook(</span>req, res, next) {
   const payload = <span class="cstat-no" title="statement not covered" >req.body;</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('../services/logger');</span>
   
   // Check root structure
 <span class="cstat-no" title="statement not covered" >  if (!payload || typeof payload !== 'object') {</span>
@@ -693,7 +696,7 @@ function <span class="fstat-no" title="function not covered" >validateMetaWebhoo
   }
   
   // Payload is valid
-<span class="cstat-no" title="statement not covered" >  console.log('✅ Webhook payload validated');</span>
+<span class="cstat-no" title="statement not covered" >  logger.info('✅ Webhook payload validated');</span>
 <span class="cstat-no" title="statement not covered" >  next();</span>
 }
 &nbsp;
@@ -728,9 +731,9 @@ function <span class="fstat-no" title="function not covered" >sanitizeWebhookPay
  * Rate limiting per phone number
  * Prevents spam from single phone number
  */
-const phoneRateLimits = <span class="cstat-no" title="statement not covered" >new Map();</span>
-const RATE_LIMIT_WINDOW = <span class="cstat-no" title="statement not covered" >60 * 1000;</span> // 1 minute
-const MAX_MESSAGES_PER_WINDOW = <span class="cstat-no" title="statement not covered" >20;</span>
+const phoneRateLimits = new Map();
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const MAX_MESSAGES_PER_WINDOW = 20;
 &nbsp;
 function <span class="fstat-no" title="function not covered" >rateLimitByPhone(</span>req, res, next) {
 <span class="cstat-no" title="statement not covered" >  try {</span>
@@ -774,7 +777,7 @@ function <span class="fstat-no" title="function not covered" >rateLimitByPhone(<
       
       // Check if exceeded
 <span class="cstat-no" title="statement not covered" >      if (limit.count &gt; MAX_MESSAGES_PER_WINDOW) {</span>
-<span class="cstat-no" title="statement not covered" >        console.warn(`⚠️ Rate limit exceeded for phone ${phone}: ${limit.count} messages in window`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.warn(`⚠️ Rate limit exceeded for phone ${phone}: ${limit.count} messages in window`);</span>
         
 <span class="cstat-no" title="statement not covered" >        return res.status(429).json({</span>
           error: 'Rate limit exceeded',
@@ -788,14 +791,14 @@ function <span class="fstat-no" title="function not covered" >rateLimitByPhone(<
 <span class="cstat-no" title="statement not covered" >    next();</span>
     
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ Rate limit check error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ Rate limit check error:', error);</span>
     // Don't block on rate limit errors
 <span class="cstat-no" title="statement not covered" >    next();</span>
   }
 }
 &nbsp;
 // Clean expired rate limits every minute
-<span class="cstat-no" title="statement not covered" >setInterval(<span class="fstat-no" title="function not covered" >()</span> =&gt; {</span>
+setInterval(<span class="fstat-no" title="function not covered" >()</span> =&gt; {
   const now = <span class="cstat-no" title="statement not covered" >Date.now();</span>
 <span class="cstat-no" title="statement not covered" >  for (const [phone, limit] of phoneRateLimits.entries()) {</span>
 <span class="cstat-no" title="statement not covered" >    if (now - limit.windowStart &gt; RATE_LIMIT_WINDOW * 2) {</span>
@@ -828,7 +831,7 @@ function <span class="fstat-no" title="function not covered" >getRateLimitStats(
 <span class="cstat-no" title="statement not covered" >  return stats;</span>
 }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >module.exports = {</span>
+module.exports = {
   validateMetaWebhook,
   sanitizeWebhookPayload,
   rateLimitByPhone,
@@ -841,7 +844,7 @@ function <span class="fstat-no" title="function not covered" >getRateLimitStats(
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>

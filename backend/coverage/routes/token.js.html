@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/38</span>
+                <span class='fraction'>0/41</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/38</span>
+                <span class='fraction'>0/41</span>
             </div>
         
             
@@ -204,7 +204,12 @@
 <a name='L139'></a><a href='#L139'>139</a>
 <a name='L140'></a><a href='#L140'>140</a>
 <a name='L141'></a><a href='#L141'>141</a>
-<a name='L142'></a><a href='#L142'>142</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -212,6 +217,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -352,8 +362,13 @@
  */
 &nbsp;
 const express = <span class="cstat-no" title="statement not covered" >require('express');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('../services/logger');</span>
 const router = <span class="cstat-no" title="statement not covered" >express.Router();</span>
 const jwtRefresh = <span class="cstat-no" title="statement not covered" >require('../services/jwtRefresh');</span>
+const { authRateLimiter } = <span class="cstat-no" title="statement not covered" >require('../middleware/rateLimiter');</span>
+&nbsp;
+// Rate limiting for token routes
+<span class="cstat-no" title="statement not covered" >router.use(authRateLimiter);</span>
 const { body } = <span class="cstat-no" title="statement not covered" >require('express-validator');</span>
 const { handleValidationErrors } = <span class="cstat-no" title="statement not covered" >require('../middleware/inputValidation');</span>
 const authenticate = <span class="cstat-no" title="statement not covered" >require('../middleware/authenticate');</span>
@@ -382,7 +397,7 @@ const authenticate = <span class="cstat-no" title="statement not covered" >requi
       data: tokens
     });
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Token refresh error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Token refresh error:', error.message);</span>
     
 <span class="cstat-no" title="statement not covered" >    res.status(401).json({</span>
       success: false,
@@ -419,7 +434,7 @@ const authenticate = <span class="cstat-no" title="statement not covered" >requi
       });
     }
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Token revoke error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Token revoke error:', error.message);</span>
     
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({</span>
       success: false,
@@ -445,7 +460,7 @@ const authenticate = <span class="cstat-no" title="statement not covered" >requi
       data: { revokedCount }
     });
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Revoke all tokens error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Revoke all tokens error:', error.message);</span>
     
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({</span>
       success: false,
@@ -476,7 +491,7 @@ const authenticate = <span class="cstat-no" title="statement not covered" >requi
       data: stats
     });
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Token stats error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Token stats error:', error.message);</span>
     
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({</span>
       success: false,
@@ -493,7 +508,7 @@ const authenticate = <span class="cstat-no" title="statement not covered" >requi
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.865Z
+                at 2026-02-06T08:02:54.748Z
             </div>
         <script src="../prettify.js"></script>
         <script>

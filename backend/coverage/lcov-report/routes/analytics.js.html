@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/265</span>
+                <span class='fraction'>0/266</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/248</span>
+                <span class='fraction'>0/249</span>
             </div>
         
             
@@ -806,7 +806,9 @@
 <a name='L741'></a><a href='#L741'>741</a>
 <a name='L742'></a><a href='#L742'>742</a>
 <a name='L743'></a><a href='#L743'>743</a>
-<a name='L744'></a><a href='#L744'>744</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L744'></a><a href='#L744'>744</a>
+<a name='L745'></a><a href='#L745'>745</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1550,6 +1552,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const express = <span class="cstat-no" title="statement not covered" >require('express');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('../services/logger');</span>
 const Order = <span class="cstat-no" title="statement not covered" >require('../models/Order');</span>
 const Customer = <span class="cstat-no" title="statement not covered" >require('../models/Customer');</span>
 const MenuItem = <span class="cstat-no" title="statement not covered" >require('../models/MenuItem');</span>
@@ -1597,7 +1600,7 @@ const trackTodayRevenue = <span class="cstat-no" title="statement not covered" >
     
 <span class="cstat-no" title="statement not covered" >    return stats;</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Error tracking today revenue:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Error tracking today revenue:', error.message);</span>
   }
 };
 &nbsp;
@@ -2083,7 +2086,7 @@ const trackTodayRevenue = <span class="cstat-no" title="statement not covered" >
       revenueTrend
     });
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Report error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Report error:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
@@ -2153,7 +2156,7 @@ const trackTodayRevenue = <span class="cstat-no" title="statement not covered" >
 <span class="cstat-no" title="statement not covered" >    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);</span>
 <span class="cstat-no" title="statement not covered" >    res.send(pdfBuffer);</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('PDF generation error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('PDF generation error:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
@@ -2193,7 +2196,7 @@ const trackTodayRevenue = <span class="cstat-no" title="statement not covered" >
     
 <span class="cstat-no" title="statement not covered" >    res.json({ success: true, message: `Report sent to ${reportEmail}` });</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Email send error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Email send error:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
@@ -2267,7 +2270,7 @@ const trackTodayRevenue = <span class="cstat-no" title="statement not covered" >
         plan: cloudinaryUsage.plan || 'Free'
       };
     } catch (cloudinaryError) {
-<span class="cstat-no" title="statement not covered" >      console.error('Cloudinary usage fetch error:', cloudinaryError.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Cloudinary usage fetch error:', cloudinaryError.message);</span>
 <span class="cstat-no" title="statement not covered" >      cloudinaryStats = { error: 'Unable to fetch Cloudinary stats' };</span>
     }
     
@@ -2286,7 +2289,7 @@ const trackTodayRevenue = <span class="cstat-no" title="statement not covered" >
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Storage stats error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Storage stats error:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
@@ -2299,7 +2302,7 @@ const trackTodayRevenue = <span class="cstat-no" title="statement not covered" >
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>

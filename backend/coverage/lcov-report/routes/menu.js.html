@@ -484,9 +484,9 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -888,18 +888,18 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const express = <span class="cstat-no" title="statement not covered" >require('express');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('../services/logger');</span>
 const MenuItem = <span class="cstat-no" title="statement not covered" >require('../models/MenuItem');</span>
 const authMiddleware = <span class="cstat-no" title="statement not covered" >require('../middleware/auth');</span>
 const cloudinaryService = <span class="cstat-no" title="statement not covered" >require('../services/cloudinary');</span>
 const dataEvents = <span class="cstat-no" title="statement not covered" >require('../services/eventEmitter');</span>
-const { adminRateLimiter } = <span class="cstat-no" title="statement not covered" >require('../middleware/rateLimiter');</span>
-const { validators, sanitizeInputs } = <span class="cstat-no" title="statement not covered" >require('../middleware/inputValidation');</span>
 const multer = <span class="cstat-no" title="statement not covered" >require('multer');</span>
+const { publicRateLimiter } = <span class="cstat-no" title="statement not covered" >require('../middleware/rateLimiter');</span>
+const { validators } = <span class="cstat-no" title="statement not covered" >require('../middleware/inputValidation');</span>
 const router = <span class="cstat-no" title="statement not covered" >express.Router();</span>
 &nbsp;
-// Apply admin rate limiting and input sanitization
-<span class="cstat-no" title="statement not covered" >router.use(adminRateLimiter);</span>
-<span class="cstat-no" title="statement not covered" >router.use(sanitizeInputs);</span>
+// Rate limiting for public menu routes
+<span class="cstat-no" title="statement not covered" >router.use(publicRateLimiter);</span>
 &nbsp;
 // Configure multer for memory storage
 const upload = <span class="cstat-no" title="statement not covered" >multer({</span>
@@ -1108,7 +1108,7 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
           const publicId = <span class="cstat-no" title="statement not covered" >cloudinaryService.extractPublicId(existingItem.image);</span>
 <span class="cstat-no" title="statement not covered" >          if (publicId) <span class="cstat-no" title="statement not covered" >await cloudinaryService.deleteImage(publicId);</span></span>
         } catch (e) {
-<span class="cstat-no" title="statement not covered" >          console.log('Could not delete old image:', e.message);</span>
+<span class="cstat-no" title="statement not covered" >          logger.info('Could not delete old image:', e.message);</span>
         }
       }
 <span class="cstat-no" title="statement not covered" >      imageUrl = null;</span>
@@ -1121,7 +1121,7 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
           const publicId = <span class="cstat-no" title="statement not covered" >cloudinaryService.extractPublicId(existingItem.image);</span>
 <span class="cstat-no" title="statement not covered" >          if (publicId) <span class="cstat-no" title="statement not covered" >await cloudinaryService.deleteImage(publicId);</span></span>
         } catch (e) {
-<span class="cstat-no" title="statement not covered" >          console.log('Could not delete old image:', e.message);</span>
+<span class="cstat-no" title="statement not covered" >          logger.info('Could not delete old image:', e.message);</span>
         }
       }
 <span class="cstat-no" title="statement not covered" >      imageUrl = await cloudinaryService.uploadFromBuffer(req.file.buffer, 'restaurant-bot/menu-items');</span>
@@ -1181,7 +1181,7 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
         const publicId = <span class="cstat-no" title="statement not covered" >cloudinaryService.extractPublicId(item.image);</span>
 <span class="cstat-no" title="statement not covered" >        if (publicId) <span class="cstat-no" title="statement not covered" >await cloudinaryService.deleteImage(publicId);</span></span>
       } catch (e) {
-<span class="cstat-no" title="statement not covered" >        console.log('Could not delete image:', e.message);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('Could not delete image:', e.message);</span>
       }
     }
     
@@ -1306,7 +1306,7 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>

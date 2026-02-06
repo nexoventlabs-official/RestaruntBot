@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/19</span>
+                <span class='fraction'>0/20</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/19</span>
+                <span class='fraction'>0/20</span>
             </div>
         
             
@@ -117,13 +117,15 @@
 <a name='L52'></a><a href='#L52'>52</a>
 <a name='L53'></a><a href='#L53'>53</a>
 <a name='L54'></a><a href='#L54'>54</a>
-<a name='L55'></a><a href='#L55'>55</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -179,6 +181,7 @@
  */
 &nbsp;
 const cron = <span class="cstat-no" title="statement not covered" >require('node-cron');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('./logger');</span>
 const messageProcessor = <span class="cstat-no" title="statement not covered" >require('./messageProcessor');</span>
 &nbsp;
 let schedulerTask = <span class="cstat-no" title="statement not covered" >null;</span>
@@ -188,26 +191,26 @@ let schedulerTask = <span class="cstat-no" title="statement not covered" >null;<
  */
 function <span class="fstat-no" title="function not covered" >start(</span>) {
 <span class="cstat-no" title="statement not covered" >  if (schedulerTask) {</span>
-<span class="cstat-no" title="statement not covered" >    console.log('⚠️ [RetryScheduler] Already running');</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('⚠️ [RetryScheduler] Already running');</span>
 <span class="cstat-no" title="statement not covered" >    return;</span>
   }
   
   // Run every 5 minutes
 <span class="cstat-no" title="statement not covered" >  schedulerTask = cron.schedule('*/5 * * * *', <span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >    console.log('🔄 [RetryScheduler] Running retry job...');</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('🔄 [RetryScheduler] Running retry job...');</span>
     
 <span class="cstat-no" title="statement not covered" >    try {</span>
       const result = <span class="cstat-no" title="statement not covered" >await messageProcessor.retryFailedMessages(3, 10);</span>
       
 <span class="cstat-no" title="statement not covered" >      if (result.retried &gt; 0) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`✅ [RetryScheduler] Completed: ${result.succeeded} succeeded, ${result.failed} failed`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`✅ [RetryScheduler] Completed: ${result.succeeded} succeeded, ${result.failed} failed`);</span>
       }
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ [RetryScheduler] Error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('❌ [RetryScheduler] Error:', error.message);</span>
     }
   });
   
-<span class="cstat-no" title="statement not covered" >  console.log('✅ [RetryScheduler] Started - running every 5 minutes');</span>
+<span class="cstat-no" title="statement not covered" >  logger.info('✅ [RetryScheduler] Started - running every 5 minutes');</span>
 }
 &nbsp;
 /**
@@ -217,7 +220,7 @@ function <span class="fstat-no" title="function not covered" >stop(</span>) {
 <span class="cstat-no" title="statement not covered" >  if (schedulerTask) {</span>
 <span class="cstat-no" title="statement not covered" >    schedulerTask.stop();</span>
 <span class="cstat-no" title="statement not covered" >    schedulerTask = null;</span>
-<span class="cstat-no" title="statement not covered" >    console.log('🛑 [RetryScheduler] Stopped');</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('🛑 [RetryScheduler] Stopped');</span>
   }
 }
 &nbsp;
@@ -232,7 +235,7 @@ function <span class="fstat-no" title="function not covered" >stop(</span>) {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.865Z
+                at 2026-02-06T08:02:54.748Z
             </div>
         <script src="../prettify.js"></script>
         <script>

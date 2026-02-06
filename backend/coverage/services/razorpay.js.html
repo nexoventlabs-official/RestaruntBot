@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/74</span>
+                <span class='fraction'>0/75</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/72</span>
+                <span class='fraction'>0/73</span>
             </div>
         
             
@@ -260,7 +260,9 @@
 <a name='L195'></a><a href='#L195'>195</a>
 <a name='L196'></a><a href='#L196'>196</a>
 <a name='L197'></a><a href='#L197'>197</a>
-<a name='L198'></a><a href='#L198'>198</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -458,6 +460,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const Razorpay = <span class="cstat-no" title="statement not covered" >require('razorpay');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('./logger');</span>
 &nbsp;
 let razorpay = <span class="cstat-no" title="statement not covered" >null;</span>
 let lastKeyId = <span class="cstat-no" title="statement not covered" >null;</span>
@@ -470,7 +473,7 @@ const getRazorpay = <span class="cstat-no" title="statement not covered" ><span 
       key_secret: process.env.RAZORPAY_KEY_SECRET
     });
 <span class="cstat-no" title="statement not covered" >    lastKeyId = process.env.RAZORPAY_KEY_ID;</span>
-<span class="cstat-no" title="statement not covered" >    console.log('🔑 Razorpay instance created/refreshed');</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('🔑 Razorpay instance created/refreshed');</span>
   }
 <span class="cstat-no" title="statement not covered" >  return razorpay;</span>
 };
@@ -487,7 +490,7 @@ const razorpayService = <span class="cstat-no" title="statement not covered" >{<
       const order = <span class="cstat-no" title="statement not covered" >await getRazorpay().orders.create(options);</span>
 <span class="cstat-no" title="statement not covered" >      return order;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Razorpay create order error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Razorpay create order error:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >      throw error;</span>
     }
   },
@@ -502,11 +505,11 @@ const razorpayService = <span class="cstat-no" title="statement not covered" >{<
       }
       // Ensure it's 10 digits
 <span class="cstat-no" title="statement not covered" >      if (cleanPhone.length !== 10) {</span>
-<span class="cstat-no" title="statement not covered" >        console.error('Invalid phone number length:', cleanPhone.length, 'Phone:', customerPhone);</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('Invalid phone number length:', cleanPhone.length, 'Phone:', customerPhone);</span>
       }
       const formattedPhone = <span class="cstat-no" title="statement not covered" >'+91' + cleanPhone;</span>
       
-<span class="cstat-no" title="statement not covered" >      console.log('Creating Razorpay payment link:', { </span>
+<span class="cstat-no" title="statement not covered" >      logger.info('Creating Razorpay payment link:', { </span>
         amount, 
         orderId, 
         originalPhone: customerPhone,
@@ -530,13 +533,13 @@ const razorpayService = <span class="cstat-no" title="statement not covered" >{<
         callback_method: 'get'
       };
       
-<span class="cstat-no" title="statement not covered" >      console.log('Payment link options:', JSON.stringify(paymentLinkOptions, null, 2));</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('Payment link options:', JSON.stringify(paymentLinkOptions, null, 2));</span>
       
       const paymentLink = <span class="cstat-no" title="statement not covered" >await getRazorpay().paymentLink.create(paymentLinkOptions);</span>
-<span class="cstat-no" title="statement not covered" >      console.log('✅ Payment link created:', paymentLink.short_url, 'ID:', paymentLink.id);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('✅ Payment link created:', paymentLink.short_url, 'ID:', paymentLink.id);</span>
 <span class="cstat-no" title="statement not covered" >      return paymentLink;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Razorpay payment link error:', {</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('❌ Razorpay payment link error:', {</span>
         message: error.message,
         code: error.error?.code,
         description: error.error?.description,
@@ -555,13 +558,13 @@ const razorpayService = <span class="cstat-no" title="statement not covered" >{<
     const RETRY_DELAY_MS = <span class="cstat-no" title="statement not covered" >5000;</span> // 5 seconds between retries
     
 <span class="cstat-no" title="statement not covered" >    try {</span>
-<span class="cstat-no" title="statement not covered" >      console.log('💰 Attempting refund:', { paymentId, amountInRupees: amount, attempt: retryCount + 1 });</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('💰 Attempting refund:', { paymentId, amountInRupees: amount, attempt: retryCount + 1 });</span>
       
       // First fetch payment details to verify it's refundable
       const payment = <span class="cstat-no" title="statement not covered" >await getRazorpay().payments.fetch(paymentId);</span>
       const paymentAmountInRupees = <span class="cstat-no" title="statement not covered" >payment.amount / 100;</span>
       
-<span class="cstat-no" title="statement not covered" >      console.log('💰 Payment details:', { </span>
+<span class="cstat-no" title="statement not covered" >      logger.info('💰 Payment details:', { </span>
         status: payment.status, 
         amountInPaise: payment.amount,
         amountInRupees: paymentAmountInRupees,
@@ -587,7 +590,7 @@ const razorpayService = <span class="cstat-no" title="statement not covered" >{<
       
 <span class="cstat-no" title="statement not covered" >      if (paymentAge &lt; MIN_PAYMENT_AGE_MS) {</span>
         const waitTime = <span class="cstat-no" title="statement not covered" >Math.min(MIN_PAYMENT_AGE_MS - paymentAge, 30000);</span> // Wait up to 30 seconds
-<span class="cstat-no" title="statement not covered" >        console.log(`⏳ Payment is ${Math.round(paymentAge / 1000)}s old, waiting ${Math.round(waitTime / 1000)}s before refund...`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`⏳ Payment is ${Math.round(paymentAge / 1000)}s old, waiting ${Math.round(waitTime / 1000)}s before refund...`);</span>
 <span class="cstat-no" title="statement not covered" >        await new Promise(<span class="fstat-no" title="function not covered" >re</span>solve =&gt; <span class="cstat-no" title="statement not covered" >setTimeout(resolve, waitTime))</span>;</span>
       }
       
@@ -595,7 +598,7 @@ const razorpayService = <span class="cstat-no" title="statement not covered" >{<
       const refundAmountInPaise = <span class="cstat-no" title="statement not covered" >Math.round(amount * 100);</span>
       const availableForRefund = <span class="cstat-no" title="statement not covered" >payment.amount - (payment.amount_refunded || 0);</span>
       
-<span class="cstat-no" title="statement not covered" >      console.log('💰 Refund calculation:', {</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('💰 Refund calculation:', {</span>
         requestedRefundInPaise: refundAmountInPaise,
         availableForRefundInPaise: availableForRefund
       });
@@ -608,20 +611,20 @@ const razorpayService = <span class="cstat-no" title="statement not covered" >{<
       }
       
       // Process refund using payments.refund (Razorpay SDK v2.x method)
-<span class="cstat-no" title="statement not covered" >      console.log('💰 Calling Razorpay refund API:', { paymentId, amountInPaise: finalRefundAmount });</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('💰 Calling Razorpay refund API:', { paymentId, amountInPaise: finalRefundAmount });</span>
       
       // SDK v2.x: payments.refund(paymentId, options)
       const refund = <span class="cstat-no" title="statement not covered" >await getRazorpay().payments.refund(paymentId, {</span>
         amount: finalRefundAmount
       });
       
-<span class="cstat-no" title="statement not covered" >      console.log('✅ Refund successful:', refund.id, 'Amount:', finalRefundAmount / 100);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('✅ Refund successful:', refund.id, 'Amount:', finalRefundAmount / 100);</span>
 <span class="cstat-no" title="statement not covered" >      return refund;</span>
     } catch (error) {
       const errorCode = <span class="cstat-no" title="statement not covered" >error.error?.code || error.code;</span>
       const errorDesc = <span class="cstat-no" title="statement not covered" >error.error?.description || error.message;</span>
       
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Razorpay refund error:', {</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('❌ Razorpay refund error:', {</span>
         message: error.message,
         code: errorCode,
         description: errorDesc,
@@ -634,7 +637,7 @@ const razorpayService = <span class="cstat-no" title="statement not covered" >{<
 <span class="cstat-no" title="statement not covered" >      if ((errorCode === 'SERVER_ERROR' || errorCode === 'GATEWAY_ERROR' || </span>
            (errorCode === 'BAD_REQUEST_ERROR' &amp;&amp; errorDesc === 'invalid request sent')) &amp;&amp; retryCount &lt; MAX_RETRIES) {
         const retryDelay = <span class="cstat-no" title="statement not covered" >errorCode === 'BAD_REQUEST_ERROR' ? 30000 : RETRY_DELAY_MS;</span> // 30s for timing issues
-<span class="cstat-no" title="statement not covered" >        console.log(`🔄 Retrying refund in ${retryDelay / 1000} seconds... (attempt ${retryCount + 2}/${MAX_RETRIES + 1})`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`🔄 Retrying refund in ${retryDelay / 1000} seconds... (attempt ${retryCount + 2}/${MAX_RETRIES + 1})`);</span>
 <span class="cstat-no" title="statement not covered" >        await new Promise(<span class="fstat-no" title="function not covered" >re</span>solve =&gt; <span class="cstat-no" title="statement not covered" >setTimeout(resolve, retryDelay))</span>;</span>
 <span class="cstat-no" title="statement not covered" >        return this.refund(paymentId, amount, retryCount + 1);</span>
       }
@@ -647,7 +650,7 @@ const razorpayService = <span class="cstat-no" title="statement not covered" >{<
 <span class="cstat-no" title="statement not covered" >    try {</span>
 <span class="cstat-no" title="statement not covered" >      return await getRazorpay().payments.fetch(paymentId);</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Razorpay fetch payment error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Razorpay fetch payment error:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >      throw error;</span>
     }
   }
@@ -661,7 +664,7 @@ const razorpayService = <span class="cstat-no" title="statement not covered" >{<
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.865Z
+                at 2026-02-06T08:02:54.748Z
             </div>
         <script src="../prettify.js"></script>
         <script>

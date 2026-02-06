@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/37</span>
+                <span class='fraction'>0/38</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/37</span>
+                <span class='fraction'>0/38</span>
             </div>
         
             
@@ -191,7 +191,8 @@
 <a name='L126'></a><a href='#L126'>126</a>
 <a name='L127'></a><a href='#L127'>127</a>
 <a name='L128'></a><a href='#L128'>128</a>
-<a name='L129'></a><a href='#L129'>129</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -203,6 +204,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -332,6 +334,7 @@
  */
 &nbsp;
 const crypto = <span class="cstat-no" title="statement not covered" >require('crypto');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('../services/logger');</span>
 &nbsp;
 /**
  * Verify Meta webhook signature
@@ -343,7 +346,7 @@ const crypto = <span class="cstat-no" title="statement not covered" >require('cr
 function <span class="fstat-no" title="function not covered" >verifyWebhookSignature(</span>req, res, next) {
   // Skip verification in development if explicitly disabled
 <span class="cstat-no" title="statement not covered" >  if (process.env.NODE_ENV === 'development' &amp;&amp; process.env.SKIP_WEBHOOK_VERIFICATION === 'true') {</span>
-<span class="cstat-no" title="statement not covered" >    console.warn('⚠️ Webhook signature verification SKIPPED (development mode)');</span>
+<span class="cstat-no" title="statement not covered" >    logger.warn('⚠️ Webhook signature verification SKIPPED (development mode)');</span>
 <span class="cstat-no" title="statement not covered" >    return next();</span>
   }
   
@@ -352,7 +355,7 @@ function <span class="fstat-no" title="function not covered" >verifyWebhookSigna
     const signature = <span class="cstat-no" title="statement not covered" >req.headers['x-hub-signature-256'];</span>
     
 <span class="cstat-no" title="statement not covered" >    if (!signature) {</span>
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Webhook signature missing');</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('❌ Webhook signature missing');</span>
 <span class="cstat-no" title="statement not covered" >      return res.status(401).json({ </span>
         error: 'Webhook signature required',
         code: 'NO_SIGNATURE'
@@ -363,7 +366,7 @@ function <span class="fstat-no" title="function not covered" >verifyWebhookSigna
     const appSecret = <span class="cstat-no" title="statement not covered" >process.env.META_APP_SECRET;</span>
     
 <span class="cstat-no" title="statement not covered" >    if (!appSecret) {</span>
-<span class="cstat-no" title="statement not covered" >      console.error('❌ META_APP_SECRET not configured');</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('❌ META_APP_SECRET not configured');</span>
 <span class="cstat-no" title="statement not covered" >      return res.status(500).json({ </span>
         error: 'Server configuration error',
         code: 'NO_APP_SECRET'
@@ -374,7 +377,7 @@ function <span class="fstat-no" title="function not covered" >verifyWebhookSigna
     const rawBody = <span class="cstat-no" title="statement not covered" >req.rawBody;</span>
     
 <span class="cstat-no" title="statement not covered" >    if (!rawBody) {</span>
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Raw body not available for signature verification');</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('❌ Raw body not available for signature verification');</span>
 <span class="cstat-no" title="statement not covered" >      return res.status(500).json({ </span>
         error: 'Cannot verify signature - raw body missing',
         code: 'NO_RAW_BODY'
@@ -392,7 +395,7 @@ function <span class="fstat-no" title="function not covered" >verifyWebhookSigna
     const expectedBuffer = <span class="cstat-no" title="statement not covered" >Buffer.from(expectedSignature);</span>
     
 <span class="cstat-no" title="statement not covered" >    if (signatureBuffer.length !== expectedBuffer.length) {</span>
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Webhook signature length mismatch');</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('❌ Webhook signature length mismatch');</span>
 <span class="cstat-no" title="statement not covered" >      return res.status(401).json({ </span>
         error: 'Invalid webhook signature',
         code: 'INVALID_SIGNATURE'
@@ -403,7 +406,7 @@ function <span class="fstat-no" title="function not covered" >verifyWebhookSigna
     const isValid = <span class="cstat-no" title="statement not covered" >crypto.timingSafeEqual(signatureBuffer, expectedBuffer);</span>
     
 <span class="cstat-no" title="statement not covered" >    if (!isValid) {</span>
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Webhook signature verification failed');</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('❌ Webhook signature verification failed');</span>
 <span class="cstat-no" title="statement not covered" >      return res.status(401).json({ </span>
         error: 'Invalid webhook signature',
         code: 'SIGNATURE_MISMATCH'
@@ -411,11 +414,11 @@ function <span class="fstat-no" title="function not covered" >verifyWebhookSigna
     }
     
     // Signature valid
-<span class="cstat-no" title="statement not covered" >    console.log('✅ Webhook signature verified');</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('✅ Webhook signature verified');</span>
 <span class="cstat-no" title="statement not covered" >    next();</span>
     
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ Webhook verification error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ Webhook verification error:', error);</span>
 <span class="cstat-no" title="statement not covered" >    return res.status(500).json({ </span>
       error: 'Signature verification failed',
       code: 'VERIFICATION_ERROR'
@@ -454,7 +457,7 @@ function <span class="fstat-no" title="function not covered" >captureRawBody(</s
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>

@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/92</span>
+                <span class='fraction'>0/94</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/90</span>
+                <span class='fraction'>0/92</span>
             </div>
         
             
@@ -368,10 +368,14 @@
 <a name='L303'></a><a href='#L303'>303</a>
 <a name='L304'></a><a href='#L304'>304</a>
 <a name='L305'></a><a href='#L305'>305</a>
-<a name='L306'></a><a href='#L306'>306</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L306'></a><a href='#L306'>306</a>
+<a name='L307'></a><a href='#L307'>307</a>
+<a name='L308'></a><a href='#L308'>308</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -678,9 +682,11 @@
  */
 &nbsp;
 const express = <span class="cstat-no" title="statement not covered" >require('express');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('../services/logger');</span>
 const router = <span class="cstat-no" title="statement not covered" >express.Router();</span>
 const admin = <span class="cstat-no" title="statement not covered" >require('firebase-admin');</span>
 const { authenticate } = <span class="cstat-no" title="statement not covered" >require('../middleware/authenticate');</span>
+const { publicRateLimiter } = <span class="cstat-no" title="statement not covered" >require('../middleware/rateLimiter');</span>
 &nbsp;
 // Initialize Firebase Admin (if not already initialized)
 <span class="cstat-no" title="statement not covered" >if (!admin.apps.length) {</span>
@@ -692,9 +698,9 @@ const { authenticate } = <span class="cstat-no" title="statement not covered" >r
         privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
       }),
     });
-<span class="cstat-no" title="statement not covered" >    console.log('✅ [Firebase Admin] Initialized');</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('✅ [Firebase Admin] Initialized');</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [Firebase Admin] Initialization error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [Firebase Admin] Initialization error:', error.message);</span>
   }
 }
 &nbsp;
@@ -706,7 +712,7 @@ const fcmTokens = <span class="cstat-no" title="statement not covered" >new Map(
  * @desc Register FCM token
  * @access Public
  */
-<span class="cstat-no" title="statement not covered" >router.post('/register', <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >router.post('/register', publicRateLimiter, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { token, userType, userId, platform, deviceInfo } = <span class="cstat-no" title="statement not covered" >req.body;</span>
     
@@ -723,11 +729,11 @@ const fcmTokens = <span class="cstat-no" title="statement not covered" >new Map(
       registeredAt: new Date(),
     });
     
-<span class="cstat-no" title="statement not covered" >    console.log(`✅ [FCM] Token registered for ${userType}:${userId}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`✅ [FCM] Token registered for ${userType}:${userId}`);</span>
     
 <span class="cstat-no" title="statement not covered" >    res.json({ success: true, message: 'Token registered successfully' });</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [FCM] Register error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [FCM] Register error:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
@@ -744,11 +750,11 @@ const fcmTokens = <span class="cstat-no" title="statement not covered" >new Map(
     const key = <span class="cstat-no" title="statement not covered" >`${userType}:${userId}`;</span>
 <span class="cstat-no" title="statement not covered" >    fcmTokens.delete(key);</span>
     
-<span class="cstat-no" title="statement not covered" >    console.log(`✅ [FCM] Token unregistered for ${userType}:${userId}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`✅ [FCM] Token unregistered for ${userType}:${userId}`);</span>
     
 <span class="cstat-no" title="statement not covered" >    res.json({ success: true, message: 'Token unregistered successfully' });</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [FCM] Unregister error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [FCM] Unregister error:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
@@ -803,11 +809,11 @@ const fcmTokens = <span class="cstat-no" title="statement not covered" >new Map(
     
     const response = <span class="cstat-no" title="statement not covered" >await admin.messaging().send(message);</span>
     
-<span class="cstat-no" title="statement not covered" >    console.log(`✅ [FCM] Notification sent to ${userType}:${userId}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`✅ [FCM] Notification sent to ${userType}:${userId}`);</span>
     
 <span class="cstat-no" title="statement not covered" >    res.json({ success: true, messageId: response });</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [FCM] Send error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [FCM] Send error:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
@@ -865,8 +871,8 @@ const fcmTokens = <span class="cstat-no" title="statement not covered" >new Map(
     
     const response = <span class="cstat-no" title="statement not covered" >await admin.messaging().sendMulticast(message);</span>
     
-<span class="cstat-no" title="statement not covered" >    console.log(`✅ [FCM] Multicast sent to ${tokens.length} ${userType} users`);</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`Success: ${response.successCount}, Failure: ${response.failureCount}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`✅ [FCM] Multicast sent to ${tokens.length} ${userType} users`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`Success: ${response.successCount}, Failure: ${response.failureCount}`);</span>
     
 <span class="cstat-no" title="statement not covered" >    res.json({</span>
       success: true,
@@ -874,7 +880,7 @@ const fcmTokens = <span class="cstat-no" title="statement not covered" >new Map(
       failureCount: response.failureCount,
     });
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [FCM] Send multicast error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [FCM] Send multicast error:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
@@ -937,7 +943,7 @@ const fcmTokens = <span class="cstat-no" title="statement not covered" >new Map(
     
     const response = <span class="cstat-no" title="statement not covered" >await admin.messaging().sendMulticast(message);</span>
     
-<span class="cstat-no" title="statement not covered" >    console.log(`✅ [FCM] Order notification sent to ${tokens.length} delivery boys`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`✅ [FCM] Order notification sent to ${tokens.length} delivery boys`);</span>
     
 <span class="cstat-no" title="statement not covered" >    res.json({</span>
       success: true,
@@ -945,7 +951,7 @@ const fcmTokens = <span class="cstat-no" title="statement not covered" >new Map(
       failureCount: response.failureCount,
     });
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [FCM] Send order notification error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [FCM] Send order notification error:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
@@ -972,7 +978,7 @@ const fcmTokens = <span class="cstat-no" title="statement not covered" >new Map(
     
 <span class="cstat-no" title="statement not covered" >    res.json(stats);</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [FCM] Get tokens error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [FCM] Get tokens error:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
@@ -985,7 +991,7 @@ const fcmTokens = <span class="cstat-no" title="statement not covered" >new Map(
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.865Z
+                at 2026-02-06T08:02:54.748Z
             </div>
         <script src="../prettify.js"></script>
         <script>

@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/308</span>
+                <span class='fraction'>0/307</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/96</span>
+                <span class='fraction'>0/94</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/304</span>
+                <span class='fraction'>0/303</span>
             </div>
         
             
@@ -681,11 +681,7 @@
 <a name='L616'></a><a href='#L616'>616</a>
 <a name='L617'></a><a href='#L617'>617</a>
 <a name='L618'></a><a href='#L618'>618</a>
-<a name='L619'></a><a href='#L619'>619</a>
-<a name='L620'></a><a href='#L620'>620</a>
-<a name='L621'></a><a href='#L621'>621</a>
-<a name='L622'></a><a href='#L622'>622</a>
-<a name='L623'></a><a href='#L623'>623</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L619'></a><a href='#L619'>619</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -697,9 +693,6 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -729,7 +722,6 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1317,15 +1309,12 @@ const razorpayService = <span class="cstat-no" title="statement not covered" >re
 const googleSheets = <span class="cstat-no" title="statement not covered" >require('../services/googleSheets');</span>
 const chatbotImagesService = <span class="cstat-no" title="statement not covered" >require('../services/chatbotImages');</span>
 const authMiddleware = <span class="cstat-no" title="statement not covered" >require('../middleware/auth');</span>
-const { authorizeAdmin } = <span class="cstat-no" title="statement not covered" >require('../middleware/authorize');</span>
-const { publicRateLimiter, strictRateLimiter } = <span class="cstat-no" title="statement not covered" >require('../middleware/rateLimiter');</span>
+const { publicRateLimiter, webhookRateLimiter } = <span class="cstat-no" title="statement not covered" >require('../middleware/rateLimiter');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('../services/logger');</span>
 const router = <span class="cstat-no" title="statement not covered" >express.Router();</span>
 &nbsp;
-// Apply public rate limiting to payment routes (they're public endpoints)
-<span class="cstat-no" title="statement not covered" >router.use(publicRateLimiter);</span>
-&nbsp;
 // Create Razorpay order for UPI intent payment (no auth required - public endpoint)
-<span class="cstat-no" title="statement not covered" >router.post('/create-upi-order', <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >router.post('/create-upi-order', publicRateLimiter, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { orderId, amount } = <span class="cstat-no" title="statement not covered" >req.body;</span>
     
@@ -1355,17 +1344,16 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
       amount: razorpayOrder.amount,
       currency: razorpayOrder.currency,
       keyId: process.env.RAZORPAY_KEY_ID,
-      configId: process.env.RAZORPAY_CONFIG_ID || null,
       merchantName: process.env.MERCHANT_NAME || 'Restaurant'
     });
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Create UPI order error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Create UPI order error', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
 &nbsp;
 // Verify UPI payment (no auth required - public endpoint)
-<span class="cstat-no" title="statement not covered" >router.post('/verify-upi', <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >router.post('/verify-upi', publicRateLimiter, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { orderId, razorpay_payment_id, razorpay_order_id, razorpay_signature } = <span class="cstat-no" title="statement not covered" >req.body;</span>
 &nbsp;
@@ -1404,7 +1392,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 &nbsp;
     // Update Google Sheets
 <span class="cstat-no" title="statement not covered" >    googleSheets.updateOrderStatus(order.orderId, 'confirmed', 'paid').catch(<span class="fstat-no" title="function not covered" >er</span>r =&gt;</span>
-<span class="cstat-no" title="statement not covered" >      console.error('Google Sheets sync error:', err)</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Google Sheets sync error', { error: err.message })</span>
     );
 &nbsp;
     // Build detailed order confirmation message
@@ -1445,7 +1433,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
         ]);
       }
     } catch (whatsappErr) {
-<span class="cstat-no" title="statement not covered" >      console.error('WhatsApp notification failed:', whatsappErr.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('WhatsApp notification failed', { error: whatsappErr.message });</span>
     }
 &nbsp;
     // Send email if available
@@ -1453,7 +1441,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 <span class="cstat-no" title="statement not covered" >      try {</span>
 <span class="cstat-no" title="statement not covered" >        await brevoMail.sendOrderConfirmation(order.customer.email, order);</span>
       } catch (emailErr) {
-<span class="cstat-no" title="statement not covered" >        console.error('Email error:', emailErr.message);</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('Email error', { error: emailErr.message });</span>
       }
     }
 &nbsp;
@@ -1465,16 +1453,16 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 <span class="cstat-no" title="statement not covered" >      await customer.save();</span>
     }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    console.log(`✅ UPI Payment verified for order ${order.orderId}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`UPI Payment verified for order ${order.orderId}`);</span>
 <span class="cstat-no" title="statement not covered" >    res.json({ success: true, message: 'Payment verified successfully' });</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Verify UPI payment error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Verify UPI payment error', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
 &nbsp;
 // Razorpay Webhook - receives payment and refund events
-<span class="cstat-no" title="statement not covered" >router.post('/razorpay-webhook', express.raw({ type: 'application/json' }), <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >router.post('/razorpay-webhook', webhookRateLimiter, express.raw({ type: 'application/json' }), <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const webhookSecret = <span class="cstat-no" title="statement not covered" >process.env.RAZORPAY_WEBHOOK_SECRET;</span>
     
@@ -1489,13 +1477,13 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
         .digest('hex');
       
 <span class="cstat-no" title="statement not covered" >      if (signature !== expectedSignature) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log('❌ Razorpay webhook signature mismatch');</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('Razorpay webhook signature mismatch');</span>
 <span class="cstat-no" title="statement not covered" >        return res.status(400).json({ error: 'Invalid signature' });</span>
       }
     }
     
     const event = <span class="cstat-no" title="statement not covered" >typeof req.body === 'string' ? JSON.parse(req.body) : req.body;</span>
-<span class="cstat-no" title="statement not covered" >    console.log('📥 Razorpay webhook event:', event.event);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('Razorpay webhook event', { event: event.event });</span>
     
     const payload = <span class="cstat-no" title="statement not covered" >event.payload;</span>
     
@@ -1505,11 +1493,11 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
       const paymentId = <span class="cstat-no" title="statement not covered" >refund?.payment_id;</span>
       
 <span class="cstat-no" title="statement not covered" >      if (!paymentId) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log('⚠️ No payment ID in refund webhook');</span>
+<span class="cstat-no" title="statement not covered" >        logger.warn('No payment ID in refund webhook');</span>
 <span class="cstat-no" title="statement not covered" >        return res.json({ status: 'ok' });</span>
       }
       
-<span class="cstat-no" title="statement not covered" >      console.log('💰 Refund webhook received:', { refundId: refund.id, paymentId, amount: refund.amount / 100, status: refund.status });</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('Refund webhook received', { refundId: refund.id, paymentId, amount: refund.amount / 100, status: refund.status });</span>
       
       // Find order by payment ID
       const order = <span class="cstat-no" title="statement not covered" >await Order.findOne({ </span>
@@ -1520,7 +1508,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
       });
       
 <span class="cstat-no" title="statement not covered" >      if (!order) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log('⚠️ Order not found for payment:', paymentId);</span>
+<span class="cstat-no" title="statement not covered" >        logger.warn('Order not found for payment', { paymentId });</span>
 <span class="cstat-no" title="statement not covered" >        return res.json({ status: 'ok' });</span>
       }
       
@@ -1539,7 +1527,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
         });
 <span class="cstat-no" title="statement not covered" >        await order.save();</span>
         
-<span class="cstat-no" title="statement not covered" >        console.log('✅ Order updated with refund:', order.orderId);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('Order updated with refund', { orderId: order.orderId });</span>
         
         // Emit event for real-time updates
         const dataEvents = <span class="cstat-no" title="statement not covered" >require('../services/eventEmitter');</span>
@@ -1548,7 +1536,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
         
         // Update Google Sheets - move to refunded sheet
 <span class="cstat-no" title="statement not covered" >        googleSheets.updateOrderStatus(order.orderId, 'refunded', 'refunded').catch(<span class="fstat-no" title="function not covered" >er</span>r =&gt;</span>
-<span class="cstat-no" title="statement not covered" >          console.error('Google Sheets sync error:', err)</span>
+<span class="cstat-no" title="statement not covered" >          logger.error('Google Sheets sync error', { error: err.message })</span>
         );
         
         // Notify customer
@@ -1561,7 +1549,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
             ]
           );
         } catch (whatsappErr) {
-<span class="cstat-no" title="statement not covered" >          console.error('WhatsApp notification failed:', whatsappErr.message);</span>
+<span class="cstat-no" title="statement not covered" >          logger.error('WhatsApp notification failed', { error: whatsappErr.message });</span>
         }
       }
       
@@ -1577,7 +1565,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 <span class="cstat-no" title="statement not covered" >        return res.json({ status: 'ok' });</span>
       }
       
-<span class="cstat-no" title="statement not covered" >      console.log('❌ Refund failed webhook:', { refundId: refund.id, paymentId, reason: refund.failure_reason });</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('Refund failed webhook', { refundId: refund.id, paymentId, reason: refund.failure_reason });</span>
       
       const order = <span class="cstat-no" title="statement not covered" >await Order.findOne({ </span>
         $or: [
@@ -1609,7 +1597,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
       
       // Update Google Sheets - move to refundfailed sheet
 <span class="cstat-no" title="statement not covered" >      googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed').catch(<span class="fstat-no" title="function not covered" >er</span>r =&gt;</span>
-<span class="cstat-no" title="statement not covered" >        console.error('Google Sheets sync error:', err)</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('Google Sheets sync error', { error: err.message })</span>
       );
       
       // Notify customer
@@ -1622,7 +1610,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
           ]
         );
       } catch (whatsappErr) {
-<span class="cstat-no" title="statement not covered" >        console.error('WhatsApp notification failed:', whatsappErr.message);</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('WhatsApp notification failed', { error: whatsappErr.message });</span>
       }
       
 <span class="cstat-no" title="statement not covered" >      return res.json({ status: 'ok' });</span>
@@ -1642,7 +1630,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 <span class="cstat-no" title="statement not covered" >          order.trackingUpdates.push({ status: 'confirmed', message: 'Payment received via webhook', timestamp: new Date() });</span>
 <span class="cstat-no" title="statement not covered" >          await order.save();</span>
           
-<span class="cstat-no" title="statement not covered" >          console.log('✅ Payment captured via webhook:', order.orderId);</span>
+<span class="cstat-no" title="statement not covered" >          logger.info('Payment captured via webhook', { orderId: order.orderId });</span>
           
           // Emit event for real-time updates
           const dataEvents = <span class="cstat-no" title="statement not covered" >require('../services/eventEmitter');</span>
@@ -1651,7 +1639,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
           
           // Update Google Sheets
 <span class="cstat-no" title="statement not covered" >          googleSheets.updateOrderStatus(order.orderId, 'confirmed', 'paid').catch(<span class="fstat-no" title="function not covered" >er</span>r =&gt;</span>
-<span class="cstat-no" title="statement not covered" >            console.error('Google Sheets sync error:', err)</span>
+<span class="cstat-no" title="statement not covered" >            logger.error('Google Sheets sync error', { error: err.message })</span>
           );
         }
       }
@@ -1661,7 +1649,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
     
 <span class="cstat-no" title="statement not covered" >    res.json({ status: 'ok' });</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ Razorpay webhook error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Razorpay webhook error', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
@@ -1687,7 +1675,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 &nbsp;
         // Update Google Sheets
 <span class="cstat-no" title="statement not covered" >        googleSheets.updateOrderStatus(order.orderId, 'confirmed', 'paid').catch(<span class="fstat-no" title="function not covered" >er</span>r =&gt;</span>
-<span class="cstat-no" title="statement not covered" >          console.error('Google Sheets sync error:', err)</span>
+<span class="cstat-no" title="statement not covered" >          logger.error('Google Sheets sync error', { error: err.message })</span>
         );
 &nbsp;
         // Build detailed order confirmation message
@@ -1732,7 +1720,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 <span class="cstat-no" title="statement not covered" >          try {</span>
 <span class="cstat-no" title="statement not covered" >            await brevoMail.sendOrderConfirmation(order.customer.email, order);</span>
           } catch (emailErr) {
-<span class="cstat-no" title="statement not covered" >            console.error('Email error:', emailErr.message);</span>
+<span class="cstat-no" title="statement not covered" >            logger.error('Email error', { error: emailErr.message });</span>
           }
         }
 &nbsp;
@@ -1744,7 +1732,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 <span class="cstat-no" title="statement not covered" >          await customer.save();</span>
         }
         
-<span class="cstat-no" title="statement not covered" >        console.log(`✅ Payment confirmed for order ${order.orderId}`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`Payment confirmed for order ${order.orderId}`);</span>
       }
     }
     
@@ -1769,12 +1757,12 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
       &lt;/html&gt;
     `);
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Payment callback error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Payment callback error', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >    res.send('&lt;html&gt;&lt;body&gt;&lt;h1&gt;Payment Error&lt;/h1&gt;&lt;p&gt;Please contact support.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;');</span>
   }
 });
 &nbsp;
-<span class="cstat-no" title="statement not covered" >router.post('/refund/:orderId', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >router.post('/refund/:orderId', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const order = <span class="cstat-no" title="statement not covered" >await Order.findOne({ orderId: req.params.orderId });</span>
 <span class="cstat-no" title="statement not covered" >    if (!order) <span class="cstat-no" title="statement not covered" >return res.status(404).json({ error: 'Order not found' });</span></span>
@@ -1804,7 +1792,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 &nbsp;
       // Update Google Sheets - move to refunded sheet
 <span class="cstat-no" title="statement not covered" >      googleSheets.updateOrderStatus(order.orderId, 'refunded', 'refunded').catch(<span class="fstat-no" title="function not covered" >er</span>r =&gt;</span>
-<span class="cstat-no" title="statement not covered" >        console.error('Google Sheets sync error:', err)</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('Google Sheets sync error', { error: err.message })</span>
       );
 &nbsp;
 <span class="cstat-no" title="statement not covered" >      await whatsapp.sendButtons(order.customer.phone,</span>
@@ -1817,7 +1805,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 &nbsp;
 <span class="cstat-no" title="statement not covered" >      res.json({ success: true, message: 'Refund processed', refundId: refund.id, orderId: order.orderId });</span>
     } catch (refundError) {
-<span class="cstat-no" title="statement not covered" >      console.error('Refund failed:', refundError.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Refund failed', { error: refundError.message });</span>
       
 <span class="cstat-no" title="statement not covered" >      order.status = 'cancelled';</span>
 <span class="cstat-no" title="statement not covered" >      order.refundStatus = 'failed';</span>
@@ -1836,7 +1824,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 &nbsp;
       // Update Google Sheets - move to refundfailed sheet
 <span class="cstat-no" title="statement not covered" >      googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed').catch(<span class="fstat-no" title="function not covered" >er</span>r =&gt;</span>
-<span class="cstat-no" title="statement not covered" >        console.error('Google Sheets sync error:', err)</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('Google Sheets sync error', { error: err.message })</span>
       );
 &nbsp;
 <span class="cstat-no" title="statement not covered" >      await whatsapp.sendButtons(order.customer.phone,</span>
@@ -1854,8 +1842,8 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
   }
 });
 &nbsp;
-// Process refund for pending refund orders (admin only)
-<span class="cstat-no" title="statement not covered" >router.post('/process-refund/:orderId', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+// Process refund for pending refund orders (admin can trigger this)
+<span class="cstat-no" title="statement not covered" >router.post('/process-refund/:orderId', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const order = <span class="cstat-no" title="statement not covered" >await Order.findOne({ orderId: req.params.orderId });</span>
 <span class="cstat-no" title="statement not covered" >    if (!order) <span class="cstat-no" title="statement not covered" >return res.status(404).json({ error: 'Order not found' });</span></span>
@@ -1888,7 +1876,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 &nbsp;
       // Update Google Sheets - move to refunded sheet
 <span class="cstat-no" title="statement not covered" >      googleSheets.updateOrderStatus(order.orderId, 'refunded', 'refunded').catch(<span class="fstat-no" title="function not covered" >er</span>r =&gt;</span>
-<span class="cstat-no" title="statement not covered" >        console.error('Google Sheets sync error:', err)</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('Google Sheets sync error', { error: err.message })</span>
       );
 &nbsp;
 <span class="cstat-no" title="statement not covered" >      await whatsapp.sendButtons(order.customer.phone,</span>
@@ -1901,7 +1889,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 &nbsp;
 <span class="cstat-no" title="statement not covered" >      res.json({ success: true, message: 'Refund processed', refundId: refund.id });</span>
     } catch (refundError) {
-<span class="cstat-no" title="statement not covered" >      console.error('Refund processing failed:', refundError.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Refund processing failed', { error: refundError.message });</span>
       
 <span class="cstat-no" title="statement not covered" >      order.refundStatus = 'failed';</span>
 <span class="cstat-no" title="statement not covered" >      order.refundError = refundError.message;</span>
@@ -1918,7 +1906,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 &nbsp;
       // Update Google Sheets - move to refundfailed sheet
 <span class="cstat-no" title="statement not covered" >      googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed').catch(<span class="fstat-no" title="function not covered" >er</span>r =&gt;</span>
-<span class="cstat-no" title="statement not covered" >        console.error('Google Sheets sync error:', err)</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('Google Sheets sync error', { error: err.message })</span>
       );
 &nbsp;
 <span class="cstat-no" title="statement not covered" >      res.status(500).json({ success: false, error: refundError.message });</span>
@@ -1936,7 +1924,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>

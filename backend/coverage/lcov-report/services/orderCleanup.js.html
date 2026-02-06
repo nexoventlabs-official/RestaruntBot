@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/110</span>
+                <span class='fraction'>0/111</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/100</span>
+                <span class='fraction'>0/101</span>
             </div>
         
             
@@ -288,7 +288,9 @@
 <a name='L223'></a><a href='#L223'>223</a>
 <a name='L224'></a><a href='#L224'>224</a>
 <a name='L225'></a><a href='#L225'>225</a>
-<a name='L226'></a><a href='#L226'>226</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L226'></a><a href='#L226'>226</a>
+<a name='L227'></a><a href='#L227'>227</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -514,6 +516,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const Order = <span class="cstat-no" title="statement not covered" >require('../models/Order');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('./logger');</span>
 const Customer = <span class="cstat-no" title="statement not covered" >require('../models/Customer');</span>
 const DashboardStats = <span class="cstat-no" title="statement not covered" >require('../models/DashboardStats');</span>
 const ReportHistory = <span class="cstat-no" title="statement not covered" >require('../models/ReportHistory');</span>
@@ -622,10 +625,10 @@ const orderCleanup = <span class="cstat-no" title="statement not covered" >{</sp
 &nbsp;
 <span class="cstat-no" title="statement not covered" >        report.updatedAt = new Date();</span>
 <span class="cstat-no" title="statement not covered" >        await report.save();</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`📊 Report history saved for ${dateStr}: ${dateOrders.length} orders`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`📊 Report history saved for ${dateStr}: ${dateOrders.length} orders`);</span>
       }
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Error saving report history:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('❌ Error saving report history:', error.message);</span>
     }
   },
 &nbsp;
@@ -647,10 +650,10 @@ const orderCleanup = <span class="cstat-no" title="statement not covered" >{</sp
       // Also save to report history
 <span class="cstat-no" title="statement not covered" >      await this.saveReportHistory(orders);</span>
       
-<span class="cstat-no" title="statement not covered" >      console.log(`📊 Cleanup stats saved: ${orders.length} orders, ₹${revenue} revenue`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`📊 Cleanup stats saved: ${orders.length} orders, ₹${revenue} revenue`);</span>
 <span class="cstat-no" title="statement not covered" >      return stats;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Error saving cleanup stats:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('❌ Error saving cleanup stats:', error.message);</span>
     }
   },
 &nbsp;
@@ -669,7 +672,7 @@ const orderCleanup = <span class="cstat-no" title="statement not covered" >{</sp
           // Customer never placed an order, safe to delete
           const result = <span class="cstat-no" title="statement not covered" >await Customer.deleteOne({ phone });</span>
 <span class="cstat-no" title="statement not covered" >          if (result.deletedCount &gt; 0) {</span>
-<span class="cstat-no" title="statement not covered" >            console.log(`👤 Deleted customer: ${phone} (never placed an order)`);</span>
+<span class="cstat-no" title="statement not covered" >            logger.info(`👤 Deleted customer: ${phone} (never placed an order)`);</span>
 <span class="cstat-no" title="statement not covered" >            return true;</span>
           }
         }
@@ -677,7 +680,7 @@ const orderCleanup = <span class="cstat-no" title="statement not covered" >{</sp
       }
 <span class="cstat-no" title="statement not covered" >      return false;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error(`❌ Error deleting customer ${phone}:`, error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error(`❌ Error deleting customer ${phone}:`, error.message);</span>
 <span class="cstat-no" title="statement not covered" >      return false;</span>
     }
   },
@@ -698,7 +701,7 @@ const orderCleanup = <span class="cstat-no" title="statement not covered" >{</sp
 <span class="cstat-no" title="statement not covered" >        return 0;</span>
       }
       
-<span class="cstat-no" title="statement not covered" >      console.log(`🧹 Found ${ordersToHide.length} completed orders to hide (status updated &gt;1 hour ago)`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`🧹 Found ${ordersToHide.length} completed orders to hide (status updated &gt;1 hour ago)`);</span>
       
       // Save cumulative stats before hiding (for total revenue/orders tracking)
 <span class="cstat-no" title="statement not covered" >      await this.saveOrderStats(ordersToHide);</span>
@@ -710,7 +713,7 @@ const orderCleanup = <span class="cstat-no" title="statement not covered" >{</sp
         { $set: { isHidden: true } }
       );
       
-<span class="cstat-no" title="statement not covered" >      console.log(`✅ Hidden ${result.modifiedCount} delivered/cancelled/refunded orders from admin dashboard`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`✅ Hidden ${result.modifiedCount} delivered/cancelled/refunded orders from admin dashboard`);</span>
       
       // Emit event to update frontend
 <span class="cstat-no" title="statement not covered" >      dataEvents.emit('orders');</span>
@@ -718,14 +721,14 @@ const orderCleanup = <span class="cstat-no" title="statement not covered" >{</sp
       
 <span class="cstat-no" title="statement not covered" >      return result.modifiedCount;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Error hiding completed orders:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('❌ Error hiding completed orders:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >      return 0;</span>
     }
   },
 &nbsp;
   // Start the scheduler (runs every 2 minutes for quick fallback cleanup)
 <span class="fstat-no" title="function not covered" >  st</span>art() {
-<span class="cstat-no" title="statement not covered" >    console.log(`🧹 Order cleanup scheduler started - fallback cleanup for delivered/cancelled/refunded orders after ${CLEANUP_DELAY_MINUTES} minute(s)`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`🧹 Order cleanup scheduler started - fallback cleanup for delivered/cancelled/refunded orders after ${CLEANUP_DELAY_MINUTES} minute(s)`);</span>
     
     // Run immediately on start
 <span class="cstat-no" title="statement not covered" >    this.cleanupCompletedOrders();</span>
@@ -745,7 +748,7 @@ const orderCleanup = <span class="cstat-no" title="statement not covered" >{</sp
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>

@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/80</span>
+                <span class='fraction'>0/81</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/76</span>
+                <span class='fraction'>0/77</span>
             </div>
         
             
@@ -279,7 +279,9 @@
 <a name='L214'></a><a href='#L214'>214</a>
 <a name='L215'></a><a href='#L215'>215</a>
 <a name='L216'></a><a href='#L216'>216</a>
-<a name='L217'></a><a href='#L217'>217</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -497,6 +499,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// Cloudinary Service - Image Upload &amp; Optimization
 const cloudinary = <span class="cstat-no" title="statement not covered" >require('cloudinary').v2;</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('./logger');</span>
 &nbsp;
 // Configure Cloudinary
 <span class="cstat-no" title="statement not covered" >cloudinary.config({</span>
@@ -529,10 +532,10 @@ const cloudinaryService = <span class="cstat-no" title="statement not covered" >
       }
 &nbsp;
       const result = <span class="cstat-no" title="statement not covered" >await cloudinary.uploader.upload(imageUrl, options);</span>
-<span class="cstat-no" title="statement not covered" >      console.log('✅ Cloudinary upload success:', result.secure_url);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('✅ Cloudinary upload success:', result.secure_url);</span>
 <span class="cstat-no" title="statement not covered" >      return result.secure_url;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Cloudinary upload error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('❌ Cloudinary upload error:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >      throw error;</span>
     }
   },
@@ -561,10 +564,10 @@ const cloudinaryService = <span class="cstat-no" title="statement not covered" >
 &nbsp;
       const uploadStream = <span class="cstat-no" title="statement not covered" >cloudinary.uploader.upload_stream(options, <span class="fstat-no" title="function not covered" >(e</span>rror, result) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >        if (error) {</span>
-<span class="cstat-no" title="statement not covered" >          console.error('❌ Cloudinary buffer upload error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >          logger.error('❌ Cloudinary buffer upload error:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >          reject(error);</span>
         } else {
-<span class="cstat-no" title="statement not covered" >          console.log('✅ Cloudinary buffer upload success:', result.secure_url);</span>
+<span class="cstat-no" title="statement not covered" >          logger.info('✅ Cloudinary buffer upload success:', result.secure_url);</span>
 <span class="cstat-no" title="statement not covered" >          resolve(result.secure_url);</span>
         }
       });
@@ -597,10 +600,10 @@ const cloudinaryService = <span class="cstat-no" title="statement not covered" >
 &nbsp;
       const uploadStream = <span class="cstat-no" title="statement not covered" >cloudinary.uploader.upload_stream(options, <span class="fstat-no" title="function not covered" >(e</span>rror, result) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >        if (error) {</span>
-<span class="cstat-no" title="statement not covered" >          console.error('❌ Cloudinary buffer upload error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >          logger.error('❌ Cloudinary buffer upload error:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >          reject(error);</span>
         } else {
-<span class="cstat-no" title="statement not covered" >          console.log('✅ Cloudinary buffer upload success:', result.secure_url);</span>
+<span class="cstat-no" title="statement not covered" >          logger.info('✅ Cloudinary buffer upload success:', result.secure_url);</span>
 <span class="cstat-no" title="statement not covered" >          resolve(result.secure_url);</span>
         }
       });
@@ -642,7 +645,7 @@ const cloudinaryService = <span class="cstat-no" title="statement not covered" >
     // For external URLs, use Cloudinary fetch (on-the-fly transformation)
     const cloudName = <span class="cstat-no" title="statement not covered" >process.env.CLOUDINARY_CLOUD_NAME;</span>
 <span class="cstat-no" title="statement not covered" >    if (!cloudName) {</span>
-<span class="cstat-no" title="statement not covered" >      console.warn('⚠️ CLOUDINARY_CLOUD_NAME not set, returning original URL');</span>
+<span class="cstat-no" title="statement not covered" >      logger.warn('⚠️ CLOUDINARY_CLOUD_NAME not set, returning original URL');</span>
 <span class="cstat-no" title="statement not covered" >      return imageUrl;</span>
     }
 &nbsp;
@@ -657,10 +660,10 @@ const cloudinaryService = <span class="cstat-no" title="statement not covered" >
 <span class="fstat-no" title="function not covered" >  as</span>ync deleteImage(publicId) {
 <span class="cstat-no" title="statement not covered" >    try {</span>
       const result = <span class="cstat-no" title="statement not covered" >await cloudinary.uploader.destroy(publicId);</span>
-<span class="cstat-no" title="statement not covered" >      console.log('✅ Cloudinary delete:', publicId, result);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('✅ Cloudinary delete:', publicId, result);</span>
 <span class="cstat-no" title="statement not covered" >      return result;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Cloudinary delete error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('❌ Cloudinary delete error:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >      throw error;</span>
     }
   },
@@ -701,10 +704,10 @@ const cloudinaryService = <span class="cstat-no" title="statement not covered" >
       const fullPath = <span class="cstat-no" title="statement not covered" >cleanSegments.join('/');</span>
       const publicId = <span class="cstat-no" title="statement not covered" >fullPath.replace(/\.[^/.]+$/, '');</span> // Remove extension
       
-<span class="cstat-no" title="statement not covered" >      console.log('📍 Extracted publicId:', publicId, 'from URL:', cloudinaryUrl);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('📍 Extracted publicId:', publicId, 'from URL:', cloudinaryUrl);</span>
 <span class="cstat-no" title="statement not covered" >      return publicId;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Error extracting publicId:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('❌ Error extracting publicId:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >      return null;</span>
     }
   }
@@ -718,7 +721,7 @@ const cloudinaryService = <span class="cstat-no" title="statement not covered" >
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>

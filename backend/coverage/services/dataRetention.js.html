@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/77</span>
+                <span class='fraction'>0/78</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/76</span>
+                <span class='fraction'>0/77</span>
             </div>
         
             
@@ -369,7 +369,8 @@
 <a name='L304'></a><a href='#L304'>304</a>
 <a name='L305'></a><a href='#L305'>305</a>
 <a name='L306'></a><a href='#L306'>306</a>
-<a name='L307'></a><a href='#L307'>307</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L307'></a><a href='#L307'>307</a>
+<a name='L308'></a><a href='#L308'>308</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -384,6 +385,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -691,6 +693,7 @@
  */
 &nbsp;
 const Order = <span class="cstat-no" title="statement not covered" >require('../models/Order');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('./logger');</span>
 const InboundMessage = <span class="cstat-no" title="statement not covered" >require('../models/InboundMessage');</span>
 const OutboundMessage = <span class="cstat-no" title="statement not covered" >require('../models/OutboundMessage');</span>
 const alerting = <span class="cstat-no" title="statement not covered" >require('./alerting');</span>
@@ -719,13 +722,13 @@ async function <span class="fstat-no" title="function not covered" >cleanComplet
       updatedAt: { $lt: cutoffDate }
     });
     
-<span class="cstat-no" title="statement not covered" >    console.log(`✅ [Data Retention] Cleaned ${result.deletedCount} completed orders`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`✅ [Data Retention] Cleaned ${result.deletedCount} completed orders`);</span>
     
 <span class="cstat-no" title="statement not covered" >    await metricsRedis.recordEvent('data_retention.orders_cleaned');</span>
     
 <span class="cstat-no" title="statement not covered" >    return result.deletedCount;</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [Data Retention] Failed to clean completed orders:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [Data Retention] Failed to clean completed orders:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return 0;</span>
   }
 }
@@ -743,13 +746,13 @@ async function <span class="fstat-no" title="function not covered" >cleanCancell
       updatedAt: { $lt: cutoffDate }
     });
     
-<span class="cstat-no" title="statement not covered" >    console.log(`✅ [Data Retention] Cleaned ${result.deletedCount} cancelled orders`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`✅ [Data Retention] Cleaned ${result.deletedCount} cancelled orders`);</span>
     
 <span class="cstat-no" title="statement not covered" >    await metricsRedis.recordEvent('data_retention.cancelled_orders_cleaned');</span>
     
 <span class="cstat-no" title="statement not covered" >    return result.deletedCount;</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [Data Retention] Failed to clean cancelled orders:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [Data Retention] Failed to clean cancelled orders:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return 0;</span>
   }
 }
@@ -767,13 +770,13 @@ async function <span class="fstat-no" title="function not covered" >cleanFailedP
       updatedAt: { $lt: cutoffDate }
     });
     
-<span class="cstat-no" title="statement not covered" >    console.log(`✅ [Data Retention] Cleaned ${result.deletedCount} failed payments`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`✅ [Data Retention] Cleaned ${result.deletedCount} failed payments`);</span>
     
 <span class="cstat-no" title="statement not covered" >    await metricsRedis.recordEvent('data_retention.failed_payments_cleaned');</span>
     
 <span class="cstat-no" title="statement not covered" >    return result.deletedCount;</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [Data Retention] Failed to clean failed payments:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [Data Retention] Failed to clean failed payments:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return 0;</span>
   }
 }
@@ -791,13 +794,13 @@ async function <span class="fstat-no" title="function not covered" >cleanInbound
       processedAt: { $lt: cutoffDate }
     });
     
-<span class="cstat-no" title="statement not covered" >    console.log(`✅ [Data Retention] Cleaned ${result.deletedCount} inbound messages`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`✅ [Data Retention] Cleaned ${result.deletedCount} inbound messages`);</span>
     
 <span class="cstat-no" title="statement not covered" >    await metricsRedis.recordEvent('data_retention.inbound_messages_cleaned');</span>
     
 <span class="cstat-no" title="statement not covered" >    return result.deletedCount;</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [Data Retention] Failed to clean inbound messages:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [Data Retention] Failed to clean inbound messages:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return 0;</span>
   }
 }
@@ -815,13 +818,13 @@ async function <span class="fstat-no" title="function not covered" >cleanOutboun
       sentAt: { $lt: cutoffDate }
     });
     
-<span class="cstat-no" title="statement not covered" >    console.log(`✅ [Data Retention] Cleaned ${result.deletedCount} outbound messages`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`✅ [Data Retention] Cleaned ${result.deletedCount} outbound messages`);</span>
     
 <span class="cstat-no" title="statement not covered" >    await metricsRedis.recordEvent('data_retention.outbound_messages_cleaned');</span>
     
 <span class="cstat-no" title="statement not covered" >    return result.deletedCount;</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [Data Retention] Failed to clean outbound messages:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [Data Retention] Failed to clean outbound messages:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return 0;</span>
   }
 }
@@ -837,13 +840,13 @@ async function <span class="fstat-no" title="function not covered" >archiveData(
     // 2. Export to data warehouse
     // 3. Create compressed backups
     
-<span class="cstat-no" title="statement not covered" >    console.log(`📦 [Data Retention] Archiving ${collection} data...`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`📦 [Data Retention] Archiving ${collection} data...`);</span>
     
     // TODO: Implement actual archiving logic
     
 <span class="cstat-no" title="statement not covered" >    return true;</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [Data Retention] Failed to archive data:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [Data Retention] Failed to archive data:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return false;</span>
   }
 }
@@ -852,7 +855,7 @@ async function <span class="fstat-no" title="function not covered" >archiveData(
  * Run all retention policies
  */
 async function <span class="fstat-no" title="function not covered" >runRetentionPolicies(</span>) {
-<span class="cstat-no" title="statement not covered" >  console.log('🔄 [Data Retention] Running retention policies...');</span>
+<span class="cstat-no" title="statement not covered" >  logger.info('🔄 [Data Retention] Running retention policies...');</span>
   
   const startTime = <span class="cstat-no" title="statement not covered" >Date.now();</span>
   
@@ -868,7 +871,7 @@ async function <span class="fstat-no" title="function not covered" >runRetention
     const totalCleaned = <span class="cstat-no" title="statement not covered" >results.reduce(<span class="fstat-no" title="function not covered" >(s</span>um, count) =&gt; <span class="cstat-no" title="statement not covered" >sum + count,</span> 0);</span>
     const duration = <span class="cstat-no" title="statement not covered" >Date.now() - startTime;</span>
     
-<span class="cstat-no" title="statement not covered" >    console.log(`✅ [Data Retention] Cleaned ${totalCleaned} records in ${duration}ms`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`✅ [Data Retention] Cleaned ${totalCleaned} records in ${duration}ms`);</span>
     
     // Alert if significant data was cleaned
 <span class="cstat-no" title="statement not covered" >    if (totalCleaned &gt; 1000) {</span>
@@ -900,7 +903,7 @@ async function <span class="fstat-no" title="function not covered" >runRetention
       }
     };
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [Data Retention] Failed to run retention policies:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [Data Retention] Failed to run retention policies:', error.message);</span>
     
 <span class="cstat-no" title="statement not covered" >    await alerting.sendAlert(</span>
       'Data Retention Policy Failed',
@@ -966,7 +969,7 @@ async function <span class="fstat-no" title="function not covered" >getRetention
       }
     };
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [Data Retention] Failed to get retention status:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [Data Retention] Failed to get retention status:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return { error: error.message };</span>
   }
 }
@@ -988,7 +991,7 @@ async function <span class="fstat-no" title="function not covered" >getRetention
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.865Z
+                at 2026-02-06T08:02:54.748Z
             </div>
         <script src="../prettify.js"></script>
         <script>

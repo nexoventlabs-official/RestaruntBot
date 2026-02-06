@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/44</span>
+                <span class='fraction'>0/45</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/44</span>
+                <span class='fraction'>0/45</span>
             </div>
         
             
@@ -181,7 +181,9 @@
 <a name='L116'></a><a href='#L116'>116</a>
 <a name='L117'></a><a href='#L117'>117</a>
 <a name='L118'></a><a href='#L118'>118</a>
-<a name='L119'></a><a href='#L119'>119</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -300,6 +302,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const Order = <span class="cstat-no" title="statement not covered" >require('../models/Order');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('./logger');</span>
 const whatsapp = <span class="cstat-no" title="statement not covered" >require('./whatsapp');</span>
 const googleSheets = <span class="cstat-no" title="statement not covered" >require('./googleSheets');</span>
 const chatbotImagesService = <span class="cstat-no" title="statement not covered" >require('./chatbotImages');</span>
@@ -324,7 +327,7 @@ const orderScheduler = <span class="cstat-no" title="statement not covered" >{</
         ]
       });
       
-<span class="cstat-no" title="statement not covered" >      console.log(`🔍 Found ${expiredOrders.length} expired pending orders (excluding pickup COD orders)`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`🔍 Found ${expiredOrders.length} expired pending orders (excluding pickup COD orders)`);</span>
       
 <span class="cstat-no" title="statement not covered" >      for (const order of expiredOrders) {</span>
 <span class="cstat-no" title="statement not covered" >        await this.cancelOrder(order);</span>
@@ -332,7 +335,7 @@ const orderScheduler = <span class="cstat-no" title="statement not covered" >{</
       
 <span class="cstat-no" title="statement not covered" >      return expiredOrders.length;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Error checking expired orders:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('❌ Error checking expired orders:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >      return 0;</span>
     }
   },
@@ -340,7 +343,7 @@ const orderScheduler = <span class="cstat-no" title="statement not covered" >{</
   // Cancel a single order and notify customer
 <span class="fstat-no" title="function not covered" >  as</span>ync cancelOrder(order) {
 <span class="cstat-no" title="statement not covered" >    try {</span>
-<span class="cstat-no" title="statement not covered" >      console.log(`⏰ Auto-cancelling order ${order.orderId} (pending for &gt;15 mins)`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`⏰ Auto-cancelling order ${order.orderId} (pending for &gt;15 mins)`);</span>
       
       // Update order status
 <span class="cstat-no" title="statement not covered" >      order.status = 'cancelled';</span>
@@ -355,7 +358,7 @@ const orderScheduler = <span class="cstat-no" title="statement not covered" >{</
       
       // Update Google Sheets
 <span class="cstat-no" title="statement not covered" >      googleSheets.updateOrderStatus(order.orderId, 'cancelled', 'pending').catch(<span class="fstat-no" title="function not covered" >er</span>r =&gt;</span>
-<span class="cstat-no" title="statement not covered" >        console.error('Google Sheets sync error:', err)</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('Google Sheets sync error:', err)</span>
       );
       
       // Build order details message
@@ -394,17 +397,17 @@ const orderScheduler = <span class="cstat-no" title="statement not covered" >{</
         ]);
       }
       
-<span class="cstat-no" title="statement not covered" >      console.log(`✅ Order ${order.orderId} cancelled and customer notified`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`✅ Order ${order.orderId} cancelled and customer notified`);</span>
 <span class="cstat-no" title="statement not covered" >      return true;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error(`❌ Error cancelling order ${order.orderId}:`, error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error(`❌ Error cancelling order ${order.orderId}:`, error.message);</span>
 <span class="cstat-no" title="statement not covered" >      return false;</span>
     }
   },
 &nbsp;
   // Start the scheduler (runs every minute)
 <span class="fstat-no" title="function not covered" >  st</span>art() {
-<span class="cstat-no" title="statement not covered" >    console.log('⏰ Order scheduler started - checking for expired orders every minute');</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('⏰ Order scheduler started - checking for expired orders every minute');</span>
     
     // Run immediately on start
 <span class="cstat-no" title="statement not covered" >    this.cancelExpiredOrders();</span>
@@ -424,7 +427,7 @@ const orderScheduler = <span class="cstat-no" title="statement not covered" >{</
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>

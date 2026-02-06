@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/95</span>
+                <span class='fraction'>0/96</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/92</span>
+                <span class='fraction'>0/93</span>
             </div>
         
             
@@ -401,7 +401,8 @@
 <a name='L336'></a><a href='#L336'>336</a>
 <a name='L337'></a><a href='#L337'>337</a>
 <a name='L338'></a><a href='#L338'>338</a>
-<a name='L339'></a><a href='#L339'>339</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L339'></a><a href='#L339'>339</a>
+<a name='L340'></a><a href='#L340'>340</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -415,6 +416,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -754,6 +756,7 @@
  */
 &nbsp;
 const mongoose = <span class="cstat-no" title="statement not covered" >require('mongoose');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('./logger');</span>
 const alerting = <span class="cstat-no" title="statement not covered" >require('./alerting');</span>
 const metricsRedis = <span class="cstat-no" title="statement not covered" >require('./metricsRedis');</span>
 &nbsp;
@@ -779,10 +782,10 @@ async function <span class="fstat-no" title="function not covered" >enableProfil
       slowms: SLOW_QUERY_THRESHOLD
     });
     
-<span class="cstat-no" title="statement not covered" >    console.log(`✅ [DB Monitor] Profiling enabled (threshold: ${SLOW_QUERY_THRESHOLD}ms)`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`✅ [DB Monitor] Profiling enabled (threshold: ${SLOW_QUERY_THRESHOLD}ms)`);</span>
 <span class="cstat-no" title="statement not covered" >    return true;</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [DB Monitor] Failed to enable profiling:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [DB Monitor] Failed to enable profiling:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return false;</span>
   }
 }
@@ -812,7 +815,7 @@ async function <span class="fstat-no" title="function not covered" >getSlowQueri
       planSummary: q.planSummary
     }));
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [DB Monitor] Failed to get slow queries:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [DB Monitor] Failed to get slow queries:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return [];</span>
   }
 }
@@ -835,7 +838,7 @@ async function <span class="fstat-no" title="function not covered" >getDatabaseS
       objects: stats.objects
     };
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [DB Monitor] Failed to get database stats:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [DB Monitor] Failed to get database stats:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return null;</span>
   }
 }
@@ -856,7 +859,7 @@ function <span class="fstat-no" title="function not covered" >getConnectionPoolS
       models: Object.keys(connection.models).length
     };
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [DB Monitor] Failed to get connection stats:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [DB Monitor] Failed to get connection stats:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return null;</span>
   }
 }
@@ -879,7 +882,7 @@ async function <span class="fstat-no" title="function not covered" >analyzeIndex
       since: stat.accesses.since
     }));
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error(`❌ [DB Monitor] Failed to analyze indexes for ${collectionName}:`, error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error(`❌ [DB Monitor] Failed to analyze indexes for ${collectionName}:`, error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return [];</span>
   }
 }
@@ -912,7 +915,7 @@ async function <span class="fstat-no" title="function not covered" >findUnusedIn
     
 <span class="cstat-no" title="statement not covered" >    return unusedIndexes;</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [DB Monitor] Failed to find unused indexes:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [DB Monitor] Failed to find unused indexes:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return [];</span>
   }
 }
@@ -965,7 +968,7 @@ async function <span class="fstat-no" title="function not covered" >monitorHealt
       dbStats
     };
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [DB Monitor] Health check failed:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [DB Monitor] Health check failed:', error.message);</span>
     
 <span class="cstat-no" title="statement not covered" >    await alerting.alertDatabaseIssue(error);</span>
     
@@ -981,11 +984,11 @@ async function <span class="fstat-no" title="function not covered" >monitorHealt
  */
 function <span class="fstat-no" title="function not covered" >startMonitoring(</span>) {
 <span class="cstat-no" title="statement not covered" >  if (monitoringInterval) {</span>
-<span class="cstat-no" title="statement not covered" >    console.log('⚠️ [DB Monitor] Monitoring already started');</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('⚠️ [DB Monitor] Monitoring already started');</span>
 <span class="cstat-no" title="statement not covered" >    return;</span>
   }
   
-<span class="cstat-no" title="statement not covered" >  console.log('🔄 [DB Monitor] Starting database monitoring...');</span>
+<span class="cstat-no" title="statement not covered" >  logger.info('🔄 [DB Monitor] Starting database monitoring...');</span>
   
   // Enable profiling
 <span class="cstat-no" title="statement not covered" >  enableProfiling();</span>
@@ -996,7 +999,7 @@ function <span class="fstat-no" title="function not covered" >startMonitoring(</
   // Schedule periodic health checks
 <span class="cstat-no" title="statement not covered" >  monitoringInterval = setInterval(monitorHealth, MONITORING_INTERVAL);</span>
   
-<span class="cstat-no" title="statement not covered" >  console.log(`✅ [DB Monitor] Monitoring started (interval: ${MONITORING_INTERVAL / 1000}s)`);</span>
+<span class="cstat-no" title="statement not covered" >  logger.info(`✅ [DB Monitor] Monitoring started (interval: ${MONITORING_INTERVAL / 1000}s)`);</span>
 }
 &nbsp;
 /**
@@ -1006,7 +1009,7 @@ function <span class="fstat-no" title="function not covered" >stopMonitoring(</s
 <span class="cstat-no" title="statement not covered" >  if (monitoringInterval) {</span>
 <span class="cstat-no" title="statement not covered" >    clearInterval(monitoringInterval);</span>
 <span class="cstat-no" title="statement not covered" >    monitoringInterval = null;</span>
-<span class="cstat-no" title="statement not covered" >    console.log('✅ [DB Monitor] Monitoring stopped');</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('✅ [DB Monitor] Monitoring stopped');</span>
   }
 }
 &nbsp;
@@ -1035,7 +1038,7 @@ async function <span class="fstat-no" title="function not covered" >getMonitorin
       }
     };
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [DB Monitor] Failed to generate report:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [DB Monitor] Failed to generate report:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return { error: error.message };</span>
   }
 }
@@ -1059,7 +1062,7 @@ async function <span class="fstat-no" title="function not covered" >explainQuery
       indexUsed: explanation.executionStats.executionStages.indexName || 'COLLSCAN'
     };
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [DB Monitor] Failed to explain query:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [DB Monitor] Failed to explain query:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return { error: error.message };</span>
   }
 }
@@ -1084,7 +1087,7 @@ async function <span class="fstat-no" title="function not covered" >explainQuery
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.865Z
+                at 2026-02-06T08:02:54.748Z
             </div>
         <script src="../prettify.js"></script>
         <script>

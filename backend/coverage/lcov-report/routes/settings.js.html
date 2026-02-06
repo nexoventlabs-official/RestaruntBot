@@ -214,17 +214,17 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const express = <span class="cstat-no" title="statement not covered" >require('express');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('../services/logger');</span>
 const Settings = <span class="cstat-no" title="statement not covered" >require('../models/Settings');</span>
 const authMiddleware = <span class="cstat-no" title="statement not covered" >require('../middleware/auth');</span>
-const { authorizeAdmin } = <span class="cstat-no" title="statement not covered" >require('../middleware/authorize');</span>
 const { adminRateLimiter } = <span class="cstat-no" title="statement not covered" >require('../middleware/rateLimiter');</span>
 const router = <span class="cstat-no" title="statement not covered" >express.Router();</span>
 &nbsp;
-// Apply admin rate limiting
+// Rate limiting for settings routes
 <span class="cstat-no" title="statement not covered" >router.use(adminRateLimiter);</span>
 &nbsp;
 // Get all settings (admin only)
-<span class="cstat-no" title="statement not covered" >router.get('/', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >router.get('/', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const settings = <span class="cstat-no" title="statement not covered" >await Settings.find();</span>
     const settingsObj = <span class="cstat-no" title="statement not covered" >{};</span>
@@ -233,45 +233,45 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
     });
 <span class="cstat-no" title="statement not covered" >    res.json(settingsObj);</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Error fetching settings:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Error fetching settings:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
 &nbsp;
-// Get a specific setting
-<span class="cstat-no" title="statement not covered" >router.get('/:key', <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+// Get a specific setting (admin only, except holiday/status)
+<span class="cstat-no" title="statement not covered" >router.get('/:key', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const value = <span class="cstat-no" title="statement not covered" >await Settings.getValue(req.params.key);</span>
 <span class="cstat-no" title="statement not covered" >    res.json({ key: req.params.key, value });</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Error fetching setting:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Error fetching setting:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
 &nbsp;
 // Update a setting (admin only)
-<span class="cstat-no" title="statement not covered" >router.put('/:key', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >router.put('/:key', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { value } = <span class="cstat-no" title="statement not covered" >req.body;</span>
     const setting = <span class="cstat-no" title="statement not covered" >await Settings.setValue(req.params.key, value, req.user?.username);</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`[Settings] Updated ${req.params.key} to ${JSON.stringify(value)} by ${req.user?.username}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`[Settings] Updated ${req.params.key} to ${JSON.stringify(value)} by ${req.user?.username}`);</span>
 <span class="cstat-no" title="statement not covered" >    res.json(setting);</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Error updating setting:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Error updating setting:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
 &nbsp;
 // Toggle holiday mode (admin only)
-<span class="cstat-no" title="statement not covered" >router.post('/holiday/toggle', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >router.post('/holiday/toggle', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const currentValue = <span class="cstat-no" title="statement not covered" >await Settings.getValue('holidayMode', false);</span>
     const newValue = <span class="cstat-no" title="statement not covered" >!currentValue;</span>
     const setting = <span class="cstat-no" title="statement not covered" >await Settings.setValue('holidayMode', newValue, req.user?.username);</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`[Settings] Holiday mode ${newValue ? 'ENABLED' : 'DISABLED'} by ${req.user?.username}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`[Settings] Holiday mode ${newValue ? 'ENABLED' : 'DISABLED'} by ${req.user?.username}`);</span>
 <span class="cstat-no" title="statement not covered" >    res.json({ holidayMode: newValue });</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Error toggling holiday mode:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Error toggling holiday mode:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
@@ -282,7 +282,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
     const holidayMode = <span class="cstat-no" title="statement not covered" >await Settings.getValue('holidayMode', false);</span>
 <span class="cstat-no" title="statement not covered" >    res.json({ holidayMode });</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Error fetching holiday status:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Error fetching holiday status:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
@@ -295,7 +295,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>

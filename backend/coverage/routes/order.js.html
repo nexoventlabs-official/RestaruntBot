@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/403</span>
+                <span class='fraction'>0/404</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/396</span>
+                <span class='fraction'>0/397</span>
             </div>
         
             
@@ -936,7 +936,9 @@
 <a name='L871'></a><a href='#L871'>871</a>
 <a name='L872'></a><a href='#L872'>872</a>
 <a name='L873'></a><a href='#L873'>873</a>
-<a name='L874'></a><a href='#L874'>874</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L874'></a><a href='#L874'>874</a>
+<a name='L875'></a><a href='#L875'>875</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1819,8 +1821,9 @@ const googleSheets = <span class="cstat-no" title="statement not covered" >requi
 const razorpayService = <span class="cstat-no" title="statement not covered" >require('../services/razorpay');</span>
 const chatbotImagesService = <span class="cstat-no" title="statement not covered" >require('../services/chatbotImages');</span>
 const authMiddleware = <span class="cstat-no" title="statement not covered" >require('../middleware/auth');</span>
-const { authorizeAdmin } = <span class="cstat-no" title="statement not covered" >require('../middleware/authorize');</span>
 const { adminRateLimiter } = <span class="cstat-no" title="statement not covered" >require('../middleware/rateLimiter');</span>
+const { validators } = <span class="cstat-no" title="statement not covered" >require('../middleware/inputValidation');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('../services/logger');</span>
 const router = <span class="cstat-no" title="statement not covered" >express.Router();</span>
 &nbsp;
 // Apply admin rate limiting to all order routes
@@ -1835,7 +1838,7 @@ const getGoogleMapsNavigationUrl = <span class="cstat-no" title="statement not c
     }
 <span class="cstat-no" title="statement not covered" >    return null;</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Error getting restaurant location:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Error getting restaurant location', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >    return null;</span>
   }
 };
@@ -1858,8 +1861,8 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
   }
 };
 &nbsp;
-// Lightweight endpoint to check for updates (admin only)
-<span class="cstat-no" title="statement not covered" >router.get('/check-updates', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+// Lightweight endpoint to check for updates (returns hash only)
+<span class="cstat-no" title="statement not covered" >router.get('/check-updates', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { status, lastHash } = <span class="cstat-no" title="statement not covered" >req.query;</span>
     const query = <span class="cstat-no" title="statement not covered" >{ isHidden: { $ne: true } };</span>
@@ -1886,7 +1889,7 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
   }
 });
 &nbsp;
-<span class="cstat-no" title="statement not covered" >router.get('/', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >router.get('/', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { status, page = <span class="branch-0 cbranch-no" title="branch not covered" >1,</span> limit = <span class="branch-0 cbranch-no" title="branch not covered" >20 </span>} = <span class="cstat-no" title="statement not covered" >req.query;</span>
     const query = <span class="cstat-no" title="statement not covered" >{ isHidden: { $ne: true } };</span>
@@ -1908,8 +1911,8 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
   }
 });
 &nbsp;
-// Get order history from Google Sheets (admin only)
-<span class="cstat-no" title="statement not covered" >router.get('/history', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+// Get order history from Google Sheets (cost-saving - not from MongoDB)
+<span class="cstat-no" title="statement not covered" >router.get('/history', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { page = <span class="branch-0 cbranch-no" title="branch not covered" >1,</span> limit = <span class="branch-0 cbranch-no" title="branch not covered" >30,</span> search, status } = <span class="cstat-no" title="statement not covered" >req.query;</span>
     
@@ -1935,13 +1938,13 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
       page: parseInt(page),
     });
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('Error fetching order history:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Error fetching order history', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ success: false, error: error.message });</span>
   }
 });
 &nbsp;
-// Get refunds with filter (admin only)
-<span class="cstat-no" title="statement not covered" >router.get('/refunds', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+// Get refunds with filter - MUST be before /:id route
+<span class="cstat-no" title="statement not covered" >router.get('/refunds', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { status } = <span class="cstat-no" title="statement not covered" >req.query;</span>
     let query = <span class="cstat-no" title="statement not covered" >{ refundStatus: { $ne: 'none' } };</span>
@@ -1964,8 +1967,8 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
   }
 });
 &nbsp;
-// Get pending refund requests (admin only)
-<span class="cstat-no" title="statement not covered" >router.get('/refunds/pending', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+// Get pending refund requests - MUST be before /:id route
+<span class="cstat-no" title="statement not covered" >router.get('/refunds/pending', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const orders = <span class="cstat-no" title="statement not covered" >await Order.find({ refundStatus: 'pending' }).sort({ createdAt: -1 });</span>
 <span class="cstat-no" title="statement not covered" >    res.json(orders);</span>
@@ -1974,7 +1977,7 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
   }
 });
 &nbsp;
-<span class="cstat-no" title="statement not covered" >router.get('/:id', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >router.get('/:id', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { id } = <span class="cstat-no" title="statement not covered" >req.params;</span>
     let order;
@@ -2000,13 +2003,13 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
   }
 });
 &nbsp;
-<span class="cstat-no" title="statement not covered" >router.put('/:id/status', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >  console.log('🔄 PUT /orders/:id/status called with id:', req.params.id, 'body:', req.body);</span>
+<span class="cstat-no" title="statement not covered" >router.put('/:id/status', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >  logger.info('PUT /orders/:id/status called', { id: req.params.id, body: req.body });</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { status, message, actualPaymentMethod } = <span class="cstat-no" title="statement not covered" >req.body;</span>
     const order = <span class="cstat-no" title="statement not covered" >await Order.findById(req.params.id);</span>
 <span class="cstat-no" title="statement not covered" >    if (!order) <span class="cstat-no" title="statement not covered" >return res.status(404).json({ error: 'Order not found' });</span></span>
-<span class="cstat-no" title="statement not covered" >    console.log('📋 Found order:', order.orderId, 'current status:', order.status, 'new status:', status);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('Found order', { orderId: order.orderId, currentStatus: order.status, newStatus: status });</span>
 &nbsp;
     const statusLabels = <span class="cstat-no" title="statement not covered" >{</span>
       pending: 'Pending', confirmed: 'Confirmed', preparing: 'Preparing', ready: 'Ready',
@@ -2024,13 +2027,13 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
         status: 'paid', 
         message: `Payment collected via ${actualPaymentMethod === 'cash' ? 'Cash' : 'UPI'} at hotel` 
       });
-<span class="cstat-no" title="statement not covered" >      console.log(`💰 Pickup order payment: ${actualPaymentMethod}`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`Pickup order payment: ${actualPaymentMethod}`);</span>
     }
     
     // Handle actual payment method for delivery COD orders
 <span class="cstat-no" title="statement not covered" >    if (actualPaymentMethod &amp;&amp; order.serviceType === 'delivery' &amp;&amp; order.paymentMethod === 'cod') {</span>
 <span class="cstat-no" title="statement not covered" >      order.actualPaymentMethod = actualPaymentMethod;</span>
-<span class="cstat-no" title="statement not covered" >      console.log(`💰 Delivery COD payment: ${actualPaymentMethod}`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`Delivery COD payment: ${actualPaymentMethod}`);</span>
     }
     
     // Track when status changed to delivered/cancelled/refunded for auto-cleanup
@@ -2072,7 +2075,7 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
 <span class="cstat-no" title="statement not covered" >          stats.lastUpdated = new Date();</span>
 <span class="cstat-no" title="statement not covered" >          await stats.save();</span>
           
-<span class="cstat-no" title="statement not covered" >          console.log(`📊 Today's revenue updated: +₹${order.totalAmount} (Total: ₹${stats.todayRevenue})`);</span>
+<span class="cstat-no" title="statement not covered" >          logger.info(`Today's revenue updated: +₹${order.totalAmount} (Total: ₹${stats.todayRevenue})`);</span>
           
           // Also update Google Sheets dashboard in real-time
 <span class="cstat-no" title="statement not covered" >          try {</span>
@@ -2083,12 +2086,12 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
             
             // Update today's daily report in real-time using helper function
 <span class="cstat-no" title="statement not covered" >            await googleSheets.syncTodayDailyReport();</span>
-<span class="cstat-no" title="statement not covered" >            console.log('📊 Google Sheets dashboard and daily report updated in real-time');</span>
+<span class="cstat-no" title="statement not covered" >            logger.info('Google Sheets dashboard and daily report updated in real-time');</span>
           } catch (sheetsErr) {
-<span class="cstat-no" title="statement not covered" >            console.error('Google Sheets update error:', sheetsErr.message);</span>
+<span class="cstat-no" title="statement not covered" >            logger.error('Google Sheets update error', { error: sheetsErr.message });</span>
           }
         } catch (statsErr) {
-<span class="cstat-no" title="statement not covered" >          console.error('Error updating today revenue:', statsErr.message);</span>
+<span class="cstat-no" title="statement not covered" >          logger.error('Error updating today revenue', { error: statsErr.message });</span>
         }
       }
     }
@@ -2102,9 +2105,9 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
 <span class="cstat-no" title="statement not covered" >    if (status === 'delivered' || status === 'cancelled') {</span>
 <span class="cstat-no" title="statement not covered" >      try {</span>
 <span class="cstat-no" title="statement not covered" >        await googleSheets.syncTodayDailyReport();</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`📊 Google Sheets daily report updated for ${status} order`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`Google Sheets daily report updated for ${status} order`);</span>
       } catch (sheetsErr) {
-<span class="cstat-no" title="statement not covered" >        console.error(`Google Sheets update error for ${status} order:`, sheetsErr.message);</span>
+<span class="cstat-no" title="statement not covered" >        logger.error(`Google Sheets update error for ${status} order`, { error: sheetsErr.message });</span>
       }
     }
     
@@ -2120,16 +2123,16 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
             orderId: order.orderId,
             totalAmount: order.totalAmount
           });
-<span class="cstat-no" title="statement not covered" >          console.log(`📱 Cancelled notification sent to ${deliveryBoy.name}`);</span>
+<span class="cstat-no" title="statement not covered" >          logger.info(`Cancelled notification sent to ${deliveryBoy.name}`);</span>
         }
       } catch (pushErr) {
-<span class="cstat-no" title="statement not covered" >        console.error('Push notification error for cancelled order:', pushErr.message);</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('Push notification error for cancelled order', { error: pushErr.message });</span>
       }
     }
     
     // For paid UPI orders that are cancelled, mark refund as pending (wait for Razorpay)
 <span class="cstat-no" title="statement not covered" >    if (status === 'cancelled' &amp;&amp; order.paymentStatus === 'paid' &amp;&amp; order.razorpayPaymentId) {</span>
-<span class="cstat-no" title="statement not covered" >      console.log('💰 Marking refund as pending for order:', order.orderId);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('Marking refund as pending for order', { orderId: order.orderId });</span>
       
 <span class="cstat-no" title="statement not covered" >      order.refundStatus = 'pending';</span>
 <span class="cstat-no" title="statement not covered" >      order.refundAmount = order.totalAmount;</span>
@@ -2140,28 +2143,28 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
         message: `Refund of ₹${order.totalAmount} is being processed`, 
         timestamp: new Date() 
       });
-<span class="cstat-no" title="statement not covered" >      console.log('⏳ Refund pending for order:', order.orderId);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('Refund pending for order', { orderId: order.orderId });</span>
     }
     
 <span class="cstat-no" title="statement not covered" >    try {</span>
 <span class="cstat-no" title="statement not covered" >      await order.save();</span>
-<span class="cstat-no" title="statement not covered" >      console.log('✅ Order saved to DB:', order.orderId, 'status:', order.status, 'paymentStatus:', order.paymentStatus);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('Order saved to DB', { orderId: order.orderId, status: order.status, paymentStatus: order.paymentStatus });</span>
     } catch (saveErr) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Order save error:', saveErr.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Order save error', { error: saveErr.message });</span>
 <span class="cstat-no" title="statement not covered" >      return res.status(500).json({ error: 'Failed to save order: ' + saveErr.message });</span>
     }
 &nbsp;
     // Sync status update to Google Sheets
 <span class="cstat-no" title="statement not covered" >    try {</span>
-<span class="cstat-no" title="statement not covered" >      console.log('📊 Syncing to Google Sheets:', order.orderId, order.status, order.paymentStatus);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('Syncing to Google Sheets', { orderId: order.orderId, status: order.status, paymentStatus: order.paymentStatus });</span>
       const sheetUpdated = <span class="cstat-no" title="statement not covered" >await googleSheets.updateOrderStatus(order.orderId, order.status, order.paymentStatus, actualPaymentMethod);</span>
 <span class="cstat-no" title="statement not covered" >      if (sheetUpdated) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log('✅ Google Sheets synced successfully');</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('Google Sheets synced successfully');</span>
       } else {
-<span class="cstat-no" title="statement not covered" >        console.log('⚠️ Google Sheets update returned false - order may not exist in sheet');</span>
+<span class="cstat-no" title="statement not covered" >        logger.warn('Google Sheets update returned false - order may not exist in sheet');</span>
       }
     } catch (err) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Google Sheets sync error:', err.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Google Sheets sync error', { error: err.message });</span>
     }
 &nbsp;
     // Notify customer via WhatsApp (don't fail if notification fails)
@@ -2317,7 +2320,7 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
                 );
               }
             } catch (callErr) {
-<span class="cstat-no" title="statement not covered" >              console.error('Failed to send call button:', callErr.message);</span>
+<span class="cstat-no" title="statement not covered" >              logger.error('Failed to send call button', { error: callErr.message });</span>
             }
           }
         } else <span class="cstat-no" title="statement not covered" >if (status === 'preparing') {</span>
@@ -2405,7 +2408,7 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
 <span class="cstat-no" title="statement not covered" >          await whatsapp.sendMessage(order.customer.phone, msg);</span>
         }
       } catch (whatsappError) {
-<span class="cstat-no" title="statement not covered" >        console.error('WhatsApp notification failed:', whatsappError.message);</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('WhatsApp notification failed', { error: whatsappError.message });</span>
       }
     }
 &nbsp;
@@ -2414,7 +2417,7 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
 <span class="cstat-no" title="statement not covered" >      try {</span>
 <span class="cstat-no" title="statement not covered" >        await brevoMail.sendStatusUpdate(order.customer.email, order.orderId, status, statusMessages[status] || '');</span>
       } catch (emailError) {
-<span class="cstat-no" title="statement not covered" >        console.error('Email notification failed:', emailError.message);</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('Email notification failed', { error: emailError.message });</span>
       }
     }
 &nbsp;
@@ -2429,7 +2432,7 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
 <span class="cstat-no" title="statement not covered" >      try {</span>
         // Update customer order history in Google Sheets (non-blocking)
 <span class="cstat-no" title="statement not covered" >        googleSheets.updateCustomerOrder(order.customer.phone, order, status).catch(<span class="fstat-no" title="function not covered" >er</span>r =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >          console.error('Failed to update customer order in sheets:', err.message);</span>
+<span class="cstat-no" title="statement not covered" >          logger.error('Failed to update customer order in sheets', { error: err.message });</span>
         });
         
         // Wait a small delay to ensure Google Sheets sync is complete
@@ -2438,11 +2441,11 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
             { _id: order._id },
             { $set: { isHidden: true } }
           );
-<span class="cstat-no" title="statement not covered" >          console.log(`🧹 Order ${order.orderId} hidden from dashboard (status: ${status})`);</span>
+<span class="cstat-no" title="statement not covered" >          logger.info(`Order ${order.orderId} hidden from dashboard (status: ${status})`);</span>
 <span class="cstat-no" title="statement not covered" >          dataEvents.emit('orders');</span>
         }, 3000); // 3 second delay to ensure sheets sync
       } catch (cleanupErr) {
-<span class="cstat-no" title="statement not covered" >        console.error('Instant cleanup error:', cleanupErr.message);</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('Instant cleanup error', { error: cleanupErr.message });</span>
       }
     }
 &nbsp;
@@ -2452,8 +2455,8 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
   }
 });
 &nbsp;
-// Assign delivery partner to order (admin only)
-<span class="cstat-no" title="statement not covered" >router.put('/:id/assign-delivery', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+// Assign delivery partner to order
+<span class="cstat-no" title="statement not covered" >router.put('/:id/assign-delivery', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { deliveryBoyId } = <span class="cstat-no" title="statement not covered" >req.body;</span>
     const DeliveryBoy = <span class="cstat-no" title="statement not covered" >require('../models/DeliveryBoy');</span>
@@ -2494,9 +2497,9 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
 <span class="cstat-no" title="statement not covered" >    if (deliveryBoy.pushToken) {</span>
 <span class="cstat-no" title="statement not covered" >      try {</span>
 <span class="cstat-no" title="statement not covered" >        await pushNotification.sendNewOrderNotification(deliveryBoy.pushToken, orderDetails);</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`📱 Push notification sent to ${deliveryBoy.name}`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`Push notification sent to ${deliveryBoy.name}`);</span>
       } catch (pushErr) {
-<span class="cstat-no" title="statement not covered" >        console.error('Push notification error:', pushErr.message);</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('Push notification error', { error: pushErr.message });</span>
       }
     }
     
@@ -2508,9 +2511,9 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
           deliveryBoy.name,
           orderDetails
         );
-<span class="cstat-no" title="statement not covered" >        console.log(`📧 Email notification sent to ${deliveryBoy.email}`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`Email notification sent to ${deliveryBoy.email}`);</span>
       } catch (emailErr) {
-<span class="cstat-no" title="statement not covered" >        console.error('Email notification error:', emailErr.message);</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('Email notification error', { error: emailErr.message });</span>
       }
     }
     
@@ -2518,7 +2521,7 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
 <span class="cstat-no" title="statement not covered" >    try {</span>
 <span class="cstat-no" title="statement not covered" >      await googleSheets.updateDeliveryPartner(order.orderId, deliveryBoy.name);</span>
     } catch (err) {
-<span class="cstat-no" title="statement not covered" >      console.error('Google Sheets delivery partner update error:', err.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Google Sheets delivery partner update error', { error: err.message });</span>
     }
     
     // Emit event for real-time updates
@@ -2531,7 +2534,7 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
   }
 });
 &nbsp;
-<span class="cstat-no" title="statement not covered" >router.put('/:id/delivery-time', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >router.put('/:id/delivery-time', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { estimatedDeliveryTime } = <span class="cstat-no" title="statement not covered" >req.body;</span>
     const order = <span class="cstat-no" title="statement not covered" >await Order.findByIdAndUpdate(</span>
@@ -2544,7 +2547,7 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
 <span class="cstat-no" title="statement not covered" >      await whatsapp.sendMessage(order.customer.phone,</span>
         `⏰ *Delivery Update*\n\nOrder: ${order.orderId}\nEstimated delivery: ${new Date(estimatedDeliveryTime).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}`);
     } catch (whatsappError) {
-<span class="cstat-no" title="statement not covered" >      console.error('WhatsApp notification failed:', whatsappError.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('WhatsApp notification failed', { error: whatsappError.message });</span>
     }
     
 <span class="cstat-no" title="statement not covered" >    res.json(order);</span>
@@ -2553,8 +2556,8 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
   }
 });
 &nbsp;
-// Approve refund by orderId (admin only)
-<span class="cstat-no" title="statement not covered" >router.post('/:orderId/refund/approve', authMiddleware, authorizeAdmin, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+// Approve refund by orderId
+<span class="cstat-no" title="statement not covered" >router.post('/:orderId/refund/approve', authMiddleware, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const order = <span class="cstat-no" title="statement not covered" >await Order.findOne({ orderId: req.params.orderId });</span>
 <span class="cstat-no" title="statement not covered" >    if (!order) <span class="cstat-no" title="statement not covered" >return res.status(404).json({ error: 'Order not found' });</span></span>
@@ -2585,10 +2588,10 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
             [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
           );
         } catch (e) {
-<span class="cstat-no" title="statement not covered" >          console.error('WhatsApp notification failed:', e.message);</span>
+<span class="cstat-no" title="statement not covered" >          logger.error('WhatsApp notification failed', { error: e.message });</span>
         }
       } catch (refundError) {
-<span class="cstat-no" title="statement not covered" >        console.error('Razorpay refund error:', refundError);</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('Razorpay refund error', { error: refundError.message });</span>
 <span class="cstat-no" title="statement not covered" >        order.refundStatus = 'failed';</span>
 <span class="cstat-no" title="statement not covered" >        order.status = 'refund_failed';</span>
 <span class="cstat-no" title="statement not covered" >        order.paymentStatus = 'refund_failed';</span>
@@ -2597,7 +2600,7 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
         
         // Sync to Google Sheets with failed status
 <span class="cstat-no" title="statement not covered" >        googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed').catch(<span class="fstat-no" title="function not covered" >er</span>r =&gt; </span>
-<span class="cstat-no" title="statement not covered" >          console.error('Google Sheets sync error:', err)</span>
+<span class="cstat-no" title="statement not covered" >          logger.error('Google Sheets sync error', { error: err.message })</span>
         );
         
         // Emit event for real-time updates
@@ -2623,7 +2626,7 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
           [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
         );
       } catch (e) {
-<span class="cstat-no" title="statement not covered" >        console.error('WhatsApp notification failed:', e.message);</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('WhatsApp notification failed', { error: e.message });</span>
       }
     }
     
@@ -2636,7 +2639,7 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
     
     // Sync to Google Sheets
 <span class="cstat-no" title="statement not covered" >    googleSheets.updateOrderStatus(order.orderId, order.status, order.paymentStatus).catch(<span class="fstat-no" title="function not covered" >er</span>r =&gt; </span>
-<span class="cstat-no" title="statement not covered" >      console.error('Google Sheets sync error:', err)</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Google Sheets sync error', { error: err.message })</span>
     );
     
 <span class="cstat-no" title="statement not covered" >    res.json({ success: true, order });</span>
@@ -2672,7 +2675,7 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
         [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
       );
     } catch (e) {
-<span class="cstat-no" title="statement not covered" >      console.error('WhatsApp notification failed:', e.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('WhatsApp notification failed', { error: e.message });</span>
     }
     
 <span class="cstat-no" title="statement not covered" >    res.json({ success: true, order });</span>
@@ -2689,7 +2692,7 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.865Z
+                at 2026-02-06T08:02:54.748Z
             </div>
         <script src="../prettify.js"></script>
         <script>

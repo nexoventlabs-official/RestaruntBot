@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/63</span>
+                <span class='fraction'>0/64</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/63</span>
+                <span class='fraction'>0/64</span>
             </div>
         
             
@@ -317,7 +317,8 @@
 <a name='L252'></a><a href='#L252'>252</a>
 <a name='L253'></a><a href='#L253'>253</a>
 <a name='L254'></a><a href='#L254'>254</a>
-<a name='L255'></a><a href='#L255'>255</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L255'></a><a href='#L255'>255</a>
+<a name='L256'></a><a href='#L256'>256</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -331,6 +332,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -586,6 +588,7 @@
  */
 &nbsp;
 const { RateLimiterRedis } = <span class="cstat-no" title="statement not covered" >require('rate-limiter-flexible');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('../services/logger');</span>
 const { getClient } = <span class="cstat-no" title="statement not covered" >require('../services/redis');</span>
 &nbsp;
 // Get Redis client
@@ -652,7 +655,7 @@ function <span class="fstat-no" title="function not covered" >createRateLimiterM
 <span class="cstat-no" title="statement not covered" >      res.setHeader('X-RateLimit-Reset', new Date(Date.now() + rateLimiterRes.msBeforeNext).toISOString());</span>
 <span class="cstat-no" title="statement not covered" >      res.setHeader('Retry-After', retryAfter);</span>
       
-<span class="cstat-no" title="statement not covered" >      console.warn(`⚠️ [RateLimit] Limit exceeded: ${key} (${rateLimiter.keyPrefix})`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.warn(`⚠️ [RateLimit] Limit exceeded: ${key} (${rateLimiter.keyPrefix})`);</span>
       
 <span class="cstat-no" title="statement not covered" >      return res.status(429).json({</span>
         error: message,
@@ -754,7 +757,7 @@ async function <span class="fstat-no" title="function not covered" >getRateLimit
     
 <span class="cstat-no" title="statement not covered" >    return stats;</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [RateLimit] Failed to get stats:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [RateLimit] Failed to get stats:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return { error: error.message };</span>
   }
 }
@@ -767,18 +770,18 @@ async function <span class="fstat-no" title="function not covered" >clearRateLim
 <span class="cstat-no" title="statement not covered" >    if (prefix) {</span>
       const key = <span class="cstat-no" title="statement not covered" >`${prefix}:${ip}`;</span>
 <span class="cstat-no" title="statement not covered" >      await redisClient.del(key);</span>
-<span class="cstat-no" title="statement not covered" >      console.log(`✅ [RateLimit] Cleared rate limit for ${key}`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`✅ [RateLimit] Cleared rate limit for ${key}`);</span>
     } else {
       // Clear all prefixes for this IP
       const keys = <span class="cstat-no" title="statement not covered" >await redisClient.keys(`rl:*:${ip}`);</span>
 <span class="cstat-no" title="statement not covered" >      if (keys.length &gt; 0) {</span>
 <span class="cstat-no" title="statement not covered" >        await redisClient.del(...keys);</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`✅ [RateLimit] Cleared ${keys.length} rate limits for ${ip}`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`✅ [RateLimit] Cleared ${keys.length} rate limits for ${ip}`);</span>
       }
     }
 <span class="cstat-no" title="statement not covered" >    return true;</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [RateLimit] Failed to clear rate limit:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [RateLimit] Failed to clear rate limit:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return false;</span>
   }
 }
@@ -804,7 +807,7 @@ async function <span class="fstat-no" title="function not covered" >getRateLimit
       expiresAt: new Date(Date.now() + ttl * 1000).toISOString()
     };
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('❌ [RateLimit] Failed to get rate limit info:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('❌ [RateLimit] Failed to get rate limit info:', error.message);</span>
 <span class="cstat-no" title="statement not covered" >    return { error: error.message };</span>
   }
 }
@@ -832,7 +835,7 @@ async function <span class="fstat-no" title="function not covered" >getRateLimit
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.865Z
+                at 2026-02-06T08:02:54.748Z
             </div>
         <script src="../prettify.js"></script>
         <script>

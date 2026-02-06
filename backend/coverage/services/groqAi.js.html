@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/244</span>
+                <span class='fraction'>0/245</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/230</span>
+                <span class='fraction'>0/231</span>
             </div>
         
             
@@ -1025,7 +1025,9 @@
 <a name='L960'></a><a href='#L960'>960</a>
 <a name='L961'></a><a href='#L961'>961</a>
 <a name='L962'></a><a href='#L962'>962</a>
-<a name='L963'></a><a href='#L963'>963</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L963'></a><a href='#L963'>963</a>
+<a name='L964'></a><a href='#L964'>964</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1988,6 +1990,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const Groq = <span class="cstat-no" title="statement not covered" >require('groq-sdk');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('./logger');</span>
 &nbsp;
 let groq = <span class="cstat-no" title="statement not covered" >null;</span>
 const getGroq = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >()</span> =&gt; {</span>
@@ -2016,10 +2019,10 @@ const groqAi = <span class="cstat-no" title="statement not covered" >{</span>
         prompt: 'Food ordering: dosa, idli, vada, sambar, rasam, biryani, pulao, curry, rice, roti, parotta, chapati, naan, paneer, chicken, mutton, fish, prawn, egg, masala, butter, ghee, curd, dal, fry, gravy, soup, juice, coffee, tea, lassi, buttermilk, payasam, halwa, gulab jamun, jalebi, pongal, upma, pesarattu, uttapam, appam, puttu, poori, bonda, bajji, pakora, manchurian, fried rice, noodles, gobi, aloo, palak, mushroom, tomato, onion, gongura, pulihora, curd rice, lemon rice, tamarind rice, coconut rice, veg, non-veg, spicy, mild, hot, cold, sweet, order, cart, menu, cancel, status, track, delivery, pickup, dine-in'
       });
       
-<span class="cstat-no" title="statement not covered" >      console.log('🎤 Transcription result:', transcription);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('Transcription result', { data: transcription });</span>
 <span class="cstat-no" title="statement not covered" >      return transcription || '';</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('❌ Groq transcription error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Groq transcription error', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >      return null;</span>
     }
   },
@@ -2164,10 +2167,10 @@ EXAMPLES:
       // Remove duplicates
 <span class="cstat-no" title="statement not covered" >      variations = [...new Set(variations)];</span>
       
-<span class="cstat-no" title="statement not covered" >      console.log(`🌐 Translated "${text}" to variations: [${variations.join(', ')}]`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('Translated text', { original: text, variations });</span>
 <span class="cstat-no" title="statement not covered" >      return { primary: variations[0], variations };</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Groq translation error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Groq translation error', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >      return { primary: text, variations: [text] };</span>
     }
   },
@@ -2234,10 +2237,10 @@ If already standard or you're unsure, return as is.`
 <span class="cstat-no" title="statement not covered" >        return text;</span>
       }
       
-<span class="cstat-no" title="statement not covered" >      console.log(`🔤 Romanized "${text}" → "${translated}"`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('Romanized translation', { original: text, translated });</span>
 <span class="cstat-no" title="statement not covered" >      return translated;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Groq romanized translation error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Groq romanized translation error', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >      return text;</span>
     }
   },
@@ -2256,7 +2259,7 @@ If already standard or you're unsure, return as is.`
       });
 <span class="cstat-no" title="statement not covered" >      return completion.choices[0]?.message?.content?.trim() || '';</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Groq AI error:', error);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Groq AI error', { error: error.message, stack: error.stack });</span>
 <span class="cstat-no" title="statement not covered" >      throw new Error('Failed to generate description: ' + error.message);</span>
     }
   },
@@ -2423,7 +2426,7 @@ If already standard or you're unsure, return as is.`
       // Limit to 8-10 unique tags maximum
 <span class="cstat-no" title="statement not covered" >      return [...new Set(finalTags)].slice(0, 10).join(', ');</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Groq AI tags error:', error);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Groq AI tags error', { error: error.message, stack: error.stack });</span>
       // Fallback: generate basic tags without AI
       const categories = <span class="cstat-no" title="statement not covered" >Array.isArray(category) ? category : [category];</span>
       const foodTypeLabel = <span class="cstat-no" title="statement not covered" >foodType === 'veg' ? 'veg' : foodType === 'nonveg' ? 'nonveg' : foodType === 'egg' ? 'egg' : '';</span>
@@ -2458,7 +2461,7 @@ If already standard or you're unsure, return as is.`
 <span class="cstat-no" title="statement not covered" >    try {</span>
       // Check for gibberish search - don't waste AI call
 <span class="cstat-no" title="statement not covered" >      if (this.isGibberishSearch(searchQuery)) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`🚫 Gibberish search detected: "${searchQuery}" - skipping tag matching`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('Gibberish search detected, skipping tag matching', { query: searchQuery });</span>
 <span class="cstat-no" title="statement not covered" >        return [];</span>
       }
       
@@ -2506,7 +2509,7 @@ Return ONLY comma-separated matching tags from the available list. No explanatio
       
       // Check if no match found
 <span class="cstat-no" title="statement not covered" >      if (matchedTagsText.toUpperCase() === 'NONE' || matchedTagsText.toLowerCase().includes('no match')) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`🤖 AI tag match: "${searchQuery}" → No matches found`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('AI tag match: No matches found', { query: searchQuery });</span>
 <span class="cstat-no" title="statement not covered" >        return [];</span>
       }
       
@@ -2517,10 +2520,10 @@ Return ONLY comma-separated matching tags from the available list. No explanatio
         .map(<span class="fstat-no" title="function not covered" >ta</span>g =&gt; <span class="cstat-no" title="statement not covered" >tag.trim().toLowerCase())</span>
         .filter(<span class="fstat-no" title="function not covered" >ta</span>g =&gt; <span class="cstat-no" title="statement not covered" >tag.length &gt; 0 &amp;&amp; tag.length &lt; 30 &amp;&amp; uniqueTags.includes(tag))</span>;
       
-<span class="cstat-no" title="statement not covered" >      console.log(`🤖 AI tag match: "${searchQuery}" → [${matchedTags.join(', ')}]`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('AI tag match', { query: searchQuery, matchedTags });</span>
 <span class="cstat-no" title="statement not covered" >      return matchedTags;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Groq AI tag matching error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Groq AI tag matching error', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >      return [];</span>
     }
   },
@@ -2531,7 +2534,7 @@ Return ONLY comma-separated matching tags from the available list. No explanatio
 <span class="cstat-no" title="statement not covered" >    try {</span>
       // Skip gibberish
 <span class="cstat-no" title="statement not covered" >      if (this.isGibberishSearch(misspelledQuery)) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`🚫 Gibberish search: "${misspelledQuery}" - skipping spell check`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('Gibberish search, skipping spell check', { query: misspelledQuery });</span>
 <span class="cstat-no" title="statement not covered" >        return { correctedQuery: null, matchedTags: [] };</span>
       }
       
@@ -2580,7 +2583,7 @@ Find closest matching tags for this misspelled search.`
       
       // Check for NONE
 <span class="cstat-no" title="statement not covered" >      if (response.toUpperCase().includes('NONE')) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`🔤 No close match for: "${misspelledQuery}"`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('No close match found', { query: misspelledQuery });</span>
 <span class="cstat-no" title="statement not covered" >        return { correctedQuery: null, matchedTags: [] };</span>
       }
       
@@ -2600,10 +2603,10 @@ Find closest matching tags for this misspelled search.`
           .filter(<span class="fstat-no" title="function not covered" >ta</span>g =&gt; <span class="cstat-no" title="statement not covered" >tag.length &gt; 0 &amp;&amp; uniqueTags.map(<span class="fstat-no" title="function not covered" >t </span>=&gt; <span class="cstat-no" title="statement not covered" >t.toLowerCase())</span>.includes(tag))</span>;
       }
       
-<span class="cstat-no" title="statement not covered" >      console.log(`🔤 Spell correction: "${misspelledQuery}" → "${correctedQuery}" → [${matchedTags.join(', ')}]`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('Spell correction', { original: misspelledQuery, corrected: correctedQuery, matchedTags });</span>
 <span class="cstat-no" title="statement not covered" >      return { correctedQuery, matchedTags };</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Groq spell correction error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Groq spell correction error', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >      return { correctedQuery: null, matchedTags: [] };</span>
     }
   },
@@ -2647,7 +2650,7 @@ Find closest matching tags for this misspelled search.`
 <span class="cstat-no" title="statement not covered" >    try {</span>
       // Check for gibberish search - don't waste AI call
 <span class="cstat-no" title="statement not covered" >      if (this.isGibberishSearch(searchQuery)) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`🚫 Gibberish search detected: "${searchQuery}" - skipping AI`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('Gibberish search detected, skipping AI', { query: searchQuery });</span>
 <span class="cstat-no" title="statement not covered" >        return [];</span>
       }
       
@@ -2711,7 +2714,7 @@ Return ONLY comma-separated item names from the menu that match or are related t
       
       // Check if no match
 <span class="cstat-no" title="statement not covered" >      if (responseText.toUpperCase() === 'NONE' || responseText.toLowerCase().includes('no match') || responseText.toLowerCase().includes('not found')) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`🤖 AI semantic search: "${searchQuery}" → No matches found`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`AI semantic search: "${searchQuery}" → No matches found`);</span>
 <span class="cstat-no" title="statement not covered" >        return [];</span>
       }
       
@@ -2730,10 +2733,10 @@ Return ONLY comma-separated item names from the menu that match or are related t
           );
         });
       
-<span class="cstat-no" title="statement not covered" >      console.log(`🤖 AI semantic search: "${searchQuery}" → [${matchedItems.join(', ')}]`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`AI semantic search: "${searchQuery}" → [${matchedItems.join(', ')}]`);</span>
 <span class="cstat-no" title="statement not covered" >      return matchedItems;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Groq AI semantic search error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Groq AI semantic search error', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >      return [];</span>
     }
   },
@@ -2744,7 +2747,7 @@ Return ONLY comma-separated item names from the menu that match or are related t
 <span class="cstat-no" title="statement not covered" >    try {</span>
       // Check for gibberish search - return as-is (will fail matching anyway)
 <span class="cstat-no" title="statement not covered" >      if (this.isGibberishSearch(searchQuery)) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`🚫 Gibberish search detected: "${searchQuery}" - skipping typo correction`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`Gibberish search detected: "${searchQuery}" - skipping typo correction`);</span>
 <span class="cstat-no" title="statement not covered" >        return searchQuery;</span>
       }
       
@@ -2816,14 +2819,14 @@ Return ONLY the corrected search term. If it's gibberish or no correction needed
       
 <span class="cstat-no" title="statement not covered" >      if (cleanCorrected &amp;&amp; cleanCorrected.length &gt; 0 &amp;&amp; cleanCorrected.length &lt; 50) {</span>
 <span class="cstat-no" title="statement not covered" >        if (cleanCorrected.toLowerCase() !== searchQuery.toLowerCase()) {</span>
-<span class="cstat-no" title="statement not covered" >          console.log(`🤖 AI typo correction: "${searchQuery}" → "${cleanCorrected}"`);</span>
+<span class="cstat-no" title="statement not covered" >          logger.info(`AI typo correction: "${searchQuery}" → "${cleanCorrected}"`);</span>
         }
 <span class="cstat-no" title="statement not covered" >        return cleanCorrected;</span>
       }
       
 <span class="cstat-no" title="statement not covered" >      return searchQuery;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Groq AI typo correction error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Groq AI typo correction error', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >      return searchQuery;</span>
     }
   },
@@ -2833,7 +2836,7 @@ Return ONLY the corrected search term. If it's gibberish or no correction needed
 <span class="cstat-no" title="statement not covered" >    try {</span>
       // Check for gibberish search - don't waste AI call
 <span class="cstat-no" title="statement not covered" >      if (this.isGibberishSearch(searchQuery)) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`🚫 Gibberish search detected: "${searchQuery}" - skipping AI fuzzy search`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`Gibberish search detected: "${searchQuery}" - skipping AI fuzzy search`);</span>
 <span class="cstat-no" title="statement not covered" >        return [];</span>
       }
       
@@ -2903,10 +2906,10 @@ Find ALL menu items that match this search (consider spelling mistakes). Return 
           );
         });
       
-<span class="cstat-no" title="statement not covered" >      console.log(`🤖 AI fuzzy search: "${searchQuery}" → [${matchedItems.join(', ')}]`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`AI fuzzy search: "${searchQuery}" → [${matchedItems.join(', ')}]`);</span>
 <span class="cstat-no" title="statement not covered" >      return matchedItems;</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Groq AI fuzzy search error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Groq AI fuzzy search error', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >      return [];</span>
     }
   },
@@ -2942,7 +2945,7 @@ Actions: view_menu, add_to_cart, view_cart, checkout, check_status, cancel_order
       });
 <span class="cstat-no" title="statement not covered" >      return completion.choices[0]?.message?.content || "I'm sorry, I couldn't understand that. Please try again.";</span>
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Groq AI chat error:', error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Groq AI chat error', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >      return "I'm having trouble processing your request. Please try again.";</span>
     }
   }
@@ -2956,7 +2959,7 @@ Actions: view_menu, add_to_cart, view_cart, checkout, check_status, cancel_order
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.865Z
+                at 2026-02-06T08:02:54.748Z
             </div>
         <script src="../prettify.js"></script>
         <script>

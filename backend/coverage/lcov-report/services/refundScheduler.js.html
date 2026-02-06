@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/77</span>
+                <span class='fraction'>0/78</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/77</span>
+                <span class='fraction'>0/78</span>
             </div>
         
             
@@ -237,7 +237,9 @@
 <a name='L172'></a><a href='#L172'>172</a>
 <a name='L173'></a><a href='#L173'>173</a>
 <a name='L174'></a><a href='#L174'>174</a>
-<a name='L175'></a><a href='#L175'>175</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -413,6 +415,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// Refund Scheduler - Processes refund after delay and sends success message
 const Order = <span class="cstat-no" title="statement not covered" >require('../models/Order');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('./logger');</span>
 const whatsapp = <span class="cstat-no" title="statement not covered" >require('./whatsapp');</span>
 const googleSheets = <span class="cstat-no" title="statement not covered" >require('./googleSheets');</span>
 const razorpayService = <span class="cstat-no" title="statement not covered" >require('./razorpay');</span>
@@ -422,7 +425,7 @@ const pendingRefunds = <span class="cstat-no" title="statement not covered" >new
 const refundScheduler = <span class="cstat-no" title="statement not covered" >{</span>
   // Schedule refund to be processed after delay (default 5 minutes)
 <span class="fstat-no" title="function not covered" >  sc</span>heduleRefund(orderId, delayMs = <span class="branch-0 cbranch-no" title="branch not covered" >5 * 60 * 1000)</span> {
-<span class="cstat-no" title="statement not covered" >    console.log(`⏰ Scheduling refund for ${orderId} in ${delayMs / 1000} seconds`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`⏰ Scheduling refund for ${orderId} in ${delayMs / 1000} seconds`);</span>
     
     // Cancel any existing scheduled refund for this order
 <span class="cstat-no" title="statement not covered" >    this.cancelScheduledRefund(orderId);</span>
@@ -440,32 +443,32 @@ const refundScheduler = <span class="cstat-no" title="statement not covered" >{<
       const order = <span class="cstat-no" title="statement not covered" >await Order.findOne({ orderId });</span>
       
 <span class="cstat-no" title="statement not covered" >      if (!order) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`❌ Order ${orderId} not found for refund`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`❌ Order ${orderId} not found for refund`);</span>
 <span class="cstat-no" title="statement not covered" >        return;</span>
       }
       
       // Check if refund should be processed
 <span class="cstat-no" title="statement not covered" >      if (order.refundStatus === 'completed') {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`⚠️ Order ${orderId} already refunded, skipping`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`⚠️ Order ${orderId} already refunded, skipping`);</span>
 <span class="cstat-no" title="statement not covered" >        return;</span>
       }
       
 <span class="cstat-no" title="statement not covered" >      if (order.refundStatus !== 'scheduled' &amp;&amp; order.refundStatus !== 'pending') {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`⚠️ Order ${orderId} refund status is ${order.refundStatus}, skipping`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`⚠️ Order ${orderId} refund status is ${order.refundStatus}, skipping`);</span>
 <span class="cstat-no" title="statement not covered" >        return;</span>
       }
       
 <span class="cstat-no" title="statement not covered" >      if (order.status !== 'cancelled') {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`⚠️ Order ${orderId} is not cancelled (status: ${order.status}), skipping refund`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`⚠️ Order ${orderId} is not cancelled (status: ${order.status}), skipping refund`);</span>
 <span class="cstat-no" title="statement not covered" >        return;</span>
       }
       
 <span class="cstat-no" title="statement not covered" >      if (!order.razorpayPaymentId) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`⚠️ Order ${orderId} has no payment ID, skipping refund`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`⚠️ Order ${orderId} has no payment ID, skipping refund`);</span>
 <span class="cstat-no" title="statement not covered" >        return;</span>
       }
       
-<span class="cstat-no" title="statement not covered" >      console.log(`💰 Processing scheduled refund for order ${orderId}`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`💰 Processing scheduled refund for order ${orderId}`);</span>
       
 <span class="cstat-no" title="statement not covered" >      try {</span>
         // Process the actual refund via Razorpay
@@ -489,7 +492,7 @@ const refundScheduler = <span class="cstat-no" title="statement not covered" >{<
 <span class="cstat-no" title="statement not covered" >        dataEvents.emit('orders');</span>
 <span class="cstat-no" title="statement not covered" >        dataEvents.emit('dashboard');</span>
         
-<span class="cstat-no" title="statement not covered" >        console.log(`✅ Refund completed for order ${orderId}, Refund ID: ${refund.id}`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`✅ Refund completed for order ${orderId}, Refund ID: ${refund.id}`);</span>
         
         // Send WhatsApp success message
 <span class="cstat-no" title="statement not covered" >        await this.sendRefundSuccessMessage(order);</span>
@@ -498,11 +501,11 @@ const refundScheduler = <span class="cstat-no" title="statement not covered" >{<
 <span class="cstat-no" title="statement not covered" >        try {</span>
 <span class="cstat-no" title="statement not covered" >          await googleSheets.updateOrderStatus(order.orderId, 'refunded', 'refunded');</span>
         } catch (err) {
-<span class="cstat-no" title="statement not covered" >          console.error('Google Sheets sync error:', err.message);</span>
+<span class="cstat-no" title="statement not covered" >          logger.error('Google Sheets sync error:', err.message);</span>
         }
         
       } catch (refundError) {
-<span class="cstat-no" title="statement not covered" >        console.error(`❌ Refund failed for order ${orderId}:`, refundError.message);</span>
+<span class="cstat-no" title="statement not covered" >        logger.error(`❌ Refund failed for order ${orderId}:`, refundError.message);</span>
         
         // Update order with failure status
 <span class="cstat-no" title="statement not covered" >        order.refundStatus = 'failed';</span>
@@ -524,7 +527,7 @@ const refundScheduler = <span class="cstat-no" title="statement not covered" >{<
 <span class="cstat-no" title="statement not covered" >        try {</span>
 <span class="cstat-no" title="statement not covered" >          await googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed');</span>
         } catch (err) {
-<span class="cstat-no" title="statement not covered" >          console.error('Google Sheets sync error for failed refund:', err.message);</span>
+<span class="cstat-no" title="statement not covered" >          logger.error('Google Sheets sync error for failed refund:', err.message);</span>
         }
         
         // Send failure notification
@@ -532,7 +535,7 @@ const refundScheduler = <span class="cstat-no" title="statement not covered" >{<
       }
       
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error(`❌ Error processing refund for ${orderId}:`, error.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error(`❌ Error processing refund for ${orderId}:`, error.message);</span>
     }
   },
 &nbsp;
@@ -549,9 +552,9 @@ const refundScheduler = <span class="cstat-no" title="statement not covered" >{<
         { id: 'place_order', text: 'New Order' },
         { id: 'home', text: 'Main Menu' }
       ]);
-<span class="cstat-no" title="statement not covered" >      console.log(`📱 Refund success message sent to ${order.customer.phone}`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`📱 Refund success message sent to ${order.customer.phone}`);</span>
     } catch (whatsappError) {
-<span class="cstat-no" title="statement not covered" >      console.error('WhatsApp refund notification failed:', whatsappError.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('WhatsApp refund notification failed:', whatsappError.message);</span>
     }
   },
 &nbsp;
@@ -568,9 +571,9 @@ const refundScheduler = <span class="cstat-no" title="statement not covered" >{<
         { id: 'place_order', text: 'New Order' },
         { id: 'home', text: 'Main Menu' }
       ]);
-<span class="cstat-no" title="statement not covered" >      console.log(`📱 Refund failure message sent to ${order.customer.phone}`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`📱 Refund failure message sent to ${order.customer.phone}`);</span>
     } catch (whatsappError) {
-<span class="cstat-no" title="statement not covered" >      console.error('WhatsApp refund failure notification failed:', whatsappError.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('WhatsApp refund failure notification failed:', whatsappError.message);</span>
     }
   },
 &nbsp;
@@ -579,7 +582,7 @@ const refundScheduler = <span class="cstat-no" title="statement not covered" >{<
 <span class="cstat-no" title="statement not covered" >    if (timeoutId) {</span>
 <span class="cstat-no" title="statement not covered" >      clearTimeout(timeoutId);</span>
 <span class="cstat-no" title="statement not covered" >      pendingRefunds.delete(orderId);</span>
-<span class="cstat-no" title="statement not covered" >      console.log(`🚫 Cancelled scheduled refund for ${orderId}`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`🚫 Cancelled scheduled refund for ${orderId}`);</span>
     }
   }
 };
@@ -592,7 +595,7 @@ const refundScheduler = <span class="cstat-no" title="statement not covered" >{<
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>

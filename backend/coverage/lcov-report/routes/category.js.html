@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/183</span>
+                <span class='fraction'>0/184</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/179</span>
+                <span class='fraction'>0/180</span>
             </div>
         
             
@@ -458,7 +458,9 @@
 <a name='L393'></a><a href='#L393'>393</a>
 <a name='L394'></a><a href='#L394'>394</a>
 <a name='L395'></a><a href='#L395'>395</a>
-<a name='L396'></a><a href='#L396'>396</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L396'></a><a href='#L396'>396</a>
+<a name='L397'></a><a href='#L397'>397</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -859,12 +861,13 @@ const MenuItem = <span class="cstat-no" title="statement not covered" >require('
 const authMiddleware = <span class="cstat-no" title="statement not covered" >require('../middleware/auth');</span>
 const cloudinaryService = <span class="cstat-no" title="statement not covered" >require('../services/cloudinary');</span>
 const dataEvents = <span class="cstat-no" title="statement not covered" >require('../services/eventEmitter');</span>
-const { adminRateLimiter } = <span class="cstat-no" title="statement not covered" >require('../middleware/rateLimiter');</span>
 const multer = <span class="cstat-no" title="statement not covered" >require('multer');</span>
+const { publicRateLimiter } = <span class="cstat-no" title="statement not covered" >require('../middleware/rateLimiter');</span>
+const logger = <span class="cstat-no" title="statement not covered" >require('../services/logger');</span>
 const router = <span class="cstat-no" title="statement not covered" >express.Router();</span>
 &nbsp;
-// Apply admin rate limiting
-<span class="cstat-no" title="statement not covered" >router.use(adminRateLimiter);</span>
+// Rate limiting for category routes
+<span class="cstat-no" title="statement not covered" >router.use(publicRateLimiter);</span>
 &nbsp;
 // Configure multer for memory storage
 const upload = <span class="cstat-no" title="statement not covered" >multer({</span>
@@ -945,7 +948,7 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
           const publicId = <span class="cstat-no" title="statement not covered" >cloudinaryService.extractPublicId(existingCategory.image);</span>
 <span class="cstat-no" title="statement not covered" >          if (publicId) <span class="cstat-no" title="statement not covered" >await cloudinaryService.deleteImage(publicId);</span></span>
         } catch (e) {
-<span class="cstat-no" title="statement not covered" >          console.log('Could not delete old image:', e.message);</span>
+<span class="cstat-no" title="statement not covered" >          logger.warn('Could not delete old image', { error: e.message });</span>
         }
       }
 <span class="cstat-no" title="statement not covered" >      imageUrl = null;</span>
@@ -957,7 +960,7 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
           const publicId = <span class="cstat-no" title="statement not covered" >cloudinaryService.extractPublicId(existingCategory.image);</span>
 <span class="cstat-no" title="statement not covered" >          if (publicId) <span class="cstat-no" title="statement not covered" >await cloudinaryService.deleteImage(publicId);</span></span>
         } catch (e) {
-<span class="cstat-no" title="statement not covered" >          console.log('Could not delete old image:', e.message);</span>
+<span class="cstat-no" title="statement not covered" >          logger.warn('Could not delete old image', { error: e.message });</span>
         }
       }
 <span class="cstat-no" title="statement not covered" >      imageUrl = await cloudinaryService.uploadFromBuffer(req.file.buffer, 'restaurant-bot/categories');</span>
@@ -1006,15 +1009,15 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { enabled, type, startTime, endTime, days, customDays } = <span class="cstat-no" title="statement not covered" >req.body;</span>
     
-<span class="cstat-no" title="statement not covered" >    console.log(`[Schedule API] Updating schedule for category ${req.params.id}`);</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`[Schedule API] Data:`, { enabled, type, startTime, endTime, days, customDays });</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`[Schedule API] Updating schedule for category ${req.params.id}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('[Schedule API] Data', { enabled, type, startTime, endTime, days, customDays });</span>
     
     const category = <span class="cstat-no" title="statement not covered" >await Category.findById(req.params.id);</span>
 <span class="cstat-no" title="statement not covered" >    if (!category) {</span>
 <span class="cstat-no" title="statement not covered" >      return res.status(404).json({ error: 'Category not found' });</span>
     }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    console.log(`[Schedule API] Category: ${category.name}, Current isPaused: ${category.isPaused}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`[Schedule API] Category: ${category.name}, Current isPaused: ${category.isPaused}`);</span>
 &nbsp;
     // Update schedule
 <span class="cstat-no" title="statement not covered" >    category.schedule = {</span>
@@ -1028,24 +1031,24 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
     };
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    await category.save();</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`[Schedule API] Schedule saved to database`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('[Schedule API] Schedule saved to database');</span>
 &nbsp;
     // Immediately check if category should be paused based on new schedule
 <span class="cstat-no" title="statement not covered" >    if (enabled) {</span>
-<span class="cstat-no" title="statement not covered" >      console.log(`[Schedule API] Running scheduler to update category status...`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('[Schedule API] Running scheduler to update category status...');</span>
       const categoryScheduler = <span class="cstat-no" title="statement not covered" >require('../services/categoryScheduler');</span>
       
 <span class="cstat-no" title="statement not covered" >      try {</span>
 <span class="cstat-no" title="statement not covered" >        await categoryScheduler.updateCategoryStatus(category._id);</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`[Schedule API] Scheduler completed successfully`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('[Schedule API] Scheduler completed successfully');</span>
       } catch (schedulerError) {
-<span class="cstat-no" title="statement not covered" >        console.error(`[Schedule API] Scheduler error:`, schedulerError);</span>
+<span class="cstat-no" title="statement not covered" >        logger.error('[Schedule API] Scheduler error', { error: schedulerError.message });</span>
       }
       
       // Fetch fresh data after scheduler update
       const updatedCategory = <span class="cstat-no" title="statement not covered" >await Category.findById(category._id);</span>
-<span class="cstat-no" title="statement not covered" >      console.log(`[Schedule API] After scheduler: isPaused = ${updatedCategory.isPaused}`);</span>
-<span class="cstat-no" title="statement not covered" >      console.log(`[Schedule API] Returning updated category to client`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`[Schedule API] After scheduler: isPaused = ${updatedCategory.isPaused}`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('[Schedule API] Returning updated category to client');</span>
       
       // Emit event for real-time updates
 <span class="cstat-no" title="statement not covered" >      dataEvents.emit('menu');</span>
@@ -1053,12 +1056,12 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
 <span class="cstat-no" title="statement not covered" >      return res.json(updatedCategory);</span>
     } else {
       // Schedule disabled - unpause category and make all items available
-<span class="cstat-no" title="statement not covered" >      console.log(`[Schedule API] Schedule disabled - unpausing category and making items available`);</span>
-<span class="cstat-no" title="statement not covered" >      console.log(`[Schedule API] Category ${category.name} was isPaused: ${category.isPaused}, isSoldOut: ${category.isSoldOut}`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('[Schedule API] Schedule disabled - unpausing category and making items available');</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`[Schedule API] Category ${category.name} was isPaused: ${category.isPaused}, isSoldOut: ${category.isSoldOut}`);</span>
       
 <span class="cstat-no" title="statement not covered" >      category.isPaused = false;</span>
 <span class="cstat-no" title="statement not covered" >      await category.save();</span>
-<span class="cstat-no" title="statement not covered" >      console.log(`[Schedule API] Category ${category.name} isPaused set to: false`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`[Schedule API] Category ${category.name} isPaused set to: false`);</span>
       
       // Make all items in this category available
       const MenuItem = <span class="cstat-no" title="statement not covered" >require('../models/MenuItem');</span>
@@ -1068,14 +1071,14 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
       );
       
 <span class="cstat-no" title="statement not covered" >      if (updateResult.modifiedCount &gt; 0) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`[Schedule API] Made ${updateResult.modifiedCount} item(s) available in ${category.name}`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`[Schedule API] Made ${updateResult.modifiedCount} item(s) available in ${category.name}`);</span>
       } else {
-<span class="cstat-no" title="statement not covered" >        console.log(`[Schedule API] No items needed availability update in ${category.name}`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`[Schedule API] No items needed availability update in ${category.name}`);</span>
       }
       
       // Fetch fresh data
       const updatedCategory = <span class="cstat-no" title="statement not covered" >await Category.findById(category._id);</span>
-<span class="cstat-no" title="statement not covered" >      console.log(`[Schedule API] Returning category with isPaused: ${updatedCategory.isPaused}`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`[Schedule API] Returning category with isPaused: ${updatedCategory.isPaused}`);</span>
       
       // Emit event for real-time updates
 <span class="cstat-no" title="statement not covered" >      dataEvents.emit('menu');</span>
@@ -1083,7 +1086,7 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
 <span class="cstat-no" title="statement not covered" >      return res.json(updatedCategory);</span>
     }
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('[Schedule API] Error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('[Schedule API] Error', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
@@ -1115,14 +1118,14 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
         { category: category.name },
         { $set: { available: false } }
       );
-<span class="cstat-no" title="statement not covered" >      console.log(`[Category] "${category.name}" marked SOLD OUT - ${result.modifiedCount} item(s) marked out of stock`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`[Category] "${category.name}" marked SOLD OUT - ${result.modifiedCount} item(s) marked out of stock`);</span>
     } else {
       // Mark all items in this category as available
       const result = <span class="cstat-no" title="statement not covered" >await MenuItem.updateMany(</span>
         { category: category.name },
         { $set: { available: true } }
       );
-<span class="cstat-no" title="statement not covered" >      console.log(`[Category] "${category.name}" RESUMED - ${result.modifiedCount} item(s) marked available`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`[Category] "${category.name}" RESUMED - ${result.modifiedCount} item(s) marked available`);</span>
     }
     
     // Emit event for real-time updates
@@ -1141,8 +1144,8 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { enabled, endTime } = <span class="cstat-no" title="statement not covered" >req.body;</span>
     
-<span class="cstat-no" title="statement not covered" >    console.log(`[SoldOut Schedule API] Updating sold out schedule for category ${req.params.id}`);</span>
-<span class="cstat-no" title="statement not covered" >    console.log(`[SoldOut Schedule API] Data:`, { enabled, endTime });</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`[SoldOut Schedule API] Updating sold out schedule for category ${req.params.id}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('[SoldOut Schedule API] Data', { enabled, endTime });</span>
     
     const category = <span class="cstat-no" title="statement not covered" >await Category.findById(req.params.id);</span>
 <span class="cstat-no" title="statement not covered" >    if (!category) {</span>
@@ -1165,7 +1168,7 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
         { category: category.name },
         { $set: { available: false } }
       );
-<span class="cstat-no" title="statement not covered" >      console.log(`[Category] "${category.name}" scheduled SOLD OUT until ${endTime} - ${result.modifiedCount} item(s) marked out of stock`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`[Category] "${category.name}" scheduled SOLD OUT until ${endTime} - ${result.modifiedCount} item(s) marked out of stock`);</span>
     }
     
 <span class="cstat-no" title="statement not covered" >    await category.save();</span>
@@ -1175,7 +1178,7 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
     
 <span class="cstat-no" title="statement not covered" >    res.json(category);</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error('[SoldOut Schedule API] Error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('[SoldOut Schedule API] Error', { error: error.message });</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
 });
@@ -1197,7 +1200,7 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
         const publicId = <span class="cstat-no" title="statement not covered" >cloudinaryService.extractPublicId(category.image);</span>
 <span class="cstat-no" title="statement not covered" >        if (publicId) <span class="cstat-no" title="statement not covered" >await cloudinaryService.deleteImage(publicId);</span></span>
       } catch (e) {
-<span class="cstat-no" title="statement not covered" >        console.log('Could not delete category image:', e.message);</span>
+<span class="cstat-no" title="statement not covered" >        logger.warn('Could not delete category image', { error: e.message });</span>
       }
     }
 &nbsp;
@@ -1216,7 +1219,7 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
             const publicId = <span class="cstat-no" title="statement not covered" >cloudinaryService.extractPublicId(item.image);</span>
 <span class="cstat-no" title="statement not covered" >            if (publicId) <span class="cstat-no" title="statement not covered" >await cloudinaryService.deleteImage(publicId);</span></span>
           } catch (e) {
-<span class="cstat-no" title="statement not covered" >            console.log('Could not delete item image:', e.message);</span>
+<span class="cstat-no" title="statement not covered" >            logger.warn('Could not delete item image', { error: e.message });</span>
           }
         }
 <span class="cstat-no" title="statement not covered" >        await MenuItem.findByIdAndDelete(item._id);</span>
@@ -1255,7 +1258,7 @@ const upload = <span class="cstat-no" title="statement not covered" >multer({</s
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>

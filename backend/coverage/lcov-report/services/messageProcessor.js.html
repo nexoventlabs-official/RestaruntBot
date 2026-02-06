@@ -1017,7 +1017,7 @@ async function <span class="fstat-no" title="function not covered" >processInbou
 <span class="cstat-no" title="statement not covered" >      try {</span>
 <span class="cstat-no" title="statement not covered" >        await inboundMessage.save();</span>
       } catch (saveError) {
-<span class="cstat-no" title="statement not covered" >        console.error(`❌ [MessageProcessor] Failed to save error state:`, saveError.message);</span>
+<span class="cstat-no" title="statement not covered" >        logger.error(`❌ [MessageProcessor] Failed to save error state:`, saveError.message);</span>
       }
     }
     
@@ -1041,7 +1041,7 @@ async function <span class="fstat-no" title="function not covered" >processInbou
 <span class="cstat-no" title="statement not covered" >      await whatsapp.sendMessage(phone, userMessage);</span>
       
     } catch (notifyError) {
-<span class="cstat-no" title="statement not covered" >      console.error(`❌ [MessageProcessor] Failed to send error notification:`, notifyError.message);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error(`❌ [MessageProcessor] Failed to send error notification:`, notifyError.message);</span>
     }
     
 <span class="cstat-no" title="statement not covered" >    return {</span>
@@ -1064,7 +1064,7 @@ async function <span class="fstat-no" title="function not covered" >processInbou
  * @param {number} batchSize - Number of messages to retry in one batch
  */
 async function <span class="fstat-no" title="function not covered" >retryFailedMessages(</span>maxRetries = <span class="branch-0 cbranch-no" title="branch not covered" >3,</span> batchSize = <span class="branch-0 cbranch-no" title="branch not covered" >10)</span> {
-<span class="cstat-no" title="statement not covered" >  console.log(`🔄 [MessageProcessor] Starting retry job (max retries: ${maxRetries}, batch: ${batchSize})`);</span>
+<span class="cstat-no" title="statement not covered" >  logger.info(`🔄 [MessageProcessor] Starting retry job (max retries: ${maxRetries}, batch: ${batchSize})`);</span>
   
 <span class="cstat-no" title="statement not covered" >  try {</span>
     // Find failed messages that are retryable and haven't exceeded max retries
@@ -1079,18 +1079,18 @@ async function <span class="fstat-no" title="function not covered" >retryFailedM
     .limit(batchSize);
     
 <span class="cstat-no" title="statement not covered" >    if (failedMessages.length === 0) {</span>
-<span class="cstat-no" title="statement not covered" >      console.log(`✅ [MessageProcessor] No failed messages to retry`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info(`✅ [MessageProcessor] No failed messages to retry`);</span>
 <span class="cstat-no" title="statement not covered" >      return { retried: 0, succeeded: 0, failed: 0 };</span>
     }
     
-<span class="cstat-no" title="statement not covered" >    console.log(`🔄 [MessageProcessor] Found ${failedMessages.length} messages to retry`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`🔄 [MessageProcessor] Found ${failedMessages.length} messages to retry`);</span>
     
     let succeeded = <span class="cstat-no" title="statement not covered" >0;</span>
     let failed = <span class="cstat-no" title="statement not covered" >0;</span>
     
 <span class="cstat-no" title="statement not covered" >    for (const msg of failedMessages) {</span>
 <span class="cstat-no" title="statement not covered" >      try {</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`🔄 [MessageProcessor] Retrying message ${msg.messageId} (attempt ${msg.retryCount + 1})`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`🔄 [MessageProcessor] Retrying message ${msg.messageId} (attempt ${msg.retryCount + 1})`);</span>
         
         // Reset status to received for reprocessing
 <span class="cstat-no" title="statement not covered" >        msg.status = 'received';</span>
@@ -1114,7 +1114,7 @@ async function <span class="fstat-no" title="function not covered" >retryFailedM
 <span class="cstat-no" title="statement not covered" >        await msg.save();</span>
         
 <span class="cstat-no" title="statement not covered" >        succeeded++;</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`✅ [MessageProcessor] Retry succeeded for message ${msg.messageId}`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info(`✅ [MessageProcessor] Retry succeeded for message ${msg.messageId}`);</span>
         
       } catch (retryError) {
 <span class="cstat-no" title="statement not covered" >        failed++;</span>
@@ -1129,11 +1129,11 @@ async function <span class="fstat-no" title="function not covered" >retryFailedM
         };
 <span class="cstat-no" title="statement not covered" >        await msg.save();</span>
         
-<span class="cstat-no" title="statement not covered" >        console.error(`❌ [MessageProcessor] Retry failed for message ${msg.messageId}:`, retryError.message);</span>
+<span class="cstat-no" title="statement not covered" >        logger.error(`❌ [MessageProcessor] Retry failed for message ${msg.messageId}:`, retryError.message);</span>
       }
     }
     
-<span class="cstat-no" title="statement not covered" >    console.log(`✅ [MessageProcessor] Retry job complete: ${succeeded} succeeded, ${failed} failed`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`✅ [MessageProcessor] Retry job complete: ${succeeded} succeeded, ${failed} failed`);</span>
     
 <span class="cstat-no" title="statement not covered" >    return {</span>
       retried: failedMessages.length,
@@ -1142,7 +1142,7 @@ async function <span class="fstat-no" title="function not covered" >retryFailedM
     };
     
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    console.error(`❌ [MessageProcessor] Retry job error:`, error.message);</span>
+<span class="cstat-no" title="statement not covered" >    logger.error(`❌ [MessageProcessor] Retry job error:`, error.message);</span>
 <span class="cstat-no" title="statement not covered" >    throw error;</span>
   }
 }
@@ -1186,7 +1186,7 @@ async function <span class="fstat-no" title="function not covered" >getStats(</s
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>

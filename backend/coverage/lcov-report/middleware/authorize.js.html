@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/36</span>
+                <span class='fraction'>0/37</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/36</span>
+                <span class='fraction'>0/37</span>
             </div>
         
             
@@ -231,7 +231,8 @@
 <a name='L166'></a><a href='#L166'>166</a>
 <a name='L167'></a><a href='#L167'>167</a>
 <a name='L168'></a><a href='#L168'>168</a>
-<a name='L169'></a><a href='#L169'>169</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -261,6 +262,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -429,13 +431,14 @@ function <span class="fstat-no" title="function not covered" >authorize(</span>.
         error: 'Authentication required',
         code: 'NOT_AUTHENTICATED'
       });
+const logger = <span class="cstat-no" title="statement not covered" >require('../services/logger');</span>
     }
     
     // Check if user has required role
     const userRole = <span class="cstat-no" title="statement not covered" >req.user.role;</span>
     
 <span class="cstat-no" title="statement not covered" >    if (!userRole) {</span>
-<span class="cstat-no" title="statement not covered" >      console.error('❌ User has no role:', req.user);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('❌ User has no role:', req.user);</span>
 <span class="cstat-no" title="statement not covered" >      return res.status(403).json({ </span>
         error: 'User role not defined',
         code: 'NO_ROLE'
@@ -444,7 +447,7 @@ function <span class="fstat-no" title="function not covered" >authorize(</span>.
     
     // Check if user's role is in allowed roles
 <span class="cstat-no" title="statement not covered" >    if (!allowedRoles.includes(userRole)) {</span>
-<span class="cstat-no" title="statement not covered" >      console.warn(`⚠️ Authorization failed: ${userRole} tried to access ${req.method} ${req.originalUrl}`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.warn(`⚠️ Authorization failed: ${userRole} tried to access ${req.method} ${req.originalUrl}`);</span>
 <span class="cstat-no" title="statement not covered" >      return res.status(403).json({ </span>
         error: 'Insufficient permissions',
         code: 'FORBIDDEN',
@@ -454,7 +457,7 @@ function <span class="fstat-no" title="function not covered" >authorize(</span>.
     }
     
     // Log authorization (for audit)
-<span class="cstat-no" title="statement not covered" >    console.log(`✅ Authorized: ${userRole} - ${req.method} ${req.originalUrl}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`✅ Authorized: ${userRole} - ${req.method} ${req.originalUrl}`);</span>
     
 <span class="cstat-no" title="statement not covered" >    next();</span>
   };
@@ -506,7 +509,7 @@ function <span class="fstat-no" title="function not covered" >authorizeOwner(</s
     
     // Check ownership
 <span class="cstat-no" title="statement not covered" >    if (resourceOwnerId !== userId &amp;&amp; resourceOwnerId !== userId.toString()) {</span>
-<span class="cstat-no" title="statement not covered" >      console.warn(`⚠️ Ownership check failed: User ${userId} tried to access resource owned by ${resourceOwnerId}`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.warn(`⚠️ Ownership check failed: User ${userId} tried to access resource owned by ${resourceOwnerId}`);</span>
 <span class="cstat-no" title="statement not covered" >      return res.status(403).json({ </span>
         error: 'You can only access your own resources',
         code: 'NOT_OWNER'
@@ -551,7 +554,7 @@ function <span class="fstat-no" title="function not covered" >authorizeCustom(</
 <span class="cstat-no" title="statement not covered" >      next();</span>
       
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Authorization check error:', error);</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('Authorization check error:', error);</span>
 <span class="cstat-no" title="statement not covered" >      return res.status(500).json({ </span>
         error: 'Authorization check failed',
         code: 'AUTH_CHECK_ERROR'
@@ -574,7 +577,7 @@ function <span class="fstat-no" title="function not covered" >authorizeCustom(</
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>

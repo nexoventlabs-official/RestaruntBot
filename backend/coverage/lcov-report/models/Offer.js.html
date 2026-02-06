@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/8</span>
+                <span class='fraction'>0/9</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/8</span>
+                <span class='fraction'>0/9</span>
             </div>
         
             
@@ -111,7 +111,22 @@
 <a name='L46'></a><a href='#L46'>46</a>
 <a name='L47'></a><a href='#L47'>47</a>
 <a name='L48'></a><a href='#L48'>48</a>
-<a name='L49'></a><a href='#L49'>49</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -150,11 +165,26 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -194,6 +224,20 @@ const offerSchema = <span class="cstat-no" title="statement not covered" >new mo
   targetMinOrders: { type: Number, default: 0 }, // For min_orders: minimum order count (e.g., 5 = customers with 5+ orders)
   targetedCustomers: [{ type: String }], // Phone numbers of targeted customers (populated when offer is created)
   
+  // WhatsApp template fields (Meta Business API)
+  templateName: { type: String, default: null }, // Unique template name submitted to Meta (e.g. offer_abc123)
+  templateStatus: { 
+    type: String, 
+    enum: ['none', 'pending', 'approved', 'rejected'], 
+    default: 'none' 
+  }, // Meta template review status
+  metaTemplateId: { type: String, default: null }, // Template ID returned by Meta
+  templateRejectionReason: { type: String, default: null }, // Reason if Meta rejects
+  templateSubmittedAt: { type: Date, default: null }, // When template was submitted for review
+  templateApprovedAt: { type: Date, default: null }, // When template was approved
+  broadcastSentAt: { type: Date, default: null }, // When offer was broadcast to customers
+  broadcastResult: { type: mongoose.Schema.Types.Mixed, default: null }, // Result of last broadcast
+  
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
@@ -205,6 +249,7 @@ const offerSchema = <span class="cstat-no" title="statement not covered" >new mo
 &nbsp;
 <span class="cstat-no" title="statement not covered" >offerSchema.index({ isActive: 1, showAsPopup: 1 });</span>
 <span class="cstat-no" title="statement not covered" >offerSchema.index({ validFrom: 1, validUntil: 1 });</span>
+<span class="cstat-no" title="statement not covered" >offerSchema.index({ templateName: 1 }, { sparse: true });</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >module.exports = mongoose.model('Offer', offerSchema);</span>
 &nbsp;</pre></td></tr></table></pre>
@@ -214,7 +259,7 @@ const offerSchema = <span class="cstat-no" title="statement not covered" >new mo
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-05T11:13:54.103Z
+                at 2026-02-06T08:02:54.301Z
             </div>
         <script src="../prettify.js"></script>
         <script>
