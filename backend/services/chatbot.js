@@ -383,6 +383,35 @@ const formatOfferTypes = (item) => {
   return '';
 };
 
+// Helper to filter customer's activeOffers by checking if the actual Offer document is still active
+// This ensures that when an admin toggles an offer OFF, targeted customers stop seeing the discount
+const filterActiveOffers = async (activeOffers) => {
+  if (!activeOffers || activeOffers.length === 0) return [];
+  
+  const Offer = require('../models/Offer');
+  const offerIds = activeOffers
+    .filter(o => o.offerId)
+    .map(o => o.offerId.toString());
+  
+  if (offerIds.length === 0) return activeOffers;
+  
+  // Batch lookup: find which of these offers are still active
+  const activeOfferDocs = await Offer.find({ 
+    _id: { $in: offerIds }, 
+    isActive: true 
+  }).select('_id').lean();
+  
+  const activeIdSet = new Set(activeOfferDocs.map(o => o._id.toString()));
+  
+  // Mark inactive offers so calculateOfferDiscount can skip them
+  return activeOffers.map(offer => {
+    if (offer.offerId && !activeIdSet.has(offer.offerId.toString())) {
+      return { ...offer.toObject ? offer.toObject() : offer, _isInactive: true };
+    }
+    return offer.toObject ? offer.toObject() : offer;
+  });
+};
+
 // Helper to calculate offer discounts from customer's activeOffers
 // Returns: { discountedPrice, discountAmount, appliedOffer } for an item
 const calculateOfferDiscount = (menuItem, activeOffers) => {
@@ -396,6 +425,11 @@ const calculateOfferDiscount = (menuItem, activeOffers) => {
   for (const offer of activeOffers) {
     // Skip expired offers
     if (offer.validUntil && new Date(offer.validUntil) < now) {
+      continue;
+    }
+    
+    // Skip inactive offers (isActive flag set by filterActiveOffers)
+    if (offer._isInactive) {
       continue;
     }
     
@@ -4038,7 +4072,7 @@ const chatbot = {
           } else if (partialMatches.length > 1) {
             // Multiple matches - show options as list
             logger.info('Multiple matches found', { match: partialMatches.map(i => i.name) });
-            const activeOffers = customer.activeOffers || [];
+            const activeOffers = await filterActiveOffers(customer.activeOffers || []);
             const sections = [{
               title: `Items matching "${websiteOrder.itemName}"`,
               rows: partialMatches.slice(0, 10).map(item => ({
@@ -4305,7 +4339,7 @@ const chatbot = {
           state.currentStep = 'item_added';
         } else if (matchingItems.length > 1) {
           // Multiple matches - show options
-          const activeOffers = customer.activeOffers || [];
+          const activeOffers = await filterActiveOffers(customer.activeOffers || []);
           const sections = [{
             title: `Items matching "${addIntent.itemName}"`,
             rows: matchingItems.slice(0, 10).map(item => ({
@@ -5325,9 +5359,9 @@ const chatbot = {
       return;
     }
 
-    // Get customer's activeOffers for targeted discounts
+    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
     const customer = await Customer.findOne({ phone });
-    const activeOffers = customer?.activeOffers || [];
+    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
 
     const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
     const ITEMS_PER_PAGE = 10;
@@ -5379,9 +5413,9 @@ const chatbot = {
       return;
     }
 
-    // Get customer's activeOffers for targeted discounts
+    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
     const customer = await Customer.findOne({ phone });
-    const activeOffers = customer?.activeOffers || [];
+    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
 
     const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
     const ITEMS_PER_PAGE = 10;
@@ -5435,9 +5469,9 @@ const chatbot = {
       return;
     }
 
-    // Get customer's activeOffers for targeted discounts
+    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
     const customer = await Customer.findOne({ phone });
-    const activeOffers = customer?.activeOffers || [];
+    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
 
     const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
     const ITEMS_PER_PAGE = 10;
@@ -5515,9 +5549,9 @@ const chatbot = {
       return;
     }
 
-    // Get customer's activeOffers for targeted discounts
+    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
     const customer = await Customer.findOne({ phone });
-    const activeOffers = customer?.activeOffers || [];
+    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
 
     const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
     
@@ -5556,9 +5590,9 @@ const chatbot = {
 
   // Send item details for order flow (with Add to Cart focus)
   async sendItemDetailsForOrder(phone, item) {
-    // Get customer's activeOffers for targeted discounts
+    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
     const customer = await Customer.findOne({ phone });
-    const activeOffers = customer?.activeOffers || [];
+    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
 
     const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
     
@@ -5687,9 +5721,9 @@ const chatbot = {
       return;
     }
 
-    // Get customer's activeOffers for targeted discounts
+    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
     const customer = await Customer.findOne({ phone });
-    const activeOffers = customer?.activeOffers || [];
+    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
 
     const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
     const ITEMS_PER_PAGE = 10;
@@ -5740,9 +5774,9 @@ const chatbot = {
       return;
     }
 
-    // Get customer's activeOffers for targeted discounts
+    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
     const customer = await Customer.findOne({ phone });
-    const activeOffers = customer?.activeOffers || [];
+    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
 
     const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
     const ITEMS_PER_PAGE = 10;
@@ -5783,9 +5817,9 @@ const chatbot = {
   },
 
   async sendQuantitySelection(phone, item) {
-    // Get customer's activeOffers for targeted discounts
+    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
     const customer = await Customer.findOne({ phone });
-    const activeOffers = customer?.activeOffers || [];
+    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
     
     const unitLabel = item.unit || 'piece';
     const baseQty = item.quantity || 1; // Base quantity per unit (e.g., 2 for "2 piece", 500 for "500ml")
@@ -5842,9 +5876,9 @@ const chatbot = {
   },
 
   async sendAddedToCart(phone, item, qty, cart) {
-    // Get customer's activeOffers for targeted discounts
+    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
     const customer = await Customer.findOne({ phone });
-    const activeOffers = customer?.activeOffers || [];
+    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
     
     const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
     const unitInfo = `${item.quantity || 1} ${item.unit || 'piece'}`;

@@ -90,7 +90,7 @@ export default function AdminOffersScreen({ navigation }) {
   };
 
   const deleteOffer = (offer) => {
-    Alert.alert('Delete Offer', `Are you sure you want to delete "${offer.title}"?`, [
+    Alert.alert('Delete Offer', `Are you sure you want to permanently delete "${offer.title || offer.offerType}"?\n\nThis will:\n• Remove the offer completely\n• Delete the Meta WhatsApp template\n• Remove offer prices from menu items`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try { 
@@ -234,10 +234,8 @@ export default function AdminOffersScreen({ navigation }) {
     
     return (
     <Animated.View style={{ opacity: fadeAnim }}>
-      <TouchableOpacity 
+      <View 
         style={styles.offerCard}
-        onPress={() => navigation.navigate('OfferForm', { offer: item })}
-        activeOpacity={0.7}
       >
         <View style={styles.offerImageContainer}>
           {item.image ? (
@@ -262,11 +260,6 @@ export default function AdminOffersScreen({ navigation }) {
           {/* Status Badge */}
           <View style={[styles.statusBadge, { backgroundColor: item.isActive ? '#22C55E' : '#EF4444' }]}>
             <Text style={styles.statusBadgeText}>{item.isActive ? 'Active' : 'Inactive'}</Text>
-          </View>
-          
-          {/* Edit Icon Overlay */}
-          <View style={styles.editIconOverlay}>
-            <Ionicons name="create-outline" size={20} color="#fff" />
           </View>
         </View>
         
@@ -330,16 +323,28 @@ export default function AdminOffersScreen({ navigation }) {
               </Text>
             </TouchableOpacity>
             
+            <View style={styles.toggleContainer}>
+              <Text style={[styles.toggleLabel, { color: item.isActive ? '#22C55E' : '#9CA3AF' }]}>
+                {item.isActive ? 'Active' : 'Inactive'}
+              </Text>
+              <Switch
+                value={item.isActive}
+                onValueChange={() => toggleActive(item)}
+                trackColor={{ false: '#E5E7EB', true: '#BBF7D0' }}
+                thumbColor={item.isActive ? '#22C55E' : '#9CA3AF'}
+                style={{ transform: [{ scaleX: 0.9 }, { scaleY: 0.9 }] }}
+              />
+            </View>
+            
             <TouchableOpacity 
               style={styles.deleteButton} 
               onPress={(e) => { e.stopPropagation(); deleteOffer(item); }}
             >
-              <Ionicons name="trash-outline" size={18} color="#EF4444" />
-              <Text style={styles.actionButtonText}>Delete</Text>
+              <Ionicons name="trash-outline" size={20} color="#EF4444" />
             </TouchableOpacity>
           </View>
         </View>
-      </TouchableOpacity>
+      </View>
     </Animated.View>
   )};
 
@@ -471,20 +476,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5
   },
-  editIconOverlay: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backdropFilter: 'blur(10px)'
-  },
   offerActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', padding: spacing.md },
-  actionButtons: { flexDirection: 'row', gap: spacing.sm },
+  actionButtons: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
   whatsappButton: { 
     flexDirection: 'row',
     alignItems: 'center',
@@ -500,14 +493,26 @@ const styles = StyleSheet.create({
   whatsappButtonDisabled: {
     backgroundColor: '#F3F4F6',
   },
-  deleteButton: { 
+  toggleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10, 
-    backgroundColor: '#FEE2E2', 
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+  },
+  toggleLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  deleteButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   actionButtonText: {
     fontSize: 13,
