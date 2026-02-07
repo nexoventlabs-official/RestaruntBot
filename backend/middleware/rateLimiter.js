@@ -6,9 +6,9 @@
  * 
  * Rate Limits:
  * - Auth endpoints: 20 requests per 15 minutes per IP
- * - Admin endpoints: 100 requests per 15 minutes per IP
+ * - Admin endpoints: 500 requests per 15 minutes per IP
  * - Webhook endpoints: 1000 requests per minute per IP
- * - Public endpoints: 200 requests per 15 minutes per IP
+ * - Public endpoints: 500 requests per 15 minutes per IP
  */
 
 // In-memory store for rate limiting
@@ -111,9 +111,9 @@ const authRateLimiter = createRateLimiter({
   keyPrefix: 'auth'
 });
 
-// Admin endpoints - moderate limit
+// Admin endpoints - generous limit (mobile app makes many parallel calls)
 const adminRateLimiter = createRateLimiter({
-  maxRequests: 100,
+  maxRequests: 500,
   windowMs: 15 * 60 * 1000, // 15 minutes
   message: 'Too many admin requests, please slow down',
   keyPrefix: 'admin'
@@ -127,9 +127,9 @@ const webhookRateLimiter = createRateLimiter({
   keyPrefix: 'webhook'
 });
 
-// Public endpoints - moderate limit
+// Public endpoints - generous limit
 const publicRateLimiter = createRateLimiter({
-  maxRequests: 200,
+  maxRequests: 500,
   windowMs: 15 * 60 * 1000, // 15 minutes
   message: 'Too many requests, please try again later',
   keyPrefix: 'public'
