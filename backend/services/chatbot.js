@@ -31,6 +31,37 @@ async function getCachedMenuData() {
   return { allCategories, allMenuItems };
 }
 
+// ============ PER-REQUEST ACTIVE OFFERS CACHE ============
+// Avoids repeated Customer.findOne + Offer.find in sub-functions (sendItemDetails,
+// sendQuantitySelection, sendAddedToCart, sendItemsByTag, etc.)
+// 10-second TTL covers an entire handleMessage cycle.
+const _activeOffersCache = new Map();
+const ACTIVE_OFFERS_CACHE_TTL = 10 * 1000; // 10 seconds
+
+async function getCachedActiveOffers(phone) {
+  const cached = _activeOffersCache.get(phone);
+  if (cached && Date.now() - cached.timestamp < ACTIVE_OFFERS_CACHE_TTL) {
+    return cached.data;
+  }
+  const cust = await Customer.findOne({ phone }).select('activeOffers').lean();
+  // filterActiveOffers is defined below — lazy require to avoid hoisting issues
+  const filtered = await filterActiveOffers(cust?.activeOffers || []);
+  _activeOffersCache.set(phone, { data: filtered, timestamp: Date.now() });
+  // Prevent unbounded growth
+  if (_activeOffersCache.size > 500) {
+    const oldestKey = _activeOffersCache.keys().next().value;
+    _activeOffersCache.delete(oldestKey);
+  }
+  return filtered;
+}
+
+// ============ TRANSLATION CACHE for Groq AI ============
+// Caches AI translation results to avoid repeated API calls for the same text.
+// 5-minute TTL, max 200 entries. Huge win for repeated searches.
+const _translationCache = new Map();
+const TRANSLATION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const TRANSLATION_CACHE_MAX = 200;
+
 const generateOrderId = (serviceType = 'delivery') => {
   const prefix = serviceType === 'pickup' ? 'S' : 'O';
   return prefix + 'RD' + Date.now().toString(36).toUpperCase();
@@ -2850,6 +2881,22 @@ const chatbot = {
   // Translate text using Groq AI (for languages not in basic map)
   // Returns object with primary translation and all variations for better search
   async translateWithAI(text) {
+    // Check translation cache first (avoids repeated Groq API calls)
+    const cacheKey = text.toLowerCase().trim();
+    const cached = _translationCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < TRANSLATION_CACHE_TTL) {
+      return cached.result;
+    }
+
+    const _cacheAndReturn = (result) => {
+      if (_translationCache.size >= TRANSLATION_CACHE_MAX) {
+        const oldestKey = _translationCache.keys().next().value;
+        _translationCache.delete(oldestKey);
+      }
+      _translationCache.set(cacheKey, { result, ts: Date.now() });
+      return result;
+    };
+
     // Check if text contains non-English characters
     const hasNonEnglish = /[^\x00-\x7F]/.test(text);
     
@@ -2860,7 +2907,7 @@ const chatbot = {
         
         // If we got valid variations, return them
         if (result.variations && result.variations.length > 0 && !/[^\x00-\x7F]/.test(result.primary)) {
-          return result;
+          return _cacheAndReturn(result);
         }
         
         // If AI translation failed, try word-by-word
@@ -2894,16 +2941,16 @@ const chatbot = {
           const cleanVariations = [...new Set(allVariations)].filter(v => !/[^\x00-\x7F]/.test(v));
           
           logger.info(`Word-by-word translation: "${text}" → [${cleanVariations.join(', ')}]`);
-          return { primary: combinedTranslation, variations: cleanVariations };
+          return _cacheAndReturn({ primary: combinedTranslation, variations: cleanVariations });
         }
         
         // Last resort: try basic transliteration
         const basicTranslated = this.transliterate(text);
-        return { primary: basicTranslated, variations: [basicTranslated] };
+        return _cacheAndReturn({ primary: basicTranslated, variations: [basicTranslated] });
       } catch (error) {
         logger.error('AI translation failed', { error: error.message });
         const basicTranslated = this.transliterate(text);
-        return { primary: basicTranslated, variations: [basicTranslated] };
+        return _cacheAndReturn({ primary: basicTranslated, variations: [basicTranslated] });
       }
     }
     
@@ -2922,7 +2969,7 @@ const chatbot = {
     // Remove duplicates
     const cleanVariations = [...new Set(variations)];
     
-    return { primary: cleanVariations[0], variations: cleanVariations };
+    return _cacheAndReturn({ primary: cleanVariations[0], variations: cleanVariations });
   },
 
   // Smart search - detects food type and searches by name/tag (async for AI translation)
@@ -3660,6 +3707,14 @@ const chatbot = {
       await customer.save();
     }
 
+    // Prime the activeOffers cache so sub-functions don't re-fetch customer
+    // (non-blocking — runs in parallel with broadcast/sheets below)
+    const _primeOffersPromise = (customer.activeOffers?.length > 0)
+      ? filterActiveOffers(customer.activeOffers).then(filtered => {
+          _activeOffersCache.set(phone, { data: filtered, timestamp: Date.now() });
+        }).catch(() => {})
+      : Promise.resolve(_activeOffersCache.set(phone, { data: [], timestamp: Date.now() }));
+
     // Save WhatsApp contact for broadcast (non-blocking)
     whatsappBroadcast.addContact(phone, customer.name || senderName, new Date()).catch(err => {
       logger.error('[Chatbot] Failed to save WhatsApp contact', { error: err.message });
@@ -4100,7 +4155,7 @@ const chatbot = {
           } else if (partialMatches.length > 1) {
             // Multiple matches - show options as list
             logger.info('Multiple matches found', { match: partialMatches.map(i => i.name) });
-            const activeOffers = await filterActiveOffers(customer.activeOffers || []);
+            const activeOffers = await getCachedActiveOffers(phone);
             const sections = [{
               title: `Items matching "${websiteOrder.itemName}"`,
               rows: partialMatches.slice(0, 10).map(item => ({
@@ -4367,7 +4422,7 @@ const chatbot = {
           state.currentStep = 'item_added';
         } else if (matchingItems.length > 1) {
           // Multiple matches - show options
-          const activeOffers = await filterActiveOffers(customer.activeOffers || []);
+          const activeOffers = await getCachedActiveOffers(phone);
           const sections = [{
             title: `Items matching "${addIntent.itemName}"`,
             rows: matchingItems.slice(0, 10).map(item => ({
@@ -4705,19 +4760,32 @@ const chatbot = {
         await this.sendItemsForOrder(phone, filteredItems, category, page);
         state.currentStep = 'selecting_item';
       }
-      // Tag search pagination
+      // Tag search pagination — use cached tagSearchResults to avoid re-running AI search
       else if (selection.startsWith('tagpage_')) {
         const parts = selection.replace('tagpage_', '').split('_');
         const page = parseInt(parts.pop());
         const safeTag = parts.join('_');
         // Restore original search term from state or use safe version
         const searchTerm = state.searchTag || safeTag.replace(/_/g, ' ');
-        const searchResult = await this.smartSearch(searchTerm, menuItems);
-        const matchingItems = searchResult?.items || [];
+
+        // Use cached search result IDs if available (avoids re-running Groq AI translation)
+        let matchingItems;
+        let displayLabel;
+        if (state.tagSearchResults && state.tagSearchResults.length > 0) {
+          matchingItems = state.tagSearchResults
+            .map(id => menuItems.find(m => m._id.toString() === id))
+            .filter(Boolean);
+          displayLabel = `"${searchTerm}"`;
+        } else {
+          // Fallback: re-run search only if cached IDs are missing
+          const searchResult = await this.smartSearch(searchTerm, menuItems);
+          matchingItems = searchResult?.items || [];
+          displayLabel = searchResult?.label 
+            ? (searchResult.searchTerm ? `${searchResult.label} "${searchResult.searchTerm}"` : searchResult.label)
+            : (searchResult?.searchTerm ? `"${searchResult.searchTerm}"` : `"${searchTerm}"`);
+        }
+
         state.currentPage = page;
-        const displayLabel = searchResult?.label 
-          ? (searchResult.searchTerm ? `${searchResult.label} "${searchResult.searchTerm}"` : searchResult.label)
-          : (searchResult?.searchTerm ? `"${searchResult.searchTerm}"` : `"${searchTerm}"`);
         await this.sendItemsByTag(phone, matchingItems, displayLabel, page);
         state.currentStep = 'viewing_tag_results';
       }
@@ -5384,9 +5452,8 @@ const chatbot = {
       return;
     }
 
-    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
-    const customer = await Customer.findOne({ phone });
-    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
+    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
+    const activeOffers = await getCachedActiveOffers(phone);
 
     const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
     const ITEMS_PER_PAGE = 10;
@@ -5438,9 +5505,8 @@ const chatbot = {
       return;
     }
 
-    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
-    const customer = await Customer.findOne({ phone });
-    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
+    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
+    const activeOffers = await getCachedActiveOffers(phone);
 
     const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
     const ITEMS_PER_PAGE = 10;
@@ -5494,9 +5560,8 @@ const chatbot = {
       return;
     }
 
-    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
-    const customer = await Customer.findOne({ phone });
-    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
+    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
+    const activeOffers = await getCachedActiveOffers(phone);
 
     const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
     const ITEMS_PER_PAGE = 10;
@@ -5574,9 +5639,8 @@ const chatbot = {
       return;
     }
 
-    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
-    const customer = await Customer.findOne({ phone });
-    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
+    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
+    const activeOffers = await getCachedActiveOffers(phone);
 
     const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
     
@@ -5615,9 +5679,8 @@ const chatbot = {
 
   // Send item details for order flow (with Add to Cart focus)
   async sendItemDetailsForOrder(phone, item) {
-    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
-    const customer = await Customer.findOne({ phone });
-    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
+    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
+    const activeOffers = await getCachedActiveOffers(phone);
 
     const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
     
@@ -5746,9 +5809,8 @@ const chatbot = {
       return;
     }
 
-    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
-    const customer = await Customer.findOne({ phone });
-    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
+    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
+    const activeOffers = await getCachedActiveOffers(phone);
 
     const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
     const ITEMS_PER_PAGE = 10;
@@ -5799,9 +5861,8 @@ const chatbot = {
       return;
     }
 
-    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
-    const customer = await Customer.findOne({ phone });
-    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
+    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
+    const activeOffers = await getCachedActiveOffers(phone);
 
     const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
     const ITEMS_PER_PAGE = 10;
@@ -5842,9 +5903,8 @@ const chatbot = {
   },
 
   async sendQuantitySelection(phone, item) {
-    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
-    const customer = await Customer.findOne({ phone });
-    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
+    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
+    const activeOffers = await getCachedActiveOffers(phone);
     
     const unitLabel = item.unit || 'piece';
     const baseQty = item.quantity || 1; // Base quantity per unit (e.g., 2 for "2 piece", 500 for "500ml")
@@ -5901,9 +5961,8 @@ const chatbot = {
   },
 
   async sendAddedToCart(phone, item, qty, cart) {
-    // Get customer's activeOffers for targeted discounts, filtered by offer isActive status
-    const customer = await Customer.findOne({ phone });
-    const activeOffers = await filterActiveOffers(customer?.activeOffers || []);
+    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
+    const activeOffers = await getCachedActiveOffers(phone);
     
     const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
     const unitInfo = `${item.quantity || 1} ${item.unit || 'piece'}`;

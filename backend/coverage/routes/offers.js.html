@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/484</span>
+                <span class='fraction'>0/492</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/419</span>
+                <span class='fraction'>0/425</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/456</span>
+                <span class='fraction'>0/464</span>
             </div>
         
             
@@ -1127,7 +1127,24 @@
 <a name='L1062'></a><a href='#L1062'>1062</a>
 <a name='L1063'></a><a href='#L1063'>1063</a>
 <a name='L1064'></a><a href='#L1064'>1064</a>
-<a name='L1065'></a><a href='#L1065'>1065</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L1065'></a><a href='#L1065'>1065</a>
+<a name='L1066'></a><a href='#L1066'>1066</a>
+<a name='L1067'></a><a href='#L1067'>1067</a>
+<a name='L1068'></a><a href='#L1068'>1068</a>
+<a name='L1069'></a><a href='#L1069'>1069</a>
+<a name='L1070'></a><a href='#L1070'>1070</a>
+<a name='L1071'></a><a href='#L1071'>1071</a>
+<a name='L1072'></a><a href='#L1072'>1072</a>
+<a name='L1073'></a><a href='#L1073'>1073</a>
+<a name='L1074'></a><a href='#L1074'>1074</a>
+<a name='L1075'></a><a href='#L1075'>1075</a>
+<a name='L1076'></a><a href='#L1076'>1076</a>
+<a name='L1077'></a><a href='#L1077'>1077</a>
+<a name='L1078'></a><a href='#L1078'>1078</a>
+<a name='L1079'></a><a href='#L1079'>1079</a>
+<a name='L1080'></a><a href='#L1080'>1080</a>
+<a name='L1081'></a><a href='#L1081'>1081</a>
+<a name='L1082'></a><a href='#L1082'>1082</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -2069,11 +2086,23 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -2169,6 +2198,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -3133,12 +3167,24 @@ const uploadMultiple = <span class="cstat-no" title="statement not covered" >upl
       
     }
     
+    // Delete the Meta WhatsApp template (best-effort, don't block deletion)
+<span class="cstat-no" title="statement not covered" >    if (offer.templateName) {</span>
+<span class="cstat-no" title="statement not covered" >      try {</span>
+<span class="cstat-no" title="statement not covered" >        await whatsapp.deleteMessageTemplate(offer.templateName);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('Deleted Meta template', { templateName: offer.templateName });</span>
+      } catch (tplErr) {
+<span class="cstat-no" title="statement not covered" >        logger.warn('Could not delete Meta template (may already be removed)', { templateName: offer.templateName, error: tplErr.message });</span>
+      }
+    }
+    
 <span class="cstat-no" title="statement not covered" >    await Offer.findByIdAndDelete(req.params.id);</span>
     
     // Emit SSE event to notify clients
     const eventEmitter = <span class="cstat-no" title="statement not covered" >require('../services/eventEmitter');</span>
 <span class="cstat-no" title="statement not covered" >    eventEmitter.emit('dataUpdate', { type: 'menu' });</span>
 <span class="cstat-no" title="statement not covered" >    eventEmitter.emit('dataUpdate', { type: 'offers' });</span>
+    // Emit specific offer-deleted event with offerId so frontend can remove items from cart/wishlist
+<span class="cstat-no" title="statement not covered" >    eventEmitter.emit('dataUpdate', { type: 'offer-deleted', offerId: req.params.id });</span>
     
 <span class="cstat-no" title="statement not covered" >    res.json({ message: 'Offer deleted and removed from all items' });</span>
   } catch (err) {
@@ -3234,6 +3280,11 @@ const uploadMultiple = <span class="cstat-no" title="statement not covered" >upl
     const eventEmitter = <span class="cstat-no" title="statement not covered" >require('../services/eventEmitter');</span>
 <span class="cstat-no" title="statement not covered" >    eventEmitter.emit('dataUpdate', { type: 'offers' });</span>
     
+    // If offer was deactivated, emit offer-deleted so frontend removes items from cart/wishlist
+<span class="cstat-no" title="statement not covered" >    if (wasActive &amp;&amp; !offer.isActive) {</span>
+<span class="cstat-no" title="statement not covered" >      eventEmitter.emit('dataUpdate', { type: 'offer-deleted', offerId: req.params.id });</span>
+    }
+    
 <span class="cstat-no" title="statement not covered" >    res.json(offer);</span>
   } catch (err) {
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: err.message });</span>
@@ -3262,7 +3313,7 @@ const uploadMultiple = <span class="cstat-no" title="statement not covered" >upl
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-06T08:02:54.748Z
+                at 2026-02-07T11:14:57.785Z
             </div>
         <script src="../prettify.js"></script>
         <script>

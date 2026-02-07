@@ -39,7 +39,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/32</span>
+                <span class='fraction'>0/33</span>
             </div>
         
             
@@ -300,7 +300,13 @@
 <a name='L235'></a><a href='#L235'>235</a>
 <a name='L236'></a><a href='#L236'>236</a>
 <a name='L237'></a><a href='#L237'>237</a>
-<a name='L238'></a><a href='#L238'>238</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L238'></a><a href='#L238'>238</a>
+<a name='L239'></a><a href='#L239'>239</a>
+<a name='L240'></a><a href='#L240'>240</a>
+<a name='L241'></a><a href='#L241'>241</a>
+<a name='L242'></a><a href='#L242'>242</a>
+<a name='L243'></a><a href='#L243'>243</a>
+<a name='L244'></a><a href='#L244'>244</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -314,24 +320,19 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -343,11 +344,22 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -549,6 +561,8 @@ const { executeWithCircuitBreaker } = <span class="cstat-no" title="statement no
  * Wrapper to track outbound messages
  * Creates OutboundMessage record before sending, updates status after
  * Includes idempotency check to prevent duplicate messages
+ * 
+ * Optimized: Single DB write on success (fire-and-forget initial save)
  */
 async function <span class="fstat-no" title="function not covered" >trackOutbound(</span>phone, messageType, contentSummary, sendFunction) {
   const normalizedPhone = <span class="cstat-no" title="statement not covered" >phone.replace(/\D/g, '');</span>
@@ -572,28 +586,32 @@ async function <span class="fstat-no" title="function not covered" >trackOutboun
     };
   }
   
-  // Create outbound message record
+  // Create outbound message record with 'sending' status directly
+  // Skip the intermediate 'pending' save — reduces 1 DB round-trip (~15-30ms)
   const outboundMsg = <span class="cstat-no" title="statement not covered" >new OutboundMessage({</span>
     phone: normalizedPhone,
     messageType,
     content: contentSummary,
-    status: 'pending'
+    status: 'sending'
   });
   
-<span class="cstat-no" title="statement not covered" >  await outboundMsg.save();</span>
+  // Fire-and-forget the initial save — don't await it before calling Meta API
+  // The record will be updated with the final status after the API call
+  const initialSavePromise = <span class="cstat-no" title="statement not covered" >outboundMsg.save().catch(<span class="fstat-no" title="function not covered" >er</span>r =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    logger.error('Failed to save initial outbound record', { phone: normalizedPhone, error: err.message });</span>
+  });
   
 <span class="cstat-no" title="statement not covered" >  try {</span>
-    // Update to sending
-<span class="cstat-no" title="statement not covered" >    outboundMsg.status = 'sending';</span>
-<span class="cstat-no" title="statement not covered" >    await outboundMsg.save();</span>
-    
-    // Call actual send function
+    // Call actual send function immediately (don't wait for DB)
     const response = <span class="cstat-no" title="statement not covered" >await sendFunction();</span>
     
     // Mark as processed in idempotency cache
 <span class="cstat-no" title="statement not covered" >    idempotencyCheck.mark();</span>
     
-    // Update to sent with Meta response
+    // Wait for initial save to complete before updating
+<span class="cstat-no" title="statement not covered" >    await initialSavePromise;</span>
+    
+    // Update to sent with Meta response — single update operation
 <span class="cstat-no" title="statement not covered" >    outboundMsg.status = 'sent';</span>
 <span class="cstat-no" title="statement not covered" >    outboundMsg.sentAt = new Date();</span>
 <span class="cstat-no" title="statement not covered" >    outboundMsg.metaMessageId = response?.messages?.[0]?.id || response?.id;</span>
@@ -781,7 +799,7 @@ const whatsapp = <span class="cstat-no" title="statement not covered" >{</span>
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-06T08:02:54.301Z
+                at 2026-02-07T11:14:57.045Z
             </div>
         <script src="../prettify.js"></script>
         <script>

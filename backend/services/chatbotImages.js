@@ -15,23 +15,25 @@ const chatbotImagesService = {
    */
   async getImageUrl(key) {
     try {
-      // Check cache
       const now = Date.now();
-      if (imageCache[key] && (now - lastCacheTime) < CACHE_TTL) {
+      // Return from cache if within TTL
+      if ((now - lastCacheTime) < CACHE_TTL && key in imageCache) {
         return imageCache[key];
       }
 
-      // Fetch from database
-      const image = await ChatbotImage.findOne({ key });
-      
-      if (image?.imageUrl) {
-        imageCache[key] = image.imageUrl;
+      // Cache expired — reload ALL images in one query instead of individual lookups
+      if ((now - lastCacheTime) >= CACHE_TTL) {
+        const images = await ChatbotImage.find().lean();
+        imageCache = {};
+        images.forEach(img => {
+          if (img.imageUrl) {
+            imageCache[img.key] = img.imageUrl;
+          }
+        });
         lastCacheTime = now;
-        return image.imageUrl;
       }
 
-      // No fallback - return null if not configured
-      return null;
+      return imageCache[key] || null;
     } catch (error) {
       logger.error(`Error fetching chatbot image ${key}:`, error.message);
       return null;
