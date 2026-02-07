@@ -37,18 +37,13 @@ function getAllowedOrigins() {
       .map(origin => origin.trim())
       .filter(origin => origin.length > 0);
     
-    // Validate origins (HTTPS required, but allow explicitly listed localhost for dev access)
+    // Validate origins (must be HTTPS in production)
     const validOrigins = origins.filter(origin => {
-      if (origin.startsWith('https://')) {
-        return true;
+      if (!origin.startsWith('https://')) {
+        console.warn(`⚠️ CORS: Ignoring non-HTTPS origin in production: ${origin}`);
+        return false;
       }
-      // Allow explicitly listed localhost/127.0.0.1 origins (for local dev against production API)
-      if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
-        console.info(`ℹ️ CORS: Allowing localhost origin in production (explicitly listed): ${origin}`);
-        return true;
-      }
-      console.warn(`⚠️ CORS: Ignoring non-HTTPS origin in production: ${origin}`);
-      return false;
+      return true;
     });
     
     // Merge with hardcoded production origins (deduplicate)
