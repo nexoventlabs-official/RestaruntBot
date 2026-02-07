@@ -4,10 +4,11 @@
  * IMPORTANT: Background notification handler MUST be registered here
  * (outside of React components) to work when app is closed/killed.
  * 
- * FCM delivers notifications with a `notification` payload directly
- * to Android OS, which displays them even when the app is killed.
- * The background handler here processes the `data` payload for
- * side-effects like updating the badge count.
+ * @react-native-firebase/messaging registers a custom FirebaseMessagingService
+ * that intercepts ALL incoming FCM messages — including those with a
+ * `notification` payload. This PREVENTS Android from auto-displaying them.
+ * Therefore we MUST explicitly create a local notification via
+ * expo-notifications inside setBackgroundMessageHandler.
  */
 
 import { registerRootComponent } from 'expo';
@@ -17,6 +18,10 @@ import App from './App';
 
 // ---------------------------------------------------------------------------
 // 1. Register FCM background message handler (must be top-level)
+//    This handler runs when the app is in BACKGROUND or KILLED state.
+//    It must explicitly display the notification since Firebase's custom
+//    service intercepts and consumes the FCM message before Android OS
+//    can auto-display it.
 // ---------------------------------------------------------------------------
 try {
   const messaging = require('@react-native-firebase/messaging').default;
@@ -24,11 +29,41 @@ try {
   messaging().setBackgroundMessageHandler(async remoteMessage => {
     console.log('📱 [FCM] Background message:', JSON.stringify(remoteMessage));
 
-    const data = remoteMessage.data;
-    if (data?.badgeCount) {
+    const { notification, data } = remoteMessage;
+
+    // ── Display the notification ──
+    // ReactNativeFirebaseMessagingService intercepts the FCM message,
+    // bypassing Android's automatic notification display. We must
+    // explicitly create a local notification via expo-notifications.
+    if (notification) {
       try {
         const Notifications = require('expo-notifications');
-        const badgeNum = parseInt(data.badgeCount, 10);
+        const channelId = data?.channelId || 'default';
+
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: notification.title || 'New Notification',
+            body: notification.body || '',
+            data: data || {},
+            sound: 'default',
+            priority: Notifications.AndroidNotificationPriority.MAX,
+            ...(Platform.OS === 'android' ? { channelId } : {}),
+          },
+          trigger: null, // Immediate display
+        });
+
+        console.log('📱 [FCM] Background notification displayed via expo-notifications');
+      } catch (displayErr) {
+        console.warn('⚠️ [FCM] Failed to display background notification:', displayErr.message);
+      }
+    }
+
+    // ── Badge count side-effect ──
+    const badgeCount = data?.badgeCount;
+    if (badgeCount) {
+      try {
+        const Notifications = require('expo-notifications');
+        const badgeNum = parseInt(badgeCount, 10);
         await Notifications.setBadgeCountAsync(badgeNum);
 
         // Also persist to SecureStore so the app can read it on next cold start
