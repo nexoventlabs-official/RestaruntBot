@@ -1,5 +1,24 @@
 const admin = require('firebase-admin');
+const { Expo } = require('expo-server-sdk');
 const logger = require('./logger');
+
+// ---------------------------------------------------------------------------
+// Initialize Expo SDK for sending to ExponentPushToken[...] tokens
+// ---------------------------------------------------------------------------
+const expo = new Expo();
+
+/**
+ * Detect token type
+ * @param {string} token
+ * @returns {'expo'|'fcm'|'invalid'}
+ */
+function getTokenType(token) {
+  if (!token || typeof token !== 'string') return 'invalid';
+  if (Expo.isExpoPushToken(token)) return 'expo';
+  // FCM tokens are long alphanumeric strings with colons
+  if (token.length > 20) return 'fcm';
+  return 'invalid';
+}
 
 /**
  * Initialize Firebase Admin SDK (singleton - only once)
@@ -74,6 +93,105 @@ function toStringData(obj) {
     out[key] = String(value ?? '');
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Expo Push - send a single notification via Expo's push service
+// ---------------------------------------------------------------------------
+async function sendExpoNotification(pushToken, title, body, data = {}, channelId = 'default', badge = 1) {
+  if (!Expo.isExpoPushToken(pushToken)) {
+    logger.error('📱 [Expo] Invalid Expo push token:', pushToken);
+    return false;
+  }
+
+  const message = {
+    to: pushToken,
+    sound: 'default',
+    title,
+    body,
+    data: { ...data, channelId },
+    badge,
+    channelId,
+    priority: 'high',
+    _displayInForeground: true,
+  };
+
+  try {
+    const chunks = expo.chunkPushNotifications([message]);
+    for (const chunk of chunks) {
+      const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+      for (const ticket of ticketChunk) {
+        if (ticket.status === 'ok') {
+          logger.info(`📱 [Expo] Push sent: ${ticket.id}`);
+          return [{ status: 'ok', id: ticket.id }];
+        } else if (ticket.status === 'error') {
+          logger.error(`📱 [Expo] Push error: ${ticket.message}`, { details: ticket.details });
+          if (ticket.details?.error === 'DeviceNotRegistered') {
+            markTokenStale(pushToken);
+          }
+          return false;
+        }
+      }
+    }
+    return false;
+  } catch (error) {
+    logger.error(`📱 [Expo] Send failed: ${error.message}`);
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Expo Push - send to multiple tokens via Expo's push service
+// ---------------------------------------------------------------------------
+async function sendExpoMultipleNotifications(pushTokens, title, body, data = {}, channelId = 'default') {
+  const messages = pushTokens
+    .filter(token => Expo.isExpoPushToken(token))
+    .map(token => ({
+      to: token,
+      sound: 'default',
+      title,
+      body,
+      data: { ...data, channelId },
+      badge: 1,
+      channelId,
+      priority: 'high',
+      _displayInForeground: true,
+    }));
+
+  if (messages.length === 0) {
+    logger.info('📱 [Expo] No valid Expo tokens for multicast');
+    return { successCount: 0, failureCount: 0 };
+  }
+
+  try {
+    const chunks = expo.chunkPushNotifications(messages);
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (const chunk of chunks) {
+      const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+      for (const ticket of ticketChunk) {
+        if (ticket.status === 'ok') {
+          successCount++;
+        } else {
+          failureCount++;
+          if (ticket.details?.error === 'DeviceNotRegistered') {
+            // Find and mark the stale token
+            const idx = ticketChunk.indexOf(ticket);
+            if (idx >= 0 && idx < pushTokens.length) {
+              markTokenStale(pushTokens[idx]);
+            }
+          }
+        }
+      }
+    }
+
+    logger.info(`📱 [Expo] Multicast: ${successCount} ok, ${failureCount} failed`);
+    return { successCount, failureCount };
+  } catch (error) {
+    logger.error(`📱 [Expo] Multicast failed: ${error.message}`);
+    return { successCount: 0, failureCount: messages.length };
+  }
 }
 
 /**
@@ -171,20 +289,28 @@ const pushNotification = {
    * @returns {Promise<object[]|false>}
    */
   async sendNotification(pushToken, title, body, data = {}, channelId = 'default') {
-    if (!isFirebaseReady()) {
-      logger.warn('📱 Firebase not initialised — notification skipped');
-      return false;
-    }
     if (!pushToken || typeof pushToken !== 'string') {
-      logger.error('📱 Invalid FCM token provided');
+      logger.error('📱 Invalid push token provided');
       return false;
     }
     if (isTokenStale(pushToken)) {
-      logger.warn('📱 Skipping stale FCM token (device unregistered recently)');
+      logger.warn('📱 Skipping stale token (device unregistered recently)');
       return false;
     }
 
+    const tokenType = getTokenType(pushToken);
     const badge = this.getBadgeCount(pushToken);
+
+    // Route to Expo push service for Expo tokens
+    if (tokenType === 'expo') {
+      return sendExpoNotification(pushToken, title, body, data, channelId, badge);
+    }
+
+    // FCM path
+    if (!isFirebaseReady()) {
+      logger.warn('📱 Firebase not initialised — FCM notification skipped');
+      return false;
+    }
 
     const message = {
       token: pushToken,
@@ -235,55 +361,63 @@ const pushNotification = {
    * @param {string}   channelId
    */
   async sendMultipleNotifications(pushTokens, title, body, data = {}, channelId = 'default') {
-    if (!isFirebaseReady()) {
-      logger.warn('📱 Firebase not initialised — multicast skipped');
-      return [];
-    }
-
     const validTokens = pushTokens.filter(t => t && typeof t === 'string' && !isTokenStale(t));
     if (validTokens.length === 0) {
-      logger.info('📱 No valid FCM tokens for multicast');
+      logger.info('📱 No valid push tokens for multicast');
       return [];
     }
 
-    const payload = buildMessagePayload({ title, body, data, channelId, badge: 1 });
+    // Split tokens by type
+    const expoTokens = validTokens.filter(t => getTokenType(t) === 'expo');
+    const fcmTokens = validTokens.filter(t => getTokenType(t) === 'fcm');
+    const results = [];
 
-    const message = { tokens: validTokens, ...payload };
+    // Send to Expo tokens
+    if (expoTokens.length > 0) {
+      const expoResult = await sendExpoMultipleNotifications(expoTokens, title, body, data, channelId);
+      results.push({ type: 'expo', ...expoResult });
+    }
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        const response = await admin.messaging().sendEachForMulticast(message);
-        logger.info(`📱 FCM multicast (attempt ${attempt + 1}): ${response.successCount} ok, ${response.failureCount} failed`);
+    // Send to FCM tokens
+    if (fcmTokens.length > 0 && isFirebaseReady()) {
+      const payload = buildMessagePayload({ title, body, data, channelId, badge: 1 });
+      const message = { tokens: fcmTokens, ...payload };
 
-        // Mark individual stale tokens
-        response.responses.forEach((resp, idx) => {
-          if (!resp.success) {
-            const code = resp.error?.code;
-            if (
-              code === 'messaging/registration-token-not-registered' ||
-              code === 'messaging/invalid-registration-token'
-            ) {
-              markTokenStale(validTokens[idx]);
-              logger.warn(`📱 Marked stale token index ${idx}`);
-            } else {
-              logger.error(`📱 FCM multicast token ${idx} error: ${resp.error?.message}`);
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const response = await admin.messaging().sendEachForMulticast(message);
+          logger.info(`📱 FCM multicast (attempt ${attempt + 1}): ${response.successCount} ok, ${response.failureCount} failed`);
+
+          // Mark individual stale tokens
+          response.responses.forEach((resp, idx) => {
+            if (!resp.success) {
+              const code = resp.error?.code;
+              if (
+                code === 'messaging/registration-token-not-registered' ||
+                code === 'messaging/invalid-registration-token'
+              ) {
+                markTokenStale(fcmTokens[idx]);
+                logger.warn(`📱 Marked stale token index ${idx}`);
+              } else {
+                logger.error(`📱 FCM multicast token ${idx} error: ${resp.error?.message}`);
+              }
             }
-          }
-        });
+          });
 
-        return response;
-      } catch (error) {
-        if (attempt < MAX_RETRIES) {
-          const delay = Math.pow(2, attempt) * 500;
-          logger.warn(`📱 FCM multicast failed (attempt ${attempt + 1}), retrying in ${delay}ms: ${error.message}`);
-          await sleep(delay);
-        } else {
-          logger.error(`📱 FCM multicast failed after ${MAX_RETRIES + 1} attempts: ${error.message}`);
-          return [];
+          results.push({ type: 'fcm', successCount: response.successCount, failureCount: response.failureCount });
+          break;
+        } catch (error) {
+          if (attempt < MAX_RETRIES) {
+            const delay = Math.pow(2, attempt) * 500;
+            logger.warn(`📱 FCM multicast failed (attempt ${attempt + 1}), retrying in ${delay}ms: ${error.message}`);
+            await sleep(delay);
+          } else {
+            logger.error(`📱 FCM multicast failed after ${MAX_RETRIES + 1} attempts: ${error.message}`);
+          }
         }
       }
     }
-    return [];
+    return results;
   },
 
   // ----- domain-specific convenience methods -----
@@ -335,10 +469,24 @@ const pushNotification = {
   },
 
   async sendTestNotification(pushToken) {
-    if (!isFirebaseReady()) return { error: 'Firebase not initialised' };
     if (!pushToken || typeof pushToken !== 'string') return { error: 'Invalid token' };
 
-    logger.info('📱 Sending test notification to:', pushToken.substring(0, 20) + '...');
+    const tokenType = getTokenType(pushToken);
+    logger.info(`📱 Sending test notification (${tokenType}) to: ${pushToken.substring(0, 30)}...`);
+
+    if (tokenType === 'expo') {
+      const result = await sendExpoNotification(
+        pushToken,
+        '🔔 Test Notification',
+        'This is a test notification from FoodAdmin. If you see this, notifications are working!',
+        { type: 'test', timestamp: new Date().toISOString() },
+        'default',
+        1
+      );
+      return result ? { success: true } : { error: 'Expo push failed' };
+    }
+
+    if (!isFirebaseReady()) return { error: 'Firebase not initialised' };
 
     const message = {
       token: pushToken,

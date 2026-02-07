@@ -280,33 +280,47 @@ export const pushNotifications = {
           }
         }
 
-        if (!token) {
-          console.error('❌ Failed to get FCM token after retries');
-          return { token: null, permissionDenied: false };
-        }
-
-        // Listen for token refresh — re-send to the correct backend endpoint
-        messaging().onTokenRefresh(async (newToken) => {
-          console.log('📱 FCM Token refreshed');
-          await SecureStore.setItemAsync(PUSH_TOKEN_KEY, newToken);
-          try {
-            const savedRole = role || (await SecureStore.getItemAsync(TOKEN_ROLE_KEY));
-            if (savedRole === 'admin') {
-              await api.post('/auth/push-token', { pushToken: newToken });
-            } else {
-              await api.post('/delivery/push-token', { pushToken: newToken });
+        if (token) {
+          // Listen for token refresh — re-send to the correct backend endpoint
+          messaging().onTokenRefresh(async (newToken) => {
+            console.log('📱 FCM Token refreshed');
+            await SecureStore.setItemAsync(PUSH_TOKEN_KEY, newToken);
+            try {
+              const savedRole = role || (await SecureStore.getItemAsync(TOKEN_ROLE_KEY));
+              if (savedRole === 'admin') {
+                await api.post('/auth/push-token', { pushToken: newToken });
+              } else {
+                await api.post('/delivery/push-token', { pushToken: newToken });
+              }
+              console.log('📱 Refreshed token sent to server');
+            } catch (e) {
+              console.warn('Failed to update refreshed FCM token on server:', e.message);
             }
-            console.log('📱 Refreshed token sent to server');
-          } catch (e) {
-            console.warn('Failed to update refreshed FCM token on server:', e.message);
+          });
+        }
+      }
+      
+      // Fallback: get native device push token (raw FCM token on Android)
+      // This works even without @react-native-firebase/messaging and
+      // does NOT require Expo's push service to have FCM credentials.
+      if (!token) {
+        try {
+          const deviceToken = await Notifications.getDevicePushTokenAsync();
+          token = deviceToken.data;
+          console.log(`📱 Native Device Token obtained (${deviceToken.type}):`, 
+            typeof token === 'string' ? token.substring(0, 20) + '...' : token);
+        } catch (deviceTokenError) {
+          console.warn('⚠️ Native device token failed:', deviceTokenError.message);
+          // Last resort: Expo push token (requires FCM credentials on Expo project)
+          try {
+            const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+            const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+            token = tokenData.data;
+            console.log('📱 Expo Push Token (last resort):', token);
+          } catch (expoTokenError) {
+            console.error('❌ All token methods failed:', expoTokenError.message);
           }
-        });
-      } else {
-        // Fallback: Expo push token (dev builds without Firebase)
-        const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-        const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
-        token = tokenData.data;
-        console.log('📱 Expo Push Token (fallback):', token);
+        }
       }
 
       // Cache token + role
