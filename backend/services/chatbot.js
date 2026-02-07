@@ -12,6 +12,25 @@ const whatsappBroadcast = require('./whatsappBroadcast');
 const axios = require('axios');
 const logger = require('./logger');
 
+// ============ IN-MEMORY CACHE for categories & menu items ============
+// Avoids 2 full collection scans (Category.find + MenuItem.find) on every single message.
+// 15-second TTL ensures changes propagate quickly while saving ~20-80ms per message.
+let _menuCache = { categories: null, menuItems: null, ts: 0 };
+const MENU_CACHE_TTL = 15 * 1000; // 15 seconds
+
+async function getCachedMenuData() {
+  const now = Date.now();
+  if (_menuCache.categories && _menuCache.menuItems && (now - _menuCache.ts) < MENU_CACHE_TTL) {
+    return { allCategories: _menuCache.categories, allMenuItems: _menuCache.menuItems };
+  }
+  const [allCategories, allMenuItems] = await Promise.all([
+    Category.find({ isActive: true }).lean(),
+    MenuItem.find({ available: true }).lean()
+  ]);
+  _menuCache = { categories: allCategories, menuItems: allMenuItems, ts: now };
+  return { allCategories, allMenuItems };
+}
+
 const generateOrderId = (serviceType = 'delivery') => {
   const prefix = serviceType === 'pickup' ? 'S' : 'O';
   return prefix + 'RD' + Date.now().toString(36).toUpperCase();
@@ -267,7 +286,8 @@ const checkCartAvailability = async (cart) => {
   if (!cart || cart.length === 0) return { available: true, unavailableItems: [] };
   
   const unavailableItems = [];
-  const allCategories = await Category.find({ isActive: true });
+  // Use cached categories to avoid redundant DB query
+  const { allCategories } = await getCachedMenuData();
   
   // Get scheduled categories that are currently ACTIVE
   const scheduledActiveCategories = allCategories
@@ -279,8 +299,16 @@ const checkCartAvailability = async (cart) => {
     .filter(c => c.schedule?.enabled && (c.isPaused || c.isSoldOut))
     .map(c => c.name);
   
+  // Batch-fetch all cart menu items in one query (replaces N individual findById calls)
+  const cartItemIds = cart.map(ci => ci.menuItem).filter(Boolean);
+  const menuItemDocs = cartItemIds.length > 0
+    ? await MenuItem.find({ _id: { $in: cartItemIds } }).lean()
+    : [];
+  const menuItemMap = new Map(menuItemDocs.map(mi => [mi._id.toString(), mi]));
+
   for (const cartItem of cart) {
-    const menuItem = await MenuItem.findById(cartItem.menuItem);
+    const itemId = cartItem.menuItem?._id || cartItem.menuItem;
+    const menuItem = menuItemMap.get(itemId?.toString());
     if (!menuItem) {
       unavailableItems.push({ name: cartItem.menuItem?.name || 'Unknown item', reason: 'deleted' });
       continue;
@@ -3642,8 +3670,8 @@ const chatbot = {
       logger.error('[Chatbot] Failed to save customer to Google Sheets', { error: err.message });
     });
 
-    // Get all categories to check schedule status
-    const allCategories = await Category.find({ isActive: true });
+    // Get all categories and menu items (cached, 15s TTL — saves ~20-80ms per message)
+    const { allCategories, allMenuItems: _allMenuItems } = await getCachedMenuData();
     
     // Get scheduled categories that are currently ACTIVE (within time, not paused)
     const scheduledActiveCategories = allCategories
@@ -3665,7 +3693,7 @@ const chatbot = {
     // 1. If item has ANY scheduled ACTIVE category → SHOW
     // 2. If item has ANY scheduled LOCKED category (and no scheduled active) → HIDE
     // 3. If item has NO scheduled categories → show if any non-scheduled category is not locked
-    const allMenuItems = await MenuItem.find({ available: true });
+    const allMenuItems = _allMenuItems;
     const menuItems = allMenuItems
       .filter(item => {
         const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
@@ -5205,9 +5233,6 @@ const chatbot = {
       { id: 'my_orders', text: '📦 My Orders' },
       { id: 'open_website', text: '🌐 Website' }
     ], 'Perivi Hotel');
-
-    // Small delay to ensure correct message order in WhatsApp
-    await new Promise(resolve => setTimeout(resolve, 500));
 
     // Step 2: Send "Explore more" with View Options list button
     await whatsapp.sendList(

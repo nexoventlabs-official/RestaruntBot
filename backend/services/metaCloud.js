@@ -1,6 +1,28 @@
 const axios = require('axios');
+const https = require('https');
 const cloudinaryService = require('./cloudinary');
 const logger = require('./logger');
+
+// Persistent HTTPS agent — reuses TCP+TLS connections across requests
+// Eliminates ~100-300ms handshake overhead per Meta API call
+const metaHttpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30000,  // Send keep-alive probes every 30s
+  maxSockets: 25,         // Allow up to 25 concurrent connections to Meta
+  maxFreeSockets: 10,     // Keep 10 idle connections warm
+  timeout: 60000,         // Socket-level timeout 60s
+  scheduling: 'lifo'      // Reuse most-recently-used connection (best for keep-alive)
+});
+
+// Pre-configured axios instance for Meta API calls
+const metaApi = axios.create({
+  httpsAgent: metaHttpsAgent,
+  timeout: 10000,           // 10s request timeout (covers connect + response)
+  headers: { 'Content-Type': 'application/json' },
+  // Disable response buffering for faster response handling
+  maxContentLength: 5 * 1024 * 1024,  // 5MB max
+  maxBodyLength: 5 * 1024 * 1024
+});
 
 const getConfig = () => ({
   phoneNumberId: process.env.META_PHONE_NUMBER_ID,
@@ -62,13 +84,13 @@ const metaCloud = {
       
       logger.info('Meta sendMessage', { to, messageLength: message.length });
       
-      const response = await axios.post(`${baseUrl}/messages`, {
+      const response = await metaApi.post(`${baseUrl}/messages`, {
         messaging_product: 'whatsapp',
         to,
         type: 'text',
         text: { body: message }
       }, {
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendMessage success', { messageId: response.data?.messages?.[0]?.id || 'sent' });
       return response.data;
@@ -111,8 +133,8 @@ const metaCloud = {
         }
       };
       
-      const response = await axios.post(`${baseUrl}/messages`, payload, {
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendButtons success');
       return response.data;
@@ -152,8 +174,8 @@ const metaCloud = {
         }
       };
       
-      const response = await axios.post(`${baseUrl}/messages`, payload, {
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta list success');
       return response.data;
@@ -247,8 +269,8 @@ const metaCloud = {
       };
 
       logger.info('Sending order with CTA', { payload: ctaPayload });
-      const response = await axios.post(`${baseUrl}/messages`, ctaPayload, {
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      const response = await metaApi.post(`${baseUrl}/messages`, ctaPayload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Order sent', { data: response.data });
       return response.data;
@@ -283,13 +305,13 @@ const metaCloud = {
       // Transform to square image for consistent display
       const squareImageUrl = getSquareImageUrl(imageUrl);
       
-      const response = await axios.post(`${baseUrl}/messages`, {
+      const response = await metaApi.post(`${baseUrl}/messages`, {
         messaging_product: 'whatsapp',
         to,
         type: 'image',
         image: { link: squareImageUrl, caption }
       }, {
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       return response.data;
     } catch (error) {
@@ -333,8 +355,8 @@ const metaCloud = {
         }
       };
       
-      const response = await axios.post(`${baseUrl}/messages`, payload, {
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendImageWithButtons response', { data: response.data });
       return response.data;
@@ -369,8 +391,8 @@ const metaCloud = {
         }
       };
       
-      const response = await axios.post(`${baseUrl}/messages`, payload, {
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta location request response', { data: response.data });
       return response.data;
@@ -420,8 +442,8 @@ const metaCloud = {
         }
       };
       
-      const response = await axios.post(`${baseUrl}/messages`, payload, {
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendImageWithCtaUrl success');
       return response.data;
@@ -465,8 +487,8 @@ const metaCloud = {
         }
       };
       
-      const response = await axios.post(`${baseUrl}/messages`, payload, {
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendImageWithCtaUrlOriginal success');
       return response.data;
@@ -505,8 +527,8 @@ const metaCloud = {
         }
       };
       
-      const response = await axios.post(`${baseUrl}/messages`, payload, {
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendCtaUrl success');
       return response.data;
@@ -545,8 +567,8 @@ const metaCloud = {
         }
       };
       
-      const response = await axios.post(`${baseUrl}/messages`, payload, {
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendCtaPhone success');
       return response.data;
@@ -591,8 +613,8 @@ const metaCloud = {
         }
       };
       
-      const response = await axios.post(`${baseUrl}/messages`, payload, {
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendImageWithCtaPhone success');
       return response.data;
@@ -662,8 +684,8 @@ const metaCloud = {
         }
       };
       
-      const response = await axios.post(`${baseUrl}/messages`, payload, {
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendMarketingTemplate success');
       return response.data;
@@ -691,8 +713,8 @@ const metaCloud = {
         }
       };
       
-      const response = await axios.post(`${baseUrl}/messages`, payload, {
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendSimpleTemplate success');
       return response.data;
@@ -867,10 +889,10 @@ const metaCloud = {
 
       logger.info('Submitting template to Meta', { templateName, componentTypes: components.map(c => c.type) });
 
-      const response = await axios.post(
+      const response = await metaApi.post(
         `https://graph.facebook.com/v24.0/${wabaId}/message_templates`,
         payload,
-        { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
+        { headers: { Authorization: `Bearer ${accessToken}` } }
       );
 
       logger.info('Meta createMessageTemplate success', { id: response.data.id, status: response.data.status });

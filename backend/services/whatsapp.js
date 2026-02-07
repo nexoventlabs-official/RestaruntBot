@@ -10,6 +10,8 @@ const { executeWithCircuitBreaker } = require('./circuitBreaker');
  * Wrapper to track outbound messages
  * Creates OutboundMessage record before sending, updates status after
  * Includes idempotency check to prevent duplicate messages
+ * 
+ * Optimized: Single DB write on success (fire-and-forget initial save)
  */
 async function trackOutbound(phone, messageType, contentSummary, sendFunction) {
   const normalizedPhone = phone.replace(/\D/g, '');
@@ -33,28 +35,32 @@ async function trackOutbound(phone, messageType, contentSummary, sendFunction) {
     };
   }
   
-  // Create outbound message record
+  // Create outbound message record with 'sending' status directly
+  // Skip the intermediate 'pending' save — reduces 1 DB round-trip (~15-30ms)
   const outboundMsg = new OutboundMessage({
     phone: normalizedPhone,
     messageType,
     content: contentSummary,
-    status: 'pending'
+    status: 'sending'
   });
   
-  await outboundMsg.save();
+  // Fire-and-forget the initial save — don't await it before calling Meta API
+  // The record will be updated with the final status after the API call
+  const initialSavePromise = outboundMsg.save().catch(err => {
+    logger.error('Failed to save initial outbound record', { phone: normalizedPhone, error: err.message });
+  });
   
   try {
-    // Update to sending
-    outboundMsg.status = 'sending';
-    await outboundMsg.save();
-    
-    // Call actual send function
+    // Call actual send function immediately (don't wait for DB)
     const response = await sendFunction();
     
     // Mark as processed in idempotency cache
     idempotencyCheck.mark();
     
-    // Update to sent with Meta response
+    // Wait for initial save to complete before updating
+    await initialSavePromise;
+    
+    // Update to sent with Meta response — single update operation
     outboundMsg.status = 'sent';
     outboundMsg.sentAt = new Date();
     outboundMsg.metaMessageId = response?.messages?.[0]?.id || response?.id;

@@ -32,17 +32,17 @@ const messageQueue = new Bull('message-processing', {
     attempts: 3, // Retry up to 3 times
     backoff: {
       type: 'exponential',
-      delay: 2000 // Start with 2 seconds, then 4s, 8s
+      delay: 1000 // Start with 1 second, then 2s, 4s (reduced from 2s start)
     },
     removeOnComplete: 100, // Keep last 100 completed jobs
     removeOnFail: 500, // Keep last 500 failed jobs
-    timeout: 60000 // 60 second timeout per job
+    timeout: 30000 // 30 second timeout per job (reduced from 60s)
   },
   settings: {
     maxStalledCount: 2, // Max times a job can be stalled before failed
-    stalledInterval: 30000, // Check for stalled jobs every 30s
-    guardInterval: 5000, // Check for delayed jobs every 5s
-    retryProcessDelay: 5000 // Delay before retrying a failed job
+    stalledInterval: 15000, // Check for stalled jobs every 15s (reduced from 30s)
+    guardInterval: 2000, // Check for delayed jobs every 2s (reduced from 5s)
+    retryProcessDelay: 2000 // Delay before retrying a failed job (reduced from 5s)
   }
 });
 

@@ -440,8 +440,10 @@ const whatsappBroadcast = {
           }
         }
         
-        // Add delay to avoid rate limiting (500ms between messages)
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Reduced delay for rate limiting (200ms between messages, down from 500ms)
+        // Meta Cloud API allows ~80 messages/second for business tier
+        // 200ms provides safe margin while being 2.5x faster
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
 
       logger.info('[WhatsApp Broadcast] BROADCAST SUMMARY', {

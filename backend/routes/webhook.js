@@ -215,9 +215,59 @@ router.post('/meta', webhookRateLimiter, async (req, res) => {
           if (change.field === 'messages') {
             const value = change.value;
 
-            // Skip status updates (delivery receipts, read receipts)
+            // Process status updates (delivery receipts, read receipts)
+            // Updates OutboundMessage records with deliveredAt/readAt/failedAt timestamps
             if (value.statuses) {
-              continue;
+              for (const status of value.statuses) {
+                try {
+                  const OutboundMessage = require('../models/OutboundMessage');
+                  const metaMessageId = status.id;
+                  const statusValue = status.status; // sent, delivered, read, failed
+                  const statusTimestamp = status.timestamp 
+                    ? new Date(parseInt(status.timestamp) * 1000)
+                    : new Date();
+
+                  const updateFields = {};
+                  
+                  if (statusValue === 'delivered') {
+                    updateFields.status = 'delivered';
+                    updateFields.deliveredAt = statusTimestamp;
+                  } else if (statusValue === 'read') {
+                    updateFields.status = 'read';
+                    updateFields.readAt = statusTimestamp;
+                  } else if (statusValue === 'failed') {
+                    const errorInfo = status.errors?.[0];
+                    updateFields.status = 'failed';
+                    updateFields.failedAt = statusTimestamp;
+                    if (errorInfo) {
+                      updateFields['error.message'] = errorInfo.message || errorInfo.title;
+                      updateFields['error.code'] = String(errorInfo.code || '');
+                    }
+                  }
+                  // 'sent' status = Meta accepted, we already track that
+
+                  if (Object.keys(updateFields).length > 0) {
+                    // Fire-and-forget — don't block webhook response processing
+                    OutboundMessage.findOneAndUpdate(
+                      { metaMessageId },
+                      { $set: updateFields },
+                      { new: true }
+                    ).catch(err => {
+                      logger.error('Failed to update outbound status', {
+                        metaMessageId,
+                        status: statusValue,
+                        error: err.message
+                      });
+                    });
+                  }
+                } catch (statusErr) {
+                  logger.error('Error processing status update', { error: statusErr.message });
+                }
+              }
+              // Also check if this payload has messages — some webhooks contain both
+              if (!value.messages || value.messages.length === 0) {
+                continue;
+              }
             }
 
             // Extract contact name from Meta API contacts array

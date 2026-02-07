@@ -22,9 +22,9 @@ const { recordApiCall } = require('./metrics');
 const circuitBreakerOptions = {
   // WhatsApp API - critical service
   whatsapp: {
-    timeout: 10000, // 10 seconds
+    timeout: 8000, // 8 seconds (reduced from 10s — connection reuse makes calls faster)
     errorThresholdPercentage: 50, // Open circuit if 50% of requests fail
-    resetTimeout: 30000, // Try again after 30 seconds
+    resetTimeout: 20000, // Try again after 20 seconds (faster recovery)
     rollingCountTimeout: 60000, // 1 minute rolling window
     rollingCountBuckets: 10,
     name: 'whatsapp-api',
