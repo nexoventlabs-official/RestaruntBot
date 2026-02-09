@@ -3746,28 +3746,40 @@ const chatbot = {
         
         logger.info('Location received', { location: locationData });
         
+        // Helper: detect if a string is just coordinates, not a real address
+        const isCoordinateString = (str) => {
+          if (!str) return true;
+          const s = str.trim();
+          if (s === 'Location shared' || !s) return true;
+          // Matches patterns like "Location (12.9913, 80.1184)" or raw "12.9913, 80.1184"
+          if (/^Location\s*\([\d.\-]+,\s*[\d.\-]+\)$/i.test(s)) return true;
+          if (/^[\d.\-]+\s*,\s*[\d.\-]+$/.test(s)) return true;
+          return false;
+        };
+
         // Get proper address - prefer WhatsApp's address, fallback to reverse geocoding
         let formattedAddress = 'Location shared';
         
         // First, try to use the address from WhatsApp location data
-        if (locationData.address && locationData.address.trim() && locationData.address !== 'undefined') {
+        // But reject it if it's just coordinates disguised as an address
+        if (locationData.address && locationData.address.trim() && locationData.address !== 'undefined' && !isCoordinateString(locationData.address)) {
           formattedAddress = locationData.address.trim();
           // If there's also a name/place, prepend it
-          if (locationData.name && locationData.name.trim() && locationData.name !== locationData.address) {
+          if (locationData.name && locationData.name.trim() && locationData.name !== locationData.address && !isCoordinateString(locationData.name)) {
             formattedAddress = `${locationData.name.trim()}, ${formattedAddress}`;
           }
           logger.info('Using WhatsApp provided address', { address: formattedAddress });
-        } else if (locationData.name && locationData.name.trim() && locationData.name !== 'undefined') {
+        } else if (locationData.name && locationData.name.trim() && locationData.name !== 'undefined' && !isCoordinateString(locationData.name)) {
           // If only name is provided (like a place name)
           formattedAddress = locationData.name.trim();
           logger.info('Using WhatsApp location name', { location: formattedAddress });
         }
         
         // If still no address, try reverse geocoding from coordinates
-        if ((formattedAddress === 'Location shared' || !formattedAddress) && locationData.latitude && locationData.longitude) {
+        if (isCoordinateString(formattedAddress) && locationData.latitude && locationData.longitude) {
           logger.info('No address from WhatsApp, trying reverse geocoding...');
           const geocodedAddress = await this.reverseGeocode(locationData.latitude, locationData.longitude);
-          if (geocodedAddress && geocodedAddress !== 'Location shared') {
+          if (geocodedAddress && !isCoordinateString(geocodedAddress)) {
             formattedAddress = geocodedAddress;
             logger.info('Got address from reverse geocoding', { address: formattedAddress });
           }
@@ -4397,7 +4409,7 @@ const chatbot = {
           const item = menuItems.find(m => m._id.toString() === state.selectedItem);
           if (item) {
             // Check if item already in cart
-            const existingIndex = customer.cart?.findIndex(c => c.menuItem.toString() === state.selectedItem);
+            const existingIndex = customer.cart?.findIndex(c => c.menuItem?.toString() === state.selectedItem);
             if (existingIndex >= 0) {
               // Item already in cart, increment quantity
               customer.cart[existingIndex].quantity += 1;
