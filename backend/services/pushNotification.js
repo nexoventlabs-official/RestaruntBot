@@ -28,11 +28,23 @@ if (!admin.apps.length) {
   try {
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
     if (!projectId || !clientEmail || !privateKey) {
       logger.warn('⚠️ [Firebase Admin] Missing credentials — push notifications disabled. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY.');
     } else {
+      // Normalize the private key:
+      // 1. Strip surrounding quotes if Render/shell added them
+      privateKey = privateKey.replace(/^["']|["']$/g, '');
+      // 2. Convert literal \n strings to real newlines
+      privateKey = privateKey.replace(/\\n/g, '\n');
+      // 3. If still no real newlines, try splitting on common PEM markers
+      if (!privateKey.includes('\n')) {
+        privateKey = privateKey
+          .replace(/-----BEGIN PRIVATE KEY-----/, '-----BEGIN PRIVATE KEY-----\n')
+          .replace(/-----END PRIVATE KEY-----/, '\n-----END PRIVATE KEY-----\n');
+      }
+
       admin.initializeApp({
         credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
       });
