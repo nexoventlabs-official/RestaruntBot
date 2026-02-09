@@ -349,6 +349,12 @@ async function initiateOnlinePayment(customer, phone, params = {}) {
   googleSheets.addOrder(order).catch(err => logger.error('Google Sheets sync error', { error: err.message }));
   googleSheets.syncTodayDailyReport().catch(err => logger.error('Daily report sync error', { error: err.message }));
   
+  // Update dashboard stats in real-time
+  googleSheets.incrementDashboardStat('Today Orders', 1).catch(err => logger.error('Dashboard stat error', { error: err.message }));
+  googleSheets.incrementDashboardStat('Today Revenue', total).catch(err => logger.error('Dashboard stat error', { error: err.message }));
+  googleSheets.incrementDashboardStat('Total Orders', 1).catch(err => logger.error('Dashboard stat error', { error: err.message }));
+  googleSheets.incrementDashboardStat('Total Revenue', total).catch(err => logger.error('Dashboard stat error', { error: err.message }));
+  
   // Send push notification to admin
   try {
     const admins = await User.find({ pushToken: { $ne: null } });
@@ -525,6 +531,12 @@ async function processCODOrder(customer, phone, params = {}) {
   // Sync to Google Sheets
   googleSheets.addOrder(order).catch(err => logger.error('Google Sheets sync error', { error: err.message }));
   googleSheets.syncTodayDailyReport().catch(err => logger.error('Daily report sync error', { error: err.message }));
+  
+  // Update dashboard stats in real-time
+  googleSheets.incrementDashboardStat('Today Orders', 1).catch(err => logger.error('Dashboard stat error', { error: err.message }));
+  googleSheets.incrementDashboardStat('Today Revenue', total).catch(err => logger.error('Dashboard stat error', { error: err.message }));
+  googleSheets.incrementDashboardStat('Total Orders', 1).catch(err => logger.error('Dashboard stat error', { error: err.message }));
+  googleSheets.incrementDashboardStat('Total Revenue', total).catch(err => logger.error('Dashboard stat error', { error: err.message }));
   
   // Send push notification to admin
   try {
