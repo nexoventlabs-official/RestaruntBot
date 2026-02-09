@@ -94,6 +94,49 @@ const orderScheduler = {
         ]);
       }
       
+      // Emit event for real-time updates
+      const dataEvents = require('./eventEmitter');
+      dataEvents.emit('orders');
+      dataEvents.emit('dashboard');
+
+      // Send push notification to admin — auto-cancelled
+      try {
+        const User = require('../models/User');
+        const pushNotification = require('./pushNotification');
+        
+        const admins = await User.find({ pushToken: { $ne: null } });
+        for (const admin of admins) {
+          if (admin.pushToken) {
+            await pushNotification.sendNotification(
+              admin.pushToken,
+              '⏰ Order Auto-Cancelled',
+              `Order #${order.orderId} - ₹${order.totalAmount}\nPayment not received within 15 min`,
+              { type: 'order_cancelled', orderId: order.orderId, screen: 'Orders' },
+              'order-updates'
+            );
+          }
+        }
+      } catch (pushErr) {
+        logger.error('Admin push error (auto-cancel)', pushErr.message);
+      }
+      // Notify assigned delivery partner if order was assigned
+      if (order.assignedTo) {
+        try {
+          const DeliveryBoy = require('../models/DeliveryBoy');
+          const pushNotification = require('./pushNotification');
+          
+          const deliveryBoy = await DeliveryBoy.findById(order.assignedTo);
+          if (deliveryBoy && deliveryBoy.pushToken) {
+            await pushNotification.sendOrderCancelledNotification(deliveryBoy.pushToken, {
+              orderId: order.orderId,
+              totalAmount: order.totalAmount
+            });
+            logger.info(`Delivery partner ${deliveryBoy.name} notified of auto-cancellation`);
+          }
+        } catch (pushErr) {
+          logger.error('Delivery push error (auto-cancel)', pushErr.message);
+        }
+      }
       logger.info(`✅ Order ${order.orderId} cancelled and customer notified`);
       return true;
     } catch (error) {

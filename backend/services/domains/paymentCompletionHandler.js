@@ -144,6 +144,27 @@ async function handlePaymentSuccess(params) {
       logger.error('Google Sheets sync error', { error: err.message })
     );
     
+    // Send push notification to admin — payment confirmed
+    try {
+      const User = require('../../models/User');
+      const pushNotification = require('../pushNotification');
+      
+      const admins = await User.find({ pushToken: { $ne: null } });
+      for (const admin of admins) {
+        if (admin.pushToken) {
+          await pushNotification.sendNotification(
+            admin.pushToken,
+            '💳 Payment Confirmed!',
+            `Order #${order.orderId} - ₹${order.totalAmount}\n${order.customer?.name || 'Customer'} paid via UPI`,
+            { type: 'payment_confirmed', orderId: order.orderId, screen: 'Orders' },
+            'order-updates'
+          );
+        }
+      }
+    } catch (pushErr) {
+      logger.error('Admin push error (payment completion)', { error: pushErr.message });
+    }
+
     // Send confirmation to customer
     await sendPaymentConfirmation(order);
     

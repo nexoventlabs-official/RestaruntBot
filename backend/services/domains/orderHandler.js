@@ -132,6 +132,51 @@ async function cancelOrder(customer, phone) {
   order.cancellationReason = 'Cancelled by customer via WhatsApp';
   await order.save();
   
+  // Emit event for real-time updates (SSE)
+  const dataEvents = require('../eventEmitter');
+  dataEvents.emit('orders');
+  dataEvents.emit('dashboard');
+
+  // Send push notification to admin — customer cancelled
+  try {
+    const User = require('../../models/User');
+    const pushNotification = require('../pushNotification');
+    
+    const admins = await User.find({ pushToken: { $ne: null } });
+    for (const admin of admins) {
+      if (admin.pushToken) {
+        await pushNotification.sendNotification(
+          admin.pushToken,
+          '❌ Order Cancelled by Customer',
+          `Order #${order.orderId} - ₹${order.totalAmount}\n${order.customer?.name || 'Customer'} cancelled via WhatsApp`,
+          { type: 'order_cancelled', orderId: order.orderId, screen: 'Orders' },
+          'order-updates'
+        );
+      }
+    }
+  } catch (pushErr) {
+    logger.error('Admin push error (customer cancel)', { error: pushErr.message });
+  }
+
+  // Notify assigned delivery partner if order was assigned
+  if (order.assignedTo) {
+    try {
+      const DeliveryBoy = require('../../models/DeliveryBoy');
+      const pushNotification = require('../pushNotification');
+      
+      const deliveryBoy = await DeliveryBoy.findById(order.assignedTo);
+      if (deliveryBoy && deliveryBoy.pushToken) {
+        await pushNotification.sendOrderCancelledNotification(deliveryBoy.pushToken, {
+          orderId: order.orderId,
+          totalAmount: order.totalAmount
+        });
+        logger.info(`Delivery partner ${deliveryBoy.name} notified of cancellation`);
+      }
+    } catch (pushErr) {
+      logger.error('Delivery push error (customer cancel)', { error: pushErr.message });
+    }
+  }
+
   await whatsapp.sendMessage(phone, 
     `✅ Order ${order.orderId} has been cancelled.\n\n` +
     `If you paid online, refund will be processed within 5-7 business days.`
@@ -302,6 +347,27 @@ async function requestRefund(customer, phone, params = {}) {
   order.refundRequestedAt = new Date();
   await order.save();
   
+  // Send push notification to admin — refund requested
+  try {
+    const User = require('../../models/User');
+    const pushNotification = require('../pushNotification');
+    
+    const admins = await User.find({ pushToken: { $ne: null } });
+    for (const admin of admins) {
+      if (admin.pushToken) {
+        await pushNotification.sendNotification(
+          admin.pushToken,
+          '💰 Refund Requested',
+          `Order #${order.orderId} - ₹${order.totalAmount}\nCustomer requested a refund`,
+          { type: 'refund_requested', orderId: order.orderId, screen: 'Orders' },
+          'order-updates'
+        );
+      }
+    }
+  } catch (pushErr) {
+    logger.error('Admin push error (refund request)', { error: pushErr.message });
+  }
+
   await whatsapp.sendMessage(phone,
     `✅ Refund requested for order ${order.orderId}\n\n` +
     `Amount: ₹${order.totalAmount}\n` +
