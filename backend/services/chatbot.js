@@ -3624,34 +3624,38 @@ const chatbot = {
     try {
       logger.info(`Reverse geocoding coordinates: ${latitude}, ${longitude}`);
       
-      // Try OpenStreetMap Nominatim first (single request, no loops to avoid delays)
+      // Try Nominatim with proper configuration for server environments
       try {
         const response = await axios.get(
           `https://nominatim.openstreetmap.org/reverse`,
           { 
             params: {
-              format: 'json',
+              format: 'jsonv2',
               lat: latitude,
               lon: longitude,
               addressdetails: 1,
-              zoom: 18,
-              'accept-language': 'en'
+              zoom: 18
             },
             headers: { 
-              'User-Agent': 'RestaurantBot/1.0 (Contact: support@restaurant.com)',
-              'Referer': process.env.BACKEND_URL || 'https://restaruntbot.onrender.com'
+              'User-Agent': 'RestaurantBot/1.0',
+              'Accept': 'application/json',
+              'Accept-Language': 'en'
             },
-            timeout: 6000
+            timeout: 8000,
+            // Important: Don't use proxy, allow redirects
+            maxRedirects: 5,
+            validateStatus: (status) => status < 500
           }
         );
         
-        logger.info('Nominatim geocoding response', { 
-          hasData: !!response.data, 
+        logger.info('Nominatim response', { 
+          status: response.status,
+          hasData: !!response.data,
           hasAddress: !!response.data?.address,
           displayName: response.data?.display_name?.substring(0, 100)
         });
         
-        if (response.data) {
+        if (response.status === 200 && response.data) {
           // Try to build address from components
           if (response.data.address) {
             const addr = response.data.address;
@@ -3666,21 +3670,16 @@ const chatbot = {
             if (addr.house_number) parts.push(addr.house_number);
             if (addr.road) parts.push(addr.road);
             else if (addr.street) parts.push(addr.street);
-            else if (addr.pedestrian) parts.push(addr.pedestrian);
             
             // Area/locality
             if (addr.neighbourhood) parts.push(addr.neighbourhood);
             else if (addr.suburb) parts.push(addr.suburb);
-            else if (addr.residential) parts.push(addr.residential);
             else if (addr.locality) parts.push(addr.locality);
-            else if (addr.quarter) parts.push(addr.quarter);
             
             // City
             if (addr.city) parts.push(addr.city);
             else if (addr.town) parts.push(addr.town);
             else if (addr.village) parts.push(addr.village);
-            else if (addr.municipality) parts.push(addr.municipality);
-            else if (addr.county) parts.push(addr.county);
             
             // State and postcode
             if (addr.state) parts.push(addr.state);
@@ -3689,69 +3688,100 @@ const chatbot = {
             // Build final address
             if (parts.length >= 2) {
               const address = parts.join(', ');
-              logger.info(`Successfully geocoded address from parts: ${address.substring(0, 150)}`);
+              logger.info(`Successfully geocoded: ${address.substring(0, 150)}`);
               return address;
             }
           }
           
-          // Fallback to display_name if available
+          // Fallback to display_name
           if (response.data.display_name) {
-            logger.info(`Using Nominatim display_name: ${response.data.display_name.substring(0, 150)}`);
+            logger.info(`Using display_name: ${response.data.display_name.substring(0, 150)}`);
             return response.data.display_name;
           }
         }
       } catch (nominatimError) {
-        logger.warn('Nominatim geocoding failed', { 
+        logger.error('Nominatim geocoding failed', { 
           error: nominatimError.message,
           code: nominatimError.code,
           status: nominatimError.response?.status,
-          statusText: nominatimError.response?.statusText
+          statusText: nominatimError.response?.statusText,
+          isTimeout: nominatimError.code === 'ECONNABORTED',
+          isNetworkError: nominatimError.code === 'ECONNREFUSED' || nominatimError.code === 'ENOTFOUND'
         });
       }
       
-      // Try alternative: BigDataCloud (free, no API key required)
+      // Try Photon API (another OSM-based geocoder, often more reliable)
       try {
-        logger.info('Trying BigDataCloud geocoding as fallback...');
-        const bdcResponse = await axios.get(
-          `https://api.bigdatacloud.net/data/reverse-geocode-client`,
+        logger.info('Trying Photon API as fallback...');
+        const photonResponse = await axios.get(
+          `https://photon.komoot.io/reverse`,
           {
             params: {
-              latitude: latitude,
-              longitude: longitude,
-              localityLanguage: 'en'
+              lat: latitude,
+              lon: longitude,
+              lang: 'en'
             },
-            timeout: 5000
+            headers: {
+              'User-Agent': 'RestaurantBot/1.0',
+              'Accept': 'application/json'
+            },
+            timeout: 8000,
+            maxRedirects: 5
           }
         );
         
-        if (bdcResponse.data) {
-          const data = bdcResponse.data;
+        if (photonResponse.data && photonResponse.data.features && photonResponse.data.features.length > 0) {
+          const feature = photonResponse.data.features[0];
+          const props = feature.properties;
           const parts = [];
           
-          // Build address from BigDataCloud response
-          if (data.locality) parts.push(data.locality);
-          if (data.localityInfo?.administrative?.[3]?.name) parts.push(data.localityInfo.administrative[3].name);
-          if (data.city) parts.push(data.city);
-          if (data.principalSubdivision) parts.push(data.principalSubdivision);
-          if (data.postcode) parts.push(data.postcode);
+          if (props.name) parts.push(props.name);
+          if (props.street) parts.push(props.street);
+          if (props.district) parts.push(props.district);
+          if (props.city) parts.push(props.city);
+          if (props.state) parts.push(props.state);
+          if (props.postcode) parts.push(props.postcode);
           
           if (parts.length >= 2) {
             const address = parts.join(', ');
-            logger.info(`Successfully geocoded with BigDataCloud: ${address.substring(0, 150)}`);
+            logger.info(`Successfully geocoded with Photon: ${address.substring(0, 150)}`);
             return address;
           }
-          
-          // Try formatted address
-          if (data.localityInfo?.informative?.[0]?.description) {
-            logger.info(`Using BigDataCloud description: ${data.localityInfo.informative[0].description.substring(0, 150)}`);
-            return data.localityInfo.informative[0].description;
-          }
         }
-      } catch (bdcError) {
-        logger.warn('BigDataCloud geocoding failed', { 
-          error: bdcError.message,
-          code: bdcError.code
+      } catch (photonError) {
+        logger.warn('Photon geocoding failed', { 
+          error: photonError.message,
+          code: photonError.code
         });
+      }
+      
+      // Try OpenCage (has free tier, 2500 requests/day)
+      if (process.env.OPENCAGE_API_KEY) {
+        try {
+          logger.info('Trying OpenCage API...');
+          const opencageResponse = await axios.get(
+            `https://api.opencagedata.com/geocode/v1/json`,
+            {
+              params: {
+                q: `${latitude},${longitude}`,
+                key: process.env.OPENCAGE_API_KEY,
+                language: 'en',
+                no_annotations: 1
+              },
+              timeout: 8000
+            }
+          );
+          
+          if (opencageResponse.data && opencageResponse.data.results && opencageResponse.data.results.length > 0) {
+            const result = opencageResponse.data.results[0];
+            if (result.formatted) {
+              logger.info(`Successfully geocoded with OpenCage: ${result.formatted.substring(0, 150)}`);
+              return result.formatted;
+            }
+          }
+        } catch (opencageError) {
+          logger.warn('OpenCage geocoding failed', { error: opencageError.message });
+        }
       }
       
       logger.warn('All geocoding services failed');
@@ -3759,8 +3789,7 @@ const chatbot = {
     } catch (error) {
       logger.error('Reverse geocoding error', { 
         error: error.message,
-        code: error.code,
-        response: error.response?.status
+        code: error.code
       });
       return null;
     }
