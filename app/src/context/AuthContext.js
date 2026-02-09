@@ -21,6 +21,8 @@ export const AuthProvider = ({ children }) => {
   // Force logout function (called from API interceptor on 401)
   const forceLogout = useCallback(() => {
     console.log('🔒 Force logout triggered - session invalidated');
+    // Clear push token in background (don't await - auth is already invalid)
+    pushNotifications.unregisterPushToken().catch(() => {});
     setUser(null);
     setRole(null);
   }, []);
@@ -223,6 +225,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
+    // Unregister push token BEFORE clearing auth token (needs auth header)
+    try {
+      await pushNotifications.unregisterPushToken();
+      console.log('📱 Push token unregistered on logout');
+    } catch (error) {
+      console.warn('⚠️ Error unregistering push token:', error);
+    }
+    
     try {
       if (role === 'delivery') {
         await api.post('/delivery/status', { isOnline: false });

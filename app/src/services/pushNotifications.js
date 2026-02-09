@@ -352,6 +352,38 @@ export const pushNotifications = {
   },
 
   /**
+   * Unregister push token from the backend and clear local cache.
+   * Call this on logout to stop receiving push notifications.
+   */
+  async unregisterPushToken() {
+    try {
+      const savedRole = await SecureStore.getItemAsync(TOKEN_ROLE_KEY);
+      
+      // Tell the backend to clear the push token
+      if (savedRole === 'admin') {
+        await api.delete('/auth/push-token');
+      } else {
+        await api.delete('/delivery/push-token');
+      }
+      console.log(`📱 Push token unregistered from server (${savedRole})`);
+    } catch (error) {
+      console.warn('⚠️ Failed to unregister push token from server:', error.message);
+    }
+    
+    // Clear local cached token and role
+    try {
+      await SecureStore.deleteItemAsync(PUSH_TOKEN_KEY);
+      await SecureStore.deleteItemAsync(TOKEN_ROLE_KEY);
+      await SecureStore.deleteItemAsync(BADGE_COUNT_KEY);
+    } catch (error) {
+      console.warn('⚠️ Failed to clear cached push token:', error.message);
+    }
+    
+    // Clear all displayed notifications
+    await this.clearAllNotifications();
+  },
+
+  /**
    * Send push token to backend.
    * Automatically picks the right endpoint based on cached role.
    * @param {string} pushToken - FCM device token

@@ -1,23 +1,55 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Platform, StatusBar, SafeAreaView, Animated
+  Platform, StatusBar, SafeAreaView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { useNotifications } from '../../context/NotificationContext';
-import { colors, spacing, radius, shadows } from '../../theme';
+import { colors, spacing } from '../../theme';
 
 const ZOMATO_RED = '#E23744';
+
+const STATUS_CONFIG = {
+  new_order: {
+    icon: 'bag-handle',
+    gradient: '#FFF7ED',
+    accent: '#F59E0B',
+    label: 'New Order',
+    labelBg: '#FEF3C7',
+    labelColor: '#B45309',
+  },
+  delivered: {
+    icon: 'checkmark-done-circle',
+    gradient: '#F0FDF4',
+    accent: '#22C55E',
+    label: 'Delivered',
+    labelBg: '#DCFCE7',
+    labelColor: '#166534',
+  },
+  cancelled: {
+    icon: 'close-circle',
+    gradient: '#FEF2F2',
+    accent: '#EF4444',
+    label: 'Cancelled',
+    labelBg: '#FEE2E2',
+    labelColor: '#991B1B',
+  },
+  default: {
+    icon: 'notifications',
+    gradient: '#F8FAFC',
+    accent: '#6366F1',
+    label: 'Update',
+    labelBg: '#EEF2FF',
+    labelColor: '#4338CA',
+  },
+};
 
 export default function NotificationsScreen({ navigation }) {
   const { notifications, markAllAsRead, markAsRead, clearAll, checkForUpdates } = useNotifications();
 
-  // Refresh notifications and mark all as read when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      // Check for updates to refresh notification data with latest order status
       checkForUpdates();
       markAllAsRead();
     }, [checkForUpdates, markAllAsRead])
@@ -27,10 +59,11 @@ export default function NotificationsScreen({ navigation }) {
     const date = new Date(timestamp);
     const now = new Date();
     const diff = now - date;
-    
+
     if (diff < 60000) return 'Just now';
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    if (diff < 172800000) return 'Yesterday';
     return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   };
 
@@ -39,108 +72,104 @@ export default function NotificationsScreen({ navigation }) {
     if (notification.orderId) {
       navigation.navigate('Orders', {
         screen: 'OrderDetail',
-        params: { orderId: notification.orderId }
+        params: { orderId: notification.orderId },
       });
     }
   };
 
-  const getNotificationGradient = (color, isRead) => {
-    if (!isRead) {
-      return ['#FFF5F5', '#FFFFFF'];
-    }
-    return ['#FFFFFF', '#FAFAFA'];
-  };
+  const getConfig = (type) => STATUS_CONFIG[type] || STATUS_CONFIG.default;
 
-  const renderNotification = ({ item, index }) => (
-    <TouchableOpacity
-      style={[styles.notificationItem, !item.read && styles.unreadItem]}
-      onPress={() => handleNotificationPress(item)}
-      activeOpacity={0.8}
-    >
-      <LinearGradient
-        colors={getNotificationGradient(item.color, item.read)}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.notificationGradient}
+  const renderNotification = ({ item }) => {
+    const config = getConfig(item.type);
+    const isUnread = !item.read;
+
+    return (
+      <TouchableOpacity
+        style={[styles.card, isUnread && styles.cardUnread]}
+        onPress={() => handleNotificationPress(item)}
+        activeOpacity={0.7}
       >
-        {!item.read && <View style={styles.unreadIndicator} />}
-        
-        <View style={styles.notificationContent}>
-          <View style={[styles.iconContainer, { backgroundColor: `${item.color}18` }]}>
-            <Ionicons name={item.icon} size={22} color={item.color} />
-          </View>
-          
-          <View style={styles.textContainer}>
-            <View style={styles.titleRow}>
-              <Text style={[styles.title, !item.read && styles.unreadTitle]} numberOfLines={1}>
-                {item.title}
-              </Text>
-              <Text style={styles.time}>{formatTime(item.timestamp)}</Text>
+        {/* Accent strip */}
+        {isUnread && <View style={[styles.accentStrip, { backgroundColor: config.accent }]} />}
+
+        {/* Icon */}
+        <View style={[styles.iconCircle, { backgroundColor: config.gradient }]}>
+          <Ionicons name={config.icon} size={22} color={config.accent} />
+        </View>
+
+        {/* Content */}
+        <View style={styles.content}>
+          <View style={styles.topRow}>
+            <View style={[styles.statusBadge, { backgroundColor: config.labelBg }]}>
+              <Text style={[styles.statusLabel, { color: config.labelColor }]}>{config.label}</Text>
             </View>
-            <Text style={styles.message} numberOfLines={2}>{item.message}</Text>
+            <Text style={styles.time}>{formatTime(item.timestamp)}</Text>
           </View>
+
+          <Text style={[styles.title, isUnread && styles.titleUnread]} numberOfLines={1}>
+            {item.title.replace(/[\u{1F389}\u{2705}\u{274C}\u{1F6B4}]/gu, '').trim()}
+          </Text>
+          <Text style={styles.message} numberOfLines={2}>{item.message}</Text>
         </View>
-        
-        <View style={styles.arrowContainer}>
-          <Ionicons name="chevron-forward" size={18} color={colors.light.text.tertiary} />
-        </View>
-      </LinearGradient>
-    </TouchableOpacity>
-  );
+
+        {/* Arrow */}
+        <Ionicons name="chevron-forward" size={16} color="#CBD5E1" style={styles.arrow} />
+      </TouchableOpacity>
+    );
+  };
 
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
-      <View style={styles.emptyIconWrapper}>
-        <LinearGradient
-          colors={['#FFF0F0', '#FFE5E5']}
-          style={styles.emptyIconContainer}
-        >
-          <Ionicons name="notifications-outline" size={48} color={ZOMATO_RED} />
-        </LinearGradient>
+      <View style={styles.emptyIconBg}>
+        <Ionicons name="notifications-off-outline" size={44} color={ZOMATO_RED} />
       </View>
-      <Text style={styles.emptyTitle}>All Caught Up!</Text>
-      <Text style={styles.emptyMessage}>No new notifications right now.{'\n'}We'll let you know when something arrives.</Text>
+      <Text style={styles.emptyTitle}>No Notifications</Text>
+      <Text style={styles.emptyMessage}>
+        You're all caught up! New order updates{'\n'}will appear here.
+      </Text>
     </View>
   );
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      
+
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color={colors.light.text.primary} />
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={20} color="#1E293B" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Notifications</Text>
         {notifications.length > 0 && (
-          <TouchableOpacity style={styles.clearButton} onPress={clearAll}>
+          <TouchableOpacity style={styles.clearBtn} onPress={clearAll}>
             <Text style={styles.clearText}>Clear All</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Notification Count Badge */}
+      {/* Count strip */}
       {notifications.length > 0 && (
-        <View style={styles.countBadge}>
+        <View style={styles.countStrip}>
           <Text style={styles.countText}>
-            {notifications.filter(n => !n.read).length} unread
+            {unreadCount > 0 ? `${unreadCount} UNREAD` : '0 UNREAD'}
           </Text>
+          <View style={styles.countDivider} />
         </View>
       )}
 
-      {/* Notifications List */}
+      {/* List */}
       <FlatList
         data={notifications}
         renderItem={renderNotification}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
-          styles.listContent,
-          notifications.length === 0 && styles.emptyListContent
+          styles.list,
+          notifications.length === 0 && styles.listEmpty,
         ]}
         ListEmptyComponent={renderEmpty}
         showsVerticalScrollIndicator={false}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
     </SafeAreaView>
   );
@@ -149,179 +178,186 @@ export default function NotificationsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F8FAFC',
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
+
+  /* Header */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     backgroundColor: '#FFFFFF',
-    borderBottomWidth: 0,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
   },
   headerTitle: {
     flex: 1,
     fontSize: 18,
     fontWeight: '700',
-    color: colors.light.text.primary,
-    marginLeft: spacing.md,
+    color: '#1E293B',
+    marginLeft: 12,
     letterSpacing: -0.3,
   },
-  clearButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: '#FFF0F0',
+  clearBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    backgroundColor: '#FEF2F2',
     borderRadius: 20,
   },
   clearText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: ZOMATO_RED,
   },
-  countBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: '#FFFFFF',
+
+  /* Count strip */
+  countStrip: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 4,
   },
   countText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.light.text.tertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 1,
   },
-  listContent: {
-    padding: spacing.md,
-    paddingTop: spacing.sm,
+  countDivider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginTop: 10,
   },
-  emptyListContent: {
+
+  /* List */
+  list: {
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 24,
+  },
+  listEmpty: {
     flex: 1,
     justifyContent: 'center',
   },
-  separator: {
-    height: 10,
-  },
-  notificationItem: {
-    borderRadius: 16,
+
+  /* Card */
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginTop: 10,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  cardUnread: {
+    borderColor: '#E2E8F0',
     backgroundColor: '#FFFFFF',
     elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowRadius: 6,
   },
-  unreadItem: {
-    elevation: 4,
-    shadowOpacity: 0.1,
-  },
-  notificationGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    paddingVertical: 14,
-    position: 'relative',
-  },
-  unreadIndicator: {
+  accentStrip: {
     position: 'absolute',
     left: 0,
-    top: 12,
-    bottom: 12,
+    top: 10,
+    bottom: 10,
     width: 3,
-    backgroundColor: ZOMATO_RED,
-    borderTopRightRadius: 2,
-    borderBottomRightRadius: 2,
+    borderTopRightRadius: 3,
+    borderBottomRightRadius: 3,
   },
-  notificationContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  iconContainer: {
+
+  /* Icon */
+  iconCircle: {
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  textContainer: {
+
+  /* Content */
+  content: {
     flex: 1,
-    marginLeft: spacing.md,
+    marginLeft: 12,
   },
-  titleRow: {
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 4,
   },
-  title: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.light.text.secondary,
-    marginRight: spacing.sm,
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
-  unreadTitle: {
+  statusLabel: {
+    fontSize: 10,
     fontWeight: '700',
-    color: colors.light.text.primary,
-  },
-  message: {
-    fontSize: 13,
-    color: colors.light.text.secondary,
-    lineHeight: 18,
+    letterSpacing: 0.3,
   },
   time: {
     fontSize: 11,
     fontWeight: '500',
-    color: colors.light.text.tertiary,
+    color: '#94A3B8',
   },
-  arrowContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: '#F5F5F5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: spacing.sm,
+  title: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#475569',
+    marginBottom: 2,
   },
+  titleUnread: {
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  message: {
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 18,
+  },
+  arrow: {
+    marginLeft: 8,
+  },
+
+  /* Empty */
   emptyContainer: {
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: 40,
   },
-  emptyIconWrapper: {
-    marginBottom: spacing.lg,
-  },
-  emptyIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+  emptyIconBg: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#FEF2F2',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 20,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
-    color: colors.light.text.primary,
-    marginBottom: spacing.sm,
-    letterSpacing: -0.3,
+    color: '#1E293B',
+    marginBottom: 8,
   },
   emptyMessage: {
     fontSize: 14,
-    color: colors.light.text.secondary,
+    color: '#64748B',
     textAlign: 'center',
     lineHeight: 22,
   },

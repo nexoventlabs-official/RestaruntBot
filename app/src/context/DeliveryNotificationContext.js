@@ -219,6 +219,7 @@ export function DeliveryNotificationProvider({ children }) {
       });
       
       const newNotifications = [];
+      const updatedExisting = []; // Track orderId updates to existing notifications
       const now = new Date();
       let newAssignments = 0;
       
@@ -231,7 +232,7 @@ export function DeliveryNotificationProvider({ children }) {
         if (!wasAssigned && order.status !== 'delivered' && order.status !== 'cancelled') {
           newAssignments++;
           const notification = {
-            id: `assigned_${orderId}_${Date.now()}`,
+            id: `order_${orderId}`,
             type: 'new_assignment',
             title: 'New Order Assigned! 🚴',
             message: `Order #${orderId} - ₹${order.totalAmount}`,
@@ -258,7 +259,7 @@ export function DeliveryNotificationProvider({ children }) {
         if (previousStatus && previousStatus !== order.status) {
           if (order.status === 'cancelled' || order.status === 'refunded') {
             const notification = {
-              id: `cancelled_${orderId}_${Date.now()}`,
+              id: `order_${orderId}`,
               type: 'order_cancelled',
               title: 'Order Cancelled ❌',
               message: `Order #${orderId} was cancelled`,
@@ -268,7 +269,8 @@ export function DeliveryNotificationProvider({ children }) {
               icon: 'close-circle',
               color: '#EF4444'
             };
-            newNotifications.push(notification);
+            // Mark as update to existing notification for same order
+            updatedExisting.push(notification);
             
             // Show local push notification for cancellation
             showLocalNotification(
@@ -278,7 +280,7 @@ export function DeliveryNotificationProvider({ children }) {
             );
           } else if (order.status === 'delivered' && previousStatus === 'out_for_delivery') {
             const notification = {
-              id: `delivered_${orderId}_${Date.now()}`,
+              id: `order_${orderId}`,
               type: 'order_delivered',
               title: 'Order Delivered ✅',
               message: `Order #${orderId} - ₹${order.totalAmount} delivered successfully!`,
@@ -289,7 +291,8 @@ export function DeliveryNotificationProvider({ children }) {
               icon: 'checkmark-circle',
               color: '#22C55E'
             };
-            newNotifications.push(notification);
+            // Mark as update to existing notification for same order
+            updatedExisting.push(notification);
             
             // Show local push notification for delivery
             showLocalNotification(
@@ -370,13 +373,41 @@ export function DeliveryNotificationProvider({ children }) {
           saveNotifications(updatedNotifications);
         }
         
-        // Add new notifications if any
+        // Apply status-change updates to existing notifications (same orderId)
+        if (updatedExisting.length > 0) {
+          const updateMap = {};
+          updatedExisting.forEach(n => { updateMap[n.orderId] = n; });
+          
+          updatedNotifications = updatedNotifications.map(notification => {
+            if (notification.orderId && updateMap[notification.orderId]) {
+              hasUpdates = true;
+              return { ...updateMap[notification.orderId], read: false, timestamp: new Date().toISOString() };
+            }
+            return notification;
+          });
+          
+          // Add any that didn't match existing notifications
+          const existingOrderIds = new Set(updatedNotifications.map(n => n.orderId));
+          const trulyNew = updatedExisting.filter(n => !existingOrderIds.has(n.orderId));
+          if (trulyNew.length > 0) {
+            updatedNotifications = [...trulyNew, ...updatedNotifications];
+            hasUpdates = true;
+          }
+        }
+        
+        // Add genuinely new notifications (new assignments not already in list)
         if (newNotifications.length > 0) {
-          const finalNotifications = [...newNotifications, ...updatedNotifications];
+          const existingOrderIds = new Set(updatedNotifications.map(n => n.orderId));
+          const trulyNewNotifications = newNotifications.filter(n => !existingOrderIds.has(n.orderId));
+          
+          const finalNotifications = [...trulyNewNotifications, ...updatedNotifications];
           saveNotifications(finalNotifications);
           return finalNotifications;
         }
         
+        if (hasUpdates) {
+          saveNotifications(updatedNotifications);
+        }
         return hasUpdates ? updatedNotifications : prev;
       });
       

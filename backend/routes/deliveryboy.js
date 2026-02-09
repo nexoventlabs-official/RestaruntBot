@@ -544,6 +544,28 @@ router.post('/push-token', async (req, res) => {
   }
 });
 
+// Clear push notification token on logout (Delivery boy)
+router.delete('/push-token', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token' });
+  
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    if (decoded.role !== 'delivery') {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    
+    await DeliveryBoy.findByIdAndUpdate(decoded.id, { pushToken: null });
+    logger.info(`📱 Push token cleared for delivery partner ${decoded.id}`);
+    
+    res.json({ message: 'Push token cleared' });
+  } catch (error) {
+    logger.error('Clear push token error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Reset badge count (Delivery boy)
 router.post('/reset-badge', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];

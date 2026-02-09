@@ -134,6 +134,32 @@ router.post('/push-token', async (req, res) => {
   }
 });
 
+// Clear push notification token on logout
+router.delete('/push-token', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token' });
+  
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    if (decoded.id) {
+      await User.findByIdAndUpdate(decoded.id, { pushToken: null });
+      logger.info(`📱 Admin push token cleared for ${decoded.username}`);
+    } else {
+      await User.findOneAndUpdate(
+        { username: decoded.username },
+        { pushToken: null }
+      );
+      logger.info(`📱 Admin push token cleared (by username) for ${decoded.username}`);
+    }
+    
+    res.json({ message: 'Push token cleared' });
+  } catch (error) {
+    logger.error('Clear push token error:', error);
+    res.status(401).json({ error: 'Invalid token' });
+  }
+});
+
 // Reset badge count for admin
 router.post('/reset-badge', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
