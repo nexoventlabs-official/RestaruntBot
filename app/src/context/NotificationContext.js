@@ -118,8 +118,13 @@ export function NotificationProvider({ children }) {
     }
   };
 
-  // Show local push notification
+  // Show local push notification (only when app is in background/inactive)
+  // When app is in foreground, FCM onMessage handler in App.js already displays the notification
   const showLocalNotification = async (title, body, data = {}) => {
+    if (appState.current === 'active') {
+      console.log('📱 Skipping local notification (app is foreground, FCM handles it):', title);
+      return;
+    }
     if (pushNotifications.isSupported()) {
       try {
         await pushNotifications.scheduleLocalNotification(title, body, data);
