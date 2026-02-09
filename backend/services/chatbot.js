@@ -7280,6 +7280,11 @@ const chatbot = {
         { id: 'home', text: 'Main Menu' }
       ]);
 
+      // Emit event for real-time updates (SSE)
+      const dataEvents = require('./eventEmitter');
+      dataEvents.emit('orders');
+      dataEvents.emit('dashboard');
+
       // Sync to Google Sheets
       googleSheets.addOrder(order).catch(err =>
         logger.error('Google Sheets sync error', { error: err.message })
@@ -7287,6 +7292,32 @@ const chatbot = {
       
       // Update daily report in real-time
       googleSheets.syncTodayDailyReport().catch(err => logger.error('Daily report sync error', { error: err.message }));
+
+      // Send push notification to admin for new pickup order
+      try {
+        const User = require('../models/User');
+        const pushNotification = require('./pushNotification');
+        
+        const admins = await User.find({ pushToken: { $ne: null } });
+        for (const admin of admins) {
+          if (admin.pushToken) {
+            await pushNotification.sendAdminNewOrderNotification(admin.pushToken, {
+              orderId,
+              totalAmount: total,
+              customerName: freshCustomer.name || 'Customer',
+              items
+            });
+          }
+        }
+        if (admins.length > 0) logger.info(`Admin push sent for pickup order ${orderId}`);
+      } catch (pushErr) {
+        logger.error('Admin push error', { error: pushErr.message });
+      }
+
+      // Update customer order history
+      freshCustomer.orderHistory = freshCustomer.orderHistory || [];
+      freshCustomer.orderHistory.push(order._id);
+      await freshCustomer.save();
 
       return { success: true, orderId };
     } catch (error) {

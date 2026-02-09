@@ -152,6 +152,28 @@ router.post('/verify-upi', publicRateLimiter, async (req, res) => {
       await customer.save();
     }
 
+    // Send push notification to admin for UPI payment confirmed
+    try {
+      const User = require('../models/User');
+      const pushNotification = require('../services/pushNotification');
+      
+      const admins = await User.find({ pushToken: { $ne: null } });
+      for (const admin of admins) {
+        if (admin.pushToken) {
+          await pushNotification.sendNotification(
+            admin.pushToken,
+            '💳 Payment Confirmed!',
+            `Order #${order.orderId} - ₹${order.totalAmount}\n${order.customer.name || 'Customer'} paid via UPI`,
+            { type: 'payment_confirmed', orderId: order.orderId, screen: 'Orders' },
+            'order-updates'
+          );
+        }
+      }
+      if (admins.length > 0) logger.info(`Admin push sent for UPI payment ${order.orderId}`);
+    } catch (pushErr) {
+      logger.error('Admin push error', { error: pushErr.message });
+    }
+
     logger.info(`UPI Payment verified for order ${order.orderId}`);
     res.json({ success: true, message: 'Payment verified successfully' });
   } catch (error) {
@@ -340,6 +362,27 @@ router.post('/razorpay-webhook', webhookRateLimiter, express.raw({ type: 'applic
           googleSheets.updateOrderStatus(order.orderId, 'confirmed', 'paid').catch(err =>
             logger.error('Google Sheets sync error', { error: err.message })
           );
+          
+          // Send push notification to admin for webhook payment
+          try {
+            const User = require('../models/User');
+            const pushNotification = require('../services/pushNotification');
+            
+            const admins = await User.find({ pushToken: { $ne: null } });
+            for (const admin of admins) {
+              if (admin.pushToken) {
+                await pushNotification.sendNotification(
+                  admin.pushToken,
+                  '💳 Payment Confirmed!',
+                  `Order #${order.orderId} - ₹${order.totalAmount} paid via UPI`,
+                  { type: 'payment_confirmed', orderId: order.orderId, screen: 'Orders' },
+                  'order-updates'
+                );
+              }
+            }
+          } catch (pushErr) {
+            logger.error('Admin push error (webhook)', { error: pushErr.message });
+          }
         }
       }
       
@@ -431,6 +474,27 @@ router.get('/callback', async (req, res) => {
           await customer.save();
         }
         
+        // Send push notification to admin for callback payment
+        try {
+          const User = require('../models/User');
+          const pushNotification = require('../services/pushNotification');
+          
+          const admins = await User.find({ pushToken: { $ne: null } });
+          for (const admin of admins) {
+            if (admin.pushToken) {
+              await pushNotification.sendNotification(
+                admin.pushToken,
+                '💳 Payment Confirmed!',
+                `Order #${order.orderId} - ₹${order.totalAmount} paid via UPI`,
+                { type: 'payment_confirmed', orderId: order.orderId, screen: 'Orders' },
+                'order-updates'
+              );
+            }
+          }
+        } catch (pushErr) {
+          logger.error('Admin push error (callback)', { error: pushErr.message });
+        }
+
         logger.info(`Payment confirmed for order ${order.orderId}`);
       }
     }

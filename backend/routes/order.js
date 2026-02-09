@@ -613,6 +613,35 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     dataEvents.emit('orders');
     dataEvents.emit('dashboard');
 
+    // Send push notification to all admins for order status changes
+    // This ensures admins get notified even when the app is closed/killed
+    try {
+      const User = require('../models/User');
+      const pushNotification = require('../services/pushNotification');
+      
+      const statusEmoji = {
+        confirmed: '✅', preparing: '👨‍🍳', ready: '📦',
+        out_for_delivery: '🛵', delivered: '✅', cancelled: '❌', refunded: '💰'
+      };
+      const emoji = statusEmoji[status] || '📋';
+      const label = statusLabels[status] || status;
+      
+      const admins = await User.find({ pushToken: { $ne: null } });
+      for (const admin of admins) {
+        if (admin.pushToken) {
+          await pushNotification.sendNotification(
+            admin.pushToken,
+            `${emoji} Order ${label}`,
+            `Order #${order.orderId} - ₹${order.totalAmount}\nStatus: ${label}`,
+            { type: 'order_status', orderId: order.orderId, status, screen: 'Orders' },
+            'order-updates'
+          );
+        }
+      }
+    } catch (pushErr) {
+      logger.error('Admin push error (status update)', { error: pushErr.message });
+    }
+
     // INSTANT CLEANUP: Hide delivered/cancelled orders from admin dashboard immediately
     // They remain in Google Sheets for history viewing (cost-saving approach)
     if (status === 'delivered' || status === 'cancelled') {
