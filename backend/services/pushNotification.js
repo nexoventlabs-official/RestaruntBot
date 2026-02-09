@@ -213,6 +213,11 @@ function buildMessagePayload({ title, body, data = {}, channelId = 'default', ba
   const stringData = toStringData(data);
   stringData.badgeCount = String(badge);
   stringData.channelId = channelId;
+  // Duplicate title/body in data so the native Android service
+  // (FoodAdminMessagingService.java) can read them as a fallback
+  // when the notification payload is not available.
+  stringData.title = title || '';
+  stringData.body = body || '';
 
   return {
     notification: { title, body },

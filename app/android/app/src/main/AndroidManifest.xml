@@ -34,5 +34,14 @@
         <category android:name="android.intent.category.LAUNCHER"/>
       </intent-filter>
     </activity>
+    <!-- Custom FCM service: displays notifications natively for background/killed state -->
+    <service
+        android:name=".FoodAdminMessagingService"
+        android:exported="false"
+        tools:node="merge">
+      <intent-filter android:priority="100">
+        <action android:name="com.google.firebase.MESSAGING_EVENT" />
+      </intent-filter>
+    </service>
   </application>
 </manifest>

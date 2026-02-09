@@ -27,36 +27,20 @@ try {
   const messaging = require('@react-native-firebase/messaging').default;
 
   messaging().setBackgroundMessageHandler(async remoteMessage => {
-    console.log('📱 [FCM] Background message:', JSON.stringify(remoteMessage));
+    console.log('📱 [FCM] Background message received (JS handler)');
 
-    const { notification, data } = remoteMessage;
+    // ── NOTE ──
+    // Notification DISPLAY is now handled natively by
+    // FoodAdminMessagingService.java — it creates a native Android
+    // notification at the Java level which is 100% reliable even when
+    // the JS runtime is not available (app killed / headless context).
+    //
+    // This JS handler only runs for SIDE-EFFECTS like badge-count
+    // persistence. It may or may not execute depending on device OEM
+    // battery-optimisation, which is fine because the notification is
+    // already displayed by the native service.
 
-    // ── Display the notification ──
-    // ReactNativeFirebaseMessagingService intercepts the FCM message,
-    // bypassing Android's automatic notification display. We must
-    // explicitly create a local notification via expo-notifications.
-    if (notification) {
-      try {
-        const Notifications = require('expo-notifications');
-        const channelId = data?.channelId || 'default';
-
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: notification.title || 'New Notification',
-            body: notification.body || '',
-            data: data || {},
-            sound: 'default',
-            priority: Notifications.AndroidNotificationPriority.MAX,
-            ...(Platform.OS === 'android' ? { channelId } : {}),
-          },
-          trigger: null, // Immediate display
-        });
-
-        console.log('📱 [FCM] Background notification displayed via expo-notifications');
-      } catch (displayErr) {
-        console.warn('⚠️ [FCM] Failed to display background notification:', displayErr.message);
-      }
-    }
+    const { data } = remoteMessage;
 
     // ── Badge count side-effect ──
     const badgeCount = data?.badgeCount;
