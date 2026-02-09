@@ -12,78 +12,53 @@ import androidx.core.app.NotificationCompat;
 
 import com.google.firebase.messaging.RemoteMessage;
 
-import java.util.Map;
-
 import io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService;
 
+import java.util.Map;
+
 /**
- * Custom Firebase Messaging Service that extends React Native Firebase's service.
+ * Native Firebase Messaging Service that EXTENDS ReactNativeFirebaseMessagingService.
  *
- * WHY THIS EXISTS:
- * ────────────────
- * @react-native-firebase/messaging registers ReactNativeFirebaseMessagingService which
- * intercepts ALL FCM messages (including notification payloads) and routes them to a
- * headless JavaScript task (setBackgroundMessageHandler). This PREVENTS Android from
- * auto-displaying the notification.
+ * By extending RNFirebase's service:
+ *   - super.onMessageReceived() fires JS-side handlers (onMessage / setBackgroundMessageHandler)
+ *   - super.onNewToken() fires JS-side token refresh
  *
- * The headless JS task uses expo-notifications.scheduleNotificationAsync to display
- * the notification, but this fails on many Android devices because:
- *   1. The Expo native modules may not initialise in the headless context.
- *   2. Aggressive OEM battery-optimisation kills the headless task before it completes.
- *   3. The JS runtime may not start at all if the app process was fully killed.
+ * This service REPLACES RNFirebase's default registration in the manifest
+ * (tools:node="remove" on the original, this one registered in its place).
  *
- * WHAT THIS SERVICE DOES:
- * ───────────────────────
- * • In BACKGROUND / KILLED state → displays the notification natively (Java), then
- *   calls super.onMessageReceived() so React Native Firebase can still attempt to
- *   run the JS handler for side-effects (badge count, etc.).
- * • In FOREGROUND state → skips native display (the JS onMessage handler in App.js
- *   already renders it via expo-notifications correctly) and just calls super.
+ * In BACKGROUND / KILLED state: displays the notification natively via
+ * Android NotificationManager — 100% reliable, no JS runtime needed.
+ * Also calls super so JS handlers (badge count etc.) still run if possible.
  *
- * This guarantees 100% reliable notification display regardless of JS runtime state.
+ * In FOREGROUND state: delegates to super only — the JS onMessage handler
+ * in App.js already renders it via expo-notifications.
  */
 public class FoodAdminMessagingService extends ReactNativeFirebaseMessagingService {
 
     private static final String TAG = "FoodAdminMsgSvc";
     private static final String DEFAULT_CHANNEL_ID = "default";
 
-    // ────────────────────────────────────────────────────────────────────
-    // onMessageReceived
-    // ────────────────────────────────────────────────────────────────────
-
     @Override
     public void onMessageReceived(RemoteMessage remoteMessage) {
         Log.d(TAG, "onMessageReceived from: " + remoteMessage.getFrom());
 
-        // Only display natively when app is NOT in the foreground.
-        // Foreground display is handled by the JS onMessage handler in App.js.
+        // Display native notification when app is NOT in foreground
+        // (background or killed). This is the reliable path — no JS needed.
         if (!isAppInForeground()) {
             displayNotification(remoteMessage);
         }
 
-        // Forward to ReactNativeFirebaseMessagingService so the JS
-        // background handler (setBackgroundMessageHandler) still fires
-        // for badge-count updates, analytics, etc.
-        try {
-            super.onMessageReceived(remoteMessage);
-        } catch (Exception e) {
-            Log.w(TAG, "super.onMessageReceived failed (JS runtime not available): " + e.getMessage());
-        }
+        // Always forward to RNFirebase so JS handlers fire:
+        //   Foreground → onMessage listener in App.js
+        //   Background → setBackgroundMessageHandler in index.js (badge count)
+        super.onMessageReceived(remoteMessage);
     }
-
-    // ────────────────────────────────────────────────────────────────────
-    // onNewToken – forward to RNFirebase so messaging().onTokenRefresh()
-    //              fires on the JS side.
-    // ────────────────────────────────────────────────────────────────────
 
     @Override
     public void onNewToken(String token) {
-        Log.d(TAG, "onNewToken: " + token);
-        try {
-            super.onNewToken(token);
-        } catch (Exception e) {
-            Log.w(TAG, "super.onNewToken failed: " + e.getMessage());
-        }
+        Log.d(TAG, "onNewToken");
+        // Forward to RNFirebase so JS-side token refresh works
+        super.onNewToken(token);
     }
 
     // ────────────────────────────────────────────────────────────────────

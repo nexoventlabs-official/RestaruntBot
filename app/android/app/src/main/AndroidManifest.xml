@@ -34,12 +34,16 @@
         <category android:name="android.intent.category.LAUNCHER"/>
       </intent-filter>
     </activity>
-    <!-- Custom FCM service: displays notifications natively for background/killed state -->
+    <!-- Disable RNFirebase default messaging service — our custom one replaces it -->
+    <service
+        android:name="io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService"
+        tools:node="remove" />
+
+    <!-- Native FCM service: reliable background/killed-state notification display -->
     <service
         android:name=".FoodAdminMessagingService"
-        android:exported="false"
-        tools:node="merge">
-      <intent-filter android:priority="100">
+        android:exported="false">
+      <intent-filter>
         <action android:name="com.google.firebase.MESSAGING_EVENT" />
       </intent-filter>
     </service>

@@ -53,16 +53,24 @@ module.exports = function withFirebaseMessagingFix(config) {
         '<meta-data android:name="com.google.firebase.messaging.default_notification_color" tools:replace="android:resource" android:resource="$1"'
       );
 
-      // ── 2. Register the native FoodAdminMessagingService ───────────
+      // ── 2. Register FoodAdminMessagingService & disable RNFirebase's service ──
+      //    Only ONE FirebaseMessagingService can handle messages. We register
+      //    ours and remove RNFirebase's so there's no conflict.
+      //    Our service displays notifications natively for bg/killed state,
+      //    and the JS onMessage handler in App.js handles foreground.
       if (!manifest.includes('FoodAdminMessagingService')) {
         const serviceBlock = [
+          '',
+          '    <!-- Disable RNFirebase default messaging service — our custom one replaces it -->',
+          '    <service',
+          '        android:name="io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService"',
+          '        tools:node="remove" />',
           '',
           '    <!-- Native FCM service: reliable background/killed-state notification display -->',
           '    <service',
           '        android:name=".FoodAdminMessagingService"',
-          '        android:exported="false"',
-          '        tools:node="merge">',
-          '      <intent-filter android:priority="100">',
+          '        android:exported="false">',
+          '      <intent-filter>',
           '        <action android:name="com.google.firebase.MESSAGING_EVENT" />',
           '      </intent-filter>',
           '    </service>',
@@ -92,7 +100,6 @@ module.exports = function withFirebaseMessagingFix(config) {
       }
 
       const javaFile = path.join(javaDir, 'FoodAdminMessagingService.java');
-      // Only write if the file doesn't exist or is outdated
       const javaSource = buildJavaSource(packageName);
       fs.writeFileSync(javaFile, javaSource);
 
@@ -118,21 +125,27 @@ import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 
+import io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
 
 import java.util.Map;
 
-import io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService;
-
 /**
- * Custom Firebase Messaging Service that extends React Native Firebase's service.
+ * Native Firebase Messaging Service that EXTENDS ReactNativeFirebaseMessagingService.
  *
- * In BACKGROUND / KILLED state: displays the notification natively (Java),
- * then calls super so React Native Firebase can run the JS headless handler
- * for side-effects (badge count, etc.).
+ * By extending RNFirebase's service:
+ *   - super.onMessageReceived() fires JS-side handlers (onMessage / setBackgroundMessageHandler)
+ *   - super.onNewToken() fires JS-side token refresh
  *
- * In FOREGROUND state: skips native display (the JS onMessage handler
- * in App.js already renders it) and just calls super.
+ * This service REPLACES RNFirebase's default registration in the manifest
+ * (tools:node="remove" on the original, this one registered in its place).
+ *
+ * In BACKGROUND / KILLED state: displays the notification natively via
+ * Android NotificationManager — 100% reliable, no JS runtime needed.
+ * Also calls super so JS handlers (badge count etc.) still run if possible.
+ *
+ * In FOREGROUND state: delegates to super only — the JS onMessage handler
+ * in App.js already renders it via expo-notifications.
  */
 public class FoodAdminMessagingService extends ReactNativeFirebaseMessagingService {
 
@@ -143,25 +156,23 @@ public class FoodAdminMessagingService extends ReactNativeFirebaseMessagingServi
     public void onMessageReceived(RemoteMessage remoteMessage) {
         Log.d(TAG, "onMessageReceived from: " + remoteMessage.getFrom());
 
+        // Display native notification when app is NOT in foreground
+        // (background or killed). This is the reliable path — no JS needed.
         if (!isAppInForeground()) {
             displayNotification(remoteMessage);
         }
 
-        try {
-            super.onMessageReceived(remoteMessage);
-        } catch (Exception e) {
-            Log.w(TAG, "super.onMessageReceived failed: " + e.getMessage());
-        }
+        // Always forward to RNFirebase so JS handlers fire:
+        //   Foreground → onMessage listener in App.js
+        //   Background → setBackgroundMessageHandler in index.js (badge count)
+        super.onMessageReceived(remoteMessage);
     }
 
     @Override
     public void onNewToken(String token) {
         Log.d(TAG, "onNewToken");
-        try {
-            super.onNewToken(token);
-        } catch (Exception e) {
-            Log.w(TAG, "super.onNewToken failed: " + e.getMessage());
-        }
+        // Forward to RNFirebase so JS-side token refresh works
+        super.onNewToken(token);
     }
 
     private void displayNotification(RemoteMessage remoteMessage) {

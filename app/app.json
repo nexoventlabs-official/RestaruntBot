@@ -20,7 +20,9 @@
       "bundleIdentifier": "com.foodadmin.mobile",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "We need your location to navigate to delivery addresses.",
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -63,9 +65,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "2261ed53-8283-4c24-b88a-f2958ab85ede"
+        "projectId": "ea224f3f-77d5-4eba-8ccd-cf28fd26b432"
       }
     },
-    "owner": "perivi"
+    "owner": "greenlabs8106"
   }
 }
