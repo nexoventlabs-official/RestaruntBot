@@ -84,7 +84,23 @@ module.exports = function withFirebaseMessagingFix(config) {
 
       fs.writeFileSync(manifestPath, manifest);
 
-      // ── 3. Write FoodAdminMessagingService.java ────────────────────
+      // ── 3. Ensure firebase-messaging dependency in build.gradle ───
+      const buildGradlePath = path.join(platformRoot, 'app', 'build.gradle');
+      let buildGradle = fs.readFileSync(buildGradlePath, 'utf-8');
+
+      if (!buildGradle.includes('firebase-messaging')) {
+        buildGradle = buildGradle.replace(
+          /implementation\(["']com\.facebook\.react:react-android["']\)/,
+          `implementation("com.facebook.react:react-android")
+
+    // Firebase BOM + Messaging — needed by FoodAdminMessagingService.java
+    implementation platform("com.google.firebase:firebase-bom:32.7.1")
+    implementation("com.google.firebase:firebase-messaging")`
+        );
+        fs.writeFileSync(buildGradlePath, buildGradle);
+      }
+
+      // ── 4. Write FoodAdminMessagingService.java ────────────────────
       const packageName = config.android?.package || 'com.foodadmin.mobile';
       const javaDir = path.join(
         platformRoot,
