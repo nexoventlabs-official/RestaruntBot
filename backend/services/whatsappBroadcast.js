@@ -152,11 +152,12 @@ const whatsappBroadcast = {
       
       if (!error && customers.length > 0) {
         logger.info('[WhatsApp Broadcast] Found customers from Google Sheets', { count: customers.length });
-        // Map to expected format
+        // Map to expected format — include lastOrderDate for 24h window check
         return customers.map(c => ({
           phone: c.phone,
           name: c.name,
           totalOrders: c.ordersCount,
+          lastOrderDate: c.lastOrderDate || null,
           isActive: true
         }));
       }
@@ -206,11 +207,25 @@ const whatsappBroadcast = {
       if (isTargetedOffer) {
         logger.info('[WhatsApp Broadcast] Filtering to targeted customers', { count: targetedCustomers.length });
         const targetSet = new Set(targetedCustomers.map(p => p.replace(/\D/g, ''))); // Normalize phone numbers
+        const contactPhoneSet = new Set(contacts.map(c => c.phone.replace(/\D/g, '')));
+        
+        // Filter existing contacts to only targeted ones
         contacts = contacts.filter(contact => {
           const normalizedPhone = contact.phone.replace(/\D/g, '');
           return targetSet.has(normalizedPhone);
         });
-        logger.info('[WhatsApp Broadcast] Found matching contacts for targeting', { count: contacts.length });
+        
+        // Add any targeted customers who are missing from the contacts list
+        // These are customers in the DB but not in Google Sheets — still need to receive the offer
+        for (const targetPhone of targetedCustomers) {
+          const normalized = targetPhone.replace(/\D/g, '');
+          if (!contactPhoneSet.has(normalized)) {
+            contacts.push({ phone: normalized, name: '', totalOrders: 0, lastOrderDate: null, isActive: true });
+            logger.info('[WhatsApp Broadcast] Added missing targeted customer', { phone: normalized });
+          }
+        }
+        
+        logger.info('[WhatsApp Broadcast] Final targeted contacts', { count: contacts.length, fromSheets: contacts.length - (targetedCustomers.length - contactPhoneSet.size) });
       }
       
       if (contacts.length === 0) {
@@ -258,6 +273,26 @@ const whatsappBroadcast = {
       // Send to each contact with delay to avoid rate limiting
       // For customers within 24h window: sends interactive message directly
       // For customers outside 24h window: uses approved marketing template directly (no hello_world needed)
+      
+      // Pre-fetch last inbound message times for accurate 24h window detection
+      // The 24h window is based on when the customer last SENT a message, not last order
+      const InboundMessage = require('../models/InboundMessage');
+      const normalizedPhones = contacts.map(c => c.phone.replace(/\D/g, ''));
+      const lastMessages = await InboundMessage.aggregate([
+        { $match: { phone: { $in: normalizedPhones } } },
+        { $group: { _id: '$phone', lastMessageAt: { $max: '$receivedAt' } } }
+      ]).catch((err) => {
+        logger.warn('[WhatsApp Broadcast] Could not fetch inbound messages', { error: err.message });
+        return [];
+      });
+      const lastMessageMap = {};
+      for (const lm of lastMessages) {
+        if (lm._id) {
+          lastMessageMap[lm._id.replace(/\D/g, '')] = lm.lastMessageAt;
+        }
+      }
+      logger.info('[WhatsApp Broadcast] Pre-fetched last message times', { count: Object.keys(lastMessageMap).length });
+
       for (const contact of contacts) {
         // Generate per-customer URL with phone for targeted offers
         let websiteUrl = defaultWebsiteUrl;
@@ -267,12 +302,22 @@ const whatsappBroadcast = {
           websiteUrl = `${baseWebsiteUrl}/offer/${offerId}?p=${encodedPhone}`;
         }
         
-        // Check if customer is outside 24h window based on lastOrderDate
-        const hoursSinceLastInteraction = Math.floor((new Date() - new Date(contact.lastOrderDate)) / (1000 * 60 * 60));
+        // Check if customer is outside 24h window using last INBOUND message (most accurate)
+        // The WhatsApp 24h window is based on the customer's last message to the business
+        const normalizedPhone = contact.phone.replace(/\D/g, '');
+        const lastMsgTime = lastMessageMap[normalizedPhone] || null;
+        const lastInteraction = lastMsgTime || (contact.lastOrderDate ? new Date(contact.lastOrderDate) : null);
+        
+        let hoursSinceLastInteraction = Infinity; // Default to outside 24h (safe — use template)
+        if (lastInteraction && !isNaN(new Date(lastInteraction).getTime())) {
+          hoursSinceLastInteraction = Math.floor((new Date() - new Date(lastInteraction)) / (1000 * 60 * 60));
+        }
         const isOutside24h = hoursSinceLastInteraction >= 24;
         
         if (isOutside24h) {
-          logger.info('[WhatsApp Broadcast] Customer outside 24h window, using template', { phone: contact.phone, name: contact.name || 'Unknown', hoursSinceLastInteraction });
+          logger.info('[WhatsApp Broadcast] Customer outside 24h window, using template', { phone: contact.phone, name: contact.name || 'Unknown', hoursSinceLastInteraction, source: lastMsgTime ? 'inbound_message' : 'last_order_date' });
+        } else {
+          logger.info('[WhatsApp Broadcast] Customer within 24h window, using interactive', { phone: contact.phone, name: contact.name || 'Unknown', hoursSinceLastInteraction });
         }
         
         // Determine which template to use for outside-24h customers (declared outside try so catch can access it)
@@ -440,10 +485,10 @@ const whatsappBroadcast = {
           }
         }
         
-        // Reduced delay for rate limiting (200ms between messages, down from 500ms)
+        // Reduced delay for rate limiting (500ms between messages for reliability)
         // Meta Cloud API allows ~80 messages/second for business tier
-        // 200ms provides safe margin while being 2.5x faster
-        await new Promise(resolve => setTimeout(resolve, 200));
+        // 500ms provides safe margin for template messages to be accepted
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
 
       logger.info('[WhatsApp Broadcast] BROADCAST SUMMARY', {

@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, FlatList,
-  RefreshControl, TouchableOpacity, Image, Alert, ActivityIndicator, Animated, Platform, StatusBar, ImageBackground, Switch, ToastAndroid
+  RefreshControl, TouchableOpacity, Image, Alert, ActivityIndicator, Animated, Platform, StatusBar, ImageBackground, Switch, ToastAndroid, Modal, ScrollView, Dimensions
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../config/api';
 import { colors, spacing, radius, typography, shadows } from '../../theme';
+import { useNotifications } from '../../context/NotificationContext';
 
 // Toast helper for cross-platform
 const showToast = (message) => {
@@ -25,6 +26,9 @@ export default function AdminOffersScreen({ navigation }) {
   const [sendingOffer, setSendingOffer] = useState(null); // Track which offer is being sent
   const [pollingIds, setPollingIds] = useState(new Set()); // Track offers being polled for template status
   const [retryingTemplate, setRetryingTemplate] = useState(null); // Track which offer template is being retried
+  const [togglingOffer, setTogglingOffer] = useState(null); // Track which offer is being toggled
+  const [detailOffer, setDetailOffer] = useState(null); // Offer detail modal
+  const { offerTemplateAlert, clearOfferTemplateAlert } = useNotifications();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const shineAnim = useRef(new Animated.Value(-1)).current;
   const pollIntervalRef = useRef(null);
@@ -53,6 +57,19 @@ export default function AdminOffersScreen({ navigation }) {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
   }, [navigation]);
+
+  // Auto-refresh when push notification updates offerTemplateAlert (no manual pull needed)
+  useEffect(() => {
+    if (offerTemplateAlert) {
+      fetchOffers();
+      // Show a toast so admin knows what happened
+      const statusMsg = offerTemplateAlert === 'approved'
+        ? '✅ Template approved by Meta!'
+        : '❌ Template rejected by Meta';
+      showToast(statusMsg);
+      clearOfferTemplateAlert();
+    }
+  }, [offerTemplateAlert]);
 
   // Auto-poll template status for pending offers every 30 seconds
   useEffect(() => {
@@ -84,9 +101,12 @@ export default function AdminOffersScreen({ navigation }) {
 
   const toggleActive = async (offer) => {
     try {
+      setTogglingOffer(offer._id);
       await api.patch(`/offers/${offer._id}/toggle`);
       setOffers(offers.map(o => o._id === offer._id ? { ...o, isActive: !o.isActive } : o));
+      showToast(offer.isActive ? 'Offer deactivated' : 'Offer activated');
     } catch (error) { Alert.alert('Error', 'Failed to update offer'); }
+    finally { setTogglingOffer(null); }
   };
 
   const deleteOffer = (offer) => {
@@ -234,8 +254,10 @@ export default function AdminOffersScreen({ navigation }) {
     
     return (
     <Animated.View style={{ opacity: fadeAnim }}>
-      <View 
+      <TouchableOpacity 
         style={styles.offerCard}
+        activeOpacity={0.85}
+        onPress={() => setDetailOffer(item)}
       >
         <View style={styles.offerImageContainer}>
           {item.image ? (
@@ -327,13 +349,17 @@ export default function AdminOffersScreen({ navigation }) {
               <Text style={[styles.toggleLabel, { color: item.isActive ? '#22C55E' : '#9CA3AF' }]}>
                 {item.isActive ? 'Active' : 'Inactive'}
               </Text>
-              <Switch
-                value={item.isActive}
-                onValueChange={() => toggleActive(item)}
-                trackColor={{ false: '#E5E7EB', true: '#BBF7D0' }}
-                thumbColor={item.isActive ? '#22C55E' : '#9CA3AF'}
-                style={{ transform: [{ scaleX: 0.9 }, { scaleY: 0.9 }] }}
-              />
+              {togglingOffer === item._id ? (
+                <ActivityIndicator size={20} color="#22C55E" style={{ marginHorizontal: 6 }} />
+              ) : (
+                <Switch
+                  value={item.isActive}
+                  onValueChange={() => toggleActive(item)}
+                  trackColor={{ false: '#E5E7EB', true: '#BBF7D0' }}
+                  thumbColor={item.isActive ? '#22C55E' : '#9CA3AF'}
+                  style={{ transform: [{ scaleX: 0.9 }, { scaleY: 0.9 }] }}
+                />
+              )}
             </View>
             
             <TouchableOpacity 
@@ -344,9 +370,181 @@ export default function AdminOffersScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+
+        {/* Toggle loading overlay */}
+        {togglingOffer === item._id && (
+          <View style={styles.toggleOverlay}>
+            <ActivityIndicator size="large" color="#fff" />
+          </View>
+        )}
+      </TouchableOpacity>
     </Animated.View>
   )};
+
+  // Helper to format date nicely
+  const formatDate = (d) => {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
+  // Offer Detail Modal
+  const renderDetailModal = () => {
+    if (!detailOffer) return null;
+    const o = detailOffer;
+    const tpl = getTemplateStatusInfo(o);
+    const hasItems = o.appliedItems && o.appliedItems.length > 0;
+    const hasCats = o.appliedCategories && o.appliedCategories.length > 0;
+    const isTargeted = o.targetType && o.targetType !== 'all';
+
+    return (
+      <Modal visible={!!detailOffer} animationType="slide" transparent onRequestClose={() => setDetailOffer(null)}>
+        <View style={styles.detailBackdrop}>
+          <View style={styles.detailSheet}>
+            {/* Header */}
+            <View style={styles.detailHeader}>
+              <Text style={styles.detailTitle}>Offer Details</Text>
+              <TouchableOpacity onPress={() => setDetailOffer(null)} style={styles.detailClose}>
+                <Ionicons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.detailScroll} showsVerticalScrollIndicator={false}>
+              {/* Image */}
+              {o.image && (
+                <Image source={{ uri: o.image }} style={styles.detailImage} resizeMode="cover" />
+              )}
+
+              {/* Status Row */}
+              <View style={styles.detailStatusRow}>
+                <View style={[styles.detailChip, { backgroundColor: o.isActive ? '#D1FAE5' : '#FEE2E2' }]}>
+                  <View style={[styles.detailDot, { backgroundColor: o.isActive ? '#22C55E' : '#EF4444' }]} />
+                  <Text style={[styles.detailChipText, { color: o.isActive ? '#16A34A' : '#DC2626' }]}>
+                    {o.isActive ? 'Active' : 'Inactive'}
+                  </Text>
+                </View>
+                <View style={[styles.detailChip, { backgroundColor: tpl.bg }]}>
+                  <Ionicons name={tpl.icon} size={14} color={tpl.color} />
+                  <Text style={[styles.detailChipText, { color: tpl.color }]}>{tpl.label}</Text>
+                </View>
+              </View>
+
+              {/* Info Rows */}
+              {o.title ? (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Title</Text>
+                  <Text style={styles.detailValue}>{o.title}</Text>
+                </View>
+              ) : null}
+
+              {o.offerType ? (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Offer Type</Text>
+                  <Text style={styles.detailValue}>{o.offerType}</Text>
+                </View>
+              ) : null}
+
+              {o.percentage != null ? (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Discount</Text>
+                  <Text style={styles.detailValue}>{o.percentage}% Off</Text>
+                </View>
+              ) : null}
+
+              {o.description ? (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Description</Text>
+                  <Text style={styles.detailValue}>{o.description}</Text>
+                </View>
+              ) : null}
+
+              {hasCats ? (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Categories</Text>
+                  <View style={styles.detailTagsRow}>
+                    {o.appliedCategories.map((cat, i) => (
+                      <View key={i} style={styles.detailTag}>
+                        <Text style={styles.detailTagText}>{cat}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+
+              {hasItems ? (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Applied Items</Text>
+                  <Text style={styles.detailValue}>{o.appliedItems.length} item{o.appliedItems.length !== 1 ? 's' : ''}</Text>
+                </View>
+              ) : null}
+
+              {/* Targeting */}
+              {isTargeted ? (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Target Audience</Text>
+                  <Text style={styles.detailValue}>
+                    {o.targetType === 'top_percentage' ? `Top ${o.targetPercentage || 10}% spenders`
+                      : o.targetType === 'min_spent' ? `Min ₹${o.targetMinSpent} spent`
+                      : o.targetType === 'min_orders' ? `${o.targetMinOrders}+ orders`
+                      : 'All customers'}
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Target Audience</Text>
+                  <Text style={styles.detailValue}>All customers</Text>
+                </View>
+              )}
+
+              {o.targetedCustomers && o.targetedCustomers.length > 0 ? (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Targeted Customers</Text>
+                  <Text style={styles.detailValue}>{o.targetedCustomers.length} customers</Text>
+                </View>
+              ) : null}
+
+              {/* Dates */}
+              <View style={styles.detailDivider} />
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Created</Text>
+                <Text style={styles.detailValue}>{formatDate(o.createdAt)}</Text>
+              </View>
+
+              {o.validUntil ? (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Valid Until</Text>
+                  <Text style={styles.detailValue}>{formatDate(o.validUntil)}</Text>
+                </View>
+              ) : null}
+
+              {o.templateApprovedAt ? (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Template Approved</Text>
+                  <Text style={styles.detailValue}>{formatDate(o.templateApprovedAt)}</Text>
+                </View>
+              ) : null}
+
+              {o.broadcastSentAt ? (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Broadcast Sent</Text>
+                  <Text style={styles.detailValue}>{formatDate(o.broadcastSentAt)}</Text>
+                </View>
+              ) : null}
+
+              {o.templateRejectionReason ? (
+                <View style={[styles.detailRow, { backgroundColor: '#FEF2F2', borderRadius: 12, padding: 12 }]}>
+                  <Text style={[styles.detailLabel, { color: '#DC2626' }]}>Rejection Reason</Text>
+                  <Text style={[styles.detailValue, { color: '#DC2626' }]}>{o.templateRejectionReason}</Text>
+                </View>
+              ) : null}
+
+              <View style={{ height: 30 }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -408,6 +606,9 @@ export default function AdminOffersScreen({ navigation }) {
         />
       )}
       
+      {/* Offer Detail Modal */}
+      {renderDetailModal()}
+
       {/* Loading Overlay */}
       {loading && (
         <View style={styles.loadingOverlay}>
@@ -609,5 +810,120 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: colors.light.text.primary,
+  },
+
+  // Toggle loading overlay on card
+  toggleOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+
+  // Detail Modal Styles
+  detailBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  detailSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: Dimensions.get('window').height * 0.85,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  detailTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  detailClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  detailScroll: {
+    paddingHorizontal: 20,
+  },
+  detailImage: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: 16,
+    marginTop: 16,
+    marginBottom: 12,
+  },
+  detailStatusRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginVertical: 12,
+  },
+  detailChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  detailDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  detailChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  detailRow: {
+    marginBottom: 14,
+  },
+  detailLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  detailValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#111827',
+  },
+  detailTagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  detailTag: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  detailTagText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  detailDivider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginVertical: 8,
   },
 });

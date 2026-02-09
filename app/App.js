@@ -34,7 +34,7 @@ function AppNavigator() {
         const data = response.notification.request.content.data;
         console.log('📱 Notification tapped:', data);
         
-        // Navigate to Notifications screen based on user role
+        // Navigate based on notification type
         if (navigationRef.current) {
           if (role === 'delivery') {
             navigationRef.current.navigate('DeliveryMain', {
@@ -44,12 +44,25 @@ function AppNavigator() {
               },
             });
           } else if (role === 'admin') {
-            navigationRef.current.navigate('AdminMain', {
-              screen: 'Home',
-              params: {
-                screen: 'Notifications',
-              },
-            });
+            // Route offer template notifications to Offers screen
+            if (data?.type === 'offer_template_status') {
+              navigationRef.current.navigate('AdminMain', {
+                screen: 'Offers',
+                params: { screen: 'OffersList' },
+              });
+            } else if (data?.screen === 'Orders' || data?.type === 'new_order' || data?.type === 'order_cancelled') {
+              navigationRef.current.navigate('AdminMain', {
+                screen: 'Orders',
+                params: { screen: 'OrdersList' },
+              });
+            } else {
+              navigationRef.current.navigate('AdminMain', {
+                screen: 'Home',
+                params: {
+                  screen: 'Notifications',
+                },
+              });
+            }
           }
         }
       });

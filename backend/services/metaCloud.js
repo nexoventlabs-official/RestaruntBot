@@ -633,7 +633,7 @@ const metaCloud = {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
       
-      logger.info('Meta sendMarketingTemplate', { to, template: templateName });
+      logger.info('Meta sendMarketingTemplate', { to, template: templateName, bodyParamCount: bodyParams?.length || 0, hasImage: !!imageUrl, hasButton: !!buttonUrl });
       
       // Build components array
       const components = [];
@@ -687,7 +687,9 @@ const metaCloud = {
       const response = await metaApi.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
-      logger.info('Meta sendMarketingTemplate success');
+      const messageId = response.data?.messages?.[0]?.id || null;
+      const messageStatus = response.data?.messages?.[0]?.message_status || null;
+      logger.info('Meta sendMarketingTemplate success', { to, messageId, messageStatus });
       return response.data;
     } catch (error) {
       logger.error('Meta Cloud marketing template error', { error: error.response?.data || error.message });
