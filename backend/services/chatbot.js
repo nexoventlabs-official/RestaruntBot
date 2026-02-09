@@ -3660,7 +3660,7 @@ const chatbot = {
         
         const address = parts.length > 0 ? parts.join(', ') : response.data.display_name || null;
         logger.info(`Geocoded address: ${address}`);
-        return address || 'Location shared';
+        return address || null;
       }
       
       // Try display_name as fallback
@@ -3670,10 +3670,10 @@ const chatbot = {
       }
       
       logger.info('No address data in geocoding response');
-      return 'Location shared';
+      return null;
     } catch (error) {
       logger.error('Reverse geocoding error', { error: error.message });
-      return 'Location shared';
+      return null;
     }
   },
 
@@ -3799,7 +3799,7 @@ const chatbot = {
         logger.info('Location received', { location: locationData });
         
         // Get proper address - prefer WhatsApp's address, fallback to reverse geocoding
-        let formattedAddress = 'Location shared';
+        let formattedAddress = null;
         
         // First, try to use the address from WhatsApp location data
         if (locationData.address && locationData.address.trim() && locationData.address !== 'undefined') {
@@ -3816,13 +3816,19 @@ const chatbot = {
         }
         
         // If still no address, try reverse geocoding from coordinates
-        if ((formattedAddress === 'Location shared' || !formattedAddress) && locationData.latitude && locationData.longitude) {
+        if (!formattedAddress && locationData.latitude && locationData.longitude) {
           logger.info('No address from WhatsApp, trying reverse geocoding...');
           const geocodedAddress = await this.reverseGeocode(locationData.latitude, locationData.longitude);
-          if (geocodedAddress && geocodedAddress !== 'Location shared') {
+          if (geocodedAddress) {
             formattedAddress = geocodedAddress;
             logger.info('Got address from reverse geocoding', { address: formattedAddress });
           }
+        }
+        
+        // Final fallback - use coordinates (should rarely happen)
+        if (!formattedAddress) {
+          formattedAddress = `Location: ${locationData.latitude.toFixed(6)}, ${locationData.longitude.toFixed(6)}`;
+          logger.warn('No address available, using coordinates', { formattedAddress });
         }
         
         // Check delivery radius BEFORE saving location

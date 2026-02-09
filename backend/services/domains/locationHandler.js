@@ -97,8 +97,13 @@ async function handleLocation(customer, phone, params) {
     return;
   }
   
-  // Get formatted address
-  const formattedAddress = address || name || 'Location shared';
+  // Get formatted address - never show "Location shared"
+  let formattedAddress = address || name;
+  
+  // If no address available, use coordinates as fallback (but this should rarely happen)
+  if (!formattedAddress || formattedAddress.trim() === '') {
+    formattedAddress = `Lat: ${latitude.toFixed(6)}, Lon: ${longitude.toFixed(6)}`;
+  }
   
   // Save location to customer
   customer.deliveryAddress = {
@@ -387,10 +392,16 @@ function formatDeliveryChargeMessage(deliveryResult) {
 async function saveCustomerLocation(customer, locationData) {
   const { latitude, longitude, address, name } = locationData;
   
+  // Never save "Location shared" - use coordinates as fallback
+  let formattedAddress = address || name;
+  if (!formattedAddress || formattedAddress.trim() === '') {
+    formattedAddress = `Lat: ${latitude.toFixed(6)}, Lon: ${longitude.toFixed(6)}`;
+  }
+  
   customer.deliveryAddress = {
     latitude,
     longitude,
-    address: address || name || 'Location shared',
+    address: formattedAddress,
     updatedAt: new Date()
   };
   
@@ -399,7 +410,8 @@ async function saveCustomerLocation(customer, locationData) {
   logger.info('Customer location saved', {
     customerId: customer._id,
     latitude,
-    longitude
+    longitude,
+    address: formattedAddress
   });
 }
 
