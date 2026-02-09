@@ -8,42 +8,7 @@ const groqAi = require('../services/groqAi');
 const pushNotification = require('../services/pushNotification');
 const authMiddleware = require('../middleware/auth');
 const { webhookRateLimiter } = require('../middleware/rateLimiter');
-const messageProcessor = require('../services/messageProcessor');
 const router = express.Router();
-
-// ============================================================
-// PER-PHONE CONCURRENCY LOCK
-// Prevents race conditions when Meta delivers duplicate webhooks
-// or user taps buttons rapidly. Messages for the same phone are
-// queued and processed sequentially.
-// ============================================================
-const _phoneLocks = new Map();
-
-async function withPhoneLock(phone, fn) {
-  // Get or create a queue for this phone number
-  if (!_phoneLocks.has(phone)) {
-    _phoneLocks.set(phone, Promise.resolve());
-  }
-
-  // Chain the new work after the current queue
-  const previousWork = _phoneLocks.get(phone);
-  // Swallow previous errors so the chain keeps moving, then run fn
-  const currentWork = previousWork.catch(() => {}).then(fn);
-
-  // Store the chain (swallow errors so future chains aren't broken)
-  const safeChain = currentWork.catch(() => {});
-  _phoneLocks.set(phone, safeChain);
-
-  // Clean up the map entry when the queue drains (avoid memory leak)
-  safeChain.then(() => {
-    // Only delete if no new work has been queued after us
-    if (_phoneLocks.get(phone) === safeChain) {
-      _phoneLocks.delete(phone);
-    }
-  });
-
-  return currentWork;
-}
 
 // ============================================================
 // TEST/DEBUG ROUTES - Protected with auth, disabled in production
@@ -389,36 +354,9 @@ router.post('/meta', webhookRateLimiter, async (req, res) => {
 
               const hasContent = text || selectedId || messageType === 'location';
               if (phone && hasContent) {
-                const messageId = message.id || `gen_${Date.now()}_${phone}`;
-                const webhookMeta = {
-                  entryId: entry.id,
-                  changeId: change.id,
-                  timestamp: message.timestamp
-                };
-
-                // Process with per-phone lock to prevent concurrent state corruption
-                // and through messageProcessor for deduplication & error handling
-                withPhoneLock(phone, async () => {
-                  try {
-                    const result = await messageProcessor.processInboundMessage(
-                      messageId, phone, text, messageType, selectedId, senderName, webhookMeta
-                    );
-                    if (result.duplicate) {
-                      logger.info('Skipped duplicate message', { messageId, phone });
-                    }
-                  } catch (err) {
-                    logger.error('❌ Message processing error:', { error: err.message, phone, messageId });
-                    // Send fallback error message so the user isn't left hanging
-                    try {
-                      await whatsapp.sendButtons(phone, '❌ Something went wrong. Please try again.', [
-                        { id: 'home', text: 'Main Menu' },
-                        { id: 'help', text: 'Help' }
-                      ]);
-                    } catch (sendErr) {
-                      logger.error('❌ Failed to send error fallback:', { error: sendErr.message });
-                    }
-                  }
-                });
+                // Process message in the background
+                chatbot.handleMessage(phone, text, messageType, selectedId, senderName)
+                  .catch(err => logger.error('❌ Async Chatbot Error:', err));
               }
             }
           }

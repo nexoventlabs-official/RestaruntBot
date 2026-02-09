@@ -3619,10 +3619,62 @@ const chatbot = {
     return menuItems;
   },
 
-  // Reverse geocode coordinates to get readable address (uses shared geocoding service)
+  // Reverse geocode coordinates to get readable address
   async reverseGeocode(latitude, longitude) {
-    const { reverseGeocode: geocode } = require('./geocoding');
-    return geocode(latitude, longitude, logger);
+    try {
+      logger.info(`Reverse geocoding coordinates: ${latitude}, ${longitude}`);
+      const response = await axios.get(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18`,
+        { 
+          headers: { 'User-Agent': 'RestaurantBot/1.0' },
+          timeout: 5000 // 5 second timeout
+        }
+      );
+      
+      if (response.data && response.data.address) {
+        const addr = response.data.address;
+        // Build a readable address - prioritize specific details
+        const parts = [];
+        
+        // Building/complex name
+        if (addr.building || addr.amenity) parts.push(addr.building || addr.amenity);
+        
+        // House number and road
+        if (addr.house_number) parts.push(addr.house_number);
+        if (addr.road || addr.street) parts.push(addr.road || addr.street);
+        
+        // Area/locality
+        if (addr.neighbourhood) parts.push(addr.neighbourhood);
+        else if (addr.suburb) parts.push(addr.suburb);
+        else if (addr.residential) parts.push(addr.residential);
+        
+        // City
+        if (addr.city) parts.push(addr.city);
+        else if (addr.town) parts.push(addr.town);
+        else if (addr.village) parts.push(addr.village);
+        else if (addr.county) parts.push(addr.county);
+        
+        // State and pincode
+        if (addr.state) parts.push(addr.state);
+        if (addr.postcode) parts.push(addr.postcode);
+        
+        const address = parts.length > 0 ? parts.join(', ') : response.data.display_name || null;
+        logger.info(`Geocoded address: ${address}`);
+        return address || 'Location shared';
+      }
+      
+      // Try display_name as fallback
+      if (response.data && response.data.display_name) {
+        logger.info(`Using display_name: ${response.data.display_name}`);
+        return response.data.display_name;
+      }
+      
+      logger.info('No address data in geocoding response');
+      return 'Location shared';
+    } catch (error) {
+      logger.error('Reverse geocoding error', { error: error.message });
+      return 'Location shared';
+    }
   },
 
   async handleMessage(phone, message, messageType = 'text', selectedId = null, senderName = null) {
@@ -3746,40 +3798,28 @@ const chatbot = {
         
         logger.info('Location received', { location: locationData });
         
-        // Helper: detect if a string is just coordinates, not a real address
-        const isCoordinateString = (str) => {
-          if (!str) return true;
-          const s = str.trim();
-          if (s === 'Location shared' || !s) return true;
-          // Matches patterns like "Location (12.9913, 80.1184)" or raw "12.9913, 80.1184"
-          if (/^Location\s*\([\d.\-]+,\s*[\d.\-]+\)$/i.test(s)) return true;
-          if (/^[\d.\-]+\s*,\s*[\d.\-]+$/.test(s)) return true;
-          return false;
-        };
-
         // Get proper address - prefer WhatsApp's address, fallback to reverse geocoding
         let formattedAddress = 'Location shared';
         
         // First, try to use the address from WhatsApp location data
-        // But reject it if it's just coordinates disguised as an address
-        if (locationData.address && locationData.address.trim() && locationData.address !== 'undefined' && !isCoordinateString(locationData.address)) {
+        if (locationData.address && locationData.address.trim() && locationData.address !== 'undefined') {
           formattedAddress = locationData.address.trim();
           // If there's also a name/place, prepend it
-          if (locationData.name && locationData.name.trim() && locationData.name !== locationData.address && !isCoordinateString(locationData.name)) {
+          if (locationData.name && locationData.name.trim() && locationData.name !== locationData.address) {
             formattedAddress = `${locationData.name.trim()}, ${formattedAddress}`;
           }
           logger.info('Using WhatsApp provided address', { address: formattedAddress });
-        } else if (locationData.name && locationData.name.trim() && locationData.name !== 'undefined' && !isCoordinateString(locationData.name)) {
+        } else if (locationData.name && locationData.name.trim() && locationData.name !== 'undefined') {
           // If only name is provided (like a place name)
           formattedAddress = locationData.name.trim();
           logger.info('Using WhatsApp location name', { location: formattedAddress });
         }
         
         // If still no address, try reverse geocoding from coordinates
-        if (isCoordinateString(formattedAddress) && locationData.latitude && locationData.longitude) {
+        if ((formattedAddress === 'Location shared' || !formattedAddress) && locationData.latitude && locationData.longitude) {
           logger.info('No address from WhatsApp, trying reverse geocoding...');
           const geocodedAddress = await this.reverseGeocode(locationData.latitude, locationData.longitude);
-          if (geocodedAddress && !isCoordinateString(geocodedAddress)) {
+          if (geocodedAddress && geocodedAddress !== 'Location shared') {
             formattedAddress = geocodedAddress;
             logger.info('Got address from reverse geocoding', { address: formattedAddress });
           }
@@ -4409,7 +4449,7 @@ const chatbot = {
           const item = menuItems.find(m => m._id.toString() === state.selectedItem);
           if (item) {
             // Check if item already in cart
-            const existingIndex = customer.cart?.findIndex(c => c.menuItem?.toString() === state.selectedItem);
+            const existingIndex = customer.cart?.findIndex(c => c.menuItem.toString() === state.selectedItem);
             if (existingIndex >= 0) {
               // Item already in cart, increment quantity
               customer.cart[existingIndex].quantity += 1;

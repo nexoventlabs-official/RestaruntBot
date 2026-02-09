@@ -157,8 +157,8 @@ async function getAvailableMenuItems() {
 async function handleLocationMessage(phone, customer, locationData) {
   logger.info('Location received', { phone, locationData });
   
-  // Delegate to location handler - wrap locationData in params object as expected
-  const result = await locationHandler.handleLocation(customer, phone, { locationData });
+  // Delegate to location handler
+  const result = await locationHandler.handleLocation(customer, phone, locationData);
   
   if (result.success) {
     logger.info('Location processed successfully', { phone });

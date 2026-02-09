@@ -1,7 +1,5 @@
 const { google } = require('googleapis');
 const logger = require('../logger');
-const axios = require('axios');
-const { reverseGeocode: resolveAddressFromCoords } = require('../geocoding');
 
 // Google Sheets configuration
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
@@ -350,14 +348,8 @@ const googleSheets = {
       const istOptions = { timeZone: 'Asia/Kolkata' };
       const itemsStr = order.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
 
-      // Get delivery address - resolve 'Location shared' via reverse geocoding if needed
-      let deliveryAddress = order.serviceType === 'pickup' ? 'Self Pickup' : (order.deliveryAddress?.address || '');
-      
-      // If address is missing, 'Location shared', or a link, try reverse geocoding from coordinates
-      if (order.serviceType !== 'pickup' && (!deliveryAddress || deliveryAddress === 'Location shared' || deliveryAddress.startsWith('http')) && order.deliveryAddress?.latitude && order.deliveryAddress?.longitude) {
-        deliveryAddress = await resolveAddressFromCoords(order.deliveryAddress.latitude, order.deliveryAddress.longitude);
-        logger.info(`📊 Resolved address: "${deliveryAddress}"`);
-      }
+      // Get delivery address for logging
+      const deliveryAddress = order.serviceType === 'pickup' ? 'Self Pickup' : (order.deliveryAddress?.address || '');
       logger.info(`📊 Adding order ${order.orderId} to sheets - Address: "${deliveryAddress}"`);
 
       // Determine payment method label based on service type
@@ -398,7 +390,7 @@ const googleSheets = {
         paymentMethodLabel,
         paymentStatusLabel,
         STATUS_LABELS[order.status] || order.status || 'Pending',
-        deliveryAddress,
+        order.serviceType === 'pickup' ? 'Self Pickup' : (order.deliveryAddress?.address || ''),
         '' // Delivery Partner (empty for pickup, or delivery partner name for delivery)
       ];
 
@@ -548,7 +540,7 @@ const googleSheets = {
                   paymentMethodLabel,
                   STATUS_LABELS[dbOrder.paymentStatus] || 'Pending',
                   'Cancelled',
-                  dbOrder.serviceType === 'pickup' ? 'Self Pickup' : (dbOrder.deliveryAddress?.address && dbOrder.deliveryAddress.address !== 'Location shared' ? dbOrder.deliveryAddress.address : (dbOrder.deliveryAddress?.latitude ? `\ud83d\udccd ${dbOrder.deliveryAddress.latitude}, ${dbOrder.deliveryAddress.longitude} (maps.google.com/?q=${dbOrder.deliveryAddress.latitude},${dbOrder.deliveryAddress.longitude})` : '')),
+                  dbOrder.serviceType === 'pickup' ? 'Self Pickup' : (dbOrder.deliveryAddress?.address || ''),
                   dbOrder.deliveryPartnerName || ''
                 ],
                 rowIndex: -1

@@ -22,7 +22,6 @@ const Settings = require('../../models/Settings');
 const conversationState = require('../conversationState');
 const whatsapp = require('../whatsapp');
 const { logger } = require('../correlationContext');
-const axios = require('axios');
 
 // Location validation constants
 const LOCATION_VALIDATION = {
@@ -32,14 +31,6 @@ const LOCATION_VALIDATION = {
   MAX_LONGITUDE: 180,
   EARTH_RADIUS_KM: 6371
 };
-
-/**
- * Reverse geocode coordinates to get readable address (uses shared geocoding service)
- */
-async function reverseGeocode(latitude, longitude) {
-  const { reverseGeocode: geocode } = require('../geocoding');
-  return geocode(latitude, longitude, logger);
-}
 
 /**
  * Request location from user
@@ -106,27 +97,8 @@ async function handleLocation(customer, phone, params) {
     return;
   }
   
-  // Get formatted address - prefer WhatsApp's address, fallback to reverse geocoding
-  let formattedAddress = 'Location shared';
-  
-  if (address && address.trim() && address !== 'undefined') {
-    formattedAddress = address.trim();
-    if (name && name.trim() && name !== address && name !== 'undefined') {
-      formattedAddress = `${name.trim()}, ${formattedAddress}`;
-    }
-  } else if (name && name.trim() && name !== 'undefined') {
-    formattedAddress = name.trim();
-  }
-  
-  // If no address from WhatsApp, try reverse geocoding from coordinates
-  if (formattedAddress === 'Location shared' && latitude && longitude) {
-    logger.info('No address from WhatsApp, trying reverse geocoding...');
-    const geocodedAddress = await reverseGeocode(latitude, longitude);
-    if (geocodedAddress && geocodedAddress !== 'Location shared') {
-      formattedAddress = geocodedAddress;
-      logger.info('Got address from reverse geocoding', { address: formattedAddress });
-    }
-  }
+  // Get formatted address
+  const formattedAddress = address || name || 'Location shared';
   
   // Save location to customer
   customer.deliveryAddress = {
@@ -415,30 +387,10 @@ function formatDeliveryChargeMessage(deliveryResult) {
 async function saveCustomerLocation(customer, locationData) {
   const { latitude, longitude, address, name } = locationData;
   
-  // Resolve address - prefer provided address, fallback to reverse geocoding
-  let resolvedAddress = 'Location shared';
-  
-  if (address && address.trim() && address !== 'undefined') {
-    resolvedAddress = address.trim();
-    if (name && name.trim() && name !== address && name !== 'undefined') {
-      resolvedAddress = `${name.trim()}, ${resolvedAddress}`;
-    }
-  } else if (name && name.trim() && name !== 'undefined') {
-    resolvedAddress = name.trim();
-  }
-  
-  // Reverse geocode if no address available
-  if (resolvedAddress === 'Location shared' && latitude && longitude) {
-    const geocodedAddress = await reverseGeocode(latitude, longitude);
-    if (geocodedAddress && geocodedAddress !== 'Location shared') {
-      resolvedAddress = geocodedAddress;
-    }
-  }
-  
   customer.deliveryAddress = {
     latitude,
     longitude,
-    address: resolvedAddress,
+    address: address || name || 'Location shared',
     updatedAt: new Date()
   };
   
@@ -447,8 +399,7 @@ async function saveCustomerLocation(customer, locationData) {
   logger.info('Customer location saved', {
     customerId: customer._id,
     latitude,
-    longitude,
-    address: resolvedAddress
+    longitude
   });
 }
 

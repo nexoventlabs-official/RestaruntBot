@@ -1,6 +1,4 @@
 const { google } = require('googleapis');
-const axios = require('axios');
-const { reverseGeocode: resolveAddressFromCoords } = require('./geocoding');
 
 // Google Sheets configuration
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
@@ -476,22 +474,6 @@ const googleSheets = {
       // Set order status at correct index (10)
       newRowData[10] = STATUS_LABELS[orderStatus] || orderStatus;
 
-      // Fix 'Location shared', empty, or link-based addresses (index 11) by resolving from DB coordinates
-      const addressVal = (newRowData[11] || '').toString();
-      if (addressVal === 'Location shared' || addressVal === '' || addressVal.startsWith('http')) {
-        try {
-          const Order = require('../models/Order');
-          const dbOrder = await Order.findOne({ orderId: newRowData[0] });
-          if (dbOrder?.deliveryAddress?.latitude && dbOrder?.deliveryAddress?.longitude) {
-            const resolved = await resolveAddressFromCoords(dbOrder.deliveryAddress.latitude, dbOrder.deliveryAddress.longitude);
-            newRowData[11] = resolved;
-            console.log(`📊 Fixed address for ${newRowData[0]}: "${resolved}"`);
-          }
-        } catch (e) {
-          console.log(`📊 Could not resolve address for ${newRowData[0]}: ${e.message}`);
-        }
-      }
-
       // Add row
       await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
@@ -558,14 +540,8 @@ const googleSheets = {
       const istOptions = { timeZone: 'Asia/Kolkata' };
       const itemsStr = order.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
 
-      // Get delivery address - resolve 'Location shared' via reverse geocoding if needed
-      let deliveryAddress = order.serviceType === 'pickup' ? 'Self Pickup' : (order.deliveryAddress?.address || '');
-      
-      // If address is missing, 'Location shared', or a link, try reverse geocoding from coordinates
-      if (order.serviceType !== 'pickup' && (!deliveryAddress || deliveryAddress === 'Location shared' || deliveryAddress.startsWith('http')) && order.deliveryAddress?.latitude && order.deliveryAddress?.longitude) {
-        deliveryAddress = await resolveAddressFromCoords(order.deliveryAddress.latitude, order.deliveryAddress.longitude);
-        console.log(`📊 Resolved address: "${deliveryAddress}"`);
-      }
+      // Get delivery address for logging
+      const deliveryAddress = order.serviceType === 'pickup' ? 'Self Pickup' : (order.deliveryAddress?.address || '');
       console.log(`📊 Adding order ${order.orderId} to sheets - Address: "${deliveryAddress}"`);
 
       // Determine payment method label based on service type
@@ -606,7 +582,7 @@ const googleSheets = {
         paymentMethodLabel,
         paymentStatusLabel,
         STATUS_LABELS[order.status] || order.status || 'Pending',
-        deliveryAddress,
+        order.serviceType === 'pickup' ? 'Self Pickup' : (order.deliveryAddress?.address || ''),
         '' // Delivery Partner (empty for pickup, or delivery partner name for delivery)
       ];
 
@@ -756,7 +732,7 @@ const googleSheets = {
                   paymentMethodLabel,
                   STATUS_LABELS[dbOrder.paymentStatus] || 'Pending',
                   'Cancelled',
-                  dbOrder.serviceType === 'pickup' ? 'Self Pickup' : (dbOrder.deliveryAddress?.address && dbOrder.deliveryAddress.address !== 'Location shared' ? dbOrder.deliveryAddress.address : (dbOrder.deliveryAddress?.latitude ? `\ud83d\udccd ${dbOrder.deliveryAddress.latitude}, ${dbOrder.deliveryAddress.longitude} (maps.google.com/?q=${dbOrder.deliveryAddress.latitude},${dbOrder.deliveryAddress.longitude})` : '')),
+                  dbOrder.serviceType === 'pickup' ? 'Self Pickup' : (dbOrder.deliveryAddress?.address || ''),
                   dbOrder.deliveryPartnerName || ''
                 ],
                 rowIndex: -1
@@ -806,22 +782,6 @@ const googleSheets = {
       if (paymentStatus) {
         // Payment Status is column J (index 9)
         updates.push({ range: `${newSheet.sheetName}!J${orderData.rowIndex + 1}`, values: [[STATUS_LABELS[paymentStatus] || paymentStatus]] });
-      }
-
-      // Fix 'Location shared', empty, or link-based addresses in column L (index 11) while we're updating
-      const currentAddress = (orderData.rowData[11] || '').toString();
-      if (currentAddress === 'Location shared' || currentAddress === '' || currentAddress.startsWith('http')) {
-        try {
-          const Order = require('../models/Order');
-          const dbOrder = await Order.findOne({ orderId });
-          if (dbOrder?.deliveryAddress?.latitude && dbOrder?.deliveryAddress?.longitude) {
-            const resolved = await resolveAddressFromCoords(dbOrder.deliveryAddress.latitude, dbOrder.deliveryAddress.longitude);
-            updates.push({ range: `${newSheet.sheetName}!L${orderData.rowIndex + 1}`, values: [[resolved]] });
-            console.log(`📊 Fixed address for ${orderId}: "${resolved}"`);
-          }
-        } catch (e) {
-          console.log(`📊 Could not resolve address for ${orderId}: ${e.message}`);
-        }
       }
 
       if (updates.length > 0) {
