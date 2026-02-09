@@ -3624,73 +3624,99 @@ const chatbot = {
     try {
       logger.info(`Reverse geocoding coordinates: ${latitude}, ${longitude}`);
       
-      // Try OpenStreetMap Nominatim first
-      const response = await axios.get(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18`,
-        { 
-          headers: { 'User-Agent': 'RestaurantBot/1.0' },
-          timeout: 4000 // 4 second timeout - faster response
-        }
-      );
+      // Try OpenStreetMap Nominatim with multiple zoom levels for better results
+      const zoomLevels = [18, 16, 14]; // Try detailed first, then broader
       
-      logger.info('Geocoding response received', { 
-        hasData: !!response.data, 
-        hasAddress: !!response.data?.address,
-        displayName: response.data?.display_name?.substring(0, 100)
-      });
-      
-      if (response.data && response.data.address) {
-        const addr = response.data.address;
-        // Build a readable address - prioritize specific details
-        const parts = [];
+      for (let i = 0; i < zoomLevels.length; i++) {
+        const zoom = zoomLevels[i];
         
-        // Building/complex name
-        if (addr.building) parts.push(addr.building);
-        if (addr.amenity && !addr.building) parts.push(addr.amenity);
-        
-        // House number and road
-        if (addr.house_number) parts.push(addr.house_number);
-        if (addr.road) parts.push(addr.road);
-        else if (addr.street) parts.push(addr.street);
-        
-        // Area/locality
-        if (addr.neighbourhood) parts.push(addr.neighbourhood);
-        else if (addr.suburb) parts.push(addr.suburb);
-        else if (addr.residential) parts.push(addr.residential);
-        else if (addr.locality) parts.push(addr.locality);
-        
-        // City
-        if (addr.city) parts.push(addr.city);
-        else if (addr.town) parts.push(addr.town);
-        else if (addr.village) parts.push(addr.village);
-        else if (addr.municipality) parts.push(addr.municipality);
-        
-        // State and pincode
-        if (addr.state) parts.push(addr.state);
-        if (addr.postcode) parts.push(addr.postcode);
-        
-        // Build final address
-        let address = null;
-        if (parts.length > 0) {
-          address = parts.join(', ');
-        } else if (response.data.display_name) {
-          // If no parts extracted, use display_name but clean it up
-          address = response.data.display_name;
+        // Add delay between requests to respect rate limits (except first request)
+        if (i > 0) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
         
-        if (address) {
-          logger.info(`Successfully geocoded address: ${address.substring(0, 150)}`);
-          return address;
+        try {
+          const response = await axios.get(
+            `https://nominatim.openstreetmap.org/reverse`,
+            { 
+              params: {
+                format: 'json',
+                lat: latitude,
+                lon: longitude,
+                addressdetails: 1,
+                zoom: zoom,
+                'accept-language': 'en'
+              },
+              headers: { 
+                'User-Agent': 'RestaurantBot/1.0 (Contact: support@restaurant.com)'
+              },
+              timeout: 5000
+            }
+          );
+          
+          logger.info(`Geocoding response (zoom ${zoom})`, { 
+            hasData: !!response.data, 
+            hasAddress: !!response.data?.address,
+            displayName: response.data?.display_name?.substring(0, 100)
+          });
+          
+          if (response.data && response.data.address) {
+            const addr = response.data.address;
+            const parts = [];
+            
+            // Building/complex name
+            if (addr.building) parts.push(addr.building);
+            if (addr.amenity && !addr.building) parts.push(addr.amenity);
+            if (addr.shop) parts.push(addr.shop);
+            
+            // House number and road
+            if (addr.house_number) parts.push(addr.house_number);
+            if (addr.road) parts.push(addr.road);
+            else if (addr.street) parts.push(addr.street);
+            else if (addr.pedestrian) parts.push(addr.pedestrian);
+            
+            // Area/locality
+            if (addr.neighbourhood) parts.push(addr.neighbourhood);
+            else if (addr.suburb) parts.push(addr.suburb);
+            else if (addr.residential) parts.push(addr.residential);
+            else if (addr.locality) parts.push(addr.locality);
+            else if (addr.quarter) parts.push(addr.quarter);
+            
+            // City
+            if (addr.city) parts.push(addr.city);
+            else if (addr.town) parts.push(addr.town);
+            else if (addr.village) parts.push(addr.village);
+            else if (addr.municipality) parts.push(addr.municipality);
+            else if (addr.county) parts.push(addr.county);
+            
+            // State and postcode
+            if (addr.state) parts.push(addr.state);
+            if (addr.postcode) parts.push(addr.postcode);
+            
+            // Build final address
+            if (parts.length >= 2) {
+              const address = parts.join(', ');
+              logger.info(`Successfully geocoded address (zoom ${zoom}): ${address.substring(0, 150)}`);
+              return address;
+            } else if (response.data.display_name) {
+              // If we got display_name but not enough parts, use it
+              logger.info(`Using display_name (zoom ${zoom}): ${response.data.display_name.substring(0, 150)}`);
+              return response.data.display_name;
+            }
+          }
+          
+          // Try display_name as fallback for this zoom level
+          if (response.data && response.data.display_name) {
+            logger.info(`Using display_name fallback (zoom ${zoom}): ${response.data.display_name.substring(0, 150)}`);
+            return response.data.display_name;
+          }
+        } catch (zoomError) {
+          logger.warn(`Geocoding failed at zoom ${zoom}`, { error: zoomError.message });
+          // Continue to next zoom level
         }
       }
       
-      // Try display_name as fallback
-      if (response.data && response.data.display_name) {
-        logger.info(`Using display_name: ${response.data.display_name.substring(0, 150)}`);
-        return response.data.display_name;
-      }
-      
-      logger.warn('No address data in geocoding response');
+      logger.warn('All geocoding attempts failed');
       return null;
     } catch (error) {
       logger.error('Reverse geocoding error', { 
