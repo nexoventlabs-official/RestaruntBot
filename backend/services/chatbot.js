@@ -3619,79 +3619,74 @@ const chatbot = {
     return menuItems;
   },
 
-  // Reverse geocode coordinates to get readable address
+  // Reverse geocode coordinates to get readable address (multi-provider for reliability)
   async reverseGeocode(latitude, longitude) {
+    // Provider 1: BigDataCloud (free, no key needed, reliable)
     try {
-      logger.info(`Reverse geocoding coordinates: ${latitude}, ${longitude}`);
+      logger.info(`Reverse geocoding via BigDataCloud: ${latitude}, ${longitude}`);
+      const bdcResponse = await axios.get(
+        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`,
+        { timeout: 8000 }
+      );
+      if (bdcResponse.data) {
+        const d = bdcResponse.data;
+        const parts = [];
+        if (d.locality) parts.push(d.locality);
+        if (d.city && d.city !== d.locality) parts.push(d.city);
+        if (d.principalSubdivision) parts.push(d.principalSubdivision);
+        if (d.postcode) parts.push(d.postcode);
+        if (parts.length > 0) {
+          const address = parts.join(', ');
+          logger.info(`BigDataCloud address: ${address}`);
+          return address;
+        }
+      }
+    } catch (err) {
+      logger.warn('BigDataCloud geocoding failed', { error: err.message });
+    }
+
+    // Provider 2: Nominatim (OpenStreetMap)
+    try {
+      logger.info(`Reverse geocoding via Nominatim: ${latitude}, ${longitude}`);
       const response = await axios.get(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18`,
         { 
-          headers: { 'User-Agent': 'RestaurantBot/1.0' },
-          timeout: 8000 // 8 second timeout (increased for reliability)
+          headers: { 'User-Agent': 'FoodAdminBot/1.0 (restaurant ordering service)' },
+          timeout: 8000
         }
       );
       
       if (response.data && response.data.address) {
         const addr = response.data.address;
-        // Build a readable address - prioritize specific details
         const parts = [];
-        
-        // Building/complex name
         if (addr.building || addr.amenity) parts.push(addr.building || addr.amenity);
-        
-        // House number and road
         if (addr.house_number) parts.push(addr.house_number);
         if (addr.road || addr.street) parts.push(addr.road || addr.street);
-        
-        // Area/locality
         if (addr.neighbourhood) parts.push(addr.neighbourhood);
         else if (addr.suburb) parts.push(addr.suburb);
         else if (addr.residential) parts.push(addr.residential);
-        
-        // City
         if (addr.city) parts.push(addr.city);
         else if (addr.town) parts.push(addr.town);
         else if (addr.village) parts.push(addr.village);
-        else if (addr.county) parts.push(addr.county);
-        
-        // State and pincode
         if (addr.state) parts.push(addr.state);
         if (addr.postcode) parts.push(addr.postcode);
         
         const address = parts.length > 0 ? parts.join(', ') : response.data.display_name || null;
-        logger.info(`Geocoded address: ${address}`);
-        return address || 'Location shared';
+        if (address) {
+          logger.info(`Nominatim address: ${address}`);
+          return address;
+        }
       }
-      
-      // Try display_name as fallback
-      if (response.data && response.data.display_name) {
-        logger.info(`Using display_name: ${response.data.display_name}`);
+      if (response.data?.display_name) {
         return response.data.display_name;
       }
-      
-      logger.info('No address data in geocoding response');
-      return 'Location shared';
     } catch (error) {
-      logger.error('Reverse geocoding error', { error: error.message });
-      // Retry once with longer timeout
-      try {
-        logger.info('Retrying reverse geocoding...');
-        const retryResponse = await axios.get(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18`,
-          {
-            headers: { 'User-Agent': 'RestaurantBot/1.0' },
-            timeout: 12000
-          }
-        );
-        if (retryResponse.data?.display_name) {
-          logger.info(`Retry success: ${retryResponse.data.display_name}`);
-          return retryResponse.data.display_name;
-        }
-      } catch (retryError) {
-        logger.error('Reverse geocoding retry also failed', { error: retryError.message });
-      }
-      return 'Location shared';
+      logger.warn('Nominatim geocoding failed', { error: error.message });
     }
+
+    // Final fallback: return a Google Maps link with coordinates so at least it's useful
+    logger.warn('All geocoding providers failed, using coordinates fallback');
+    return `📍 ${Number(latitude).toFixed(6)}, ${Number(longitude).toFixed(6)} (maps.google.com/?q=${latitude},${longitude})`;
   },
 
   async handleMessage(phone, message, messageType = 'text', selectedId = null, senderName = null) {

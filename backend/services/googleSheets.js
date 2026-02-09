@@ -546,17 +546,47 @@ const googleSheets = {
       
       // If address is missing or 'Location shared', try reverse geocoding from coordinates
       if (order.serviceType !== 'pickup' && (!deliveryAddress || deliveryAddress === 'Location shared') && order.deliveryAddress?.latitude && order.deliveryAddress?.longitude) {
+        const lat = order.deliveryAddress.latitude;
+        const lon = order.deliveryAddress.longitude;
+        // Try BigDataCloud first (free, reliable)
         try {
-          const geoResponse = await axios.get(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${order.deliveryAddress.latitude}&lon=${order.deliveryAddress.longitude}&addressdetails=1&zoom=18`,
-            { headers: { 'User-Agent': 'RestaurantBot/1.0' }, timeout: 8000 }
+          const bdcResponse = await axios.get(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`,
+            { timeout: 8000 }
           );
-          if (geoResponse.data?.display_name) {
-            deliveryAddress = geoResponse.data.display_name;
-            console.log(`📊 Resolved address from coordinates: "${deliveryAddress}"`);
+          if (bdcResponse.data) {
+            const d = bdcResponse.data;
+            const parts = [];
+            if (d.locality) parts.push(d.locality);
+            if (d.city && d.city !== d.locality) parts.push(d.city);
+            if (d.principalSubdivision) parts.push(d.principalSubdivision);
+            if (d.postcode) parts.push(d.postcode);
+            if (parts.length > 0) {
+              deliveryAddress = parts.join(', ');
+              console.log(`📊 Resolved address via BigDataCloud: "${deliveryAddress}"`);
+            }
           }
-        } catch (geoErr) {
-          console.log(`📊 Reverse geocoding failed for order ${order.orderId}: ${geoErr.message}`);
+        } catch (bdcErr) {
+          console.log(`📊 BigDataCloud failed: ${bdcErr.message}`);
+        }
+        // Fallback to Nominatim
+        if (!deliveryAddress || deliveryAddress === 'Location shared') {
+          try {
+            const geoResponse = await axios.get(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1&zoom=18`,
+              { headers: { 'User-Agent': 'FoodAdminBot/1.0 (restaurant ordering service)' }, timeout: 8000 }
+            );
+            if (geoResponse.data?.display_name) {
+              deliveryAddress = geoResponse.data.display_name;
+              console.log(`📊 Resolved address via Nominatim: "${deliveryAddress}"`);
+            }
+          } catch (geoErr) {
+            console.log(`📊 Nominatim failed: ${geoErr.message}`);
+          }
+        }
+        // Final fallback: coordinates with maps link
+        if (!deliveryAddress || deliveryAddress === 'Location shared') {
+          deliveryAddress = `📍 ${Number(lat).toFixed(6)}, ${Number(lon).toFixed(6)} (maps.google.com/?q=${lat},${lon})`;
         }
       }
       console.log(`📊 Adding order ${order.orderId} to sheets - Address: "${deliveryAddress}"`);
@@ -749,7 +779,7 @@ const googleSheets = {
                   paymentMethodLabel,
                   STATUS_LABELS[dbOrder.paymentStatus] || 'Pending',
                   'Cancelled',
-                  dbOrder.serviceType === 'pickup' ? 'Self Pickup' : (dbOrder.deliveryAddress?.address || ''),
+                  dbOrder.serviceType === 'pickup' ? 'Self Pickup' : (dbOrder.deliveryAddress?.address && dbOrder.deliveryAddress.address !== 'Location shared' ? dbOrder.deliveryAddress.address : (dbOrder.deliveryAddress?.latitude ? `\ud83d\udccd ${dbOrder.deliveryAddress.latitude}, ${dbOrder.deliveryAddress.longitude} (maps.google.com/?q=${dbOrder.deliveryAddress.latitude},${dbOrder.deliveryAddress.longitude})` : '')),
                   dbOrder.deliveryPartnerName || ''
                 ],
                 rowIndex: -1
