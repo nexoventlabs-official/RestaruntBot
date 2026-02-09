@@ -3623,13 +3623,21 @@ const chatbot = {
   async reverseGeocode(latitude, longitude) {
     try {
       logger.info(`Reverse geocoding coordinates: ${latitude}, ${longitude}`);
+      
+      // Try OpenStreetMap Nominatim first
       const response = await axios.get(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18`,
         { 
           headers: { 'User-Agent': 'RestaurantBot/1.0' },
-          timeout: 5000 // 5 second timeout
+          timeout: 4000 // 4 second timeout - faster response
         }
       );
+      
+      logger.info('Geocoding response received', { 
+        hasData: !!response.data, 
+        hasAddress: !!response.data?.address,
+        displayName: response.data?.display_name?.substring(0, 100)
+      });
       
       if (response.data && response.data.address) {
         const addr = response.data.address;
@@ -3637,42 +3645,59 @@ const chatbot = {
         const parts = [];
         
         // Building/complex name
-        if (addr.building || addr.amenity) parts.push(addr.building || addr.amenity);
+        if (addr.building) parts.push(addr.building);
+        if (addr.amenity && !addr.building) parts.push(addr.amenity);
         
         // House number and road
         if (addr.house_number) parts.push(addr.house_number);
-        if (addr.road || addr.street) parts.push(addr.road || addr.street);
+        if (addr.road) parts.push(addr.road);
+        else if (addr.street) parts.push(addr.street);
         
         // Area/locality
         if (addr.neighbourhood) parts.push(addr.neighbourhood);
         else if (addr.suburb) parts.push(addr.suburb);
         else if (addr.residential) parts.push(addr.residential);
+        else if (addr.locality) parts.push(addr.locality);
         
         // City
         if (addr.city) parts.push(addr.city);
         else if (addr.town) parts.push(addr.town);
         else if (addr.village) parts.push(addr.village);
-        else if (addr.county) parts.push(addr.county);
+        else if (addr.municipality) parts.push(addr.municipality);
         
         // State and pincode
         if (addr.state) parts.push(addr.state);
         if (addr.postcode) parts.push(addr.postcode);
         
-        const address = parts.length > 0 ? parts.join(', ') : response.data.display_name || null;
-        logger.info(`Geocoded address: ${address}`);
-        return address || null;
+        // Build final address
+        let address = null;
+        if (parts.length > 0) {
+          address = parts.join(', ');
+        } else if (response.data.display_name) {
+          // If no parts extracted, use display_name but clean it up
+          address = response.data.display_name;
+        }
+        
+        if (address) {
+          logger.info(`Successfully geocoded address: ${address.substring(0, 150)}`);
+          return address;
+        }
       }
       
       // Try display_name as fallback
       if (response.data && response.data.display_name) {
-        logger.info(`Using display_name: ${response.data.display_name}`);
+        logger.info(`Using display_name: ${response.data.display_name.substring(0, 150)}`);
         return response.data.display_name;
       }
       
-      logger.info('No address data in geocoding response');
+      logger.warn('No address data in geocoding response');
       return null;
     } catch (error) {
-      logger.error('Reverse geocoding error', { error: error.message });
+      logger.error('Reverse geocoding error', { 
+        error: error.message,
+        code: error.code,
+        response: error.response?.status
+      });
       return null;
     }
   },
@@ -3810,18 +3835,43 @@ const chatbot = {
           }
           logger.info('Using WhatsApp provided address', { address: formattedAddress });
         } else if (locationData.name && locationData.name.trim() && locationData.name !== 'undefined') {
-          // If only name is provided (like a place name)
-          formattedAddress = locationData.name.trim();
-          logger.info('Using WhatsApp location name', { location: formattedAddress });
+          // If only name is provided (like a place name), still try reverse geocoding for full address
+          const placeName = locationData.name.trim();
+          logger.info('WhatsApp location name provided', { name: placeName });
+          
+          // Try reverse geocoding to get full address
+          if (locationData.latitude && locationData.longitude) {
+            logger.info('Attempting reverse geocoding for full address...');
+            const geocodedAddress = await this.reverseGeocode(locationData.latitude, locationData.longitude);
+            if (geocodedAddress) {
+              // Use geocoded address, prepend place name if it's not already in the address
+              if (!geocodedAddress.toLowerCase().includes(placeName.toLowerCase())) {
+                formattedAddress = `${placeName}, ${geocodedAddress}`;
+              } else {
+                formattedAddress = geocodedAddress;
+              }
+              logger.info('Using geocoded address with place name', { address: formattedAddress });
+            } else {
+              // Fallback to just the place name
+              formattedAddress = placeName;
+              logger.info('Reverse geocoding failed, using place name only');
+            }
+          } else {
+            formattedAddress = placeName;
+          }
         }
         
-        // If still no address, try reverse geocoding from coordinates
+        // If still no address, ALWAYS try reverse geocoding from coordinates
         if (!formattedAddress && locationData.latitude && locationData.longitude) {
           logger.info('No address from WhatsApp, trying reverse geocoding...');
+          
+          // Try reverse geocoding without showing message first (faster UX)
           const geocodedAddress = await this.reverseGeocode(locationData.latitude, locationData.longitude);
           if (geocodedAddress) {
             formattedAddress = geocodedAddress;
             logger.info('Got address from reverse geocoding', { address: formattedAddress });
+          } else {
+            logger.warn('Reverse geocoding failed to return address');
           }
         }
         
@@ -4449,6 +4499,15 @@ const chatbot = {
         }
       }
       else if (selection === 'checkout' || selection === 'review_pay') {
+        // Reset state if customer was in order_confirmed or order_placed state
+        if (state.currentStep === 'order_confirmed' || state.currentStep === 'order_placed' || state.currentStep === 'awaiting_payment') {
+          logger.info('Resetting state from previous order', { previousStep: state.currentStep });
+          state.currentStep = 'main_menu';
+          state.selectedItem = null;
+          state.serviceType = null;
+          state.paymentMethod = null;
+        }
+        
         // If user has a selected item they're viewing (but hasn't added it yet), add it to cart with qty 1
         // Only add if user is on 'viewing_item_details' step - otherwise item was already added via quantity selection
         if (state.selectedItem && state.currentStep === 'viewing_item_details') {
