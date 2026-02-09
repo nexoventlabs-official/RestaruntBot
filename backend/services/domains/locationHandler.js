@@ -37,19 +37,33 @@ const LOCATION_VALIDATION = {
  * Reverse geocode coordinates to get readable address (multi-provider for reliability)
  */
 async function reverseGeocode(latitude, longitude) {
-  // Provider 1: BigDataCloud (free, no key needed, reliable)
+  const lat = Number(latitude);
+  const lon = Number(longitude);
+
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // Provider 1: BigDataCloud (free, no key needed)
   try {
-    logger.info(`Reverse geocoding via BigDataCloud: ${latitude}, ${longitude}`);
+    logger.info(`Reverse geocoding via BigDataCloud: ${lat}, ${lon}`);
     const bdcResponse = await axios.get(
-      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`,
-      { timeout: 8000 }
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`,
+      { timeout: 10000 }
     );
     if (bdcResponse.data) {
       const d = bdcResponse.data;
       const parts = [];
-      if (d.locality) parts.push(d.locality);
-      if (d.city && d.city !== d.locality) parts.push(d.city);
-      if (d.principalSubdivision) parts.push(d.principalSubdivision);
+      if (d.localityInfo?.administrative) {
+        const adminAreas = d.localityInfo.administrative
+          .filter(a => a.name && a.order >= 6)
+          .sort((a, b) => b.order - a.order)
+          .map(a => a.name);
+        if (adminAreas.length > 0) parts.push(...adminAreas.slice(0, 3));
+      }
+      if (parts.length === 0) {
+        if (d.locality) parts.push(d.locality);
+        if (d.city && d.city !== d.locality) parts.push(d.city);
+      }
+      if (d.principalSubdivision && !parts.includes(d.principalSubdivision)) parts.push(d.principalSubdivision);
       if (d.postcode) parts.push(d.postcode);
       if (parts.length > 0) {
         const address = parts.join(', ');
@@ -61,46 +75,47 @@ async function reverseGeocode(latitude, longitude) {
     logger.warn('BigDataCloud geocoding failed', { error: err.message });
   }
 
-  // Provider 2: Nominatim (OpenStreetMap)
+  await delay(300);
+
+  // Provider 2: geocode.maps.co (free Nominatim mirror, more reliable)
   try {
-    logger.info(`Reverse geocoding via Nominatim: ${latitude}, ${longitude}`);
+    logger.info(`Reverse geocoding via geocode.maps.co: ${lat}, ${lon}`);
+    const mapsCoResponse = await axios.get(
+      `https://geocode.maps.co/reverse?lat=${lat}&lon=${lon}&format=json`,
+      { timeout: 10000 }
+    );
+    if (mapsCoResponse.data?.display_name) {
+      const address = mapsCoResponse.data.display_name;
+      logger.info(`geocode.maps.co address: ${address}`);
+      return address;
+    }
+  } catch (err) {
+    logger.warn('geocode.maps.co geocoding failed', { error: err.message });
+  }
+
+  await delay(500);
+
+  // Provider 3: Nominatim direct (OpenStreetMap)
+  try {
+    logger.info(`Reverse geocoding via Nominatim: ${lat}, ${lon}`);
     const response = await axios.get(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18`,
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1&zoom=18`,
       {
         headers: { 'User-Agent': 'FoodAdminBot/1.0 (restaurant ordering service)' },
-        timeout: 8000
+        timeout: 10000
       }
     );
-    if (response.data && response.data.address) {
-      const addr = response.data.address;
-      const parts = [];
-      if (addr.building || addr.amenity) parts.push(addr.building || addr.amenity);
-      if (addr.house_number) parts.push(addr.house_number);
-      if (addr.road || addr.street) parts.push(addr.road || addr.street);
-      if (addr.neighbourhood) parts.push(addr.neighbourhood);
-      else if (addr.suburb) parts.push(addr.suburb);
-      else if (addr.residential) parts.push(addr.residential);
-      if (addr.city) parts.push(addr.city);
-      else if (addr.town) parts.push(addr.town);
-      else if (addr.village) parts.push(addr.village);
-      if (addr.state) parts.push(addr.state);
-      if (addr.postcode) parts.push(addr.postcode);
-      const address = parts.length > 0 ? parts.join(', ') : response.data.display_name || null;
-      if (address) {
-        logger.info(`Nominatim address: ${address}`);
-        return address;
-      }
-    }
     if (response.data?.display_name) {
+      logger.info(`Nominatim address: ${response.data.display_name}`);
       return response.data.display_name;
     }
   } catch (error) {
     logger.warn('Nominatim geocoding failed', { error: error.message });
   }
 
-  // Final fallback: return coordinates with Google Maps link
-  logger.warn('All geocoding providers failed, using coordinates fallback');
-  return `📍 ${Number(latitude).toFixed(6)}, ${Number(longitude).toFixed(6)} (maps.google.com/?q=${latitude},${longitude})`;
+  // Fallback: Google Maps link
+  logger.warn('All geocoding providers failed, using maps link fallback');
+  return `https://maps.google.com/?q=${lat},${lon}`;
 }
 
 /**
