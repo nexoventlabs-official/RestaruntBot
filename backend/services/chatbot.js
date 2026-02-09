@@ -3624,141 +3624,10 @@ const chatbot = {
     try {
       logger.info(`Reverse geocoding coordinates: ${latitude}, ${longitude}`);
       
-      // Try Nominatim with proper configuration for server environments
-      try {
-        const response = await axios.get(
-          `https://nominatim.openstreetmap.org/reverse`,
-          { 
-            params: {
-              format: 'jsonv2',
-              lat: latitude,
-              lon: longitude,
-              addressdetails: 1,
-              zoom: 18
-            },
-            headers: { 
-              'User-Agent': 'RestaurantBot/1.0',
-              'Accept': 'application/json',
-              'Accept-Language': 'en'
-            },
-            timeout: 8000,
-            // Important: Don't use proxy, allow redirects
-            maxRedirects: 5,
-            validateStatus: (status) => status < 500
-          }
-        );
-        
-        logger.info('Nominatim response', { 
-          status: response.status,
-          hasData: !!response.data,
-          hasAddress: !!response.data?.address,
-          displayName: response.data?.display_name?.substring(0, 100)
-        });
-        
-        if (response.status === 200 && response.data) {
-          // Try to build address from components
-          if (response.data.address) {
-            const addr = response.data.address;
-            const parts = [];
-            
-            // Building/complex name
-            if (addr.building) parts.push(addr.building);
-            if (addr.amenity && !addr.building) parts.push(addr.amenity);
-            if (addr.shop) parts.push(addr.shop);
-            
-            // House number and road
-            if (addr.house_number) parts.push(addr.house_number);
-            if (addr.road) parts.push(addr.road);
-            else if (addr.street) parts.push(addr.street);
-            
-            // Area/locality
-            if (addr.neighbourhood) parts.push(addr.neighbourhood);
-            else if (addr.suburb) parts.push(addr.suburb);
-            else if (addr.locality) parts.push(addr.locality);
-            
-            // City
-            if (addr.city) parts.push(addr.city);
-            else if (addr.town) parts.push(addr.town);
-            else if (addr.village) parts.push(addr.village);
-            
-            // State and postcode
-            if (addr.state) parts.push(addr.state);
-            if (addr.postcode) parts.push(addr.postcode);
-            
-            // Build final address
-            if (parts.length >= 2) {
-              const address = parts.join(', ');
-              logger.info(`Successfully geocoded: ${address.substring(0, 150)}`);
-              return address;
-            }
-          }
-          
-          // Fallback to display_name
-          if (response.data.display_name) {
-            logger.info(`Using display_name: ${response.data.display_name.substring(0, 150)}`);
-            return response.data.display_name;
-          }
-        }
-      } catch (nominatimError) {
-        logger.error('Nominatim geocoding failed', { 
-          error: nominatimError.message,
-          code: nominatimError.code,
-          status: nominatimError.response?.status,
-          statusText: nominatimError.response?.statusText,
-          isTimeout: nominatimError.code === 'ECONNABORTED',
-          isNetworkError: nominatimError.code === 'ECONNREFUSED' || nominatimError.code === 'ENOTFOUND'
-        });
-      }
-      
-      // Try Photon API (another OSM-based geocoder, often more reliable)
-      try {
-        logger.info('Trying Photon API as fallback...');
-        const photonResponse = await axios.get(
-          `https://photon.komoot.io/reverse`,
-          {
-            params: {
-              lat: latitude,
-              lon: longitude,
-              lang: 'en'
-            },
-            headers: {
-              'User-Agent': 'RestaurantBot/1.0',
-              'Accept': 'application/json'
-            },
-            timeout: 8000,
-            maxRedirects: 5
-          }
-        );
-        
-        if (photonResponse.data && photonResponse.data.features && photonResponse.data.features.length > 0) {
-          const feature = photonResponse.data.features[0];
-          const props = feature.properties;
-          const parts = [];
-          
-          if (props.name) parts.push(props.name);
-          if (props.street) parts.push(props.street);
-          if (props.district) parts.push(props.district);
-          if (props.city) parts.push(props.city);
-          if (props.state) parts.push(props.state);
-          if (props.postcode) parts.push(props.postcode);
-          
-          if (parts.length >= 2) {
-            const address = parts.join(', ');
-            logger.info(`Successfully geocoded with Photon: ${address.substring(0, 150)}`);
-            return address;
-          }
-        }
-      } catch (photonError) {
-        logger.warn('Photon geocoding failed', { 
-          error: photonError.message,
-          code: photonError.code
-        });
-      }
-      
-      // Try OpenCage (has free tier, 2500 requests/day)
+      // Only use OpenCage API (most reliable for production)
       if (process.env.OPENCAGE_API_KEY) {
         try {
-          logger.info('Trying OpenCage API...');
+          logger.info('Using OpenCage API for geocoding...');
           const opencageResponse = await axios.get(
             `https://api.opencagedata.com/geocode/v1/json`,
             {
@@ -3766,25 +3635,75 @@ const chatbot = {
                 q: `${latitude},${longitude}`,
                 key: process.env.OPENCAGE_API_KEY,
                 language: 'en',
-                no_annotations: 1
+                no_annotations: 1,
+                limit: 1
               },
               timeout: 8000
             }
           );
           
+          logger.info('OpenCage response', {
+            status: opencageResponse.status,
+            hasResults: !!opencageResponse.data?.results?.length,
+            resultCount: opencageResponse.data?.results?.length || 0
+          });
+          
           if (opencageResponse.data && opencageResponse.data.results && opencageResponse.data.results.length > 0) {
             const result = opencageResponse.data.results[0];
+            
+            // Try to build custom address from components first
+            if (result.components) {
+              const comp = result.components;
+              const parts = [];
+              
+              // Building/place
+              if (comp.building) parts.push(comp.building);
+              if (comp.shop) parts.push(comp.shop);
+              if (comp.amenity && !comp.building) parts.push(comp.amenity);
+              
+              // House number and road
+              if (comp.house_number) parts.push(comp.house_number);
+              if (comp.road) parts.push(comp.road);
+              
+              // Neighborhood/suburb
+              if (comp.neighbourhood) parts.push(comp.neighbourhood);
+              else if (comp.suburb) parts.push(comp.suburb);
+              
+              // City
+              if (comp.city) parts.push(comp.city);
+              else if (comp.town) parts.push(comp.town);
+              else if (comp.village) parts.push(comp.village);
+              
+              // State and postcode
+              if (comp.state) parts.push(comp.state);
+              if (comp.postcode) parts.push(comp.postcode);
+              
+              if (parts.length >= 3) {
+                const address = parts.join(', ');
+                logger.info(`OpenCage custom address: ${address.substring(0, 150)}`);
+                return address;
+              }
+            }
+            
+            // Use formatted address as fallback
             if (result.formatted) {
-              logger.info(`Successfully geocoded with OpenCage: ${result.formatted.substring(0, 150)}`);
+              logger.info(`OpenCage formatted address: ${result.formatted.substring(0, 150)}`);
               return result.formatted;
             }
           }
         } catch (opencageError) {
-          logger.warn('OpenCage geocoding failed', { error: opencageError.message });
+          logger.error('OpenCage geocoding failed', { 
+            error: opencageError.message,
+            code: opencageError.code,
+            status: opencageError.response?.status,
+            statusText: opencageError.response?.statusText
+          });
         }
+      } else {
+        logger.warn('OpenCage API key not configured');
       }
       
-      logger.warn('All geocoding services failed');
+      logger.warn('Geocoding failed - no address found');
       return null;
     } catch (error) {
       logger.error('Reverse geocoding error', { 
@@ -3916,7 +3835,7 @@ const chatbot = {
         
         logger.info('Location received', { location: locationData });
         
-        // Get proper address - prefer WhatsApp's address, fallback to reverse geocoding
+        // Get proper address - prefer WhatsApp's address, only geocode if no address provided
         let formattedAddress = null;
         
         // First, try to use the address from WhatsApp location data
@@ -3928,47 +3847,24 @@ const chatbot = {
           }
           logger.info('Using WhatsApp provided address', { address: formattedAddress });
         } else if (locationData.name && locationData.name.trim() && locationData.name !== 'undefined') {
-          // If only name is provided (like a place name), still try reverse geocoding for full address
-          const placeName = locationData.name.trim();
-          logger.info('WhatsApp location name provided', { name: placeName });
-          
-          // Try reverse geocoding to get full address
-          if (locationData.latitude && locationData.longitude) {
-            logger.info('Attempting reverse geocoding for full address...');
-            const geocodedAddress = await this.reverseGeocode(locationData.latitude, locationData.longitude);
-            if (geocodedAddress) {
-              // Use geocoded address, prepend place name if it's not already in the address
-              if (!geocodedAddress.toLowerCase().includes(placeName.toLowerCase())) {
-                formattedAddress = `${placeName}, ${geocodedAddress}`;
-              } else {
-                formattedAddress = geocodedAddress;
-              }
-              logger.info('Using geocoded address with place name', { address: formattedAddress });
-            } else {
-              // Fallback to just the place name
-              formattedAddress = placeName;
-              logger.info('Reverse geocoding failed, using place name only');
-            }
-          } else {
-            formattedAddress = placeName;
-          }
+          // If only name is provided (like a place name), use it
+          formattedAddress = locationData.name.trim();
+          logger.info('Using WhatsApp location name', { location: formattedAddress });
         }
         
-        // If still no address, ALWAYS try reverse geocoding from coordinates
+        // If NO address from WhatsApp (current location with only coordinates), use OpenCage geocoding
         if (!formattedAddress && locationData.latitude && locationData.longitude) {
-          logger.info('No address from WhatsApp, trying reverse geocoding...');
-          
-          // Try reverse geocoding without showing message first (faster UX)
+          logger.info('No address from WhatsApp - current location shared, using OpenCage geocoding...');
           const geocodedAddress = await this.reverseGeocode(locationData.latitude, locationData.longitude);
           if (geocodedAddress) {
             formattedAddress = geocodedAddress;
-            logger.info('Got address from reverse geocoding', { address: formattedAddress });
+            logger.info('Got address from OpenCage geocoding', { address: formattedAddress });
           } else {
-            logger.warn('Reverse geocoding failed to return address');
+            logger.warn('OpenCage geocoding failed to return address');
           }
         }
         
-        // Final fallback - use coordinates (should rarely happen)
+        // Final fallback - use coordinates (should rarely happen with OpenCage)
         if (!formattedAddress) {
           formattedAddress = `Location: ${locationData.latitude.toFixed(6)}, ${locationData.longitude.toFixed(6)}`;
           logger.warn('No address available, using coordinates', { formattedAddress });
