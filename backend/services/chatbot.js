@@ -3624,43 +3624,36 @@ const chatbot = {
     try {
       logger.info(`Reverse geocoding coordinates: ${latitude}, ${longitude}`);
       
-      // Try OpenStreetMap Nominatim with multiple zoom levels for better results
-      const zoomLevels = [18, 16, 14]; // Try detailed first, then broader
-      
-      for (let i = 0; i < zoomLevels.length; i++) {
-        const zoom = zoomLevels[i];
+      // Try OpenStreetMap Nominatim first (single request, no loops to avoid delays)
+      try {
+        const response = await axios.get(
+          `https://nominatim.openstreetmap.org/reverse`,
+          { 
+            params: {
+              format: 'json',
+              lat: latitude,
+              lon: longitude,
+              addressdetails: 1,
+              zoom: 18,
+              'accept-language': 'en'
+            },
+            headers: { 
+              'User-Agent': 'RestaurantBot/1.0 (Contact: support@restaurant.com)',
+              'Referer': process.env.BACKEND_URL || 'https://restaruntbot.onrender.com'
+            },
+            timeout: 6000
+          }
+        );
         
-        // Add delay between requests to respect rate limits (except first request)
-        if (i > 0) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+        logger.info('Nominatim geocoding response', { 
+          hasData: !!response.data, 
+          hasAddress: !!response.data?.address,
+          displayName: response.data?.display_name?.substring(0, 100)
+        });
         
-        try {
-          const response = await axios.get(
-            `https://nominatim.openstreetmap.org/reverse`,
-            { 
-              params: {
-                format: 'json',
-                lat: latitude,
-                lon: longitude,
-                addressdetails: 1,
-                zoom: zoom,
-                'accept-language': 'en'
-              },
-              headers: { 
-                'User-Agent': 'RestaurantBot/1.0 (Contact: support@restaurant.com)'
-              },
-              timeout: 5000
-            }
-          );
-          
-          logger.info(`Geocoding response (zoom ${zoom})`, { 
-            hasData: !!response.data, 
-            hasAddress: !!response.data?.address,
-            displayName: response.data?.display_name?.substring(0, 100)
-          });
-          
-          if (response.data && response.data.address) {
+        if (response.data) {
+          // Try to build address from components
+          if (response.data.address) {
             const addr = response.data.address;
             const parts = [];
             
@@ -3696,27 +3689,72 @@ const chatbot = {
             // Build final address
             if (parts.length >= 2) {
               const address = parts.join(', ');
-              logger.info(`Successfully geocoded address (zoom ${zoom}): ${address.substring(0, 150)}`);
+              logger.info(`Successfully geocoded address from parts: ${address.substring(0, 150)}`);
               return address;
-            } else if (response.data.display_name) {
-              // If we got display_name but not enough parts, use it
-              logger.info(`Using display_name (zoom ${zoom}): ${response.data.display_name.substring(0, 150)}`);
-              return response.data.display_name;
             }
           }
           
-          // Try display_name as fallback for this zoom level
-          if (response.data && response.data.display_name) {
-            logger.info(`Using display_name fallback (zoom ${zoom}): ${response.data.display_name.substring(0, 150)}`);
+          // Fallback to display_name if available
+          if (response.data.display_name) {
+            logger.info(`Using Nominatim display_name: ${response.data.display_name.substring(0, 150)}`);
             return response.data.display_name;
           }
-        } catch (zoomError) {
-          logger.warn(`Geocoding failed at zoom ${zoom}`, { error: zoomError.message });
-          // Continue to next zoom level
         }
+      } catch (nominatimError) {
+        logger.warn('Nominatim geocoding failed', { 
+          error: nominatimError.message,
+          code: nominatimError.code,
+          status: nominatimError.response?.status,
+          statusText: nominatimError.response?.statusText
+        });
       }
       
-      logger.warn('All geocoding attempts failed');
+      // Try alternative: BigDataCloud (free, no API key required)
+      try {
+        logger.info('Trying BigDataCloud geocoding as fallback...');
+        const bdcResponse = await axios.get(
+          `https://api.bigdatacloud.net/data/reverse-geocode-client`,
+          {
+            params: {
+              latitude: latitude,
+              longitude: longitude,
+              localityLanguage: 'en'
+            },
+            timeout: 5000
+          }
+        );
+        
+        if (bdcResponse.data) {
+          const data = bdcResponse.data;
+          const parts = [];
+          
+          // Build address from BigDataCloud response
+          if (data.locality) parts.push(data.locality);
+          if (data.localityInfo?.administrative?.[3]?.name) parts.push(data.localityInfo.administrative[3].name);
+          if (data.city) parts.push(data.city);
+          if (data.principalSubdivision) parts.push(data.principalSubdivision);
+          if (data.postcode) parts.push(data.postcode);
+          
+          if (parts.length >= 2) {
+            const address = parts.join(', ');
+            logger.info(`Successfully geocoded with BigDataCloud: ${address.substring(0, 150)}`);
+            return address;
+          }
+          
+          // Try formatted address
+          if (data.localityInfo?.informative?.[0]?.description) {
+            logger.info(`Using BigDataCloud description: ${data.localityInfo.informative[0].description.substring(0, 150)}`);
+            return data.localityInfo.informative[0].description;
+          }
+        }
+      } catch (bdcError) {
+        logger.warn('BigDataCloud geocoding failed', { 
+          error: bdcError.message,
+          code: bdcError.code
+        });
+      }
+      
+      logger.warn('All geocoding services failed');
       return null;
     } catch (error) {
       logger.error('Reverse geocoding error', { 
