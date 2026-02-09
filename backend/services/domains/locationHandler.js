@@ -34,88 +34,11 @@ const LOCATION_VALIDATION = {
 };
 
 /**
- * Reverse geocode coordinates to get readable address (multi-provider for reliability)
+ * Reverse geocode coordinates to get readable address (uses shared geocoding service)
  */
 async function reverseGeocode(latitude, longitude) {
-  const lat = Number(latitude);
-  const lon = Number(longitude);
-
-  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-  // Provider 1: BigDataCloud (free, no key needed)
-  try {
-    logger.info(`Reverse geocoding via BigDataCloud: ${lat}, ${lon}`);
-    const bdcResponse = await axios.get(
-      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`,
-      { timeout: 10000 }
-    );
-    if (bdcResponse.data) {
-      const d = bdcResponse.data;
-      const parts = [];
-      if (d.localityInfo?.administrative) {
-        const adminAreas = d.localityInfo.administrative
-          .filter(a => a.name && a.order >= 6)
-          .sort((a, b) => b.order - a.order)
-          .map(a => a.name);
-        if (adminAreas.length > 0) parts.push(...adminAreas.slice(0, 3));
-      }
-      if (parts.length === 0) {
-        if (d.locality) parts.push(d.locality);
-        if (d.city && d.city !== d.locality) parts.push(d.city);
-      }
-      if (d.principalSubdivision && !parts.includes(d.principalSubdivision)) parts.push(d.principalSubdivision);
-      if (d.postcode) parts.push(d.postcode);
-      if (parts.length > 0) {
-        const address = parts.join(', ');
-        logger.info(`BigDataCloud address: ${address}`);
-        return address;
-      }
-    }
-  } catch (err) {
-    logger.warn('BigDataCloud geocoding failed', { error: err.message });
-  }
-
-  await delay(300);
-
-  // Provider 2: geocode.maps.co (free Nominatim mirror, more reliable)
-  try {
-    logger.info(`Reverse geocoding via geocode.maps.co: ${lat}, ${lon}`);
-    const mapsCoResponse = await axios.get(
-      `https://geocode.maps.co/reverse?lat=${lat}&lon=${lon}&format=json`,
-      { timeout: 10000 }
-    );
-    if (mapsCoResponse.data?.display_name) {
-      const address = mapsCoResponse.data.display_name;
-      logger.info(`geocode.maps.co address: ${address}`);
-      return address;
-    }
-  } catch (err) {
-    logger.warn('geocode.maps.co geocoding failed', { error: err.message });
-  }
-
-  await delay(500);
-
-  // Provider 3: Nominatim direct (OpenStreetMap)
-  try {
-    logger.info(`Reverse geocoding via Nominatim: ${lat}, ${lon}`);
-    const response = await axios.get(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1&zoom=18`,
-      {
-        headers: { 'User-Agent': 'FoodAdminBot/1.0 (restaurant ordering service)' },
-        timeout: 10000
-      }
-    );
-    if (response.data?.display_name) {
-      logger.info(`Nominatim address: ${response.data.display_name}`);
-      return response.data.display_name;
-    }
-  } catch (error) {
-    logger.warn('Nominatim geocoding failed', { error: error.message });
-  }
-
-  // Fallback: Google Maps link
-  logger.warn('All geocoding providers failed, using maps link fallback');
-  return `https://maps.google.com/?q=${lat},${lon}`;
+  const { reverseGeocode: geocode } = require('../geocoding');
+  return geocode(latitude, longitude, logger);
 }
 
 /**
