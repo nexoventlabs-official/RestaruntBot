@@ -22,6 +22,7 @@ const Settings = require('../../models/Settings');
 const conversationState = require('../conversationState');
 const whatsapp = require('../whatsapp');
 const { logger } = require('../correlationContext');
+const axios = require('axios');
 
 // Location validation constants
 const LOCATION_VALIDATION = {
@@ -31,6 +32,76 @@ const LOCATION_VALIDATION = {
   MAX_LONGITUDE: 180,
   EARTH_RADIUS_KM: 6371
 };
+
+/**
+ * Reverse geocode coordinates to get readable address
+ * Uses OpenStreetMap Nominatim API with retry logic
+ */
+async function reverseGeocode(latitude, longitude) {
+  try {
+    logger.info(`Reverse geocoding coordinates: ${latitude}, ${longitude}`);
+    const response = await axios.get(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18`,
+      {
+        headers: { 'User-Agent': 'RestaurantBot/1.0' },
+        timeout: 8000
+      }
+    );
+
+    if (response.data && response.data.address) {
+      const addr = response.data.address;
+      const parts = [];
+
+      if (addr.building || addr.amenity) parts.push(addr.building || addr.amenity);
+      if (addr.house_number) parts.push(addr.house_number);
+      if (addr.road || addr.street) parts.push(addr.road || addr.street);
+
+      if (addr.neighbourhood) parts.push(addr.neighbourhood);
+      else if (addr.suburb) parts.push(addr.suburb);
+      else if (addr.residential) parts.push(addr.residential);
+
+      if (addr.city) parts.push(addr.city);
+      else if (addr.town) parts.push(addr.town);
+      else if (addr.village) parts.push(addr.village);
+      else if (addr.county) parts.push(addr.county);
+
+      if (addr.state) parts.push(addr.state);
+      if (addr.postcode) parts.push(addr.postcode);
+
+      const address = parts.length > 0 ? parts.join(', ') : response.data.display_name || null;
+      logger.info(`Geocoded address: ${address}`);
+      return address || null;
+    }
+
+    if (response.data && response.data.display_name) {
+      logger.info(`Using display_name: ${response.data.display_name}`);
+      return response.data.display_name;
+    }
+
+    logger.info('No address data in geocoding response');
+    return null;
+  } catch (error) {
+    logger.error('Reverse geocoding error', { error: error.message });
+    // Retry once with longer timeout
+    try {
+      logger.info('Retrying reverse geocoding...');
+      const retryResponse = await axios.get(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18`,
+        {
+          headers: { 'User-Agent': 'RestaurantBot/1.0' },
+          timeout: 12000
+        }
+      );
+      if (retryResponse.data?.display_name) {
+        logger.info(`Retry success: ${retryResponse.data.display_name}`);
+        return retryResponse.data.display_name;
+      }
+    } catch (retryError) {
+      logger.error('Reverse geocoding retry also failed', { error: retryError.message });
+    }
+    return null;
+  }
+}
 
 /**
  * Request location from user
@@ -97,8 +168,27 @@ async function handleLocation(customer, phone, params) {
     return;
   }
   
-  // Get formatted address
-  const formattedAddress = address || name || 'Location shared';
+  // Get formatted address - prefer WhatsApp's address, fallback to reverse geocoding
+  let formattedAddress = 'Location shared';
+  
+  if (address && address.trim() && address !== 'undefined') {
+    formattedAddress = address.trim();
+    if (name && name.trim() && name !== address && name !== 'undefined') {
+      formattedAddress = `${name.trim()}, ${formattedAddress}`;
+    }
+  } else if (name && name.trim() && name !== 'undefined') {
+    formattedAddress = name.trim();
+  }
+  
+  // If no address from WhatsApp, try reverse geocoding from coordinates
+  if (formattedAddress === 'Location shared' && latitude && longitude) {
+    logger.info('No address from WhatsApp, trying reverse geocoding...');
+    const geocodedAddress = await reverseGeocode(latitude, longitude);
+    if (geocodedAddress && geocodedAddress !== 'Location shared') {
+      formattedAddress = geocodedAddress;
+      logger.info('Got address from reverse geocoding', { address: formattedAddress });
+    }
+  }
   
   // Save location to customer
   customer.deliveryAddress = {
@@ -387,10 +477,30 @@ function formatDeliveryChargeMessage(deliveryResult) {
 async function saveCustomerLocation(customer, locationData) {
   const { latitude, longitude, address, name } = locationData;
   
+  // Resolve address - prefer provided address, fallback to reverse geocoding
+  let resolvedAddress = 'Location shared';
+  
+  if (address && address.trim() && address !== 'undefined') {
+    resolvedAddress = address.trim();
+    if (name && name.trim() && name !== address && name !== 'undefined') {
+      resolvedAddress = `${name.trim()}, ${resolvedAddress}`;
+    }
+  } else if (name && name.trim() && name !== 'undefined') {
+    resolvedAddress = name.trim();
+  }
+  
+  // Reverse geocode if no address available
+  if (resolvedAddress === 'Location shared' && latitude && longitude) {
+    const geocodedAddress = await reverseGeocode(latitude, longitude);
+    if (geocodedAddress && geocodedAddress !== 'Location shared') {
+      resolvedAddress = geocodedAddress;
+    }
+  }
+  
   customer.deliveryAddress = {
     latitude,
     longitude,
-    address: address || name || 'Location shared',
+    address: resolvedAddress,
     updatedAt: new Date()
   };
   
@@ -399,7 +509,8 @@ async function saveCustomerLocation(customer, locationData) {
   logger.info('Customer location saved', {
     customerId: customer._id,
     latitude,
-    longitude
+    longitude,
+    address: resolvedAddress
   });
 }
 

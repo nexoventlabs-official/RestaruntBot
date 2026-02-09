@@ -3627,7 +3627,7 @@ const chatbot = {
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18`,
         { 
           headers: { 'User-Agent': 'RestaurantBot/1.0' },
-          timeout: 5000 // 5 second timeout
+          timeout: 8000 // 8 second timeout (increased for reliability)
         }
       );
       
@@ -3673,6 +3673,23 @@ const chatbot = {
       return 'Location shared';
     } catch (error) {
       logger.error('Reverse geocoding error', { error: error.message });
+      // Retry once with longer timeout
+      try {
+        logger.info('Retrying reverse geocoding...');
+        const retryResponse = await axios.get(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18`,
+          {
+            headers: { 'User-Agent': 'RestaurantBot/1.0' },
+            timeout: 12000
+          }
+        );
+        if (retryResponse.data?.display_name) {
+          logger.info(`Retry success: ${retryResponse.data.display_name}`);
+          return retryResponse.data.display_name;
+        }
+      } catch (retryError) {
+        logger.error('Reverse geocoding retry also failed', { error: retryError.message });
+      }
       return 'Location shared';
     }
   },

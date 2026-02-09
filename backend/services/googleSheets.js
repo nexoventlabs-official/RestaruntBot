@@ -1,4 +1,5 @@
 const { google } = require('googleapis');
+const axios = require('axios');
 
 // Google Sheets configuration
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
@@ -540,8 +541,24 @@ const googleSheets = {
       const istOptions = { timeZone: 'Asia/Kolkata' };
       const itemsStr = order.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
 
-      // Get delivery address for logging
-      const deliveryAddress = order.serviceType === 'pickup' ? 'Self Pickup' : (order.deliveryAddress?.address || '');
+      // Get delivery address - resolve 'Location shared' via reverse geocoding if needed
+      let deliveryAddress = order.serviceType === 'pickup' ? 'Self Pickup' : (order.deliveryAddress?.address || '');
+      
+      // If address is missing or 'Location shared', try reverse geocoding from coordinates
+      if (order.serviceType !== 'pickup' && (!deliveryAddress || deliveryAddress === 'Location shared') && order.deliveryAddress?.latitude && order.deliveryAddress?.longitude) {
+        try {
+          const geoResponse = await axios.get(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${order.deliveryAddress.latitude}&lon=${order.deliveryAddress.longitude}&addressdetails=1&zoom=18`,
+            { headers: { 'User-Agent': 'RestaurantBot/1.0' }, timeout: 8000 }
+          );
+          if (geoResponse.data?.display_name) {
+            deliveryAddress = geoResponse.data.display_name;
+            console.log(`📊 Resolved address from coordinates: "${deliveryAddress}"`);
+          }
+        } catch (geoErr) {
+          console.log(`📊 Reverse geocoding failed for order ${order.orderId}: ${geoErr.message}`);
+        }
+      }
       console.log(`📊 Adding order ${order.orderId} to sheets - Address: "${deliveryAddress}"`);
 
       // Determine payment method label based on service type
@@ -582,7 +599,7 @@ const googleSheets = {
         paymentMethodLabel,
         paymentStatusLabel,
         STATUS_LABELS[order.status] || order.status || 'Pending',
-        order.serviceType === 'pickup' ? 'Self Pickup' : (order.deliveryAddress?.address || ''),
+        deliveryAddress,
         '' // Delivery Partner (empty for pickup, or delivery partner name for delivery)
       ];
 
