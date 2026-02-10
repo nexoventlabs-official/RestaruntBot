@@ -6,7 +6,7 @@ import CartSidebar from '../components/CartSidebar';
 
 const API_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api') + '/public';
 const SSE_URL = 'https://restaruntbot.onrender.com/api/events';
-const WHATSAPP_NUMBER = '15551858897';
+const WHATSAPP_NUMBER = '9440203095';
 
 export default function UserMenu() {
   const [categories, setCategories] = useState([]);

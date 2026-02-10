@@ -14,7 +14,7 @@ import {
   HomeIcon, FoodIcon, InfoIcon, PhoneIcon, SearchIcon, WhatsAppIcon 
 } from './Icons';
 
-const WHATSAPP_NUMBER = '15551858897';
+const WHATSAPP_NUMBER = '9440203095';
 const API_URL = 'https://restaruntbot.onrender.com/api/public';
 const SETTINGS_URL = 'https://restaruntbot.onrender.com/api/settings';
 const SSE_URL = 'https://restaruntbot.onrender.com/api/events';
@@ -851,7 +851,7 @@ export default function UserLayout() {
                   <div className="w-7 h-7 sm:w-8 sm:h-8 bg-orange-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
                     <PhoneIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-400" />
                   </div>
-                  +1 555-185-8897
+                  9440203095
                 </li>
                 <li className="flex items-center gap-2 sm:gap-3">
                   <div className="w-7 h-7 sm:w-8 sm:h-8 bg-orange-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
