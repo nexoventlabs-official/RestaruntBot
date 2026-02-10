@@ -35,7 +35,7 @@ router.get('/mappings', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/catalog/auto-sync - Auto-create retailer ID mappings from menu items
+// POST /api/catalog/auto-sync - Sync all menu items to Meta catalog + create local mappings
 // Body: { overwrite: boolean }
 router.post('/auto-sync', authMiddleware, async (req, res) => {
   try {
@@ -43,7 +43,7 @@ router.post('/auto-sync', authMiddleware, async (req, res) => {
     const result = await catalogService.autoSync(overwrite);
     res.json({
       success: true,
-      message: `Synced ${result.created} products (${result.skipped} skipped)`,
+      message: `Local mappings: ${result.created} created, ${result.skipped} skipped. Meta catalog: ${result.metaPushed || 0} pushed, ${result.metaFailed || 0} failed.`,
       ...result
     });
   } catch (error) {

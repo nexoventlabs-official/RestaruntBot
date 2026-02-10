@@ -198,9 +198,14 @@ const catalogService = {
    */
   async autoSync(overwrite = false) {
     const items = await MenuItem.find({ available: true, isPaused: false }).lean();
+    const metaCloud = require('./metaCloud');
+    const catalogId = this.getCatalogId();
     let created = 0;
     let skipped = 0;
+    let metaPushed = 0;
+    let metaFailed = 0;
 
+    // Step 1: Create all local CatalogProduct mappings first
     for (const item of items) {
       const itemId = item._id.toString();
       try {
@@ -211,29 +216,61 @@ const catalogService = {
           continue;
         }
 
-        if (existing && overwrite) {
-          existing.retailerId = itemId;
-          existing.isActive = true;
-          existing.lastSyncedAt = new Date();
-          await existing.save();
-        } else {
-          await CatalogProduct.create({
+        await CatalogProduct.findOneAndUpdate(
+          { menuItem: item._id },
+          {
             menuItem: item._id,
             retailerId: itemId,
             isActive: true,
             lastSyncedAt: new Date()
-          });
-        }
+          },
+          { upsert: true, new: true }
+        );
         created++;
       } catch (err) {
-        logger.error('Catalog auto-sync error for item', { itemId, error: err.message });
-        skipped++;
+        logger.error('Catalog mapping error for item', { itemId, name: item.name, error: err.message });
       }
     }
 
     this.clearCache();
-    logger.info('Catalog auto-sync completed', { created, skipped, total: items.length });
-    return { created, skipped, total: items.length };
+
+    // Step 2: Batch-push products to Meta Commerce Catalog (20 per request, 3s delay between batches)
+    if (this.isEnabled() && catalogId) {
+      const BATCH_SIZE = 20;
+      const DELAY_MS = 3000;
+      const itemsToSync = overwrite ? items : items.filter((_, i) => i >= skipped || overwrite);
+
+      for (let i = 0; i < items.length; i += BATCH_SIZE) {
+        const batch = items.slice(i, i + BATCH_SIZE);
+        const products = batch.map(item => ({
+          retailerId: item._id.toString(),
+          name: item.name,
+          description: item.description || item.name,
+          price: item.price,
+          currency: 'INR',
+          imageUrl: item.image || null,
+          category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
+          availability: (item.available && !item.isPaused) ? 'in stock' : 'out of stock'
+        }));
+
+        try {
+          await metaCloud.batchCreateOrUpdateProducts(catalogId, products);
+          metaPushed += batch.length;
+          logger.info('Catalog batch pushed to Meta', { batchStart: i, count: batch.length });
+        } catch (err) {
+          metaFailed += batch.length;
+          logger.error('Catalog batch push failed', { batchStart: i, error: err.message });
+        }
+
+        // Delay between batches to respect Meta rate limits
+        if (i + BATCH_SIZE < items.length) {
+          await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+        }
+      }
+    }
+
+    logger.info('Catalog auto-sync completed', { created, skipped, metaPushed, metaFailed, total: items.length });
+    return { created, skipped, metaPushed, metaFailed, total: items.length };
   },
 
   /**

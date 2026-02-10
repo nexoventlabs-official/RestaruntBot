@@ -1063,7 +1063,7 @@ const metaCloud = {
   // ========== COMMERCE CATALOG PRODUCT CRUD ==========
 
   /**
-   * Create or update a product in the Meta Commerce Catalog.
+   * Create or update a single product in the Meta Commerce Catalog.
    * Uses the Catalog Batch API to add/update products.
    * 
    * @param {string} catalogId - Meta Commerce catalog ID
@@ -1071,14 +1071,24 @@ const metaCloud = {
    * @param {string} product.retailerId - Unique retailer ID for the product
    * @param {string} product.name - Product name
    * @param {string} product.description - Product description
-   * @param {number} product.price - Price in smallest currency unit (paise for INR)
+   * @param {number} product.price - Price (in rupees, will convert to paise)
    * @param {string} product.currency - Currency code (default: INR)
    * @param {string} product.imageUrl - Product image URL
    * @param {string} product.category - Product category
    * @param {string} product.availability - 'in stock' or 'out of stock'
-   * @param {string} product.url - Product URL (optional)
    */
   async createOrUpdateCatalogProduct(catalogId, product) {
+    return this.batchCreateOrUpdateProducts(catalogId, [product]);
+  },
+
+  /**
+   * Batch create/update multiple products in a single Catalog Batch API call.
+   * Meta allows up to 20 products per batch request.
+   * 
+   * @param {string} catalogId - Meta Commerce catalog ID
+   * @param {Array} products - Array of product objects (max 20)
+   */
+  async batchCreateOrUpdateProducts(catalogId, products) {
     try {
       const { accessToken } = getConfig();
 
@@ -1086,40 +1096,35 @@ const metaCloud = {
         throw new Error('META_CATALOG_ID not configured');
       }
 
-      logger.info('Meta createOrUpdateCatalogProduct', { catalogId, retailerId: product.retailerId });
+      logger.info('Meta batchCreateOrUpdateProducts', { catalogId, count: products.length });
 
-      // Price must be in format "100.00 INR" for the Catalog API
-      const priceStr = `${product.price.toFixed(0)}00 ${product.currency || 'INR'}`;
+      const requests = products.map(product => {
+        // Price must be in smallest currency unit (paise for INR) followed by currency code
+        // e.g. ₹100.50 → "10050 INR" (10050 paise)
+        const priceInPaise = Math.round(product.price * 100);
+        const priceStr = `${priceInPaise} ${product.currency || 'INR'}`;
 
-      const productData = {
-        retailer_id: product.retailerId,
-        data: {
+        const data = {
           name: product.name,
           description: product.description || product.name,
           availability: product.availability || 'in stock',
           price: priceStr,
           currency: product.currency || 'INR',
           category: product.category || 'Food & Beverage',
+        };
+
+        if (product.imageUrl) {
+          data.image_url = product.imageUrl;
         }
-      };
 
-      // Add image URL if available
-      if (product.imageUrl) {
-        productData.data.image_url = product.imageUrl;
-      }
-
-      // Add optional URL
-      if (product.url) {
-        productData.data.url = product.url;
-      }
-
-      const payload = {
-        requests: [{
+        return {
           method: 'UPDATE',
           retailer_id: product.retailerId,
-          data: productData.data
-        }]
-      };
+          data
+        };
+      });
+
+      const payload = { requests };
 
       const response = await metaApi.post(
         `https://graph.facebook.com/v24.0/${catalogId}/batch`,
@@ -1127,16 +1132,16 @@ const metaCloud = {
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
 
-      logger.info('Meta createOrUpdateCatalogProduct success', {
-        retailerId: product.retailerId,
+      logger.info('Meta batchCreateOrUpdateProducts success', {
+        count: products.length,
         handles: response.data?.handles
       });
       return response.data;
     } catch (error) {
       const errorData = error.response?.data?.error || error.response?.data;
-      logger.error('Meta createOrUpdateCatalogProduct error', {
+      logger.error('Meta batchCreateOrUpdateProducts error', {
         error: errorData?.message || error.message,
-        retailerId: product.retailerId
+        count: products.length
       });
       throw error;
     }
