@@ -5518,6 +5518,34 @@ const chatbot = {
       return;
     }
 
+    // ===== TRY NATIVE CATALOG product_list WITH CATEGORY SECTIONS =====
+    // Shows all items grouped by category as native catalog cards with images/prices
+    try {
+      const catalogResult = await catalogService.buildProductSections(menuItems);
+      if (catalogResult && catalogResult.sections.length > 0) {
+        const catalogId = catalogService.getCatalogId();
+        await whatsapp.sendProductList(
+          phone,
+          catalogId,
+          `📋 ${label}`,
+          `${menuItems.length} items in ${catalogResult.sections.length} categories\nTap any item to view details & add to cart 🛒`,
+          catalogResult.sections,
+          'Fresh & Delicious!'
+        );
+        // Send navigation buttons below the catalog
+        await whatsapp.sendButtons(phone, `Browse ${label} above 👆`, [
+          { id: 'view_cart', text: '🛒 My Cart' },
+          { id: 'cat_all', text: '📋 All Items' },
+          { id: 'home', text: '🏠 Main Menu' }
+        ]);
+        return;
+      }
+    } catch (catalogErr) {
+      logger.info('Catalog fallback for categories', { label, error: catalogErr.message });
+    }
+
+    // ===== FALLBACK: TEXT LIST OF CATEGORY NAMES =====
+
     // If 9 or fewer categories (+ All Items = 10), use WhatsApp list without pagination
     if (categories.length <= 9) {
       const rows = [
@@ -5974,6 +6002,32 @@ const chatbot = {
       ]);
       return;
     }
+
+    // ===== TRY NATIVE CATALOG product_list WITH CATEGORY SECTIONS =====
+    try {
+      const catalogResult = await catalogService.buildProductSections(menuItems);
+      if (catalogResult && catalogResult.sections.length > 0) {
+        const catalogId = catalogService.getCatalogId();
+        await whatsapp.sendProductList(
+          phone,
+          catalogId,
+          `🛒 ${label}`,
+          `${menuItems.length} items in ${catalogResult.sections.length} categories\nTap any item to add to cart 🛒`,
+          catalogResult.sections,
+          'Fresh & Delicious!'
+        );
+        await whatsapp.sendButtons(phone, `Browse items above & add to cart 👆`, [
+          { id: 'view_cart', text: '🛒 My Cart' },
+          { id: 'cat_all', text: '📋 All Items' },
+          { id: 'home', text: '🏠 Main Menu' }
+        ]);
+        return;
+      }
+    } catch (catalogErr) {
+      logger.info('Catalog fallback for order menu', { label, error: catalogErr.message });
+    }
+
+    // ===== FALLBACK: TEXT LIST OF CATEGORY NAMES =====
 
     // If 9 or fewer categories (+ All Items = 10), use WhatsApp list without pagination
     if (categories.length <= 9) {
