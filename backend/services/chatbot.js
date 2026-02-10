@@ -5519,28 +5519,14 @@ const chatbot = {
     }
 
     // ===== TRY NATIVE CATALOG =====
-    // catalog_message shows the FULL catalog (can't filter by veg/nonveg)
-    // Only use it for "All Menu"; for filtered menus, skip to text list → category → product_list
+    // Send product_list messages (split into pages of 30 if needed)
     try {
       if (catalogService.isEnabled()) {
         const catalogId = catalogService.getCatalogId();
         const catalogResult = await catalogService.buildProductSections(menuItems);
-        const isFullMenu = label.includes('All') || label === 'Our Menu';
 
-        if (isFullMenu && catalogResult && catalogResult.totalMapped > 30) {
-          // Full menu with >30 items: catalog_message (native catalog browser)
-          const map = await catalogService.getCatalogMap();
-          const firstMapped = menuItems.find(item => map.has(item._id.toString()));
-          const thumbnailId = firstMapped ? map.get(firstMapped._id.toString()) : '';
-          await whatsapp.sendCatalogMessage(
-            phone,
-            `📋 *${label}*\n\n${menuItems.length} items in ${categories.length} categories\nBrowse by category & add to cart! 🛒`,
-            'Fresh & Delicious!',
-            thumbnailId
-          );
-          return;
-        } else if (catalogResult && catalogResult.totalMapped <= 30 && catalogResult.sections.length > 0) {
-          // <=30 items: product_list with category sections
+        if (catalogResult && catalogResult.totalMapped <= 30 && catalogResult.sections.length > 0) {
+          // <=30 items: single product_list
           await whatsapp.sendProductList(
             phone,
             catalogId,
@@ -5550,8 +5536,26 @@ const chatbot = {
             'Fresh & Delicious!'
           );
           return;
+        } else if (catalogResult && catalogResult.totalMapped > 30) {
+          // >30 items: split into multiple product_list messages (30 items each)
+          const pages = await catalogService.buildPaginatedProductSections(menuItems);
+          if (pages && pages.length > 0) {
+            for (const page of pages) {
+              const pageLabel = pages.length > 1
+                ? `📋 ${label} (${page.pageNumber}/${page.totalPages})`
+                : `📋 ${label}`;
+              await whatsapp.sendProductList(
+                phone,
+                catalogId,
+                pageLabel,
+                `${page.totalInPage} items • Tap to view & add to cart 🛒`,
+                page.sections,
+                'Fresh & Delicious!'
+              );
+            }
+            return;
+          }
         }
-        // Filtered menu with >30 items: fall through to text list
       }
     } catch (catalogErr) {
       logger.info('Catalog fallback for categories', { label, error: catalogErr.message });
@@ -6017,20 +6021,8 @@ const chatbot = {
       if (catalogService.isEnabled()) {
         const catalogId = catalogService.getCatalogId();
         const catalogResult = await catalogService.buildProductSections(menuItems);
-        const isFullMenu = label.includes('All') || label === 'Select Items';
 
-        if (isFullMenu && catalogResult && catalogResult.totalMapped > 30) {
-          const map = await catalogService.getCatalogMap();
-          const firstMapped = menuItems.find(item => map.has(item._id.toString()));
-          const thumbnailId = firstMapped ? map.get(firstMapped._id.toString()) : '';
-          await whatsapp.sendCatalogMessage(
-            phone,
-            `🛒 *${label}*\n\n${menuItems.length} items in ${categories.length} categories\nBrowse by category & add to cart! 🛒`,
-            'Fresh & Delicious!',
-            thumbnailId
-          );
-          return;
-        } else if (catalogResult && catalogResult.totalMapped <= 30 && catalogResult.sections.length > 0) {
+        if (catalogResult && catalogResult.totalMapped <= 30 && catalogResult.sections.length > 0) {
           await whatsapp.sendProductList(
             phone,
             catalogId,
@@ -6040,6 +6032,25 @@ const chatbot = {
             'Fresh & Delicious!'
           );
           return;
+        } else if (catalogResult && catalogResult.totalMapped > 30) {
+          // >30 items: split into multiple product_list messages
+          const pages = await catalogService.buildPaginatedProductSections(menuItems);
+          if (pages && pages.length > 0) {
+            for (const page of pages) {
+              const pageLabel = pages.length > 1
+                ? `🛒 ${label} (${page.pageNumber}/${page.totalPages})`
+                : `🛒 ${label}`;
+              await whatsapp.sendProductList(
+                phone,
+                catalogId,
+                pageLabel,
+                `${page.totalInPage} items • Tap to view & add to cart 🛒`,
+                page.sections,
+                'Fresh & Delicious!'
+              );
+            }
+            return;
+          }
         }
       }
     } catch (catalogErr) {

@@ -166,6 +166,83 @@ const catalogService = {
   },
 
   /**
+   * Build paginated product_list pages for >30 items.
+   * Each page has max 30 products across max 10 sections.
+   * Returns array of { sections, totalInPage, pageNumber, totalPages }.
+   */
+  async buildPaginatedProductSections(menuItems) {
+    if (!this.isEnabled()) return null;
+
+    const map = await this.getCatalogMap();
+    if (map.size === 0) return null;
+
+    const mappedItems = menuItems.filter(item => map.has(item._id.toString()));
+    if (mappedItems.length === 0 || mappedItems.length < menuItems.length * 0.5) {
+      return null;
+    }
+
+    // Group by category preserving order
+    const categoryMap = new Map();
+    for (const item of mappedItems) {
+      const categories = Array.isArray(item.category) ? item.category : [item.category];
+      const cat = categories[0] || 'Menu';
+      if (!categoryMap.has(cat)) categoryMap.set(cat, []);
+      categoryMap.get(cat).push(map.get(item._id.toString()));
+    }
+
+    // Flatten categories into sequential entries
+    const allEntries = [...categoryMap.entries()];
+    const pages = [];
+    let entryIdx = 0;
+    let offsetInCategory = 0; // track partially consumed category
+
+    while (entryIdx < allEntries.length) {
+      const sections = [];
+      let pageTotal = 0;
+      const MAX_PER_PAGE = 30;
+      const MAX_SECTIONS = 10;
+
+      while (entryIdx < allEntries.length && sections.length < MAX_SECTIONS && pageTotal < MAX_PER_PAGE) {
+        const [catName, retailerIds] = allEntries[entryIdx];
+        const remaining = MAX_PER_PAGE - pageTotal;
+        const idsLeft = retailerIds.slice(offsetInCategory);
+        const sliced = idsLeft.slice(0, remaining);
+
+        if (sliced.length > 0) {
+          sections.push({
+            title: catName.substring(0, 24),
+            productRetailerIds: sliced
+          });
+          pageTotal += sliced.length;
+        }
+
+        if (offsetInCategory + sliced.length >= retailerIds.length) {
+          // Category fully consumed, move to next
+          entryIdx++;
+          offsetInCategory = 0;
+        } else {
+          // Category partially consumed, continue on next page
+          offsetInCategory += sliced.length;
+          break;
+        }
+      }
+
+      if (sections.length > 0) {
+        pages.push({ sections, totalInPage: pageTotal });
+      }
+    }
+
+    // Add page metadata
+    const totalPages = pages.length;
+    return pages.map((p, i) => ({
+      ...p,
+      pageNumber: i + 1,
+      totalPages,
+      totalMapped: mappedItems.length
+    }));
+  },
+
+  /**
    * Build product sections for a specific category
    */
   async buildCategorySections(menuItems, category) {
