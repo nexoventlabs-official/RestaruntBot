@@ -5537,10 +5537,6 @@ const chatbot = {
             'Fresh & Delicious!',
             thumbnailId
           );
-          await whatsapp.sendButtons(phone, `Browse our catalog above 👆`, [
-            { id: 'view_cart', text: '🛒 My Cart' },
-            { id: 'home', text: '🏠 Main Menu' }
-          ]);
           return;
         } else if (catalogResult && catalogResult.sections.length > 0) {
           // Use product_list with category sections (<=30 items fits)
@@ -5733,10 +5729,6 @@ const chatbot = {
               'Perivi Hotel',
               thumbnailId
             );
-            await whatsapp.sendButtons(phone, 'Browse our catalog above 👆', [
-              { id: 'view_cart', text: 'My Cart' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
             return;
           }
 
@@ -6040,10 +6032,6 @@ const chatbot = {
             'Fresh & Delicious!',
             thumbnailId
           );
-          await whatsapp.sendButtons(phone, `Browse our catalog above & add to cart 👆`, [
-            { id: 'view_cart', text: '🛒 My Cart' },
-            { id: 'home', text: '🏠 Main Menu' }
-          ]);
           return;
         } else if (catalogResult && catalogResult.sections.length > 0) {
           await whatsapp.sendProductList(
