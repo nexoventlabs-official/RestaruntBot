@@ -1082,8 +1082,8 @@ const metaCloud = {
   },
 
   /**
-   * Batch create/update multiple products in a single Catalog Batch API call.
-   * Meta allows up to 20 products per batch request.
+   * Batch create/update multiple products using the items_batch Commerce API.
+   * Meta allows up to 20 products per request.
    * 
    * @param {string} catalogId - Meta Commerce catalog ID
    * @param {Array} products - Array of product objects (max 20)
@@ -1102,9 +1102,8 @@ const metaCloud = {
         // Price format: "79.00 INR" (decimal with currency code)
         const priceStr = `${product.price.toFixed(2)} ${product.currency || 'INR'}`;
 
-        // Meta catalog required fields use specific names:
-        // title (not name), image_link (not image_url), link (required)
         const data = {
+          id: product.retailerId,
           title: product.name,
           description: product.description || product.name,
           availability: product.availability || 'in stock',
@@ -1121,15 +1120,17 @@ const metaCloud = {
 
         return {
           method: 'UPDATE',
-          retailer_id: product.retailerId,
           data
         };
       });
 
-      const payload = { requests };
+      const payload = {
+        item_type: 'PRODUCT_ITEM',
+        requests
+      };
 
       const response = await metaApi.post(
-        `https://graph.facebook.com/v24.0/${catalogId}/batch`,
+        `https://graph.facebook.com/v24.0/${catalogId}/items_batch`,
         payload,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
@@ -1166,14 +1167,15 @@ const metaCloud = {
       logger.info('Meta deleteCatalogProduct', { catalogId, retailerId });
 
       const payload = {
+        item_type: 'PRODUCT_ITEM',
         requests: [{
           method: 'DELETE',
-          retailer_id: retailerId
+          data: { id: retailerId }
         }]
       };
 
       const response = await metaApi.post(
-        `https://graph.facebook.com/v24.0/${catalogId}/batch`,
+        `https://graph.facebook.com/v24.0/${catalogId}/items_batch`,
         payload,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
