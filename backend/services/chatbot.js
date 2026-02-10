@@ -6828,37 +6828,29 @@ const chatbot = {
       return;
     }
 
-    // Try sending cart items in WhatsApp Catalog format
+    // Send each cart item as an individual product card (image, name, price)
     let catalogSent = false;
     try {
       if (catalogService.isEnabled()) {
-        const validCartItems = freshCustomer.cart.filter(item => item.menuItem);
-        const cartSections = await catalogService.buildCartSections(validCartItems);
-        if (cartSections) {
-          const catalogId = catalogService.getCatalogId();
-          if (validItems > 30) {
-            // Too many cart items for product_list, use catalog_message
-            const map = await catalogService.getCatalogMap();
-            const firstMapped = validCartItems.find(item => map.has(item.menuItem._id.toString()));
-            const thumbnailId = firstMapped ? map.get(firstMapped.menuItem._id.toString()) : '';
-            await whatsapp.sendCatalogMessage(
-              phone,
-              `🛒 *Your Cart — ${validItems} items*\n\nTap "View catalog" to see your items with images & prices`,
-              'Perivi Hotel',
-              thumbnailId
-            );
-          } else {
-            // Send cart items as product_list with catalog cards
-            await whatsapp.sendProductList(
-              phone,
-              catalogId,
-              '🛒 Your Cart',
-              `${validItems} items in your cart\nTap to view details`,
-              cartSections.sections,
-              'Perivi Hotel'
-            );
+        const catalogId = catalogService.getCatalogId();
+        const map = await catalogService.getCatalogMap();
+        if (map.size > 0 && catalogId) {
+          const validCartItems = freshCustomer.cart.filter(item => item.menuItem);
+          let sentCount = 0;
+          for (const cartItem of validCartItems) {
+            const retailerId = map.get(cartItem.menuItem._id.toString());
+            if (retailerId) {
+              await whatsapp.sendProduct(
+                phone,
+                catalogId,
+                retailerId,
+                `Qty: ${cartItem.quantity}`,
+                ''
+              );
+              sentCount++;
+            }
           }
-          catalogSent = true;
+          if (sentCount > 0) catalogSent = true;
         }
       }
     } catch (catalogErr) {
@@ -6876,22 +6868,12 @@ const chatbot = {
     
     cartMsg += `*Total: ₹${total}*`;
 
-    if (catalogSent) {
-      // Catalog cards already sent above — now just send the summary + action buttons
-      await whatsapp.sendButtons(phone, cartMsg, [
-        { id: 'review_pay', text: 'Review & Order' },
-        { id: 'add_more', text: 'Add More' },
-        { id: 'clear_cart', text: 'Clear Cart' }
-      ]);
-    } else {
-      // Fallback: original image + text style
-      const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
-      await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [
-        { id: 'review_pay', text: 'Review & Order' },
-        { id: 'add_more', text: 'Add More' },
-        { id: 'clear_cart', text: 'Clear Cart' }
-      ]);
-    }
+    // Send summary with totals + action buttons
+    await whatsapp.sendButtons(phone, cartMsg, [
+      { id: 'review_pay', text: 'Review & Order' },
+      { id: 'add_more', text: 'Add More' },
+      { id: 'clear_cart', text: 'Clear Cart' }
+    ]);
   },
 
   async processCheckout(phone, customer, state) {
