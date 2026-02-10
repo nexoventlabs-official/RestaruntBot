@@ -95,6 +95,7 @@ jest.mock('../../routes/offers', () => mockRouter);
 jest.mock('../../routes/whatsappBroadcast', () => mockRouter);
 jest.mock('../../routes/settings', () => mockRouter);
 jest.mock('../../routes/health', () => mockRouter);
+jest.mock('../../routes/catalog', () => mockRouter);
 jest.mock('../../middleware/auth', () => jest.fn((req, res, next) => next()));
 
 describe('Server Configuration', () => {

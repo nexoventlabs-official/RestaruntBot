@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/197</span>
+                <span class='fraction'>0/201</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/138</span>
+                <span class='fraction'>0/145</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/195</span>
+                <span class='fraction'>0/199</span>
             </div>
         
             
@@ -434,7 +434,16 @@
 <a name='L369'></a><a href='#L369'>369</a>
 <a name='L370'></a><a href='#L370'>370</a>
 <a name='L371'></a><a href='#L371'>371</a>
-<a name='L372'></a><a href='#L372'>372</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L372'></a><a href='#L372'>372</a>
+<a name='L373'></a><a href='#L373'>373</a>
+<a name='L374'></a><a href='#L374'>374</a>
+<a name='L375'></a><a href='#L375'>375</a>
+<a name='L376'></a><a href='#L376'>376</a>
+<a name='L377'></a><a href='#L377'>377</a>
+<a name='L378'></a><a href='#L378'>378</a>
+<a name='L379'></a><a href='#L379'>379</a>
+<a name='L380'></a><a href='#L380'>380</a>
+<a name='L381'></a><a href='#L381'>381</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -733,6 +742,15 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1105,6 +1123,15 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 <span class="cstat-no" title="statement not covered" >                  text = message.interactive.list_reply?.title || '';</span>
 <span class="cstat-no" title="statement not covered" >                  messageType = 'list';</span>
                 }
+              } else <span class="cstat-no" title="statement not covered" >if (message.type === 'order') {</span>
+                // WhatsApp Catalog cart submission — user tapped "Send" on their cart
+<span class="cstat-no" title="statement not covered" >                messageType = 'order';</span>
+<span class="cstat-no" title="statement not covered" >                text = message.order || {};</span>
+<span class="cstat-no" title="statement not covered" >                logger.info('📦 Catalog order received', {</span>
+                  phone,
+                  catalogId: message.order?.catalog_id,
+                  itemCount: message.order?.product_items?.length || 0
+                });
               } else <span class="cstat-no" title="statement not covered" >if (message.type === 'location') {</span>
 <span class="cstat-no" title="statement not covered" >                messageType = 'location';</span>
 <span class="cstat-no" title="statement not covered" >                text = {</span>
@@ -1159,7 +1186,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
                 }
               }
 &nbsp;
-              const hasContent = <span class="cstat-no" title="statement not covered" >text || selectedId || messageType === 'location';</span>
+              const hasContent = <span class="cstat-no" title="statement not covered" >text || selectedId || messageType === 'location' || messageType === 'order';</span>
 <span class="cstat-no" title="statement not covered" >              if (phone &amp;&amp; hasContent) {</span>
                 // Process message in the background
 <span class="cstat-no" title="statement not covered" >                chatbot.handleMessage(phone, text, messageType, selectedId, senderName)</span>
@@ -1183,7 +1210,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-07T11:14:57.785Z
+                at 2026-02-10T09:54:05.114Z
             </div>
         <script src="../prettify.js"></script>
         <script>

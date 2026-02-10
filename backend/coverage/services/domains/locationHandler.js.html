@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/129</span>
+                <span class='fraction'>0/134</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/99</span>
+                <span class='fraction'>0/105</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/128</span>
+                <span class='fraction'>0/133</span>
             </div>
         
             
@@ -537,7 +537,19 @@
 <a name='L472'></a><a href='#L472'>472</a>
 <a name='L473'></a><a href='#L473'>473</a>
 <a name='L474'></a><a href='#L474'>474</a>
-<a name='L475'></a><a href='#L475'>475</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L475'></a><a href='#L475'>475</a>
+<a name='L476'></a><a href='#L476'>476</a>
+<a name='L477'></a><a href='#L477'>477</a>
+<a name='L478'></a><a href='#L478'>478</a>
+<a name='L479'></a><a href='#L479'>479</a>
+<a name='L480'></a><a href='#L480'>480</a>
+<a name='L481'></a><a href='#L481'>481</a>
+<a name='L482'></a><a href='#L482'>482</a>
+<a name='L483'></a><a href='#L483'>483</a>
+<a name='L484'></a><a href='#L484'>484</a>
+<a name='L485'></a><a href='#L485'>485</a>
+<a name='L486'></a><a href='#L486'>486</a>
+<a name='L487'></a><a href='#L487'>487</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -641,13 +653,18 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -918,14 +935,20 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -936,6 +959,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1110,8 +1134,13 @@ async function <span class="fstat-no" title="function not covered" >handleLocati
 <span class="cstat-no" title="statement not covered" >    return;</span>
   }
   
-  // Get formatted address
-  const formattedAddress = <span class="cstat-no" title="statement not covered" >address || name || 'Location shared';</span>
+  // Get formatted address - never show "Location shared"
+  let formattedAddress = <span class="cstat-no" title="statement not covered" >address || name;</span>
+  
+  // If no address available, use coordinates as fallback (but this should rarely happen)
+<span class="cstat-no" title="statement not covered" >  if (!formattedAddress || formattedAddress.trim() === '') {</span>
+<span class="cstat-no" title="statement not covered" >    formattedAddress = `Lat: ${latitude.toFixed(6)}, Lon: ${longitude.toFixed(6)}`;</span>
+  }
   
   // Save location to customer
 <span class="cstat-no" title="statement not covered" >  customer.deliveryAddress = {</span>
@@ -1400,10 +1429,16 @@ function <span class="fstat-no" title="function not covered" >formatDeliveryChar
 async function <span class="fstat-no" title="function not covered" >saveCustomerLocation(</span>customer, locationData) {
   const { latitude, longitude, address, name } = <span class="cstat-no" title="statement not covered" >locationData;</span>
   
+  // Never save "Location shared" - use coordinates as fallback
+  let formattedAddress = <span class="cstat-no" title="statement not covered" >address || name;</span>
+<span class="cstat-no" title="statement not covered" >  if (!formattedAddress || formattedAddress.trim() === '') {</span>
+<span class="cstat-no" title="statement not covered" >    formattedAddress = `Lat: ${latitude.toFixed(6)}, Lon: ${longitude.toFixed(6)}`;</span>
+  }
+  
 <span class="cstat-no" title="statement not covered" >  customer.deliveryAddress = {</span>
     latitude,
     longitude,
-    address: address || name || 'Location shared',
+    address: formattedAddress,
     updatedAt: new Date()
   };
   
@@ -1412,7 +1447,8 @@ async function <span class="fstat-no" title="function not covered" >saveCustomer
 <span class="cstat-no" title="statement not covered" >  logger.info('Customer location saved', {</span>
     customerId: customer._id,
     latitude,
-    longitude
+    longitude,
+    address: formattedAddress
   });
 }
 &nbsp;
@@ -1492,7 +1528,7 @@ async function <span class="fstat-no" title="function not covered" >requestLocat
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-07T11:14:57.785Z
+                at 2026-02-10T09:54:05.114Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

@@ -24,7 +24,7 @@ setInterval(() => {
       rateLimitStore.delete(ip);
     }
   }
-}, 5 * 60 * 1000);
+}, 5 * 60 * 1000).unref();
 
 /**
  * Create rate limiter middleware

@@ -25,28 +25,28 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/555</span>
+                <span class='fraction'>0/568</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/252</span>
+                <span class='fraction'>0/256</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/45</span>
+                <span class='fraction'>0/46</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/537</span>
+                <span class='fraction'>0/549</span>
             </div>
         
             
@@ -1491,7 +1491,29 @@
 <a name='L1426'></a><a href='#L1426'>1426</a>
 <a name='L1427'></a><a href='#L1427'>1427</a>
 <a name='L1428'></a><a href='#L1428'>1428</a>
-<a name='L1429'></a><a href='#L1429'>1429</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L1429'></a><a href='#L1429'>1429</a>
+<a name='L1430'></a><a href='#L1430'>1430</a>
+<a name='L1431'></a><a href='#L1431'>1431</a>
+<a name='L1432'></a><a href='#L1432'>1432</a>
+<a name='L1433'></a><a href='#L1433'>1433</a>
+<a name='L1434'></a><a href='#L1434'>1434</a>
+<a name='L1435'></a><a href='#L1435'>1435</a>
+<a name='L1436'></a><a href='#L1436'>1436</a>
+<a name='L1437'></a><a href='#L1437'>1437</a>
+<a name='L1438'></a><a href='#L1438'>1438</a>
+<a name='L1439'></a><a href='#L1439'>1439</a>
+<a name='L1440'></a><a href='#L1440'>1440</a>
+<a name='L1441'></a><a href='#L1441'>1441</a>
+<a name='L1442'></a><a href='#L1442'>1442</a>
+<a name='L1443'></a><a href='#L1443'>1443</a>
+<a name='L1444'></a><a href='#L1444'>1444</a>
+<a name='L1445'></a><a href='#L1445'>1445</a>
+<a name='L1446'></a><a href='#L1446'>1446</a>
+<a name='L1447'></a><a href='#L1447'>1447</a>
+<a name='L1448'></a><a href='#L1448'>1448</a>
+<a name='L1449'></a><a href='#L1449'>1449</a>
+<a name='L1450'></a><a href='#L1450'>1450</a>
+<a name='L1451'></a><a href='#L1451'>1451</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -2033,6 +2055,28 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -3465,6 +3509,28 @@ const sendPasswordEmail = <span class="cstat-no" title="statement not covered" >
   }
 });
 &nbsp;
+// Clear push notification token on logout (Delivery boy)
+<span class="cstat-no" title="statement not covered" >router.delete('/push-token', <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+  const token = <span class="cstat-no" title="statement not covered" >req.headers.authorization?.split(' ')[1];</span>
+<span class="cstat-no" title="statement not covered" >  if (!token) <span class="cstat-no" title="statement not covered" >return res.status(401).json({ error: 'No token' });</span></span>
+  
+<span class="cstat-no" title="statement not covered" >  try {</span>
+    const decoded = <span class="cstat-no" title="statement not covered" >jwt.verify(token, process.env.JWT_SECRET);</span>
+    
+<span class="cstat-no" title="statement not covered" >    if (decoded.role !== 'delivery') {</span>
+<span class="cstat-no" title="statement not covered" >      return res.status(401).json({ error: 'Invalid token' });</span>
+    }
+    
+<span class="cstat-no" title="statement not covered" >    await DeliveryBoy.findByIdAndUpdate(decoded.id, { pushToken: null });</span>
+<span class="cstat-no" title="statement not covered" >    logger.info(`📱 Push token cleared for delivery partner ${decoded.id}`);</span>
+    
+<span class="cstat-no" title="statement not covered" >    res.json({ message: 'Push token cleared' });</span>
+  } catch (error) {
+<span class="cstat-no" title="statement not covered" >    logger.error('Clear push token error:', error);</span>
+<span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
+  }
+});
+&nbsp;
 // Reset badge count (Delivery boy)
 <span class="cstat-no" title="statement not covered" >router.post('/reset-badge', <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
   const token = <span class="cstat-no" title="statement not covered" >req.headers.authorization?.split(' ')[1];</span>
@@ -4354,7 +4420,7 @@ const sendPasswordEmail = <span class="cstat-no" title="statement not covered" >
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-07T11:14:57.045Z
+                at 2026-02-10T09:54:04.685Z
             </div>
         <script src="../prettify.js"></script>
         <script>
