@@ -186,6 +186,51 @@ const catalogService = {
     };
   },
 
+  /**
+   * Build product sections for cart items
+   * Groups cart items by category and maps to catalog retailer IDs
+   */
+  async buildCartSections(cartItems) {
+    if (!this.isEnabled()) return null;
+
+    const map = await this.getCatalogMap();
+    if (map.size === 0) return null;
+
+    // Filter cart items whose menuItem has a catalog mapping
+    const mappedItems = cartItems.filter(item =>
+      item.menuItem && map.has(item.menuItem._id.toString())
+    );
+
+    if (mappedItems.length === 0) return null;
+
+    // Group by category
+    const categoryMap = new Map();
+    for (const cartItem of mappedItems) {
+      const mi = cartItem.menuItem;
+      const categories = Array.isArray(mi.category) ? mi.category : [mi.category];
+      const cat = categories[0] || 'Cart Items';
+      if (!categoryMap.has(cat)) {
+        categoryMap.set(cat, []);
+      }
+      categoryMap.get(cat).push(map.get(mi._id.toString()));
+    }
+
+    // Build sections (max 10 sections, max 30 products per section for WhatsApp API)
+    const sections = [];
+    for (const [category, retailerIds] of categoryMap) {
+      if (sections.length >= 10) break;
+      sections.push({
+        title: category.substring(0, 24),
+        productRetailerIds: retailerIds.slice(0, 30)
+      });
+    }
+
+    return {
+      sections,
+      totalMapped: mappedItems.length
+    };
+  },
+
   // ========== ADMIN CRUD OPERATIONS ==========
 
   /**
