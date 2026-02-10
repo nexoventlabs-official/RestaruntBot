@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/3318</span>
+                <span class='fraction'>0/3321</span>
             </div>
         
             
@@ -39,14 +39,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/357</span>
+                <span class='fraction'>0/358</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/3039</span>
+                <span class='fraction'>0/3042</span>
             </div>
         
             
@@ -7868,7 +7868,21 @@
 <a name='L7803'></a><a href='#L7803'>7803</a>
 <a name='L7804'></a><a href='#L7804'>7804</a>
 <a name='L7805'></a><a href='#L7805'>7805</a>
-<a name='L7806'></a><a href='#L7806'>7806</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L7806'></a><a href='#L7806'>7806</a>
+<a name='L7807'></a><a href='#L7807'>7807</a>
+<a name='L7808'></a><a href='#L7808'>7808</a>
+<a name='L7809'></a><a href='#L7809'>7809</a>
+<a name='L7810'></a><a href='#L7810'>7810</a>
+<a name='L7811'></a><a href='#L7811'>7811</a>
+<a name='L7812'></a><a href='#L7812'>7812</a>
+<a name='L7813'></a><a href='#L7813'>7813</a>
+<a name='L7814'></a><a href='#L7814'>7814</a>
+<a name='L7815'></a><a href='#L7815'>7815</a>
+<a name='L7816'></a><a href='#L7816'>7816</a>
+<a name='L7817'></a><a href='#L7817'>7817</a>
+<a name='L7818'></a><a href='#L7818'>7818</a>
+<a name='L7819'></a><a href='#L7819'>7819</a>
+<a name='L7820'></a><a href='#L7820'>7820</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -14720,6 +14734,12 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -14734,12 +14754,20 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -22503,29 +22531,35 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
 <span class="cstat-no" title="statement not covered" >      return;</span>
     }
 &nbsp;
-    // Send each cart item as an individual product card (image, name, price)
+    // Show cart items in WhatsApp Catalog format (product_list)
     let catalogSent = <span class="cstat-no" title="statement not covered" >false;</span>
 <span class="cstat-no" title="statement not covered" >    try {</span>
 <span class="cstat-no" title="statement not covered" >      if (catalogService.isEnabled()) {</span>
-        const catalogId = <span class="cstat-no" title="statement not covered" >catalogService.getCatalogId();</span>
-        const map = <span class="cstat-no" title="statement not covered" >await catalogService.getCatalogMap();</span>
-<span class="cstat-no" title="statement not covered" >        if (map.size &gt; 0 &amp;&amp; catalogId) {</span>
-          const validCartItems = <span class="cstat-no" title="statement not covered" >freshCustomer.cart.filter(<span class="fstat-no" title="function not covered" >it</span>em =&gt; <span class="cstat-no" title="statement not covered" >item.menuItem)</span>;</span>
-          let sentCount = <span class="cstat-no" title="statement not covered" >0;</span>
-<span class="cstat-no" title="statement not covered" >          for (const cartItem of validCartItems) {</span>
-            const retailerId = <span class="cstat-no" title="statement not covered" >map.get(cartItem.menuItem._id.toString());</span>
-<span class="cstat-no" title="statement not covered" >            if (retailerId) {</span>
-<span class="cstat-no" title="statement not covered" >              await whatsapp.sendProduct(</span>
-                phone,
-                catalogId,
-                retailerId,
-                `Qty: ${cartItem.quantity}`,
-                ''
-              );
-<span class="cstat-no" title="statement not covered" >              sentCount++;</span>
-            }
+        const validCartItems = <span class="cstat-no" title="statement not covered" >freshCustomer.cart.filter(<span class="fstat-no" title="function not covered" >it</span>em =&gt; <span class="cstat-no" title="statement not covered" >item.menuItem)</span>;</span>
+        const cartSections = <span class="cstat-no" title="statement not covered" >await catalogService.buildCartSections(validCartItems);</span>
+<span class="cstat-no" title="statement not covered" >        if (cartSections) {</span>
+          const catalogId = <span class="cstat-no" title="statement not covered" >catalogService.getCatalogId();</span>
+<span class="cstat-no" title="statement not covered" >          if (validItems &gt; 30) {</span>
+            const map = <span class="cstat-no" title="statement not covered" >await catalogService.getCatalogMap();</span>
+            const firstMapped = <span class="cstat-no" title="statement not covered" >validCartItems.find(<span class="fstat-no" title="function not covered" >it</span>em =&gt; <span class="cstat-no" title="statement not covered" >map.has(item.menuItem._id.toString()))</span>;</span>
+            const thumbnailId = <span class="cstat-no" title="statement not covered" >firstMapped ? map.get(firstMapped.menuItem._id.toString()) : '';</span>
+<span class="cstat-no" title="statement not covered" >            await whatsapp.sendCatalogMessage(</span>
+              phone,
+              `🛒 *Your Cart — ${validItems} items*\n\nTap "View catalog" to see your items with images &amp; prices`,
+              'Perivi Hotel',
+              thumbnailId
+            );
+          } else {
+<span class="cstat-no" title="statement not covered" >            await whatsapp.sendProductList(</span>
+              phone,
+              catalogId,
+              '🛒 Your Cart',
+              `${validItems} items in your cart\nTap to view details`,
+              cartSections.sections,
+              'Perivi Hotel'
+            );
           }
-<span class="cstat-no" title="statement not covered" >          if (sentCount &gt; 0) <span class="cstat-no" title="statement not covered" >catalogSent = true;</span></span>
+<span class="cstat-no" title="statement not covered" >          catalogSent = true;</span>
         }
       }
     } catch (catalogErr) {
@@ -22543,12 +22577,20 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
     
 <span class="cstat-no" title="statement not covered" >    cartMsg += `*Total: ₹${total}*`;</span>
 &nbsp;
-    // Send summary with totals + action buttons
-<span class="cstat-no" title="statement not covered" >    await whatsapp.sendButtons(phone, cartMsg, [</span>
-      { id: 'review_pay', text: 'Review &amp; Order' },
-      { id: 'add_more', text: 'Add More' },
-      { id: 'clear_cart', text: 'Clear Cart' }
-    ]);
+<span class="cstat-no" title="statement not covered" >    if (catalogSent) {</span>
+<span class="cstat-no" title="statement not covered" >      await whatsapp.sendButtons(phone, cartMsg, [</span>
+        { id: 'review_pay', text: 'Review &amp; Order' },
+        { id: 'add_more', text: 'Add More' },
+        { id: 'clear_cart', text: 'Clear Cart' }
+      ]);
+    } else {
+      const viewCartImageUrl = <span class="cstat-no" title="statement not covered" >await chatbotImagesService.getImageUrl('view_cart');</span>
+<span class="cstat-no" title="statement not covered" >      await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [</span>
+        { id: 'review_pay', text: 'Review &amp; Order' },
+        { id: 'add_more', text: 'Add More' },
+        { id: 'clear_cart', text: 'Clear Cart' }
+      ]);
+    }
   },
 &nbsp;
 <span class="fstat-no" title="function not covered" >  as</span>ync processCheckout(phone, customer, state) {
@@ -23485,7 +23527,7 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-10T12:28:25.268Z
+                at 2026-02-10T12:37:27.433Z
             </div>
         <script src="../prettify.js"></script>
         <script>

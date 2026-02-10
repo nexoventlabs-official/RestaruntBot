@@ -188,7 +188,7 @@ const catalogService = {
 
   /**
    * Build product sections for cart items
-   * Groups cart items by category and maps to catalog retailer IDs
+   * Puts all cart items into a single section for clean display
    */
   async buildCartSections(cartItems) {
     if (!this.isEnabled()) return null;
@@ -203,30 +203,14 @@ const catalogService = {
 
     if (mappedItems.length === 0) return null;
 
-    // Group by category
-    const categoryMap = new Map();
-    for (const cartItem of mappedItems) {
-      const mi = cartItem.menuItem;
-      const categories = Array.isArray(mi.category) ? mi.category : [mi.category];
-      const cat = categories[0] || 'Cart Items';
-      if (!categoryMap.has(cat)) {
-        categoryMap.set(cat, []);
-      }
-      categoryMap.get(cat).push(map.get(mi._id.toString()));
-    }
-
-    // Build sections (max 10 sections, max 30 products per section for WhatsApp API)
-    const sections = [];
-    for (const [category, retailerIds] of categoryMap) {
-      if (sections.length >= 10) break;
-      sections.push({
-        title: category.substring(0, 24),
-        productRetailerIds: retailerIds.slice(0, 30)
-      });
-    }
+    // Put all cart items in a single section (avoids multi-section rendering issues)
+    const retailerIds = mappedItems.map(item => map.get(item.menuItem._id.toString()));
 
     return {
-      sections,
+      sections: [{
+        title: 'Your Items',
+        productRetailerIds: retailerIds.slice(0, 30)
+      }],
       totalMapped: mappedItems.length
     };
   },
