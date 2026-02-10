@@ -142,19 +142,26 @@ const catalogService = {
       categoryMap.get(cat).push(map.get(item._id.toString()));
     }
 
-    // Build sections (max 10 sections, max 30 products per section for WhatsApp API)
+    // Build sections (max 10 sections, max 30 products TOTAL for WhatsApp product_list API)
     const sections = [];
+    let totalProducts = 0;
+    const MAX_TOTAL_PRODUCTS = 30;
     for (const [category, retailerIds] of categoryMap) {
       if (sections.length >= 10) break;
+      const remaining = MAX_TOTAL_PRODUCTS - totalProducts;
+      if (remaining <= 0) break;
+      const slicedIds = retailerIds.slice(0, remaining);
       sections.push({
         title: category.substring(0, 24),
-        productRetailerIds: retailerIds.slice(0, 30)
+        productRetailerIds: slicedIds
       });
+      totalProducts += slicedIds.length;
     }
 
     return {
       sections,
-      totalMapped: mappedItems.length
+      totalMapped: mappedItems.length,
+      totalInSections: totalProducts
     };
   },
 

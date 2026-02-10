@@ -5518,27 +5518,47 @@ const chatbot = {
       return;
     }
 
-    // ===== TRY NATIVE CATALOG product_list WITH CATEGORY SECTIONS =====
-    // Shows all items grouped by category as native catalog cards with images/prices
+    // ===== TRY NATIVE CATALOG =====
+    // For >30 items: catalog_message opens WhatsApp's native catalog browser with category tabs
+    // For <=30 items: product_list shows items grouped by category sections
     try {
-      const catalogResult = await catalogService.buildProductSections(menuItems);
-      if (catalogResult && catalogResult.sections.length > 0) {
+      if (catalogService.isEnabled()) {
         const catalogId = catalogService.getCatalogId();
-        await whatsapp.sendProductList(
-          phone,
-          catalogId,
-          `📋 ${label}`,
-          `${menuItems.length} items in ${catalogResult.sections.length} categories\nTap any item to view details & add to cart 🛒`,
-          catalogResult.sections,
-          'Fresh & Delicious!'
-        );
-        // Send navigation buttons below the catalog
-        await whatsapp.sendButtons(phone, `Browse ${label} above 👆`, [
-          { id: 'view_cart', text: '🛒 My Cart' },
-          { id: 'cat_all', text: '📋 All Items' },
-          { id: 'home', text: '🏠 Main Menu' }
-        ]);
-        return;
+        const catalogResult = await catalogService.buildProductSections(menuItems);
+
+        if (catalogResult && catalogResult.totalMapped > 30) {
+          // Use catalog_message — opens native WhatsApp catalog with category browsing
+          const map = await catalogService.getCatalogMap();
+          const firstMapped = menuItems.find(item => map.has(item._id.toString()));
+          const thumbnailId = firstMapped ? map.get(firstMapped._id.toString()) : '';
+          await whatsapp.sendCatalogMessage(
+            phone,
+            `📋 *${label}*\n\n${menuItems.length} items in ${categories.length} categories\nBrowse by category & add to cart! 🛒`,
+            'Fresh & Delicious!',
+            thumbnailId
+          );
+          await whatsapp.sendButtons(phone, `Browse our catalog above 👆`, [
+            { id: 'view_cart', text: '🛒 My Cart' },
+            { id: 'home', text: '🏠 Main Menu' }
+          ]);
+          return;
+        } else if (catalogResult && catalogResult.sections.length > 0) {
+          // Use product_list with category sections (<=30 items fits)
+          await whatsapp.sendProductList(
+            phone,
+            catalogId,
+            `📋 ${label}`,
+            `${catalogResult.totalInSections} items in ${catalogResult.sections.length} categories\nTap any item to view details & add to cart 🛒`,
+            catalogResult.sections,
+            'Fresh & Delicious!'
+          );
+          await whatsapp.sendButtons(phone, `Browse ${label} above 👆`, [
+            { id: 'view_cart', text: '🛒 My Cart' },
+            { id: 'cat_all', text: '📋 All Items' },
+            { id: 'home', text: '🏠 Main Menu' }
+          ]);
+          return;
+        }
       }
     } catch (catalogErr) {
       logger.info('Catalog fallback for categories', { label, error: catalogErr.message });
@@ -6003,25 +6023,44 @@ const chatbot = {
       return;
     }
 
-    // ===== TRY NATIVE CATALOG product_list WITH CATEGORY SECTIONS =====
+    // ===== TRY NATIVE CATALOG =====
     try {
-      const catalogResult = await catalogService.buildProductSections(menuItems);
-      if (catalogResult && catalogResult.sections.length > 0) {
+      if (catalogService.isEnabled()) {
         const catalogId = catalogService.getCatalogId();
-        await whatsapp.sendProductList(
-          phone,
-          catalogId,
-          `🛒 ${label}`,
-          `${menuItems.length} items in ${catalogResult.sections.length} categories\nTap any item to add to cart 🛒`,
-          catalogResult.sections,
-          'Fresh & Delicious!'
-        );
-        await whatsapp.sendButtons(phone, `Browse items above & add to cart 👆`, [
-          { id: 'view_cart', text: '🛒 My Cart' },
-          { id: 'cat_all', text: '📋 All Items' },
-          { id: 'home', text: '🏠 Main Menu' }
-        ]);
-        return;
+        const catalogResult = await catalogService.buildProductSections(menuItems);
+
+        if (catalogResult && catalogResult.totalMapped > 30) {
+          // Use catalog_message — opens native WhatsApp catalog with category browsing
+          const map = await catalogService.getCatalogMap();
+          const firstMapped = menuItems.find(item => map.has(item._id.toString()));
+          const thumbnailId = firstMapped ? map.get(firstMapped._id.toString()) : '';
+          await whatsapp.sendCatalogMessage(
+            phone,
+            `🛒 *${label}*\n\n${menuItems.length} items in ${categories.length} categories\nBrowse by category & add to cart! 🛒`,
+            'Fresh & Delicious!',
+            thumbnailId
+          );
+          await whatsapp.sendButtons(phone, `Browse our catalog above & add to cart 👆`, [
+            { id: 'view_cart', text: '🛒 My Cart' },
+            { id: 'home', text: '🏠 Main Menu' }
+          ]);
+          return;
+        } else if (catalogResult && catalogResult.sections.length > 0) {
+          await whatsapp.sendProductList(
+            phone,
+            catalogId,
+            `🛒 ${label}`,
+            `${catalogResult.totalInSections} items in ${catalogResult.sections.length} categories\nTap any item to add to cart 🛒`,
+            catalogResult.sections,
+            'Fresh & Delicious!'
+          );
+          await whatsapp.sendButtons(phone, `Browse items above & add to cart 👆`, [
+            { id: 'view_cart', text: '🛒 My Cart' },
+            { id: 'cat_all', text: '📋 All Items' },
+            { id: 'home', text: '🏠 Main Menu' }
+          ]);
+          return;
+        }
       }
     } catch (catalogErr) {
       logger.info('Catalog fallback for order menu', { label, error: catalogErr.message });
