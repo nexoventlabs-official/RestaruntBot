@@ -5519,40 +5519,40 @@ const chatbot = {
     }
 
     // ===== TRY NATIVE CATALOG =====
-    // Send one product_list per category — each shows category name + native catalog cards
+    // For >30 items: catalog_message opens WhatsApp's native catalog browser with category tabs
+    // For <=30 items: product_list shows items grouped by category sections
     try {
       if (catalogService.isEnabled()) {
         const catalogId = catalogService.getCatalogId();
-
-        // Check if we have enough mapped items
         const catalogResult = await catalogService.buildProductSections(menuItems);
-        if (catalogResult && catalogResult.sections.length > 0) {
-          // If total items fit in one product_list (<=30), send single message with all sections
-          if (catalogResult.totalMapped <= 30) {
-            await whatsapp.sendProductList(
-              phone,
-              catalogId,
-              `📋 ${label}`,
-              `${catalogResult.totalInSections} items in ${catalogResult.sections.length} categories\nTap any item to view details & add to cart 🛒`,
-              catalogResult.sections,
-              'Fresh & Delicious!'
-            );
-          } else {
-            // >30 items: send separate product_list per category
-            for (const cat of categories) {
-              const catResult = await catalogService.buildCategorySections(menuItems, cat);
-              if (catResult && catResult.sections.length > 0) {
-                await whatsapp.sendProductList(
-                  phone,
-                  catalogId,
-                  `📋 ${cat}`,
-                  `${catResult.totalMapped} items \u2022 Tap to view & add to cart`,
-                  catResult.sections,
-                  label
-                );
-              }
-            }
-          }
+
+        if (catalogResult && catalogResult.totalMapped > 30) {
+          // Use catalog_message — opens native WhatsApp catalog with category browsing
+          const map = await catalogService.getCatalogMap();
+          const firstMapped = menuItems.find(item => map.has(item._id.toString()));
+          const thumbnailId = firstMapped ? map.get(firstMapped._id.toString()) : '';
+          await whatsapp.sendCatalogMessage(
+            phone,
+            `📋 *${label}*\n\n${menuItems.length} items in ${categories.length} categories\nBrowse by category & add to cart! 🛒`,
+            'Fresh & Delicious!',
+            thumbnailId
+          );
+          return;
+        } else if (catalogResult && catalogResult.sections.length > 0) {
+          // Use product_list with category sections (<=30 items fits)
+          await whatsapp.sendProductList(
+            phone,
+            catalogId,
+            `📋 ${label}`,
+            `${catalogResult.totalInSections} items in ${catalogResult.sections.length} categories\nTap any item to view details & add to cart 🛒`,
+            catalogResult.sections,
+            'Fresh & Delicious!'
+          );
+          await whatsapp.sendButtons(phone, `Browse ${label} above 👆`, [
+            { id: 'view_cart', text: '🛒 My Cart' },
+            { id: 'cat_all', text: '📋 All Items' },
+            { id: 'home', text: '🏠 Main Menu' }
+          ]);
           return;
         }
       }
@@ -6019,34 +6019,34 @@ const chatbot = {
     try {
       if (catalogService.isEnabled()) {
         const catalogId = catalogService.getCatalogId();
-
         const catalogResult = await catalogService.buildProductSections(menuItems);
-        if (catalogResult && catalogResult.sections.length > 0) {
-          if (catalogResult.totalMapped <= 30) {
-            await whatsapp.sendProductList(
-              phone,
-              catalogId,
-              `🛒 ${label}`,
-              `${catalogResult.totalInSections} items in ${catalogResult.sections.length} categories\nTap any item to add to cart 🛒`,
-              catalogResult.sections,
-              'Fresh & Delicious!'
-            );
-          } else {
-            // >30 items: send separate product_list per category
-            for (const cat of categories) {
-              const catResult = await catalogService.buildCategorySections(menuItems, cat);
-              if (catResult && catResult.sections.length > 0) {
-                await whatsapp.sendProductList(
-                  phone,
-                  catalogId,
-                  `🛒 ${cat}`,
-                  `${catResult.totalMapped} items \u2022 Tap to view & add to cart`,
-                  catResult.sections,
-                  label
-                );
-              }
-            }
-          }
+
+        if (catalogResult && catalogResult.totalMapped > 30) {
+          // Use catalog_message — opens native WhatsApp catalog with category browsing
+          const map = await catalogService.getCatalogMap();
+          const firstMapped = menuItems.find(item => map.has(item._id.toString()));
+          const thumbnailId = firstMapped ? map.get(firstMapped._id.toString()) : '';
+          await whatsapp.sendCatalogMessage(
+            phone,
+            `🛒 *${label}*\n\n${menuItems.length} items in ${categories.length} categories\nBrowse by category & add to cart! 🛒`,
+            'Fresh & Delicious!',
+            thumbnailId
+          );
+          return;
+        } else if (catalogResult && catalogResult.sections.length > 0) {
+          await whatsapp.sendProductList(
+            phone,
+            catalogId,
+            `🛒 ${label}`,
+            `${catalogResult.totalInSections} items in ${catalogResult.sections.length} categories\nTap any item to add to cart 🛒`,
+            catalogResult.sections,
+            'Fresh & Delicious!'
+          );
+          await whatsapp.sendButtons(phone, `Browse items above & add to cart 👆`, [
+            { id: 'view_cart', text: '🛒 My Cart' },
+            { id: 'cat_all', text: '📋 All Items' },
+            { id: 'home', text: '🏠 Main Menu' }
+          ]);
           return;
         }
       }
