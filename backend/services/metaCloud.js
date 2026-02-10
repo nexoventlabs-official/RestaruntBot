@@ -1132,45 +1132,10 @@ const metaCloud = {
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
 
-      logger.info('Meta batchCreateOrUpdateProducts /batch success', {
+      logger.info('Meta batchCreateOrUpdateProducts success', {
         count: products.length,
         handles: batchResponse.data?.handles
       });
-
-      // --- Commerce API /items_batch (for Commerce Manager visibility) ---
-      try {
-        const itemsBatchRequests = products.map(product => {
-          const priceStr = `${product.price.toFixed(2)} ${product.currency || 'INR'}`;
-          const link = product.url || process.env.WEBSITE_URL || process.env.BACKEND_URL || 'https://wa.me/' + (process.env.META_PHONE_NUMBER_ID || '');
-          const data = {
-            id: product.retailerId,
-            title: product.name,
-            description: product.description || product.name,
-            availability: product.availability || 'in stock',
-            condition: 'new',
-            price: priceStr,
-            link,
-            brand: product.brand || 'Perivi Hotel',
-            google_product_category: 'Food, Beverages & Tobacco > Food Items',
-          };
-          if (product.imageUrl) {
-            data.image_link = product.imageUrl;
-          }
-          return { method: 'UPDATE', data };
-        });
-
-        await metaApi.post(
-          `https://graph.facebook.com/v24.0/${catalogId}/items_batch`,
-          { item_type: 'PRODUCT_ITEM', requests: itemsBatchRequests },
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        logger.info('Meta batchCreateOrUpdateProducts /items_batch success', { count: products.length });
-      } catch (itemsErr) {
-        // Non-fatal: Commerce Manager display may lag but WhatsApp will still work
-        logger.warn('Meta /items_batch secondary push failed (non-fatal)', {
-          error: itemsErr.response?.data?.error?.message || itemsErr.message
-        });
-      }
 
       return batchResponse.data;
     } catch (error) {
@@ -1212,22 +1177,6 @@ const metaCloud = {
         batchPayload,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
-
-      // Also delete from Commerce API /items_batch
-      try {
-        await metaApi.post(
-          `https://graph.facebook.com/v24.0/${catalogId}/items_batch`,
-          {
-            item_type: 'PRODUCT_ITEM',
-            requests: [{ method: 'DELETE', data: { id: retailerId } }]
-          },
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-      } catch (itemsErr) {
-        logger.warn('Meta /items_batch delete failed (non-fatal)', {
-          error: itemsErr.response?.data?.error?.message || itemsErr.message
-        });
-      }
 
       logger.info('Meta deleteCatalogProduct success', { retailerId });
       return response.data;
