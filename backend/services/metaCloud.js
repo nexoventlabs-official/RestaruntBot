@@ -1099,22 +1099,24 @@ const metaCloud = {
       logger.info('Meta batchCreateOrUpdateProducts', { catalogId, count: products.length });
 
       const requests = products.map(product => {
-        // Price must be in smallest currency unit (paise for INR) followed by currency code
-        // e.g. ₹100.50 → "10050 INR" (10050 paise)
-        const priceInPaise = Math.round(product.price * 100);
-        const priceStr = `${priceInPaise} ${product.currency || 'INR'}`;
+        // Price format: "79.00 INR" (decimal with currency code)
+        const priceStr = `${product.price.toFixed(2)} ${product.currency || 'INR'}`;
 
+        // Meta catalog required fields use specific names:
+        // title (not name), image_link (not image_url), link (required)
         const data = {
-          name: product.name,
+          title: product.name,
           description: product.description || product.name,
           availability: product.availability || 'in stock',
+          condition: 'new',
           price: priceStr,
-          currency: product.currency || 'INR',
-          category: product.category || 'Food & Beverage',
+          link: product.url || process.env.WEBSITE_URL || process.env.BACKEND_URL || 'https://wa.me/' + (process.env.META_PHONE_NUMBER_ID || ''),
+          brand: product.brand || 'Perivi Hotel',
+          google_product_category: 'Food, Beverages & Tobacco > Food Items',
         };
 
         if (product.imageUrl) {
-          data.image_url = product.imageUrl;
+          data.image_link = product.imageUrl;
         }
 
         return {
