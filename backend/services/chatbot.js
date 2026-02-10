@@ -6828,41 +6828,6 @@ const chatbot = {
       return;
     }
 
-    // Show cart items in WhatsApp Catalog format (product_list)
-    let catalogSent = false;
-    try {
-      if (catalogService.isEnabled()) {
-        const validCartItems = freshCustomer.cart.filter(item => item.menuItem);
-        const cartSections = await catalogService.buildCartSections(validCartItems);
-        if (cartSections) {
-          const catalogId = catalogService.getCatalogId();
-          if (validItems > 30) {
-            const map = await catalogService.getCatalogMap();
-            const firstMapped = validCartItems.find(item => map.has(item.menuItem._id.toString()));
-            const thumbnailId = firstMapped ? map.get(firstMapped.menuItem._id.toString()) : '';
-            await whatsapp.sendCatalogMessage(
-              phone,
-              `🛒 *Your Cart — ${validItems} items*\n\nTap "View catalog" to see your items with images & prices`,
-              'Perivi Hotel',
-              thumbnailId
-            );
-          } else {
-            await whatsapp.sendProductList(
-              phone,
-              catalogId,
-              '🛒 Your Cart',
-              `${validItems} items in your cart\nTap to view details`,
-              cartSections.sections,
-              'Perivi Hotel'
-            );
-          }
-          catalogSent = true;
-        }
-      }
-    } catch (catalogErr) {
-      logger.info('Catalog fallback for cart', { error: catalogErr.message });
-    }
-    
     cartMsg += `━━━━━━━━━━━━━━━\n`;
     
     // Show offer applied message if discounts were applied
@@ -6874,20 +6839,12 @@ const chatbot = {
     
     cartMsg += `*Total: ₹${total}*`;
 
-    if (catalogSent) {
-      await whatsapp.sendButtons(phone, cartMsg, [
-        { id: 'review_pay', text: 'Review & Order' },
-        { id: 'add_more', text: 'Add More' },
-        { id: 'clear_cart', text: 'Clear Cart' }
-      ]);
-    } else {
-      const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
-      await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [
-        { id: 'review_pay', text: 'Review & Order' },
-        { id: 'add_more', text: 'Add More' },
-        { id: 'clear_cart', text: 'Clear Cart' }
-      ]);
-    }
+    const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
+    await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [
+      { id: 'review_pay', text: 'Place Order ✅' },
+      { id: 'add_more', text: 'Add More' },
+      { id: 'clear_cart', text: 'Clear Cart' }
+    ]);
   },
 
   async processCheckout(phone, customer, state) {
