@@ -160,6 +160,36 @@ router.delete('/push-token', async (req, res) => {
   }
 });
 
+// Clear push token by value — fallback for logout when JWT is expired.
+// This does NOT require authentication. It simply removes the given
+// push token from any User or DeliveryBoy document that has it.
+// Safe because push tokens are opaque device identifiers with no
+// security value — clearing them only stops notifications.
+const DeliveryBoy = require('../models/DeliveryBoy');
+
+router.post('/clear-push-token', strictRateLimiter, async (req, res) => {
+  try {
+    const { pushToken } = req.body;
+    if (!pushToken || typeof pushToken !== 'string' || pushToken.length < 20) {
+      return res.status(400).json({ error: 'Valid pushToken is required' });
+    }
+
+    // Clear from both collections — one will match, the other is a no-op
+    const [adminResult, deliveryResult] = await Promise.all([
+      User.updateMany({ pushToken }, { pushToken: null }),
+      DeliveryBoy.updateMany({ pushToken }, { pushToken: null }),
+    ]);
+
+    const cleared = (adminResult.modifiedCount || 0) + (deliveryResult.modifiedCount || 0);
+    logger.info(`📱 Push token cleared via fallback endpoint (${cleared} doc(s) updated)`);
+
+    res.json({ message: 'Push token cleared', cleared });
+  } catch (error) {
+    logger.error('Clear push token (fallback) error:', error);
+    res.status(500).json({ error: 'Failed to clear push token' });
+  }
+});
+
 // Reset badge count for admin
 router.post('/reset-badge', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];

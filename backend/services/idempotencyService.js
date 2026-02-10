@@ -83,7 +83,7 @@ function checkOutboundMessage(phone, messageType, content) {
   const key = generateKey('outbound', phone, messageType, content);
   return {
     isDuplicate: isDuplicate(key),
-    mark: () => markProcessed(key, 2 * 60 * 1000) // 2 min TTL for messages
+    mark: () => markProcessed(key, 1 * 60 * 1000) // 1 min TTL for messages
   };
 }
 
@@ -107,7 +107,7 @@ function checkOrderOperation(customerId, operation, orderData) {
   const key = generateKey('order', customerId, operation, orderData);
   return {
     isDuplicate: isDuplicate(key),
-    mark: () => markProcessed(key, 5 * 60 * 1000) // 5 min TTL for orders
+    mark: () => markProcessed(key, 1 * 60 * 1000) // 1 min TTL for orders
   };
 }
 

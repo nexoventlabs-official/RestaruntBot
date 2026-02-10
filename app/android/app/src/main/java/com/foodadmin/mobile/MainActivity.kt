@@ -24,6 +24,17 @@ class MainActivity : ReactActivity() {
   }
 
   /**
+   * Ensure that when the activity receives a new intent (e.g. from tapping a
+   * notification while the app is already running), getIntent() returns the
+   * latest intent with the notification data. Without this, Firebase's
+   * getInitialNotification() would return stale data.
+   */
+  override fun onNewIntent(intent: android.content.Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+  }
+
+  /**
    * Returns the name of the main component registered from JavaScript. This is used to schedule
    * rendering of the component.
    */

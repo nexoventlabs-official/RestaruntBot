@@ -74,6 +74,7 @@ try {
 if (Platform.OS === 'android') {
   try {
     const Notifications = require('expo-notifications');
+    const SecureStoreIdx = require('expo-secure-store');
 
     const channelDefaults = {
       importance: Notifications.AndroidImportance.MAX,
@@ -83,6 +84,23 @@ if (Platform.OS === 'android') {
       showBadge: true,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     };
+
+    // Version-gated channel migration: delete and recreate channels ONLY
+    // when the channel config version changes. This preserves user's custom
+    // notification preferences (mute, custom sound, vibration) between app
+    // starts, while still allowing us to fix channels when needed.
+    const CHANNEL_CONFIG_VERSION = '2'; // Bump to force channel recreation
+    const channelIds = ['default', 'new-orders', 'order-updates', 'orders', 'delivery'];
+
+    SecureStoreIdx.getItemAsync('notification_channel_version').then(async (storedVersion) => {
+      if (storedVersion !== CHANNEL_CONFIG_VERSION) {
+        for (const id of channelIds) {
+          try { await Notifications.deleteNotificationChannelAsync(id); } catch (_) {}
+        }
+        await SecureStoreIdx.setItemAsync('notification_channel_version', CHANNEL_CONFIG_VERSION);
+        console.log('📱 Notification channels migrated to version', CHANNEL_CONFIG_VERSION);
+      }
+    }).catch(() => {});
 
     Notifications.setNotificationChannelAsync('default', {
       name: 'Default Notifications',

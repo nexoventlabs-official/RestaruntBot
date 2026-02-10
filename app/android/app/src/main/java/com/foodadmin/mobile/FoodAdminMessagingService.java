@@ -8,6 +8,10 @@ import android.content.Intent;
 import android.os.Build;
 import android.util.Log;
 
+import android.media.AudioAttributes;
+import android.net.Uri;
+import android.provider.Settings;
+
 import androidx.core.app.NotificationCompat;
 
 import com.google.firebase.messaging.RemoteMessage;
@@ -114,7 +118,10 @@ public class FoodAdminMessagingService extends ReactNativeFirebaseMessagingServi
             if (intent == null) {
                 intent = new Intent();
             }
-            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            // Use NEW_TASK + SINGLE_TOP only. Do NOT use CLEAR_TOP — with singleTask
+            // launch mode it can cause the OS to destroy the task during cold start
+            // from killed state, resulting in the app opening and immediately closing.
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 
             // Pass notification data as extras so the app can read them on tap
             for (Map.Entry<String, String> entry : data.entrySet()) {
@@ -207,6 +214,17 @@ public class FoodAdminMessagingService extends ReactNativeFirebaseMessagingServi
         channel.enableVibration(true);
         channel.enableLights(true);
         channel.setShowBadge(true);
+
+        // Explicitly set the default notification sound — without this the
+        // channel is created silently and Android will NEVER let the JS side
+        // update it later (channel settings are immutable once created).
+        channel.setSound(
+                Settings.System.DEFAULT_NOTIFICATION_URI,
+                new AudioAttributes.Builder()
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .build()
+        );
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             channel.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
         }

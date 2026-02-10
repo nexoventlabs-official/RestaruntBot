@@ -61,6 +61,20 @@ const initializeNotificationChannels = async () => {
         lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       };
 
+      // Version-gated channel migration: delete and recreate channels ONLY
+      // when the channel config version changes. This preserves user's custom
+      // notification preferences between app starts.
+      const CHANNEL_CONFIG_VERSION = '2'; // Bump to force channel recreation
+      const channelIds = ['default', 'new-orders', 'order-updates', 'orders', 'delivery'];
+      const storedVersion = await SecureStore.getItemAsync('notification_channel_version').catch(() => null);
+      if (storedVersion !== CHANNEL_CONFIG_VERSION) {
+        for (const id of channelIds) {
+          try { await Notifications.deleteNotificationChannelAsync(id); } catch (_) {}
+        }
+        await SecureStore.setItemAsync('notification_channel_version', CHANNEL_CONFIG_VERSION).catch(() => {});
+        console.log('📱 Notification channels migrated to version', CHANNEL_CONFIG_VERSION);
+      }
+
       // Default channel
       await Notifications.setNotificationChannelAsync('default', {
         name: 'Default',
@@ -356,21 +370,50 @@ export const pushNotifications = {
    * Call this on logout to stop receiving push notifications.
    */
   async unregisterPushToken() {
+    const savedRole = await SecureStore.getItemAsync(TOKEN_ROLE_KEY).catch(() => null);
+    const cachedToken = await SecureStore.getItemAsync(PUSH_TOKEN_KEY).catch(() => null);
+
+    // 1. Try the authenticated DELETE endpoint first (works when JWT is valid)
+    //    If that fails (e.g. expired JWT on force-logout), fall back to the
+    //    token-based POST /logout endpoint which only needs the push token.
     try {
-      const savedRole = await SecureStore.getItemAsync(TOKEN_ROLE_KEY);
-      
-      // Tell the backend to clear the push token
       if (savedRole === 'admin') {
         await api.delete('/auth/push-token');
-      } else {
+      } else if (savedRole === 'delivery') {
         await api.delete('/delivery/push-token');
+      } else {
+        // Role unknown — try both, ignore failures
+        await api.delete('/auth/push-token').catch(() => {});
+        await api.delete('/delivery/push-token').catch(() => {});
       }
       console.log(`📱 Push token unregistered from server (${savedRole})`);
     } catch (error) {
-      console.warn('⚠️ Failed to unregister push token from server:', error.message);
+      console.warn('⚠️ Authenticated push-token DELETE failed, trying fallback:', error.message);
+      // Fallback: send the raw push token to a dedicated logout endpoint
+      // that clears it without requiring a valid JWT
+      if (cachedToken) {
+        try {
+          await api.post('/auth/clear-push-token', { pushToken: cachedToken });
+          console.log('📱 Push token cleared via fallback endpoint');
+        } catch (fallbackError) {
+          console.warn('⚠️ Fallback push-token clear also failed:', fallbackError.message);
+        }
+      }
     }
-    
-    // Clear local cached token and role
+
+    // 2. Delete the FCM registration on the device itself so Firebase
+    //    stops delivering messages to this device entirely.
+    try {
+      const messaging = getFirebaseMessaging();
+      if (messaging) {
+        await messaging().deleteToken();
+        console.log('📱 FCM device token deleted');
+      }
+    } catch (e) {
+      console.warn('⚠️ Failed to delete FCM token:', e.message);
+    }
+
+    // 3. Clear local cached token and role
     try {
       await SecureStore.deleteItemAsync(PUSH_TOKEN_KEY);
       await SecureStore.deleteItemAsync(TOKEN_ROLE_KEY);
@@ -379,7 +422,7 @@ export const pushNotifications = {
       console.warn('⚠️ Failed to clear cached push token:', error.message);
     }
     
-    // Clear all displayed notifications
+    // 4. Clear all displayed notifications
     await this.clearAllNotifications();
   },
 
@@ -527,6 +570,10 @@ export const pushNotifications = {
         title,
         body,
         data,
+        // Use 'default' string — expo-notifications recognises this as
+        // the system default notification sound on both platforms.
+        // Boolean `true` may not be recognised and can result in silent
+        // notifications on some Android versions.
         sound: 'default',
         priority: Notifications.AndroidNotificationPriority.MAX,
         ...(Platform.OS === 'android' ? { channelId: channel } : {}),
