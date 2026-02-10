@@ -215,11 +215,120 @@ router.post('/meta', webhookRateLimiter, async (req, res) => {
           if (change.field === 'messages') {
             const value = change.value;
 
-            // Process status updates (delivery receipts, read receipts)
+            // Process status updates (delivery receipts, read receipts, PAYMENT statuses)
             // Updates OutboundMessage records with deliveredAt/readAt/failedAt timestamps
             if (value.statuses) {
               for (const status of value.statuses) {
                 try {
+                  // ===== HANDLE WHATSAPP NATIVE PAYMENT STATUS =====
+                  if (status.type === 'payment' || status.payment) {
+                    const paymentInfo = status.payment || {};
+                    const txn = paymentInfo.transaction || {};
+                    const referenceId = paymentInfo.reference_id || txn.id;
+                    const paymentStatus = txn.status; // success, pending, failed, canceled
+                    const paymentMethod = txn.method || paymentInfo.payment_method;
+                    const amount = txn.amount;
+                    const recipientPhone = status.recipient_id;
+
+                    logger.info('💳 WhatsApp payment status received', {
+                      referenceId,
+                      paymentStatus,
+                      paymentMethod,
+                      amount,
+                      recipientPhone
+                    });
+
+                    try {
+                      const Order = require('../models/Order');
+                      const order = await Order.findOne({ orderId: referenceId });
+
+                      if (order) {
+                        if (paymentStatus === 'success' || paymentStatus === 'completed') {
+                          order.paymentStatus = 'paid';
+                          order.paymentMethod = 'whatsapp_upi';
+                          order.status = 'confirmed';
+                          order.trackingUpdates.push({
+                            status: 'confirmed',
+                            message: `Payment received via WhatsApp UPI${paymentMethod ? ' (' + paymentMethod + ')' : ''}`,
+                            timestamp: new Date()
+                          });
+                          await order.save();
+
+                          // Send order_status confirmation to customer
+                          const metaCloud = require('../services/metaCloud');
+                          await metaCloud.sendOrderStatusUpdate(
+                            recipientPhone,
+                            referenceId,
+                            'completed',
+                            `✅ Payment of ₹${order.totalAmount} received!\nOrder #${referenceId} is confirmed.\nWe're preparing your order! 🍳`
+                          );
+
+                          // Send push notification to admin
+                          try {
+                            const User = require('../models/User');
+                            const pushNotification = require('../services/pushNotification');
+                            const admins = await User.find({ pushToken: { $ne: null } });
+                            for (const admin of admins) {
+                              if (admin.pushToken) {
+                                await pushNotification.sendAdminNewOrderNotification(admin.pushToken, {
+                                  orderId: referenceId,
+                                  totalAmount: order.totalAmount,
+                                  customerName: order.customer?.name || 'Customer',
+                                  items: order.items
+                                });
+                              }
+                            }
+                          } catch (pushErr) {
+                            logger.error('Admin push error on payment', { error: pushErr.message });
+                          }
+
+                          // Sync to Google Sheets
+                          const googleSheets = require('../services/googleSheets');
+                          googleSheets.addOrder(order).catch(err => logger.error('GSheets sync error', { error: err.message }));
+                          googleSheets.syncTodayDailyReport().catch(err => logger.error('Daily report sync error', { error: err.message }));
+
+                          // Emit real-time events
+                          const dataEvents = require('../services/eventEmitter');
+                          dataEvents.emit('orders');
+                          dataEvents.emit('dashboard');
+
+                          logger.info('✅ WhatsApp payment confirmed, order updated', { orderId: referenceId });
+                        } else if (paymentStatus === 'failed' || paymentStatus === 'canceled') {
+                          order.paymentStatus = paymentStatus === 'canceled' ? 'cancelled' : 'failed';
+                          order.trackingUpdates.push({
+                            status: 'payment_failed',
+                            message: `Payment ${paymentStatus} via WhatsApp UPI`,
+                            timestamp: new Date()
+                          });
+                          await order.save();
+
+                          // Notify customer
+                          const chatbot = require('../services/chatbot');
+                          const whatsapp = require('../services/whatsapp');
+                          await whatsapp.sendButtons(recipientPhone,
+                            `❌ *Payment ${paymentStatus === 'canceled' ? 'Cancelled' : 'Failed'}*\n\nOrder #${referenceId}\n\nPlease try again or choose a different payment method.`,
+                            [
+                              { id: 'pay_upi', text: '🔄 Retry UPI' },
+                              { id: 'pay_cod', text: '💵 Pay COD' },
+                              { id: 'home', text: '🏠 Main Menu' }
+                            ]
+                          );
+
+                          logger.warn('❌ WhatsApp payment failed/canceled', { orderId: referenceId, paymentStatus });
+                        }
+                        // 'pending' — no action needed, wait for final status
+                      } else {
+                        logger.warn('Payment status for unknown order', { referenceId, paymentStatus });
+                      }
+                    } catch (paymentErr) {
+                      logger.error('Error processing payment status', {
+                        referenceId,
+                        error: paymentErr.message
+                      });
+                    }
+                    continue; // Skip normal status processing for payment statuses
+                  }
+
                   const OutboundMessage = require('../models/OutboundMessage');
                   const metaMessageId = status.id;
                   const statusValue = status.status; // sent, delivered, read, failed

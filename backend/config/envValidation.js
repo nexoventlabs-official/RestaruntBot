@@ -82,6 +82,14 @@ const envSchema = {
     error: 'RAZORPAY_KEY_SECRET appears invalid'
   },
   
+  // WhatsApp Native Payment Configuration
+  // The payment_configuration name from WhatsApp Manager → Payment Settings
+  WHATSAPP_PAYMENT_CONFIG: {
+    required: false,
+    validate: (value) => !value || value.length > 0,
+    error: 'WHATSAPP_PAYMENT_CONFIG cannot be empty if set'
+  },
+  
   // Cloudinary (for images)
   CLOUDINARY_CLOUD_NAME: {
     required: false,
@@ -263,7 +271,8 @@ function getEnvInfo() {
       appSecret: process.env.META_APP_SECRET ? 'configured' : 'missing'
     },
     payment: {
-      razorpay: process.env.RAZORPAY_KEY_ID ? 'configured' : 'not configured'
+      razorpay: process.env.RAZORPAY_KEY_ID ? 'configured' : 'not configured',
+      whatsappNativePayment: process.env.WHATSAPP_PAYMENT_CONFIG ? 'configured' : 'not configured'
     },
     services: {
       cloudinary: process.env.CLOUDINARY_CLOUD_NAME ? 'configured' : 'not configured',

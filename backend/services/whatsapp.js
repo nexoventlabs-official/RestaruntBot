@@ -226,6 +226,26 @@ const whatsapp = {
     );
   },
 
+  // ========== WHATSAPP NATIVE PAYMENT ==========
+  async sendOrderDetails(phone, referenceId, items, totalAmount, options = {}) {
+    return trackOutbound(phone, 'order_details', {
+      referenceId,
+      itemCount: items.length,
+      totalAmount
+    },
+      () => metaCloud.sendOrderDetails(phone, referenceId, items, totalAmount, options)
+    );
+  },
+
+  async sendOrderStatusUpdate(phone, referenceId, status, description = '') {
+    return trackOutbound(phone, 'order_status', {
+      referenceId,
+      status
+    },
+      () => metaCloud.sendOrderStatusUpdate(phone, referenceId, status, description)
+    );
+  },
+
   async sendProduct(phone, catalogId, retailerId, bodyText = '', footerText = '') {
     return trackOutbound(phone, 'product', {
       catalogId,

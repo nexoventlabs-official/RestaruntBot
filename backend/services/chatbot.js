@@ -7017,25 +7017,28 @@ const chatbot = {
     googleSheets.syncTodayDailyReport().catch(err => logger.error('Daily report sync error', { error: err.message }));
 
     // Send push notification to admin for new UPI order
-    try {
-      const User = require('../models/User');
-      const pushNotification = require('./pushNotification');
-      
-      const admins = await User.find({ pushToken: { $ne: null } });
-      for (const admin of admins) {
-        if (admin.pushToken) {
-          await pushNotification.sendAdminNewOrderNotification(admin.pushToken, {
-            orderId,
-            totalAmount: total,
-            customerName: freshCustomer.name || 'Customer',
-            items
-          });
+    // (For native WhatsApp payment, admin push is sent after payment confirmation in webhook)
+    const sendAdminPush = async () => {
+      try {
+        const User = require('../models/User');
+        const pushNotification = require('./pushNotification');
+        
+        const admins = await User.find({ pushToken: { $ne: null } });
+        for (const admin of admins) {
+          if (admin.pushToken) {
+            await pushNotification.sendAdminNewOrderNotification(admin.pushToken, {
+              orderId,
+              totalAmount: total,
+              customerName: freshCustomer.name || 'Customer',
+              items
+            });
+          }
         }
+        if (admins.length > 0) logger.info(`Admin push sent for UPI order ${orderId}`);
+      } catch (pushErr) {
+        logger.error('Admin push error', { error: pushErr.message });
       }
-      if (admins.length > 0) logger.info(`Admin push sent for UPI order ${orderId}`);
-    } catch (pushErr) {
-      logger.error('Admin push error', { error: pushErr.message });
-    }
+    };
 
     // Clear cart on the fresh customer and save
     freshCustomer.cart = [];
@@ -7048,6 +7051,53 @@ const chatbot = {
     customer.orderHistory = freshCustomer.orderHistory;
     
     state.pendingOrderId = orderId;
+
+    // ===== TRY WHATSAPP NATIVE PAYMENT (order_details) FIRST =====
+    const paymentConfig = process.env.WHATSAPP_PAYMENT_CONFIG || process.env.RAZORPAY_CONFIG_ID;
+    if (catalogService.isEnabled() && paymentConfig) {
+      try {
+        // Build items with retailer_id from catalog mappings
+        const menuItemIds = items.map(i => i.menuItem.toString());
+        const retailerMappings = await catalogService.getRetailerIds(menuItemIds);
+        const retailerMap = new Map(retailerMappings.map(m => [m.menuItemId, m.retailerId]));
+
+        // Only use native payment if ALL items have catalog mappings
+        if (retailerMappings.length === items.length) {
+          const orderItems = items.map(item => ({
+            retailerId: retailerMap.get(item.menuItem.toString()),
+            name: item.name,
+            priceAmount: item.originalPrice || item.price,
+            saleAmount: item.price !== item.originalPrice ? item.price : undefined,
+            quantity: item.quantity
+          }));
+
+          await whatsapp.sendOrderDetails(phone, orderId, orderItems, total, {
+            tax: 0,
+            shipping: deliveryCharge,
+            discount: totalDiscount
+          });
+
+          // Don't send admin push yet — wait for payment confirmation webhook
+          logger.info('Native WhatsApp payment sent', { orderId, total });
+          return { success: true };
+        } else {
+          logger.info('Not all items mapped to catalog, falling back to CTA payment', {
+            orderId,
+            mapped: retailerMappings.length,
+            total: items.length
+          });
+        }
+      } catch (nativePayErr) {
+        logger.warn('Native WhatsApp payment failed, falling back to CTA', {
+          orderId,
+          error: nativePayErr.response?.data || nativePayErr.message
+        });
+      }
+    }
+
+    // ===== FALLBACK: CTA URL PAYMENT (Razorpay payment page) =====
+    // Send admin push immediately for CTA-based payment
+    await sendAdminPush();
 
     try {
       // Generate payment page URL (UPI app selection page)

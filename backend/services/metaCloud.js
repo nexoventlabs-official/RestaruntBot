@@ -1246,6 +1246,190 @@ const metaCloud = {
   },
 
   /**
+   * Send order_details interactive message for WhatsApp native payment (UPI).
+   * Triggers the in-chat payment flow: review items → choose UPI app → pay.
+   *
+   * @param {string} phone - Customer phone
+   * @param {string} referenceId - Unique order/reference ID
+   * @param {Array} items - Array of { retailerId, name, priceAmount, quantity, saleAmount? }
+   *        priceAmount/saleAmount are in rupees (will be converted to paise × 100)
+   * @param {number} totalAmount - Grand total in rupees
+   * @param {number} [tax=0] - Tax in rupees
+   * @param {number} [shipping=0] - Shipping/delivery charge in rupees
+   * @param {number} [discount=0] - Discount in rupees
+   * @returns {Object} Meta API response
+   */
+  async sendOrderDetails(phone, referenceId, items, totalAmount, { tax = 0, shipping = 0, discount = 0 } = {}) {
+    try {
+      const { baseUrl, accessToken } = getConfig();
+      const to = phone.replace('@c.us', '').replace(/\D/g, '');
+      const catalogId = process.env.META_CATALOG_ID;
+      const paymentConfig = process.env.WHATSAPP_PAYMENT_CONFIG || process.env.RAZORPAY_CONFIG_ID;
+
+      if (!catalogId) throw new Error('META_CATALOG_ID not configured');
+      if (!paymentConfig) throw new Error('WHATSAPP_PAYMENT_CONFIG / RAZORPAY_CONFIG_ID not configured');
+
+      // Convert rupees to paise offset (offset 100 → value in paise)
+      const toPaise = (rupees) => Math.round(Number(rupees) * 100);
+
+      const orderItems = items.map(item => {
+        const obj = {
+          retailer_id: item.retailerId,
+          name: item.name,
+          amount: {
+            value: toPaise(item.priceAmount),
+            offset: 100
+          },
+          quantity: item.quantity
+        };
+        // If sale/discounted price differs from original, add sale_amount
+        if (item.saleAmount != null && item.saleAmount !== item.priceAmount) {
+          obj.sale_amount = {
+            value: toPaise(item.saleAmount),
+            offset: 100
+          };
+        }
+        return obj;
+      });
+
+      const subtotal = items.reduce((sum, i) => {
+        const price = i.saleAmount != null ? i.saleAmount : i.priceAmount;
+        return sum + price * i.quantity;
+      }, 0);
+
+      const payload = {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'order_details',
+          header: {
+            type: 'image',
+            image: {
+              link: 'https://res.cloudinary.com/dzmmp2dxy/image/upload/v1/rb/order_payment'
+            }
+          },
+          body: {
+            text: `🧾 *Order #${referenceId}*\nReview your items and pay securely via UPI.`
+          },
+          footer: {
+            text: 'Powered by WhatsApp Pay'
+          },
+          action: {
+            name: 'review_and_pay',
+            parameters: {
+              reference_id: referenceId,
+              type: 'digital-goods',
+              payment_type: 'upi',
+              payment_configuration: paymentConfig,
+              currency: 'INR',
+              total_amount: {
+                value: toPaise(totalAmount),
+                offset: 100
+              },
+              order: {
+                status: 'pending',
+                catalog_id: catalogId,
+                expiration: {
+                  timestamp: Math.floor(Date.now() / 1000) + 900, // 15 min expiry
+                  description: 'Order expires in 15 minutes'
+                },
+                items: orderItems,
+                subtotal: {
+                  value: toPaise(subtotal),
+                  offset: 100
+                },
+                tax: {
+                  value: toPaise(tax),
+                  offset: 100,
+                  description: 'Tax'
+                },
+                shipping: {
+                  value: toPaise(shipping),
+                  offset: 100,
+                  description: 'Delivery charge'
+                },
+                discount: {
+                  value: toPaise(discount),
+                  offset: 100,
+                  description: 'Discount'
+                }
+              }
+            }
+          }
+        }
+      };
+
+      logger.info('Sending order_details for native payment', { to, referenceId, totalAmount, itemCount: items.length });
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      logger.info('order_details sent', { data: response.data });
+      return response.data;
+    } catch (error) {
+      logger.error('Meta sendOrderDetails error', {
+        error: error.response?.data || error.message,
+        referenceId
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Send order_status message to confirm payment outcome.
+   * Used after receiving payment webhook to update the customer.
+   *
+   * @param {string} phone - Customer phone
+   * @param {string} referenceId - Same reference_id used in order_details
+   * @param {string} status - 'completed' | 'canceled' | 'pending'
+   * @param {string} [description] - Status description text
+   */
+  async sendOrderStatusUpdate(phone, referenceId, status, description = '') {
+    try {
+      const { baseUrl, accessToken } = getConfig();
+      const to = phone.replace('@c.us', '').replace(/\D/g, '');
+      const paymentConfig = process.env.WHATSAPP_PAYMENT_CONFIG || process.env.RAZORPAY_CONFIG_ID;
+
+      const payload = {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'order_status',
+          body: {
+            text: description || (status === 'completed' ? '✅ Payment received! Your order is confirmed.' : `Order status: ${status}`)
+          },
+          action: {
+            name: 'review_order',
+            parameters: {
+              reference_id: referenceId,
+              order: {
+                status,
+                description: description || `Order ${status}`
+              },
+              payment_configuration: paymentConfig
+            }
+          }
+        }
+      };
+
+      logger.info('Sending order_status update', { to, referenceId, status });
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      logger.info('order_status sent', { data: response.data });
+      return response.data;
+    } catch (error) {
+      logger.error('Meta sendOrderStatusUpdate error', {
+        error: error.response?.data || error.message,
+        referenceId,
+        status
+      });
+      throw error;
+    }
+  },
+
+  /**
    * Delete a message template by name.
    */
   async deleteMessageTemplate(templateName) {
