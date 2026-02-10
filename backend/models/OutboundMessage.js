@@ -20,7 +20,7 @@ const outboundMessageSchema = new mongoose.Schema({
   // Message type
   messageType: {
     type: String,
-    enum: ['text', 'buttons', 'list', 'image', 'template', 'location', 'cta_url', 'cta_phone'],
+    enum: ['text', 'buttons', 'list', 'image', 'template', 'location', 'cta_url', 'cta_phone', 'product', 'product_list'],
     required: true
   },
   
