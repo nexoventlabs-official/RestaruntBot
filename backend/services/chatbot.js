@@ -6839,6 +6839,29 @@ const chatbot = {
     
     cartMsg += `*Total: ₹${total}*`;
 
+    // Try showing cart items as WhatsApp Catalog product_list (native cart with images/prices/Place Order)
+    try {
+      if (catalogService.isEnabled()) {
+        const validCartItems = freshCustomer.cart.filter(item => item.menuItem);
+        const cartSections = await catalogService.buildCartSections(validCartItems);
+        if (cartSections && cartSections.totalMapped === validItems) {
+          const catalogId = catalogService.getCatalogId();
+          await whatsapp.sendProductList(
+            phone,
+            catalogId,
+            '🛒 Your Cart',
+            `${validItems} items • Total: ₹${total}\nTap "View items" → Add to cart → Place order`,
+            cartSections.sections,
+            'Perivi Hotel'
+          );
+          return;
+        }
+      }
+    } catch (catalogErr) {
+      logger.info('Catalog fallback for cart', { error: catalogErr.message });
+    }
+
+    // Fallback: text-based cart
     const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
     await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [
       { id: 'review_pay', text: 'Place Order ✅' },
