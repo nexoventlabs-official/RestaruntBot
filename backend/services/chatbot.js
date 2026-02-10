@@ -5668,24 +5668,49 @@ const chatbot = {
       return;
     }
 
-    // Try WhatsApp Catalog product_list (native catalog cards with images/prices)
+    // Try WhatsApp Catalog (native catalog cards with images/prices)
     try {
-      const catalogResult = await catalogService.buildProductSections(menuItems);
-      if (catalogResult) {
-        const catalogId = catalogService.getCatalogId();
-        await whatsapp.sendProductList(
-          phone,
-          catalogId,
-          '📋 Our Menu',
-          `${catalogResult.totalMapped} items available\nBrowse, tap & add to cart!`,
-          catalogResult.sections,
-          'Perivi Hotel'
-        );
-        await whatsapp.sendButtons(phone, 'Browse our menu above 👆', [
-          { id: 'view_cart', text: 'My Cart' },
-          { id: 'home', text: 'Main Menu' }
-        ]);
-        return;
+      if (catalogService.isEnabled()) {
+        const map = await catalogService.getCatalogMap();
+        if (map.size > 0) {
+          // For large menus (>30 items), send catalog_message (shows entire catalog)
+          // For smaller sets, send product_list with sections
+          if (menuItems.length > 30) {
+            // Get a thumbnail retailer ID from the first mapped item
+            const firstMapped = menuItems.find(item => map.has(item._id.toString()));
+            const thumbnailId = firstMapped ? map.get(firstMapped._id.toString()) : '';
+            await whatsapp.sendCatalogMessage(
+              phone,
+              `🍽️ Browse our full menu!\n${menuItems.length} items available\n\nTap "View catalog" to see all items with images & prices. Add items to your cart and place your order!`,
+              'Perivi Hotel',
+              thumbnailId
+            );
+            await whatsapp.sendButtons(phone, 'Browse our catalog above 👆', [
+              { id: 'view_cart', text: 'My Cart' },
+              { id: 'home', text: 'Main Menu' }
+            ]);
+            return;
+          }
+
+          // For <=30 items, use product_list with category sections
+          const catalogResult = await catalogService.buildProductSections(menuItems);
+          if (catalogResult) {
+            const catalogId = catalogService.getCatalogId();
+            await whatsapp.sendProductList(
+              phone,
+              catalogId,
+              '📋 Our Menu',
+              `${catalogResult.totalMapped} items available\nBrowse, tap & add to cart!`,
+              catalogResult.sections,
+              'Perivi Hotel'
+            );
+            await whatsapp.sendButtons(phone, 'Browse our menu above 👆', [
+              { id: 'view_cart', text: 'My Cart' },
+              { id: 'home', text: 'Main Menu' }
+            ]);
+            return;
+          }
+        }
       }
     } catch (catalogErr) {
       logger.info('Catalog fallback for all items', { error: catalogErr.message });
@@ -6098,25 +6123,47 @@ const chatbot = {
       return;
     }
 
-    // Try WhatsApp Catalog product_list for order flow
+    // Try WhatsApp Catalog for order flow
     try {
-      const catalogResult = await catalogService.buildProductSections(menuItems);
-      if (catalogResult) {
-        const catalogId = catalogService.getCatalogId();
-        await whatsapp.sendProductList(
-          phone,
-          catalogId,
-          '📋 All Items',
-          `${catalogResult.totalMapped} items • Add to cart directly!`,
-          catalogResult.sections,
-          'Perivi Hotel'
-        );
-        await whatsapp.sendButtons(phone, 'Browse all items above 👆', [
-          { id: 'add_more', text: 'Categories' },
-          { id: 'view_cart', text: 'My Cart' },
-          { id: 'review_pay', text: 'Review & Order' }
-        ]);
-        return;
+      if (catalogService.isEnabled()) {
+        const map = await catalogService.getCatalogMap();
+        if (map.size > 0) {
+          if (menuItems.length > 30) {
+            const firstMapped = menuItems.find(item => map.has(item._id.toString()));
+            const thumbnailId = firstMapped ? map.get(firstMapped._id.toString()) : '';
+            await whatsapp.sendCatalogMessage(
+              phone,
+              `🍽️ Browse all items!\n${menuItems.length} items available\n\nTap "View catalog" to browse, add to cart & order!`,
+              'Perivi Hotel',
+              thumbnailId
+            );
+            await whatsapp.sendButtons(phone, 'Browse the catalog above 👆', [
+              { id: 'add_more', text: 'Categories' },
+              { id: 'view_cart', text: 'My Cart' },
+              { id: 'review_pay', text: 'Review & Order' }
+            ]);
+            return;
+          }
+
+          const catalogResult = await catalogService.buildProductSections(menuItems);
+          if (catalogResult) {
+            const catalogId = catalogService.getCatalogId();
+            await whatsapp.sendProductList(
+              phone,
+              catalogId,
+              '📋 All Items',
+              `${catalogResult.totalMapped} items • Add to cart directly!`,
+              catalogResult.sections,
+              'Perivi Hotel'
+            );
+            await whatsapp.sendButtons(phone, 'Browse all items above 👆', [
+              { id: 'add_more', text: 'Categories' },
+              { id: 'view_cart', text: 'My Cart' },
+              { id: 'review_pay', text: 'Review & Order' }
+            ]);
+            return;
+          }
+        }
       }
     } catch (catalogErr) {
       logger.info('Catalog fallback for all order items', { error: catalogErr.message });

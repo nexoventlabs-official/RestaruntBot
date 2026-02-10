@@ -218,6 +218,14 @@ const whatsapp = {
   },
 
   // ========== CATALOG / COMMERCE MESSAGES ==========
+  async sendCatalogMessage(phone, bodyText, footerText = '', thumbnailRetailerId = '') {
+    return trackOutbound(phone, 'product_list', {
+      type: 'catalog_message'
+    },
+      () => metaCloud.sendCatalogMessage(phone, bodyText, footerText, thumbnailRetailerId)
+    );
+  },
+
   async sendProduct(phone, catalogId, retailerId, bodyText = '', footerText = '') {
     return trackOutbound(phone, 'product', {
       catalogId,

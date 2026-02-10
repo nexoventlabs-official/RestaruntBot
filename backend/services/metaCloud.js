@@ -948,6 +948,61 @@ const metaCloud = {
   // ========== WHATSAPP CATALOG / COMMERCE MESSAGES ==========
 
   /**
+   * Send a catalog_message that shows the entire WhatsApp catalog.
+   * Users tap "View catalog" to browse all products natively.
+   * 
+   * @param {string} phone - Recipient phone number
+   * @param {string} bodyText - Body text (max 1024 chars)
+   * @param {string} footerText - Optional footer text (max 60 chars)
+   * @param {string} thumbnailRetailerId - Optional product retailer_id for thumbnail
+   */
+  async sendCatalogMessage(phone, bodyText, footerText = '', thumbnailRetailerId = '') {
+    try {
+      const { baseUrl, accessToken } = getConfig();
+      const to = phone.replace('@c.us', '').replace(/\D/g, '');
+
+      logger.info('Meta sendCatalogMessage', { to });
+
+      const payload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'catalog_message',
+          body: { text: bodyText.substring(0, 1024) },
+          action: {
+            name: 'catalog_message',
+          }
+        }
+      };
+
+      if (footerText) {
+        payload.interactive.footer = { text: footerText.substring(0, 60) };
+      }
+
+      if (thumbnailRetailerId) {
+        payload.interactive.action.parameters = {
+          thumbnail_product_retailer_id: thumbnailRetailerId
+        };
+      }
+
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      logger.info('Meta sendCatalogMessage success');
+      return response.data;
+    } catch (error) {
+      const errorData = error.response?.data?.error;
+      logger.error('Meta sendCatalogMessage error', {
+        error: errorData?.message || error.message,
+        code: errorData?.code
+      });
+      throw error;
+    }
+  },
+
+  /**
    * Send a single product message from the WhatsApp Commerce catalog.
    * Shows product card with image, name, price, description inside WhatsApp.
    * 
