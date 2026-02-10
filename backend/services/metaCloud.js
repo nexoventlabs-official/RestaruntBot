@@ -1082,7 +1082,8 @@ const metaCloud = {
   },
 
   /**
-   * Batch create/update multiple products using the items_batch Commerce API.
+   * Batch create/update multiple products using the Marketing API /batch endpoint.
+   * This is the endpoint WhatsApp indexes products from.
    * Meta allows up to 20 products per request.
    * 
    * @param {string} catalogId - Meta Commerce catalog ID
@@ -1098,48 +1099,80 @@ const metaCloud = {
 
       logger.info('Meta batchCreateOrUpdateProducts', { catalogId, count: products.length });
 
-      const requests = products.map(product => {
-        // Price format: "79.00 INR" (decimal with currency code)
-        const priceStr = `${product.price.toFixed(2)} ${product.currency || 'INR'}`;
+      // --- Marketing API /batch (WhatsApp indexes from this) ---
+      const batchRequests = products.map(product => {
+        // Price must be integer in smallest currency unit (paise for INR)
+        const priceInPaise = Math.round(product.price * 100);
+        const link = product.url || process.env.WEBSITE_URL || process.env.BACKEND_URL || 'https://wa.me/' + (process.env.META_PHONE_NUMBER_ID || '');
 
-        const data = {
-          id: product.retailerId,
-          title: product.name,
-          description: product.description || product.name,
-          availability: product.availability || 'in stock',
-          condition: 'new',
-          price: priceStr,
-          link: product.url || process.env.WEBSITE_URL || process.env.BACKEND_URL || 'https://wa.me/' + (process.env.META_PHONE_NUMBER_ID || ''),
-          brand: product.brand || 'Perivi Hotel',
-          google_product_category: 'Food, Beverages & Tobacco > Food Items',
+        const req = {
+          method: 'UPDATE',
+          retailer_id: product.retailerId,
+          data: {
+            name: product.name,
+            description: product.description || product.name,
+            availability: product.availability || 'in stock',
+            price: priceInPaise,
+            currency: product.currency || 'INR',
+            url: link,
+            category: 'Food, Beverages & Tobacco > Food Items',
+          }
         };
 
         if (product.imageUrl) {
-          data.image_link = product.imageUrl;
+          req.data.image_url = product.imageUrl;
         }
 
-        return {
-          method: 'UPDATE',
-          data
-        };
+        return req;
       });
 
-      const payload = {
-        item_type: 'PRODUCT_ITEM',
-        requests
-      };
-
-      const response = await metaApi.post(
-        `https://graph.facebook.com/v24.0/${catalogId}/items_batch`,
-        payload,
+      const batchResponse = await metaApi.post(
+        `https://graph.facebook.com/v24.0/${catalogId}/batch`,
+        { requests: batchRequests },
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
 
-      logger.info('Meta batchCreateOrUpdateProducts success', {
+      logger.info('Meta batchCreateOrUpdateProducts /batch success', {
         count: products.length,
-        handles: response.data?.handles
+        handles: batchResponse.data?.handles
       });
-      return response.data;
+
+      // --- Commerce API /items_batch (for Commerce Manager visibility) ---
+      try {
+        const itemsBatchRequests = products.map(product => {
+          const priceStr = `${product.price.toFixed(2)} ${product.currency || 'INR'}`;
+          const link = product.url || process.env.WEBSITE_URL || process.env.BACKEND_URL || 'https://wa.me/' + (process.env.META_PHONE_NUMBER_ID || '');
+          const data = {
+            id: product.retailerId,
+            title: product.name,
+            description: product.description || product.name,
+            availability: product.availability || 'in stock',
+            condition: 'new',
+            price: priceStr,
+            link,
+            brand: product.brand || 'Perivi Hotel',
+            google_product_category: 'Food, Beverages & Tobacco > Food Items',
+          };
+          if (product.imageUrl) {
+            data.image_link = product.imageUrl;
+          }
+          return { method: 'UPDATE', data };
+        });
+
+        await metaApi.post(
+          `https://graph.facebook.com/v24.0/${catalogId}/items_batch`,
+          { item_type: 'PRODUCT_ITEM', requests: itemsBatchRequests },
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        logger.info('Meta batchCreateOrUpdateProducts /items_batch success', { count: products.length });
+      } catch (itemsErr) {
+        // Non-fatal: Commerce Manager display may lag but WhatsApp will still work
+        logger.warn('Meta /items_batch secondary push failed (non-fatal)', {
+          error: itemsErr.response?.data?.error?.message || itemsErr.message
+        });
+      }
+
+      return batchResponse.data;
     } catch (error) {
       const errorData = error.response?.data?.error || error.response?.data;
       logger.error('Meta batchCreateOrUpdateProducts error', {
@@ -1166,19 +1199,35 @@ const metaCloud = {
 
       logger.info('Meta deleteCatalogProduct', { catalogId, retailerId });
 
-      const payload = {
-        item_type: 'PRODUCT_ITEM',
+      // Marketing API /batch DELETE
+      const batchPayload = {
         requests: [{
           method: 'DELETE',
-          data: { id: retailerId }
+          retailer_id: retailerId
         }]
       };
 
       const response = await metaApi.post(
-        `https://graph.facebook.com/v24.0/${catalogId}/items_batch`,
-        payload,
+        `https://graph.facebook.com/v24.0/${catalogId}/batch`,
+        batchPayload,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
+
+      // Also delete from Commerce API /items_batch
+      try {
+        await metaApi.post(
+          `https://graph.facebook.com/v24.0/${catalogId}/items_batch`,
+          {
+            item_type: 'PRODUCT_ITEM',
+            requests: [{ method: 'DELETE', data: { id: retailerId } }]
+          },
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+      } catch (itemsErr) {
+        logger.warn('Meta /items_batch delete failed (non-fatal)', {
+          error: itemsErr.response?.data?.error?.message || itemsErr.message
+        });
+      }
 
       logger.info('Meta deleteCatalogProduct success', { retailerId });
       return response.data;
