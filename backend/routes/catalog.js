@@ -83,4 +83,30 @@ router.delete('/mapping/:menuItemId', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/catalog/sync-collections - Sync categories as catalog collections with images
+router.post('/sync-collections', authMiddleware, async (req, res) => {
+  try {
+    const result = await catalogService.syncCollections();
+    res.json({
+      success: true,
+      message: `Collections: ${result.created} created, ${result.updated} updated, ${result.failed} failed.`,
+      ...result
+    });
+  } catch (error) {
+    logger.error('Catalog collections sync error', { error: error.message });
+    res.status(500).json({ error: 'Failed to sync collections' });
+  }
+});
+
+// GET /api/catalog/collections - List all collections from Meta catalog
+router.get('/collections', authMiddleware, async (req, res) => {
+  try {
+    const collections = await catalogService.getCollections();
+    res.json(collections);
+  } catch (error) {
+    logger.error('Catalog get collections error', { error: error.message });
+    res.status(500).json({ error: 'Failed to get collections' });
+  }
+});
+
 module.exports = router;

@@ -382,8 +382,17 @@ const catalogService = {
       }
     }
 
-    logger.info('Catalog auto-sync completed', { created, skipped, metaPushed, metaFailed, total: items.length });
-    return { created, skipped, metaPushed, metaFailed, total: items.length };
+    // Step 3: Sync category collections (horizontal tiles with images)
+    let collectionResult = { created: 0, updated: 0, failed: 0 };
+    try {
+      collectionResult = await this.syncCollections();
+      logger.info('Collections synced during auto-sync', collectionResult);
+    } catch (err) {
+      logger.error('Collections sync failed during auto-sync', { error: err.message });
+    }
+
+    logger.info('Catalog auto-sync completed', { created, skipped, metaPushed, metaFailed, collections: collectionResult, total: items.length });
+    return { created, skipped, metaPushed, metaFailed, collections: collectionResult, total: items.length };
   },
 
   /**
@@ -543,6 +552,104 @@ const catalogService = {
    * @param {Object} orderData - The order object from WhatsApp webhook
    * @returns {Object} { items, totalAmount } parsed from the order
    */
+  // ========== CATALOG COLLECTIONS (Category Tiles) ==========
+
+  /**
+   * Sync categories as Collections (product sets) in the Meta catalog.
+   * Creates horizontal category tiles with cover images at the top of the WhatsApp catalog.
+   * Uses the Category model's `image` field for cover images.
+   *
+   * @returns {Object} { created, updated, failed, total }
+   */
+  async syncCollections() {
+    if (!this.isEnabled()) return { created: 0, updated: 0, failed: 0, total: 0 };
+
+    const Category = require('../models/Category');
+    const metaCloud = require('./metaCloud');
+    const catalogId = this.getCatalogId();
+    const map = await this.getCatalogMap();
+
+    let created = 0;
+    let updated = 0;
+    let failed = 0;
+
+    try {
+      // Get all active categories with their menu items
+      const categories = await Category.find({ isActive: true }).sort({ sortOrder: 1 }).lean();
+      const items = await MenuItem.find({ available: true, isPaused: false }).lean();
+
+      // Get existing collections from Meta to check for updates
+      let existingCollections = [];
+      try {
+        existingCollections = await metaCloud.getCollections(catalogId);
+      } catch (err) {
+        logger.info('Could not fetch existing collections, will create new', { error: err.message });
+      }
+
+      // Map existing collection names to their IDs
+      const existingMap = new Map();
+      for (const col of existingCollections) {
+        existingMap.set(col.name, col.id);
+      }
+
+      for (const category of categories) {
+        try {
+          // Find items in this category that have catalog mappings
+          const categoryItems = items.filter(item => {
+            const cats = Array.isArray(item.category) ? item.category : [item.category];
+            return cats.includes(category.name) && map.has(item._id.toString());
+          });
+
+          if (categoryItems.length === 0) {
+            logger.info('Skipping collection - no mapped items', { category: category.name });
+            continue;
+          }
+
+          const retailerIds = categoryItems.map(item => map.get(item._id.toString()));
+
+          const collectionData = {
+            name: category.name,
+            retailerIds,
+            coverImageUrl: category.image || null,
+            description: category.description || `${categoryItems.length} items in ${category.name}`
+          };
+
+          // Check if collection already exists
+          const existingId = existingMap.get(category.name);
+          if (existingId) {
+            collectionData.productSetId = existingId;
+            await metaCloud.createOrUpdateCollection(catalogId, collectionData);
+            updated++;
+          } else {
+            await metaCloud.createOrUpdateCollection(catalogId, collectionData);
+            created++;
+          }
+
+          // Delay between API calls to respect rate limits
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (err) {
+          failed++;
+          logger.error('Failed to sync collection', { category: category.name, error: err.message });
+        }
+      }
+
+      logger.info('Collections sync completed', { created, updated, failed, total: categories.length });
+      return { created, updated, failed, total: categories.length };
+    } catch (err) {
+      logger.error('Collections sync error', { error: err.message });
+      throw err;
+    }
+  },
+
+  /**
+   * Get all collections from Meta catalog
+   */
+  async getCollections() {
+    if (!this.isEnabled()) return [];
+    const metaCloud = require('./metaCloud');
+    return metaCloud.getCollections(this.getCatalogId());
+  },
+
   async parseWhatsAppOrder(orderData) {
     const productItems = orderData.product_items || [];
     const parsedItems = [];

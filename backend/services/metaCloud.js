@@ -1455,6 +1455,130 @@ const metaCloud = {
       logger.error('Meta deleteMessageTemplate error', { error: error.response?.data || error.message });
       throw error;
     }
+  },
+
+  // ========== CATALOG COLLECTIONS (Product Sets) ==========
+
+  /**
+   * Create or update a product set (collection) in the Meta catalog.
+   * Collections show as horizontal category tiles with images at the top of the WhatsApp catalog.
+   *
+   * @param {string} catalogId - Meta catalog ID
+   * @param {Object} collection - Collection data
+   * @param {string} collection.name - Collection name (category name)
+   * @param {Array<string>} collection.retailerIds - Product retailer IDs to include
+   * @param {string} [collection.coverImageUrl] - Cover image URL (min 600x600)
+   * @param {string} [collection.description] - Description (max 200 chars)
+   * @param {string} [collection.productSetId] - Existing product set ID (for updates)
+   * @returns {Object} { id } of created/updated product set
+   */
+  async createOrUpdateCollection(catalogId, collection) {
+    try {
+      const { accessToken } = getConfig();
+
+      if (!catalogId) throw new Error('META_CATALOG_ID not configured');
+
+      const filter = {
+        retailer_id: {
+          is_any: collection.retailerIds
+        }
+      };
+
+      const metadata = {};
+      if (collection.coverImageUrl) {
+        metadata.cover_image_url = collection.coverImageUrl;
+      }
+      if (collection.description) {
+        metadata.description = collection.description.substring(0, 200);
+      }
+
+      const params = {
+        name: collection.name,
+        filter: JSON.stringify(filter),
+        access_token: accessToken
+      };
+
+      if (Object.keys(metadata).length > 0) {
+        params.metadata = JSON.stringify(metadata);
+      }
+
+      let response;
+      if (collection.productSetId) {
+        // Update existing product set
+        response = await metaApi.post(
+          `https://graph.facebook.com/v24.0/${collection.productSetId}`,
+          params
+        );
+        logger.info('Meta collection updated', { name: collection.name, id: collection.productSetId });
+      } else {
+        // Create new product set
+        response = await metaApi.post(
+          `https://graph.facebook.com/v24.0/${catalogId}/product_sets`,
+          params
+        );
+        logger.info('Meta collection created', { name: collection.name, id: response.data?.id });
+      }
+
+      return response.data;
+    } catch (error) {
+      const errorData = error.response?.data?.error || error.response?.data;
+      logger.error('Meta createOrUpdateCollection error', {
+        name: collection.name,
+        error: errorData?.message || error.message
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Get all product sets (collections) for a catalog.
+   *
+   * @param {string} catalogId - Meta catalog ID
+   * @returns {Array} List of product sets with id, name, metadata
+   */
+  async getCollections(catalogId) {
+    try {
+      const { accessToken } = getConfig();
+
+      if (!catalogId) throw new Error('META_CATALOG_ID not configured');
+
+      const response = await metaApi.get(
+        `https://graph.facebook.com/v24.0/${catalogId}/product_sets`,
+        {
+          params: {
+            fields: 'id,name,latest_metadata{cover_image_url,description,integrity_review_status},live_metadata{cover_image_url,description}',
+            access_token: accessToken
+          }
+        }
+      );
+
+      return response.data?.data || [];
+    } catch (error) {
+      logger.error('Meta getCollections error', { error: error.response?.data?.error?.message || error.message });
+      throw error;
+    }
+  },
+
+  /**
+   * Delete a product set (collection) from the catalog.
+   *
+   * @param {string} productSetId - The product set ID to delete
+   */
+  async deleteCollection(productSetId) {
+    try {
+      const { accessToken } = getConfig();
+
+      const response = await metaApi.delete(
+        `https://graph.facebook.com/v24.0/${productSetId}`,
+        { params: { access_token: accessToken } }
+      );
+
+      logger.info('Meta collection deleted', { id: productSetId });
+      return response.data;
+    } catch (error) {
+      logger.error('Meta deleteCollection error', { id: productSetId, error: error.response?.data?.error?.message || error.message });
+      throw error;
+    }
   }
 };
 
