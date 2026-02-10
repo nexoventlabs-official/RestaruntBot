@@ -436,20 +436,44 @@ async function processCODOrder(customer, phone, params = {}) {
   
   const orderId = generateOrderId(serviceType);
   let itemsTotal = 0;
+  let totalDiscount = 0;
+  let appliedOfferIds = new Set();
+  
+  // Get customer's active offers
+  const activeOffers = freshCustomer.activeOffers || [];
   
   const items = freshCustomer.cart.filter(item => item.menuItem).map(item => {
-    const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+    let effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+    let itemDiscount = 0;
+    let appliedOfferId = null;
+    
+    // If no offerPrice, check customer's activeOffers for applicable discount
+    if (!item.menuItem.offerPrice && activeOffers.length > 0) {
+      const offerResult = calculateOfferDiscount(item.menuItem, activeOffers);
+      if (offerResult.discountedPrice !== null) {
+        effectivePrice = offerResult.discountedPrice;
+        itemDiscount = offerResult.discountAmount * item.quantity;
+        if (offerResult.appliedOffer?.offerId) {
+          appliedOfferId = offerResult.appliedOffer.offerId;
+          appliedOfferIds.add(offerResult.appliedOffer.offerId.toString());
+        }
+      }
+    }
+    
     const subtotal = effectivePrice * item.quantity;
     itemsTotal += subtotal;
+    totalDiscount += itemDiscount;
     
     return {
       menuItem: item.menuItem._id,
       name: item.menuItem.name,
       quantity: item.quantity,
       price: effectivePrice,
+      originalPrice: item.menuItem.price,
       unit: item.menuItem.unit || 'piece',
       unitQty: item.menuItem.quantity || 1,
-      image: item.menuItem.image
+      image: item.menuItem.image,
+      appliedOfferId
     };
   });
   
@@ -485,6 +509,8 @@ async function processCODOrder(customer, phone, params = {}) {
     deliveryCharge,
     deliveryDistance,
     totalAmount: total,
+    discountAmount: totalDiscount,
+    appliedOfferIds: Array.from(appliedOfferIds),
     serviceType,
     deliveryAddress: freshCustomer.deliveryAddress ? {
       address: freshCustomer.deliveryAddress.address,
@@ -498,6 +524,13 @@ async function processCODOrder(customer, phone, params = {}) {
   });
   
   await order.save();
+  
+  // Remove applied offers from customer's activeOffers (one-time use)
+  if (appliedOfferIds.size > 0) {
+    freshCustomer.activeOffers = (freshCustomer.activeOffers || []).filter(
+      offer => !appliedOfferIds.has(offer.offerId?.toString())
+    );
+  }
   
   // Add to broadcast contacts
   await whatsappBroadcast.addContact(freshCustomer.phone, freshCustomer.name, new Date());

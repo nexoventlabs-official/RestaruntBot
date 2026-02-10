@@ -6227,18 +6227,45 @@ const chatbot = {
     const serviceType = state.serviceType || state.selectedService || 'delivery';
     const orderId = generateOrderId(serviceType);
     let itemsTotal = 0;
+    let totalDiscount = 0;
+    let appliedOfferIds = new Set();
+    
+    // Get customer's active offers
+    const activeOffers = freshCustomer.activeOffers || [];
+    
     const items = freshCustomer.cart.filter(item => item.menuItem).map(item => {
-      const effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+      // First check if item has built-in offerPrice
+      let effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+      let itemDiscount = 0;
+      let appliedOfferId = null;
+      
+      // If no offerPrice, check customer's activeOffers for applicable discount
+      if (!item.menuItem.offerPrice && activeOffers.length > 0) {
+        const offerResult = calculateOfferDiscount(item.menuItem, activeOffers);
+        if (offerResult.discountedPrice !== null) {
+          effectivePrice = offerResult.discountedPrice;
+          itemDiscount = offerResult.discountAmount * item.quantity;
+          if (offerResult.appliedOffer?.offerId) {
+            appliedOfferId = offerResult.appliedOffer.offerId;
+            appliedOfferIds.add(offerResult.appliedOffer.offerId.toString());
+          }
+        }
+      }
+      
       const subtotal = effectivePrice * item.quantity;
       itemsTotal += subtotal;
+      totalDiscount += itemDiscount;
+      
       return {
         menuItem: item.menuItem._id,
         name: item.menuItem.name,
         quantity: item.quantity,
         price: effectivePrice,
+        originalPrice: item.menuItem.price,
         unit: item.menuItem.unit || 'piece',
         unitQty: item.menuItem.quantity || 1,
-        image: item.menuItem.image
+        image: item.menuItem.image,
+        appliedOfferId
       };
     });
 
@@ -6272,6 +6299,8 @@ const chatbot = {
       deliveryCharge,
       deliveryDistance,
       totalAmount: total,
+      discountAmount: totalDiscount,
+      appliedOfferIds: Array.from(appliedOfferIds),
       serviceType: state.serviceType || state.selectedService || 'delivery',
       deliveryAddress: freshCustomer.deliveryAddress ? {
         address: freshCustomer.deliveryAddress.address,
@@ -6283,6 +6312,13 @@ const chatbot = {
       trackingUpdates: [{ status: 'confirmed', message: 'Order confirmed - Cash on Delivery' }]
     });
     await order.save();
+    
+    // Remove applied offers from customer's activeOffers (one-time use)
+    if (appliedOfferIds.size > 0) {
+      freshCustomer.activeOffers = (freshCustomer.activeOffers || []).filter(
+        offer => !appliedOfferIds.has(offer.offerId?.toString())
+      );
+    }
 
     // Add to WhatsApp broadcast contacts
     const whatsappBroadcast = require('./whatsappBroadcast');
@@ -7248,13 +7284,30 @@ const chatbot = {
 
     // Calculate total
     let total = 0;
+    let totalDiscount = 0;
     const items = [];
+    
+    // Get customer's active offers
+    const activeOffers = freshCustomer.activeOffers || [];
+    
     for (const cartItem of freshCustomer.cart) {
       if (!cartItem.menuItem) continue;
       const item = cartItem.menuItem;
-      const price = item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price;
+      let price = item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price;
+      let itemDiscount = 0;
+      
+      // If no offerPrice, check customer's activeOffers for applicable discount
+      if (!(item.offerPrice && item.offerPrice < item.price) && activeOffers.length > 0) {
+        const offerResult = calculateOfferDiscount(item, activeOffers);
+        if (offerResult.discountedPrice !== null) {
+          price = offerResult.discountedPrice;
+          itemDiscount = offerResult.discountAmount * cartItem.quantity;
+        }
+      }
+      
       const itemTotal = price * cartItem.quantity;
       total += itemTotal;
+      totalDiscount += itemDiscount;
       items.push({
         name: item.name,
         quantity: cartItem.quantity,
@@ -7267,8 +7320,11 @@ const chatbot = {
     items.forEach(item => {
       msg += `• ${item.name} x${item.quantity} - ₹${item.price}\n`;
     });
-    msg += `\n💰 *Total: ₹${total}*\n\n`;
-    msg += '🏪 *Pickup Location:* Restaurant\n\n';
+    msg += `\n💰 *Total: ₹${total}*\n`;
+    if (totalDiscount > 0) {
+      msg += `🎁 *You Save: ₹${totalDiscount}*\n`;
+    }
+    msg += '\n🏪 *Pickup Location:* Restaurant\n\n';
     msg += '💳 *Choose Payment Method:*';
 
     // Get pickup order summary image
@@ -7293,21 +7349,46 @@ const chatbot = {
 
       // Calculate total and prepare items
       let total = 0;
+      let totalDiscount = 0;
+      let appliedOfferIds = new Set();
       const items = [];
+      
+      // Get customer's active offers
+      const activeOffers = freshCustomer.activeOffers || [];
+      
       for (const cartItem of freshCustomer.cart) {
         if (!cartItem.menuItem) continue;
         const item = cartItem.menuItem;
-        const price = item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price;
+        let price = item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price;
+        let itemDiscount = 0;
+        let appliedOfferId = null;
+        
+        // If no offerPrice, check customer's activeOffers for applicable discount
+        if (!(item.offerPrice && item.offerPrice < item.price) && activeOffers.length > 0) {
+          const offerResult = calculateOfferDiscount(item, activeOffers);
+          if (offerResult.discountedPrice !== null) {
+            price = offerResult.discountedPrice;
+            itemDiscount = offerResult.discountAmount * cartItem.quantity;
+            if (offerResult.appliedOffer?.offerId) {
+              appliedOfferId = offerResult.appliedOffer.offerId;
+              appliedOfferIds.add(offerResult.appliedOffer.offerId.toString());
+            }
+          }
+        }
+        
         const itemTotal = price * cartItem.quantity;
         total += itemTotal;
+        totalDiscount += itemDiscount;
         items.push({
           menuItem: item._id,
           name: item.name,
           quantity: cartItem.quantity,
           price: itemTotal,
+          originalPrice: item.price,
           unit: item.unit || 'piece',
           unitQty: item.unitQty || 1,
-          image: item.image
+          image: item.image,
+          appliedOfferId
         });
       }
 
@@ -7325,6 +7406,8 @@ const chatbot = {
         },
         items,
         totalAmount: total,
+        discountAmount: totalDiscount,
+        appliedOfferIds: Array.from(appliedOfferIds),
         serviceType: 'pickup',
         paymentMethod: state.paymentMethod || 'cod',
         paymentStatus: 'pending',
@@ -7333,6 +7416,13 @@ const chatbot = {
 
       await order.save();
       logger.info(`Pickup order created: ${orderId}`);
+
+      // Remove applied offers from customer's activeOffers (one-time use)
+      if (appliedOfferIds.size > 0) {
+        freshCustomer.activeOffers = (freshCustomer.activeOffers || []).filter(
+          offer => !appliedOfferIds.has(offer.offerId?.toString())
+        );
+      }
 
       // Clear cart
       freshCustomer.cart = [];
