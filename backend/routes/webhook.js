@@ -298,6 +298,15 @@ router.post('/meta', webhookRateLimiter, async (req, res) => {
                   text = message.interactive.list_reply?.title || '';
                   messageType = 'list';
                 }
+              } else if (message.type === 'order') {
+                // WhatsApp Catalog cart submission — user tapped "Send" on their cart
+                messageType = 'order';
+                text = message.order || {};
+                logger.info('📦 Catalog order received', {
+                  phone,
+                  catalogId: message.order?.catalog_id,
+                  itemCount: message.order?.product_items?.length || 0
+                });
               } else if (message.type === 'location') {
                 messageType = 'location';
                 text = {
@@ -352,7 +361,7 @@ router.post('/meta', webhookRateLimiter, async (req, res) => {
                 }
               }
 
-              const hasContent = text || selectedId || messageType === 'location';
+              const hasContent = text || selectedId || messageType === 'location' || messageType === 'order';
               if (phone && hasContent) {
                 // Process message in the background
                 chatbot.handleMessage(phone, text, messageType, selectedId, senderName)

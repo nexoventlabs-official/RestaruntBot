@@ -945,6 +945,244 @@ const metaCloud = {
     }
   },
 
+  // ========== WHATSAPP CATALOG / COMMERCE MESSAGES ==========
+
+  /**
+   * Send a single product message from the WhatsApp Commerce catalog.
+   * Shows product card with image, name, price, description inside WhatsApp.
+   * 
+   * @param {string} phone - Recipient phone number
+   * @param {string} catalogId - Meta Commerce catalog ID (from env META_CATALOG_ID)
+   * @param {string} retailerId - Product retailer_id in the catalog
+   * @param {string} bodyText - Optional body text above the product card
+   * @param {string} footerText - Optional footer text
+   */
+  async sendProduct(phone, catalogId, retailerId, bodyText = '', footerText = '') {
+    try {
+      const { baseUrl, accessToken } = getConfig();
+      const to = phone.replace('@c.us', '').replace(/\D/g, '');
+
+      logger.info('Meta sendProduct', { to, catalogId, retailerId });
+
+      const payload = {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'product',
+          body: bodyText ? { text: bodyText.substring(0, 1024) } : undefined,
+          footer: footerText ? { text: footerText.substring(0, 60) } : undefined,
+          action: {
+            catalog_id: catalogId,
+            product_retailer_id: retailerId
+          }
+        }
+      };
+
+      // Remove undefined fields
+      if (!payload.interactive.body) delete payload.interactive.body;
+      if (!payload.interactive.footer) delete payload.interactive.footer;
+
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      logger.info('Meta sendProduct success', { retailerId });
+      return response.data;
+    } catch (error) {
+      const errorData = error.response?.data?.error;
+      logger.error('Meta sendProduct error', {
+        error: errorData?.message || error.message,
+        retailerId
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Send a multi-product message (product list) from the WhatsApp Commerce catalog.
+   * Shows a catalog-style browsable list with product images, names, prices.
+   * Users can tap items to view details, add to cart, and submit orders natively.
+   * 
+   * @param {string} phone - Recipient phone number
+   * @param {string} catalogId - Meta Commerce catalog ID
+   * @param {string} headerText - Header text (max 60 chars)
+   * @param {string} bodyText - Body text (max 1024 chars)
+   * @param {Array} sections - Array of { title, productRetailerIds: [string] }
+   * @param {string} footerText - Optional footer
+   */
+  async sendProductList(phone, catalogId, headerText, bodyText, sections, footerText = '') {
+    try {
+      const { baseUrl, accessToken } = getConfig();
+      const to = phone.replace('@c.us', '').replace(/\D/g, '');
+
+      logger.info('Meta sendProductList', { to, catalogId, sectionCount: sections.length });
+
+      const payload = {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'product_list',
+          header: {
+            type: 'text',
+            text: headerText.substring(0, 60)
+          },
+          body: {
+            text: bodyText.substring(0, 1024)
+          },
+          footer: footerText ? { text: footerText.substring(0, 60) } : undefined,
+          action: {
+            catalog_id: catalogId,
+            sections: sections.map(section => ({
+              title: section.title.substring(0, 24),
+              product_items: section.productRetailerIds.slice(0, 30).map(id => ({
+                product_retailer_id: id
+              }))
+            }))
+          }
+        }
+      };
+
+      if (!payload.interactive.footer) delete payload.interactive.footer;
+
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      logger.info('Meta sendProductList success', { sectionCount: sections.length });
+      return response.data;
+    } catch (error) {
+      const errorData = error.response?.data?.error;
+      logger.error('Meta sendProductList error', {
+        error: errorData?.message || error.message,
+        code: errorData?.code
+      });
+      throw error;
+    }
+  },
+
+  // ========== COMMERCE CATALOG PRODUCT CRUD ==========
+
+  /**
+   * Create or update a product in the Meta Commerce Catalog.
+   * Uses the Catalog Batch API to add/update products.
+   * 
+   * @param {string} catalogId - Meta Commerce catalog ID
+   * @param {Object} product - Product data
+   * @param {string} product.retailerId - Unique retailer ID for the product
+   * @param {string} product.name - Product name
+   * @param {string} product.description - Product description
+   * @param {number} product.price - Price in smallest currency unit (paise for INR)
+   * @param {string} product.currency - Currency code (default: INR)
+   * @param {string} product.imageUrl - Product image URL
+   * @param {string} product.category - Product category
+   * @param {string} product.availability - 'in stock' or 'out of stock'
+   * @param {string} product.url - Product URL (optional)
+   */
+  async createOrUpdateCatalogProduct(catalogId, product) {
+    try {
+      const { accessToken } = getConfig();
+
+      if (!catalogId) {
+        throw new Error('META_CATALOG_ID not configured');
+      }
+
+      logger.info('Meta createOrUpdateCatalogProduct', { catalogId, retailerId: product.retailerId });
+
+      // Price must be in format "100.00 INR" for the Catalog API
+      const priceStr = `${product.price.toFixed(0)}00 ${product.currency || 'INR'}`;
+
+      const productData = {
+        retailer_id: product.retailerId,
+        data: {
+          name: product.name,
+          description: product.description || product.name,
+          availability: product.availability || 'in stock',
+          price: priceStr,
+          currency: product.currency || 'INR',
+          category: product.category || 'Food & Beverage',
+        }
+      };
+
+      // Add image URL if available
+      if (product.imageUrl) {
+        productData.data.image_url = product.imageUrl;
+      }
+
+      // Add optional URL
+      if (product.url) {
+        productData.data.url = product.url;
+      }
+
+      const payload = {
+        requests: [{
+          method: 'UPDATE',
+          retailer_id: product.retailerId,
+          data: productData.data
+        }]
+      };
+
+      const response = await metaApi.post(
+        `https://graph.facebook.com/v24.0/${catalogId}/batch`,
+        payload,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+
+      logger.info('Meta createOrUpdateCatalogProduct success', {
+        retailerId: product.retailerId,
+        handles: response.data?.handles
+      });
+      return response.data;
+    } catch (error) {
+      const errorData = error.response?.data?.error || error.response?.data;
+      logger.error('Meta createOrUpdateCatalogProduct error', {
+        error: errorData?.message || error.message,
+        retailerId: product.retailerId
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Delete a product from the Meta Commerce Catalog.
+   * 
+   * @param {string} catalogId - Meta Commerce catalog ID
+   * @param {string} retailerId - The retailer_id of the product to delete
+   */
+  async deleteCatalogProduct(catalogId, retailerId) {
+    try {
+      const { accessToken } = getConfig();
+
+      if (!catalogId) {
+        throw new Error('META_CATALOG_ID not configured');
+      }
+
+      logger.info('Meta deleteCatalogProduct', { catalogId, retailerId });
+
+      const payload = {
+        requests: [{
+          method: 'DELETE',
+          retailer_id: retailerId
+        }]
+      };
+
+      const response = await metaApi.post(
+        `https://graph.facebook.com/v24.0/${catalogId}/batch`,
+        payload,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+
+      logger.info('Meta deleteCatalogProduct success', { retailerId });
+      return response.data;
+    } catch (error) {
+      const errorData = error.response?.data?.error || error.response?.data;
+      logger.error('Meta deleteCatalogProduct error', {
+        error: errorData?.message || error.message,
+        retailerId
+      });
+      throw error;
+    }
+  },
+
   /**
    * Delete a message template by name.
    */

@@ -217,6 +217,26 @@ const whatsapp = {
     return metaCloud.sendImageWithCtaPhone(phone, imageUrl, message, buttonText, phoneNumber, footer);
   },
 
+  // ========== CATALOG / COMMERCE MESSAGES ==========
+  async sendProduct(phone, catalogId, retailerId, bodyText = '', footerText = '') {
+    return trackOutbound(phone, 'product', {
+      catalogId,
+      retailerId
+    },
+      () => metaCloud.sendProduct(phone, catalogId, retailerId, bodyText, footerText)
+    );
+  },
+
+  async sendProductList(phone, catalogId, headerText, bodyText, sections, footerText = '') {
+    return trackOutbound(phone, 'product_list', {
+      catalogId,
+      sectionCount: sections.length,
+      header: headerText.substring(0, 60)
+    },
+      () => metaCloud.sendProductList(phone, catalogId, headerText, bodyText, sections, footerText)
+    );
+  },
+
   // Template messages - work outside 24-hour window
   async sendMarketingTemplate(phone, templateName, imageUrl, bodyParams = [], buttonUrl = null) {
     return metaCloud.sendMarketingTemplate(phone, templateName, imageUrl, bodyParams, buttonUrl);

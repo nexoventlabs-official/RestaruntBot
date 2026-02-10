@@ -9,6 +9,7 @@ const googleSheets = require('./googleSheets');
 const groqAi = require('./groqAi');
 const chatbotImagesService = require('./chatbotImages');
 const whatsappBroadcast = require('./whatsappBroadcast');
+const catalogService = require('./catalogService');
 const axios = require('axios');
 const logger = require('./logger');
 
@@ -3828,6 +3829,88 @@ const chatbot = {
     logger.info('Chatbot', { phone, msg, selection, messageType, currentStep: state.currentStep });
 
     try {
+      // ========== HANDLE WHATSAPP CATALOG ORDER (cart submission) ==========
+      if (messageType === 'order') {
+        const orderData = typeof message === 'object' ? message : {};
+        logger.info('📦 Catalog order processing', { phone, itemCount: orderData.product_items?.length || 0 });
+
+        try {
+          const parsed = await catalogService.parseWhatsAppOrder(orderData);
+
+          if (!parsed.items.length) {
+            await whatsapp.sendButtons(phone,
+              '❌ Sorry, we couldn\'t process your cart. Please try again.',
+              [
+                { id: 'order_food', text: '🍽️ Order Food' },
+                { id: 'home', text: '🏠 Main Menu' }
+              ]
+            );
+            state.currentStep = 'main_menu';
+            customer.conversationState = state;
+            await customer.save();
+            return;
+          }
+
+          // Add all catalog items to customer cart
+          customer.cart = customer.cart || [];
+          for (const item of parsed.items) {
+            if (!item.menuItemId) {
+              logger.warn('Catalog order item missing menuItem mapping', { retailerId: item.retailerId });
+              continue;
+            }
+            const existingIndex = customer.cart.findIndex(
+              c => c.menuItem?.toString() === item.menuItemId.toString()
+            );
+            if (existingIndex >= 0) {
+              customer.cart[existingIndex].quantity = item.quantity;
+              customer.cart[existingIndex].addedAt = new Date();
+            } else {
+              customer.cart.push({
+                menuItem: item.menuItemId,
+                quantity: item.quantity,
+                addedAt: new Date()
+              });
+            }
+          }
+          await customer.save();
+
+          // Build summary text
+          const itemsSummary = parsed.items
+            .filter(i => i.menuItem)
+            .map(i => `• ${i.name} × ${i.quantity} — ₹${i.price * i.quantity}`)
+            .join('\n');
+          const unmapped = parsed.items.filter(i => !i.menuItem);
+
+          let summaryMsg = `🛒 *Cart Updated from Catalog*\n\n${itemsSummary}\n\n💰 *Subtotal:* ₹${parsed.totalAmount}`;
+          if (unmapped.length > 0) {
+            summaryMsg += `\n\n⚠️ ${unmapped.length} item(s) couldn't be matched and were skipped.`;
+          }
+
+          await whatsapp.sendButtons(phone, summaryMsg, [
+            { id: 'review_pay', text: 'Review & Order' },
+            { id: 'add_more', text: 'Add More' },
+            { id: 'clear_cart', text: 'Clear Cart' }
+          ]);
+
+          state.currentStep = 'item_added';
+          customer.conversationState = state;
+          await customer.save();
+        } catch (catalogOrderErr) {
+          logger.error('Catalog order processing error', { phone, error: catalogOrderErr.message });
+          await whatsapp.sendButtons(phone,
+            '❌ Something went wrong processing your cart. Please try again.',
+            [
+              { id: 'order_food', text: '🍽️ Order Food' },
+              { id: 'home', text: '🏠 Main Menu' }
+            ]
+          );
+          state.currentStep = 'main_menu';
+          customer.conversationState = state;
+          await customer.save();
+        }
+        return;
+      }
+
       // ========== HANDLE LOCATION MESSAGE ==========
       if (messageType === 'location') {
         // message contains location data: { latitude, longitude, name, address }
@@ -5506,6 +5589,32 @@ const chatbot = {
       return;
     }
 
+    // Try WhatsApp Catalog product_list (native catalog cards with images/prices)
+    try {
+      const catalogResult = await catalogService.buildCategorySections(items, category);
+      if (catalogResult) {
+        const catalogId = catalogService.getCatalogId();
+        await whatsapp.sendProductList(
+          phone,
+          catalogId,
+          `📋 ${category}`,
+          `${items.length} items available\nTap to view details & add to cart`,
+          catalogResult.sections,
+          'Perivi Hotel'
+        );
+        // Send navigation buttons (back to menu, etc.)
+        await whatsapp.sendButtons(phone, `Browse ${category} items above 👆`, [
+          { id: 'view_menu', text: 'Back to Menu' },
+          { id: 'view_cart', text: 'My Cart' },
+          { id: 'home', text: 'Main Menu' }
+        ]);
+        return;
+      }
+    } catch (catalogErr) {
+      logger.info('Catalog fallback for category items', { category, error: catalogErr.message });
+    }
+
+    // Fallback: existing list-based flow
     // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
     const activeOffers = await getCachedActiveOffers(phone);
 
@@ -5559,6 +5668,30 @@ const chatbot = {
       return;
     }
 
+    // Try WhatsApp Catalog product_list (native catalog cards with images/prices)
+    try {
+      const catalogResult = await catalogService.buildProductSections(menuItems);
+      if (catalogResult) {
+        const catalogId = catalogService.getCatalogId();
+        await whatsapp.sendProductList(
+          phone,
+          catalogId,
+          '📋 Our Menu',
+          `${catalogResult.totalMapped} items available\nBrowse, tap & add to cart!`,
+          catalogResult.sections,
+          'Perivi Hotel'
+        );
+        await whatsapp.sendButtons(phone, 'Browse our menu above 👆', [
+          { id: 'view_cart', text: 'My Cart' },
+          { id: 'home', text: 'Main Menu' }
+        ]);
+        return;
+      }
+    } catch (catalogErr) {
+      logger.info('Catalog fallback for all items', { error: catalogErr.message });
+    }
+
+    // Fallback: existing list-based flow
     // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
     const activeOffers = await getCachedActiveOffers(phone);
 
@@ -5614,6 +5747,31 @@ const chatbot = {
       return;
     }
 
+    // Try WhatsApp Catalog for search results
+    try {
+      const catalogResult = await catalogService.buildProductSections(items);
+      if (catalogResult) {
+        const catalogId = catalogService.getCatalogId();
+        await whatsapp.sendProductList(
+          phone,
+          catalogId,
+          `🏷️ ${tagKeyword}`.substring(0, 60),
+          `Found ${items.length} items matching "${tagKeyword}"\nTap to view details & add to cart`,
+          catalogResult.sections,
+          'Perivi Hotel'
+        );
+        await whatsapp.sendButtons(phone, `Results for "${tagKeyword}" above 👆`, [
+          { id: 'view_menu', text: 'Browse Menu' },
+          { id: 'view_cart', text: 'My Cart' },
+          { id: 'home', text: 'Main Menu' }
+        ]);
+        return;
+      }
+    } catch (catalogErr) {
+      logger.info('Catalog fallback for search results', { tagKeyword, error: catalogErr.message });
+    }
+
+    // Fallback: existing list-based flow
     // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
     const activeOffers = await getCachedActiveOffers(phone);
 
@@ -5863,6 +6021,31 @@ const chatbot = {
       return;
     }
 
+    // Try WhatsApp Catalog for order items
+    try {
+      const catalogResult = await catalogService.buildCategorySections(items, category);
+      if (catalogResult) {
+        const catalogId = catalogService.getCatalogId();
+        await whatsapp.sendProductList(
+          phone,
+          catalogId,
+          `📋 ${category}`,
+          `${items.length} items • Add to cart directly!`,
+          catalogResult.sections,
+          'Perivi Hotel'
+        );
+        await whatsapp.sendButtons(phone, `Browse ${category} items above 👆`, [
+          { id: 'add_more', text: 'Other Categories' },
+          { id: 'view_cart', text: 'My Cart' },
+          { id: 'review_pay', text: 'Review & Order' }
+        ]);
+        return;
+      }
+    } catch (catalogErr) {
+      logger.info('Catalog fallback for order items', { category, error: catalogErr.message });
+    }
+
+    // Fallback: existing list-based flow
     // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
     const activeOffers = await getCachedActiveOffers(phone);
 
@@ -5915,6 +6098,31 @@ const chatbot = {
       return;
     }
 
+    // Try WhatsApp Catalog product_list for order flow
+    try {
+      const catalogResult = await catalogService.buildProductSections(menuItems);
+      if (catalogResult) {
+        const catalogId = catalogService.getCatalogId();
+        await whatsapp.sendProductList(
+          phone,
+          catalogId,
+          '📋 All Items',
+          `${catalogResult.totalMapped} items • Add to cart directly!`,
+          catalogResult.sections,
+          'Perivi Hotel'
+        );
+        await whatsapp.sendButtons(phone, 'Browse all items above 👆', [
+          { id: 'add_more', text: 'Categories' },
+          { id: 'view_cart', text: 'My Cart' },
+          { id: 'review_pay', text: 'Review & Order' }
+        ]);
+        return;
+      }
+    } catch (catalogErr) {
+      logger.info('Catalog fallback for all order items', { error: catalogErr.message });
+    }
+
+    // Fallback: existing list-based flow
     // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
     const activeOffers = await getCachedActiveOffers(phone);
 

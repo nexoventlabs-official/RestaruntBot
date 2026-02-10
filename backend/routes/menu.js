@@ -4,6 +4,7 @@ const MenuItem = require('../models/MenuItem');
 const authMiddleware = require('../middleware/auth');
 const cloudinaryService = require('../services/cloudinary');
 const dataEvents = require('../services/eventEmitter');
+const catalogService = require('../services/catalogService');
 const multer = require('multer');
 const { publicRateLimiter } = require('../middleware/rateLimiter');
 const { validators } = require('../middleware/inputValidation');
@@ -141,6 +142,11 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
     const item = new MenuItem(itemData);
     await item.save();
     
+    // Sync to Meta Commerce Catalog (non-blocking)
+    catalogService.syncProductToMeta(item).catch(err => {
+      logger.info('Catalog sync skipped for new item', { itemId: item._id, error: err.message });
+    });
+    
     // Emit event for real-time updates
     dataEvents.emit('menu');
     
@@ -274,6 +280,13 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
     
     const item = await MenuItem.findByIdAndUpdate(req.params.id, update, { new: true });
     
+    // Sync updated item to Meta Commerce Catalog (non-blocking)
+    if (item) {
+      catalogService.syncProductToMeta(item).catch(err => {
+        logger.info('Catalog sync skipped for updated item', { itemId: item._id, error: err.message });
+      });
+    }
+    
     // Emit event for real-time updates
     dataEvents.emit('menu');
     
@@ -296,6 +309,11 @@ router.delete('/:id', authMiddleware, async (req, res) => {
       }
     }
     
+    // Delete from Meta Commerce Catalog (non-blocking)
+    catalogService.deleteProductFromMeta(req.params.id).catch(err => {
+      logger.info('Catalog delete skipped', { itemId: req.params.id, error: err.message });
+    });
+    
     await MenuItem.findByIdAndDelete(req.params.id);
     
     // Emit event for real-time updates
@@ -316,6 +334,11 @@ router.patch('/:id/toggle-pause', authMiddleware, async (req, res) => {
     }
     item.isPaused = !item.isPaused;
     await item.save();
+    
+    // Sync pause status to Meta Catalog (updates availability)
+    catalogService.syncProductToMeta(item).catch(err => {
+      logger.info('Catalog sync skipped for pause toggle', { itemId: item._id, error: err.message });
+    });
     
     // Emit event for real-time updates
     dataEvents.emit('menu');
@@ -338,6 +361,13 @@ router.patch('/bulk-pause', authMiddleware, async (req, res) => {
       { category: categoryName },
       { isPaused: isPaused !== false }
     );
+    
+    // Sync all affected items to Meta Catalog (updates availability) — non-blocking
+    MenuItem.find({ category: categoryName }).lean().then(items => {
+      for (const item of items) {
+        catalogService.syncProductToMeta(item).catch(() => {});
+      }
+    }).catch(() => {});
     
     // Emit event for real-time updates
     dataEvents.emit('menu');

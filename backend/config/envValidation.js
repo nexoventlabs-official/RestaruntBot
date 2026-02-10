@@ -62,6 +62,12 @@ const envSchema = {
     validate: (value) => !value || /^\d+$/.test(value),
     error: 'META_APP_ID must be numeric (needed for template image uploads)'
   },
+
+  META_CATALOG_ID: {
+    required: false,
+    validate: (value) => !value || /^\d+$/.test(value),
+    error: 'META_CATALOG_ID must be numeric (your WhatsApp Commerce catalog ID from Meta Commerce Manager)'
+  },
   
   // Razorpay Payment
   RAZORPAY_KEY_ID: {
