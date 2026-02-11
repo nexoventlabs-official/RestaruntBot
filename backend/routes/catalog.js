@@ -164,4 +164,47 @@ router.delete('/flow/:flowId', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/catalog/test-flow - Send a test Flow message to a phone number
+router.post('/test-flow', authMiddleware, async (req, res) => {
+  try {
+    const metaCloud = require('../services/metaCloud');
+    const catalogService = require('../services/catalogService');
+    const phone = req.body.phone || '919440203095';
+    const flowId = catalogService.getCategoryFlowId();
+    const flowMode = catalogService.getCategoryFlowMode();
+
+    if (!flowId) {
+      return res.status(400).json({ error: 'No Flow ID configured. Call POST /setup-flow first.' });
+    }
+
+    const result = await metaCloud.sendFlowMessage(phone, {
+      flowId,
+      flowCta: 'Browse by Category',
+      headerText: 'Our Menu',
+      bodyText: 'Select a category to browse menu items.',
+      footerText: 'Powered by JRB Gold',
+      screenName: 'CATEGORY_SELECT',
+      screenData: {
+        categories: [
+          { id: 'veg_starters', title: 'Veg Starters (12 items)' },
+          { id: 'biryani', title: 'Biryani (6 items)' }
+        ]
+      },
+      flowToken: `category_select_test_${phone}`,
+      mode: flowMode
+    });
+
+    res.json({ success: true, flowId, mode: flowMode, result });
+  } catch (error) {
+    const errData = error.response?.data?.error;
+    logger.error('Test Flow send error', { error: error.message, apiError: errData });
+    res.status(500).json({
+      error: 'Flow message send failed',
+      details: errData || error.message,
+      flowId: require('../services/catalogService').getCategoryFlowId(),
+      mode: require('../services/catalogService').getCategoryFlowMode()
+    });
+  }
+});
+
 module.exports = router;
