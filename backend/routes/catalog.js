@@ -182,43 +182,69 @@ router.delete('/flow/:flowId', authMiddleware, async (req, res) => {
 // POST /api/catalog/test-flow - Send a test Flow message to a phone number
 router.post('/test-flow', authMiddleware, async (req, res) => {
   try {
-    const metaCloud = require('../services/metaCloud');
+    const axios = require('axios');
     const catalogService = require('../services/catalogService');
     const phone = req.body.phone || '919440203095';
-    const flowId = catalogService.getCategoryFlowId();
-    const flowMode = catalogService.getCategoryFlowMode();
+    const flowId = catalogService.getCategoryFlowId() || '875972408691130';
+    const accessToken = process.env.META_ACCESS_TOKEN;
+    const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
 
-    if (!flowId) {
-      return res.status(400).json({ error: 'No Flow ID configured. Call POST /setup-flow first.' });
+    const results = [];
+
+    // Test with different API versions
+    const versions = ['v21.0', 'v20.0', 'v18.0'];
+    
+    for (const ver of versions) {
+      try {
+        const payload = {
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: phone,
+          type: 'interactive',
+          interactive: {
+            type: 'flow',
+            body: { text: 'Select a category to browse menu items.' },
+            action: {
+              name: 'flow',
+              parameters: {
+                flow_message_version: '3',
+                flow_id: flowId,
+                flow_cta: 'Browse Menu',
+                mode: 'draft'
+              }
+            }
+          }
+        };
+
+        const response = await axios.post(
+          `https://graph.facebook.com/${ver}/${phoneNumberId}/messages`,
+          payload,
+          { headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, timeout: 15000 }
+        );
+        results.push({ version: ver, success: true, data: response.data });
+        break; // Stop on first success
+      } catch (err) {
+        const errData = err.response?.data?.error;
+        results.push({ version: ver, success: false, error: errData || err.message });
+      }
     }
 
-    const result = await metaCloud.sendFlowMessage(phone, {
-      flowId,
-      flowCta: 'Browse by Category',
-      headerText: 'Our Menu',
-      bodyText: 'Select a category to browse menu items.',
-      footerText: 'Powered by JRB Gold',
-      screenName: 'CATEGORY_SELECT',
-      screenData: {
-        categories: [
-          { id: 'veg_starters', title: 'Veg Starters (12 items)' },
-          { id: 'biryani', title: 'Biryani (6 items)' }
-        ]
-      },
-      flowToken: `category_select_test_${phone}`,
-      mode: flowMode
-    });
+    // Also try sending a basic text message to confirm token works
+    try {
+      const textResp = await axios.post(
+        `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+        { messaging_product: 'whatsapp', to: phone, type: 'text', text: { body: 'Flow test - token validation' } },
+        { headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, timeout: 10000 }
+      );
+      results.push({ test: 'basic_text_v21', success: true, data: textResp.data });
+    } catch (textErr) {
+      results.push({ test: 'basic_text_v21', success: false, error: textErr.response?.data?.error || textErr.message });
+    }
 
-    res.json({ success: true, flowId, mode: flowMode, result });
+    res.json({ results, flowId, phoneNumberId: phoneNumberId ? 'set' : 'missing' });
   } catch (error) {
-    const errData = error.response?.data?.error;
-    logger.error('Test Flow send error', { error: error.message, apiError: errData });
-    res.status(500).json({
-      error: 'Flow message send failed',
-      details: errData || error.message,
-      flowId: require('../services/catalogService').getCategoryFlowId(),
-      mode: require('../services/catalogService').getCategoryFlowMode()
-    });
+    logger.error('Test Flow error', { error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
