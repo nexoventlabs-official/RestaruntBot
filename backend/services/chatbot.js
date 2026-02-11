@@ -5516,41 +5516,7 @@ const chatbot = {
         const flowData = await catalogService.buildCategoryFlowDataSorted(menuItems, `category_select_${phone}`);
 
         if (flowData.categories.length > 0) {
-          // Send the catalog product_list first (all items)
-          const catalogId = catalogService.getCatalogId();
-          const catalogResult = await catalogService.buildProductSections(menuItems);
-
-          if (catalogResult && catalogResult.sections.length > 0) {
-            if (catalogResult.totalMapped <= 30) {
-              await whatsapp.sendProductList(
-                phone,
-                catalogId,
-                `📋 ${label}`,
-                `${catalogResult.totalInSections} items in ${catalogResult.sections.length} categories\nTap any item to view details & add to cart 🛒`,
-                catalogResult.sections,
-                'Fresh & Delicious!'
-              );
-            } else {
-              const pages = await catalogService.buildPaginatedProductSections(menuItems);
-              if (pages && pages.length > 0) {
-                for (const pg of pages) {
-                  const pageLabel = pages.length > 1
-                    ? `📋 ${label} (${pg.pageNumber}/${pg.totalPages})`
-                    : `📋 ${label}`;
-                  await whatsapp.sendProductList(
-                    phone,
-                    catalogId,
-                    pageLabel,
-                    `${pg.totalInPage} items • Tap to view & add to cart 🛒`,
-                    pg.sections,
-                    'Fresh & Delicious!'
-                  );
-                }
-              }
-            }
-          }
-
-          // Send WhatsApp Flow message for category selection
+          // Send WhatsApp Flow message for category selection (categories first, catalog after selection)
           logger.info('Attempting Flow category send', { phone, flowId, mode: flowMode, categories: flowData.categories.length });
           await metaCloud.sendFlowMessage(phone, {
             flowId,
@@ -5661,7 +5627,6 @@ const chatbot = {
         // Send navigation buttons (back to menu, etc.)
         await whatsapp.sendButtons(phone, `Browse ${category} items above 👆`, [
           { id: 'view_menu', text: 'Back to Menu' },
-          { id: 'view_cart', text: 'My Cart' },
           { id: 'home', text: 'Main Menu' }
         ]);
         return;

@@ -248,25 +248,31 @@ const catalogService = {
   async buildCategorySections(menuItems, category) {
     if (!this.isEnabled()) return null;
 
-    const map = await this.getCatalogMap();
-    if (map.size === 0) return null;
-
-    // Filter items in this category that have catalog mappings
+    // Filter items in this category
     const categoryItems = menuItems.filter(item => {
       const cats = Array.isArray(item.category) ? item.category : [item.category];
-      return cats.includes(category) && map.has(item._id.toString());
+      return cats.includes(category);
     });
 
     if (categoryItems.length === 0) return null;
 
-    const retailerIds = categoryItems.map(item => map.get(item._id.toString()));
+    // Auto-ensure every category item has a catalog mapping (real-time sync)
+    const retailerIds = [];
+    for (const item of categoryItems) {
+      const retailerId = await this.ensureCatalogMapping(item);
+      if (retailerId) {
+        retailerIds.push(retailerId);
+      }
+    }
+
+    if (retailerIds.length === 0) return null;
 
     return {
       sections: [{
         title: category.substring(0, 24),
         productRetailerIds: retailerIds.slice(0, 30)
       }],
-      totalMapped: categoryItems.length
+      totalMapped: retailerIds.length
     };
   },
 
