@@ -1174,6 +1174,12 @@ const metaCloud = {
           }
         };
 
+        // If sale price is provided and less than regular price, set it
+        if (product.salePrice && product.salePrice < product.price) {
+          req.data.sale_price = Math.round(product.salePrice * 100);
+          req.data.sale_price_effective_date = product.salePriceEffectiveDate || '';
+        }
+
         if (product.imageUrl) {
           req.data.image_url = product.imageUrl;
         }

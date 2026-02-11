@@ -8,6 +8,7 @@ const googleSheets = require('../services/googleSheets');
 const whatsapp = require('../services/whatsapp');
 const whatsappBroadcast = require('../services/whatsappBroadcast');
 const logger = require('../services/logger');
+const catalogService = require('../services/catalogService');
 const multer = require('multer');
 
 // Apply admin rate limiting
@@ -281,11 +282,12 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     // Apply offer to selected items and categories (if any items/categories are selected)
     // NOTE: For targeted offers, we DON'T apply offerPrice to items (discount is calculated at order time for eligible customers only)
     
+    let allItemIds = [];
     if (parsedAppliedItems.length > 0 || parsedAppliedCategories.length > 0) {
       const MenuItem = require('../models/MenuItem');
       
       // Collect all item IDs (from both direct selection and categories)
-      let allItemIds = [...parsedAppliedItems];
+      allItemIds = [...parsedAppliedItems];
       
       // Add items from selected categories
       if (parsedAppliedCategories.length > 0) {
@@ -340,6 +342,23 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     const eventEmitter = require('../services/eventEmitter');
     eventEmitter.emit('dataUpdate', { type: 'offers' });
     eventEmitter.emit('dataUpdate', { type: 'menu' });
+
+    // Sync affected items to Meta catalog with updated offer prices
+    if (allItemIds && allItemIds.length > 0) {
+      const MenuItem = require('../models/MenuItem');
+      (async () => {
+        try {
+          for (const itemId of allItemIds) {
+            const freshItem = await MenuItem.findById(itemId);
+            if (freshItem) await catalogService.syncProductToMeta(freshItem);
+          }
+          catalogService.clearCache();
+          logger.info('Catalog synced after offer create', { itemCount: allItemIds.length });
+        } catch (syncErr) {
+          logger.error('Catalog sync after offer create failed', { error: syncErr.message });
+        }
+      })();
+    }
     
     // ========== AUTO-SUBMIT TEMPLATE TO META FOR REVIEW ==========
     // Template is required to send offers to customers outside 24-hour window
@@ -820,6 +839,38 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
     const eventEmitter = require('../services/eventEmitter');
     eventEmitter.emit('dataUpdate', { type: 'offers' });
     eventEmitter.emit('dataUpdate', { type: 'menu' });
+
+    // Sync all affected items to Meta catalog with updated offer/regular prices
+    {
+      const MenuItem = require('../models/MenuItem');
+      // Collect current + previous items that may have changed prices
+      const prevItems = (existingOffer.appliedItems || []).map(id => id.toString());
+      let prevCatItems = [];
+      if ((existingOffer.appliedCategories || []).length > 0) {
+        const pcItems = await MenuItem.find({ category: { $in: existingOffer.appliedCategories } });
+        prevCatItems = pcItems.map(i => i._id.toString());
+      }
+      let curCatItems = [];
+      if (parsedAppliedCategories.length > 0) {
+        const ccItems = await MenuItem.find({ category: { $in: parsedAppliedCategories } });
+        curCatItems = ccItems.map(i => i._id.toString());
+      }
+      const allAffected = [...new Set([...prevItems, ...prevCatItems, ...parsedAppliedItems, ...curCatItems])];
+      if (allAffected.length > 0) {
+        (async () => {
+          try {
+            for (const itemId of allAffected) {
+              const freshItem = await MenuItem.findById(itemId);
+              if (freshItem) await catalogService.syncProductToMeta(freshItem);
+            }
+            catalogService.clearCache();
+            logger.info('Catalog synced after offer update', { itemCount: allAffected.length });
+          } catch (syncErr) {
+            logger.error('Catalog sync after offer update failed', { error: syncErr.message });
+          }
+        })();
+      }
+    }
     
     // Fetch targeted customers in background (don't block response)
     if (isTargetedOffer) {
@@ -949,6 +1000,29 @@ router.delete('/:id', auth, async (req, res) => {
         logger.warn('Could not delete Meta template (may already be removed)', { templateName: offer.templateName, error: tplErr.message });
       }
     }
+
+    // Sync affected items to Meta catalog (remove sale_price)
+    if (offer.offerType) {
+      const MenuItem = require('../models/MenuItem');
+      const affectedItems = await MenuItem.find({ _id: { $in: (offer.appliedItems || []) } });
+      let catItems = [];
+      if ((offer.appliedCategories || []).length > 0) {
+        catItems = await MenuItem.find({ category: { $in: offer.appliedCategories } });
+      }
+      const allItems = [...affectedItems, ...catItems];
+      (async () => {
+        try {
+          for (const item of allItems) {
+            const freshItem = await MenuItem.findById(item._id);
+            if (freshItem) await catalogService.syncProductToMeta(freshItem);
+          }
+          catalogService.clearCache();
+          logger.info('Catalog synced after offer delete', { itemCount: allItems.length });
+        } catch (syncErr) {
+          logger.error('Catalog sync after offer delete failed', { error: syncErr.message });
+        }
+      })();
+    }
     
     await Offer.findByIdAndDelete(req.params.id);
     
@@ -1056,6 +1130,24 @@ router.patch('/:id/toggle', auth, async (req, res) => {
     // If offer was deactivated, emit offer-deleted so frontend removes items from cart/wishlist
     if (wasActive && !offer.isActive) {
       eventEmitter.emit('dataUpdate', { type: 'offer-deleted', offerId: req.params.id });
+    }
+
+    // Sync affected items to Meta catalog (update/remove sale_price)
+    if (offer.offerType) {
+      const MenuItem = require('../models/MenuItem');
+      const itemsWithOffer = await MenuItem.find({ offerType: offer.offerType });
+      (async () => {
+        try {
+          for (const item of itemsWithOffer) {
+            const freshItem = await MenuItem.findById(item._id);
+            if (freshItem) await catalogService.syncProductToMeta(freshItem);
+          }
+          catalogService.clearCache();
+          logger.info('Catalog synced after offer toggle', { itemCount: itemsWithOffer.length, active: offer.isActive });
+        } catch (syncErr) {
+          logger.error('Catalog sync after offer toggle failed', { error: syncErr.message });
+        }
+      })();
     }
     
     res.json(offer);

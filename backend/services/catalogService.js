@@ -508,12 +508,17 @@ const catalogService = {
         retailerId,
         name: menuItem.name,
         description: this.buildProductDescription(menuItem),
-        price: menuItem.price,
+        price: menuItem.offerPrice ? menuItem.price : menuItem.price,
         currency: 'INR',
         imageUrl: menuItem.image || null,
         category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
         availability: (menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock'
       };
+
+      // If item has an active offer price, send it as sale_price
+      if (menuItem.offerPrice && menuItem.offerPrice < menuItem.price) {
+        product.salePrice = menuItem.offerPrice;
+      }
 
       // Push to Meta Commerce Catalog
       const metaResult = await metaCloud.createOrUpdateCatalogProduct(catalogId, product);
