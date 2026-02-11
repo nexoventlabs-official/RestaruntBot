@@ -358,7 +358,7 @@ const catalogService = {
         const products = batch.map(item => ({
           retailerId: item._id.toString(),
           name: item.name,
-          description: item.description || item.name,
+          description: this.buildProductDescription(item),
           price: item.price,
           currency: 'INR',
           imageUrl: item.image || null,
@@ -449,6 +449,37 @@ const catalogService = {
   // ========== AUTO-SYNC: Menu Item → Meta Catalog ==========
 
   /**
+   * Build a rich product description including rating info for Meta catalog.
+   * @param {Object} menuItem - The MenuItem document
+   * @returns {string} Description with ratings
+   */
+  buildProductDescription(menuItem) {
+    let desc = menuItem.description || menuItem.name;
+    
+    // Add rating info to description
+    if (menuItem.totalRatings > 0 && menuItem.avgRating > 0) {
+      const stars = '⭐'.repeat(Math.min(Math.floor(menuItem.avgRating), 5));
+      desc += ` | ${stars} ${menuItem.avgRating}/5 (${menuItem.totalRatings} reviews)`;
+    }
+    
+    // Add food type
+    if (menuItem.foodType === 'veg') {
+      desc += ' | 🟢 Veg';
+    } else if (menuItem.foodType === 'nonveg') {
+      desc += ' | 🔴 Non-Veg';
+    } else if (menuItem.foodType === 'egg') {
+      desc += ' | 🟡 Egg';
+    }
+    
+    // Add unit/quantity info
+    if (menuItem.quantity && menuItem.unit) {
+      desc += ` | ${menuItem.quantity} ${menuItem.unit}`;
+    }
+    
+    return desc.substring(0, 5000); // Meta catalog description limit
+  },
+
+  /**
    * Sync a single menu item to Meta Commerce Catalog.
    * Called automatically when a menu item is created or updated in the admin panel.
    * Creates the catalog mapping + pushes the product to Meta.
@@ -464,11 +495,11 @@ const catalogService = {
     const retailerId = menuItem._id.toString();
 
     try {
-      // Build product data from menu item
+      // Build product data from menu item with ratings in description
       const product = {
         retailerId,
         name: menuItem.name,
-        description: menuItem.description || menuItem.name,
+        description: this.buildProductDescription(menuItem),
         price: menuItem.price,
         currency: 'INR',
         imageUrl: menuItem.image || null,
@@ -648,6 +679,101 @@ const catalogService = {
     if (!this.isEnabled()) return [];
     const metaCloud = require('./metaCloud');
     return metaCloud.getCollections(this.getCatalogId());
+  },
+
+  /**
+   * Build product sections specifically for search results.
+   * More lenient than buildProductSections — doesn't require 50% coverage.
+   * Groups by category, max 30 products.
+   * @param {Array} items - Search result MenuItem documents
+   * @param {string} searchLabel - Label for the search
+   * @returns {Object|null} { sections, totalMapped } or null
+   */
+  async buildSearchResultSections(items) {
+    if (!this.isEnabled()) return null;
+
+    const map = await this.getCatalogMap();
+    if (map.size === 0) return null;
+
+    // Filter items that have catalog mappings (no 50% threshold for search results)
+    const mappedItems = items.filter(item => map.has(item._id.toString()));
+    if (mappedItems.length === 0) return null;
+
+    // Group by category
+    const categoryMap = new Map();
+    for (const item of mappedItems) {
+      const categories = Array.isArray(item.category) ? item.category : [item.category];
+      const cat = categories[0] || 'Results';
+      if (!categoryMap.has(cat)) categoryMap.set(cat, []);
+      categoryMap.get(cat).push(map.get(item._id.toString()));
+    }
+
+    // Build sections (max 10 sections, max 30 products)
+    const sections = [];
+    let totalProducts = 0;
+    const MAX_TOTAL_PRODUCTS = 30;
+    for (const [category, retailerIds] of categoryMap) {
+      if (sections.length >= 10) break;
+      const remaining = MAX_TOTAL_PRODUCTS - totalProducts;
+      if (remaining <= 0) break;
+      const slicedIds = retailerIds.slice(0, remaining);
+      sections.push({
+        title: category.substring(0, 24),
+        productRetailerIds: slicedIds
+      });
+      totalProducts += slicedIds.length;
+    }
+
+    return {
+      sections,
+      totalMapped: mappedItems.length,
+      totalInSections: totalProducts
+    };
+  },
+
+  /**
+   * Sync ratings for menu items to Meta Commerce Catalog.
+   * Called after a customer submits a rating. Updates the product description
+   * in Meta catalog to reflect the latest ratings.
+   * 
+   * @param {Array<string>} menuItemIds - Array of MenuItem IDs whose ratings changed
+   * @returns {Object} { synced, failed }
+   */
+  async syncRatingsToMeta(menuItemIds) {
+    if (!this.isEnabled()) return { synced: 0, failed: 0 };
+
+    const catalogId = this.getCatalogId();
+    const metaCloud = require('./metaCloud');
+    let synced = 0;
+    let failed = 0;
+
+    try {
+      // Fetch the updated menu items
+      const items = await MenuItem.find({ _id: { $in: menuItemIds } }).lean();
+      
+      if (items.length === 0) return { synced: 0, failed: 0 };
+
+      // Build batch update with new descriptions including ratings
+      const products = items.map(item => ({
+        retailerId: item._id.toString(),
+        name: item.name,
+        description: this.buildProductDescription(item),
+        price: item.price,
+        currency: 'INR',
+        imageUrl: item.image || null,
+        category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
+        availability: (item.available && !item.isPaused) ? 'in stock' : 'out of stock'
+      }));
+
+      await metaCloud.batchCreateOrUpdateProducts(catalogId, products);
+      synced = products.length;
+      logger.info('Ratings synced to Meta catalog', { count: synced, itemIds: menuItemIds });
+    } catch (err) {
+      failed = menuItemIds.length;
+      logger.error('Failed to sync ratings to Meta catalog', { error: err.message, itemIds: menuItemIds });
+    }
+
+    return { synced, failed };
   },
 
   async parseWhatsAppOrder(orderData) {

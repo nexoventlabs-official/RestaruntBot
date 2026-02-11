@@ -7,6 +7,7 @@ const DeliveryBoy = require('../models/DeliveryBoy');
 const HeroSection = require('../models/HeroSection');
 const Offer = require('../models/Offer');
 const whatsapp = require('../services/whatsapp');
+const catalogService = require('../services/catalogService');
 const { publicRateLimiter } = require('../middleware/rateLimiter');
 const router = express.Router();
 
@@ -685,6 +686,17 @@ router.post('/review/:phone/:orderId', async (req, res) => {
     }
     
     res.json({ success: true, message: 'Thank you for your feedback!' });
+
+    // Real-time sync: Update product descriptions in Meta WhatsApp Catalog with new ratings
+    // Fire-and-forget — don't block the response
+    const ratedMenuItemIds = ratings
+      .filter(r => r.menuItemId && r.rating >= 1 && r.rating <= 5)
+      .map(r => r.menuItemId);
+    if (ratedMenuItemIds.length > 0) {
+      catalogService.syncRatingsToMeta(ratedMenuItemIds).catch(err => {
+        logger.error('Background rating sync to Meta catalog failed', { error: err.message });
+      });
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

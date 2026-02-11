@@ -4411,6 +4411,24 @@ const chatbot = {
         await this.sendFoodTypeSelection(phone);
         state.currentStep = 'select_food_type';
       }
+      // Handle veg_only / nonveg_only / show_all (from "Item Not Available" browse menu buttons)
+      else if (selection === 'veg_only' || selection === 'nonveg_only' || selection === 'show_all') {
+        const foodTypeMap = { veg_only: 'veg', nonveg_only: 'nonveg', show_all: 'both' };
+        state.foodTypePreference = foodTypeMap[selection];
+        const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference);
+        const labelMap = { veg_only: '🌿 Veg Menu', nonveg_only: '🍗 Non-Veg Menu', show_all: '🍽️ All Menu' };
+        
+        if (filteredItems.length > 0) {
+          await this.sendMenuCategoriesWithLabel(phone, filteredItems, labelMap[selection]);
+          state.currentStep = 'select_category';
+        } else {
+          await whatsapp.sendButtons(phone, `❌ No ${labelMap[selection]} items available right now.`, [
+            { id: 'view_menu', text: '📋 View All Menu' },
+            { id: 'home', text: '🏠 Main Menu' }
+          ]);
+          state.currentStep = 'main_menu';
+        }
+      }
       // Handle text/voice menu intent with food type detection (only for text messages, not button clicks)
       else if (!selectedId && this.isShowMenuIntent(msg)) {
         const menuIntent = this.isShowMenuIntent(msg);
@@ -5847,9 +5865,9 @@ const chatbot = {
       return;
     }
 
-    // Try WhatsApp Catalog for search results
+    // Try WhatsApp Catalog for search results (uses lenient threshold for search)
     try {
-      const catalogResult = await catalogService.buildProductSections(items);
+      const catalogResult = await catalogService.buildSearchResultSections(items);
       if (catalogResult) {
         const catalogId = catalogService.getCatalogId();
         await whatsapp.sendProductList(
@@ -5980,6 +5998,31 @@ const chatbot = {
 
   // Send multiple items as individual catalog-style cards (for 2-5 search results)
   async sendSearchResultCards(phone, items, searchLabel) {
+    // Try WhatsApp Catalog product_list for search results (native catalog cards)
+    try {
+      const catalogResult = await catalogService.buildSearchResultSections(items);
+      if (catalogResult && catalogResult.sections.length > 0) {
+        const catalogId = catalogService.getCatalogId();
+        await whatsapp.sendProductList(
+          phone,
+          catalogId,
+          `🔍 ${searchLabel}`.substring(0, 60),
+          `Found ${items.length} items matching ${searchLabel}\nTap to view details & add to cart`,
+          catalogResult.sections,
+          'Perivi Hotel'
+        );
+        await whatsapp.sendButtons(phone, `🔍 Search results for ${searchLabel} above 👆`, [
+          { id: 'view_menu', text: 'Browse Menu' },
+          { id: 'view_cart', text: 'My Cart' },
+          { id: 'review_pay', text: 'Review & Order' }
+        ]);
+        return;
+      }
+    } catch (catalogErr) {
+      logger.info('Catalog fallback for search result cards', { searchLabel, error: catalogErr.message });
+    }
+
+    // Fallback: individual rich cards with image + buttons
     const activeOffers = await getCachedActiveOffers(phone);
     
     // Header message
@@ -6018,7 +6061,30 @@ const chatbot = {
       return;
     }
 
-    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
+    // Try WhatsApp Catalog single product card (native catalog display with image, price, rating)
+    try {
+      if (catalogService.isEnabled()) {
+        const retailerId = await catalogService.getRetailerId(item._id.toString());
+        if (retailerId) {
+          const catalogId = catalogService.getCatalogId();
+          const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating} (${item.totalRatings} reviews)` : '';
+          const foodIcon = item.foodType === 'veg' ? '🌿 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
+          const bodyText = `${foodIcon} ${ratingStr}\n⏱️ ${item.preparationTime || 15} mins prep time\nTap to add to cart!`;
+          await whatsapp.sendProduct(phone, catalogId, retailerId, bodyText, 'Perivi Hotel');
+          // Send action buttons below the catalog card
+          await whatsapp.sendButtons(phone, `📋 *${item.name}*\nTap above to view full details & add to cart`, [
+            { id: `confirm_add_${item._id}`, text: 'Quick Add to Cart' },
+            { id: 'view_menu', text: 'Back to Menu' },
+            { id: 'review_pay', text: 'Review & Order' }
+          ]);
+          return;
+        }
+      }
+    } catch (catalogErr) {
+      logger.info('Catalog fallback for item details', { itemId, error: catalogErr.message });
+    }
+
+    // Fallback: rich card with image + buttons
     const activeOffers = await getCachedActiveOffers(phone);
     const msg = this.buildItemCardMessage(item, activeOffers);
 
@@ -6029,17 +6095,37 @@ const chatbot = {
     ];
 
     if (item.image) {
-      // Send image with details and buttons in one message
       await whatsapp.sendImageWithButtons(phone, item.image, msg, buttons);
     } else {
-      // No image, send regular buttons with details
       await whatsapp.sendButtons(phone, msg, buttons);
     }
   },
 
   // Send item details for order flow (with Add to Cart focus)
   async sendItemDetailsForOrder(phone, item) {
-    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
+    // Try WhatsApp Catalog single product card
+    try {
+      if (catalogService.isEnabled()) {
+        const retailerId = await catalogService.getRetailerId(item._id.toString());
+        if (retailerId) {
+          const catalogId = catalogService.getCatalogId();
+          const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating} (${item.totalRatings} reviews)` : '';
+          const foodIcon = item.foodType === 'veg' ? '🌿 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
+          const bodyText = `${foodIcon} ${ratingStr}\n⏱️ ${item.preparationTime || 15} mins prep time\nTap to add to cart!`;
+          await whatsapp.sendProduct(phone, catalogId, retailerId, bodyText, 'Perivi Hotel');
+          await whatsapp.sendButtons(phone, `📋 *${item.name}*\nTap above to view full details & add to cart`, [
+            { id: `confirm_add_${item._id}`, text: 'Quick Add to Cart' },
+            { id: 'add_more', text: 'Back to Menu' },
+            { id: 'review_pay', text: 'Review & Order' }
+          ]);
+          return;
+        }
+      }
+    } catch (catalogErr) {
+      logger.info('Catalog fallback for order item details', { itemId: item._id, error: catalogErr.message });
+    }
+
+    // Fallback: rich card with image + buttons
     const activeOffers = await getCachedActiveOffers(phone);
     const msg = this.buildItemCardMessage(item, activeOffers);
 
