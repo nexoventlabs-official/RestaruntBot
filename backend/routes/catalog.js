@@ -190,6 +190,9 @@ router.post('/test-flow', authMiddleware, async (req, res) => {
     const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
 
     const results = [];
+    const tokenPrefix = accessToken ? accessToken.substring(0, 10) + '...' : 'MISSING';
+    const tokenLength = accessToken ? accessToken.length : 0;
+    results.push({ diagnostic: true, tokenPrefix, tokenLength, phoneNumberId });
 
     // Test with different API versions
     const versions = ['v21.0', 'v20.0', 'v18.0'];
