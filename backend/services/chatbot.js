@@ -5179,6 +5179,12 @@ const chatbot = {
               state.selectedItem = item._id.toString();
               await this.sendItemDetails(phone, menuItems, item._id.toString());
               state.currentStep = 'viewing_item_details';
+            } else if (matchingItems.length <= 5) {
+              // 2-5 items: show each as a rich catalog card with image, rating, price, buttons
+              state.searchTag = msg.trim();
+              state.tagSearchResults = matchingItems.map(i => i._id.toString());
+              await this.sendSearchResultCards(phone, matchingItems, displayLabel);
+              state.currentStep = 'viewing_tag_results';
             } else {
               // Multiple items - show list
               state.searchTag = msg.trim();
@@ -5835,6 +5841,12 @@ const chatbot = {
       return;
     }
 
+    // For small result sets (2-5 items), show individual catalog-style cards
+    if (items.length <= 5 && page === 0) {
+      await this.sendSearchResultCards(phone, items, tagKeyword);
+      return;
+    }
+
     // Try WhatsApp Catalog for search results
     try {
       const catalogResult = await catalogService.buildProductSections(items);
@@ -5930,26 +5942,27 @@ const chatbot = {
     ]);
   },
 
-  async sendItemDetails(phone, menuItems, itemId) {
-    const item = menuItems.find(m => m._id.toString() === itemId);
-    if (!item) {
-      await whatsapp.sendButtons(phone, '❌ Item not found.', [
-        { id: 'view_menu', text: 'View Menu' }
-      ]);
-      return;
-    }
-
-    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
-    const activeOffers = await getCachedActiveOffers(phone);
-
+  // Build a rich catalog-style card message for a single item (reusable)
+  buildItemCardMessage(item, activeOffers) {
     const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
     
-    // Rating display
+    // Rating display with breakdown
     let ratingDisplay = '';
     if (item.totalRatings > 0) {
       const fullStars = Math.floor(item.avgRating);
       const stars = '⭐'.repeat(fullStars);
       ratingDisplay = `${stars} ${item.avgRating} (${item.totalRatings} reviews)`;
+      
+      // Show rating breakdown if there are multiple ratings
+      if (item.ratings && item.ratings.length > 1) {
+        const counts = [0, 0, 0, 0, 0]; // index 0=1star, 4=5star
+        item.ratings.forEach(r => { if (r.rating >= 1 && r.rating <= 5) counts[r.rating - 1]++; });
+        const breakdown = [];
+        for (let i = 4; i >= 0; i--) {
+          if (counts[i] > 0) breakdown.push(`${i + 1}★: ${counts[i]}`);
+        }
+        if (breakdown.length > 0) ratingDisplay += `\n   ${breakdown.join(' | ')}`;
+      }
     } else {
       ratingDisplay = '☆☆☆☆☆ No ratings yet';
     }
@@ -5961,6 +5974,53 @@ const chatbot = {
     if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
     msg += formatOfferTypes(item);
     msg += `\n\n📝 ${item.description || 'Delicious dish prepared fresh!'}`;
+    
+    return msg;
+  },
+
+  // Send multiple items as individual catalog-style cards (for 2-5 search results)
+  async sendSearchResultCards(phone, items, searchLabel) {
+    const activeOffers = await getCachedActiveOffers(phone);
+    
+    // Header message
+    await whatsapp.sendText(phone, `🔍 Found *${items.length} items* matching ${searchLabel}\n\nSwipe through the results below 👇`);
+    
+    // Send each item as a rich card with image + buttons
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const msg = this.buildItemCardMessage(item, activeOffers);
+      
+      const buttons = [
+        { id: `confirm_add_${item._id}`, text: 'Add to Cart' },
+        { id: `view_${item._id}`, text: 'View Details' }
+      ];
+      // Add "Review & Order" only on last card
+      if (i === items.length - 1) {
+        buttons.push({ id: 'review_pay', text: 'Review & Order' });
+      } else {
+        buttons.push({ id: 'view_menu', text: 'Back to Menu' });
+      }
+      
+      if (item.image) {
+        await whatsapp.sendImageWithButtons(phone, item.image, msg, buttons);
+      } else {
+        await whatsapp.sendButtons(phone, msg, buttons);
+      }
+    }
+  },
+
+  async sendItemDetails(phone, menuItems, itemId) {
+    const item = menuItems.find(m => m._id.toString() === itemId);
+    if (!item) {
+      await whatsapp.sendButtons(phone, '❌ Item not found.', [
+        { id: 'view_menu', text: 'View Menu' }
+      ]);
+      return;
+    }
+
+    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
+    const activeOffers = await getCachedActiveOffers(phone);
+    const msg = this.buildItemCardMessage(item, activeOffers);
 
     const buttons = [
       { id: `confirm_add_${item._id}`, text: 'Add to Cart' },
@@ -5981,26 +6041,7 @@ const chatbot = {
   async sendItemDetailsForOrder(phone, item) {
     // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
     const activeOffers = await getCachedActiveOffers(phone);
-
-    const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
-    
-    // Rating display
-    let ratingDisplay = '';
-    if (item.totalRatings > 0) {
-      const fullStars = Math.floor(item.avgRating);
-      const stars = '⭐'.repeat(fullStars);
-      ratingDisplay = `${stars} ${item.avgRating} (${item.totalRatings} reviews)`;
-    } else {
-      ratingDisplay = '☆☆☆☆☆ No ratings yet';
-    }
-    
-    let msg = `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n\n`;
-    msg += `${ratingDisplay}\n\n`;
-    msg += `💰 *Price:* ${formatPriceWithActiveOffers(item, activeOffers)} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
-    msg += `⏱️ *Prep Time:* ${item.preparationTime || 15} mins\n`;
-    if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
-    msg += formatOfferTypes(item);
-    msg += `\n\n📝 ${item.description || 'Delicious dish prepared fresh!'}`;
+    const msg = this.buildItemCardMessage(item, activeOffers);
 
     const buttons = [
       { id: `confirm_add_${item._id}`, text: 'Add to Cart' },
