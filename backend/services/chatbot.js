@@ -5475,8 +5475,7 @@ const chatbot = {
           rows: [
             { rowId: 'food_both', title: 'All Menu', description: 'Browse all dishes' },
             { rowId: 'food_veg', title: 'Veg Menu', description: 'Browse vegetarian dishes' },
-            { rowId: 'food_nonveg', title: 'Non-Veg Menu', description: 'Browse non-vegetarian dishes' },
-            { rowId: 'view_cart', title: 'My Cart', description: 'View items in cart' }
+            { rowId: 'food_nonveg', title: 'Non-Veg Menu', description: 'Browse non-vegetarian dishes' }
           ]
         },
         {
@@ -5878,11 +5877,6 @@ const chatbot = {
           catalogResult.sections,
           'Perivi Hotel'
         );
-        await whatsapp.sendButtons(phone, `Results for "${tagKeyword}" above 👆`, [
-          { id: 'view_menu', text: 'Browse Menu' },
-          { id: 'view_cart', text: 'My Cart' },
-          { id: 'home', text: 'Main Menu' }
-        ]);
         return;
       }
     } catch (catalogErr) {
@@ -6011,11 +6005,6 @@ const chatbot = {
           catalogResult.sections,
           'Perivi Hotel'
         );
-        await whatsapp.sendButtons(phone, `🔍 Search results for ${searchLabel} above 👆`, [
-          { id: 'view_menu', text: 'Browse Menu' },
-          { id: 'view_cart', text: 'My Cart' },
-          { id: 'review_pay', text: 'Review & Order' }
-        ]);
         return;
       }
     } catch (catalogErr) {
