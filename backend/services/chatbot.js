@@ -5462,40 +5462,6 @@ const chatbot = {
       { id: 'my_orders', text: '📦 My Orders' },
       { id: 'open_website', text: '🌐 Website' }
     ], 'Perivi Hotel');
-
-    // Step 2: Send "Explore more" with View Options list button
-    await whatsapp.sendList(
-      phone,
-      '✨ Explore More',
-      'Tap below to see all available options',
-      'View Options',
-      [
-        {
-          title: 'Order Food',
-          rows: [
-            { rowId: 'food_both', title: 'All Menu', description: 'Browse all dishes' },
-            { rowId: 'food_veg', title: 'Veg Menu', description: 'Browse vegetarian dishes' },
-            { rowId: 'food_nonveg', title: 'Non-Veg Menu', description: 'Browse non-vegetarian dishes' }
-          ]
-        },
-        {
-          title: 'My Orders',
-          rows: [
-            { rowId: 'order_status', title: 'Order Status', description: 'Check your orders' },
-            { rowId: 'track_order', title: 'Track Delivery', description: 'Live order tracking' },
-            { rowId: 'cancel_order', title: 'Cancel Order', description: 'Cancel & auto-refund if paid' }
-          ]
-        },
-        {
-          title: 'More',
-          rows: [
-            { rowId: 'open_website', title: 'Open Website 🌐', description: 'Order through our website' },
-            { rowId: 'help', title: 'Help', description: 'Get assistance' }
-          ]
-        }
-      ],
-      'Powered by AI'
-    );
   },
 
   // ============ ORDER FOOD MENU ============
