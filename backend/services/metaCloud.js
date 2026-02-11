@@ -1761,153 +1761,80 @@ const metaCloud = {
    * @param {string} [options.mode] - 'published' (default) or 'draft'
    */
   async sendFlowMessage(phone, options) {
-    const { baseUrl, accessToken } = getConfig();
-    const to = phone.replace('@c.us', '').replace(/\D/g, '');
+    try {
+      const { baseUrl, accessToken } = getConfig();
+      const to = phone.replace('@c.us', '').replace(/\D/g, '');
 
-    const {
-      flowId,
-      flowCta,
-      headerText,
-      bodyText,
-      footerText,
-      screenName = 'CATEGORY_SELECT',
-      screenData = {},
-      flowToken = 'unused',
-      mode = 'published'
-    } = options;
+      const {
+        flowId,
+        flowCta,
+        headerText,
+        bodyText,
+        footerText,
+        screenName = 'CATEGORY_SELECT',
+        screenData = {},
+        flowToken = 'unused',
+        mode = 'published'
+      } = options;
 
-    const headers = { Authorization: `Bearer ${accessToken}` };
-
-    // Build full payload with navigate + data
-    const fullPayload = {
-      messaging_product: 'whatsapp',
-      recipient_type: 'individual',
-      to,
-      type: 'interactive',
-      interactive: {
-        type: 'flow',
-        header: { type: 'text', text: headerText || 'Menu' },
-        body: { text: bodyText || 'Select a category' },
-        action: {
-          name: 'flow',
-          parameters: {
-            flow_message_version: '3',
-            flow_token: flowToken,
-            flow_id: flowId,
-            flow_cta: flowCta,
-            mode,
-            flow_action: 'navigate',
-            flow_action_payload: {
-              screen: screenName,
-              data: {
-                ...screenData,
-                flow_token: flowToken
+      const payload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'flow',
+          header: { type: 'text', text: headerText || 'Menu' },
+          body: { text: bodyText || 'Select a category' },
+          action: {
+            name: 'flow',
+            parameters: {
+              flow_message_version: '3',
+              flow_token: flowToken,
+              flow_id: flowId,
+              flow_cta: flowCta,
+              mode,
+              flow_action: 'navigate',
+              flow_action_payload: {
+                screen: screenName,
+                data: {
+                  ...screenData,
+                  flow_token: flowToken
+                }
               }
             }
           }
         }
+      };
+
+      if (footerText) {
+        payload.interactive.footer = { text: footerText };
       }
-    };
-    if (footerText) {
-      fullPayload.interactive.footer = { text: footerText };
-    }
 
-    // Attempt 1: Full payload with navigate + data
-    try {
-      logger.info('Flow attempt 1: full payload', { to, flowId, screen: screenName, mode, cta: flowCta, dataKeys: Object.keys(screenData) });
-      const response = await metaApi.post(`${baseUrl}/messages`, fullPayload, { headers });
-      logger.info('Flow message sent (full payload)', { messageId: response.data?.messages?.[0]?.id });
-      return response.data;
-    } catch (err1) {
-      const e1 = err1.response?.data?.error;
-      logger.warn('Flow attempt 1 failed (full payload)', {
-        code: e1?.code, message: e1?.message, subcode: e1?.error_subcode,
-        details: e1?.error_data?.details, full: JSON.stringify(err1.response?.data)
-      });
-    }
+      logger.info('Sending WhatsApp Flow message', { to, flowId, screen: screenName, mode, cta: flowCta });
 
-    // Attempt 2: Without header (some API versions don't support header for flow type)
-    try {
-      const noHeaderPayload = JSON.parse(JSON.stringify(fullPayload));
-      delete noHeaderPayload.interactive.header;
-      delete noHeaderPayload.interactive.footer;
-      logger.info('Flow attempt 2: no header/footer', { to, flowId });
-      const response = await metaApi.post(`${baseUrl}/messages`, noHeaderPayload, { headers });
-      logger.info('Flow message sent (no header/footer)', { messageId: response.data?.messages?.[0]?.id });
-      return response.data;
-    } catch (err2) {
-      const e2 = err2.response?.data?.error;
-      logger.warn('Flow attempt 2 failed (no header/footer)', {
-        code: e2?.code, message: e2?.message, subcode: e2?.error_subcode,
-        details: e2?.error_data?.details
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
-    }
 
-    // Attempt 3: Truly minimal - no mode, no flow_token, no navigate
-    // Tests if the issue is the mode parameter or flow_token
-    try {
-      const minPayload = {
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to,
-        type: 'interactive',
-        interactive: {
-          type: 'flow',
-          body: { text: bodyText || 'Select a category' },
-          action: {
-            name: 'flow',
-            parameters: {
-              flow_message_version: '3',
-              flow_id: flowId,
-              flow_cta: flowCta
-            }
-          }
-        }
-      };
-      logger.info('Flow attempt 3: truly minimal (no mode, no flow_token)', { to, flowId });
-      const response = await metaApi.post(`${baseUrl}/messages`, minPayload, { headers });
-      logger.info('Flow message sent (minimum payload)', { messageId: response.data?.messages?.[0]?.id });
+      logger.info('WhatsApp Flow message sent', { messageId: response.data?.messages?.[0]?.id });
       return response.data;
-    } catch (err3) {
-      const e3 = err3.response?.data?.error;
-      logger.error('Flow attempt 3 failed (truly minimal)', {
-        code: e3?.code, message: e3?.message, subcode: e3?.error_subcode,
-        details: e3?.error_data?.details, full: JSON.stringify(err3.response?.data)
+    } catch (error) {
+      const errorData = error.response?.data?.error;
+      logger.error('sendFlowMessage error', {
+        code: errorData?.code,
+        message: errorData?.message,
+        subcode: errorData?.error_subcode,
+        type: errorData?.type,
+        details: errorData?.error_data?.details
       });
-    }
 
-    // Attempt 4: Use flow_name instead of flow_id + draft mode
-    try {
-      const namePayload = {
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to,
-        type: 'interactive',
-        interactive: {
-          type: 'flow',
-          body: { text: bodyText || 'Select a category' },
-          action: {
-            name: 'flow',
-            parameters: {
-              flow_message_version: '3',
-              flow_name: 'JRB Menu Categories',
-              flow_cta: flowCta,
-              mode: 'draft'
-            }
-          }
-        }
-      };
-      logger.info('Flow attempt 4: flow_name + draft mode', { to });
-      const response = await metaApi.post(`${baseUrl}/messages`, namePayload, { headers });
-      logger.info('Flow message sent (flow_name)', { messageId: response.data?.messages?.[0]?.id });
-      return response.data;
-    } catch (err4) {
-      const e4 = err4.response?.data?.error;
-      logger.error('Flow ALL attempts failed', {
-        code: e4?.code, message: e4?.message, subcode: e4?.error_subcode,
-        details: e4?.error_data?.details, full: JSON.stringify(err4.response?.data)
-      });
-      throw err4;
+      // If blocked by integrity, disable Flows for this session to avoid repeated failures
+      if (errorData?.code === 139000) {
+        logger.warn('WhatsApp Flows blocked by integrity - disabling Flow category selection for this session');
+        process.env.WHATSAPP_CATEGORY_FLOW_STATUS = 'BLOCKED';
+      }
+      throw error;
     }
   }
 };

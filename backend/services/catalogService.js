@@ -910,11 +910,12 @@ const catalogService = {
   },
 
   /**
-   * Get the Flow send mode (published or draft).
-   * @returns {string} 'published' or 'draft'
+   * Get the Flow send mode (published, draft, or null if blocked).
+   * @returns {string|null} 'published', 'draft', or null if blocked/unavailable
    */
   getCategoryFlowMode() {
     const status = process.env.WHATSAPP_CATEGORY_FLOW_STATUS || 'DRAFT';
+    if (status === 'BLOCKED') return null;
     return status === 'PUBLISHED' ? 'published' : 'draft';
   }
 };

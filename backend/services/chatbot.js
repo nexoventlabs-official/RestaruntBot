@@ -5521,7 +5521,8 @@ const chatbot = {
     // ===== TRY WHATSAPP FLOW FOR CATEGORY SELECTION =====
     try {
       const flowId = catalogService.getCategoryFlowId();
-      if (flowId && catalogService.isEnabled()) {
+      const flowMode = catalogService.getCategoryFlowMode();
+      if (flowId && flowMode && catalogService.isEnabled()) {
         const metaCloud = require('./metaCloud');
         const flowData = await catalogService.buildCategoryFlowDataSorted(menuItems, `category_select_${phone}`);
 
@@ -5561,7 +5562,6 @@ const chatbot = {
           }
 
           // Send WhatsApp Flow message for category selection
-          const flowMode = catalogService.getCategoryFlowMode();
           logger.info('Attempting Flow category send', { phone, flowId, mode: flowMode, categories: flowData.categories.length });
           await metaCloud.sendFlowMessage(phone, {
             flowId,
@@ -6041,7 +6041,8 @@ const chatbot = {
     // ===== TRY WHATSAPP FLOW FOR CATEGORY SELECTION =====
     try {
       const flowId = catalogService.getCategoryFlowId();
-      if (flowId && catalogService.isEnabled()) {
+      const flowMode = catalogService.getCategoryFlowMode();
+      if (flowId && flowMode && catalogService.isEnabled()) {
         const metaCloud = require('./metaCloud');
         const flowData = await catalogService.buildCategoryFlowDataSorted(menuItems, `category_select_order_${phone}`);
 
@@ -6081,8 +6082,7 @@ const chatbot = {
           }
 
           // Send WhatsApp Flow message for category selection
-          const flowModeOrder = catalogService.getCategoryFlowMode();
-          logger.info('Attempting Flow category send (order)', { phone, flowId, mode: flowModeOrder, categories: flowData.categories.length });
+          logger.info('Attempting Flow category send (order)', { phone, flowId, mode: flowMode, categories: flowData.categories.length });
           await metaCloud.sendFlowMessage(phone, {
             flowId,
             flowCta: 'Browse by Category',
@@ -6092,10 +6092,10 @@ const chatbot = {
             screenName: 'CATEGORY_SELECT',
             screenData: flowData,
             flowToken: `category_select_order_${phone}`,
-            mode: flowModeOrder
+            mode: flowMode
           });
 
-          logger.info('Sent Flow category selector (order)', { phone, categoryCount: flowData.categories.length, mode: flowModeOrder });
+          logger.info('Sent Flow category selector (order)', { phone, categoryCount: flowData.categories.length, mode: flowMode });
           return;
         }
       }
