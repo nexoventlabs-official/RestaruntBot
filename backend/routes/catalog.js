@@ -184,7 +184,7 @@ router.post('/test-flow', authMiddleware, async (req, res) => {
   try {
     const axios = require('axios');
     const catalogService = require('../services/catalogService');
-    const phone = req.body.phone || '919440203095';
+    const phone = req.body.phone || '918903162114'; // Default to a real customer, NOT bot's own number
     const flowId = catalogService.getCategoryFlowId() || '875972408691130';
     const accessToken = process.env.META_ACCESS_TOKEN;
     const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
