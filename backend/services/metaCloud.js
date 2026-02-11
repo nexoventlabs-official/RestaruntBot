@@ -1579,6 +1579,256 @@ const metaCloud = {
       logger.error('Meta deleteCollection error', { id: productSetId, error: error.response?.data?.error?.message || error.message });
       throw error;
     }
+  },
+
+  // ============ WHATSAPP FLOWS API ============
+
+  /**
+   * Create a new WhatsApp Flow under the WABA.
+   * @param {string} name - Flow name
+   * @param {string[]} categories - Flow categories, e.g. ['OTHER']
+   * @param {string} [flowJson] - Optional Flow JSON string to create+publish in one request
+   * @returns {{ id: string, success: boolean, validation_errors: Array }}
+   */
+  async createFlow(name, categories = ['OTHER'], flowJson = null) {
+    try {
+      const { accessToken, wabaId } = getConfig();
+      const data = { name, categories };
+      if (flowJson) {
+        data.flow_json = flowJson;
+      }
+
+      const response = await metaApi.post(
+        `https://graph.facebook.com/v24.0/${wabaId}/flows`,
+        data,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+
+      logger.info('WhatsApp Flow created', { id: response.data?.id, name });
+      return response.data;
+    } catch (error) {
+      logger.error('createFlow error', {
+        error: error.response?.data?.error?.message || error.message,
+        details: error.response?.data
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Update a Flow's JSON by uploading it as a form-data asset.
+   * @param {string} flowId - The Flow ID
+   * @param {object} flowJsonObj - The Flow JSON object
+   */
+  async updateFlowJSON(flowId, flowJsonObj) {
+    try {
+      const { accessToken } = getConfig();
+      const FormData = require('form-data');
+      const formData = new FormData();
+
+      const jsonStr = JSON.stringify(flowJsonObj);
+      formData.append('file', Buffer.from(jsonStr), {
+        filename: 'flow.json',
+        contentType: 'application/json'
+      });
+      formData.append('name', 'flow.json');
+      formData.append('asset_type', 'FLOW_JSON');
+
+      const response = await metaApi.post(
+        `https://graph.facebook.com/v24.0/${flowId}/assets`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            ...formData.getHeaders()
+          },
+          maxContentLength: 10 * 1024 * 1024,
+          maxBodyLength: 10 * 1024 * 1024
+        }
+      );
+
+      logger.info('WhatsApp Flow JSON updated', { flowId, errors: response.data?.validation_errors?.length || 0 });
+      return response.data;
+    } catch (error) {
+      logger.error('updateFlowJSON error', {
+        flowId,
+        error: error.response?.data?.error?.message || error.message,
+        details: error.response?.data
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Publish a Flow (changes status from DRAFT to PUBLISHED).
+   * @param {string} flowId - The Flow ID
+   */
+  async publishFlow(flowId) {
+    try {
+      const { accessToken } = getConfig();
+      const response = await metaApi.post(
+        `https://graph.facebook.com/v24.0/${flowId}/publish`,
+        {},
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+
+      logger.info('WhatsApp Flow published', { flowId });
+      return response.data;
+    } catch (error) {
+      logger.error('publishFlow error', {
+        flowId,
+        error: error.response?.data?.error?.message || error.message
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Get list of Flows under the WABA.
+   */
+  async getFlows() {
+    try {
+      const { accessToken, wabaId } = getConfig();
+      const response = await metaApi.get(
+        `https://graph.facebook.com/v24.0/${wabaId}/flows`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+
+      return response.data?.data || [];
+    } catch (error) {
+      logger.error('getFlows error', { error: error.response?.data?.error?.message || error.message });
+      throw error;
+    }
+  },
+
+  /**
+   * Get details of a specific Flow.
+   * @param {string} flowId
+   */
+  async getFlowDetails(flowId) {
+    try {
+      const { accessToken } = getConfig();
+      const response = await metaApi.get(
+        `https://graph.facebook.com/v24.0/${flowId}`,
+        {
+          params: {
+            fields: 'id,name,status,categories,validation_errors,json_version,data_api_version',
+            access_token: accessToken
+          }
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      logger.error('getFlowDetails error', { flowId, error: error.response?.data?.error?.message || error.message });
+      throw error;
+    }
+  },
+
+  /**
+   * Delete a Flow (only works on DRAFT flows).
+   * @param {string} flowId
+   */
+  async deleteFlow(flowId) {
+    try {
+      const { accessToken } = getConfig();
+      const response = await metaApi.delete(
+        `https://graph.facebook.com/v24.0/${flowId}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+
+      logger.info('WhatsApp Flow deleted', { flowId });
+      return response.data;
+    } catch (error) {
+      logger.error('deleteFlow error', { flowId, error: error.response?.data?.error?.message || error.message });
+      throw error;
+    }
+  },
+
+  /**
+   * Send an interactive Flow message to a user (user-initiated conversation).
+   *
+   * @param {string} phone - Recipient phone number
+   * @param {object} options
+   * @param {string} options.flowId - The published Flow ID
+   * @param {string} options.flowCta - CTA button text (e.g. "View Categories")
+   * @param {string} options.headerText - Header text
+   * @param {string} options.bodyText - Body text
+   * @param {string} [options.footerText] - Optional footer text
+   * @param {string} [options.screenName] - Initial screen to navigate to
+   * @param {object} [options.screenData] - Data payload for the screen
+   * @param {string} [options.flowToken] - Custom flow token for identification
+   * @param {string} [options.mode] - 'published' (default) or 'draft'
+   */
+  async sendFlowMessage(phone, options) {
+    try {
+      const { baseUrl, accessToken } = getConfig();
+      const to = phone.replace('@c.us', '').replace(/\D/g, '');
+
+      const {
+        flowId,
+        flowCta,
+        headerText,
+        bodyText,
+        footerText,
+        screenName = 'CATEGORY_SELECT',
+        screenData = {},
+        flowToken = 'unused',
+        mode = 'published'
+      } = options;
+
+      const payload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'flow',
+          header: { type: 'text', text: headerText },
+          body: { text: bodyText },
+          action: {
+            name: 'flow',
+            parameters: {
+              flow_message_version: '3',
+              flow_token: flowToken,
+              flow_id: flowId,
+              flow_cta: flowCta,
+              mode,
+              flow_action: 'navigate',
+              flow_action_payload: {
+                screen: screenName,
+                data: {
+                  ...screenData,
+                  flow_token: flowToken
+                }
+              }
+            }
+          }
+        }
+      };
+
+      if (footerText) {
+        payload.interactive.footer = { text: footerText };
+      }
+
+      logger.info('Sending WhatsApp Flow message', { to, flowId, screen: screenName });
+
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+
+      logger.info('WhatsApp Flow message sent', { messageId: response.data?.messages?.[0]?.id });
+      return response.data;
+    } catch (error) {
+      const errorData = error.response?.data?.error;
+      logger.error('sendFlowMessage error', {
+        code: errorData?.code,
+        message: errorData?.message,
+        type: errorData?.type,
+        details: error.response?.data
+      });
+      throw error;
+    }
   }
 };
 

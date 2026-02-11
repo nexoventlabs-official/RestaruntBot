@@ -406,6 +406,39 @@ router.post('/meta', webhookRateLimiter, async (req, res) => {
                   selectedId = message.interactive.list_reply?.id || '';
                   text = message.interactive.list_reply?.title || '';
                   messageType = 'list';
+                } else if (message.interactive?.type === 'nfm_reply') {
+                  // WhatsApp Flows response — user completed a Flow
+                  const nfmReply = message.interactive.nfm_reply || {};
+                  try {
+                    const responseData = typeof nfmReply.response_json === 'string'
+                      ? JSON.parse(nfmReply.response_json)
+                      : nfmReply.response_json || {};
+
+                    logger.info('📋 Flow response received', {
+                      phone,
+                      flowName: nfmReply.name,
+                      flowToken: responseData.flow_token,
+                      data: responseData
+                    });
+
+                    // Category selection flow
+                    if (responseData.flow_token?.startsWith('category_select') && responseData.selected_category) {
+                      const isOrderFlow = responseData.flow_token.includes('order_');
+                      const prefix = isOrderFlow ? 'order_cat_' : 'cat_';
+                      selectedId = `${prefix}${responseData.selected_category}`;
+                      text = responseData.selected_category;
+                      messageType = 'button'; // Treat as button press for chatbot routing
+                      logger.info('📋 Flow category selected', { category: responseData.selected_category, selectedId, isOrderFlow });
+                    } else {
+                      // Generic flow response — pass as text
+                      messageType = 'flow_reply';
+                      text = JSON.stringify(responseData);
+                    }
+                  } catch (parseErr) {
+                    logger.error('Flow response parse error', { error: parseErr.message, raw: nfmReply.response_json });
+                    messageType = 'text';
+                    text = nfmReply.body || 'Flow response';
+                  }
                 }
               } else if (message.type === 'order') {
                 // WhatsApp Catalog cart submission — user tapped "Send" on their cart

@@ -109,4 +109,59 @@ router.get('/collections', authMiddleware, async (req, res) => {
   }
 });
 
+// ============ WHATSAPP FLOWS ============
+
+// POST /api/catalog/setup-flow - Create & publish the category selection Flow
+router.post('/setup-flow', authMiddleware, async (req, res) => {
+  try {
+    const result = await catalogService.setupCategoryFlow();
+    res.json({
+      success: true,
+      message: result.status === 'already_published'
+        ? `Flow already published (ID: ${result.flowId})`
+        : `Flow created and published (ID: ${result.flowId})`,
+      ...result
+    });
+  } catch (error) {
+    logger.error('Setup Flow error', { error: error.message });
+    res.status(500).json({ error: 'Failed to setup category Flow', details: error.message });
+  }
+});
+
+// GET /api/catalog/flows - List all Flows under the WABA
+router.get('/flows', authMiddleware, async (req, res) => {
+  try {
+    const metaCloud = require('../services/metaCloud');
+    const flows = await metaCloud.getFlows();
+    res.json(flows);
+  } catch (error) {
+    logger.error('Get Flows error', { error: error.message });
+    res.status(500).json({ error: 'Failed to get Flows' });
+  }
+});
+
+// GET /api/catalog/flow/:flowId - Get Flow details
+router.get('/flow/:flowId', authMiddleware, async (req, res) => {
+  try {
+    const metaCloud = require('../services/metaCloud');
+    const details = await metaCloud.getFlowDetails(req.params.flowId);
+    res.json(details);
+  } catch (error) {
+    logger.error('Get Flow details error', { error: error.message });
+    res.status(500).json({ error: 'Failed to get Flow details' });
+  }
+});
+
+// DELETE /api/catalog/flow/:flowId - Delete a draft Flow
+router.delete('/flow/:flowId', authMiddleware, async (req, res) => {
+  try {
+    const metaCloud = require('../services/metaCloud');
+    await metaCloud.deleteFlow(req.params.flowId);
+    res.json({ success: true, message: 'Flow deleted' });
+  } catch (error) {
+    logger.error('Delete Flow error', { error: error.message });
+    res.status(500).json({ error: 'Failed to delete Flow (only DRAFT flows can be deleted)' });
+  }
+});
+
 module.exports = router;

@@ -693,6 +693,229 @@ const catalogService = {
       totalAmount,
       catalogId: orderData.catalog_id || null
     };
+  },
+
+  // ============ WHATSAPP FLOWS ============
+
+  /**
+   * Build the Flow JSON for category selection.
+   * Single-screen Flow with RadioButtonsGroup showing all active categories.
+   * Categories are passed dynamically via flow_action_payload when sending.
+   *
+   * @returns {object} Flow JSON definition
+   */
+  buildCategoryFlowJSON() {
+    return {
+      version: '6.3',
+      screens: [
+        {
+          id: 'CATEGORY_SELECT',
+          title: 'Menu Categories',
+          terminal: true,
+          success: true,
+          data: {
+            categories: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'veg_starters', title: 'Veg Starters (12 items)' },
+                { id: 'non_veg_starters', title: 'Non-Veg Starters (8 items)' },
+                { id: 'biryani', title: 'Biryani (6 items)' }
+              ]
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'category_select_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'TextHeading',
+                text: '🍽️ Select a Category'
+              },
+              {
+                type: 'TextBody',
+                text: 'Choose a category to browse our menu items'
+              },
+              {
+                type: 'RadioButtonsGroup',
+                name: 'selected_category',
+                label: 'Categories',
+                required: true,
+                'data-source': '${data.categories}'
+              },
+              {
+                type: 'Footer',
+                label: 'Browse Menu',
+                'on-click-action': {
+                  name: 'complete',
+                  payload: {
+                    selected_category: '${form.selected_category}',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    };
+  },
+
+  /**
+   * Build the data payload for the category selection Flow.
+   * @param {Array} menuItems - Filtered menu items to derive categories from
+   * @param {string} flowToken - Unique token to identify this flow instance
+   * @returns {object} { categories: [{id, title}], flow_token }
+   */
+  buildCategoryFlowData(menuItems, flowToken = 'category_select') {
+    const Category = require('../models/Category');
+    const categories = [...new Set(menuItems.flatMap(m =>
+      Array.isArray(m.category) ? m.category : [m.category]
+    ))];
+
+    const categoryData = categories.map(cat => {
+      const count = menuItems.filter(m =>
+        Array.isArray(m.category) ? m.category.includes(cat) : m.category === cat
+      ).length;
+      const safeId = cat.replace(/[^a-zA-Z0-9_]/g, '_');
+      return {
+        id: safeId,
+        title: `${cat} (${count} items)`
+      };
+    });
+
+    return {
+      categories: categoryData,
+      flow_token: flowToken
+    };
+  },
+
+  /**
+   * Build category flow data asynchronously using Category model for sorting.
+   * @param {Array} menuItems
+   * @param {string} flowToken
+   * @returns {Promise<object>}
+   */
+  async buildCategoryFlowDataSorted(menuItems, flowToken = 'category_select') {
+    const Category = require('../models/Category');
+    const categories = [...new Set(menuItems.flatMap(m =>
+      Array.isArray(m.category) ? m.category : [m.category]
+    ))];
+
+    // Get category docs for sort order
+    const catDocs = await Category.find({ isActive: true, name: { $in: categories } })
+      .sort({ sortOrder: 1 }).lean();
+
+    // Build sorted list, fall back to unsorted for categories not in DB
+    const sortedCats = catDocs.map(c => c.name);
+    const unsortedCats = categories.filter(c => !sortedCats.includes(c));
+    const allCats = [...sortedCats, ...unsortedCats];
+
+    const categoryData = allCats.map(cat => {
+      const count = menuItems.filter(m =>
+        Array.isArray(m.category) ? m.category.includes(cat) : m.category === cat
+      ).length;
+      const safeId = cat.replace(/[^a-zA-Z0-9_]/g, '_');
+      return {
+        id: safeId,
+        title: `${cat} (${count} items)`
+      };
+    });
+
+    return {
+      categories: categoryData,
+      flow_token: flowToken
+    };
+  },
+
+  /**
+   * Create and publish the Category Selection Flow.
+   * Stores the Flow ID in process.env.WHATSAPP_CATEGORY_FLOW_ID.
+   * @returns {Promise<{flowId: string, status: string}>}
+   */
+  async setupCategoryFlow() {
+    const metaCloud = require('./metaCloud');
+
+    // Check if a flow already exists
+    const flows = await metaCloud.getFlows();
+    const existing = flows.find(f => f.name === 'JRB Menu Categories');
+
+    if (existing && existing.status === 'PUBLISHED') {
+      logger.info('Category Flow already exists and is published', { flowId: existing.id });
+      process.env.WHATSAPP_CATEGORY_FLOW_ID = existing.id;
+      process.env.WHATSAPP_CATEGORY_FLOW_STATUS = 'PUBLISHED';
+      return { flowId: existing.id, status: 'already_published' };
+    }
+
+    // If exists as draft, reuse it (don't delete - JSON is already uploaded)
+    if (existing && existing.status === 'DRAFT') {
+      logger.info('Category Flow exists as draft, attempting to publish', { flowId: existing.id });
+      try {
+        await metaCloud.publishFlow(existing.id);
+        process.env.WHATSAPP_CATEGORY_FLOW_ID = existing.id;
+        process.env.WHATSAPP_CATEGORY_FLOW_STATUS = 'PUBLISHED';
+        return { flowId: existing.id, status: 'published' };
+      } catch (pubErr) {
+        logger.warn('Could not publish existing draft Flow, using draft mode', {
+          flowId: existing.id,
+          error: pubErr.response?.data?.error?.message || pubErr.message
+        });
+        process.env.WHATSAPP_CATEGORY_FLOW_ID = existing.id;
+        process.env.WHATSAPP_CATEGORY_FLOW_STATUS = 'DRAFT';
+        return { flowId: existing.id, status: 'draft' };
+      }
+    }
+
+    // Step 1: Create the Flow
+    const flowJson = this.buildCategoryFlowJSON();
+    const createResult = await metaCloud.createFlow('JRB Menu Categories', ['OTHER']);
+    const flowId = createResult.id;
+
+    // Step 2: Upload the Flow JSON
+    await metaCloud.updateFlowJSON(flowId, flowJson);
+
+    // Step 3: Try to publish the Flow
+    try {
+      await metaCloud.publishFlow(flowId);
+      process.env.WHATSAPP_CATEGORY_FLOW_ID = flowId;
+      process.env.WHATSAPP_CATEGORY_FLOW_STATUS = 'PUBLISHED';
+      logger.info('Category Flow created and published', { flowId });
+      return { flowId, status: 'created_and_published' };
+    } catch (pubErr) {
+      logger.warn('Flow created but publish failed, using draft mode', {
+        flowId,
+        error: pubErr.response?.data?.error?.message || pubErr.message
+      });
+      process.env.WHATSAPP_CATEGORY_FLOW_ID = flowId;
+      process.env.WHATSAPP_CATEGORY_FLOW_STATUS = 'DRAFT';
+      return { flowId, status: 'created_as_draft' };
+    }
+  },
+
+  /**
+   * Get the category Flow ID (from env or cached).
+   * @returns {string|null}
+   */
+  getCategoryFlowId() {
+    return process.env.WHATSAPP_CATEGORY_FLOW_ID || null;
+  },
+
+  /**
+   * Get the Flow send mode (published or draft).
+   * @returns {string} 'published' or 'draft'
+   */
+  getCategoryFlowMode() {
+    const status = process.env.WHATSAPP_CATEGORY_FLOW_STATUS || 'DRAFT';
+    return status === 'PUBLISHED' ? 'published' : 'draft';
   }
 };
 

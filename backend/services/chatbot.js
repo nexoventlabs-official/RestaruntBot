@@ -5518,66 +5518,68 @@ const chatbot = {
       return;
     }
 
-    // ===== TRY NATIVE CATALOG WITH CATEGORY IMAGE CARDS =====
+    // ===== TRY WHATSAPP FLOW FOR CATEGORY SELECTION =====
     try {
-      if (catalogService.isEnabled()) {
-        const catalogId = catalogService.getCatalogId();
-        const catalogResult = await catalogService.buildProductSections(menuItems);
+      const flowId = catalogService.getCategoryFlowId();
+      if (flowId && catalogService.isEnabled()) {
+        const metaCloud = require('./metaCloud');
+        const flowData = await catalogService.buildCategoryFlowDataSorted(menuItems, `category_select_${phone}`);
 
-        if (catalogResult && catalogResult.sections.length > 0) {
-          // Send product_list messages (split into pages of 30 if >30)
-          if (catalogResult.totalMapped <= 30) {
-            await whatsapp.sendProductList(
-              phone,
-              catalogId,
-              `📋 ${label}`,
-              `${catalogResult.totalInSections} items in ${catalogResult.sections.length} categories\nTap any item to view details & add to cart 🛒`,
-              catalogResult.sections,
-              'Fresh & Delicious!'
-            );
-          } else {
-            const pages = await catalogService.buildPaginatedProductSections(menuItems);
-            if (pages && pages.length > 0) {
-              for (const pg of pages) {
-                const pageLabel = pages.length > 1
-                  ? `📋 ${label} (${pg.pageNumber}/${pg.totalPages})`
-                  : `📋 ${label}`;
-                await whatsapp.sendProductList(
-                  phone,
-                  catalogId,
-                  pageLabel,
-                  `${pg.totalInPage} items • Tap to view & add to cart 🛒`,
-                  pg.sections,
-                  'Fresh & Delicious!'
-                );
+        if (flowData.categories.length > 0) {
+          // Send the catalog product_list first (all items)
+          const catalogId = catalogService.getCatalogId();
+          const catalogResult = await catalogService.buildProductSections(menuItems);
+
+          if (catalogResult && catalogResult.sections.length > 0) {
+            if (catalogResult.totalMapped <= 30) {
+              await whatsapp.sendProductList(
+                phone,
+                catalogId,
+                `📋 ${label}`,
+                `${catalogResult.totalInSections} items in ${catalogResult.sections.length} categories\nTap any item to view details & add to cart 🛒`,
+                catalogResult.sections,
+                'Fresh & Delicious!'
+              );
+            } else {
+              const pages = await catalogService.buildPaginatedProductSections(menuItems);
+              if (pages && pages.length > 0) {
+                for (const pg of pages) {
+                  const pageLabel = pages.length > 1
+                    ? `📋 ${label} (${pg.pageNumber}/${pg.totalPages})`
+                    : `📋 ${label}`;
+                  await whatsapp.sendProductList(
+                    phone,
+                    catalogId,
+                    pageLabel,
+                    `${pg.totalInPage} items • Tap to view & add to cart 🛒`,
+                    pg.sections,
+                    'Fresh & Delicious!'
+                  );
+                }
               }
             }
           }
 
-          // Send category image cards (visual category browsing)
-          try {
-            const catDocs = await Category.find({ isActive: true, image: { $exists: true, $ne: '' } })
-              .sort({ sortOrder: 1 }).lean();
-            const catsWithImages = catDocs.filter(c => categories.includes(c.name));
+          // Send WhatsApp Flow message for category selection
+          const flowMode = catalogService.getCategoryFlowMode();
+          await metaCloud.sendFlowMessage(phone, {
+            flowId,
+            flowCta: '📋 Browse by Category',
+            headerText: `🍽️ ${label}`,
+            bodyText: `Browse our ${flowData.categories.length} categories to find your favorite dishes!\nTap the button below to select a category.`,
+            footerText: 'Powered by JRB Gold',
+            screenName: 'CATEGORY_SELECT',
+            screenData: flowData,
+            flowToken: `category_select_${phone}`,
+            mode: flowMode
+          });
 
-            for (const cat of catsWithImages) {
-              const count = menuItems.filter(m => Array.isArray(m.category) ? m.category.includes(cat.name) : m.category === cat.name).length;
-              const safeId = cat.name.replace(/[^a-zA-Z0-9_]/g, '_');
-              await whatsapp.sendImageWithButtons(
-                phone,
-                cat.image,
-                `🍽️ *${cat.name}*\n${count} items available`,
-                [{ id: `cat_${safeId}`, text: `Browse ${cat.name.substring(0, 16)}` }]
-              );
-            }
-          } catch (catImgErr) {
-            logger.info('Category image cards skipped', { error: catImgErr.message });
-          }
+          logger.info('Sent Flow category selector', { phone, categoryCount: flowData.categories.length, mode: flowMode });
           return;
         }
       }
-    } catch (catalogErr) {
-      logger.info('Catalog fallback for categories', { label, error: catalogErr.message });
+    } catch (flowErr) {
+      logger.info('Flow category fallback', { error: flowErr.message });
     }
 
     // ===== FALLBACK: TEXT LIST OF CATEGORY NAMES =====
@@ -6035,65 +6037,68 @@ const chatbot = {
       return;
     }
 
-    // ===== TRY NATIVE CATALOG WITH CATEGORY IMAGE CARDS =====
+    // ===== TRY WHATSAPP FLOW FOR CATEGORY SELECTION =====
     try {
-      if (catalogService.isEnabled()) {
-        const catalogId = catalogService.getCatalogId();
-        const catalogResult = await catalogService.buildProductSections(menuItems);
+      const flowId = catalogService.getCategoryFlowId();
+      if (flowId && catalogService.isEnabled()) {
+        const metaCloud = require('./metaCloud');
+        const flowData = await catalogService.buildCategoryFlowDataSorted(menuItems, `category_select_order_${phone}`);
 
-        if (catalogResult && catalogResult.sections.length > 0) {
-          if (catalogResult.totalMapped <= 30) {
-            await whatsapp.sendProductList(
-              phone,
-              catalogId,
-              `🛒 ${label}`,
-              `${catalogResult.totalInSections} items in ${catalogResult.sections.length} categories\nTap any item to add to cart 🛒`,
-              catalogResult.sections,
-              'Fresh & Delicious!'
-            );
-          } else {
-            const pages = await catalogService.buildPaginatedProductSections(menuItems);
-            if (pages && pages.length > 0) {
-              for (const pg of pages) {
-                const pageLabel = pages.length > 1
-                  ? `🛒 ${label} (${pg.pageNumber}/${pg.totalPages})`
-                  : `🛒 ${label}`;
-                await whatsapp.sendProductList(
-                  phone,
-                  catalogId,
-                  pageLabel,
-                  `${pg.totalInPage} items • Tap to view & add to cart 🛒`,
-                  pg.sections,
-                  'Fresh & Delicious!'
-                );
+        if (flowData.categories.length > 0) {
+          // Send the catalog product_list first (all items)
+          const catalogId = catalogService.getCatalogId();
+          const catalogResult = await catalogService.buildProductSections(menuItems);
+
+          if (catalogResult && catalogResult.sections.length > 0) {
+            if (catalogResult.totalMapped <= 30) {
+              await whatsapp.sendProductList(
+                phone,
+                catalogId,
+                `🛒 ${label}`,
+                `${catalogResult.totalInSections} items in ${catalogResult.sections.length} categories\nTap any item to add to cart 🛒`,
+                catalogResult.sections,
+                'Fresh & Delicious!'
+              );
+            } else {
+              const pages = await catalogService.buildPaginatedProductSections(menuItems);
+              if (pages && pages.length > 0) {
+                for (const pg of pages) {
+                  const pageLabel = pages.length > 1
+                    ? `🛒 ${label} (${pg.pageNumber}/${pg.totalPages})`
+                    : `🛒 ${label}`;
+                  await whatsapp.sendProductList(
+                    phone,
+                    catalogId,
+                    pageLabel,
+                    `${pg.totalInPage} items • Tap to view & add to cart 🛒`,
+                    pg.sections,
+                    'Fresh & Delicious!'
+                  );
+                }
               }
             }
           }
 
-          // Send category image cards (visual category browsing)
-          try {
-            const catDocs = await Category.find({ isActive: true, image: { $exists: true, $ne: '' } })
-              .sort({ sortOrder: 1 }).lean();
-            const catsWithImages = catDocs.filter(c => categories.includes(c.name));
+          // Send WhatsApp Flow message for category selection
+          const flowModeOrder = catalogService.getCategoryFlowMode();
+          await metaCloud.sendFlowMessage(phone, {
+            flowId,
+            flowCta: '📋 Browse by Category',
+            headerText: `🛒 ${label}`,
+            bodyText: `Browse our ${flowData.categories.length} categories to add items to your cart!\nTap the button below to select a category.`,
+            footerText: 'Powered by JRB Gold',
+            screenName: 'CATEGORY_SELECT',
+            screenData: flowData,
+            flowToken: `category_select_order_${phone}`,
+            mode: flowModeOrder
+          });
 
-            for (const cat of catsWithImages) {
-              const count = menuItems.filter(m => Array.isArray(m.category) ? m.category.includes(cat.name) : m.category === cat.name).length;
-              const safeId = cat.name.replace(/[^a-zA-Z0-9_]/g, '_');
-              await whatsapp.sendImageWithButtons(
-                phone,
-                cat.image,
-                `🍽️ *${cat.name}*\n${count} items available`,
-                [{ id: `order_cat_${safeId}`, text: `Browse ${cat.name.substring(0, 16)}` }]
-              );
-            }
-          } catch (catImgErr) {
-            logger.info('Category image cards skipped', { error: catImgErr.message });
-          }
+          logger.info('Sent Flow category selector (order)', { phone, categoryCount: flowData.categories.length, mode: flowModeOrder });
           return;
         }
       }
-    } catch (catalogErr) {
-      logger.info('Catalog fallback for order menu', { label, error: catalogErr.message });
+    } catch (flowErr) {
+      logger.info('Flow category fallback (order)', { error: flowErr.message });
     }
 
     // ===== FALLBACK: TEXT LIST OF CATEGORY NAMES =====
