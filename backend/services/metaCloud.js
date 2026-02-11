@@ -1843,8 +1843,8 @@ const metaCloud = {
       });
     }
 
-    // Attempt 3: Minimum payload - no navigate, no data, no header/footer
-    // Flow opens to first screen using __example__ data from Flow JSON
+    // Attempt 3: Truly minimal - no mode, no flow_token, no navigate
+    // Tests if the issue is the mode parameter or flow_token
     try {
       const minPayload = {
         messaging_product: 'whatsapp',
@@ -1858,25 +1858,56 @@ const metaCloud = {
             name: 'flow',
             parameters: {
               flow_message_version: '3',
-              flow_token: flowToken,
               flow_id: flowId,
-              flow_cta: flowCta,
-              mode
+              flow_cta: flowCta
             }
           }
         }
       };
-      logger.info('Flow attempt 3: minimum payload', { to, flowId, mode });
+      logger.info('Flow attempt 3: truly minimal (no mode, no flow_token)', { to, flowId });
       const response = await metaApi.post(`${baseUrl}/messages`, minPayload, { headers });
       logger.info('Flow message sent (minimum payload)', { messageId: response.data?.messages?.[0]?.id });
       return response.data;
     } catch (err3) {
       const e3 = err3.response?.data?.error;
-      logger.error('Flow attempt 3 failed (minimum payload)', {
+      logger.error('Flow attempt 3 failed (truly minimal)', {
         code: e3?.code, message: e3?.message, subcode: e3?.error_subcode,
         details: e3?.error_data?.details, full: JSON.stringify(err3.response?.data)
       });
-      throw err3;
+    }
+
+    // Attempt 4: Use flow_name instead of flow_id + draft mode
+    try {
+      const namePayload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'flow',
+          body: { text: bodyText || 'Select a category' },
+          action: {
+            name: 'flow',
+            parameters: {
+              flow_message_version: '3',
+              flow_name: 'JRB Menu Categories',
+              flow_cta: flowCta,
+              mode: 'draft'
+            }
+          }
+        }
+      };
+      logger.info('Flow attempt 4: flow_name + draft mode', { to });
+      const response = await metaApi.post(`${baseUrl}/messages`, namePayload, { headers });
+      logger.info('Flow message sent (flow_name)', { messageId: response.data?.messages?.[0]?.id });
+      return response.data;
+    } catch (err4) {
+      const e4 = err4.response?.data?.error;
+      logger.error('Flow ALL attempts failed', {
+        code: e4?.code, message: e4?.message, subcode: e4?.error_subcode,
+        details: e4?.error_data?.details, full: JSON.stringify(err4.response?.data)
+      });
+      throw err4;
     }
   }
 };
