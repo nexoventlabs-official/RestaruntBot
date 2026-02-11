@@ -5624,11 +5624,6 @@ const chatbot = {
           catalogResult.sections,
           'Perivi Hotel'
         );
-        // Send navigation buttons (back to menu, etc.)
-        await whatsapp.sendButtons(phone, `Browse ${category} items above 👆`, [
-          { id: 'view_menu', text: 'Back to Menu' },
-          { id: 'home', text: 'Main Menu' }
-        ]);
         return;
       }
     } catch (catalogErr) {
@@ -5721,10 +5716,6 @@ const chatbot = {
               catalogResult.sections,
               'Perivi Hotel'
             );
-            await whatsapp.sendButtons(phone, 'Browse our menu above 👆', [
-              { id: 'view_cart', text: 'My Cart' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
             return;
           }
         }
@@ -6238,11 +6229,6 @@ const chatbot = {
           catalogResult.sections,
           'Perivi Hotel'
         );
-        await whatsapp.sendButtons(phone, `Browse ${category} items above 👆`, [
-          { id: 'add_more', text: 'Other Categories' },
-          { id: 'view_cart', text: 'My Cart' },
-          { id: 'review_pay', text: 'Review & Order' }
-        ]);
         return;
       }
     } catch (catalogErr) {
@@ -6316,11 +6302,6 @@ const chatbot = {
               'Perivi Hotel',
               thumbnailId
             );
-            await whatsapp.sendButtons(phone, 'Browse the catalog above 👆', [
-              { id: 'add_more', text: 'Categories' },
-              { id: 'view_cart', text: 'My Cart' },
-              { id: 'review_pay', text: 'Review & Order' }
-            ]);
             return;
           }
 
@@ -6335,11 +6316,6 @@ const chatbot = {
               catalogResult.sections,
               'Perivi Hotel'
             );
-            await whatsapp.sendButtons(phone, 'Browse all items above 👆', [
-              { id: 'add_more', text: 'Categories' },
-              { id: 'view_cart', text: 'My Cart' },
-              { id: 'review_pay', text: 'Review & Order' }
-            ]);
             return;
           }
         }
