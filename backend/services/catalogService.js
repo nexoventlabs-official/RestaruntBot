@@ -271,31 +271,33 @@ const catalogService = {
   },
 
   /**
-   * Build product sections for cart items
-   * Puts all cart items into a single section for clean display
+   * Build product sections for cart items.
+   * Auto-ensures catalog mappings for any unmapped items (real-time sync).
+   * Puts all cart items into a single section for clean native cart display.
    */
   async buildCartSections(cartItems) {
     if (!this.isEnabled()) return null;
+    if (!cartItems || cartItems.length === 0) return null;
 
-    const map = await this.getCatalogMap();
-    if (map.size === 0) return null;
+    // Auto-ensure every cart item has a catalog mapping
+    const retailerIds = [];
+    for (const item of cartItems) {
+      if (!item.menuItem) continue;
+      const retailerId = await this.ensureCatalogMapping(item.menuItem);
+      if (retailerId) {
+        retailerIds.push(retailerId);
+      }
+    }
 
-    // Filter cart items whose menuItem has a catalog mapping
-    const mappedItems = cartItems.filter(item =>
-      item.menuItem && map.has(item.menuItem._id.toString())
-    );
-
-    if (mappedItems.length === 0) return null;
+    if (retailerIds.length === 0) return null;
 
     // Put all cart items in a single section (avoids multi-section rendering issues)
-    const retailerIds = mappedItems.map(item => map.get(item.menuItem._id.toString()));
-
     return {
       sections: [{
         title: 'Your Items',
         productRetailerIds: retailerIds.slice(0, 30)
       }],
-      totalMapped: mappedItems.length
+      totalMapped: retailerIds.length
     };
   },
 
@@ -532,6 +534,38 @@ const catalogService = {
         error: err.message
       });
       // Don't throw — menu save should succeed even if catalog sync fails
+      return null;
+    }
+  },
+
+  /**
+   * Ensure a menu item has a catalog mapping. If one doesn't exist,
+   * auto-creates the local CatalogProduct mapping and pushes to Meta catalog.
+   * Used to guarantee native catalog product cards for smart search single results.
+   *
+   * @param {Object} menuItem - The full MenuItem document
+   * @returns {string|null} The retailer ID if successful, null if catalog not enabled
+   */
+  async ensureCatalogMapping(menuItem) {
+    if (!this.isEnabled()) return null;
+
+    const itemId = menuItem._id.toString();
+
+    // Check if mapping already exists (fast path via cache)
+    const existingRetailerId = await this.getRetailerId(itemId);
+    if (existingRetailerId) return existingRetailerId;
+
+    // No mapping found — auto-create one on the fly
+    try {
+      logger.info('Auto-creating catalog mapping for item', { itemId, name: menuItem.name });
+      await this.syncProductToMeta(menuItem);
+      return itemId; // retailerId = menuItemId by convention
+    } catch (err) {
+      logger.error('Failed to auto-create catalog mapping', {
+        itemId,
+        name: menuItem.name,
+        error: err.message
+      });
       return null;
     }
   },

@@ -6064,7 +6064,8 @@ const chatbot = {
     // Try WhatsApp Catalog single product card (native catalog display with image, price, rating)
     try {
       if (catalogService.isEnabled()) {
-        const retailerId = await catalogService.getRetailerId(item._id.toString());
+        // Auto-ensure catalog mapping exists (creates on-the-fly if missing)
+        const retailerId = await catalogService.ensureCatalogMapping(item);
         if (retailerId) {
           const catalogId = catalogService.getCatalogId();
           const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating} (${item.totalRatings} reviews)` : '';
@@ -6106,7 +6107,8 @@ const chatbot = {
     // Try WhatsApp Catalog single product card
     try {
       if (catalogService.isEnabled()) {
-        const retailerId = await catalogService.getRetailerId(item._id.toString());
+        // Auto-ensure catalog mapping exists (creates on-the-fly if missing)
+        const retailerId = await catalogService.ensureCatalogMapping(item);
         if (retailerId) {
           const catalogId = catalogService.getCatalogId();
           const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating} (${item.totalRatings} reviews)` : '';
@@ -7009,6 +7011,25 @@ const chatbot = {
     const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
     if (!freshCustomer?.cart?.length) {
+      // Try native WhatsApp catalog browse for empty cart
+      try {
+        if (catalogService.isEnabled()) {
+          await whatsapp.sendCatalogMessage(
+            phone,
+            '🛒 Your cart is empty!\n\nBrowse our menu below and tap any item to add it to your cart.',
+            'Perivi Hotel'
+          );
+          await whatsapp.sendButtons(phone, '👆 Tap "View catalog" above to browse & add items', [
+            { id: 'view_menu', text: '📋 Menu Categories' },
+            { id: 'home', text: '🏠 Main Menu' }
+          ]);
+          return;
+        }
+      } catch (catalogErr) {
+        logger.info('Catalog fallback for empty cart', { error: catalogErr.message });
+      }
+
+      // Fallback: old style empty cart
       const cartEmptyImageUrl = await chatbotImagesService.getImageUrl('cart_empty');
       await sendWithOptionalImage(phone, cartEmptyImageUrl,
         '🛒 *Your Cart is Empty*\n\nStart adding delicious items!',
@@ -7074,6 +7095,24 @@ const chatbot = {
       freshCustomer.cart = [];
       await freshCustomer.save();
       
+      // Try native WhatsApp catalog browse
+      try {
+        if (catalogService.isEnabled()) {
+          await whatsapp.sendCatalogMessage(
+            phone,
+            '🛒 Your cart is empty!\n\nBrowse our menu below and tap any item to add it to your cart.',
+            'Perivi Hotel'
+          );
+          await whatsapp.sendButtons(phone, '👆 Tap "View catalog" above to browse & add items', [
+            { id: 'view_menu', text: '📋 Menu Categories' },
+            { id: 'home', text: '🏠 Main Menu' }
+          ]);
+          return;
+        }
+      } catch (catalogErr) {
+        logger.info('Catalog fallback for empty cart (invalid items)', { error: catalogErr.message });
+      }
+
       const cartEmptyImageUrl = await chatbotImagesService.getImageUrl('cart_empty');
       await sendWithOptionalImage(phone, cartEmptyImageUrl,
         '🛒 *Your Cart is Empty*\n\nStart adding delicious items!',
@@ -7101,15 +7140,34 @@ const chatbot = {
       if (catalogService.isEnabled()) {
         const validCartItems = freshCustomer.cart.filter(item => item.menuItem);
         const cartSections = await catalogService.buildCartSections(validCartItems);
-        if (cartSections && cartSections.totalMapped === validItems) {
+        if (cartSections && cartSections.sections.length > 0) {
           const catalogId = catalogService.getCatalogId();
+
+          // Build discount info for body text
+          let bodyText = `${validItems} items • Total: ₹${total}`;
+          if (totalDiscount > 0) {
+            bodyText += ` (Save ₹${totalDiscount})`;
+          }
+          bodyText += '\nTap "View items" to modify quantities';
+
           await whatsapp.sendProductList(
             phone,
             catalogId,
             '🛒 Your Cart',
-            `${validItems} items • Total: ₹${total}\nTap "View items" → Add to cart → Place order`,
+            bodyText,
             cartSections.sections,
             'Perivi Hotel'
+          );
+
+          // Always send action buttons below the native catalog cart
+          await whatsapp.sendButtons(
+            phone,
+            `🛒 *${validItems} items* • Total: *₹${total}*${totalDiscount > 0 ? ` (🎁 Save ₹${totalDiscount})` : ''}\n\nReady to order? Tap Place Order below 👇`,
+            [
+              { id: 'review_pay', text: 'Place Order ✅' },
+              { id: 'add_more', text: 'Add More' },
+              { id: 'clear_cart', text: 'Clear Cart' }
+            ]
           );
           return;
         }
