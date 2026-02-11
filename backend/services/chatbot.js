@@ -7011,26 +7011,12 @@ const chatbot = {
     const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
     if (!freshCustomer?.cart?.length) {
-      // Send native WhatsApp catalog message so user can browse & add items
-      try {
-        if (catalogService.isEnabled()) {
-          await whatsapp.sendCatalogMessage(
-            phone,
-            '🛒 Your cart is empty!\n\nBrowse our menu and tap any item to add it to your cart.',
-            'Perivi Hotel'
-          );
-          return;
-        }
-      } catch (catalogErr) {
-        logger.info('Catalog fallback for empty cart', { error: catalogErr.message });
-      }
-      // Fallback if catalog not enabled
-      const cartEmptyImageUrl = await chatbotImagesService.getImageUrl('cart_empty');
-      await sendWithOptionalImage(phone, cartEmptyImageUrl,
-        '🛒 *Your Cart is Empty*\n\nStart adding delicious items!',
+      await whatsapp.sendButtons(phone,
+        '🛒 *Your Cart is Empty*\n\nTap the 🛒 cart icon at the top right to view your WhatsApp cart, or browse our menu to add items!',
         [
-          { id: 'view_menu', text: 'View Menu' },
-          { id: 'home', text: 'Main Menu' }
+          { id: 'view_menu', text: '📋 View Menu' },
+          { id: 'order_food', text: '🍽️ Order Food' },
+          { id: 'home', text: '🏠 Main Menu' }
         ]
       );
       return;
@@ -7090,26 +7076,12 @@ const chatbot = {
       freshCustomer.cart = [];
       await freshCustomer.save();
       
-      // Send native WhatsApp catalog message so user can browse & add items
-      try {
-        if (catalogService.isEnabled()) {
-          await whatsapp.sendCatalogMessage(
-            phone,
-            '🛒 Your cart is empty!\n\nBrowse our menu and tap any item to add it to your cart.',
-            'Perivi Hotel'
-          );
-          return;
-        }
-      } catch (catalogErr) {
-        logger.info('Catalog fallback for empty cart (invalid items)', { error: catalogErr.message });
-      }
-      // Fallback if catalog not enabled
-      const cartEmptyImageUrl = await chatbotImagesService.getImageUrl('cart_empty');
-      await sendWithOptionalImage(phone, cartEmptyImageUrl,
-        '🛒 *Your Cart is Empty*\n\nStart adding delicious items!',
+      await whatsapp.sendButtons(phone,
+        '🛒 *Your Cart is Empty*\n\nTap the 🛒 cart icon at the top right to view your WhatsApp cart, or browse our menu to add items!',
         [
-          { id: 'view_menu', text: 'View Menu' },
-          { id: 'home', text: 'Main Menu' }
+          { id: 'view_menu', text: '📋 View Menu' },
+          { id: 'order_food', text: '🍽️ Order Food' },
+          { id: 'home', text: '🏠 Main Menu' }
         ]
       );
       return;
