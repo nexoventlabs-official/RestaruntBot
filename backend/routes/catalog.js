@@ -140,6 +140,21 @@ router.get('/flows', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/catalog/flow-status - Quick diagnostics for Flow configuration
+router.get('/flow-status', authMiddleware, async (req, res) => {
+  const catalogService = require('../services/catalogService');
+  res.json({
+    flowId: catalogService.getCategoryFlowId(),
+    flowMode: catalogService.getCategoryFlowMode(),
+    flowStatus: process.env.WHATSAPP_CATEGORY_FLOW_STATUS || 'NOT_SET',
+    catalogEnabled: catalogService.isEnabled(),
+    catalogId: process.env.META_CATALOG_ID ? 'set' : 'not_set',
+    phoneNumberId: process.env.META_PHONE_NUMBER_ID ? 'set' : 'not_set',
+    tokenSet: !!process.env.META_ACCESS_TOKEN,
+    wabaId: process.env.META_WABA_ID ? 'set' : 'not_set'
+  });
+});
+
 // GET /api/catalog/flow/:flowId - Get Flow details
 router.get('/flow/:flowId', authMiddleware, async (req, res) => {
   try {
