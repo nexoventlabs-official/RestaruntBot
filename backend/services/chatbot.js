@@ -5518,43 +5518,62 @@ const chatbot = {
       return;
     }
 
-    // ===== TRY NATIVE CATALOG =====
-    // Send product_list messages (split into pages of 30 if needed)
+    // ===== TRY NATIVE CATALOG WITH CATEGORY IMAGE CARDS =====
     try {
       if (catalogService.isEnabled()) {
         const catalogId = catalogService.getCatalogId();
         const catalogResult = await catalogService.buildProductSections(menuItems);
 
-        if (catalogResult && catalogResult.totalMapped <= 30 && catalogResult.sections.length > 0) {
-          // <=30 items: single product_list
-          await whatsapp.sendProductList(
-            phone,
-            catalogId,
-            `📋 ${label}`,
-            `${catalogResult.totalInSections} items in ${catalogResult.sections.length} categories\nTap any item to view details & add to cart 🛒`,
-            catalogResult.sections,
-            'Fresh & Delicious!'
-          );
-          return;
-        } else if (catalogResult && catalogResult.totalMapped > 30) {
-          // >30 items: split into multiple product_list messages (30 items each)
-          const pages = await catalogService.buildPaginatedProductSections(menuItems);
-          if (pages && pages.length > 0) {
-            for (const page of pages) {
-              const pageLabel = pages.length > 1
-                ? `📋 ${label} (${page.pageNumber}/${page.totalPages})`
-                : `📋 ${label}`;
-              await whatsapp.sendProductList(
+        if (catalogResult && catalogResult.sections.length > 0) {
+          // Send product_list messages (split into pages of 30 if >30)
+          if (catalogResult.totalMapped <= 30) {
+            await whatsapp.sendProductList(
+              phone,
+              catalogId,
+              `📋 ${label}`,
+              `${catalogResult.totalInSections} items in ${catalogResult.sections.length} categories\nTap any item to view details & add to cart 🛒`,
+              catalogResult.sections,
+              'Fresh & Delicious!'
+            );
+          } else {
+            const pages = await catalogService.buildPaginatedProductSections(menuItems);
+            if (pages && pages.length > 0) {
+              for (const pg of pages) {
+                const pageLabel = pages.length > 1
+                  ? `📋 ${label} (${pg.pageNumber}/${pg.totalPages})`
+                  : `📋 ${label}`;
+                await whatsapp.sendProductList(
+                  phone,
+                  catalogId,
+                  pageLabel,
+                  `${pg.totalInPage} items • Tap to view & add to cart 🛒`,
+                  pg.sections,
+                  'Fresh & Delicious!'
+                );
+              }
+            }
+          }
+
+          // Send category image cards (visual category browsing)
+          try {
+            const catDocs = await Category.find({ isActive: true, image: { $exists: true, $ne: '' } })
+              .sort({ sortOrder: 1 }).lean();
+            const catsWithImages = catDocs.filter(c => categories.includes(c.name));
+
+            for (const cat of catsWithImages) {
+              const count = menuItems.filter(m => Array.isArray(m.category) ? m.category.includes(cat.name) : m.category === cat.name).length;
+              const safeId = cat.name.replace(/[^a-zA-Z0-9_]/g, '_');
+              await whatsapp.sendImageWithButtons(
                 phone,
-                catalogId,
-                pageLabel,
-                `${page.totalInPage} items • Tap to view & add to cart 🛒`,
-                page.sections,
-                'Fresh & Delicious!'
+                cat.image,
+                `🍽️ *${cat.name}*\n${count} items available`,
+                [{ id: `cat_${safeId}`, text: `Browse ${cat.name.substring(0, 16)}` }]
               );
             }
-            return;
+          } catch (catImgErr) {
+            logger.info('Category image cards skipped', { error: catImgErr.message });
           }
+          return;
         }
       }
     } catch (catalogErr) {
@@ -6016,41 +6035,61 @@ const chatbot = {
       return;
     }
 
-    // ===== TRY NATIVE CATALOG =====
+    // ===== TRY NATIVE CATALOG WITH CATEGORY IMAGE CARDS =====
     try {
       if (catalogService.isEnabled()) {
         const catalogId = catalogService.getCatalogId();
         const catalogResult = await catalogService.buildProductSections(menuItems);
 
-        if (catalogResult && catalogResult.totalMapped <= 30 && catalogResult.sections.length > 0) {
-          await whatsapp.sendProductList(
-            phone,
-            catalogId,
-            `🛒 ${label}`,
-            `${catalogResult.totalInSections} items in ${catalogResult.sections.length} categories\nTap any item to add to cart 🛒`,
-            catalogResult.sections,
-            'Fresh & Delicious!'
-          );
-          return;
-        } else if (catalogResult && catalogResult.totalMapped > 30) {
-          // >30 items: split into multiple product_list messages
-          const pages = await catalogService.buildPaginatedProductSections(menuItems);
-          if (pages && pages.length > 0) {
-            for (const page of pages) {
-              const pageLabel = pages.length > 1
-                ? `🛒 ${label} (${page.pageNumber}/${page.totalPages})`
-                : `🛒 ${label}`;
-              await whatsapp.sendProductList(
+        if (catalogResult && catalogResult.sections.length > 0) {
+          if (catalogResult.totalMapped <= 30) {
+            await whatsapp.sendProductList(
+              phone,
+              catalogId,
+              `🛒 ${label}`,
+              `${catalogResult.totalInSections} items in ${catalogResult.sections.length} categories\nTap any item to add to cart 🛒`,
+              catalogResult.sections,
+              'Fresh & Delicious!'
+            );
+          } else {
+            const pages = await catalogService.buildPaginatedProductSections(menuItems);
+            if (pages && pages.length > 0) {
+              for (const pg of pages) {
+                const pageLabel = pages.length > 1
+                  ? `🛒 ${label} (${pg.pageNumber}/${pg.totalPages})`
+                  : `🛒 ${label}`;
+                await whatsapp.sendProductList(
+                  phone,
+                  catalogId,
+                  pageLabel,
+                  `${pg.totalInPage} items • Tap to view & add to cart 🛒`,
+                  pg.sections,
+                  'Fresh & Delicious!'
+                );
+              }
+            }
+          }
+
+          // Send category image cards (visual category browsing)
+          try {
+            const catDocs = await Category.find({ isActive: true, image: { $exists: true, $ne: '' } })
+              .sort({ sortOrder: 1 }).lean();
+            const catsWithImages = catDocs.filter(c => categories.includes(c.name));
+
+            for (const cat of catsWithImages) {
+              const count = menuItems.filter(m => Array.isArray(m.category) ? m.category.includes(cat.name) : m.category === cat.name).length;
+              const safeId = cat.name.replace(/[^a-zA-Z0-9_]/g, '_');
+              await whatsapp.sendImageWithButtons(
                 phone,
-                catalogId,
-                pageLabel,
-                `${page.totalInPage} items • Tap to view & add to cart 🛒`,
-                page.sections,
-                'Fresh & Delicious!'
+                cat.image,
+                `🍽️ *${cat.name}*\n${count} items available`,
+                [{ id: `order_cat_${safeId}`, text: `Browse ${cat.name.substring(0, 16)}` }]
               );
             }
-            return;
+          } catch (catImgErr) {
+            logger.info('Category image cards skipped', { error: catImgErr.message });
           }
+          return;
         }
       }
     } catch (catalogErr) {
