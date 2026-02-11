@@ -5983,7 +5983,7 @@ const chatbot = {
     const activeOffers = await getCachedActiveOffers(phone);
     
     // Header message
-    await whatsapp.sendText(phone, `🔍 Found *${items.length} items* matching ${searchLabel}\n\nSwipe through the results below 👇`);
+    await whatsapp.sendMessage(phone, `🔍 Found *${items.length} items* matching ${searchLabel}\n\nSwipe through the results below 👇`);
     
     // Send each item as a rich card with image + buttons
     for (let i = 0; i < items.length; i++) {
