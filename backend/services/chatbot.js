@@ -5562,10 +5562,11 @@ const chatbot = {
 
           // Send WhatsApp Flow message for category selection
           const flowMode = catalogService.getCategoryFlowMode();
+          logger.info('Attempting Flow category send', { phone, flowId, mode: flowMode, categories: flowData.categories.length });
           await metaCloud.sendFlowMessage(phone, {
             flowId,
-            flowCta: '📋 Browse by Category',
-            headerText: `🍽️ ${label}`,
+            flowCta: 'Browse by Category',
+            headerText: `${label}`,
             bodyText: `Browse our ${flowData.categories.length} categories to find your favorite dishes!\nTap the button below to select a category.`,
             footerText: 'Powered by JRB Gold',
             screenName: 'CATEGORY_SELECT',
@@ -6081,10 +6082,11 @@ const chatbot = {
 
           // Send WhatsApp Flow message for category selection
           const flowModeOrder = catalogService.getCategoryFlowMode();
+          logger.info('Attempting Flow category send (order)', { phone, flowId, mode: flowModeOrder, categories: flowData.categories.length });
           await metaCloud.sendFlowMessage(phone, {
             flowId,
-            flowCta: '📋 Browse by Category',
-            headerText: `🛒 ${label}`,
+            flowCta: 'Browse by Category',
+            headerText: `${label}`,
             bodyText: `Browse our ${flowData.categories.length} categories to add items to your cart!\nTap the button below to select a category.`,
             footerText: 'Powered by JRB Gold',
             screenName: 'CATEGORY_SELECT',

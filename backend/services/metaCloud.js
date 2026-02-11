@@ -1811,7 +1811,7 @@ const metaCloud = {
         payload.interactive.footer = { text: footerText };
       }
 
-      logger.info('Sending WhatsApp Flow message', { to, flowId, screen: screenName });
+      logger.info('Sending WhatsApp Flow message', { to, flowId, screen: screenName, mode, cta: flowCta });
 
       const response = await metaApi.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}` }
@@ -1824,8 +1824,10 @@ const metaCloud = {
       logger.error('sendFlowMessage error', {
         code: errorData?.code,
         message: errorData?.message,
+        subcode: errorData?.error_subcode,
         type: errorData?.type,
-        details: error.response?.data
+        details: errorData?.error_data?.details,
+        fullError: JSON.stringify(error.response?.data)
       });
       throw error;
     }

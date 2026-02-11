@@ -113,6 +113,20 @@ const connectMongoDB = async () => {
     await googleSheets.initializeDashboardStatsSheet();
     await googleSheets.initializeCustomersSheet();
     logger.info('Google Sheets initialized');
+
+    // Initialize WhatsApp Flows (category selection)
+    try {
+      const catalogService = require('./services/catalogService');
+      if (catalogService.isEnabled() && !catalogService.getCategoryFlowId()) {
+        logger.info('Setting up WhatsApp Category Flow...');
+        const result = await catalogService.setupCategoryFlow();
+        logger.info('WhatsApp Category Flow initialized', { flowId: result.flowId, status: result.status });
+      } else if (catalogService.getCategoryFlowId()) {
+        logger.info('WhatsApp Category Flow already configured', { flowId: catalogService.getCategoryFlowId() });
+      }
+    } catch (flowErr) {
+      logger.warn('WhatsApp Category Flow setup skipped', { error: flowErr.message });
+    }
   } catch (err) {
     logger.error('MongoDB connection error', { error: err.message, stack: err.stack });
     // Retry after 5 seconds
