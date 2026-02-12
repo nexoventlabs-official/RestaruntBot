@@ -35,6 +35,7 @@ jest.mock('../../services/orderScheduler', () => ({ start: jest.fn(), stop: jest
 jest.mock('../../services/dailyCleanup', () => ({ start: jest.fn(), stop: jest.fn() }));
 jest.mock('../../services/categoryScheduler', () => ({ start: jest.fn(), stop: jest.fn() }));
 jest.mock('../../services/orderCleanup', () => ({ start: jest.fn(), stop: jest.fn() }));
+jest.mock('../../services/catalogReviewPoller', () => ({ start: jest.fn(), stop: jest.fn() }));
 jest.mock('../../services/cartCleanup', () => ({
   startCartCleanupScheduler: jest.fn(),
   stopCartCleanupScheduler: jest.fn()
