@@ -368,6 +368,11 @@ const checkCartAvailability = async (cart) => {
     
     const itemCategories = Array.isArray(menuItem.category) ? menuItem.category : [menuItem.category];
     
+    // Items with no categories bypass category-based checks (always available if item.available)
+    if (itemCategories.length === 0 || (itemCategories.length === 1 && !itemCategories[0])) {
+      continue;
+    }
+    
     // Check if item has any scheduled category that is ACTIVE → available
     const hasScheduledActiveCategory = itemCategories.some(cat => scheduledActiveCategories.includes(cat));
     if (hasScheduledActiveCategory) continue; // Item is available
