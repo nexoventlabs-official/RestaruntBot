@@ -901,6 +901,50 @@ const catalogService = {
   },
 
   /**
+   * Delete stale variant products from Meta when variants are removed or reduced.
+   * Compares old variants to new variants and deletes any retailer IDs that no longer exist.
+   *
+   * @param {string} menuItemId - The MenuItem _id
+   * @param {Array} oldVariants - Previous variants array from the existing document
+   * @param {Array} newVariants - New variants array being saved
+   */
+  async deleteRemovedVariantProducts(menuItemId, oldVariants = [], newVariants = []) {
+    if (!this.isEnabled()) return;
+    const catalogId = this.getCatalogId();
+    const metaCloud = require('./metaCloud');
+    const baseId = menuItemId.toString();
+
+    // Build set of OLD retailer IDs
+    const oldIds = new Set();
+    (oldVariants || []).forEach((v, vIdx) => {
+      if (v.quantities && v.quantities.length > 0) {
+        v.quantities.forEach((_, qIdx) => oldIds.add(`${baseId}_v${vIdx}_q${qIdx}`));
+      } else {
+        oldIds.add(`${baseId}_v${vIdx}`);
+      }
+    });
+
+    // Build set of NEW retailer IDs
+    const newIds = new Set();
+    (newVariants || []).forEach((v, vIdx) => {
+      if (v.quantities && Array.isArray(v.quantities) && v.quantities.length > 0) {
+        v.quantities.forEach((_, qIdx) => newIds.add(`${baseId}_v${vIdx}_q${qIdx}`));
+      } else {
+        newIds.add(`${baseId}_v${vIdx}`);
+      }
+    });
+
+    // Delete IDs that exist in old but not in new
+    const toDelete = [...oldIds].filter(id => !newIds.has(id));
+    if (toDelete.length > 0) {
+      logger.info('Deleting removed variant products from Meta', { menuItemId: baseId, retailerIds: toDelete });
+      await Promise.all(
+        toDelete.map(rid => metaCloud.deleteCatalogProduct(catalogId, rid).catch(() => null))
+      );
+    }
+  },
+
+  /**
    * Delete a product from Meta Commerce Catalog.
    * Called automatically when a menu item is deleted from the admin panel.
    * 

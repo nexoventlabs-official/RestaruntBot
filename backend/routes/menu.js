@@ -323,11 +323,29 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
     }
 
     // Parse and update variants if provided
+    const existingVariants = existingItem?.variants || [];
     if (variants) {
       let parsedVariants = typeof variants === 'string' ? JSON.parse(variants) : variants;
       if (Array.isArray(parsedVariants)) {
         const variantImages = req.files?.variantImages || [];
-        const existingVariants = existingItem?.variants || [];
+
+        // Detect removed variants — delete their Cloudinary images
+        for (let i = parsedVariants.length; i < existingVariants.length; i++) {
+          const oldImg = existingVariants[i]?.image;
+          if (oldImg && oldImg.includes('cloudinary.com')) {
+            try {
+              const pid = cloudinaryService.extractPublicId(oldImg);
+              if (pid) await cloudinaryService.deleteImage(pid);
+              logger.info('Deleted removed variant image from Cloudinary', { variantIndex: i, publicId: pid });
+            } catch (e) { /* ignore */ }
+          }
+        }
+
+        // Delete removed variant products from Meta catalog (non-blocking)
+        catalogService.deleteRemovedVariantProducts(req.params.id, existingVariants, parsedVariants).catch(err => {
+          logger.info('Meta variant cleanup skipped', { error: err.message });
+        });
+
         update.variants = await Promise.all(parsedVariants.map(async (v, idx) => {
           let variantImage = v.image || null;
           // Check if there's a newly uploaded file for this variant index
@@ -368,6 +386,19 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
         }));
       }
     } else if (variants === '[]' || variants === '') {
+      // All variants removed — delete all variant images from Cloudinary
+      for (const oldV of existingVariants) {
+        if (oldV?.image && oldV.image.includes('cloudinary.com')) {
+          try {
+            const pid = cloudinaryService.extractPublicId(oldV.image);
+            if (pid) await cloudinaryService.deleteImage(pid);
+          } catch (e) { /* ignore */ }
+        }
+      }
+      // Delete all variant products from Meta catalog (non-blocking)
+      catalogService.deleteRemovedVariantProducts(req.params.id, existingVariants, []).catch(err => {
+        logger.info('Meta variant cleanup skipped', { error: err.message });
+      });
       update.variants = [];
     }
     
@@ -391,14 +422,27 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
 
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
-    // Get item to delete its image from Cloudinary
+    // Get item to delete its images from Cloudinary
     const item = await MenuItem.findById(req.params.id);
     if (item?.image && item.image.includes('cloudinary.com')) {
       try {
         const publicId = cloudinaryService.extractPublicId(item.image);
         if (publicId) await cloudinaryService.deleteImage(publicId);
       } catch (e) {
-        logger.info('Could not delete image:', e.message);
+        logger.info('Could not delete main image:', e.message);
+      }
+    }
+    // Also delete all variant images from Cloudinary
+    if (item?.variants?.length > 0) {
+      for (const v of item.variants) {
+        if (v.image && v.image.includes('cloudinary.com')) {
+          try {
+            const pid = cloudinaryService.extractPublicId(v.image);
+            if (pid) await cloudinaryService.deleteImage(pid);
+          } catch (e) {
+            logger.info('Could not delete variant image:', e.message);
+          }
+        }
       }
     }
     
