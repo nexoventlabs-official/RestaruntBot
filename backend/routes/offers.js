@@ -140,7 +140,7 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     const { 
       title, description, offerType, code, discountType, discountValue, 
       minOrderAmount, validFrom, validUntil, isActive, showAsPopup,
-      buttonText, buttonLink, percentage, appliedItems, appliedCategories,
+      buttonText, buttonLink, percentage, appliedItems, appliedCategories, appliedVariants,
       targetType, targetPercentage, targetMinSpent, targetMinOrders
     } = req.body;
     
@@ -188,6 +188,7 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     // Parse appliedItems and appliedCategories if they're JSON strings
     let parsedAppliedItems = [];
     let parsedAppliedCategories = [];
+    let parsedAppliedVariants = [];
     
     if (appliedItems) {
       parsedAppliedItems = typeof appliedItems === 'string' ? JSON.parse(appliedItems) : appliedItems;
@@ -195,6 +196,10 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     
     if (appliedCategories) {
       parsedAppliedCategories = typeof appliedCategories === 'string' ? JSON.parse(appliedCategories) : appliedCategories;
+    }
+    
+    if (appliedVariants) {
+      parsedAppliedVariants = typeof appliedVariants === 'string' ? JSON.parse(appliedVariants) : appliedVariants;
     }
 
     // Handle targeting - we'll fetch customers in background after saving offer
@@ -212,6 +217,7 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       offerType: offerType || '',
       percentage: percentage ? parseFloat(percentage) : null,
       appliedItems: parsedAppliedItems,
+      appliedVariants: parsedAppliedVariants,
       appliedCategories: parsedAppliedCategories,
       image: legacyImageUrl || imageDesktopUrl || imageTabletUrl || imageMobileUrl, // Legacy field
       imageMobile: imageMobileUrl,
@@ -276,17 +282,20 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       offerType,
       percentage,
       appliedItems: parsedAppliedItems,
+      appliedVariants: parsedAppliedVariants,
       appliedCategories: parsedAppliedCategories
     });
     
     // Apply offer to selected items and categories (if any items/categories are selected)
     // NOTE: For targeted offers, we DON'T apply offerPrice to items (discount is calculated at order time for eligible customers only)
     
+    // Collect item IDs from appliedVariants (extract the itemId part from "itemId_variantIndex")
+    const variantItemIds = [...new Set(parsedAppliedVariants.map(v => v.split('_')[0]))];
     let allItemIds = [];
-    if (parsedAppliedItems.length > 0 || parsedAppliedCategories.length > 0) {
+    if (parsedAppliedItems.length > 0 || parsedAppliedCategories.length > 0 || parsedAppliedVariants.length > 0) {
       const MenuItem = require('../models/MenuItem');
       
-      // Collect all item IDs (from both direct selection and categories)
+      // Collect all item IDs (from both direct selection, categories, and variant selections)
       allItemIds = [...parsedAppliedItems];
       
       // Add items from selected categories
@@ -300,7 +309,12 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
         allItemIds = [...new Set([...allItemIds, ...categoryItemIds])];
       }
       
-      logger.info('Total items to apply offer', { count: allItemIds.length });
+      // Add items from variant-level selections (the parent items that have specific variants selected)
+      if (variantItemIds.length > 0) {
+        allItemIds = [...new Set([...allItemIds, ...variantItemIds])];
+      }
+      
+      logger.info('Total items to apply offer', { count: allItemIds.length, variantSpecific: parsedAppliedVariants.length });
       logger.info('Is targeted offer', { isTargeted: isTargetedOffer, offerPriceApplied: !isTargetedOffer });
       
       // Apply offer to all collected items
@@ -315,20 +329,47 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
           
           const updateFields = { offerType: offerTypes };
           
+          // Check if this item is fully selected or only specific variants
+          const isFullItemSelected = parsedAppliedItems.includes(itemId) || 
+            parsedAppliedCategories.some(cat => {
+              const itemCats = Array.isArray(item.category) ? item.category : [item.category];
+              return itemCats.includes(cat);
+            });
+          
           // If percentage is provided AND it's NOT a targeted offer, calculate and apply discount
           // For targeted offers, discount is applied at order time for eligible customers only
           if (percentage && !isTargetedOffer) {
             const discountPercent = parseFloat(percentage);
-            const offerPrice = Math.round(item.price * (1 - discountPercent / 100));
-            updateFields.offerPrice = offerPrice;
-            logger.info(`Applying to ${item.name}: ${item.price} -> ${offerPrice} (${discountPercent}% OFF)`);
             
-            // Also apply discount to variants if item has variants
-            if (item.variants && item.variants.length > 0) {
-              updateFields.variants = item.variants.map(v => ({
-                ...v.toObject ? v.toObject() : v,
-                offerPrice: Math.round(v.price * (1 - discountPercent / 100))
-              }));
+            if (isFullItemSelected) {
+              // Full item selected — apply to parent price and ALL variants
+              const offerPrice = Math.round(item.price * (1 - discountPercent / 100));
+              updateFields.offerPrice = offerPrice;
+              logger.info(`Applying to ${item.name}: ${item.price} -> ${offerPrice} (${discountPercent}% OFF)`);
+              
+              if (item.variants && item.variants.length > 0) {
+                updateFields.variants = item.variants.map(v => ({
+                  ...v.toObject ? v.toObject() : v,
+                  offerPrice: Math.round(v.price * (1 - discountPercent / 100))
+                }));
+              }
+            } else {
+              // Only specific variants selected — apply discount only to those variants
+              const selectedVariantIndices = parsedAppliedVariants
+                .filter(v => v.startsWith(itemId + '_'))
+                .map(v => parseInt(v.split('_')[1]));
+              
+              if (item.variants && item.variants.length > 0) {
+                updateFields.variants = item.variants.map((v, idx) => {
+                  const vObj = v.toObject ? v.toObject() : v;
+                  if (selectedVariantIndices.includes(idx)) {
+                    const vOfferPrice = Math.round(v.price * (1 - discountPercent / 100));
+                    logger.info(`Applying to ${item.name} variant ${v.label}: ${v.price} -> ${vOfferPrice} (${discountPercent}% OFF)`);
+                    return { ...vObj, offerPrice: vOfferPrice };
+                  }
+                  return vObj; // Leave unselected variants unchanged
+                });
+              }
             }
           } else if (percentage && isTargetedOffer) {
             logger.info(`Targeted offer - NOT applying offerPrice to ${item.name} (${percentage}% discount for eligible customers only)`);
@@ -621,7 +662,7 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
     const { 
       title, description, offerType, code, discountType, discountValue, 
       minOrderAmount, validFrom, validUntil, isActive, showAsPopup,
-      buttonText, buttonLink, percentage, appliedItems, appliedCategories,
+      buttonText, buttonLink, percentage, appliedItems, appliedCategories, appliedVariants,
       targetType, targetPercentage, targetMinSpent, targetMinOrders
     } = req.body;
     
@@ -632,6 +673,7 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
     // Parse appliedItems and appliedCategories if they're JSON strings
     let parsedAppliedItems = [];
     let parsedAppliedCategories = [];
+    let parsedAppliedVariants = [];
     
     if (appliedItems) {
       parsedAppliedItems = typeof appliedItems === 'string' ? JSON.parse(appliedItems) : appliedItems;
@@ -639,6 +681,10 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
     
     if (appliedCategories) {
       parsedAppliedCategories = typeof appliedCategories === 'string' ? JSON.parse(appliedCategories) : appliedCategories;
+    }
+    
+    if (appliedVariants) {
+      parsedAppliedVariants = typeof appliedVariants === 'string' ? JSON.parse(appliedVariants) : appliedVariants;
     }
     
     // Handle targeting - fetch customers in background after saving
@@ -656,6 +702,7 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
       offerType: offerType || '',
       percentage: percentage ? parseFloat(percentage) : null,
       appliedItems: parsedAppliedItems,
+      appliedVariants: parsedAppliedVariants,
       appliedCategories: parsedAppliedCategories,
       code,
       discountType: discountType || 'none',

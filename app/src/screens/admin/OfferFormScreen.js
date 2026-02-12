@@ -35,6 +35,7 @@ export default function OfferFormScreen({ route, navigation }) {
       ? existingOffer.appliedItems.map(item => typeof item === 'string' ? item : item._id)
       : []
   );
+  const [selectedVariants, setSelectedVariants] = useState(existingOffer?.appliedVariants || []);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState(null);
   const [expandedItemId, setExpandedItemId] = useState(null); // For variant drill-down
@@ -166,6 +167,42 @@ export default function OfferFormScreen({ route, navigation }) {
     }
   };
 
+  const toggleVariant = (itemId, variantIndex) => {
+    const item = menuItems.find(i => i._id === itemId);
+    if (!item) return;
+    const key = `${itemId}_${variantIndex}`;
+    const totalVariants = item.variants?.length || 0;
+    
+    if (selectedItems.includes(itemId)) {
+      // Parent was fully selected — uncheck this variant, move others to selectedVariants
+      const otherKeys = [];
+      for (let i = 0; i < totalVariants; i++) {
+        if (i !== variantIndex) otherKeys.push(`${itemId}_${i}`);
+      }
+      setSelectedItems(selectedItems.filter(id => id !== itemId));
+      setSelectedVariants(prev => [...prev.filter(v => !v.startsWith(itemId + '_')), ...otherKeys]);
+    } else if (selectedVariants.includes(key)) {
+      // Already individually selected — remove it
+      setSelectedVariants(prev => prev.filter(v => v !== key));
+    } else {
+      // Add this variant
+      const newVariants = [...selectedVariants, key];
+      // Check if all variants are now selected → upgrade to parent selection
+      const selectedForItem = newVariants.filter(v => v.startsWith(itemId + '_'));
+      if (totalVariants > 0 && selectedForItem.length === totalVariants) {
+        setSelectedItems(prev => [...prev, itemId]);
+        setSelectedVariants(prev => prev.filter(v => !v.startsWith(itemId + '_')));
+      } else {
+        setSelectedVariants(newVariants);
+      }
+    }
+  };
+
+  const isVariantSelected = (itemId, variantIndex) => {
+    if (selectedItems.includes(itemId)) return true;
+    return selectedVariants.includes(`${itemId}_${variantIndex}`);
+  };
+
   const toggleItem = (itemId) => {
     const item = menuItems.find(i => i._id === itemId);
     if (!item) return;
@@ -177,6 +214,8 @@ export default function OfferFormScreen({ route, navigation }) {
       newSelectedItems = [...selectedItems, itemId];
     }
     setSelectedItems(newSelectedItems);
+    // Clear any individual variant selections for this item
+    setSelectedVariants(prev => prev.filter(v => !v.startsWith(itemId + '_')));
     
     // Check if all items in this item's categories are now selected/deselected
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
@@ -350,6 +389,10 @@ export default function OfferFormScreen({ route, navigation }) {
       
       if (selectedItems.length > 0) {
         formData.append('appliedItems', JSON.stringify(selectedItems));
+      }
+      
+      if (selectedVariants.length > 0) {
+        formData.append('appliedVariants', JSON.stringify(selectedVariants));
       }
       
       if (selectedCategories.length > 0) {
@@ -571,20 +614,20 @@ export default function OfferFormScreen({ route, navigation }) {
                 >
                   <Ionicons name="list" size={20} color={ZOMATO_RED} />
                   <Text style={styles.selectItemsButtonText}>
-                    {selectedItems.length > 0
-                      ? `${selectedItems.length} item(s) selected` 
+                    {(selectedItems.length > 0 || selectedVariants.length > 0)
+                      ? `${selectedItems.length} item(s), ${selectedVariants.length} variant(s) selected` 
                       : 'Select Items'}
                   </Text>
                   <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
                 </TouchableOpacity>
 
-                {selectedItems.length > 0 && (
+                {(selectedItems.length > 0 || selectedVariants.length > 0) && (
                   <View style={styles.selectedItemsInfo}>
                     <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
                     <Text style={styles.selectedItemsInfoText}>
                       {percentage && percentage.trim()
-                        ? `${percentage}% discount will be applied to ${selectedItems.length} item(s)`
-                        : `Offer will apply to ${selectedItems.length} item(s)`}
+                        ? `${percentage}% discount will be applied to ${selectedItems.length} item(s) & ${selectedVariants.length} variant(s)`
+                        : `Offer will apply to ${selectedItems.length} item(s) & ${selectedVariants.length} variant(s)`}
                     </Text>
                   </View>
                 )}
@@ -983,9 +1026,12 @@ export default function OfferFormScreen({ route, navigation }) {
                         const allSelected = allIds.every(id => selectedItems.includes(id));
                         if (allSelected) {
                           setSelectedItems(selectedItems.filter(id => !allIds.includes(id)));
+                          setSelectedVariants(prev => prev.filter(v => !allIds.some(id => v.startsWith(id + '_'))));
                           setSelectedCategories([]);
                         } else {
                           setSelectedItems([...new Set([...selectedItems, ...allIds])]);
+                          // Clear individual variant selections since all parents are now fully selected
+                          setSelectedVariants(prev => prev.filter(v => !allIds.some(id => v.startsWith(id + '_'))));
                         }
                       }}
                     >
@@ -1018,15 +1064,22 @@ export default function OfferFormScreen({ route, navigation }) {
                             onPress={() => setExpandedCategory(isExpanded ? null : item._id)}
                           >
                             <View style={styles.categoryHeaderLeft}>
-                              <TouchableOpacity
-                                style={[styles.checkbox, selectedItems.includes(item._id) && styles.checkboxChecked]}
-                                onPress={(e) => {
-                                  e.stopPropagation();
-                                  toggleItem(item._id);
-                                }}
-                              >
-                                {selectedItems.includes(item._id) && <Ionicons name="checkmark" size={16} color="#fff" />}
-                              </TouchableOpacity>
+                              {(() => {
+                                const isFullySelected = selectedItems.includes(item._id);
+                                const hasPartialVariants = !isFullySelected && selectedVariants.some(v => v.startsWith(item._id + '_'));
+                                return (
+                                  <TouchableOpacity
+                                    style={[styles.checkbox, isFullySelected && styles.checkboxChecked, hasPartialVariants && { borderColor: ZOMATO_RED, backgroundColor: '#FFF1F2' }]}
+                                    onPress={(e) => {
+                                      e.stopPropagation();
+                                      toggleItem(item._id);
+                                    }}
+                                  >
+                                    {isFullySelected && <Ionicons name="checkmark" size={16} color="#fff" />}
+                                    {hasPartialVariants && <Ionicons name="remove" size={16} color={ZOMATO_RED} />}
+                                  </TouchableOpacity>
+                                );
+                              })()}
                               {item.image ? (
                                 <Image source={{ uri: item.image }} style={styles.itemImage} />
                               ) : null}
@@ -1054,8 +1107,12 @@ export default function OfferFormScreen({ route, navigation }) {
                                 const vOfferPrice = discountPercent > 0 ? Math.round(vPrice * (1 - discountPercent / 100)) : vPrice;
                                 const vDiscount = vPrice - vOfferPrice;
                                 const foodType = variant.foodType || item.foodType;
+                                const vSelected = isVariantSelected(item._id, vIdx);
                                 return (
-                                  <View key={vIdx} style={styles.variantRow}>
+                                  <TouchableOpacity key={vIdx} style={styles.variantRow} activeOpacity={0.7} onPress={() => toggleVariant(item._id, vIdx)}>
+                                    <View style={[styles.checkbox, { width: 20, height: 20, borderRadius: 4, marginRight: 8 }, vSelected && styles.checkboxChecked]}>
+                                      {vSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
+                                    </View>
                                     {variant.image ? (
                                       <Image source={{ uri: variant.image }} style={styles.variantImage} />
                                     ) : item.image ? (
@@ -1114,7 +1171,7 @@ export default function OfferFormScreen({ route, navigation }) {
                                         {variant.available !== false ? 'Active' : 'Off'}
                                       </Text>
                                     </View>
-                                  </View>
+                                  </TouchableOpacity>
                                 );
                               })}
                             </View>
@@ -1157,7 +1214,7 @@ export default function OfferFormScreen({ route, navigation }) {
                 onPress={() => setShowCategoryModal(false)}
               >
                 <Text style={styles.modalDoneButtonText}>
-                  Done ({selectedItems.length} items selected)
+                  Done ({selectedItems.length} items, {selectedVariants.length} variants)
                 </Text>
               </TouchableOpacity>
             </View>

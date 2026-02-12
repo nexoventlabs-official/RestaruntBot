@@ -278,6 +278,11 @@ router.post('/customer/active-offers', async (req, res) => {
             );
           }
           
+          // Check by appliedVariants (specific variant selections like "itemId_0")
+          if (!isApplicable && offer.appliedVariants && offer.appliedVariants.length > 0) {
+            isApplicable = offer.appliedVariants.some(v => v.startsWith(menuItem._id.toString() + '_'));
+          }
+          
           // Check by appliedCategories
           if (!isApplicable && offer.appliedCategories && offer.appliedCategories.length > 0) {
             const itemCategories = Array.isArray(menuItem.category) ? menuItem.category : [menuItem.category];
@@ -334,6 +339,7 @@ router.post('/customer/active-offers', async (req, res) => {
         discountValue: o.discountValue,
         percentage: o.percentage,
         appliedItems: o.appliedItems,
+        appliedVariants: o.appliedVariants,
         appliedCategories: o.appliedCategories,
         validUntil: o.validUntil
       })),
