@@ -516,18 +516,16 @@ const catalogService = {
    * @returns {string} Description with ratings
    */
   buildProductDescription(menuItem, variant = null) {
-    let desc = menuItem.description || menuItem.name;
-    
-    // If variant-specific, mention label + quantity/unit
+    const lines = [];
+
+    // ── Line 1: Variant label + quantity/unit (or base unit info) ──
     if (variant) {
-      desc += ` | ${variant.label}`;
+      let variantInfo = variant.label;
       if (variant.quantity && variant.unit) {
-        desc += ` (${variant.quantity} ${variant.unit})`;
+        variantInfo += ` | ${variant.quantity} ${variant.unit}`;
       }
-    }
-    
-    // List all available variants/sizes if item has variants (for base product description)
-    if (menuItem.variants && menuItem.variants.length > 0 && !variant) {
+      lines.push(variantInfo);
+    } else if (menuItem.variants && menuItem.variants.length > 0) {
       const variantTypeName = menuItem.variants[0]?.variantType === 'color' ? 'Colors' : 'Sizes';
       const labels = menuItem.variants
         .filter(v => v.available !== false)
@@ -538,31 +536,38 @@ const catalogService = {
         })
         .join(', ');
       if (labels) {
-        desc += ` | Available ${variantTypeName}: ${labels}`;
+        lines.push(`Available ${variantTypeName}: ${labels}`);
       }
+    } else if (menuItem.quantity && menuItem.unit) {
+      lines.push(`${menuItem.quantity} ${menuItem.unit}`);
     }
-    
-    // Add rating info to description
-    if (menuItem.totalRatings > 0 && menuItem.avgRating > 0) {
-      const stars = '⭐'.repeat(Math.min(Math.floor(menuItem.avgRating), 5));
-      desc += ` | ${stars} ${menuItem.avgRating}/5 (${menuItem.totalRatings} reviews)`;
+
+    // ── Line 2: Star rating ──
+    const rating = menuItem.avgRating || 0;
+    const totalRatings = menuItem.totalRatings || 0;
+    const filledStars = Math.min(Math.floor(rating), 5);
+    const emptyStars = 5 - filledStars;
+    const starLine = '⭐'.repeat(filledStars) + '☆'.repeat(emptyStars);
+    if (totalRatings > 0) {
+      lines.push(`${starLine} ${rating}/5 (${totalRatings} reviews)`);
+    } else {
+      lines.push(`${starLine} No reviews yet`);
     }
-    
-    // Add food type
+
+    // ── Line 3: Food type icon + label ──
     if (menuItem.foodType === 'veg') {
-      desc += ' | 🟢 Veg';
+      lines.push('🟢 Veg');
     } else if (menuItem.foodType === 'nonveg') {
-      desc += ' | 🔴 Non-Veg';
+      lines.push('🔴 Non-Veg');
     } else if (menuItem.foodType === 'egg') {
-      desc += ' | 🟡 Egg';
+      lines.push('🟡 Egg');
     }
-    
-    // Add unit/quantity info (only for non-variant base products)
-    if (!variant && menuItem.quantity && menuItem.unit) {
-      desc += ` | ${menuItem.quantity} ${menuItem.unit}`;
-    }
-    
-    return desc.substring(0, 5000); // Meta catalog description limit
+
+    // ── Line 4: Description ──
+    const descText = menuItem.description || menuItem.name;
+    lines.push(descText);
+
+    return lines.join('\n').substring(0, 5000); // Meta catalog description limit
   },
 
   /**
@@ -985,20 +990,54 @@ const catalogService = {
       
       if (items.length === 0) return { synced: 0, failed: 0 };
 
-      // Build batch update with new descriptions including ratings
-      const products = items.map(item => ({
-        retailerId: item._id.toString(),
-        name: item.name,
-        description: this.buildProductDescription(item),
-        price: item.price,
-        currency: 'INR',
-        imageUrl: item.image || null,
-        category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
-        availability: (item.available && !item.isPaused) ? 'in stock' : 'out of stock'
-      }));
+      // Separate variant items from single items
+      const singleProducts = [];
+      const variantProducts = [];
 
-      await metaCloud.batchCreateOrUpdateProducts(catalogId, products);
-      synced = products.length;
+      for (const item of items) {
+        if (item.variants && item.variants.length > 0) {
+          // Re-sync all variants with updated description (includes new ratings)
+          item.variants.forEach((v, idx) => {
+            let pillLabel = v.label;
+            if (v.quantity && v.unit && !v.label.toLowerCase().includes(v.unit.toLowerCase())) {
+              pillLabel = `${v.label} (${v.quantity} ${v.unit})`;
+            }
+            variantProducts.push({
+              retailerId: `${item._id.toString()}_v${idx}`,
+              name: item.name,
+              description: this.buildProductDescription(item, v),
+              price: v.price,
+              currency: 'INR',
+              imageUrl: v.image || item.image || null,
+              category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
+              availability: (v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
+              itemGroupId: item._id.toString(),
+              variantType: v.variantType || 'size',
+              variantLabel: pillLabel
+            });
+          });
+        } else {
+          singleProducts.push({
+            retailerId: item._id.toString(),
+            name: item.name,
+            description: this.buildProductDescription(item),
+            price: item.price,
+            currency: 'INR',
+            imageUrl: item.image || null,
+            category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
+            availability: (item.available && !item.isPaused) ? 'in stock' : 'out of stock'
+          });
+        }
+      }
+
+      if (variantProducts.length > 0) {
+        await metaCloud.batchCreateOrUpdateProducts(catalogId, variantProducts);
+        synced += variantProducts.length;
+      }
+      if (singleProducts.length > 0) {
+        await metaCloud.batchCreateOrUpdateProducts(catalogId, singleProducts);
+        synced += singleProducts.length;
+      }
       logger.info('Ratings synced to Meta catalog', { count: synced, itemIds: menuItemIds });
     } catch (err) {
       failed = menuItemIds.length;
