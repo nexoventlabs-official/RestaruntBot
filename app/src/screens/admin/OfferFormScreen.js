@@ -571,20 +571,20 @@ export default function OfferFormScreen({ route, navigation }) {
                 >
                   <Ionicons name="list" size={20} color={ZOMATO_RED} />
                   <Text style={styles.selectItemsButtonText}>
-                    {selectedItems.length > 0 || selectedCategories.length > 0
-                      ? `${selectedCategories.length} category(ies), ${selectedItems.length} item(s) selected` 
-                      : 'Select Categories & Items'}
+                    {selectedItems.length > 0
+                      ? `${selectedItems.length} item(s) selected` 
+                      : 'Select Items'}
                   </Text>
                   <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
                 </TouchableOpacity>
 
-                {(selectedItems.length > 0 || selectedCategories.length > 0) && (
+                {selectedItems.length > 0 && (
                   <View style={styles.selectedItemsInfo}>
                     <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
                     <Text style={styles.selectedItemsInfoText}>
                       {percentage && percentage.trim()
-                        ? `${percentage}% discount will be applied to ${selectedCategories.length} category(ies) and ${selectedItems.length} item(s)`
-                        : `Offer will apply to ${selectedCategories.length} category(ies) and ${selectedItems.length} item(s)`}
+                        ? `${percentage}% discount will be applied to ${selectedItems.length} item(s)`
+                        : `Offer will apply to ${selectedItems.length} item(s)`}
                     </Text>
                   </View>
                 )}
@@ -912,12 +912,9 @@ export default function OfferFormScreen({ route, navigation }) {
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle}>Select Categories & Items</Text>
+                <Text style={styles.modalTitle}>Select Items</Text>
                 <Text style={styles.modalSubtitle}>
-                  {categories.length} total categories • {menuItems.length} total items
-                </Text>
-                <Text style={styles.modalSubtitle}>
-                  {selectedCategories.length} categories, {selectedItems.length} items selected
+                  {menuItems.length} total items • {selectedItems.length} selected
                 </Text>
               </View>
               <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowCategoryModal(false)}>
@@ -950,12 +947,6 @@ export default function OfferFormScreen({ route, navigation }) {
                   <ActivityIndicator size="large" color={ZOMATO_RED} />
                   <Text style={styles.emptyStateText}>Loading...</Text>
                 </View>
-              ) : categories.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Ionicons name="folder-open-outline" size={48} color="#9CA3AF" />
-                  <Text style={styles.emptyStateText}>No categories found</Text>
-                  <Text style={styles.emptyStateHint}>Add categories from Menu screen first</Text>
-                </View>
               ) : menuItems.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Ionicons name="fast-food-outline" size={48} color="#9CA3AF" />
@@ -963,9 +954,16 @@ export default function OfferFormScreen({ route, navigation }) {
                   <Text style={styles.emptyStateHint}>Add menu items from Menu screen first</Text>
                 </View>
               ) : (() => {
-                const filteredCategories = getFilteredCategoriesAndItems();
-                
-                if (filteredCategories.length === 0) {
+                const query = searchQuery.toLowerCase().trim();
+                // Filter items by search query
+                const filtered = menuItems.filter(item => {
+                  if (!query) return true;
+                  if (item.name.toLowerCase().includes(query)) return true;
+                  if (item.variants?.some(v => v.label?.toLowerCase().includes(query))) return true;
+                  return false;
+                });
+
+                if (filtered.length === 0) {
                   return (
                     <View style={styles.emptyState}>
                       <Ionicons name="search-outline" size={48} color="#9CA3AF" />
@@ -974,159 +972,175 @@ export default function OfferFormScreen({ route, navigation }) {
                     </View>
                   );
                 }
-                
+
                 return (
                   <>
-                    {filteredCategories.map((category) => {
-                      const categoryItems = getItemsByCategory(category.name);
-                      const filteredItems = getFilteredItemsByCategory(category.name);
-                      const allItemsSelected = categoryItems.length > 0 && categoryItems.every(item => selectedItems.includes(item._id));
-                      
+                    {/* Select All */}
+                    <TouchableOpacity
+                      style={styles.categoryHeader}
+                      onPress={() => {
+                        const allIds = filtered.map(i => i._id);
+                        const allSelected = allIds.every(id => selectedItems.includes(id));
+                        if (allSelected) {
+                          setSelectedItems(selectedItems.filter(id => !allIds.includes(id)));
+                          setSelectedCategories([]);
+                        } else {
+                          setSelectedItems([...new Set([...selectedItems, ...allIds])]);
+                        }
+                      }}
+                    >
+                      <View style={styles.categoryHeaderLeft}>
+                        <View style={[
+                          styles.checkbox,
+                          filtered.length > 0 && filtered.every(i => selectedItems.includes(i._id)) && styles.checkboxChecked
+                        ]}>
+                          {filtered.length > 0 && filtered.every(i => selectedItems.includes(i._id)) && (
+                            <Ionicons name="checkmark" size={16} color="#fff" />
+                          )}
+                        </View>
+                        <Text style={[styles.categoryName, { fontWeight: '700' }]}>Select All</Text>
+                        <View style={styles.categoryBadge}>
+                          <Text style={styles.categoryBadgeText}>{filtered.length}</Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+
+                    {filtered.map((item) => {
+                      const hasVariants = item.variants && item.variants.length > 0;
+                      const isExpanded = expandedCategory === item._id;
+                      const discountPercent = percentage && percentage.trim() ? parseFloat(percentage) : 0;
+
                       return (
-                        <View key={category._id} style={styles.categorySection}>
-                          <TouchableOpacity 
+                        <View key={item._id} style={styles.categorySection}>
+                          {/* Parent Title Header */}
+                          <TouchableOpacity
                             style={styles.categoryHeader}
-                            onPress={() => setExpandedCategory(expandedCategory === category.name ? null : category.name)}
+                            onPress={() => setExpandedCategory(isExpanded ? null : item._id)}
                           >
                             <View style={styles.categoryHeaderLeft}>
-                              <TouchableOpacity 
-                                style={[styles.checkbox, allItemsSelected && styles.checkboxChecked]}
+                              <TouchableOpacity
+                                style={[styles.checkbox, selectedItems.includes(item._id) && styles.checkboxChecked]}
                                 onPress={(e) => {
                                   e.stopPropagation();
-                                  selectAllItemsInCategory(category.name);
+                                  toggleItem(item._id);
                                 }}
-                                disabled={categoryItems.length === 0}
                               >
-                                {allItemsSelected && <Ionicons name="checkmark" size={16} color="#fff" />}
+                                {selectedItems.includes(item._id) && <Ionicons name="checkmark" size={16} color="#fff" />}
                               </TouchableOpacity>
-                              <Text style={styles.categoryName}>{category.name}</Text>
-                              <View style={styles.categoryBadge}>
-                                <Text style={styles.categoryBadgeText}>{categoryItems.length}</Text>
+                              {item.image ? (
+                                <Image source={{ uri: item.image }} style={styles.itemImage} />
+                              ) : null}
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.categoryName}>{item.name}</Text>
+                                {hasVariants && (
+                                  <Text style={styles.variantHint}>{item.variants.length} variant{item.variants.length > 1 ? 's' : ''}</Text>
+                                )}
                               </View>
                             </View>
-                            <Ionicons 
-                              name={expandedCategory === category.name ? "chevron-up" : "chevron-down"} 
-                              size={20} 
-                              color="#9CA3AF" 
-                            />
+                            {hasVariants && (
+                              <Ionicons
+                                name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                                size={20}
+                                color="#9CA3AF"
+                              />
+                            )}
                           </TouchableOpacity>
-                          
-                          {expandedCategory === category.name && (
-                            <View style={styles.itemsList}>
-                              {filteredItems.length === 0 ? (
-                                <View style={styles.emptyCategory}>
-                                  <Text style={styles.emptyCategoryText}>
-                                    {searchQuery ? 'No matching items in this category' : 'No items in this category'}
-                                  </Text>
-                                </View>
-                              ) : (
-                              filteredItems.map((item) => {
-                                  const discountPercent = percentage && percentage.trim() ? parseFloat(percentage) : 0;
-                                  const offerPrice = discountPercent > 0 ? Math.round(item.price * (1 - discountPercent / 100)) : item.price;
-                                  const discount = item.price - offerPrice;
-                                  const hasVariants = item.variants && item.variants.length > 0;
-                                  const isExpanded = expandedItemId === item._id;
-                                  
-                                  return (
-                                    <View key={item._id}>
-                                      <TouchableOpacity 
-                                        style={styles.itemRow}
-                                        onPress={() => toggleItem(item._id)}
-                                      >
-                                        <View style={[styles.checkbox, selectedItems.includes(item._id) && styles.checkboxChecked]}>
-                                          {selectedItems.includes(item._id) && <Ionicons name="checkmark" size={16} color="#fff" />}
-                                        </View>
-                                        {item.image && (
-                                          <Image source={{ uri: item.image }} style={styles.itemImage} />
-                                        )}
-                                        <View style={styles.itemInfo}>
-                                          <Text style={styles.itemName}>{item.name}</Text>
-                                          <View style={styles.priceContainer}>
-                                            {discountPercent > 0 ? (
-                                              <>
-                                                <View style={styles.priceRow}>
-                                                  <Text style={styles.originalPrice}>₹{item.price}</Text>
-                                                  <Ionicons name="arrow-forward" size={12} color="#9CA3AF" style={{ marginHorizontal: 4 }} />
-                                                  <Text style={styles.offerPrice}>₹{offerPrice}</Text>
-                                                </View>
-                                                <View style={styles.discountBadge}>
-                                                  <Text style={styles.discountText}>Save ₹{discount}</Text>
-                                                </View>
-                                              </>
-                                            ) : (
-                                              <Text style={styles.itemPrice}>₹{item.price}</Text>
-                                            )}
-                                          </View>
-                                          {hasVariants && (
-                                            <Text style={styles.variantHint}>{item.variants.length} variant{item.variants.length > 1 ? 's' : ''}</Text>
-                                          )}
-                                        </View>
-                                        {hasVariants && (
-                                          <TouchableOpacity
-                                            style={styles.variantExpandBtn}
-                                            onPress={(e) => {
-                                              e.stopPropagation();
-                                              setExpandedItemId(isExpanded ? null : item._id);
-                                            }}
-                                          >
-                                            <Ionicons 
-                                              name={isExpanded ? 'chevron-up' : 'chevron-down'} 
-                                              size={18} 
-                                              color="#9CA3AF" 
-                                            />
-                                          </TouchableOpacity>
-                                        )}
-                                      </TouchableOpacity>
-                                      
-                                      {/* Variant Drill-Down */}
-                                      {hasVariants && isExpanded && (
-                                        <View style={styles.variantsList}>
-                                          {item.variants.map((variant, vIdx) => {
-                                            const vOfferPrice = discountPercent > 0 ? Math.round(variant.price * (1 - discountPercent / 100)) : variant.price;
-                                            const vDiscount = variant.price - vOfferPrice;
+
+                          {/* Variant Items */}
+                          {hasVariants && isExpanded && (
+                            <View style={styles.variantsList}>
+                              {item.variants.map((variant, vIdx) => {
+                                const vPrice = variant.price || (variant.quantities?.[0]?.price) || item.price;
+                                const vOfferPrice = discountPercent > 0 ? Math.round(vPrice * (1 - discountPercent / 100)) : vPrice;
+                                const vDiscount = vPrice - vOfferPrice;
+                                const foodType = variant.foodType || item.foodType;
+                                return (
+                                  <View key={vIdx} style={styles.variantRow}>
+                                    {variant.image ? (
+                                      <Image source={{ uri: variant.image }} style={styles.variantImage} />
+                                    ) : item.image ? (
+                                      <Image source={{ uri: item.image }} style={styles.variantImage} />
+                                    ) : (
+                                      <View style={[styles.variantImage, { backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' }]}>
+                                        <Ionicons name="restaurant-outline" size={14} color="#9ca3af" />
+                                      </View>
+                                    )}
+                                    {foodType && foodType !== 'none' && (
+                                      <View style={[styles.foodTypeDot, {
+                                        backgroundColor: foodType === 'veg' ? '#22c55e' : foodType === 'egg' ? '#f59e0b' : '#ef4444',
+                                        width: 8, height: 8, borderRadius: 4, marginRight: 6,
+                                      }]} />
+                                    )}
+                                    <View style={styles.variantInfo}>
+                                      <Text style={styles.variantLabel}>{variant.label}</Text>
+                                      {variant.quantities && variant.quantities.length > 0 ? (
+                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
+                                          {variant.quantities.map((q, qIdx) => {
+                                            const qOfferPrice = discountPercent > 0 ? Math.round(q.price * (1 - discountPercent / 100)) : q.price;
                                             return (
-                                              <View key={vIdx} style={styles.variantRow}>
-                                                <View style={styles.variantDot} />
-                                                {variant.image ? (
-                                                  <Image source={{ uri: variant.image }} style={styles.variantImage} />
-                                                ) : null}
-                                                <View style={styles.variantInfo}>
-                                                  <Text style={styles.variantLabel}>{variant.label}</Text>
-                                                  <View style={styles.priceContainer}>
-                                                    {discountPercent > 0 ? (
-                                                      <View style={styles.priceRow}>
-                                                        <Text style={styles.originalPrice}>₹{variant.price}</Text>
-                                                        <Ionicons name="arrow-forward" size={10} color="#9CA3AF" style={{ marginHorizontal: 3 }} />
-                                                        <Text style={[styles.offerPrice, { fontSize: 13 }]}>₹{vOfferPrice}</Text>
-                                                        <View style={[styles.discountBadge, { marginLeft: 6 }]}>
-                                                          <Text style={styles.discountText}>-₹{vDiscount}</Text>
-                                                        </View>
-                                                      </View>
-                                                    ) : (
-                                                      <Text style={[styles.itemPrice, { fontSize: 12 }]}>₹{variant.price}</Text>
-                                                    )}
-                                                  </View>
-                                                </View>
-                                                <View style={[
-                                                  styles.variantAvailBadge,
-                                                  { backgroundColor: variant.available !== false ? '#D1FAE5' : '#FEE2E2' }
-                                                ]}>
-                                                  <Text style={[
-                                                    styles.variantAvailText,
-                                                    { color: variant.available !== false ? '#16A34A' : '#DC2626' }
-                                                  ]}>
-                                                    {variant.available !== false ? 'Available' : 'Unavailable'}
-                                                  </Text>
-                                                </View>
+                                              <View key={qIdx} style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                                <Text style={{ fontSize: 10, color: '#4b5563', fontWeight: '600' }}>
+                                                  {q.quantity} {q.unit} — {discountPercent > 0 ? `₹${qOfferPrice}` : `₹${q.price}`}
+                                                </Text>
                                               </View>
                                             );
                                           })}
                                         </View>
+                                      ) : (
+                                        <View style={styles.priceContainer}>
+                                          {discountPercent > 0 ? (
+                                            <View style={styles.priceRow}>
+                                              <Text style={styles.originalPrice}>₹{vPrice}</Text>
+                                              <Ionicons name="arrow-forward" size={10} color="#9CA3AF" style={{ marginHorizontal: 3 }} />
+                                              <Text style={[styles.offerPrice, { fontSize: 13 }]}>₹{vOfferPrice}</Text>
+                                              <View style={[styles.discountBadge, { marginLeft: 6 }]}>
+                                                <Text style={styles.discountText}>-₹{vDiscount}</Text>
+                                              </View>
+                                            </View>
+                                          ) : (
+                                            <Text style={[styles.itemPrice, { fontSize: 12 }]}>₹{vPrice}</Text>
+                                          )}
+                                        </View>
                                       )}
                                     </View>
-                                  );
-                                })
-                              )}
+                                    <View style={[
+                                      styles.variantAvailBadge,
+                                      { backgroundColor: variant.available !== false ? '#D1FAE5' : '#FEE2E2' }
+                                    ]}>
+                                      <Text style={[
+                                        styles.variantAvailText,
+                                        { color: variant.available !== false ? '#16A34A' : '#DC2626' }
+                                      ]}>
+                                        {variant.available !== false ? 'Active' : 'Off'}
+                                      </Text>
+                                    </View>
+                                  </View>
+                                );
+                              })}
+                            </View>
+                          )}
+
+                          {/* Non-variant item: show price directly */}
+                          {!hasVariants && isExpanded && (
+                            <View style={styles.variantsList}>
+                              <View style={styles.variantRow}>
+                                <View style={styles.variantInfo}>
+                                  <View style={styles.priceContainer}>
+                                    {discountPercent > 0 ? (
+                                      <View style={styles.priceRow}>
+                                        <Text style={styles.originalPrice}>₹{item.price}</Text>
+                                        <Ionicons name="arrow-forward" size={10} color="#9CA3AF" style={{ marginHorizontal: 3 }} />
+                                        <Text style={[styles.offerPrice, { fontSize: 13 }]}>₹{Math.round(item.price * (1 - discountPercent / 100))}</Text>
+                                        <View style={[styles.discountBadge, { marginLeft: 6 }]}>
+                                          <Text style={styles.discountText}>-₹{item.price - Math.round(item.price * (1 - discountPercent / 100))}</Text>
+                                        </View>
+                                      </View>
+                                    ) : (
+                                      <Text style={[styles.itemPrice, { fontSize: 12 }]}>₹{item.price}</Text>
+                                    )}
+                                  </View>
+                                </View>
+                              </View>
                             </View>
                           )}
                         </View>
@@ -1143,7 +1157,7 @@ export default function OfferFormScreen({ route, navigation }) {
                 onPress={() => setShowCategoryModal(false)}
               >
                 <Text style={styles.modalDoneButtonText}>
-                  Done ({selectedCategories.length} categories, {selectedItems.length} items)
+                  Done ({selectedItems.length} items selected)
                 </Text>
               </TouchableOpacity>
             </View>
