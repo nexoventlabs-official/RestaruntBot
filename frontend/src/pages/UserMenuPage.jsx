@@ -1088,7 +1088,7 @@ export default function UserMenuPage() {
                 </p>
               )}
 
-              {/* Details Grid */
+              {/* Details Grid */}
               <div className="grid grid-cols-2 gap-3 mb-5">
                 {/* Preparation Time */}
                 <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
