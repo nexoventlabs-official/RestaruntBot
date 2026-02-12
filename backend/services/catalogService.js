@@ -399,7 +399,7 @@ const catalogService = {
                 const sizeLabel = `${q.quantity} ${q.unit}`;
                 variantProducts.push({
                   retailerId: `${item._id.toString()}_v${vIdx}_q${qIdx}`,
-                  name: v.label || item.name,
+                  name: item.name,
                   description: this.buildProductDescription(item, v),
                   price: q.price,
                   currency: 'INR',
@@ -413,11 +413,11 @@ const catalogService = {
                 });
               });
             } else {
-              // Single quantity variant (backward compatible)
-              const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : v.label;
+              // Single quantity variant — still uses dual color+size for proper grouping
+              const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : 'Standard';
               variantProducts.push({
                 retailerId: `${item._id.toString()}_v${vIdx}`,
-                name: v.label || item.name,
+                name: item.name,
                 description: this.buildProductDescription(item, v),
                 price: v.price,
                 currency: 'INR',
@@ -425,8 +425,8 @@ const catalogService = {
                 category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
                 availability: (v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
                 itemGroupId: item._id.toString(),
-                variantType: 'size',
-                variantLabel: pillLabel,
+                colorLabel: v.label,     // Item name as "color" selector
+                sizeLabel: pillLabel,    // Quantity+unit as "size" selector
                 salePrice: (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : null
               });
             }
@@ -638,7 +638,7 @@ const catalogService = {
               const sizeLabel = `${q.quantity} ${q.unit}`;
               const prod = {
                 retailerId: `${retailerId}_v${vIdx}_q${qIdx}`,
-                name: v.label || menuItem.name,
+                name: menuItem.name,
                 description: this.buildProductDescription(menuItem, v),
                 price: q.price,
                 currency: 'INR',
@@ -653,11 +653,11 @@ const catalogService = {
               variantProducts.push(prod);
             });
           } else {
-            // Backward compatible: single quantity variant with size only
-            const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : v.label;
+            // Single quantity variant — dual color+size for proper grouping
+            const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : 'Standard';
             const prod = {
               retailerId: `${retailerId}_v${vIdx}`,
-              name: v.label || menuItem.name,
+              name: menuItem.name,
               description: this.buildProductDescription(menuItem, v),
               price: v.price,
               currency: 'INR',
@@ -665,8 +665,8 @@ const catalogService = {
               category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
               availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
               itemGroupId: retailerId,
-              variantType: 'size',
-              variantLabel: pillLabel,
+              colorLabel: v.label,
+              sizeLabel: pillLabel,
               salePrice: (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : null
             };
             variantProducts.push(prod);
@@ -1105,7 +1105,7 @@ const catalogService = {
               v.quantities.forEach((q, qIdx) => {
                 variantProducts.push({
                   retailerId: `${item._id.toString()}_v${vIdx}_q${qIdx}`,
-                  name: v.label || item.name,
+                  name: item.name,
                   description: this.buildProductDescription(item, v),
                   price: q.price,
                   currency: 'INR',
@@ -1118,10 +1118,10 @@ const catalogService = {
                 });
               });
             } else {
-              const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : v.label;
+              const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : 'Standard';
               variantProducts.push({
                 retailerId: `${item._id.toString()}_v${vIdx}`,
-                name: v.label || item.name,
+                name: item.name,
                 description: this.buildProductDescription(item, v),
                 price: v.price,
                 currency: 'INR',
@@ -1129,8 +1129,8 @@ const catalogService = {
                 category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
                 availability: (v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
                 itemGroupId: item._id.toString(),
-                variantType: 'size',
-                variantLabel: pillLabel
+                colorLabel: v.label,
+                sizeLabel: pillLabel
               });
             }
           });
