@@ -4515,7 +4515,7 @@ const chatbot = {
           state.currentStep = 'select_food_type';
         }
       }
-      else if (selection === 'food_veg' || selection === 'food_nonveg' || selection === 'food_both') {
+      else if (selection === 'food_veg' || selection === 'food_nonveg' || selection === 'food_egg') {
         state.foodTypePreference = selection.replace('food_', '');
         logger.info('Food type selected', { data: state.foodTypePreference });
         const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference);
@@ -4523,7 +4523,7 @@ const chatbot = {
         const foodTypeLabels = {
           veg: '🌿 Veg Menu',
           nonveg: '🍗 Non-Veg Menu',
-          both: '🍽️ All Menu'
+          egg: '🟡 Egg Menu'
         };
         
         // If coming from order flow, show title list (items with matching variants); otherwise show browse menu
@@ -5536,7 +5536,7 @@ const chatbot = {
       [
         { id: 'food_veg', text: 'Veg Only' },
         { id: 'food_nonveg', text: 'Non-Veg Only' },
-        { id: 'food_both', text: 'Show All' }
+        { id: 'food_egg', text: 'Egg Only' }
       ]
     );
   },
