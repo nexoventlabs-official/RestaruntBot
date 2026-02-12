@@ -1184,6 +1184,18 @@ const metaCloud = {
           req.data.image_url = product.imageUrl;
         }
 
+        // Variant grouping — groups products with same item_group_id together
+        if (product.itemGroupId) {
+          req.data.item_group_id = product.itemGroupId;
+        }
+
+        // Variant attributes (size, color, etc.)
+        if (product.variantType === 'size' && product.variantLabel) {
+          req.data.size = product.variantLabel;
+        } else if (product.variantType === 'color' && product.variantLabel) {
+          req.data.color = product.variantLabel;
+        }
+
         return req;
       });
 

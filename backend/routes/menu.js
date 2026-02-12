@@ -13,7 +13,7 @@ const router = express.Router();
 // Rate limiting for public menu routes
 router.use(publicRateLimiter);
 
-// Configure multer for memory storage
+// Configure multer for memory storage — supports main image + variant images
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
@@ -25,6 +25,12 @@ const upload = multer({
     }
   }
 });
+
+// Multer fields: 'image' for main item image, 'variantImages' for variant-specific images
+const menuUpload = upload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'variantImages', maxCount: 20 }
+]);
 
 router.get('/', async (req, res) => {
   try {
@@ -44,9 +50,9 @@ router.get('/categories', async (req, res) => {
   }
 });
 
-router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
+router.post('/', authMiddleware, menuUpload, async (req, res) => {
   try {
-    const { name, description, price, originalPrice, category, unit, quantity, foodType, offerType, available, preparationTime, tags, image } = req.body;
+    const { name, description, price, originalPrice, category, unit, quantity, foodType, offerType, available, preparationTime, tags, image, variants } = req.body;
     
     // Trim whitespace from name and description
     const trimmedName = name ? name.trim() : '';
@@ -108,8 +114,8 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
     let imageUrl = image || null;
     
     // If file uploaded, upload to Cloudinary
-    if (req.file) {
-      imageUrl = await cloudinaryService.uploadFromBuffer(req.file.buffer, 'restaurant-bot/menu-items');
+    if (req.files?.image?.[0]) {
+      imageUrl = await cloudinaryService.uploadFromBuffer(req.files.image[0].buffer, 'restaurant-bot/menu-items');
     }
     
     const parsedCategory = parseCategory(category);
@@ -138,6 +144,29 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
     if (originalPrice && originalPrice.trim()) {
       itemData.originalPrice = parseFloat(originalPrice);
     }
+
+    // Parse and add variants if provided
+    if (variants) {
+      let parsedVariants = typeof variants === 'string' ? JSON.parse(variants) : variants;
+      if (Array.isArray(parsedVariants) && parsedVariants.length > 0) {
+        const variantImages = req.files?.variantImages || [];
+        itemData.variants = await Promise.all(parsedVariants.map(async (v, idx) => {
+          let variantImage = v.image || null;
+          // Check if there's an uploaded file for this variant index
+          if (variantImages[idx]) {
+            variantImage = await cloudinaryService.uploadFromBuffer(variantImages[idx].buffer, 'restaurant-bot/menu-variants');
+          }
+          return {
+            label: v.label,
+            variantType: v.variantType || 'size',
+            price: parseFloat(v.price),
+            offerPrice: v.offerPrice ? parseFloat(v.offerPrice) : undefined,
+            image: variantImage,
+            available: v.available !== false && v.available !== 'false'
+          };
+        }));
+      }
+    }
     
     const item = new MenuItem(itemData);
     await item.save();
@@ -156,9 +185,9 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
   }
 });
 
-router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
+router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
   try {
-    const { name, description, price, originalPrice, category, unit, quantity, foodType, offerType, available, preparationTime, tags, image, removeImage } = req.body;
+    const { name, description, price, originalPrice, category, unit, quantity, foodType, offerType, available, preparationTime, tags, image, removeImage, variants } = req.body;
     
     // Trim whitespace from name and description
     const trimmedName = name ? name.trim() : '';
@@ -231,7 +260,7 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
       imageUrl = null;
     }
     // If new file uploaded, upload to Cloudinary
-    else if (req.file) {
+    else if (req.files?.image?.[0]) {
       // Delete old image from Cloudinary if it exists
       if (existingItem?.image && existingItem.image.includes('cloudinary.com')) {
         try {
@@ -241,7 +270,7 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
           logger.info('Could not delete old image:', e.message);
         }
       }
-      imageUrl = await cloudinaryService.uploadFromBuffer(req.file.buffer, 'restaurant-bot/menu-items');
+      imageUrl = await cloudinaryService.uploadFromBuffer(req.files.image[0].buffer, 'restaurant-bot/menu-items');
     }
     // If image URL provided (for backward compatibility)
     else if (image && image !== existingItem?.image) {
@@ -276,6 +305,40 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
       update.originalPrice = parseFloat(originalPrice);
     } else {
       update.originalPrice = null;
+    }
+
+    // Parse and update variants if provided
+    if (variants) {
+      let parsedVariants = typeof variants === 'string' ? JSON.parse(variants) : variants;
+      if (Array.isArray(parsedVariants)) {
+        const variantImages = req.files?.variantImages || [];
+        const existingVariants = existingItem?.variants || [];
+        update.variants = await Promise.all(parsedVariants.map(async (v, idx) => {
+          let variantImage = v.image || null;
+          // Check if there's a newly uploaded file for this variant index
+          if (variantImages[idx]) {
+            // Delete old variant image from Cloudinary
+            const oldImage = existingVariants[idx]?.image;
+            if (oldImage && oldImage.includes('cloudinary.com')) {
+              try {
+                const pid = cloudinaryService.extractPublicId(oldImage);
+                if (pid) await cloudinaryService.deleteImage(pid);
+              } catch (e) { /* ignore */ }
+            }
+            variantImage = await cloudinaryService.uploadFromBuffer(variantImages[idx].buffer, 'restaurant-bot/menu-variants');
+          }
+          return {
+            label: v.label,
+            variantType: v.variantType || 'size',
+            price: parseFloat(v.price),
+            offerPrice: v.offerPrice ? parseFloat(v.offerPrice) : undefined,
+            image: variantImage,
+            available: v.available !== false && v.available !== 'false'
+          };
+        }));
+      }
+    } else if (variants === '[]' || variants === '') {
+      update.variants = [];
     }
     
     const item = await MenuItem.findByIdAndUpdate(req.params.id, update, { new: true });

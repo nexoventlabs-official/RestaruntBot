@@ -44,10 +44,16 @@ export default function MenuItemFormScreen({ route, navigation }) {
   const [aiLoading, setAiLoading] = useState(false);
   const [tagsAiLoading, setTagsAiLoading] = useState(false);
   
+  // Variants state
+  const [variants, setVariants] = useState(
+    existingItem?.variants?.map(v => ({ ...v, newImageFile: null })) || []
+  );
+  
   const [categories, setCategories] = useState([]);
   const [offers, setOffers] = useState([]);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showUnitPicker, setShowUnitPicker] = useState(false);
+  const [showVariantTypePicker, setShowVariantTypePicker] = useState(null); // index of variant being edited
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -153,6 +159,54 @@ export default function MenuItemFormScreen({ route, navigation }) {
     }
   };
 
+  // ── Variant helpers ──
+  const addVariant = () => {
+    setVariants([...variants, { 
+      label: '', variantType: 'size', price: '', offerPrice: '', 
+      image: null, newImageFile: null, available: true 
+    }]);
+  };
+
+  const removeVariant = (index) => {
+    Alert.alert('Remove Variant', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => {
+        setVariants(variants.filter((_, i) => i !== index));
+      }},
+    ]);
+  };
+
+  const updateVariant = (index, field, value) => {
+    const updated = [...variants];
+    updated[index] = { ...updated[index], [field]: value };
+    setVariants(updated);
+  };
+
+  const pickVariantImage = async (index) => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+      });
+      if (!result.canceled) {
+        const asset = result.assets[0];
+        const updated = [...variants];
+        updated[index] = { ...updated[index], image: asset.uri, newImageFile: asset };
+        setVariants(updated);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to pick variant image');
+    }
+  };
+
+  const removeVariantImage = (index) => {
+    const updated = [...variants];
+    updated[index] = { ...updated[index], image: null, newImageFile: null };
+    setVariants(updated);
+  };
+
   const handleSubmit = async () => {
     if (!name.trim() || !price.trim() || selectedCategories.length === 0) {
       Alert.alert('Error', 'Please fill in name, price, and select at least one category');
@@ -187,6 +241,33 @@ export default function MenuItemFormScreen({ route, navigation }) {
         formData.append('image', { uri: newImage.uri, name: filename, type });
       } else if (!image && existingItem?.image) {
         formData.append('removeImage', 'true');
+      }
+
+      // ── Variants ──
+      if (variants.length > 0) {
+        const variantsPayload = variants.map(v => ({
+          label: v.label,
+          variantType: v.variantType,
+          price: v.price,
+          offerPrice: v.offerPrice || '',
+          available: v.available,
+          // keep existing image url if no new file picked
+          image: v.newImageFile ? '' : (v.image || ''),
+        }));
+        formData.append('variants', JSON.stringify(variantsPayload));
+
+        // Append new variant image files
+        variants.forEach((v) => {
+          if (v.newImageFile) {
+            const fname = v.newImageFile.uri.split('/').pop();
+            const ext = /\.(\w+)$/.exec(fname);
+            const mimeType = ext ? `image/${ext[1]}` : 'image/jpeg';
+            formData.append('variantImages', { uri: v.newImageFile.uri, name: fname, type: mimeType });
+          }
+        });
+      } else {
+        // Send empty array to clear variants if all removed
+        formData.append('variants', JSON.stringify([]));
       }
 
       if (isEditing) {
@@ -509,6 +590,150 @@ export default function MenuItemFormScreen({ route, navigation }) {
                   placeholderTextColor="#9CA3AF"
                 />
                 <Text style={styles.inputHint}>Up to 10 tags, separated by commas (use AI Generate for best results)</Text>
+              </View>
+
+              {/* ── Variants Section ── */}
+              <View style={styles.variantsSection}>
+                <View style={styles.variantsSectionHeader}>
+                  <View style={styles.variantsTitleRow}>
+                    <View style={styles.variantsIconContainer}>
+                      <Ionicons name="layers-outline" size={20} color={ZOMATO_RED} />
+                    </View>
+                    <View>
+                      <Text style={styles.variantsSectionTitle}>Product Variants</Text>
+                      <Text style={styles.variantsSectionHint}>Size, Color options (shown in WhatsApp catalog)</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity style={styles.addVariantButton} onPress={addVariant}>
+                    <Ionicons name="add" size={18} color="#fff" />
+                    <Text style={styles.addVariantButtonText}>Add</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {variants.length === 0 && (
+                  <View style={styles.noVariantsContainer}>
+                    <Ionicons name="cube-outline" size={28} color="#D1D5DB" />
+                    <Text style={styles.noVariantsText}>No variants added</Text>
+                    <Text style={styles.noVariantsHint}>Add size or color variants for catalog grouping</Text>
+                  </View>
+                )}
+
+                {variants.map((variant, index) => (
+                  <View key={index} style={styles.variantCard}>
+                    {/* Variant Header */}
+                    <View style={styles.variantCardHeader}>
+                      <Text style={styles.variantCardNumber}>Variant {index + 1}</Text>
+                      <TouchableOpacity onPress={() => removeVariant(index)}>
+                        <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Variant Image */}
+                    <View style={styles.variantImageRow}>
+                      <TouchableOpacity style={styles.variantImagePicker} onPress={() => pickVariantImage(index)}>
+                        {variant.image ? (
+                          <Image source={{ uri: variant.image }} style={styles.variantImagePreview} />
+                        ) : (
+                          <View style={styles.variantImagePlaceholder}>
+                            <Ionicons name="camera-outline" size={20} color="#9CA3AF" />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                      {variant.image && (
+                        <TouchableOpacity style={styles.variantImageRemove} onPress={() => removeVariantImage(index)}>
+                          <Ionicons name="close-circle" size={20} color="#EF4444" />
+                        </TouchableOpacity>
+                      )}
+                      <View style={styles.variantImageHintContainer}>
+                        <Text style={styles.variantImageHintText}>Tap to set variant image</Text>
+                      </View>
+                    </View>
+
+                    {/* Label */}
+                    <View style={styles.variantField}>
+                      <Text style={styles.variantFieldLabel}>Label</Text>
+                      <TextInput
+                        style={styles.variantInput}
+                        value={variant.label}
+                        onChangeText={(val) => updateVariant(index, 'label', val)}
+                        placeholder="e.g., Large, Red, 500ml"
+                        placeholderTextColor="#9CA3AF"
+                      />
+                    </View>
+
+                    {/* Type */}
+                    <View style={styles.variantField}>
+                      <Text style={styles.variantFieldLabel}>Type</Text>
+                      <View style={styles.variantTypeRow}>
+                        {['size', 'color'].map((t) => (
+                          <TouchableOpacity
+                            key={t}
+                            style={[
+                              styles.variantTypeChip,
+                              variant.variantType === t && styles.variantTypeChipActive,
+                            ]}
+                            onPress={() => updateVariant(index, 'variantType', t)}
+                          >
+                            <Ionicons 
+                              name={t === 'size' ? 'resize-outline' : 'color-palette-outline'} 
+                              size={16} 
+                              color={variant.variantType === t ? '#fff' : '#696969'} 
+                            />
+                            <Text style={[
+                              styles.variantTypeChipText,
+                              variant.variantType === t && styles.variantTypeChipTextActive,
+                            ]}>
+                              {t.charAt(0).toUpperCase() + t.slice(1)}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+
+                    {/* Price & Offer Price */}
+                    <View style={styles.variantPriceRow}>
+                      <View style={[styles.variantField, { flex: 1 }]}>
+                        <Text style={styles.variantFieldLabel}>Price</Text>
+                        <View style={styles.variantPriceInput}>
+                          <Text style={styles.variantCurrency}>₹</Text>
+                          <TextInput
+                            style={styles.variantPriceTextInput}
+                            value={variant.price?.toString() || ''}
+                            onChangeText={(val) => updateVariant(index, 'price', val)}
+                            placeholder="0"
+                            placeholderTextColor="#9CA3AF"
+                            keyboardType="numeric"
+                          />
+                        </View>
+                      </View>
+                      <View style={[styles.variantField, { flex: 1 }]}>
+                        <Text style={styles.variantFieldLabel}>Offer Price</Text>
+                        <View style={styles.variantPriceInput}>
+                          <Text style={styles.variantCurrency}>₹</Text>
+                          <TextInput
+                            style={styles.variantPriceTextInput}
+                            value={variant.offerPrice?.toString() || ''}
+                            onChangeText={(val) => updateVariant(index, 'offerPrice', val)}
+                            placeholder="0"
+                            placeholderTextColor="#9CA3AF"
+                            keyboardType="numeric"
+                          />
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Available Toggle */}
+                    <View style={styles.variantAvailableRow}>
+                      <Text style={styles.variantFieldLabel}>Available</Text>
+                      <Switch
+                        value={variant.available !== false}
+                        onValueChange={(val) => updateVariant(index, 'available', val)}
+                        trackColor={{ false: '#E5E7EB', true: '#BBF7D0' }}
+                        thumbColor={variant.available !== false ? '#22C55E' : '#9CA3AF'}
+                      />
+                    </View>
+                  </View>
+                ))}
               </View>
 
               {/* Available Switch */}
@@ -930,6 +1155,207 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#22C55E',
+  },
+
+  // ── Variants ──
+  variantsSection: {
+    gap: 14,
+  },
+  variantsSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  variantsTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  variantsIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  variantsSectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1C1C1C',
+  },
+  variantsSectionHint: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 1,
+  },
+  addVariantButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: ZOMATO_RED,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  addVariantButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  noVariantsContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E8E8E8',
+    borderStyle: 'dashed',
+  },
+  noVariantsText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    marginTop: 8,
+  },
+  noVariantsHint: {
+    fontSize: 12,
+    color: '#D1D5DB',
+    marginTop: 2,
+  },
+  variantCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#E8E8E8',
+    gap: 12,
+  },
+  variantCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  variantCardNumber: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: ZOMATO_RED,
+  },
+  variantImageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  variantImagePicker: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  variantImagePreview: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+  },
+  variantImagePlaceholder: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E8E8E8',
+    borderStyle: 'dashed',
+  },
+  variantImageRemove: {
+    marginLeft: -16,
+    marginTop: -10,
+  },
+  variantImageHintContainer: {
+    flex: 1,
+  },
+  variantImageHintText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  variantField: {
+    gap: 6,
+  },
+  variantFieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#696969',
+  },
+  variantInput: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    height: 44,
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
+    fontSize: 14,
+    color: '#1C1C1C',
+    fontWeight: '500',
+  },
+  variantTypeRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  variantTypeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1.5,
+    borderColor: '#E8E8E8',
+  },
+  variantTypeChipActive: {
+    backgroundColor: ZOMATO_RED,
+    borderColor: ZOMATO_RED,
+  },
+  variantTypeChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#696969',
+  },
+  variantTypeChipTextActive: {
+    color: '#fff',
+  },
+  variantPriceRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  variantPriceInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 44,
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
+  },
+  variantCurrency: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: ZOMATO_RED,
+    marginRight: 6,
+  },
+  variantPriceTextInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#1C1C1C',
+    fontWeight: '600',
+  },
+  variantAvailableRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 4,
   },
   
   // Loading Overlay

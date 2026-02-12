@@ -16,6 +16,17 @@ const menuItemSchema = new mongoose.Schema({
   isPaused: { type: Boolean, default: false },
   preparationTime: { type: Number, default: 15 },
   tags: [String],
+  // Product Variants — each variant has its own label, price, image
+  // Variant types: 'size' (e.g., 100ml, 500ml) or 'color' (e.g., Red, Blue)
+  variants: [{
+    label: { type: String, required: true },        // e.g., "500 grams", "Red"
+    variantType: { type: String, enum: ['size', 'color'], default: 'size' },
+    price: { type: Number, required: true },         // Price for this variant
+    offerPrice: { type: Number },                    // Offer price for this variant
+    image: { type: String },                         // Optional variant-specific image
+    available: { type: Boolean, default: true },
+    sku: { type: String }                            // Auto-generated: itemId_variantIndex
+  }],
   ratings: [{
     phone: { type: String, required: true },
     orderId: { type: String, required: true },

@@ -171,7 +171,7 @@ export default function Menu() {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [form, setForm] = useState({ name: '', description: '', price: '', category: [], unit: 'piece', quantity: 1, foodType: 'veg', available: true, preparationTime: 15, tags: '', image: '' });
+  const [form, setForm] = useState({ name: '', description: '', price: '', category: [], unit: 'piece', quantity: 1, foodType: 'veg', available: true, preparationTime: 15, tags: '', image: '', variants: [] });
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '', image: '' });
   const [editingCategory, setEditingCategory] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -187,6 +187,8 @@ export default function Menu() {
   const lastTapRef = useRef({});
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
+  const [variantImageFiles, setVariantImageFiles] = useState({}); // { index: File }
+  const [variantImagePreviews, setVariantImagePreviews] = useState({}); // { index: dataURL }
   const [categoryImageFile, setCategoryImageFile] = useState(null);
   const [categoryImagePreview, setCategoryImagePreview] = useState('');
   const imageInputRef = useRef(null);
@@ -296,14 +298,21 @@ export default function Menu() {
     if (item) {
       setEditing(item);
       const categoryArray = Array.isArray(item.category) ? item.category : (item.category ? [item.category] : []);
-      setForm({ name: item.name, description: item.description || '', price: item.price, category: categoryArray, unit: item.unit || 'piece', quantity: item.quantity || 1, foodType: item.foodType || 'veg', available: item.available, preparationTime: item.preparationTime || 15, tags: item.tags?.join(', ') || '', image: item.image || '' });
+      setForm({ name: item.name, description: item.description || '', price: item.price, category: categoryArray, unit: item.unit || 'piece', quantity: item.quantity || 1, foodType: item.foodType || 'veg', available: item.available, preparationTime: item.preparationTime || 15, tags: item.tags?.join(', ') || '', image: item.image || '', variants: item.variants || [] });
       setImagePreview(item.image || '');
       setImageFile(null);
+      setVariantImageFiles({});
+      // Set variant image previews from existing variant images
+      const vPreviews = {};
+      (item.variants || []).forEach((v, idx) => { if (v.image) vPreviews[idx] = v.image; });
+      setVariantImagePreviews(vPreviews);
     } else {
       setEditing(null);
-      setForm({ name: '', description: '', price: '', category: [], unit: 'piece', quantity: 1, foodType: 'veg', available: true, preparationTime: 15, tags: '', image: '' });
+      setForm({ name: '', description: '', price: '', category: [], unit: 'piece', quantity: 1, foodType: 'veg', available: true, preparationTime: 15, tags: '', image: '', variants: [] });
       setImagePreview('');
       setImageFile(null);
+      setVariantImageFiles({});
+      setVariantImagePreviews({});
     }
     setShowModal(true);
   };
@@ -345,6 +354,20 @@ export default function Menu() {
         // Image was removed
         formData.append('removeImage', 'true');
       }
+
+      // Handle variants
+      if (form.variants && form.variants.length > 0) {
+        // Send variants JSON (with existing image URLs preserved)
+        formData.append('variants', JSON.stringify(form.variants));
+        // Append variant image files in order
+        form.variants.forEach((v, idx) => {
+          if (variantImageFiles[idx]) {
+            formData.append('variantImages', variantImageFiles[idx]);
+          }
+        });
+      } else {
+        formData.append('variants', '[]');
+      }
       
       if (editing) {
         await api.put(`/menu/${editing._id}`, formData, {
@@ -358,6 +381,8 @@ export default function Menu() {
       setShowModal(false);
       setImageFile(null);
       setImagePreview('');
+      setVariantImageFiles({});
+      setVariantImagePreviews({});
       fetchItems();
     } catch (err) {
       alert('Failed to save item');
@@ -649,7 +674,7 @@ export default function Menu() {
                         <h3 className={`font-semibold line-clamp-1 ${isPaused ? 'text-gray-400' : 'text-dark-900'}`}>{item.name}</h3>
                         <span className={`font-bold whitespace-nowrap ${isPaused ? 'text-gray-400' : 'text-primary-600'}`}>₹{item.price}</span>
                       </div>
-                      <p className={`text-xs mb-2 ${isPaused ? 'text-gray-400' : 'text-dark-400'}`}>{item.quantity || 1} {item.unit || 'piece'}</p>
+                      <p className={`text-xs mb-2 ${isPaused ? 'text-gray-400' : 'text-dark-400'}`}>{item.quantity || 1} {item.unit || 'piece'}{item.variants?.length > 0 ? ` • ${item.variants.length} variant${item.variants.length > 1 ? 's' : ''}` : ''}</p>
                       {item.description && <p className={`text-sm line-clamp-2 mb-3 ${isPaused ? 'text-gray-400' : 'text-dark-500'}`}>{item.description}</p>}
                       {item.preparationTime && (
                         <div className={`flex items-center gap-1 text-xs mb-3 ${isPaused ? 'text-gray-400' : 'text-dark-400'}`}>
@@ -787,6 +812,100 @@ export default function Menu() {
                 <input type="text" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })}
                   className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" placeholder="spicy, popular, bestseller" />
               </div>
+
+              {/* ===== VARIANTS SECTION ===== */}
+              <div className="border border-dark-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-semibold text-dark-700">Variants (Size / Color)</label>
+                  <button type="button" onClick={() => {
+                    const newVariants = [...(form.variants || []), { label: '', variantType: 'size', price: form.price || '', image: '', available: true }];
+                    setForm({ ...form, variants: newVariants });
+                  }} className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-primary-600 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors">
+                    <Plus className="w-3.5 h-3.5" /> Add Variant
+                  </button>
+                </div>
+                {(!form.variants || form.variants.length === 0) && (
+                  <p className="text-dark-400 text-xs">No variants. Add variants for different sizes (e.g., 100ml, 500ml) or colors.</p>
+                )}
+                {(form.variants || []).map((variant, idx) => (
+                  <div key={idx} className="bg-dark-50 rounded-xl p-3 space-y-2 relative">
+                    <button type="button" onClick={() => {
+                      const updated = form.variants.filter((_, i) => i !== idx);
+                      setForm({ ...form, variants: updated });
+                      const newFiles = { ...variantImageFiles };
+                      delete newFiles[idx];
+                      setVariantImageFiles(newFiles);
+                      const newPreviews = { ...variantImagePreviews };
+                      delete newPreviews[idx];
+                      setVariantImagePreviews(newPreviews);
+                    }} className="absolute top-2 right-2 p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2">
+                        <label className="text-xs text-dark-500 mb-1 block">Label</label>
+                        <input type="text" value={variant.label} onChange={(e) => {
+                          const updated = [...form.variants];
+                          updated[idx] = { ...updated[idx], label: e.target.value };
+                          setForm({ ...form, variants: updated });
+                        }} className="w-full px-3 py-2 text-sm bg-white border border-dark-200 rounded-lg focus:border-primary-500 transition-all" placeholder="e.g., 500 grams" required />
+                      </div>
+                      <div>
+                        <label className="text-xs text-dark-500 mb-1 block">Type</label>
+                        <select value={variant.variantType} onChange={(e) => {
+                          const updated = [...form.variants];
+                          updated[idx] = { ...updated[idx], variantType: e.target.value };
+                          setForm({ ...form, variants: updated });
+                        }} className="w-full px-3 py-2 text-sm bg-white border border-dark-200 rounded-lg focus:border-primary-500 transition-all">
+                          <option value="size">Size</option>
+                          <option value="color">Color</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs text-dark-500 mb-1 block">Price (₹)</label>
+                        <input type="number" value={variant.price} onChange={(e) => {
+                          const updated = [...form.variants];
+                          updated[idx] = { ...updated[idx], price: e.target.value };
+                          setForm({ ...form, variants: updated });
+                        }} className="w-full px-3 py-2 text-sm bg-white border border-dark-200 rounded-lg focus:border-primary-500 transition-all" required />
+                      </div>
+                      <div>
+                        <label className="text-xs text-dark-500 mb-1 block">Image</label>
+                        <div className="flex items-center gap-2">
+                          {(variantImagePreviews[idx] || variant.image) ? (
+                            <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-dark-200 flex-shrink-0">
+                              <img src={variantImagePreviews[idx] || variant.image} alt="" className="w-full h-full object-cover" />
+                              <button type="button" onClick={() => {
+                                const updated = [...form.variants];
+                                updated[idx] = { ...updated[idx], image: '' };
+                                setForm({ ...form, variants: updated });
+                                const nf = { ...variantImageFiles }; delete nf[idx]; setVariantImageFiles(nf);
+                                const np = { ...variantImagePreviews }; delete np[idx]; setVariantImagePreviews(np);
+                              }} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[8px]">✕</button>
+                            </div>
+                          ) : null}
+                          <label className="flex-1 flex items-center justify-center gap-1 px-2 py-2 text-xs bg-white border border-dark-200 border-dashed rounded-lg hover:bg-dark-100 cursor-pointer transition-colors text-dark-500">
+                            <Upload className="w-3.5 h-3.5" />
+                            {(variantImagePreviews[idx] || variant.image) ? 'Change' : 'Upload'}
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                              const file = e.target.files[0];
+                              if (file) {
+                                setVariantImageFiles(prev => ({ ...prev, [idx]: file }));
+                                const reader = new FileReader();
+                                reader.onloadend = () => setVariantImagePreviews(prev => ({ ...prev, [idx]: reader.result }));
+                                reader.readAsDataURL(file);
+                              }
+                            }} />
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               <div>
                 <label className="block text-sm font-semibold text-dark-700 mb-3">Food Type</label>
                 <div className="flex gap-3">

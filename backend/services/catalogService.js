@@ -501,14 +501,86 @@ const catalogService = {
     const catalogId = this.getCatalogId();
     const metaCloud = require('./metaCloud');
     const retailerId = menuItem._id.toString();
+    const hasVariants = menuItem.variants && menuItem.variants.length > 0;
 
     try {
-      // Build product data from menu item with ratings in description
+      if (hasVariants) {
+        // ===== VARIANT PRODUCTS: each variant is a separate catalog product =====
+        // They share the same item_group_id so WhatsApp groups them together
+        const variantProducts = menuItem.variants.map((v, idx) => {
+          const variantRetailerId = `${retailerId}_v${idx}`;
+          const variantProduct = {
+            retailerId: variantRetailerId,
+            name: `${menuItem.name} - ${v.label}`,
+            description: this.buildProductDescription(menuItem),
+            price: v.price,
+            currency: 'INR',
+            imageUrl: v.image || menuItem.image || null,
+            category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
+            availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
+            itemGroupId: retailerId,  // Groups all variants together
+            variantType: v.variantType || 'size',
+            variantLabel: v.label
+          };
+
+          // Handle offer price for variant
+          if (v.offerPrice && v.offerPrice < v.price) {
+            variantProduct.salePrice = v.offerPrice;
+          } else if (menuItem.offerPrice && menuItem.offerPrice < menuItem.price) {
+            // Apply item-level offer percentage to variant
+            const discountPct = 1 - (menuItem.offerPrice / menuItem.price);
+            variantProduct.salePrice = Math.round(v.price * (1 - discountPct));
+          }
+
+          return variantProduct;
+        });
+
+        // Also push the base product (first variant is the default)
+        const baseProduct = {
+          retailerId,
+          name: menuItem.name,
+          description: this.buildProductDescription(menuItem),
+          price: menuItem.price,
+          currency: 'INR',
+          imageUrl: menuItem.image || null,
+          category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
+          availability: (menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
+          itemGroupId: retailerId
+        };
+
+        if (menuItem.offerPrice && menuItem.offerPrice < menuItem.price) {
+          baseProduct.salePrice = menuItem.offerPrice;
+        }
+
+        // Push base + all variants to Meta
+        const allProducts = [baseProduct, ...variantProducts];
+        const metaResult = await metaCloud.batchCreateOrUpdateProducts(catalogId, allProducts);
+
+        // Upsert local mapping for the base item
+        await CatalogProduct.findOneAndUpdate(
+          { menuItem: menuItem._id },
+          {
+            menuItem: menuItem._id,
+            retailerId,
+            isActive: menuItem.available && !menuItem.isPaused,
+            lastSyncedAt: new Date()
+          },
+          { upsert: true, new: true }
+        );
+
+        this.clearCache();
+        logger.info('Product with variants synced to Meta catalog', { 
+          itemId: retailerId, name: menuItem.name, variantCount: menuItem.variants.length 
+        });
+        return metaResult;
+      }
+
+      // ===== SINGLE PRODUCT (no variants) =====
       const product = {
         retailerId,
         name: menuItem.name,
         description: this.buildProductDescription(menuItem),
-        price: menuItem.offerPrice ? menuItem.price : menuItem.price,
+        price: menuItem.price,
         currency: 'INR',
         imageUrl: menuItem.image || null,
         category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
