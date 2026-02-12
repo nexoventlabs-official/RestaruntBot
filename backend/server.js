@@ -36,6 +36,7 @@ const dailyCleanup = require('./services/dailyCleanup');
 const categoryScheduler = require('./services/categoryScheduler');
 const orderCleanup = require('./services/orderCleanup');
 const cartCleanup = require('./services/cartCleanup');
+const catalogReviewPoller = require('./services/catalogReviewPoller');
 const googleSheets = require('./services/googleSheets');
 
 // Validate environment variables at startup
@@ -105,6 +106,7 @@ const connectMongoDB = async () => {
     categoryScheduler.start();
     orderCleanup.start();
     cartCleanup.startCartCleanupScheduler();
+    catalogReviewPoller.start();
     
     // Initialize Google Sheets - auto-create missing sheets, then initialize headers
     logger.info('Initializing Google Sheets...');

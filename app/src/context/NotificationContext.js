@@ -38,6 +38,24 @@ export function NotificationProvider({ children }) {
           setOfferTemplateAlert(data.status);
           SecureStore.setItemAsync(OFFER_TEMPLATE_ALERTS_KEY, data.status).catch(() => {});
         }
+        // Catalog item review notification
+        if (data?.type === 'catalog_review') {
+          const newNotif = {
+            id: `catalog_${Date.now()}`,
+            type: 'catalog_review',
+            title: notification?.request?.content?.title || 'Catalog Update',
+            body: notification?.request?.content?.body || '',
+            status: data.status,
+            read: false,
+            timestamp: new Date().toISOString(),
+          };
+          setNotifications(prev => {
+            const updated = [newNotif, ...prev].slice(0, 100);
+            SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
+            return updated;
+          });
+          setUnreadCount(prev => prev + 1);
+        }
       });
     } catch (e) {
       // Not critical if listener fails
