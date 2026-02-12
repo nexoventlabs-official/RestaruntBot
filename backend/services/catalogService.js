@@ -516,15 +516,15 @@ const catalogService = {
    * @returns {string} Description with ratings
    */
   buildProductDescription(menuItem, variant = null) {
-    const lines = [];
+    const parts = [];
 
-    // ── Line 1: Variant label + quantity/unit (or base unit info) ──
+    // ── Part 1: Variant label + quantity/unit (or base unit info) ──
     if (variant) {
       let variantInfo = variant.label;
       if (variant.quantity && variant.unit) {
-        variantInfo += ` | ${variant.quantity} ${variant.unit}`;
+        variantInfo += ` (${variant.quantity} ${variant.unit})`;
       }
-      lines.push(variantInfo);
+      parts.push(variantInfo);
     } else if (menuItem.variants && menuItem.variants.length > 0) {
       const variantTypeName = menuItem.variants[0]?.variantType === 'color' ? 'Colors' : 'Sizes';
       const labels = menuItem.variants
@@ -536,38 +536,38 @@ const catalogService = {
         })
         .join(', ');
       if (labels) {
-        lines.push(`Available ${variantTypeName}: ${labels}`);
+        parts.push(`${variantTypeName}: ${labels}`);
       }
     } else if (menuItem.quantity && menuItem.unit) {
-      lines.push(`${menuItem.quantity} ${menuItem.unit}`);
+      parts.push(`${menuItem.quantity} ${menuItem.unit}`);
     }
 
-    // ── Line 2: Star rating ──
+    // ── Part 2: Star rating ──
     const rating = menuItem.avgRating || 0;
     const totalRatings = menuItem.totalRatings || 0;
     const filledStars = Math.min(Math.floor(rating), 5);
     const emptyStars = 5 - filledStars;
     const starLine = '⭐'.repeat(filledStars) + '☆'.repeat(emptyStars);
     if (totalRatings > 0) {
-      lines.push(`${starLine} ${rating}/5 (${totalRatings} reviews)`);
+      parts.push(`${starLine} ${rating}/5 (${totalRatings} reviews)`);
     } else {
-      lines.push(`${starLine} No reviews yet`);
+      parts.push(`${starLine} No reviews yet`);
     }
 
-    // ── Line 3: Food type icon + label ──
+    // ── Part 3: Food type icon + label ──
     if (menuItem.foodType === 'veg') {
-      lines.push('🟢 Veg');
+      parts.push('🟢 Veg');
     } else if (menuItem.foodType === 'nonveg') {
-      lines.push('🔴 Non-Veg');
+      parts.push('🔴 Non-Veg');
     } else if (menuItem.foodType === 'egg') {
-      lines.push('🟡 Egg');
+      parts.push('🟡 Egg');
     }
 
-    // ── Line 4: Description ──
+    // ── Part 4: Description ──
     const descText = menuItem.description || menuItem.name;
-    lines.push(descText);
+    parts.push(descText);
 
-    return lines.join('\n').substring(0, 5000); // Meta catalog description limit
+    return parts.join(' | ').substring(0, 5000); // Meta catalog description limit
   },
 
   /**
