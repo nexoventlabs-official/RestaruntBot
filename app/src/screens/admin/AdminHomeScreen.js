@@ -35,6 +35,8 @@ export default function AdminHomeScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [holidayMode, setHolidayMode] = useState(false);
   const [togglingHoliday, setTogglingHoliday] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const syncSpinAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const shineAnim = useRef(new Animated.Value(-1)).current;
@@ -122,6 +124,33 @@ export default function AdminHomeScreen({ navigation }) {
         setLoading(false); 
         setRefreshing(false); 
       }
+    }
+  };
+
+  // Catalog auto-sync
+  const handleCatalogSync = async () => {
+    try {
+      setSyncing(true);
+      // Start spin animation
+      syncSpinAnim.setValue(0);
+      const loop = Animated.loop(
+        Animated.timing(syncSpinAnim, { toValue: 1, duration: 1000, useNativeDriver: true })
+      );
+      loop.start();
+
+      const res = await api.post('/catalog/auto-sync', { overwrite: true });
+      loop.stop();
+      syncSpinAnim.setValue(0);
+      const d = res.data;
+      Alert.alert(
+        '✅ Catalog Synced',
+        `${d.metaPushed} products pushed, ${d.metaFailed} failed\n${d.collections?.updated || 0} collections updated`
+      );
+    } catch (err) {
+      console.error('Catalog sync error:', err);
+      Alert.alert('❌ Sync Failed', err?.response?.data?.error || err.message);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -220,6 +249,15 @@ export default function AdminHomeScreen({ navigation }) {
                 </View>
               </View>
               <View style={styles.headerActions}>
+                <TouchableOpacity
+                  style={styles.headerButton}
+                  onPress={handleCatalogSync}
+                  disabled={syncing}
+                >
+                  <Animated.View style={{ transform: [{ rotate: syncSpinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] }}>
+                    <Ionicons name="sync-outline" size={22} color={syncing ? 'rgba(255,255,255,0.5)' : '#fff'} />
+                  </Animated.View>
+                </TouchableOpacity>
                 <TouchableOpacity 
                   style={styles.headerButton}
                   onPress={() => navigation.navigate('Notifications')}
