@@ -483,7 +483,7 @@ const catalogService = {
                 variantProducts.push({
                   retailerId: `${item._id.toString()}_v${vIdx}_q${qIdx}`,
                   name: variantTitle,
-                  description: this.buildProductDescription(item, v),
+                  description: this.buildProductDescription(item, v, q),
                   price: q.price,
                   currency: 'INR',
                   imageUrl: v.image || item.image || null,
@@ -638,11 +638,13 @@ const catalogService = {
    * @param {Object} [variant] - Optional variant object for variant-specific description
    * @returns {string} Description with ratings
    */
-  buildProductDescription(menuItem, variant = null) {
+  buildProductDescription(menuItem, variant = null, quantityOption = null) {
     const parts = [];
 
-    // ── Part 1: Quantity/unit for variants (variant name already shown as size pill) ──
-    if (variant) {
+    // ── Part 1: Quantity/unit — use specific quantity option if provided ──
+    if (quantityOption && quantityOption.quantity && quantityOption.unit) {
+      parts.push(`${quantityOption.quantity} ${quantityOption.unit}`);
+    } else if (variant) {
       if (variant.quantity && variant.unit) {
         parts.push(`${variant.quantity} ${variant.unit}`);
       }
@@ -658,9 +660,9 @@ const catalogService = {
       parts.push(`${menuItem.quantity} ${menuItem.unit}`);
     }
 
-    // ── Part 2: Star rating ──
-    const rating = menuItem.avgRating || 0;
-    const totalRatings = menuItem.totalRatings || 0;
+    // ── Part 2: Star rating — prefer variant-level, fallback to item-level ──
+    const rating = (variant && variant.avgRating) ? variant.avgRating : (menuItem.avgRating || 0);
+    const totalRatings = (variant && variant.totalRatings) ? variant.totalRatings : (menuItem.totalRatings || 0);
     const filledStars = Math.min(Math.floor(rating), 5);
     const emptyStars = 5 - filledStars;
     const starLine = '⭐'.repeat(filledStars) + '☆'.repeat(emptyStars);
@@ -724,7 +726,7 @@ const catalogService = {
               const prod = {
                 retailerId: `${retailerId}_v${vIdx}_q${qIdx}`,
                 name: variantTitle,
-                description: this.buildProductDescription(menuItem, v),
+                description: this.buildProductDescription(menuItem, v, q),
                 price: q.price,
                 currency: 'INR',
                 imageUrl: v.image || menuItem.image || null,
@@ -1167,7 +1169,7 @@ const catalogService = {
                 variantProducts.push({
                   retailerId: `${item._id.toString()}_v${vIdx}_q${qIdx}`,
                   name: variantTitle,
-                  description: this.buildProductDescription(item, v),
+                  description: this.buildProductDescription(item, v, q),
                   price: q.price,
                   currency: 'INR',
                   imageUrl: v.image || item.image || null,

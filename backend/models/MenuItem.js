@@ -32,6 +32,8 @@ const menuItemSchema = new mongoose.Schema({
     tags: [String],                                  // Variant-specific tags
     available: { type: Boolean, default: true },
     sku: { type: String },                           // Auto-generated: itemId_variantIndex
+    avgRating: { type: Number, default: 0 },         // Per-variant average rating
+    totalRatings: { type: Number, default: 0 },      // Per-variant total review count
     // Multiple quantity options per variant (e.g., 0.5 kg ₹249, 1 kg ₹449)
     quantities: [{
       quantity: { type: Number, required: true },
