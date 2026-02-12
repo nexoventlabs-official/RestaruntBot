@@ -590,24 +590,7 @@ const catalogService = {
   buildProductDescription(menuItem, variant = null) {
     const parts = [];
 
-    // ── Part 1: Quantity/unit for variants (variant name already shown as size pill) ──
-    if (variant) {
-      if (variant.quantity && variant.unit) {
-        parts.push(`${variant.quantity} ${variant.unit}`);
-      }
-    } else if (menuItem.variants && menuItem.variants.length > 0) {
-      const labels = menuItem.variants
-        .filter(v => v.available !== false)
-        .map(v => (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : v.label)
-        .join(', ');
-      if (labels) {
-        parts.push(`Sizes: ${labels}`);
-      }
-    } else if (menuItem.quantity && menuItem.unit) {
-      parts.push(`${menuItem.quantity} ${menuItem.unit}`);
-    }
-
-    // ── Part 2: Star rating ──
+    // ── Star rating ──
     const rating = menuItem.avgRating || 0;
     const totalRatings = menuItem.totalRatings || 0;
     const filledStars = Math.min(Math.floor(rating), 5);
@@ -619,7 +602,7 @@ const catalogService = {
       parts.push(`${starLine} No reviews yet`);
     }
 
-    // ── Part 3: Food type icon + label (prefer variant-level, fallback to item-level) ──
+    // ── Food type icon + label (prefer variant-level, fallback to item-level) ──
     const foodType = (variant && variant.foodType) ? variant.foodType : menuItem.foodType;
     if (foodType === 'veg') {
       parts.push('🟢 Veg');
@@ -629,13 +612,13 @@ const catalogService = {
       parts.push('🟡 Egg');
     }
 
-    // ── Part 4: Tags (variant-level tags if available) ──
+    // ── Tags (variant-level tags if available) ──
     const tags = (variant && variant.tags && variant.tags.length > 0) ? variant.tags : menuItem.tags;
     if (tags && tags.length > 0) {
       parts.push(tags.map(t => `#${t}`).join(' '));
     }
 
-    // ── Part 5: Description (prefer variant-level, fallback to item-level) ──
+    // ── Description (prefer variant-level, fallback to item-level) ──
     const descText = (variant && variant.description) ? variant.description : (menuItem.description || menuItem.name);
     parts.push(descText);
 
