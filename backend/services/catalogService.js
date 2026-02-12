@@ -479,9 +479,10 @@ const catalogService = {
               // color = item name (variant label), size = quantity+unit
               v.quantities.forEach((q, qIdx) => {
                 const sizeLabel = `${q.quantity} ${q.unit}`;
+                const variantTitle = `${v.label}, ${q.quantity} ${q.unit}`;
                 variantProducts.push({
                   retailerId: `${item._id.toString()}_v${vIdx}_q${qIdx}`,
-                  name: item.name,
+                  name: variantTitle,
                   description: this.buildProductDescription(item, v),
                   price: q.price,
                   currency: 'INR',
@@ -497,9 +498,10 @@ const catalogService = {
             } else {
               // Single quantity variant — still uses dual color+size for proper grouping
               const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : 'Standard';
+              const variantTitle = (v.quantity && v.unit) ? `${v.label}, ${v.quantity} ${v.unit}` : v.label;
               variantProducts.push({
                 retailerId: `${item._id.toString()}_v${vIdx}`,
-                name: item.name,
+                name: variantTitle,
                 description: this.buildProductDescription(item, v),
                 price: v.price,
                 currency: 'INR',
@@ -718,9 +720,10 @@ const catalogService = {
             // New format: variant × quantity combos with color + size
             v.quantities.forEach((q, qIdx) => {
               const sizeLabel = `${q.quantity} ${q.unit}`;
+              const variantTitle = `${v.label}, ${q.quantity} ${q.unit}`;
               const prod = {
                 retailerId: `${retailerId}_v${vIdx}_q${qIdx}`,
-                name: menuItem.name,
+                name: variantTitle,
                 description: this.buildProductDescription(menuItem, v),
                 price: q.price,
                 currency: 'INR',
@@ -737,9 +740,10 @@ const catalogService = {
           } else {
             // Single quantity variant — dual color+size for proper grouping
             const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : 'Standard';
+            const variantTitle = (v.quantity && v.unit) ? `${v.label}, ${v.quantity} ${v.unit}` : v.label;
             const prod = {
               retailerId: `${retailerId}_v${vIdx}`,
-              name: menuItem.name,
+              name: variantTitle,
               description: this.buildProductDescription(menuItem, v),
               price: v.price,
               currency: 'INR',
@@ -1159,9 +1163,10 @@ const catalogService = {
           item.variants.forEach((v, vIdx) => {
             if (v.quantities && v.quantities.length > 0) {
               v.quantities.forEach((q, qIdx) => {
+                const variantTitle = `${v.label}, ${q.quantity} ${q.unit}`;
                 variantProducts.push({
                   retailerId: `${item._id.toString()}_v${vIdx}_q${qIdx}`,
-                  name: item.name,
+                  name: variantTitle,
                   description: this.buildProductDescription(item, v),
                   price: q.price,
                   currency: 'INR',
@@ -1175,9 +1180,10 @@ const catalogService = {
               });
             } else {
               const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : 'Standard';
+              const variantTitle = (v.quantity && v.unit) ? `${v.label}, ${v.quantity} ${v.unit}` : v.label;
               variantProducts.push({
                 retailerId: `${item._id.toString()}_v${vIdx}`,
-                name: item.name,
+                name: variantTitle,
                 description: this.buildProductDescription(item, v),
                 price: v.price,
                 currency: 'INR',
