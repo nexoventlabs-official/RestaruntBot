@@ -37,8 +37,17 @@ export default function OfferFormScreen({ route, navigation }) {
   );
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState(null);
+  const [expandedItemId, setExpandedItemId] = useState(null); // For variant drill-down
   const [loadingData, setLoadingData] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Schedule time state
+  const [validFrom, setValidFrom] = useState(
+    existingOffer?.validFrom ? new Date(existingOffer.validFrom).toISOString().slice(0, 16) : ''
+  );
+  const [validUntil, setValidUntil] = useState(
+    existingOffer?.validUntil ? new Date(existingOffer.validUntil).toISOString().slice(0, 16) : ''
+  );
   
   // Targeting state
   const [targetType, setTargetType] = useState(existingOffer?.targetType || 'all');
@@ -329,6 +338,14 @@ export default function OfferFormScreen({ route, navigation }) {
       
       if (percentage && percentage.trim()) {
         formData.append('percentage', percentage);
+      }
+      
+      // Schedule time
+      if (validFrom) {
+        formData.append('validFrom', new Date(validFrom).toISOString());
+      }
+      if (validUntil) {
+        formData.append('validUntil', new Date(validUntil).toISOString());
       }
       
       if (selectedItems.length > 0) {
@@ -775,6 +792,95 @@ export default function OfferFormScreen({ route, navigation }) {
                   </View>
                 )}
               </View>
+
+              {/* Schedule Time Section */}
+              <View style={styles.applySection}>
+                <View style={styles.applySectionHeader}>
+                  <Ionicons name="time" size={20} color={ZOMATO_RED} />
+                  <Text style={styles.applySectionTitle}>Schedule Time</Text>
+                </View>
+                <Text style={styles.applySectionHint}>
+                  Set when this offer should be active (optional)
+                </Text>
+                
+                <View style={styles.scheduleRow}>
+                  <View style={styles.scheduleField}>
+                    <Text style={styles.scheduleLabel}>Valid From</Text>
+                    <TextInput
+                      style={styles.scheduleInput}
+                      value={validFrom}
+                      onChangeText={setValidFrom}
+                      placeholder="YYYY-MM-DDTHH:MM"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                    <TouchableOpacity 
+                      style={styles.scheduleNowButton}
+                      onPress={() => setValidFrom(new Date().toISOString().slice(0, 16))}
+                    >
+                      <Text style={styles.scheduleNowText}>Now</Text>
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <View style={styles.scheduleField}>
+                    <Text style={styles.scheduleLabel}>Valid Until</Text>
+                    <TextInput
+                      style={styles.scheduleInput}
+                      value={validUntil}
+                      onChangeText={setValidUntil}
+                      placeholder="YYYY-MM-DDTHH:MM"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                    {validFrom ? (
+                      <View style={styles.scheduleQuickButtons}>
+                        <TouchableOpacity 
+                          style={styles.scheduleQuickBtn}
+                          onPress={() => {
+                            const from = validFrom ? new Date(validFrom) : new Date();
+                            from.setDate(from.getDate() + 1);
+                            setValidUntil(from.toISOString().slice(0, 16));
+                          }}
+                        >
+                          <Text style={styles.scheduleQuickText}>+1d</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          style={styles.scheduleQuickBtn}
+                          onPress={() => {
+                            const from = validFrom ? new Date(validFrom) : new Date();
+                            from.setDate(from.getDate() + 7);
+                            setValidUntil(from.toISOString().slice(0, 16));
+                          }}
+                        >
+                          <Text style={styles.scheduleQuickText}>+7d</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          style={styles.scheduleQuickBtn}
+                          onPress={() => {
+                            const from = validFrom ? new Date(validFrom) : new Date();
+                            from.setMonth(from.getMonth() + 1);
+                            setValidUntil(from.toISOString().slice(0, 16));
+                          }}
+                        >
+                          <Text style={styles.scheduleQuickText}>+1m</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+                
+                {validFrom || validUntil ? (
+                  <View style={styles.selectedItemsInfo}>
+                    <Ionicons name="calendar" size={16} color="#22C55E" />
+                    <Text style={styles.selectedItemsInfoText}>
+                      {validFrom && validUntil 
+                        ? `Active from ${new Date(validFrom).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} to ${new Date(validUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                        : validFrom 
+                          ? `Starts ${new Date(validFrom).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                          : `Ends ${new Date(validUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                      }
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
             </View>
           </Animated.View>
           <View style={{ height: 120 }} />
@@ -914,43 +1020,110 @@ export default function OfferFormScreen({ route, navigation }) {
                                   </Text>
                                 </View>
                               ) : (
-                                filteredItems.map((item) => {
+                              filteredItems.map((item) => {
                                   const discountPercent = percentage && percentage.trim() ? parseFloat(percentage) : 0;
                                   const offerPrice = discountPercent > 0 ? Math.round(item.price * (1 - discountPercent / 100)) : item.price;
                                   const discount = item.price - offerPrice;
+                                  const hasVariants = item.variants && item.variants.length > 0;
+                                  const isExpanded = expandedItemId === item._id;
                                   
                                   return (
-                                    <TouchableOpacity 
-                                      key={item._id}
-                                      style={styles.itemRow}
-                                      onPress={() => toggleItem(item._id)}
-                                    >
-                                      <View style={[styles.checkbox, selectedItems.includes(item._id) && styles.checkboxChecked]}>
-                                        {selectedItems.includes(item._id) && <Ionicons name="checkmark" size={16} color="#fff" />}
-                                      </View>
-                                      {item.image && (
-                                        <Image source={{ uri: item.image }} style={styles.itemImage} />
-                                      )}
-                                      <View style={styles.itemInfo}>
-                                        <Text style={styles.itemName}>{item.name}</Text>
-                                        <View style={styles.priceContainer}>
-                                          {discountPercent > 0 ? (
-                                            <>
-                                              <View style={styles.priceRow}>
-                                                <Text style={styles.originalPrice}>₹{item.price}</Text>
-                                                <Ionicons name="arrow-forward" size={12} color="#9CA3AF" style={{ marginHorizontal: 4 }} />
-                                                <Text style={styles.offerPrice}>₹{offerPrice}</Text>
-                                              </View>
-                                              <View style={styles.discountBadge}>
-                                                <Text style={styles.discountText}>Save ₹{discount}</Text>
-                                              </View>
-                                            </>
-                                          ) : (
-                                            <Text style={styles.itemPrice}>₹{item.price}</Text>
+                                    <View key={item._id}>
+                                      <TouchableOpacity 
+                                        style={styles.itemRow}
+                                        onPress={() => toggleItem(item._id)}
+                                      >
+                                        <View style={[styles.checkbox, selectedItems.includes(item._id) && styles.checkboxChecked]}>
+                                          {selectedItems.includes(item._id) && <Ionicons name="checkmark" size={16} color="#fff" />}
+                                        </View>
+                                        {item.image && (
+                                          <Image source={{ uri: item.image }} style={styles.itemImage} />
+                                        )}
+                                        <View style={styles.itemInfo}>
+                                          <Text style={styles.itemName}>{item.name}</Text>
+                                          <View style={styles.priceContainer}>
+                                            {discountPercent > 0 ? (
+                                              <>
+                                                <View style={styles.priceRow}>
+                                                  <Text style={styles.originalPrice}>₹{item.price}</Text>
+                                                  <Ionicons name="arrow-forward" size={12} color="#9CA3AF" style={{ marginHorizontal: 4 }} />
+                                                  <Text style={styles.offerPrice}>₹{offerPrice}</Text>
+                                                </View>
+                                                <View style={styles.discountBadge}>
+                                                  <Text style={styles.discountText}>Save ₹{discount}</Text>
+                                                </View>
+                                              </>
+                                            ) : (
+                                              <Text style={styles.itemPrice}>₹{item.price}</Text>
+                                            )}
+                                          </View>
+                                          {hasVariants && (
+                                            <Text style={styles.variantHint}>{item.variants.length} variant{item.variants.length > 1 ? 's' : ''}</Text>
                                           )}
                                         </View>
-                                      </View>
-                                    </TouchableOpacity>
+                                        {hasVariants && (
+                                          <TouchableOpacity
+                                            style={styles.variantExpandBtn}
+                                            onPress={(e) => {
+                                              e.stopPropagation();
+                                              setExpandedItemId(isExpanded ? null : item._id);
+                                            }}
+                                          >
+                                            <Ionicons 
+                                              name={isExpanded ? 'chevron-up' : 'chevron-down'} 
+                                              size={18} 
+                                              color="#9CA3AF" 
+                                            />
+                                          </TouchableOpacity>
+                                        )}
+                                      </TouchableOpacity>
+                                      
+                                      {/* Variant Drill-Down */}
+                                      {hasVariants && isExpanded && (
+                                        <View style={styles.variantsList}>
+                                          {item.variants.map((variant, vIdx) => {
+                                            const vOfferPrice = discountPercent > 0 ? Math.round(variant.price * (1 - discountPercent / 100)) : variant.price;
+                                            const vDiscount = variant.price - vOfferPrice;
+                                            return (
+                                              <View key={vIdx} style={styles.variantRow}>
+                                                <View style={styles.variantDot} />
+                                                {variant.image ? (
+                                                  <Image source={{ uri: variant.image }} style={styles.variantImage} />
+                                                ) : null}
+                                                <View style={styles.variantInfo}>
+                                                  <Text style={styles.variantLabel}>{variant.label}</Text>
+                                                  <View style={styles.priceContainer}>
+                                                    {discountPercent > 0 ? (
+                                                      <View style={styles.priceRow}>
+                                                        <Text style={styles.originalPrice}>₹{variant.price}</Text>
+                                                        <Ionicons name="arrow-forward" size={10} color="#9CA3AF" style={{ marginHorizontal: 3 }} />
+                                                        <Text style={[styles.offerPrice, { fontSize: 13 }]}>₹{vOfferPrice}</Text>
+                                                        <View style={[styles.discountBadge, { marginLeft: 6 }]}>
+                                                          <Text style={styles.discountText}>-₹{vDiscount}</Text>
+                                                        </View>
+                                                      </View>
+                                                    ) : (
+                                                      <Text style={[styles.itemPrice, { fontSize: 12 }]}>₹{variant.price}</Text>
+                                                    )}
+                                                  </View>
+                                                </View>
+                                                <View style={[
+                                                  styles.variantAvailBadge,
+                                                  { backgroundColor: variant.available !== false ? '#D1FAE5' : '#FEE2E2' }
+                                                ]}>
+                                                  <Text style={[
+                                                    styles.variantAvailText,
+                                                    { color: variant.available !== false ? '#16A34A' : '#DC2626' }
+                                                  ]}>
+                                                    {variant.available !== false ? 'Available' : 'Unavailable'}
+                                                  </Text>
+                                                </View>
+                                              </View>
+                                            );
+                                          })}
+                                        </View>
+                                      )}
+                                    </View>
                                   );
                                 })
                               )}
@@ -1410,6 +1583,126 @@ const styles = StyleSheet.create({
   checkboxChecked: {
     backgroundColor: ZOMATO_RED,
     borderColor: ZOMATO_RED,
+  },
+  
+  // Variant Styles
+  variantHint: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  variantExpandBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  variantsList: {
+    marginLeft: 36,
+    marginRight: 12,
+    marginBottom: 8,
+    paddingLeft: 12,
+    borderLeftWidth: 2,
+    borderLeftColor: '#E5E7EB',
+  },
+  variantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    backgroundColor: '#FAFAFA',
+    borderRadius: 8,
+    marginBottom: 4,
+    gap: 8,
+  },
+  variantDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: ZOMATO_RED,
+  },
+  variantImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: '#E5E7EB',
+  },
+  variantInfo: {
+    flex: 1,
+  },
+  variantLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 2,
+  },
+  variantAvailBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  variantAvailText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  
+  // Schedule Time Styles
+  scheduleRow: {
+    gap: 12,
+  },
+  scheduleField: {
+    gap: 6,
+  },
+  scheduleLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  scheduleInput: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    height: 44,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    fontSize: 14,
+    color: '#1C1C1C',
+    fontWeight: '500',
+  },
+  scheduleNowButton: {
+    position: 'absolute',
+    right: 8,
+    top: 28,
+    backgroundColor: ZOMATO_RED,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  scheduleNowText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  scheduleQuickButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  scheduleQuickBtn: {
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  scheduleQuickText: {
+    color: ZOMATO_RED,
+    fontSize: 12,
+    fontWeight: '700',
   },
   
   // Modal Footer

@@ -45,7 +45,9 @@ export default function CartSidebar({
     if (availableCartItems.length === 0) return '';
     let msg = '🛒 *Order from Website*\n\n';
     availableCartItems.forEach((item, i) => {
-      msg += `${i + 1}. ${item.name} x${item.quantity} - ₹${item.price * item.quantity}`;
+      msg += `${i + 1}. ${item.name}`;
+      if (item.variantLabel) msg += ` (${item.variantLabel})`;
+      msg += ` x${item.quantity} - ₹${item.price * item.quantity}`;
       if (item.offerInfo) {
         msg += ` 🎁`;
       }
@@ -131,7 +133,7 @@ export default function CartSidebar({
 
                 {/* Available items */}
                 {availableCartItems.map(item => (
-                  <div key={item._id} className="flex gap-3 bg-gray-50 rounded-xl p-3">
+                  <div key={item.cartKey || item._id} className="flex gap-3 bg-gray-50 rounded-xl p-3">
                     <div className="relative">
                       {item.image ? (
                         <img src={item.image} alt={item.name} className="w-20 h-20 rounded-lg object-cover" />
@@ -149,6 +151,9 @@ export default function CartSidebar({
                     </div>
                     <div className="flex-1">
                       <h4 className="font-medium text-gray-900">{item.name}</h4>
+                      {item.variantLabel && (
+                        <span className="inline-block text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium mt-0.5">{item.variantLabel}</span>
+                      )}
                       <p className="text-sm text-gray-500">{item.quantity || 1} {item.unit}</p>
                       {/* Show offer info if present */}
                       {item.offerInfo && (
@@ -169,14 +174,14 @@ export default function CartSidebar({
                         )}
                       </div>
                       <div className="flex items-center gap-2 mt-2">
-                        <button onClick={() => updateQuantity(item._id, item.quantity - 1)} className="p-1 bg-white rounded-full shadow hover:bg-gray-50">
+                        <button onClick={() => updateQuantity(item.cartKey || item._id, item.quantity - 1)} className="p-1 bg-white rounded-full shadow hover:bg-gray-50">
                           <Minus className="w-4 h-4" />
                         </button>
                         <span className="w-8 text-center font-medium">{item.quantity}</span>
-                        <button onClick={() => updateQuantity(item._id, item.quantity + 1)} className="p-1 bg-white rounded-full shadow hover:bg-gray-50">
+                        <button onClick={() => updateQuantity(item.cartKey || item._id, item.quantity + 1)} className="p-1 bg-white rounded-full shadow hover:bg-gray-50">
                           <Plus className="w-4 h-4" />
                         </button>
-                        <button onClick={() => removeFromCart(item._id)} className="ml-auto p-1 text-red-500 hover:bg-red-50 rounded-full">
+                        <button onClick={() => removeFromCart(item.cartKey || item._id)} className="ml-auto p-1 text-red-500 hover:bg-red-50 rounded-full">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -194,7 +199,7 @@ export default function CartSidebar({
                       const status = getItemStatus(item._id);
                       const isSoldOut = status === 'soldout';
                       return (
-                      <div key={item._id} className="flex gap-3 bg-gray-100 rounded-xl p-3 opacity-60">
+                      <div key={item.cartKey || item._id} className="flex gap-3 bg-gray-100 rounded-xl p-3 opacity-60">
                         {item.image ? (
                           <img src={item.image} alt={item.name} className="w-20 h-20 rounded-lg object-cover grayscale" />
                         ) : (
@@ -211,7 +216,7 @@ export default function CartSidebar({
                           </div>
                           <p className="text-sm text-gray-400">{item.quantity || 1} {item.unit}</p>
                           <p className="text-gray-400 line-through">₹{item.price * item.quantity}</p>
-                          <button onClick={() => removeFromCart(item._id)} className="mt-2 px-3 py-1 bg-red-100 text-red-600 text-sm rounded-lg hover:bg-red-200">
+                          <button onClick={() => removeFromCart(item.cartKey || item._id)} className="mt-2 px-3 py-1 bg-red-100 text-red-600 text-sm rounded-lg hover:bg-red-200">
                             Remove
                           </button>
                         </div>

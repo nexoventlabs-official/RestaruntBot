@@ -13,6 +13,20 @@ const catalogService = require('./catalogService');
 const axios = require('axios');
 const logger = require('./logger');
 
+// Helper: Count items including variants for accurate WhatsApp display
+// If an item has variants, count each variant as a separate item (matches Meta catalog)
+function countItemsWithVariants(items) {
+  let count = 0;
+  for (const item of items) {
+    if (item.variants && item.variants.length > 0) {
+      count += item.variants.filter(v => v.available !== false).length;
+    } else {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 // ============ IN-MEMORY CACHE for categories & menu items ============
 // Avoids 2 full collection scans (Category.find + MenuItem.find) on every single message.
 // 15-second TTL ensures changes propagate quickly while saving ~20-80ms per message.
@@ -5542,12 +5556,14 @@ const chatbot = {
 
     // If 9 or fewer categories (+ All Items = 10), use WhatsApp list without pagination
     if (categories.length <= 9) {
+      const totalWithVariants = countItemsWithVariants(menuItems);
       const rows = [
-        { rowId: 'cat_all', title: '📋 All Items', description: `${menuItems.length} items - View everything` }
+        { rowId: 'cat_all', title: '📋 All Items', description: `${totalWithVariants} items - View everything` }
       ];
       
       categories.forEach(cat => {
-        const count = menuItems.filter(m => Array.isArray(m.category) ? m.category.includes(cat) : m.category === cat).length;
+        const catItems = menuItems.filter(m => Array.isArray(m.category) ? m.category.includes(cat) : m.category === cat);
+        const count = countItemsWithVariants(catItems);
         const safeId = cat.replace(/[^a-zA-Z0-9_]/g, '_');
         rows.push({ rowId: `cat_${safeId}`, title: cat.substring(0, 24), description: `${count} items available` });
       });
@@ -5568,11 +5584,13 @@ const chatbot = {
     
     // Add "All Items" option on first page only
     if (page === 0) {
-      rows.push({ rowId: 'cat_all', title: '📋 All Items', description: `${menuItems.length} items - View everything` });
+      const totalWithVariants = countItemsWithVariants(menuItems);
+      rows.push({ rowId: 'cat_all', title: '📋 All Items', description: `${totalWithVariants} items - View everything` });
     }
     
     pageCats.forEach(cat => {
-      const count = menuItems.filter(m => Array.isArray(m.category) ? m.category.includes(cat) : m.category === cat).length;
+      const catItems = menuItems.filter(m => Array.isArray(m.category) ? m.category.includes(cat) : m.category === cat);
+      const count = countItemsWithVariants(catItems);
       const safeId = cat.replace(/[^a-zA-Z0-9_]/g, '_');
       rows.push({ rowId: `cat_${safeId}`, title: cat.substring(0, 24), description: `${count} items available` });
     });
@@ -5602,6 +5620,7 @@ const chatbot = {
   async sendCategoryItems(phone, menuItems, category, page = 0) {
     // Filter items that include this category (category is an array field)
     const items = menuItems.filter(m => Array.isArray(m.category) ? m.category.includes(category) : m.category === category);
+    const itemCountWithVariants = countItemsWithVariants(items);
     
     if (!items.length) {
       await whatsapp.sendButtons(phone, `📋 No items in ${category} right now.`, [
@@ -5620,7 +5639,7 @@ const chatbot = {
           phone,
           catalogId,
           `📋 ${category}`,
-          `${items.length} items available\nTap to view details & add to cart`,
+          `${catalogResult.totalMapped} items available\nTap to view details & add to cart`,
           catalogResult.sections,
           'Perivi Hotel'
         );

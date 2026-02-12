@@ -322,6 +322,14 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
             const offerPrice = Math.round(item.price * (1 - discountPercent / 100));
             updateFields.offerPrice = offerPrice;
             logger.info(`Applying to ${item.name}: ${item.price} -> ${offerPrice} (${discountPercent}% OFF)`);
+            
+            // Also apply discount to variants if item has variants
+            if (item.variants && item.variants.length > 0) {
+              updateFields.variants = item.variants.map(v => ({
+                ...v.toObject ? v.toObject() : v,
+                offerPrice: Math.round(v.price * (1 - discountPercent / 100))
+              }));
+            }
           } else if (percentage && isTargetedOffer) {
             logger.info(`Targeted offer - NOT applying offerPrice to ${item.name} (${percentage}% discount for eligible customers only)`);
           } else {
@@ -762,10 +770,19 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
           const updatedOfferTypes = offerTypes.filter(ot => ot !== offerType);
           
           if (updatedOfferTypes.length === 0) {
-            await MenuItem.findByIdAndUpdate(itemId, {
+            const clearFields = {
               $unset: { offerPrice: 1 },
               offerType: []
-            });
+            };
+            // Clear variant offerPrices too
+            if (item.variants && item.variants.length > 0) {
+              clearFields.variants = item.variants.map(v => {
+                const vObj = v.toObject ? v.toObject() : { ...v };
+                delete vObj.offerPrice;
+                return vObj;
+              });
+            }
+            await MenuItem.findByIdAndUpdate(itemId, clearFields);
           } else {
             await MenuItem.findByIdAndUpdate(itemId, {
               offerType: updatedOfferTypes
@@ -793,6 +810,14 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
             const discountPercent = parseFloat(percentage);
             const offerPrice = Math.round(item.price * (1 - discountPercent / 100));
             updateFields.offerPrice = offerPrice;
+            
+            // Also apply discount to variants if item has variants
+            if (item.variants && item.variants.length > 0) {
+              updateFields.variants = item.variants.map(v => ({
+                ...v.toObject ? v.toObject() : v,
+                offerPrice: Math.round(v.price * (1 - discountPercent / 100))
+              }));
+            }
           }
           
           await MenuItem.findByIdAndUpdate(itemId, updateFields);
@@ -822,10 +847,18 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
           const updatedOfferTypes = offerTypes.filter(ot => ot !== offerType);
           
           if (updatedOfferTypes.length === 0) {
-            await MenuItem.findByIdAndUpdate(itemId, {
+            const clearFields = {
               $unset: { offerPrice: 1 },
               offerType: []
-            });
+            };
+            if (item.variants && item.variants.length > 0) {
+              clearFields.variants = item.variants.map(v => {
+                const vObj = v.toObject ? v.toObject() : { ...v };
+                delete vObj.offerPrice;
+                return vObj;
+              });
+            }
+            await MenuItem.findByIdAndUpdate(itemId, clearFields);
           } else {
             await MenuItem.findByIdAndUpdate(itemId, {
               offerType: updatedOfferTypes
@@ -952,12 +985,21 @@ router.delete('/:id', auth, async (req, res) => {
         const offerTypes = Array.isArray(item.offerType) ? item.offerType : [item.offerType];
         const updatedOfferTypes = offerTypes.filter(ot => ot !== offer.offerType);
         
-        // If no more offers, remove offerPrice
+        // If no more offers, remove offerPrice (including variant offerPrices)
         if (updatedOfferTypes.length === 0) {
-          await MenuItem.findByIdAndUpdate(item._id, {
+          const clearFields = {
             $unset: { offerPrice: 1 },
             offerType: []
-          });
+          };
+          // Clear variant offerPrices too
+          if (item.variants && item.variants.length > 0) {
+            clearFields.variants = item.variants.map(v => {
+              const vObj = v.toObject ? v.toObject() : { ...v };
+              delete vObj.offerPrice;
+              return vObj;
+            });
+          }
+          await MenuItem.findByIdAndUpdate(item._id, clearFields);
         } else {
           // Still has other offers, recalculate offerPrice based on remaining offers
           const remainingOffers = await Offer.find({ 
@@ -976,12 +1018,27 @@ router.delete('/:id', auth, async (req, res) => {
           const updateFields = { offerType: updatedOfferTypes };
           if (bestDiscount > 0) {
             updateFields.offerPrice = Math.round(item.price * (1 - bestDiscount / 100));
+            // Recalculate variant offerPrices
+            if (item.variants && item.variants.length > 0) {
+              updateFields.variants = item.variants.map(v => ({
+                ...v.toObject ? v.toObject() : v,
+                offerPrice: Math.round(v.price * (1 - bestDiscount / 100))
+              }));
+            }
           } else {
             // No percentage-based offers remain, remove offerPrice
-            await MenuItem.findByIdAndUpdate(item._id, {
+            const clearFields = {
               $unset: { offerPrice: 1 },
               offerType: updatedOfferTypes
-            });
+            };
+            if (item.variants && item.variants.length > 0) {
+              clearFields.variants = item.variants.map(v => {
+                const vObj = v.toObject ? v.toObject() : { ...v };
+                delete vObj.offerPrice;
+                return vObj;
+              });
+            }
+            await MenuItem.findByIdAndUpdate(item._id, clearFields);
             continue;
           }
           
@@ -1073,14 +1130,27 @@ router.patch('/:id/toggle', auth, async (req, res) => {
         }
         
         if (bestDiscount > 0) {
-          await MenuItem.findByIdAndUpdate(item._id, {
+          const updateFields = {
             offerPrice: Math.round(item.price * (1 - bestDiscount / 100))
-          });
+          };
+          if (item.variants && item.variants.length > 0) {
+            updateFields.variants = item.variants.map(v => ({
+              ...v.toObject ? v.toObject() : v,
+              offerPrice: Math.round(v.price * (1 - bestDiscount / 100))
+            }));
+          }
+          await MenuItem.findByIdAndUpdate(item._id, updateFields);
         } else {
           // No active percentage-based offers remain, remove offerPrice
-          await MenuItem.findByIdAndUpdate(item._id, {
-            $unset: { offerPrice: 1 }
-          });
+          const clearFields = { $unset: { offerPrice: 1 } };
+          if (item.variants && item.variants.length > 0) {
+            clearFields.variants = item.variants.map(v => {
+              const vObj = v.toObject ? v.toObject() : { ...v };
+              delete vObj.offerPrice;
+              return vObj;
+            });
+          }
+          await MenuItem.findByIdAndUpdate(item._id, clearFields);
         }
       }
       
@@ -1112,9 +1182,16 @@ router.patch('/:id/toggle', auth, async (req, res) => {
         }
         
         if (bestDiscount > 0) {
-          await MenuItem.findByIdAndUpdate(item._id, {
+          const updateFields = {
             offerPrice: Math.round(item.price * (1 - bestDiscount / 100))
-          });
+          };
+          if (item.variants && item.variants.length > 0) {
+            updateFields.variants = item.variants.map(v => ({
+              ...v.toObject ? v.toObject() : v,
+              offerPrice: Math.round(v.price * (1 - bestDiscount / 100))
+            }));
+          }
+          await MenuItem.findByIdAndUpdate(item._id, updateFields);
         }
       }
       

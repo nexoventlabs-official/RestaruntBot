@@ -52,6 +52,7 @@ export default function UserMenuPage() {
   const [bannerFading, setBannerFading] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [dialogQuantity, setDialogQuantity] = useState(1);
+  const [selectedVariantIndex, setSelectedVariantIndex] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const eventSourceRef = useRef(null);
 
@@ -238,6 +239,11 @@ export default function UserMenuPage() {
   const handleAddToCart = (item, e) => { 
     e.stopPropagation(); 
     if (!isItemAvailable(item._id) || !addToCart) return;
+    // If item has variants, open the dialog so user can choose a variant
+    if (item.variants && item.variants.length > 0) {
+      openItemDialog(item);
+      return;
+    }
     addToCart(item); 
   };
 
@@ -276,6 +282,13 @@ export default function UserMenuPage() {
   const openItemDialog = (item) => {
     setSelectedItem(item);
     setDialogQuantity(cart?.find(c => c._id === item._id)?.quantity || 1);
+    // Auto-select first available variant if item has variants
+    if (item.variants && item.variants.length > 0) {
+      const firstAvailable = item.variants.findIndex(v => v.available !== false);
+      setSelectedVariantIndex(firstAvailable >= 0 ? firstAvailable : 0);
+    } else {
+      setSelectedVariantIndex(null);
+    }
     // Prevent body scroll when dialog is open
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
@@ -287,6 +300,7 @@ export default function UserMenuPage() {
   const closeItemDialog = () => {
     setSelectedItem(null);
     setDialogQuantity(1);
+    setSelectedVariantIndex(null);
     // Restore body scroll
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
@@ -294,12 +308,34 @@ export default function UserMenuPage() {
     if (window.lenis) window.lenis.start();
   };
 
+  // Helper: get effective price/image for selected variant or base item
+  const getDialogItemDetails = () => {
+    if (!selectedItem) return { price: 0, offerPrice: null, image: null };
+    if (selectedVariantIndex !== null && selectedItem.variants?.[selectedVariantIndex]) {
+      const v = selectedItem.variants[selectedVariantIndex];
+      return {
+        price: v.price,
+        offerPrice: v.offerPrice && v.offerPrice < v.price ? v.offerPrice : null,
+        image: v.image || selectedItem.image,
+        label: v.label,
+        available: v.available !== false
+      };
+    }
+    return {
+      price: selectedItem.price,
+      offerPrice: selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price ? selectedItem.offerPrice : null,
+      image: selectedItem.image,
+      label: null,
+      available: true
+    };
+  };
+
   // Add to cart from dialog
   const handleDialogAddToCart = () => {
     if (!selectedItem || !addToCart) return;
-    for (let i = 0; i < dialogQuantity; i++) {
-      addToCart(selectedItem);
-    }
+    const details = getDialogItemDetails();
+    const variant = selectedVariantIndex !== null ? selectedItem.variants?.[selectedVariantIndex] : null;
+    addToCart(selectedItem, dialogQuantity, null, variant ? { variantIndex: selectedVariantIndex, label: variant.label, price: details.price, offerPrice: details.offerPrice, image: details.image } : null);
     closeItemDialog();
   };
 
@@ -307,15 +343,20 @@ export default function UserMenuPage() {
   const handleDialogWhatsApp = () => {
     if (!selectedItem) return;
     const item = selectedItem;
+    const details = getDialogItemDetails();
+    const variant = selectedVariantIndex !== null ? item.variants?.[selectedVariantIndex] : null;
+    const unitPrice = details.offerPrice || details.price;
     
     const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : 
                           item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
                           item.foodType === 'egg' ? '🥚 Egg' : '';
     
     let msg = `Hi! I'd like to order:\n\n`;
-    msg += `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n`;
+    msg += `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}`;
+    if (variant) msg += ` - ${variant.label}`;
+    msg += `\n`;
     msg += `📦 *Quantity:* ${dialogQuantity}\n`;
-    msg += `💰 *Price:* ₹${item.price} x ${dialogQuantity} = ₹${item.price * dialogQuantity}\n`;
+    msg += `💰 *Price:* ₹${unitPrice} x ${dialogQuantity} = ₹${unitPrice * dialogQuantity}\n`;
     msg += `\nPlease confirm my order. Thank you!`;
     
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
@@ -400,6 +441,7 @@ export default function UserMenuPage() {
   const renderItemCard = (item) => {
     const inCart = isInCart ? isInCart(item._id) : false;
     const cartItem = cart?.find(c => c._id === item._id);
+    const cartItemTotalQty = cart?.filter(c => c._id === item._id).reduce((sum, c) => sum + c.quantity, 0) || 0;
     const itemStatus = getItemStatus(item);
     const available = itemStatus === 'available';
     const rating = item.avgRating || 0;
@@ -506,15 +548,37 @@ export default function UserMenuPage() {
 
           {/* Price Section with more spacing */}
           <div className="flex items-center gap-3 mb-4 flex-wrap">
-            <span className="text-xl sm:text-2xl font-bold text-orange-600">
-              ₹{item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}
-            </span>
-            {item.offerPrice && item.offerPrice < item.price && (
+            {item.variants && item.variants.length > 0 ? (
               <>
-                <span className="text-sm text-gray-400 line-through">₹{item.price}</span>
-                <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2.5 py-1 rounded-full text-xs font-bold shadow-md">
-                  {Math.round(((item.price - item.offerPrice) / item.price) * 100)}% OFF
+                {(() => {
+                  const prices = item.variants.filter(v => v.available !== false).map(v => v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price);
+                  const minPrice = Math.min(...prices);
+                  const maxPrice = Math.max(...prices);
+                  return (
+                    <>
+                      <span className="text-xl sm:text-2xl font-bold text-orange-600">
+                        {minPrice === maxPrice ? `₹${minPrice}` : `₹${minPrice} - ₹${maxPrice}`}
+                      </span>
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                        {item.variants.length} {item.variants[0]?.variantType === 'color' ? 'colors' : 'sizes'}
+                      </span>
+                    </>
+                  );
+                })()}
+              </>
+            ) : (
+              <>
+                <span className="text-xl sm:text-2xl font-bold text-orange-600">
+                  ₹{item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}
                 </span>
+                {item.offerPrice && item.offerPrice < item.price && (
+                  <>
+                    <span className="text-sm text-gray-400 line-through">₹{item.price}</span>
+                    <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2.5 py-1 rounded-full text-xs font-bold shadow-md">
+                      {Math.round(((item.price - item.offerPrice) / item.price) * 100)}% OFF
+                    </span>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -549,7 +613,7 @@ export default function UserMenuPage() {
               >
                 <ShoppingCart className="w-5 h-5" />
                 <span className="absolute -top-1 -right-1 w-5 h-5 bg-white text-green-600 rounded-full text-xs font-bold flex items-center justify-center">
-                  {cartItem?.quantity}
+                  {cartItemTotalQty}
                 </span>
               </button>
             ) : (
@@ -883,9 +947,9 @@ export default function UserMenuPage() {
 
             {/* Left Side - Image (PC) / Top (Mobile) */}
             <div className="relative h-40 sm:h-56 lg:h-auto lg:w-[45%] bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center flex-shrink-0">
-              {selectedItem.image ? (
+              {(getDialogItemDetails().image || selectedItem.image) ? (
                 <img 
-                  src={selectedItem.image} 
+                  src={getDialogItemDetails().image || selectedItem.image} 
                   alt={selectedItem.name}
                   className="max-h-full max-w-full object-contain p-4 sm:p-6 lg:p-8"
                 />
@@ -931,22 +995,25 @@ export default function UserMenuPage() {
               </div>
 
               {/* Price */}
-              <div className="flex items-center gap-3 mb-3 flex-wrap">
-                {/* Current Price - Large and prominent */}
-                <div className="text-3xl sm:text-4xl lg:text-5xl font-bold text-orange-500">
-                  ₹{selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price ? selectedItem.offerPrice : selectedItem.price}
-                </div>
-                
-                {/* Original Price & Discount Badge - Only if there's a discount */}
-                {selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price && (
-                  <>
-                    <span className="text-lg sm:text-xl text-gray-400 line-through">₹{selectedItem.price}</span>
-                    <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold">
-                      {Math.round(((selectedItem.price - selectedItem.offerPrice) / selectedItem.price) * 100)}% OFF
+              {(() => {
+                const d = getDialogItemDetails();
+                const displayPrice = d.offerPrice || d.price;
+                return (
+                  <div className="flex items-center gap-3 mb-3 flex-wrap">
+                    <div className="text-3xl sm:text-4xl lg:text-5xl font-bold text-orange-500">
+                      ₹{displayPrice}
                     </div>
-                  </>
-                )}
-              </div>
+                    {d.offerPrice && (
+                      <>
+                        <span className="text-lg sm:text-xl text-gray-400 line-through">₹{d.price}</span>
+                        <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold">
+                          {Math.round(((d.price - d.offerPrice) / d.price) * 100)}% OFF
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Offer Type Tags */}
               {selectedItem.offerType && (Array.isArray(selectedItem.offerType) ? selectedItem.offerType : [selectedItem.offerType]).length > 0 && (
@@ -975,6 +1042,45 @@ export default function UserMenuPage() {
                 </span>
               </div>
 
+              {/* Variant Selector */}
+              {selectedItem.variants && selectedItem.variants.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-sm font-semibold text-gray-700 mb-2">
+                    {selectedItem.variants[0]?.variantType === 'color' ? 'Color' : 'Size'}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedItem.variants.map((v, idx) => {
+                      const isSelected = selectedVariantIndex === idx;
+                      const isAvailable = v.available !== false;
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => isAvailable && setSelectedVariantIndex(idx)}
+                          disabled={!isAvailable}
+                          className={`px-4 py-2 rounded-xl text-sm font-medium border-2 transition-all ${
+                            isSelected
+                              ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-sm'
+                              : isAvailable
+                                ? 'border-gray-200 bg-white text-gray-700 hover:border-orange-300 hover:bg-orange-50'
+                                : 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed line-through'
+                          }`}
+                        >
+                          {v.label}
+                          {isAvailable && (
+                            <span className="ml-1.5 text-xs text-gray-400">
+                              ₹{v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price}
+                            </span>
+                          )}
+                          {!isAvailable && (
+                            <span className="ml-1.5 text-xs">Sold Out</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Description */}
               {selectedItem.description && (
                 <p className="text-gray-600 text-sm sm:text-base lg:text-base mb-4 leading-relaxed">
@@ -982,7 +1088,7 @@ export default function UserMenuPage() {
                 </p>
               )}
 
-              {/* Details Grid */}
+              {/* Details Grid */
               <div className="grid grid-cols-2 gap-3 mb-5">
                 {/* Preparation Time */}
                 <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
@@ -1026,7 +1132,11 @@ export default function UserMenuPage() {
               {/* Total Price */}
               <div className="flex items-center justify-between mb-5 pb-4 border-b border-gray-100">
                 <span className="text-gray-600">Total</span>
-                <span className="text-2xl font-bold text-gray-900">₹{selectedItem.price * dialogQuantity}</span>
+                {(() => {
+                  const d = getDialogItemDetails();
+                  const unitPrice = d.offerPrice || d.price;
+                  return <span className="text-2xl font-bold text-gray-900">₹{unitPrice * dialogQuantity}</span>;
+                })()}
               </div>
 
               {/* Action Buttons */}

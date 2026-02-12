@@ -50,6 +50,23 @@ export function useCart() {
     setCart(prev => prev.map(cartItem => {
       const latestItem = menuMap.get(cartItem._id);
       if (latestItem) {
+        // If cart item has a variant, sync from the specific variant data
+        if (cartItem.variantIndex !== null && cartItem.variantIndex !== undefined && latestItem.variants?.[cartItem.variantIndex]) {
+          const v = latestItem.variants[cartItem.variantIndex];
+          const variantPrice = v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price;
+          const variantOriginal = v.offerPrice && v.offerPrice < v.price ? v.price : undefined;
+          return {
+            ...cartItem,
+            name: latestItem.name,
+            price: variantPrice,
+            originalPrice: variantOriginal,
+            image: v.image || latestItem.image,
+            unit: latestItem.unit || 'piece',
+            unitQty: latestItem.quantity || 1,
+            variantLabel: v.label
+          };
+        }
+
         // Check if this is a regular offer item (not targeted)
         const isRegularOffer = cartItem.offerInfo?.isRegularOffer;
         const isTargetedOffer = cartItem.offerInfo && !cartItem.offerInfo.isRegularOffer;
@@ -191,14 +208,20 @@ export function useCart() {
     }));
   }, []);
 
-  const addToCart = (item, qty = 1, offerInfo = null) => {
+  const addToCart = (item, qty = 1, offerInfo = null, variantInfo = null) => {
     // Auto-detect offer info from item if not provided
     let finalOfferInfo = offerInfo;
     let finalPrice = item.price;
     let finalOriginalPrice = item.originalPrice;
     
-    // If item has offerPrice (from "all customers" offers), auto-create offer info
-    if (!offerInfo && item.offerPrice && item.offerPrice < item.price) {
+    // If variant is selected, use variant pricing
+    if (variantInfo) {
+      finalPrice = variantInfo.offerPrice || variantInfo.price;
+      if (variantInfo.offerPrice && variantInfo.offerPrice < variantInfo.price) {
+        finalOriginalPrice = variantInfo.price;
+      }
+    } else if (!offerInfo && item.offerPrice && item.offerPrice < item.price) {
+      // If item has offerPrice (from "all customers" offers), auto-create offer info
       finalOfferInfo = {
         offerType: Array.isArray(item.offerType) ? item.offerType.join(', ') : item.offerType,
         title: Array.isArray(item.offerType) ? item.offerType.join(', ') : item.offerType,
@@ -209,17 +232,20 @@ export function useCart() {
     }
     
     // If item already has originalPrice set (from targeted offers), use it
-    if (item.originalPrice && item.originalPrice > item.price) {
+    if (!variantInfo && item.originalPrice && item.originalPrice > item.price) {
       finalOriginalPrice = item.originalPrice;
       finalPrice = item.price;
     }
+
+    // Cart key: use _id + variantIndex to distinguish variants of the same item
+    const cartKey = variantInfo ? `${item._id}_v${variantInfo.variantIndex}` : item._id;
     
     setCart(prev => {
-      const existing = prev.find(c => c._id === item._id);
+      const existing = prev.find(c => c.cartKey === cartKey);
       if (existing) {
         // If adding with offer info, update offer info and price too
         if (finalOfferInfo) {
-          return prev.map(c => c._id === item._id ? { 
+          return prev.map(c => c.cartKey === cartKey ? { 
             ...c, 
             quantity: c.quantity + qty, 
             offerInfo: finalOfferInfo,
@@ -227,32 +253,35 @@ export function useCart() {
             originalPrice: finalOriginalPrice 
           } : c);
         }
-        return prev.map(c => c._id === item._id ? { ...c, quantity: c.quantity + qty } : c);
+        return prev.map(c => c.cartKey === cartKey ? { ...c, quantity: c.quantity + qty } : c);
       }
       return [...prev, { 
-        _id: item._id, 
+        _id: item._id,
+        cartKey,
         name: item.name, 
         price: finalPrice, 
         originalPrice: finalOriginalPrice, // Store original price if exists
-        image: item.image, 
+        image: variantInfo?.image || item.image, 
         quantity: qty, 
         unit: item.unit || 'piece', 
         unitQty: item.quantity || 1,
-        offerInfo: finalOfferInfo // Store offer info with cart item
+        offerInfo: finalOfferInfo, // Store offer info with cart item
+        variantLabel: variantInfo?.label || null, // Store variant label for display
+        variantIndex: variantInfo?.variantIndex ?? null
       }];
     });
   };
 
-  const removeFromCart = (itemId) => {
-    setCart(prev => prev.filter(c => c._id !== itemId));
+  const removeFromCart = (cartKey) => {
+    setCart(prev => prev.filter(c => (c.cartKey || c._id) !== cartKey));
   };
 
-  const updateQuantity = (itemId, qty) => {
+  const updateQuantity = (cartKey, qty) => {
     if (qty <= 0) {
-      removeFromCart(itemId);
+      removeFromCart(cartKey);
       return;
     }
-    setCart(prev => prev.map(c => c._id === itemId ? { ...c, quantity: qty } : c));
+    setCart(prev => prev.map(c => (c.cartKey || c._id) === cartKey ? { ...c, quantity: qty } : c));
   };
 
   const clearCart = () => setCart([]);

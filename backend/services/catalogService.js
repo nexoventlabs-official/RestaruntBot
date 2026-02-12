@@ -257,11 +257,12 @@ const catalogService = {
     if (categoryItems.length === 0) return null;
 
     // Auto-ensure every category item has a catalog mapping (real-time sync)
+    // For variant items, include ALL variant retailer IDs (not just _v0)
     const retailerIds = [];
     for (const item of categoryItems) {
-      const retailerId = await this.ensureCatalogMapping(item);
-      if (retailerId) {
-        retailerIds.push(retailerId);
+      const ids = await this.ensureAllCatalogMappings(item);
+      if (ids && ids.length > 0) {
+        retailerIds.push(...ids);
       }
     }
 
@@ -459,10 +460,28 @@ const catalogService = {
   /**
    * Build a rich product description including rating info for Meta catalog.
    * @param {Object} menuItem - The MenuItem document
+   * @param {Object} [variant] - Optional variant object for variant-specific description
    * @returns {string} Description with ratings
    */
-  buildProductDescription(menuItem) {
+  buildProductDescription(menuItem, variant = null) {
     let desc = menuItem.description || menuItem.name;
+    
+    // If variant-specific, mention the variant
+    if (variant) {
+      desc += ` | ${variant.label}`;
+    }
+    
+    // List all available variants/sizes if item has variants
+    if (menuItem.variants && menuItem.variants.length > 0 && !variant) {
+      const variantTypeName = menuItem.variants[0]?.variantType === 'color' ? 'Colors' : 'Sizes';
+      const labels = menuItem.variants
+        .filter(v => v.available !== false)
+        .map(v => v.label)
+        .join(', ');
+      if (labels) {
+        desc += ` | Available ${variantTypeName}: ${labels}`;
+      }
+    }
     
     // Add rating info to description
     if (menuItem.totalRatings > 0 && menuItem.avgRating > 0) {
@@ -509,18 +528,25 @@ const catalogService = {
         // Per Meta docs: ALL products in a group MUST have variant fields populated.
         // Do NOT push a base product without size/color — it breaks variant grouping.
         // Only push variant products, all sharing the same item_group_id.
+        //
+        // Reference: BigHaat-style catalog with size/color pills on WhatsApp product detail page.
+        // Meta auto-renders "N sizes" / "N colors" label on the product card in product_list.
         const variantProducts = menuItem.variants.map((v, idx) => {
           const variantRetailerId = `${retailerId}_v${idx}`;
           const variantProduct = {
             retailerId: variantRetailerId,
-            name: menuItem.name,  // Same name for all variants (Meta requirement)
-            description: this.buildProductDescription(menuItem),
+            // Use same base name for all variants — Meta groups them under item_group_id
+            // and shows variant selector (size/color pills) on the detail page
+            name: menuItem.name,
+            // Per-variant description includes the variant label and available options
+            description: this.buildProductDescription(menuItem, v),
             price: v.price,
             currency: 'INR',
+            // Use variant-specific image; fall back to item image
             imageUrl: v.image || menuItem.image || null,
             category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
             availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
-            itemGroupId: retailerId,  // Groups all variants together
+            itemGroupId: retailerId,  // Groups all variants together — enables size/color pills
             variantType: v.variantType || 'size',
             variantLabel: v.label
           };
@@ -639,6 +665,31 @@ const catalogService = {
       });
       return null;
     }
+  },
+
+  /**
+   * Ensure a menu item has catalog mappings and return ALL retailer IDs.
+   * For variant items, returns all variant IDs (_v0, _v1, _v2, etc.).
+   * For single items, returns [itemId].
+   * Used in buildCategorySections so item count matches what Meta shows.
+   *
+   * @param {Object} menuItem - The full MenuItem document
+   * @returns {string[]|null} Array of retailer IDs, or null if catalog not enabled
+   */
+  async ensureAllCatalogMappings(menuItem) {
+    if (!this.isEnabled()) return null;
+
+    const itemId = menuItem._id.toString();
+    const hasVariants = menuItem.variants && menuItem.variants.length > 0;
+
+    // Ensure base mapping exists first
+    await this.ensureCatalogMapping(menuItem);
+
+    if (hasVariants) {
+      // Return all variant retailer IDs
+      return menuItem.variants.map((_, idx) => `${itemId}_v${idx}`);
+    }
+    return [itemId];
   },
 
   /**
