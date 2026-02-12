@@ -1152,9 +1152,65 @@ const metaCloud = {
         throw new Error('META_CATALOG_ID not configured');
       }
 
-      logger.info('Meta batchCreateOrUpdateProducts', { catalogId, count: products.length });
+      const hasVariants = products.some(p => p.itemGroupId);
+      logger.info('Meta batchCreateOrUpdateProducts', { catalogId, count: products.length, hasVariants });
 
-      // --- Marketing API /batch (WhatsApp indexes from this) ---
+      if (hasVariants) {
+        // ── items_batch endpoint: supports item_group_id, size, color, google_product_category ──
+        const itemsBatchRequests = products.map(product => {
+          const currency = product.currency || 'INR';
+          const link = product.url || process.env.WEBSITE_URL || process.env.BACKEND_URL || 'https://wa.me/' + (process.env.META_PHONE_NUMBER_ID || '');
+
+          const data = {
+            id: product.retailerId,
+            title: product.name,
+            description: product.description || product.name,
+            availability: product.availability || 'in stock',
+            price: `${product.price.toFixed(2)} ${currency}`,
+            link: link,
+            google_product_category: 'Food, Beverages & Tobacco > Food Items',
+            brand: process.env.BUSINESS_NAME || 'Restaurant',
+            condition: 'new',
+            item_group_id: product.itemGroupId,
+          };
+
+          if (product.salePrice && product.salePrice < product.price) {
+            data.sale_price = `${product.salePrice.toFixed(2)} ${currency}`;
+          }
+
+          if (product.imageUrl) {
+            data.image_link = product.imageUrl;
+          }
+
+          // Variant attributes
+          if (product.variantType === 'size' && product.variantLabel) {
+            data.size = product.variantLabel;
+          } else if (product.variantType === 'color' && product.variantLabel) {
+            data.color = product.variantLabel;
+          }
+
+          return { method: 'UPDATE', data };
+        });
+
+        const batchResponse = await metaApi.post(
+          `https://graph.facebook.com/v24.0/${catalogId}/items_batch`,
+          {
+            item_type: 'PRODUCT_ITEM',
+            requests: itemsBatchRequests
+          },
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+
+        logger.info('Meta items_batch success', {
+          count: products.length,
+          handles: batchResponse.data?.handles,
+          validation: batchResponse.data?.validation_status
+        });
+
+        return batchResponse.data;
+      }
+
+      // ── batch endpoint: simpler, for single products without variants ──
       const batchRequests = products.map(product => {
         // Price must be integer in smallest currency unit (paise for INR)
         const priceInPaise = Math.round(product.price * 100);
@@ -1171,7 +1227,6 @@ const metaCloud = {
             currency: product.currency || 'INR',
             url: link,
             category: 'Food, Beverages & Tobacco > Food Items',
-            google_product_category: 'Food, Beverages & Tobacco > Food Items',
           }
         };
 
@@ -1183,18 +1238,6 @@ const metaCloud = {
 
         if (product.imageUrl) {
           req.data.image_url = product.imageUrl;
-        }
-
-        // Variant grouping — groups products with same item_group_id together
-        if (product.itemGroupId) {
-          req.data.item_group_id = product.itemGroupId;
-        }
-
-        // Variant attributes (size, color, etc.)
-        if (product.variantType === 'size' && product.variantLabel) {
-          req.data.size = product.variantLabel;
-        } else if (product.variantType === 'color' && product.variantLabel) {
-          req.data.color = product.variantLabel;
         }
 
         return req;
