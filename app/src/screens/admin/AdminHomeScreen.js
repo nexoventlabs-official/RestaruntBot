@@ -138,7 +138,7 @@ export default function AdminHomeScreen({ navigation }) {
       );
       loop.start();
 
-      const res = await api.post('/catalog/auto-sync', { overwrite: true });
+      const res = await api.post('/catalog/auto-sync', { overwrite: true }, { timeout: 180000 });
       loop.stop();
       syncSpinAnim.setValue(0);
       const d = res.data;
