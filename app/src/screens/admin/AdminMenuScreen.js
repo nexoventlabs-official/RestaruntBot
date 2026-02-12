@@ -127,6 +127,7 @@ export default function AdminMenuScreen({ navigation, route }) {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [foodTypeFilter, setFoodTypeFilter] = useState(route?.params?.foodTypeFilter || 'all');
+  const [selectedTitle, setSelectedTitle] = useState('all');
   const [togglingId, setTogglingId] = useState(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
@@ -239,6 +240,7 @@ export default function AdminMenuScreen({ navigation, route }) {
       setFoodTypeFilter('all');
       setStatusFilter('all');
       setSelectedCategory('all');
+      setSelectedTitle('all');
       setSearchTerm('');
     } else if (route?.params?.foodTypeFilter !== undefined) {
       setFoodTypeFilter(route.params.foodTypeFilter);
@@ -725,6 +727,16 @@ export default function AdminMenuScreen({ navigation, route }) {
     return itemCategories.filter(cat => manuallyPausedCategoryNames.includes(cat));
   }, [manuallyPausedCategoryNames]);
 
+  // Unique titles (menu item names) for title filter - memoized
+  const titleCards = useMemo(() => {
+    return items.map(item => ({
+      id: item._id,
+      name: item.name,
+      image: item.image || (item.variants?.[0]?.image) || null,
+      variantCount: item.variants?.length || 0,
+    }));
+  }, [items]);
+
   // Filter items - memoized
   const filteredItems = useMemo(() => {
     return items.filter(item => {
@@ -736,9 +748,10 @@ export default function AdminMenuScreen({ navigation, route }) {
         (statusFilter === 'available' && item.available) ||
         (statusFilter === 'unavailable' && !item.available);
       const matchesFoodType = foodTypeFilter === 'all' || item.foodType === foodTypeFilter;
-      return matchesSearch && matchesCategory && matchesStatus && matchesFoodType;
+      const matchesTitle = selectedTitle === 'all' || item._id === selectedTitle;
+      return matchesSearch && matchesCategory && matchesStatus && matchesFoodType && matchesTitle;
     });
-  }, [items, searchTerm, selectedCategory, statusFilter, foodTypeFilter]);
+  }, [items, searchTerm, selectedCategory, statusFilter, foodTypeFilter, selectedTitle]);
 
   // Stats - memoized
   const stats = useMemo(() => {
@@ -819,6 +832,13 @@ export default function AdminMenuScreen({ navigation, route }) {
             <Text style={[styles.itemCategory, hasAnyLock && styles.textPaused]} numberOfLines={1}>
               {Array.isArray(item.category) ? item.category.join(', ') : item.category}
             </Text>
+            {/* Variant count badge */}
+            {item.variants && item.variants.length > 0 && (
+              <View style={styles.variantCountRow}>
+                <Ionicons name="layers-outline" size={12} color="#8b5cf6" />
+                <Text style={styles.variantCountText}>{item.variants.length} variant{item.variants.length > 1 ? 's' : ''}</Text>
+              </View>
+            )}
             {item.preparationTime > 0 && (
               <View style={styles.prepTimeRow}>
                 <Ionicons name="time-outline" size={12} color="#9ca3af" />
@@ -880,9 +900,51 @@ export default function AdminMenuScreen({ navigation, route }) {
             )}
           </TouchableOpacity>
         </TouchableOpacity>
+
+        {/* Expanded Variant Details when title is selected */}
+        {selectedTitle !== 'all' && item.variants && item.variants.length > 0 && (
+          <View style={styles.variantSection}>
+            <Text style={styles.variantSectionTitle}>Variants</Text>
+            {item.variants.map((v, vIdx) => (
+              <View key={vIdx} style={styles.variantCard}>
+                <View style={styles.variantCardLeft}>
+                  {v.image ? (
+                    <Image source={{ uri: v.image, cache: 'force-cache' }} style={styles.variantThumb} resizeMode="cover" />
+                  ) : (
+                    <View style={[styles.variantThumb, styles.variantThumbPlaceholder]}>
+                      <Ionicons name="image-outline" size={16} color="#d1d5db" />
+                    </View>
+                  )}
+                  <View style={styles.variantCardInfo}>
+                    <Text style={styles.variantCardName} numberOfLines={1}>{v.label}</Text>
+                    <Text style={styles.variantCardFoodType}>
+                      {v.foodType === 'veg' ? '🟢 Veg' : v.foodType === 'nonveg' ? '🔴 Non-Veg' : v.foodType === 'egg' ? '🟡 Egg' : ''}
+                    </Text>
+                    {v.quantities && v.quantities.length > 0 ? (
+                      <View style={styles.variantQtyRow}>
+                        {v.quantities.map((q, qIdx) => (
+                          <View key={qIdx} style={styles.variantQtyChip}>
+                            <Text style={styles.variantQtyText}>{q.quantity} {q.unit} — ₹{q.price}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={styles.variantCardPrice}>₹{v.price}{v.quantity && v.unit ? ` / ${v.quantity} ${v.unit}` : ''}</Text>
+                    )}
+                  </View>
+                </View>
+                <View style={[styles.variantAvailBadge, { backgroundColor: v.available !== false ? '#DCFCE7' : '#FEE2E2' }]}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: v.available !== false ? '#16A34A' : '#DC2626' }}>
+                    {v.available !== false ? 'Active' : 'Off'}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
       </Animated.View>
     );
-  }, [fadeAnim, scaleAnim, isItemCategoryUnavailable, isItemScheduledLocked, isItemManuallyPaused, getItemLockedCategories, getItemManuallyPausedCategories, navigation, togglingId]);
+  }, [fadeAnim, scaleAnim, isItemCategoryUnavailable, isItemScheduledLocked, isItemManuallyPaused, getItemLockedCategories, getItemManuallyPausedCategories, navigation, togglingId, selectedTitle]);
 
   const keyExtractor = useCallback((item) => item._id, []);
 
@@ -1173,6 +1235,58 @@ export default function AdminMenuScreen({ navigation, route }) {
         </View>
       )}
 
+      {/* Title Filter - Product Cards */}
+      {items.length > 0 && (
+        <View style={styles.titleFilterContainer}>
+          <Text style={styles.titleFilterLabel}>Products</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.titleFilterList}>
+            <TouchableOpacity
+              style={styles.titleFilterItem}
+              onPress={() => setSelectedTitle('all')}
+            >
+              <View style={[styles.titleImageWrapper, selectedTitle === 'all' && styles.titleImageWrapperActive]}>
+                <LinearGradient
+                  colors={[ZOMATO_RED, ZOMATO_DARK_RED]}
+                  style={styles.titleAllIcon}
+                >
+                  <Ionicons name="grid-outline" size={22} color="#fff" />
+                  <Text style={styles.titleAllText}>All</Text>
+                </LinearGradient>
+              </View>
+              <Text style={[styles.titleName, selectedTitle === 'all' && styles.titleNameActive]}>All Items</Text>
+              <Text style={styles.titleVariantCount}>{items.length} items</Text>
+              {selectedTitle === 'all' && <View style={styles.titleUnderline} />}
+            </TouchableOpacity>
+            {titleCards.map(tc => (
+              <TouchableOpacity
+                key={tc.id}
+                style={styles.titleFilterItem}
+                onPress={() => setSelectedTitle(tc.id === selectedTitle ? 'all' : tc.id)}
+              >
+                <View style={[styles.titleImageWrapper, selectedTitle === tc.id && styles.titleImageWrapperActive]}>
+                  {tc.image ? (
+                    <Image
+                      source={{ uri: tc.image, cache: 'force-cache' }}
+                      style={styles.titleImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.titlePlaceholder}>
+                      <Ionicons name="restaurant-outline" size={24} color="#9ca3af" />
+                    </View>
+                  )}
+                </View>
+                <Text style={[styles.titleName, selectedTitle === tc.id && styles.titleNameActive]} numberOfLines={1}>{tc.name}</Text>
+                {tc.variantCount > 0 && (
+                  <Text style={styles.titleVariantCount}>{tc.variantCount} variant{tc.variantCount > 1 ? 's' : ''}</Text>
+                )}
+                {selectedTitle === tc.id && <View style={styles.titleUnderline} />}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={ZOMATO_RED} />
@@ -1191,11 +1305,6 @@ export default function AdminMenuScreen({ navigation, route }) {
           updateCellsBatchingPeriod={50}
           initialNumToRender={10}
           windowSize={10}
-          getItemLayout={(data, index) => ({
-            length: 140,
-            offset: 140 * index,
-            index,
-          })}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <View style={styles.emptyIconContainer}>
@@ -2000,6 +2109,93 @@ const styles = StyleSheet.create({
   textPaused: { color: '#9CA3AF' },
   prepTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
   prepTimeText: { fontSize: 12, color: '#9CA3AF', fontWeight: '500' },
+  variantCountRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  variantCountText: { fontSize: 11, color: '#8b5cf6', fontWeight: '600' },
+  variantSection: {
+    backgroundColor: '#fafafa',
+    borderRadius: 16,
+    marginBottom: 14,
+    marginTop: -6,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  variantSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#6b7280',
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  variantCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  variantCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  variantThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+  },
+  variantThumbPlaceholder: {
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  variantCardInfo: {
+    marginLeft: 10,
+    flex: 1,
+  },
+  variantCardName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1C1C1C',
+  },
+  variantCardFoodType: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  variantCardPrice: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: ZOMATO_RED,
+    marginTop: 4,
+  },
+  variantQtyRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 4,
+  },
+  variantQtyChip: {
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  variantQtyText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#4b5563',
+  },
+  variantAvailBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
   itemFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
   priceContainer: { flexDirection: 'row', alignItems: 'center' },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -2226,6 +2422,100 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
   },
+  // Title Filter
+  titleFilterContainer: {
+    backgroundColor: '#fff',
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  titleFilterLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#9ca3af',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingHorizontal: 20,
+    marginBottom: 10,
+  },
+  titleFilterList: {
+    paddingHorizontal: 16,
+    gap: 14,
+  },
+  titleFilterItem: {
+    alignItems: 'center',
+    width: 80,
+  },
+  titleImageWrapper: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 2.5,
+    borderColor: 'transparent',
+  },
+  titleImageWrapperActive: {
+    borderColor: ZOMATO_RED,
+    shadowColor: ZOMATO_RED,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  titleImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 14,
+  },
+  titlePlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+  },
+  titleAllIcon: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  titleAllText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#fff',
+    marginTop: 2,
+  },
+  titleName: {
+    fontSize: 11,
+    color: '#696969',
+    fontWeight: '600',
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  titleNameActive: {
+    color: ZOMATO_RED,
+    fontWeight: '700',
+  },
+  titleVariantCount: {
+    fontSize: 9,
+    color: '#9ca3af',
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  titleUnderline: {
+    width: 24,
+    height: 3,
+    backgroundColor: ZOMATO_RED,
+    borderRadius: 1.5,
+    marginTop: 4,
+  },
+
   // Category Action Modal Styles
   categoryActionOverlay: {
     flex: 1,
