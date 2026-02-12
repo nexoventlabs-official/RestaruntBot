@@ -1182,8 +1182,12 @@ const metaCloud = {
             data.image_link = product.imageUrl;
           }
 
-          // Variant attributes
-          if (product.variantType === 'size' && product.variantLabel) {
+          // Variant attributes - support dual color+size for 3-level hierarchy
+          if (product.colorLabel && product.sizeLabel) {
+            // New format: color = item name, size = quantity+unit
+            data.color = product.colorLabel;
+            data.size = product.sizeLabel;
+          } else if (product.variantType === 'size' && product.variantLabel) {
             data.size = product.variantLabel;
           } else if (product.variantType === 'color' && product.variantLabel) {
             data.color = product.variantLabel;

@@ -44,9 +44,24 @@ export default function MenuItemFormScreen({ route, navigation }) {
   const [aiLoading, setAiLoading] = useState(false);
   const [tagsAiLoading, setTagsAiLoading] = useState(false);
   
-  // Variants state
+  // Variants state - enhanced with description, foodType, tags, quantities
   const [variants, setVariants] = useState(
-    existingItem?.variants?.map(v => ({ ...v, price: v.price?.toString() || '', quantity: v.quantity?.toString() || '1', unit: v.unit || 'piece', newImageFile: null })) || []
+    existingItem?.variants?.map(v => ({ 
+      ...v, 
+      price: v.price?.toString() || '', 
+      quantity: v.quantity?.toString() || '1', 
+      unit: v.unit || 'piece', 
+      description: v.description || '',
+      foodType: v.foodType || 'veg',
+      tags: v.tags?.join(', ') || '',
+      quantities: v.quantities?.map(q => ({ 
+        quantity: q.quantity?.toString() || '1', 
+        unit: q.unit || 'piece', 
+        price: q.price?.toString() || '', 
+        offerPrice: q.offerPrice?.toString() || '' 
+      })) || [],
+      newImageFile: null 
+    })) || []
   );
   
   const [categories, setCategories] = useState([]);
@@ -164,7 +179,9 @@ export default function MenuItemFormScreen({ route, navigation }) {
   const addVariant = () => {
     setVariants([...variants, { 
       label: '', variantType: 'size', price: '', quantity: '1', unit: 'piece',
-      image: null, newImageFile: null, available: true 
+      image: null, newImageFile: null, available: true,
+      description: '', foodType: 'veg', tags: '',
+      quantities: []
     }]);
   };
 
@@ -208,6 +225,39 @@ export default function MenuItemFormScreen({ route, navigation }) {
     setVariants(updated);
   };
 
+  // ── Quantity option helpers ──
+  const addQuantityOption = (variantIndex) => {
+    const updated = [...variants];
+    const v = updated[variantIndex];
+    updated[variantIndex] = {
+      ...v,
+      quantities: [...(v.quantities || []), { quantity: '1', unit: 'piece', price: '', offerPrice: '' }]
+    };
+    setVariants(updated);
+  };
+
+  const removeQuantityOption = (variantIndex, qtyIndex) => {
+    const updated = [...variants];
+    const v = updated[variantIndex];
+    updated[variantIndex] = {
+      ...v,
+      quantities: v.quantities.filter((_, i) => i !== qtyIndex)
+    };
+    setVariants(updated);
+  };
+
+  const updateQuantityOption = (variantIndex, qtyIndex, field, value) => {
+    const updated = [...variants];
+    const v = updated[variantIndex];
+    const qtys = [...(v.quantities || [])];
+    qtys[qtyIndex] = { ...qtys[qtyIndex], [field]: value };
+    updated[variantIndex] = { ...v, quantities: qtys };
+    setVariants(updated);
+  };
+
+  // State for quantity unit picker: { variantIndex, qtyIndex }
+  const [qtyUnitPicker, setQtyUnitPicker] = useState(null);
+
   const handleSubmit = async () => {
     // When variants exist, base price can be auto-derived
     const hasVariants = variants.length > 0;
@@ -220,16 +270,33 @@ export default function MenuItemFormScreen({ route, navigation }) {
       return;
     }
     if (hasVariants) {
-      const emptyPrice = variants.some(v => !v.price || v.price.toString().trim() === '' || parseFloat(v.price) <= 0);
-      if (emptyPrice) {
-        Alert.alert('Error', 'Every variant must have a valid price');
-        return;
+      // Validate: each variant needs a label and either a direct price or quantity options with prices
+      for (let i = 0; i < variants.length; i++) {
+        const v = variants[i];
+        if (!v.label || v.label.trim() === '') {
+          Alert.alert('Error', `Variant ${i + 1}: Item name is required`);
+          return;
+        }
+        if (v.quantities && v.quantities.length > 0) {
+          // Has quantity options - each needs a price
+          const emptyQtyPrice = v.quantities.some(q => !q.price || q.price.toString().trim() === '' || parseFloat(q.price) <= 0);
+          if (emptyQtyPrice) {
+            Alert.alert('Error', `Variant ${i + 1}: Every quantity option must have a valid price`);
+            return;
+          }
+        } else {
+          // Single variant - needs a direct price
+          if (!v.price || v.price.toString().trim() === '' || parseFloat(v.price) <= 0) {
+            Alert.alert('Error', `Variant ${i + 1}: Price is required`);
+            return;
+          }
+        }
       }
     }
     
-    // Validate tags - required field
+    // Validate tags - required when no variants; variant-level tags used otherwise
     const cleanedTags = tags.trim();
-    if (!cleanedTags) {
+    if (!hasVariants && !cleanedTags) {
       Alert.alert('Error', 'Please add tags for the item. Use AI Generate button to auto-generate tags.');
       return;
     }
@@ -241,11 +308,21 @@ export default function MenuItemFormScreen({ route, navigation }) {
       formData.append('description', description);
       // When variants exist, auto-set base price to lowest variant price
       if (hasVariants) {
-        const lowestPrice = Math.min(...variants.map(v => parseFloat(v.price) || 0));
+        const lowestPrice = Math.min(...variants.map(v => {
+          if (v.quantities && v.quantities.length > 0) {
+            return Math.min(...v.quantities.map(q => parseFloat(q.price) || 0));
+          }
+          return parseFloat(v.price) || 0;
+        }));
         formData.append('price', lowestPrice.toString());
         // Use first variant's quantity/unit as base fallback
-        formData.append('quantity', variants[0].quantity || '1');
-        formData.append('unit', variants[0].unit || 'piece');
+        if (variants[0].quantities && variants[0].quantities.length > 0) {
+          formData.append('quantity', variants[0].quantities[0].quantity || '1');
+          formData.append('unit', variants[0].quantities[0].unit || 'piece');
+        } else {
+          formData.append('quantity', variants[0].quantity || '1');
+          formData.append('unit', variants[0].unit || 'piece');
+        }
       } else {
         formData.append('price', price);
         formData.append('quantity', quantity);
@@ -270,11 +347,20 @@ export default function MenuItemFormScreen({ route, navigation }) {
       if (variants.length > 0) {
         const variantsPayload = variants.map(v => ({
           label: v.label,
-          variantType: v.variantType,
-          price: v.price,
+          variantType: 'size',
+          price: v.quantities?.length > 0 ? Math.min(...v.quantities.map(q => parseFloat(q.price) || 0)).toString() : v.price,
           quantity: v.quantity || '1',
           unit: v.unit || 'piece',
           available: v.available,
+          description: v.description || '',
+          foodType: v.foodType || 'veg',
+          tags: v.tags || '',
+          quantities: (v.quantities || []).map(q => ({
+            quantity: q.quantity || '1',
+            unit: q.unit || 'piece',
+            price: q.price || '0',
+            offerPrice: q.offerPrice || ''
+          })),
           // keep existing image url if no new file picked
           image: v.newImageFile ? '' : (v.image || ''),
         }));
@@ -393,14 +479,14 @@ export default function MenuItemFormScreen({ route, navigation }) {
             </View>
 
             <View style={styles.form}>
-              {/* Name */}
+              {/* Title (Group Name) */}
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Item Name <Text style={styles.required}>*</Text></Text>
+                <Text style={styles.label}>{variants.length > 0 ? 'Title' : 'Item Name'} <Text style={styles.required}>*</Text></Text>
                 <TextInput 
                   style={styles.input} 
                   value={name} 
                   onChangeText={setName} 
-                  placeholder="e.g., Margherita Pizza" 
+                  placeholder={variants.length > 0 ? "e.g., Biryani, Pizza" : "e.g., Margherita Pizza"}
                   placeholderTextColor="#9CA3AF"
                 />
               </View>
@@ -427,6 +513,9 @@ export default function MenuItemFormScreen({ route, navigation }) {
                 </TouchableOpacity>
               </View>
 
+              {/* Description, Food Type, Tags – only when no variants (variant-level fields used otherwise) */}
+              {variants.length === 0 && (
+              <>
               {/* Description with AI */}
               <View style={styles.inputGroup}>
                 <View style={styles.labelRow}>
@@ -500,6 +589,8 @@ export default function MenuItemFormScreen({ route, navigation }) {
                 />
                 <Text style={styles.inputHint}>Up to 10 tags, separated by commas (use AI Generate for best results)</Text>
               </View>
+              </>
+              )}
 
               {/* ── Variants Section ── */}
               <View style={styles.variantsSection}>
@@ -509,8 +600,8 @@ export default function MenuItemFormScreen({ route, navigation }) {
                       <Ionicons name="layers-outline" size={20} color={ZOMATO_RED} />
                     </View>
                     <View>
-                      <Text style={styles.variantsSectionTitle}>Product Variants</Text>
-                      <Text style={styles.variantsSectionHint}>Size, Color options (shown in WhatsApp catalog)</Text>
+                      <Text style={styles.variantsSectionTitle}>Item Variants</Text>
+                      <Text style={styles.variantsSectionHint}>Each variant = an item with its own image, name, price & sizes</Text>
                     </View>
                   </View>
                   <TouchableOpacity style={styles.addVariantButton} onPress={addVariant}>
@@ -523,7 +614,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
                   <View style={styles.noVariantsContainer}>
                     <Ionicons name="cube-outline" size={28} color="#D1D5DB" />
                     <Text style={styles.noVariantsText}>No variants added</Text>
-                    <Text style={styles.noVariantsHint}>Add size or color variants for catalog grouping</Text>
+                    <Text style={styles.noVariantsHint}>Add item variants (e.g., Chicken Biryani, Mutton Biryani)</Text>
                   </View>
                 )}
 
@@ -531,7 +622,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
                   <View key={index} style={styles.variantCard}>
                     {/* Variant Header */}
                     <View style={styles.variantCardHeader}>
-                      <Text style={styles.variantCardNumber}>Variant {index + 1}</Text>
+                      <Text style={styles.variantCardNumber}>Item {index + 1}</Text>
                       <TouchableOpacity onPress={() => removeVariant(index)}>
                         <Ionicons name="trash-outline" size={20} color="#EF4444" />
                       </TouchableOpacity>
@@ -554,58 +645,174 @@ export default function MenuItemFormScreen({ route, navigation }) {
                         </TouchableOpacity>
                       )}
                       <View style={styles.variantImageHintContainer}>
-                        <Text style={styles.variantImageHintText}>Tap to set variant image</Text>
+                        <Text style={styles.variantImageHintText}>Tap to set item image</Text>
                       </View>
                     </View>
 
-                    {/* Label */}
+                    {/* Item Name (Label) */}
                     <View style={styles.variantField}>
-                      <Text style={styles.variantFieldLabel}>Label</Text>
+                      <Text style={styles.variantFieldLabel}>Item Name <Text style={styles.required}>*</Text></Text>
                       <TextInput
                         style={styles.variantInput}
                         value={variant.label}
                         onChangeText={(val) => updateVariant(index, 'label', val)}
-                        placeholder="e.g., Large, Red, 500ml"
+                        placeholder="e.g., Chicken Biryani"
                         placeholderTextColor="#9CA3AF"
                       />
                     </View>
 
-                    {/* Price */}
+                    {/* Description */}
                     <View style={styles.variantField}>
-                      <Text style={styles.variantFieldLabel}>Price <Text style={styles.required}>*</Text></Text>
-                      <View style={styles.variantPriceInput}>
-                        <Text style={styles.variantCurrency}>₹</Text>
-                        <TextInput
-                          style={styles.variantPriceTextInput}
-                          value={variant.price?.toString() || ''}
-                          onChangeText={(val) => updateVariant(index, 'price', val)}
-                          placeholder="0"
-                          placeholderTextColor="#9CA3AF"
-                          keyboardType="numeric"
-                        />
+                      <Text style={styles.variantFieldLabel}>Description</Text>
+                      <TextInput
+                        style={[styles.variantInput, { height: 60, textAlignVertical: 'top' }]}
+                        value={variant.description || ''}
+                        onChangeText={(val) => updateVariant(index, 'description', val)}
+                        placeholder="Describe this item..."
+                        placeholderTextColor="#9CA3AF"
+                        multiline
+                        numberOfLines={2}
+                      />
+                    </View>
+
+                    {/* Food Type */}
+                    <View style={styles.variantField}>
+                      <Text style={styles.variantFieldLabel}>Food Type</Text>
+                      <View style={styles.foodTypeContainer}>
+                        {FOOD_TYPES.map((type) => (
+                          <TouchableOpacity
+                            key={type.value}
+                            style={[styles.foodTypeButton, { flex: 1, paddingVertical: 6 }, variant.foodType === type.value && { backgroundColor: type.color, borderColor: type.color }]}
+                            onPress={() => updateVariant(index, 'foodType', type.value)}
+                          >
+                            <View style={[styles.foodTypeIcon, { borderColor: variant.foodType === type.value ? '#fff' : type.color }]}>
+                              <View style={[styles.foodTypeDot, { backgroundColor: variant.foodType === type.value ? '#fff' : type.color }]} />
+                            </View>
+                            <Text style={[styles.foodTypeText, { fontSize: 11 }, variant.foodType === type.value && { color: '#fff' }]}>{type.label}</Text>
+                          </TouchableOpacity>
+                        ))}
                       </View>
                     </View>
 
-                    {/* Quantity & Unit */}
-                    <View style={styles.variantPriceRow}>
-                      <View style={[styles.variantField, { flex: 1 }]}>
-                        <Text style={styles.variantFieldLabel}>Quantity</Text>
-                        <TextInput
-                          style={styles.variantInput}
-                          value={variant.quantity?.toString() || '1'}
-                          onChangeText={(val) => updateVariant(index, 'quantity', val)}
-                          placeholder="1"
-                          placeholderTextColor="#9CA3AF"
-                          keyboardType="numeric"
-                        />
+                    {/* Tags */}
+                    <View style={styles.variantField}>
+                      <Text style={styles.variantFieldLabel}>Tags</Text>
+                      <TextInput
+                        style={styles.variantInput}
+                        value={variant.tags || ''}
+                        onChangeText={(val) => updateVariant(index, 'tags', val)}
+                        placeholder="spicy, popular, bestseller"
+                        placeholderTextColor="#9CA3AF"
+                      />
+                    </View>
+
+                    {/* Price (when no quantity options) */}
+                    {(!variant.quantities || variant.quantities.length === 0) && (
+                      <View style={styles.variantField}>
+                        <Text style={styles.variantFieldLabel}>Price <Text style={styles.required}>*</Text></Text>
+                        <View style={styles.variantPriceInput}>
+                          <Text style={styles.variantCurrency}>₹</Text>
+                          <TextInput
+                            style={styles.variantPriceTextInput}
+                            value={variant.price?.toString() || ''}
+                            onChangeText={(val) => updateVariant(index, 'price', val)}
+                            placeholder="0"
+                            placeholderTextColor="#9CA3AF"
+                            keyboardType="numeric"
+                          />
+                        </View>
                       </View>
-                      <View style={[styles.variantField, { flex: 1 }]}>
-                        <Text style={styles.variantFieldLabel}>Unit</Text>
-                        <TouchableOpacity style={styles.pickerButton} onPress={() => setVariantUnitPickerIndex(index)}>
-                          <Text style={styles.pickerValue}>{variant.unit || 'piece'}</Text>
-                          <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
+                    )}
+
+                    {/* Quantity & Unit (when no quantity options) */}
+                    {(!variant.quantities || variant.quantities.length === 0) && (
+                      <View style={styles.variantPriceRow}>
+                        <View style={[styles.variantField, { flex: 1 }]}>
+                          <Text style={styles.variantFieldLabel}>Quantity</Text>
+                          <TextInput
+                            style={styles.variantInput}
+                            value={variant.quantity?.toString() || '1'}
+                            onChangeText={(val) => updateVariant(index, 'quantity', val)}
+                            placeholder="1"
+                            placeholderTextColor="#9CA3AF"
+                            keyboardType="numeric"
+                          />
+                        </View>
+                        <View style={[styles.variantField, { flex: 1 }]}>
+                          <Text style={styles.variantFieldLabel}>Unit</Text>
+                          <TouchableOpacity style={styles.pickerButton} onPress={() => setVariantUnitPickerIndex(index)}>
+                            <Text style={styles.pickerValue}>{variant.unit || 'piece'}</Text>
+                            <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* ── Quantity Options (Sizes) ── */}
+                    <View style={[styles.variantField, { marginTop: 8 }]}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <Text style={[styles.variantFieldLabel, { marginBottom: 0 }]}>Quantity Options (Sizes)</Text>
+                        <TouchableOpacity 
+                          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: ZOMATO_RED, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 }}
+                          onPress={() => addQuantityOption(index)}
+                        >
+                          <Ionicons name="add" size={14} color="#fff" />
+                          <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600', marginLeft: 2 }}>Add Size</Text>
                         </TouchableOpacity>
                       </View>
+                      
+                      {(!variant.quantities || variant.quantities.length === 0) && (
+                        <Text style={{ fontSize: 11, color: '#9CA3AF', fontStyle: 'italic', marginBottom: 4 }}>
+                          No sizes added. Add quantity options like 0.5 kg, 1 kg etc.
+                        </Text>
+                      )}
+
+                      {variant.quantities && variant.quantities.map((q, qIdx) => (
+                        <View key={qIdx} style={{ 
+                          flexDirection: 'row', alignItems: 'center', 
+                          backgroundColor: '#F9FAFB', borderRadius: 8, padding: 8, marginBottom: 6,
+                          borderWidth: 1, borderColor: '#E5E7EB'
+                        }}>
+                          <View style={{ flex: 1, marginRight: 4 }}>
+                            <Text style={{ fontSize: 10, color: '#6B7280', marginBottom: 2 }}>Qty</Text>
+                            <TextInput
+                              style={{ backgroundColor: '#fff', borderRadius: 6, borderWidth: 1, borderColor: '#E5E7EB', paddingHorizontal: 6, paddingVertical: 4, fontSize: 13 }}
+                              value={q.quantity?.toString() || ''}
+                              onChangeText={(val) => updateQuantityOption(index, qIdx, 'quantity', val)}
+                              keyboardType="numeric"
+                              placeholder="1"
+                              placeholderTextColor="#D1D5DB"
+                            />
+                          </View>
+                          <View style={{ flex: 1, marginRight: 4 }}>
+                            <Text style={{ fontSize: 10, color: '#6B7280', marginBottom: 2 }}>Unit</Text>
+                            <TouchableOpacity 
+                              style={{ backgroundColor: '#fff', borderRadius: 6, borderWidth: 1, borderColor: '#E5E7EB', paddingHorizontal: 6, paddingVertical: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+                              onPress={() => setQtyUnitPicker({ variantIndex: index, qtyIndex: qIdx })}
+                            >
+                              <Text style={{ fontSize: 13, color: '#1F2937' }}>{q.unit || 'piece'}</Text>
+                              <Ionicons name="chevron-down" size={14} color="#9CA3AF" />
+                            </TouchableOpacity>
+                          </View>
+                          <View style={{ flex: 1, marginRight: 4 }}>
+                            <Text style={{ fontSize: 10, color: '#6B7280', marginBottom: 2 }}>Price <Text style={{ color: ZOMATO_RED }}>*</Text></Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 6, borderWidth: 1, borderColor: '#E5E7EB', paddingHorizontal: 4 }}>
+                              <Text style={{ fontSize: 12, color: '#9CA3AF' }}>₹</Text>
+                              <TextInput
+                                style={{ flex: 1, paddingHorizontal: 4, paddingVertical: 4, fontSize: 13 }}
+                                value={q.price?.toString() || ''}
+                                onChangeText={(val) => updateQuantityOption(index, qIdx, 'price', val)}
+                                keyboardType="numeric"
+                                placeholder="0"
+                                placeholderTextColor="#D1D5DB"
+                              />
+                            </View>
+                          </View>
+                          <TouchableOpacity onPress={() => removeQuantityOption(index, qIdx)} style={{ padding: 4 }}>
+                            <Ionicons name="close-circle" size={20} color="#EF4444" />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
                     </View>
 
                     {/* Available Toggle */}
@@ -861,6 +1068,41 @@ export default function MenuItemFormScreen({ route, navigation }) {
                   <TouchableOpacity
                     style={[styles.unitOption, currentUnit === item && styles.unitOptionSelected]}
                     onPress={() => { updateVariant(variantUnitPickerIndex, 'unit', item); setVariantUnitPickerIndex(null); }}
+                  >
+                    <Text style={[styles.unitOptionText, currentUnit === item && styles.unitOptionTextSelected]}>{item}</Text>
+                    {currentUnit === item && <Ionicons name="checkmark-circle" size={22} color={ZOMATO_RED} />}
+                  </TouchableOpacity>
+                );
+              }}
+              contentContainerStyle={styles.modalList}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Quantity Option Unit Picker Modal */}
+      <Modal visible={qtyUnitPicker !== null} animationType="slide" transparent={true} onRequestClose={() => setQtyUnitPicker(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Unit</Text>
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setQtyUnitPicker(null)}>
+                <Ionicons name="close" size={24} color="#696969" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={UNITS}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => {
+                const currentUnit = qtyUnitPicker ? (variants[qtyUnitPicker.variantIndex]?.quantities?.[qtyUnitPicker.qtyIndex]?.unit || 'piece') : '';
+                return (
+                  <TouchableOpacity
+                    style={[styles.unitOption, currentUnit === item && styles.unitOptionSelected]}
+                    onPress={() => { 
+                      updateQuantityOption(qtyUnitPicker.variantIndex, qtyUnitPicker.qtyIndex, 'unit', item); 
+                      setQtyUnitPicker(null); 
+                    }}
                   >
                     <Text style={[styles.unitOptionText, currentUnit === item && styles.unitOptionTextSelected]}>{item}</Text>
                     {currentUnit === item && <Ionicons name="checkmark-circle" size={22} color={ZOMATO_RED} />}

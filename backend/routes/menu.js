@@ -156,16 +156,29 @@ router.post('/', authMiddleware, menuUpload, async (req, res) => {
           if (variantImages[idx]) {
             variantImage = await cloudinaryService.uploadFromBuffer(variantImages[idx].buffer, 'restaurant-bot/menu-variants');
           }
-          return {
+          const variantData = {
             label: v.label,
-            variantType: v.variantType || 'size',
+            variantType: 'size',
             price: parseFloat(v.price),
             offerPrice: v.offerPrice ? parseFloat(v.offerPrice) : undefined,
             quantity: v.quantity ? parseFloat(v.quantity) : 1,
             unit: v.unit || 'piece',
             image: variantImage,
+            description: v.description || '',
+            foodType: v.foodType || 'none',
+            tags: Array.isArray(v.tags) ? v.tags : (typeof v.tags === 'string' ? v.tags.split(',').map(s => s.trim()).filter(Boolean) : []),
             available: v.available !== false && v.available !== 'false'
           };
+          // Multiple quantity options per variant
+          if (v.quantities && Array.isArray(v.quantities) && v.quantities.length > 0) {
+            variantData.quantities = v.quantities.map(q => ({
+              quantity: parseFloat(q.quantity) || 1,
+              unit: q.unit || 'piece',
+              price: parseFloat(q.price) || variantData.price,
+              offerPrice: q.offerPrice ? parseFloat(q.offerPrice) : undefined
+            }));
+          }
+          return variantData;
         }));
       }
     }
@@ -329,16 +342,29 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
             }
             variantImage = await cloudinaryService.uploadFromBuffer(variantImages[idx].buffer, 'restaurant-bot/menu-variants');
           }
-          return {
+          const variantData = {
             label: v.label,
-            variantType: v.variantType || 'size',
+            variantType: 'size',
             price: parseFloat(v.price),
             offerPrice: v.offerPrice ? parseFloat(v.offerPrice) : undefined,
             quantity: v.quantity ? parseFloat(v.quantity) : 1,
             unit: v.unit || 'piece',
             image: variantImage,
+            description: v.description || '',
+            foodType: v.foodType || 'none',
+            tags: Array.isArray(v.tags) ? v.tags : (typeof v.tags === 'string' ? v.tags.split(',').map(s => s.trim()).filter(Boolean) : []),
             available: v.available !== false && v.available !== 'false'
           };
+          // Multiple quantity options per variant
+          if (v.quantities && Array.isArray(v.quantities) && v.quantities.length > 0) {
+            variantData.quantities = v.quantities.map(q => ({
+              quantity: parseFloat(q.quantity) || 1,
+              unit: q.unit || 'piece',
+              price: parseFloat(q.price) || variantData.price,
+              offerPrice: q.offerPrice ? parseFloat(q.offerPrice) : undefined
+            }));
+          }
+          return variantData;
         }));
       }
     } else if (variants === '[]' || variants === '') {

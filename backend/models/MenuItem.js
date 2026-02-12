@@ -16,18 +16,29 @@ const menuItemSchema = new mongoose.Schema({
   isPaused: { type: Boolean, default: false },
   preparationTime: { type: Number, default: 15 },
   tags: [String],
-  // Product Variants — each variant has its own label, price, image
-  // Variant types: 'size' (e.g., 100ml, 500ml) or 'color' (e.g., Red, Blue)
+  // Product Variants — each variant is a full product under this title/group
+  // e.g., Title: "Biryani" → Variants: "Chicken Biryani", "Mutton Biryani"
+  // Each variant can have multiple quantity options (e.g., 0.5 kg, 1 kg)
   variants: [{
-    label: { type: String, required: true },        // e.g., "500 grams", "Red"
+    label: { type: String, required: true },        // Item name (e.g., "Chicken Biryani")
     variantType: { type: String, enum: ['size', 'color'], default: 'size' },
-    price: { type: Number, required: true },         // Price for this variant
+    price: { type: Number, required: true },         // Base price for this variant
     offerPrice: { type: Number },                    // Offer price for this variant
-    quantity: { type: Number, default: 1 },           // Quantity for this variant
+    quantity: { type: Number, default: 1 },           // Default quantity
     unit: { type: String, default: 'piece', enum: ['piece', 'kg', 'gram', 'liter', 'ml', 'plate', 'bowl', 'cup', 'slice', 'inch', 'full', 'half', 'small'] },
-    image: { type: String },                         // Optional variant-specific image
+    image: { type: String },                         // Variant-specific image
+    description: { type: String },                   // Variant-specific description
+    foodType: { type: String, default: 'none', enum: ['veg', 'nonveg', 'egg', 'none'] },
+    tags: [String],                                  // Variant-specific tags
     available: { type: Boolean, default: true },
-    sku: { type: String }                            // Auto-generated: itemId_variantIndex
+    sku: { type: String },                           // Auto-generated: itemId_variantIndex
+    // Multiple quantity options per variant (e.g., 0.5 kg ₹249, 1 kg ₹449)
+    quantities: [{
+      quantity: { type: Number, required: true },
+      unit: { type: String, required: true, enum: ['piece', 'kg', 'gram', 'liter', 'ml', 'plate', 'bowl', 'cup', 'slice', 'inch', 'full', 'half', 'small'] },
+      price: { type: Number, required: true },
+      offerPrice: { type: Number }
+    }]
   }],
   ratings: [{
     phone: { type: String, required: true },

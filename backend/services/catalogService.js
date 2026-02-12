@@ -371,24 +371,46 @@ const catalogService = {
 
       for (const item of items) {
         if (item.variants && item.variants.length > 0) {
-          // Each variant becomes its own catalog product with item_group_id
-          item.variants.forEach((v, idx) => {
-            // Pill label: quantity+unit (e.g., "1 kg", "500 gm") — label is just internal name
-            const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : v.label;
-            variantProducts.push({
-              retailerId: `${item._id.toString()}_v${idx}`,
-              name: item.name,
-              description: this.buildProductDescription(item, v),
-              price: v.price,
-              currency: 'INR',
-              imageUrl: v.image || item.image || null,
-              category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
-              availability: (v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
-              itemGroupId: item._id.toString(),
-              variantType: 'size',
-              variantLabel: pillLabel,
-              salePrice: (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : null
-            });
+          item.variants.forEach((v, vIdx) => {
+            // Check if variant has multiple quantity options
+            if (v.quantities && v.quantities.length > 0) {
+              // Each variant × quantity combo = a separate catalog product
+              // color = item name (variant label), size = quantity+unit
+              v.quantities.forEach((q, qIdx) => {
+                const sizeLabel = `${q.quantity} ${q.unit}`;
+                variantProducts.push({
+                  retailerId: `${item._id.toString()}_v${vIdx}_q${qIdx}`,
+                  name: item.name,
+                  description: this.buildProductDescription(item, v),
+                  price: q.price,
+                  currency: 'INR',
+                  imageUrl: v.image || item.image || null,
+                  category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
+                  availability: (v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
+                  itemGroupId: item._id.toString(),
+                  colorLabel: v.label,    // Item name as "color" selector
+                  sizeLabel: sizeLabel,    // Quantity+unit as "size" selector
+                  salePrice: (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : null
+                });
+              });
+            } else {
+              // Single quantity variant (backward compatible)
+              const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : v.label;
+              variantProducts.push({
+                retailerId: `${item._id.toString()}_v${vIdx}`,
+                name: item.name,
+                description: this.buildProductDescription(item, v),
+                price: v.price,
+                currency: 'INR',
+                imageUrl: v.image || item.image || null,
+                category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
+                availability: (v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
+                itemGroupId: item._id.toString(),
+                variantType: 'size',
+                variantLabel: pillLabel,
+                salePrice: (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : null
+              });
+            }
           });
         } else {
           const prod = {
@@ -580,58 +602,61 @@ const catalogService = {
     try {
       if (hasVariants) {
         // ===== VARIANT PRODUCTS: each variant is a separate catalog product =====
-        // Per Meta docs: ALL products in a group MUST have variant fields populated.
-        // Do NOT push a base product without size/color — it breaks variant grouping.
-        // Only push variant products, all sharing the same item_group_id.
-        //
-        // Reference: BigHaat-style catalog with size/color pills on WhatsApp product detail page.
-        // Meta auto-renders "N sizes" / "N colors" label on the product card in product_list.
-        const variantProducts = menuItem.variants.map((v, idx) => {
-          const variantRetailerId = `${retailerId}_v${idx}`;
-
-          // Pill label: quantity+unit (e.g., "1 kg", "500 gm")
-          const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : v.label;
-
-          const variantProduct = {
-            retailerId: variantRetailerId,
-            // Use same base name for all variants — Meta groups them under item_group_id
-            // and shows variant selector (size/color pills) on the detail page
-            name: menuItem.name,
-            // Per-variant description includes the variant label and available options
-            description: this.buildProductDescription(menuItem, v),
-            price: v.price,
-            currency: 'INR',
-            // Use variant-specific image; fall back to item image
-            imageUrl: v.image || menuItem.image || null,
-            category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
-            availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
-            itemGroupId: retailerId,  // Groups all variants together — enables size/color pills
-            variantType: 'size',
-            variantLabel: pillLabel
-          };
-
-          // Handle offer price for variant
-          if (v.offerPrice && v.offerPrice < v.price) {
-            variantProduct.salePrice = v.offerPrice;
-          } else if (menuItem.offerPrice && menuItem.offerPrice < menuItem.price) {
-            // Apply item-level offer percentage to variant
-            const discountPct = 1 - (menuItem.offerPrice / menuItem.price);
-            variantProduct.salePrice = Math.round(v.price * (1 - discountPct));
+        // 3-level hierarchy: Title (item_group_id) → Variant Items (color) → Quantities (size)
+        // Meta supports both color + size attributes for dual-selector pills.
+        const variantProducts = [];
+        menuItem.variants.forEach((v, vIdx) => {
+          if (v.quantities && v.quantities.length > 0) {
+            // New format: variant × quantity combos with color + size
+            v.quantities.forEach((q, qIdx) => {
+              const sizeLabel = `${q.quantity} ${q.unit}`;
+              const prod = {
+                retailerId: `${retailerId}_v${vIdx}_q${qIdx}`,
+                name: menuItem.name,
+                description: this.buildProductDescription(menuItem, v),
+                price: q.price,
+                currency: 'INR',
+                imageUrl: v.image || menuItem.image || null,
+                category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
+                availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
+                itemGroupId: retailerId,
+                colorLabel: v.label,
+                sizeLabel: sizeLabel,
+                salePrice: (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : null
+              };
+              variantProducts.push(prod);
+            });
+          } else {
+            // Backward compatible: single quantity variant with size only
+            const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : v.label;
+            const prod = {
+              retailerId: `${retailerId}_v${vIdx}`,
+              name: menuItem.name,
+              description: this.buildProductDescription(menuItem, v),
+              price: v.price,
+              currency: 'INR',
+              imageUrl: v.image || menuItem.image || null,
+              category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
+              availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
+              itemGroupId: retailerId,
+              variantType: 'size',
+              variantLabel: pillLabel,
+              salePrice: (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : null
+            };
+            variantProducts.push(prod);
           }
-
-          return variantProduct;
         });
 
-        // Push ONLY variant products to Meta (no base product without variant attrs)
+        // Push ONLY variant products to Meta
         const metaResult = await metaCloud.batchCreateOrUpdateProducts(catalogId, variantProducts);
 
-        // Upsert local mapping — use first variant's retailer_id so product cards work
-        const firstVariantRetailerId = `${retailerId}_v0`;
+        // Upsert local mapping
+        const firstRetId = variantProducts[0]?.retailerId || `${retailerId}_v0`;
         await CatalogProduct.findOneAndUpdate(
           { menuItem: menuItem._id },
           {
             menuItem: menuItem._id,
-            retailerId: firstVariantRetailerId,
+            retailerId: firstRetId,
             isActive: menuItem.available && !menuItem.isPaused,
             lastSyncedAt: new Date()
           },
@@ -640,7 +665,7 @@ const catalogService = {
 
         this.clearCache();
         logger.info('Product with variants synced to Meta catalog', { 
-          itemId: retailerId, name: menuItem.name, variantCount: menuItem.variants.length,
+          itemId: retailerId, name: menuItem.name, variantCount: variantProducts.length,
           retailerIds: variantProducts.map(v => v.retailerId)
         });
         return metaResult;
@@ -745,8 +770,18 @@ const catalogService = {
     await this.ensureCatalogMapping(menuItem);
 
     if (hasVariants) {
-      // Return all variant retailer IDs
-      return menuItem.variants.map((_, idx) => `${itemId}_v${idx}`);
+      // Return all variant retailer IDs (including quantity combos)
+      const ids = [];
+      menuItem.variants.forEach((v, vIdx) => {
+        if (v.quantities && v.quantities.length > 0) {
+          v.quantities.forEach((_, qIdx) => {
+            ids.push(`${itemId}_v${vIdx}_q${qIdx}`);
+          });
+        } else {
+          ids.push(`${itemId}_v${vIdx}`);
+        }
+      });
+      return ids;
     }
     return [itemId];
   },
@@ -772,9 +807,20 @@ const catalogService = {
 
       // Delete all variant products from Meta catalog if they exist
       if (menuItem?.variants?.length > 0) {
-        const deletePromises = menuItem.variants.map((_, idx) =>
-          metaCloud.deleteCatalogProduct(catalogId, `${baseRetailerId}_v${idx}`).catch(() => null)
-        );
+        const deletePromises = [];
+        menuItem.variants.forEach((v, vIdx) => {
+          if (v.quantities && v.quantities.length > 0) {
+            v.quantities.forEach((_, qIdx) => {
+              deletePromises.push(
+                metaCloud.deleteCatalogProduct(catalogId, `${baseRetailerId}_v${vIdx}_q${qIdx}`).catch(() => null)
+              );
+            });
+          } else {
+            deletePromises.push(
+              metaCloud.deleteCatalogProduct(catalogId, `${baseRetailerId}_v${vIdx}`).catch(() => null)
+            );
+          }
+        });
         await Promise.all(deletePromises);
       }
 
@@ -984,21 +1030,39 @@ const catalogService = {
       for (const item of items) {
         if (item.variants && item.variants.length > 0) {
           // Re-sync all variants with updated description (includes new ratings)
-          item.variants.forEach((v, idx) => {
-            const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : v.label;
-            variantProducts.push({
-              retailerId: `${item._id.toString()}_v${idx}`,
-              name: item.name,
-              description: this.buildProductDescription(item, v),
-              price: v.price,
-              currency: 'INR',
-              imageUrl: v.image || item.image || null,
-              category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
-              availability: (v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
-              itemGroupId: item._id.toString(),
-              variantType: 'size',
-              variantLabel: pillLabel
-            });
+          item.variants.forEach((v, vIdx) => {
+            if (v.quantities && v.quantities.length > 0) {
+              v.quantities.forEach((q, qIdx) => {
+                variantProducts.push({
+                  retailerId: `${item._id.toString()}_v${vIdx}_q${qIdx}`,
+                  name: item.name,
+                  description: this.buildProductDescription(item, v),
+                  price: q.price,
+                  currency: 'INR',
+                  imageUrl: v.image || item.image || null,
+                  category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
+                  availability: (v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
+                  itemGroupId: item._id.toString(),
+                  colorLabel: v.label,
+                  sizeLabel: `${q.quantity} ${q.unit}`
+                });
+              });
+            } else {
+              const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : v.label;
+              variantProducts.push({
+                retailerId: `${item._id.toString()}_v${vIdx}`,
+                name: item.name,
+                description: this.buildProductDescription(item, v),
+                price: v.price,
+                currency: 'INR',
+                imageUrl: v.image || item.image || null,
+                category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
+                availability: (v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
+                itemGroupId: item._id.toString(),
+                variantType: 'size',
+                variantLabel: pillLabel
+              });
+            }
           });
         } else {
           singleProducts.push({
@@ -1043,12 +1107,36 @@ const catalogService = {
 
       let menuItem = null;
       let variantIndex = null;
+      let quantityIndex = null;
       let variantLabel = null;
       let variantPrice = null;
 
-      // ── Check if this is a variant retailer ID (format: {menuItemId}_v{index}) ──
-      const variantMatch = retailerId.match(/^(.+)_v(\d+)$/);
-      if (variantMatch) {
+      // ── Check if this is a variant+quantity retailer ID (format: {menuItemId}_v{idx}_q{qIdx}) ──
+      const vqMatch = retailerId.match(/^(.+)_v(\d+)_q(\d+)$/);
+      const variantMatch = !vqMatch ? retailerId.match(/^(.+)_v(\d+)$/) : null;
+
+      if (vqMatch) {
+        const baseItemId = vqMatch[1];
+        variantIndex = parseInt(vqMatch[2], 10);
+        quantityIndex = parseInt(vqMatch[3], 10);
+        try {
+          menuItem = await MenuItem.findById(baseItemId).lean();
+          if (menuItem && menuItem.variants && menuItem.variants[variantIndex]) {
+            const variant = menuItem.variants[variantIndex];
+            variantLabel = variant.label;
+            if (variant.quantities && variant.quantities[quantityIndex]) {
+              const q = variant.quantities[quantityIndex];
+              variantPrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+              variantLabel = `${variant.label} - ${q.quantity} ${q.unit}`;
+            } else {
+              variantPrice = variant.offerPrice && variant.offerPrice < variant.price
+                ? variant.offerPrice : variant.price;
+            }
+          }
+        } catch (e) {
+          logger.warn('Variant+qty lookup failed', { retailerId, error: e.message });
+        }
+      } else if (variantMatch) {
         const baseItemId = variantMatch[1];
         variantIndex = parseInt(variantMatch[2], 10);
         try {
@@ -1088,6 +1176,7 @@ const catalogService = {
         retailerId,
         name: menuItem?.name || product.product_retailer_id,
         variantIndex,
+        quantityIndex,
         variantLabel,
         quantity,
         price: effectivePrice,

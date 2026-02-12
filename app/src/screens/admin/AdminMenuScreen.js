@@ -908,9 +908,6 @@ export default function AdminMenuScreen({ navigation, route }) {
                 </View>
               </View>
               <View style={styles.headerButtons}>
-                <TouchableOpacity style={styles.headerButton} onPress={() => openCategoryModal()}>
-                  <Ionicons name="folder-outline" size={20} color={ZOMATO_RED} />
-                </TouchableOpacity>
                 <TouchableOpacity style={styles.headerButton} onPress={() => navigation.navigate('MenuItemForm', {})}>
                   <Ionicons name="add" size={24} color={ZOMATO_RED} />
                 </TouchableOpacity>
@@ -1172,11 +1169,6 @@ export default function AdminMenuScreen({ navigation, route }) {
                 </TouchableOpacity>
               );
             })}
-            <TouchableOpacity style={styles.categoryAddItem} onPress={() => openCategoryModal()}>
-              <View style={styles.categoryAddIcon}>
-                <Ionicons name="add" size={24} color="#9ca3af" />
-              </View>
-            </TouchableOpacity>
           </ScrollView>
         </View>
       )}
