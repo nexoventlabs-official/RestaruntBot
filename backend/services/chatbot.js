@@ -3803,7 +3803,10 @@ const chatbot = {
     const allMenuItems = _allMenuItems;
     const menuItems = allMenuItems
       .filter(item => {
-        const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+        const itemCategories = Array.isArray(item.category) ? item.category.filter(Boolean) : [item.category].filter(Boolean);
+        
+        // Items with no categories assigned → always show (no category lock applies)
+        if (itemCategories.length === 0) return true;
         
         // Check if item has any scheduled category that is ACTIVE → SHOW
         const hasScheduledActiveCategory = itemCategories.some(cat => scheduledActiveCategories.includes(cat));
