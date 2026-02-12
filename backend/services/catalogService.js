@@ -384,6 +384,39 @@ const catalogService = {
       const BATCH_SIZE = 20;
       const DELAY_MS = 3000;
 
+      // If overwrite, delete all existing products from Meta first (ensures clean attribute assignment)
+      if (overwrite) {
+        try {
+          const existingMappings = await CatalogProduct.find({ isActive: true }).lean();
+          for (const mapping of existingMappings) {
+            try {
+              await metaCloud.deleteCatalogProduct(catalogId, mapping.retailerId);
+            } catch (delErr) {
+              // Non-critical: product may not exist in Meta
+            }
+          }
+          // Also delete variant suffixed products that aren't in mappings
+          for (const item of items) {
+            if (item.variants && item.variants.length > 0) {
+              for (let vIdx = 0; vIdx < item.variants.length; vIdx++) {
+                const v = item.variants[vIdx];
+                if (v.quantities && v.quantities.length > 0) {
+                  for (let qIdx = 0; qIdx < v.quantities.length; qIdx++) {
+                    await metaCloud.deleteCatalogProduct(catalogId, `${item._id.toString()}_v${vIdx}_q${qIdx}`).catch(() => {});
+                  }
+                } else {
+                  await metaCloud.deleteCatalogProduct(catalogId, `${item._id.toString()}_v${vIdx}`).catch(() => {});
+                }
+              }
+            }
+          }
+          logger.info('Deleted existing Meta products for clean overwrite');
+          await new Promise(resolve => setTimeout(resolve, 3000)); // Let deletions propagate
+        } catch (err) {
+          logger.error('Pre-delete during overwrite failed', { error: err.message });
+        }
+      }
+
       // Separate items into variant and non-variant products
       const singleProducts = [];
       const variantProducts = [];
