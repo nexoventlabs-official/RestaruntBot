@@ -258,11 +258,67 @@ export default function MenuItemFormScreen({ route, navigation }) {
   // State for quantity unit picker: { variantIndex, qtyIndex }
   const [qtyUnitPicker, setQtyUnitPicker] = useState(null);
 
+  // ── AI generate for variant description ──
+  const generateVariantDescription = async (variantIndex) => {
+    const v = variants[variantIndex];
+    if (!v.label?.trim()) {
+      Alert.alert('Required', 'Enter item name first');
+      return;
+    }
+    // Set loading flag on the variant
+    const updated = [...variants];
+    updated[variantIndex] = { ...updated[variantIndex], _aiDescLoading: true };
+    setVariants(updated);
+    try {
+      const response = await api.post('/ai/generate-description', { 
+        name: v.label, 
+        category: selectedCategories.length > 0 ? selectedCategories : [name || 'Food'] 
+      });
+      const updated2 = [...variants];
+      updated2[variantIndex] = { ...updated2[variantIndex], description: response.data.description, _aiDescLoading: false };
+      setVariants(updated2);
+    } catch (error) {
+      const updated2 = [...variants];
+      updated2[variantIndex] = { ...updated2[variantIndex], _aiDescLoading: false };
+      setVariants(updated2);
+      Alert.alert('Error', 'Failed to generate description');
+    }
+  };
+
+  // ── AI generate for variant tags ──
+  const generateVariantTags = async (variantIndex) => {
+    const v = variants[variantIndex];
+    if (!v.label?.trim()) {
+      Alert.alert('Required', 'Enter item name first');
+      return;
+    }
+    const updated = [...variants];
+    updated[variantIndex] = { ...updated[variantIndex], _aiTagsLoading: true };
+    setVariants(updated);
+    try {
+      const response = await api.post('/ai/generate-tags', { 
+        name: v.label, 
+        category: selectedCategories.length > 0 ? selectedCategories : [name || 'Food'],
+        foodType: v.foodType || 'veg',
+        quantity: v.quantity || '1',
+        unit: v.unit || 'piece'
+      });
+      const updated2 = [...variants];
+      updated2[variantIndex] = { ...updated2[variantIndex], tags: response.data.tags, _aiTagsLoading: false };
+      setVariants(updated2);
+    } catch (error) {
+      const updated2 = [...variants];
+      updated2[variantIndex] = { ...updated2[variantIndex], _aiTagsLoading: false };
+      setVariants(updated2);
+      Alert.alert('Error', 'Failed to generate tags');
+    }
+  };
+
   const handleSubmit = async () => {
     // When variants exist, base price can be auto-derived
     const hasVariants = variants.length > 0;
-    if (!name.trim() || selectedCategories.length === 0) {
-      Alert.alert('Error', 'Please fill in name and select at least one category');
+    if (!name.trim()) {
+      Alert.alert('Error', 'Please fill in the title / item name');
       return;
     }
     if (!hasVariants && !price.trim()) {
@@ -294,12 +350,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
       }
     }
     
-    // Validate tags - required when no variants; variant-level tags used otherwise
-    const cleanedTags = tags.trim();
-    if (!hasVariants && !cleanedTags) {
-      Alert.alert('Error', 'Please add tags for the item. Use AI Generate button to auto-generate tags.');
-      return;
-    }
+
 
     setLoading(true);
     try {
@@ -332,7 +383,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
       formData.append('foodType', foodType);
       formData.append('available', available.toString());
       formData.append('preparationTime', preparationTime);
-      formData.append('tags', tags);
+      formData.append('tags', tags || '');
 
       if (newImage) {
         const filename = newImage.uri.split('/').pop();
@@ -479,9 +530,9 @@ export default function MenuItemFormScreen({ route, navigation }) {
             </View>
 
             <View style={styles.form}>
-              {/* Title (Group Name) */}
+              {/* Title */}
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>{variants.length > 0 ? 'Title' : 'Item Name'} <Text style={styles.required}>*</Text></Text>
+                <Text style={styles.label}>Title <Text style={styles.required}>*</Text></Text>
                 <TextInput 
                   style={styles.input} 
                   value={name} 
@@ -491,106 +542,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
                 />
               </View>
 
-              {/* Categories */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Category <Text style={styles.required}>*</Text></Text>
-                <TouchableOpacity style={styles.pickerButton} onPress={() => setShowCategoryPicker(true)}>
-                  <View style={styles.selectedTags}>
-                    {selectedCategories.length === 0 ? (
-                      <Text style={styles.pickerPlaceholder}>Select categories</Text>
-                    ) : (
-                      selectedCategories.map(cat => (
-                        <View key={cat} style={styles.selectedTag}>
-                          <Text style={styles.selectedTagText}>{cat}</Text>
-                          <TouchableOpacity onPress={() => toggleCategory(cat)}>
-                            <Ionicons name="close" size={14} color="#fff" />
-                          </TouchableOpacity>
-                        </View>
-                      ))
-                    )}
-                  </View>
-                  <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
-                </TouchableOpacity>
-              </View>
 
-              {/* Description, Food Type, Tags – only when no variants (variant-level fields used otherwise) */}
-              {variants.length === 0 && (
-              <>
-              {/* Description with AI */}
-              <View style={styles.inputGroup}>
-                <View style={styles.labelRow}>
-                  <Text style={styles.label}>Description</Text>
-                  <TouchableOpacity style={styles.aiButton} onPress={generateDescription} disabled={aiLoading}>
-                    {aiLoading ? (
-                      <ActivityIndicator size="small" color="#8B5CF6" />
-                    ) : (
-                      <>
-                        <Ionicons name="sparkles" size={14} color="#8B5CF6" />
-                        <Text style={styles.aiButtonText}>AI Generate</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  value={description}
-                  onChangeText={setDescription}
-                  placeholder="Describe your item..."
-                  placeholderTextColor="#9CA3AF"
-                  multiline
-                  numberOfLines={3}
-                />
-              </View>
-
-              {/* Food Type */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Food Type</Text>
-                <View style={styles.foodTypeContainer}>
-                  {FOOD_TYPES.map((type) => (
-                    <TouchableOpacity
-                      key={type.value}
-                      style={[styles.foodTypeButton, foodType === type.value && { backgroundColor: type.color, borderColor: type.color }]}
-                      onPress={() => setFoodType(type.value)}
-                    >
-                      <View style={[styles.foodTypeIcon, { borderColor: foodType === type.value ? '#fff' : type.color }]}>
-                        <View style={[styles.foodTypeDot, { backgroundColor: foodType === type.value ? '#fff' : type.color }]} />
-                      </View>
-                      <Text style={[styles.foodTypeText, foodType === type.value && { color: '#fff' }]}>{type.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Tags */}
-              <View style={styles.inputGroup}>
-                <View style={styles.labelRow}>
-                  <Text style={styles.label}>Tags <Text style={styles.required}>*</Text></Text>
-                  <TouchableOpacity 
-                    style={styles.aiTagsButton} 
-                    onPress={generateTags}
-                    disabled={tagsAiLoading}
-                  >
-                    {tagsAiLoading ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <>
-                        <Ionicons name="sparkles" size={14} color="#fff" />
-                        <Text style={styles.aiTagsButtonText}>AI Generate</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-                <TextInput
-                  style={styles.input}
-                  value={tags}
-                  onChangeText={setTags}
-                  placeholder="Click AI Generate for accurate tags"
-                  placeholderTextColor="#9CA3AF"
-                />
-                <Text style={styles.inputHint}>Up to 10 tags, separated by commas (use AI Generate for best results)</Text>
-              </View>
-              </>
-              )}
 
               {/* ── Variants Section ── */}
               <View style={styles.variantsSection}>
@@ -661,9 +613,25 @@ export default function MenuItemFormScreen({ route, navigation }) {
                       />
                     </View>
 
-                    {/* Description */}
+                    {/* Description with AI */}
                     <View style={styles.variantField}>
-                      <Text style={styles.variantFieldLabel}>Description</Text>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={[styles.variantFieldLabel, { marginBottom: 0 }]}>Description</Text>
+                        <TouchableOpacity 
+                          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3E8FF', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 }}
+                          onPress={() => generateVariantDescription(index)}
+                          disabled={variant._aiDescLoading}
+                        >
+                          {variant._aiDescLoading ? (
+                            <ActivityIndicator size="small" color="#8B5CF6" />
+                          ) : (
+                            <>
+                              <Ionicons name="sparkles" size={12} color="#8B5CF6" />
+                              <Text style={{ color: '#8B5CF6', fontSize: 11, fontWeight: '600', marginLeft: 3 }}>AI</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
                       <TextInput
                         style={[styles.variantInput, { height: 60, textAlignVertical: 'top' }]}
                         value={variant.description || ''}
@@ -694,9 +662,25 @@ export default function MenuItemFormScreen({ route, navigation }) {
                       </View>
                     </View>
 
-                    {/* Tags */}
+                    {/* Tags with AI */}
                     <View style={styles.variantField}>
-                      <Text style={styles.variantFieldLabel}>Tags</Text>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={[styles.variantFieldLabel, { marginBottom: 0 }]}>Tags</Text>
+                        <TouchableOpacity 
+                          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: ZOMATO_RED, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 }}
+                          onPress={() => generateVariantTags(index)}
+                          disabled={variant._aiTagsLoading}
+                        >
+                          {variant._aiTagsLoading ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : (
+                            <>
+                              <Ionicons name="sparkles" size={12} color="#fff" />
+                              <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600', marginLeft: 3 }}>AI</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
                       <TextInput
                         style={styles.variantInput}
                         value={variant.tags || ''}
@@ -984,40 +968,6 @@ export default function MenuItemFormScreen({ route, navigation }) {
           )}
         </TouchableOpacity>
       </View>
-
-      {/* Category Picker Modal */}
-      <Modal visible={showCategoryPicker} animationType="slide" transparent={true} onRequestClose={() => setShowCategoryPicker(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Categories</Text>
-              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowCategoryPicker(false)}>
-                <Ionicons name="close" size={24} color="#696969" />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={categories}
-              keyExtractor={(item) => item._id}
-              renderItem={({ item }) => (
-                <TouchableOpacity style={styles.categoryOption} onPress={() => toggleCategory(item.name)}>
-                  <View style={[styles.checkbox, selectedCategories.includes(item.name) && styles.checkboxChecked]}>
-                    {selectedCategories.includes(item.name) && <Ionicons name="checkmark" size={16} color="#fff" />}
-                  </View>
-                  <Text style={styles.categoryOptionText}>{item.name}</Text>
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={<Text style={styles.emptyText}>No categories found. Add categories from Menu screen.</Text>}
-              contentContainerStyle={styles.modalList}
-            />
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.modalDoneButton} onPress={() => setShowCategoryPicker(false)}>
-                <Text style={styles.modalDoneButtonText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Unit Picker Modal */}
       <Modal visible={showUnitPicker} animationType="slide" transparent={true} onRequestClose={() => setShowUnitPicker(false)}>
