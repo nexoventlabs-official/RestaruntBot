@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, ScrollView,
+  View, Text, StyleSheet, FlatList, SectionList, ScrollView,
   RefreshControl, TouchableOpacity, Image, Alert, ActivityIndicator,
   TextInput, Modal, Animated, Platform, StatusBar, ImageBackground, KeyboardAvoidingView
 } from 'react-native';
@@ -263,6 +263,128 @@ export default function AdminMenuScreen({ navigation, route }) {
       Alert.alert('Error', 'Failed to update availability');
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  // Toggle a single variant's availability (tapping Active/Off badge)
+  const toggleVariantAvailability = async (vItem) => {
+    const parentId = vItem.parentId;
+    const vIdx = vItem.variantIndex;
+    const wasAvail = vItem.variantAvailable;
+    // Optimistic update
+    setItems(prev => prev.map(i => {
+      if (i._id !== parentId) return i;
+      if (vIdx === -1) {
+        // No-variant item — toggle parent available
+        return { ...i, available: !i.available };
+      }
+      const updatedVariants = i.variants.map((v, idx) =>
+        idx === vIdx ? { ...v, available: !v.available } : v
+      );
+      return { ...i, variants: updatedVariants };
+    }));
+    try {
+      if (vIdx === -1) {
+        await api.patch(`/menu/${parentId}/toggle-pause`);
+      } else {
+        await api.patch(`/menu/${parentId}/variant/${vIdx}/toggle`);
+      }
+    } catch (error) {
+      // Revert on error
+      setItems(prev => prev.map(i => {
+        if (i._id !== parentId) return i;
+        if (vIdx === -1) return { ...i, available: wasAvail };
+        const revertedVariants = i.variants.map((v, idx) =>
+          idx === vIdx ? { ...v, available: wasAvail } : v
+        );
+        return { ...i, variants: revertedVariants };
+      }));
+      Alert.alert('Error', 'Failed to toggle variant availability');
+    }
+  };
+
+  // Long-press on parent title header — sold out / schedule options
+  const showItemSoldOutOptions = (parentItem) => {
+    const allVariantsOff = parentItem.variants?.length > 0
+      ? parentItem.variants.every(v => v.available === false)
+      : !parentItem.available;
+
+    const options = allVariantsOff
+      ? [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Mark Available', onPress: () => markItemSoldOut(parentItem, false) },
+        ]
+      : [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Sold Out Now', style: 'destructive', onPress: () => markItemSoldOut(parentItem, true) },
+          { text: 'Schedule', onPress: () => showItemScheduleModal(parentItem) },
+        ];
+
+    Alert.alert(
+      allVariantsOff ? 'Resume Item' : 'Mark Sold Out',
+      allVariantsOff
+        ? `"${parentItem.name}" is currently sold out. Mark as available?`
+        : `Mark all variants of "${parentItem.name}" as sold out?`,
+      options
+    );
+  };
+
+  // Bulk mark all variants sold out or available + real-time Meta sync
+  const markItemSoldOut = async (parentItem, soldOut) => {
+    const parentId = parentItem._id;
+    // Optimistic update
+    setItems(prev => prev.map(i => {
+      if (i._id !== parentId) return i;
+      const updatedVariants = (i.variants || []).map(v => ({ ...v, available: !soldOut }));
+      return { ...i, available: !soldOut, variants: updatedVariants };
+    }));
+    try {
+      await api.patch(`/menu/${parentId}/variants-soldout`, { soldOut });
+    } catch (error) {
+      // Revert
+      setItems(prev => prev.map(i => {
+        if (i._id !== parentId) return i;
+        return { ...i, ...parentItem };
+      }));
+      Alert.alert('Error', 'Failed to update sold out status');
+    }
+  };
+
+  // Schedule sold-out modal state for menu items
+  const [showItemSoldOutModal, setShowItemSoldOutModal] = useState(false);
+  const [soldOutItem, setSoldOutItem] = useState(null);
+  const [soldOutItemEndTime, setSoldOutItemEndTime] = useState('17:00');
+
+  const showItemScheduleModal = (parentItem) => {
+    setSoldOutItem(parentItem);
+    const now = new Date();
+    const hours = (now.getHours() + 1) % 24;
+    setSoldOutItemEndTime(`${hours.toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
+    setShowItemSoldOutModal(true);
+  };
+
+  const saveItemSoldOutSchedule = async () => {
+    if (!soldOutItem) return;
+    const parentId = soldOutItem._id;
+    try {
+      setSavingCategory(true);
+      // Optimistic update
+      setItems(prev => prev.map(i => {
+        if (i._id !== parentId) return i;
+        const updatedVariants = (i.variants || []).map(v => ({ ...v, available: false }));
+        return { ...i, available: false, variants: updatedVariants };
+      }));
+      await api.patch(`/menu/${parentId}/schedule-soldout`, { endTime: soldOutItemEndTime });
+      setShowItemSoldOutModal(false);
+      const [hours, mins] = soldOutItemEndTime.split(':').map(Number);
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const hours12 = hours % 12 || 12;
+      Alert.alert('Success', `"${soldOutItem.name}" marked sold out until ${hours12}:${mins.toString().padStart(2, '0')} ${period}`);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to schedule sold out');
+      fetchMenu();
+    } finally {
+      setSavingCategory(false);
     }
   };
 
@@ -773,6 +895,7 @@ export default function AdminMenuScreen({ navigation, route }) {
             price: v.price || (v.quantities?.[0]?.price) || item.price,
             offerPrice: v.offerPrice || (v.quantities?.[0]?.offerPrice) || null,
             available: v.available !== false && item.available && !item.isPaused,
+            variantAvailable: v.available !== false,
             quantities: v.quantities || null,
             quantity: v.quantity,
             unit: v.unit,
@@ -797,6 +920,7 @@ export default function AdminMenuScreen({ navigation, route }) {
           price: item.price,
           offerPrice: item.offerPrice,
           available: item.available && !item.isPaused,
+          variantAvailable: item.available,
           quantities: null,
           quantity: item.quantity,
           unit: item.unit,
@@ -810,6 +934,23 @@ export default function AdminMenuScreen({ navigation, route }) {
     });
     return result;
   }, [items, searchTerm, selectedCategory, statusFilter, foodTypeFilter, selectedTitle]);
+
+  // Group flattenedVariants into sections by parent item
+  const sectionData = useMemo(() => {
+    const map = new Map();
+    flattenedVariants.forEach(vItem => {
+      const pid = vItem.parentId;
+      if (!map.has(pid)) {
+        map.set(pid, { parentItem: vItem.parentItem, data: [] });
+      }
+      map.get(pid).data.push(vItem);
+    });
+    return Array.from(map.values()).map(s => ({
+      title: s.parentItem.name,
+      parentItem: s.parentItem,
+      data: s.data,
+    }));
+  }, [flattenedVariants]);
 
   // Stats - memoized
   const stats = useMemo(() => {
@@ -883,11 +1024,15 @@ export default function AdminMenuScreen({ navigation, route }) {
             )}
           </View>
 
-          <View style={[styles.variantAvailBadge, { backgroundColor: isAvail ? '#DCFCE7' : '#FEE2E2' }]}>
+          <TouchableOpacity
+            onPress={() => toggleVariantAvailability(vItem)}
+            activeOpacity={0.6}
+            style={[styles.variantAvailBadge, { backgroundColor: isAvail ? '#DCFCE7' : '#FEE2E2' }]}
+          >
             <Text style={{ fontSize: 10, fontWeight: '700', color: isAvail ? '#16A34A' : '#DC2626' }}>
               {isAvail ? 'Active' : 'Off'}
             </Text>
-          </View>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Animated.View>
     );
@@ -1240,13 +1385,41 @@ export default function AdminMenuScreen({ navigation, route }) {
           <Text style={styles.loadingText}>Loading menu...</Text>
         </View>
       ) : (
-        <FlatList
-          data={flattenedVariants}
+        <SectionList
+          sections={sectionData}
           renderItem={renderVariantItem}
+          renderSectionHeader={({ section }) => {
+            const pItem = section.parentItem;
+            const allOff = section.data.every(d => !d.available);
+            return (
+              <TouchableOpacity
+                style={styles.sectionHeader}
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate('MenuItemForm', { item: pItem })}
+                onLongPress={() => showItemSoldOutOptions(pItem)}
+              >
+                {pItem.image ? (
+                  <Image source={{ uri: pItem.image, cache: 'force-cache' }} style={styles.sectionHeaderImage} />
+                ) : (
+                  <View style={[styles.sectionHeaderImage, { backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' }]}>
+                    <Ionicons name="restaurant-outline" size={18} color="#9ca3af" />
+                  </View>
+                )}
+                <Text style={styles.sectionHeaderTitle} numberOfLines={1}>{pItem.name}</Text>
+                {allOff && (
+                  <View style={styles.sectionSoldOutBadge}>
+                    <Text style={styles.sectionSoldOutText}>SOLD OUT</Text>
+                  </View>
+                )}
+                <Ionicons name="ellipsis-vertical" size={18} color="#9ca3af" style={{ marginLeft: 'auto' }} />
+              </TouchableOpacity>
+            );
+          }}
           keyExtractor={variantKeyExtractor}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[ZOMATO_RED]} tintColor={ZOMATO_RED} />}
           showsVerticalScrollIndicator={false}
+          stickySectionHeadersEnabled={false}
           removeClippedSubviews={true}
           maxToRenderPerBatch={10}
           updateCellsBatchingPeriod={50}
@@ -1664,6 +1837,127 @@ export default function AdminMenuScreen({ navigation, route }) {
           </View>
         </View>
       </Modal>
+
+      {/* Item Sold Out Schedule Modal */}
+      <Modal
+        visible={showItemSoldOutModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowItemSoldOutModal(false)}
+      >
+        <View style={styles.soldOutModalOverlay}>
+          <View style={styles.soldOutModalContent}>
+            <View style={styles.soldOutModalHeader}>
+              <Text style={styles.soldOutModalTitle}>Schedule Sold Out</Text>
+              <TouchableOpacity onPress={() => setShowItemSoldOutModal(false)} style={styles.soldOutCloseButton}>
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.soldOutModalBody}>
+              <Text style={styles.soldOutCategoryName}>{soldOutItem?.name}</Text>
+              <Text style={styles.soldOutDescription}>
+                Mark all variants of this item as sold out until a specific time. WhatsApp catalog will be updated in real-time.
+              </Text>
+              
+              <View style={styles.soldOutTimeSection}>
+                <Text style={styles.soldOutTimeLabel}>Available again at:</Text>
+                <View style={styles.soldOutTimePicker}>
+                  <View style={styles.soldOutTimeUnit}>
+                    <TouchableOpacity 
+                      style={styles.soldOutTimeButton}
+                      onPress={() => {
+                        const [h, m] = soldOutItemEndTime.split(':').map(Number);
+                        const newH = (h + 1) % 24;
+                        setSoldOutItemEndTime(`${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+                      }}
+                    >
+                      <Ionicons name="chevron-up" size={24} color={ZOMATO_RED} />
+                    </TouchableOpacity>
+                    <Text style={styles.soldOutTimeValue}>
+                      {(() => {
+                        const h = parseInt(soldOutItemEndTime.split(':')[0]);
+                        return (h % 12 || 12).toString().padStart(2, '0');
+                      })()}
+                    </Text>
+                    <TouchableOpacity 
+                      style={styles.soldOutTimeButton}
+                      onPress={() => {
+                        const [h, m] = soldOutItemEndTime.split(':').map(Number);
+                        const newH = (h - 1 + 24) % 24;
+                        setSoldOutItemEndTime(`${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+                      }}
+                    >
+                      <Ionicons name="chevron-down" size={24} color={ZOMATO_RED} />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <Text style={styles.soldOutTimeSeparator}>:</Text>
+                  
+                  <View style={styles.soldOutTimeUnit}>
+                    <TouchableOpacity 
+                      style={styles.soldOutTimeButton}
+                      onPress={() => {
+                        const [h, m] = soldOutItemEndTime.split(':').map(Number);
+                        const newM = (m + 5) % 60;
+                        setSoldOutItemEndTime(`${h.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`);
+                      }}
+                    >
+                      <Ionicons name="chevron-up" size={24} color={ZOMATO_RED} />
+                    </TouchableOpacity>
+                    <Text style={styles.soldOutTimeValue}>
+                      {soldOutItemEndTime.split(':')[1]}
+                    </Text>
+                    <TouchableOpacity 
+                      style={styles.soldOutTimeButton}
+                      onPress={() => {
+                        const [h, m] = soldOutItemEndTime.split(':').map(Number);
+                        const newM = (m - 5 + 60) % 60;
+                        setSoldOutItemEndTime(`${h.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`);
+                      }}
+                    >
+                      <Ionicons name="chevron-down" size={24} color={ZOMATO_RED} />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <TouchableOpacity 
+                    style={styles.soldOutAmPmButton}
+                    onPress={() => {
+                      const [h, m] = soldOutItemEndTime.split(':').map(Number);
+                      const newH = h >= 12 ? h - 12 : h + 12;
+                      setSoldOutItemEndTime(`${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+                    }}
+                  >
+                    <Text style={styles.soldOutAmPmText}>
+                      {parseInt(soldOutItemEndTime.split(':')[0]) >= 12 ? 'PM' : 'AM'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+            
+            <View style={styles.soldOutModalFooter}>
+              <TouchableOpacity 
+                style={styles.soldOutCancelButton} 
+                onPress={() => setShowItemSoldOutModal(false)}
+              >
+                <Text style={styles.soldOutCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.soldOutSaveButton, savingCategory && styles.soldOutSaveButtonDisabled]} 
+                onPress={saveItemSoldOutSchedule}
+                disabled={savingCategory}
+              >
+                {savingCategory ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.soldOutSaveButtonText}>Mark Sold Out</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1993,6 +2287,51 @@ const styles = StyleSheet.create({
   itemCardPaused: { backgroundColor: '#FEFCE8', borderWidth: 1, borderColor: '#FEF3C7' },
   itemCardScheduled: { backgroundColor: '#EEF2FF', borderWidth: 2, borderColor: '#C7D2FE' },
   itemCardOutOfStock: { backgroundColor: '#FEE2E2', borderWidth: 2, borderColor: '#FCA5A5' },
+
+  // Section header (parent item title row)
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sectionHeaderImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    marginRight: 10,
+  },
+  sectionHeaderTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1f2937',
+    flex: 1,
+  },
+  sectionSoldOutBadge: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginRight: 6,
+  },
+  sectionSoldOutText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#DC2626',
+    letterSpacing: 0.5,
+  },
   itemImageContainer: { position: 'relative' },
   itemImage: { width: 90, height: 90, borderRadius: 16 },
   itemImagePaused: { opacity: 0.6 },

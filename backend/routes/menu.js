@@ -515,6 +515,85 @@ router.patch('/bulk-pause', authMiddleware, async (req, res) => {
   }
 });
 
+// Toggle availability for a single variant
+router.patch('/:id/variant/:variantIndex/toggle', authMiddleware, async (req, res) => {
+  try {
+    const item = await MenuItem.findById(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    const vIdx = parseInt(req.params.variantIndex);
+    if (!item.variants || !item.variants[vIdx]) {
+      return res.status(404).json({ error: 'Variant not found' });
+    }
+    item.variants[vIdx].available = !item.variants[vIdx].available;
+    await item.save();
+
+    // Sync to Meta Catalog (updates availability for this variant)
+    catalogService.syncProductToMeta(item).catch(err => {
+      logger.info('Catalog sync skipped for variant toggle', { itemId: item._id, variantIndex: vIdx, error: err.message });
+    });
+
+    dataEvents.emit('menu');
+    res.json(item);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Bulk mark all variants of a menu item as sold out or available
+router.patch('/:id/variants-soldout', authMiddleware, async (req, res) => {
+  try {
+    const { soldOut } = req.body; // true = sold out, false = available
+    const item = await MenuItem.findById(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+
+    if (item.variants && item.variants.length > 0) {
+      item.variants.forEach(v => { v.available = !soldOut; });
+    }
+    // Also set parent-level available
+    item.available = !soldOut;
+    await item.save();
+
+    // Sync to Meta Catalog (updates availability for all variants)
+    catalogService.syncProductToMeta(item).catch(err => {
+      logger.info('Catalog sync skipped for bulk sold out', { itemId: item._id, error: err.message });
+    });
+
+    dataEvents.emit('menu');
+    res.json(item);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Schedule sold-out for a menu item (all variants) with auto-resume time
+router.patch('/:id/schedule-soldout', authMiddleware, async (req, res) => {
+  try {
+    const { endTime } = req.body; // e.g. "17:00"
+    const item = await MenuItem.findById(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+
+    // Mark all variants as unavailable now
+    if (item.variants && item.variants.length > 0) {
+      item.variants.forEach(v => { v.available = false; });
+    }
+    item.available = false;
+
+    // Store schedule end time so a cron/check can auto-resume
+    item.soldOutUntil = endTime;
+    await item.save();
+
+    // Sync to Meta Catalog immediately (mark out of stock)
+    catalogService.syncProductToMeta(item).catch(err => {
+      logger.info('Catalog sync skipped for schedule sold out', { itemId: item._id, error: err.message });
+    });
+
+    dataEvents.emit('menu');
+    res.json(item);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Regenerate auto-tags for all menu items (one-time migration)
 router.post('/regenerate-tags', authMiddleware, async (req, res) => {
   try {

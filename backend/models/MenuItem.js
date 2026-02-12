@@ -50,6 +50,7 @@ const menuItemSchema = new mongoose.Schema({
   }],
   avgRating: { type: Number, default: 0 },
   totalRatings: { type: Number, default: 0 },
+  soldOutUntil: { type: String },  // HH:mm time string — auto-resume after this time
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
