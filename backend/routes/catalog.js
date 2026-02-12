@@ -192,7 +192,7 @@ router.get('/products-review', authMiddleware, async (req, res) => {
       `https://graph.facebook.com/v24.0/${catalogId}/products`,
       {
         params: {
-          fields: 'id,retailer_id,name,review_status,visibility,image_url,price,availability',
+          fields: 'id,retailer_id,name,review_status,visibility,image_url,price,availability,color,size,item_group_id',
           limit: 100,
           access_token: accessToken
         }
