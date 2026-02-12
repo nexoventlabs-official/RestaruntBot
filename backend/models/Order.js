@@ -22,6 +22,8 @@ const orderSchema = new mongoose.Schema({
     unit: { type: String, default: 'piece' },
     unitQty: { type: Number, default: 1 },
     image: String,
+    variantIndex: { type: Number, default: null },
+    variantLabel: { type: String, default: null },
     appliedOfferId: { type: mongoose.Schema.Types.ObjectId, ref: 'Offer' } // Offer applied to this item
   }],
   itemsTotal: { type: Number }, // Total of items before delivery charge

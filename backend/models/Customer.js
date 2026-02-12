@@ -19,6 +19,8 @@ const customerSchema = new mongoose.Schema({
   cart: [{
     menuItem: { type: mongoose.Schema.Types.ObjectId, ref: 'MenuItem' },
     quantity: Number,
+    variantIndex: { type: Number, default: null },
+    variantLabel: { type: String, default: null },
     addedAt: { type: Date, default: Date.now }
   }],
   // Active offers applied to this customer (from targeted broadcasts)

@@ -23,6 +23,8 @@ const menuItemSchema = new mongoose.Schema({
     variantType: { type: String, enum: ['size', 'color'], default: 'size' },
     price: { type: Number, required: true },         // Price for this variant
     offerPrice: { type: Number },                    // Offer price for this variant
+    quantity: { type: Number, default: 1 },           // Quantity for this variant
+    unit: { type: String, default: 'piece', enum: ['piece', 'kg', 'gram', 'liter', 'ml', 'plate', 'bowl', 'cup', 'slice', 'inch', 'full', 'half', 'small'] },
     image: { type: String },                         // Optional variant-specific image
     available: { type: Boolean, default: true },
     sku: { type: String }                            // Auto-generated: itemId_variantIndex

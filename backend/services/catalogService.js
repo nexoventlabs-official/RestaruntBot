@@ -338,11 +338,15 @@ const catalogService = {
           continue;
         }
 
+        // For variant items, store the first variant's retailer_id
+        const hasVariants = item.variants && item.variants.length > 0;
+        const mappingRetailerId = hasVariants ? `${itemId}_v0` : itemId;
+
         await CatalogProduct.findOneAndUpdate(
           { menuItem: item._id },
           {
             menuItem: item._id,
-            retailerId: itemId,
+            retailerId: mappingRetailerId,
             isActive: true,
             lastSyncedAt: new Date()
           },
@@ -360,32 +364,80 @@ const catalogService = {
     if (this.isEnabled() && catalogId) {
       const BATCH_SIZE = 20;
       const DELAY_MS = 3000;
-      const itemsToSync = overwrite ? items : items.filter((_, i) => i >= skipped || overwrite);
 
-      for (let i = 0; i < items.length; i += BATCH_SIZE) {
-        const batch = items.slice(i, i + BATCH_SIZE);
-        const products = batch.map(item => ({
-          retailerId: item._id.toString(),
-          name: item.name,
-          description: this.buildProductDescription(item),
-          price: item.price,
-          currency: 'INR',
-          imageUrl: item.image || null,
-          category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
-          availability: (item.available && !item.isPaused) ? 'in stock' : 'out of stock'
-        }));
+      // Separate items into variant and non-variant products
+      const singleProducts = [];
+      const variantProducts = [];
 
+      for (const item of items) {
+        if (item.variants && item.variants.length > 0) {
+          // Each variant becomes its own catalog product with item_group_id
+          item.variants.forEach((v, idx) => {
+            let pillLabel = v.label;
+            if (v.quantity && v.unit && !v.label.toLowerCase().includes(v.unit.toLowerCase())) {
+              pillLabel = `${v.label} (${v.quantity} ${v.unit})`;
+            }
+            variantProducts.push({
+              retailerId: `${item._id.toString()}_v${idx}`,
+              name: item.name,
+              description: this.buildProductDescription(item, v),
+              price: v.price,
+              currency: 'INR',
+              imageUrl: v.image || item.image || null,
+              category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
+              availability: (v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
+              itemGroupId: item._id.toString(),
+              variantType: v.variantType || 'size',
+              variantLabel: pillLabel,
+              salePrice: (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : null
+            });
+          });
+        } else {
+          const prod = {
+            retailerId: item._id.toString(),
+            name: item.name,
+            description: this.buildProductDescription(item),
+            price: item.price,
+            currency: 'INR',
+            imageUrl: item.image || null,
+            category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
+            availability: (item.available && !item.isPaused) ? 'in stock' : 'out of stock'
+          };
+          if (item.offerPrice && item.offerPrice < item.price) {
+            prod.salePrice = item.offerPrice;
+          }
+          singleProducts.push(prod);
+        }
+      }
+
+      // Push variant products first (items_batch endpoint)
+      for (let i = 0; i < variantProducts.length; i += BATCH_SIZE) {
+        const batch = variantProducts.slice(i, i + BATCH_SIZE);
         try {
-          await metaCloud.batchCreateOrUpdateProducts(catalogId, products);
+          await metaCloud.batchCreateOrUpdateProducts(catalogId, batch);
           metaPushed += batch.length;
-          logger.info('Catalog batch pushed to Meta', { batchStart: i, count: batch.length });
+          logger.info('Catalog variant batch pushed', { batchStart: i, count: batch.length });
         } catch (err) {
           metaFailed += batch.length;
-          logger.error('Catalog batch push failed', { batchStart: i, error: err.message });
+          logger.error('Catalog variant batch failed', { batchStart: i, error: err.message });
         }
+        if (i + BATCH_SIZE < variantProducts.length) {
+          await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+        }
+      }
 
-        // Delay between batches to respect Meta rate limits
-        if (i + BATCH_SIZE < items.length) {
+      // Push single products (batch endpoint)
+      for (let i = 0; i < singleProducts.length; i += BATCH_SIZE) {
+        const batch = singleProducts.slice(i, i + BATCH_SIZE);
+        try {
+          await metaCloud.batchCreateOrUpdateProducts(catalogId, batch);
+          metaPushed += batch.length;
+          logger.info('Catalog single batch pushed', { batchStart: i, count: batch.length });
+        } catch (err) {
+          metaFailed += batch.length;
+          logger.error('Catalog single batch failed', { batchStart: i, error: err.message });
+        }
+        if (i + BATCH_SIZE < singleProducts.length) {
           await new Promise(resolve => setTimeout(resolve, DELAY_MS));
         }
       }
@@ -466,17 +518,24 @@ const catalogService = {
   buildProductDescription(menuItem, variant = null) {
     let desc = menuItem.description || menuItem.name;
     
-    // If variant-specific, mention the variant
+    // If variant-specific, mention label + quantity/unit
     if (variant) {
       desc += ` | ${variant.label}`;
+      if (variant.quantity && variant.unit) {
+        desc += ` (${variant.quantity} ${variant.unit})`;
+      }
     }
     
-    // List all available variants/sizes if item has variants
+    // List all available variants/sizes if item has variants (for base product description)
     if (menuItem.variants && menuItem.variants.length > 0 && !variant) {
       const variantTypeName = menuItem.variants[0]?.variantType === 'color' ? 'Colors' : 'Sizes';
       const labels = menuItem.variants
         .filter(v => v.available !== false)
-        .map(v => v.label)
+        .map(v => {
+          let lbl = v.label;
+          if (v.quantity && v.unit) lbl += ` (${v.quantity} ${v.unit})`;
+          return lbl;
+        })
         .join(', ');
       if (labels) {
         desc += ` | Available ${variantTypeName}: ${labels}`;
@@ -498,8 +557,8 @@ const catalogService = {
       desc += ' | 🟡 Egg';
     }
     
-    // Add unit/quantity info
-    if (menuItem.quantity && menuItem.unit) {
+    // Add unit/quantity info (only for non-variant base products)
+    if (!variant && menuItem.quantity && menuItem.unit) {
       desc += ` | ${menuItem.quantity} ${menuItem.unit}`;
     }
     
@@ -533,6 +592,14 @@ const catalogService = {
         // Meta auto-renders "N sizes" / "N colors" label on the product card in product_list.
         const variantProducts = menuItem.variants.map((v, idx) => {
           const variantRetailerId = `${retailerId}_v${idx}`;
+
+          // Build the size/color pill label — include qty+unit if different from just the label
+          // e.g., "Large (500 ml)" or "Red" or "1 kg"
+          let pillLabel = v.label;
+          if (v.quantity && v.unit && !v.label.toLowerCase().includes(v.unit.toLowerCase())) {
+            pillLabel = `${v.label} (${v.quantity} ${v.unit})`;
+          }
+
           const variantProduct = {
             retailerId: variantRetailerId,
             // Use same base name for all variants — Meta groups them under item_group_id
@@ -548,7 +615,7 @@ const catalogService = {
             availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
             itemGroupId: retailerId,  // Groups all variants together — enables size/color pills
             variantType: v.variantType || 'size',
-            variantLabel: v.label
+            variantLabel: pillLabel
           };
 
           // Handle offer price for variant
@@ -951,28 +1018,56 @@ const catalogService = {
       const itemPrice = product.item_price ? parseFloat(product.item_price) : 0;
       const currency = product.currency || 'INR';
 
-      // Find the menu item by retailer ID mapping
-      const mapping = await CatalogProduct.findOne({ retailerId, isActive: true }).lean();
       let menuItem = null;
-      
-      if (mapping) {
-        menuItem = await MenuItem.findById(mapping.menuItem).lean();
-      } else {
-        // Try direct ObjectId match (if retailer_id = menuItem._id)
+      let variantIndex = null;
+      let variantLabel = null;
+      let variantPrice = null;
+
+      // ── Check if this is a variant retailer ID (format: {menuItemId}_v{index}) ──
+      const variantMatch = retailerId.match(/^(.+)_v(\d+)$/);
+      if (variantMatch) {
+        const baseItemId = variantMatch[1];
+        variantIndex = parseInt(variantMatch[2], 10);
         try {
-          menuItem = await MenuItem.findById(retailerId).lean();
+          menuItem = await MenuItem.findById(baseItemId).lean();
+          if (menuItem && menuItem.variants && menuItem.variants[variantIndex]) {
+            const variant = menuItem.variants[variantIndex];
+            variantLabel = variant.label;
+            // Use variant's offer price if available, otherwise variant price
+            variantPrice = variant.offerPrice && variant.offerPrice < variant.price
+              ? variant.offerPrice : variant.price;
+          }
         } catch (e) {
-          // Not a valid ObjectId, skip
+          logger.warn('Variant lookup failed', { retailerId, error: e.message });
         }
       }
+
+      // ── Standard lookup if not a variant or variant lookup failed ──
+      if (!menuItem) {
+        const mapping = await CatalogProduct.findOne({ retailerId, isActive: true }).lean();
+        if (mapping) {
+          menuItem = await MenuItem.findById(mapping.menuItem).lean();
+        } else {
+          // Try direct ObjectId match (if retailer_id = menuItem._id)
+          try {
+            menuItem = await MenuItem.findById(retailerId).lean();
+          } catch (e) {
+            // Not a valid ObjectId, skip
+          }
+        }
+      }
+
+      const effectivePrice = variantPrice || menuItem?.offerPrice || menuItem?.price || itemPrice;
 
       parsedItems.push({
         menuItemId: menuItem?._id || null,
         menuItem: menuItem || null,
         retailerId,
         name: menuItem?.name || product.product_retailer_id,
+        variantIndex,
+        variantLabel,
         quantity,
-        price: menuItem?.price || itemPrice,
+        price: effectivePrice,
         currency
       });
     }

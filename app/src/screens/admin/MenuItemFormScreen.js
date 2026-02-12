@@ -46,13 +46,14 @@ export default function MenuItemFormScreen({ route, navigation }) {
   
   // Variants state
   const [variants, setVariants] = useState(
-    existingItem?.variants?.map(v => ({ ...v, newImageFile: null })) || []
+    existingItem?.variants?.map(v => ({ ...v, price: v.price?.toString() || '', quantity: v.quantity?.toString() || '1', unit: v.unit || 'piece', newImageFile: null })) || []
   );
   
   const [categories, setCategories] = useState([]);
   const [offers, setOffers] = useState([]);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showUnitPicker, setShowUnitPicker] = useState(false);
+  const [variantUnitPickerIndex, setVariantUnitPickerIndex] = useState(null);
   const [showVariantTypePicker, setShowVariantTypePicker] = useState(null); // index of variant being edited
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -162,7 +163,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
   // ── Variant helpers ──
   const addVariant = () => {
     setVariants([...variants, { 
-      label: '', variantType: 'size', price: '', offerPrice: '', 
+      label: '', variantType: 'size', price: '', quantity: '1', unit: 'piece',
       image: null, newImageFile: null, available: true 
     }]);
   };
@@ -208,9 +209,22 @@ export default function MenuItemFormScreen({ route, navigation }) {
   };
 
   const handleSubmit = async () => {
-    if (!name.trim() || !price.trim() || selectedCategories.length === 0) {
-      Alert.alert('Error', 'Please fill in name, price, and select at least one category');
+    // When variants exist, base price can be auto-derived
+    const hasVariants = variants.length > 0;
+    if (!name.trim() || selectedCategories.length === 0) {
+      Alert.alert('Error', 'Please fill in name and select at least one category');
       return;
+    }
+    if (!hasVariants && !price.trim()) {
+      Alert.alert('Error', 'Please set a price or add product variants');
+      return;
+    }
+    if (hasVariants) {
+      const emptyPrice = variants.some(v => !v.price || v.price.toString().trim() === '' || parseFloat(v.price) <= 0);
+      if (emptyPrice) {
+        Alert.alert('Error', 'Every variant must have a valid price');
+        return;
+      }
     }
     
     // Validate tags - required field
@@ -225,10 +239,19 @@ export default function MenuItemFormScreen({ route, navigation }) {
       const formData = new FormData();
       formData.append('name', name);
       formData.append('description', description);
-      formData.append('price', price);
+      // When variants exist, auto-set base price to lowest variant price
+      if (hasVariants) {
+        const lowestPrice = Math.min(...variants.map(v => parseFloat(v.price) || 0));
+        formData.append('price', lowestPrice.toString());
+        // Use first variant's quantity/unit as base fallback
+        formData.append('quantity', variants[0].quantity || '1');
+        formData.append('unit', variants[0].unit || 'piece');
+      } else {
+        formData.append('price', price);
+        formData.append('quantity', quantity);
+        formData.append('unit', unit);
+      }
       formData.append('category', JSON.stringify(selectedCategories));
-      formData.append('unit', unit);
-      formData.append('quantity', quantity);
       formData.append('foodType', foodType);
       formData.append('available', available.toString());
       formData.append('preparationTime', preparationTime);
@@ -249,7 +272,8 @@ export default function MenuItemFormScreen({ route, navigation }) {
           label: v.label,
           variantType: v.variantType,
           price: v.price,
-          offerPrice: v.offerPrice || '',
+          quantity: v.quantity || '1',
+          unit: v.unit || 'piece',
           available: v.available,
           // keep existing image url if no new file picked
           image: v.newImageFile ? '' : (v.image || ''),
@@ -429,73 +453,6 @@ export default function MenuItemFormScreen({ route, navigation }) {
                 />
               </View>
 
-              {/* Price */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Price <Text style={styles.required}>*</Text></Text>
-                <View style={styles.priceInputContainer}>
-                  <Text style={styles.currencySymbol}>₹</Text>
-                  <TextInput
-                    style={styles.priceInput}
-                    value={price}
-                    onChangeText={setPrice}
-                    placeholder="0"
-                    placeholderTextColor="#9CA3AF"
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-
-              {/* Quantity & Unit */}
-              <View style={styles.rowInputs}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>Quantity</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={quantity}
-                    onChangeText={setQuantity}
-                    placeholder="1"
-                    placeholderTextColor="#9CA3AF"
-                    keyboardType="numeric"
-                  />
-                </View>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>Unit</Text>
-                  <TouchableOpacity style={styles.pickerButton} onPress={() => setShowUnitPicker(true)}>
-                    <Text style={styles.pickerValue}>{unit}</Text>
-                    <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Preparation Time */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Preparation Time</Text>
-                <View style={styles.prepTimeContainer}>
-                  <TouchableOpacity 
-                    style={styles.prepTimeButton}
-                    onPress={() => setPreparationTime(Math.max(0, parseInt(preparationTime || 0) - 5).toString())}
-                  >
-                    <Ionicons name="remove" size={22} color={ZOMATO_RED} />
-                  </TouchableOpacity>
-                  <View style={styles.prepTimeInputWrapper}>
-                    <TextInput
-                      style={styles.prepTimeInput}
-                      value={preparationTime}
-                      onChangeText={setPreparationTime}
-                      keyboardType="numeric"
-                      textAlign="center"
-                    />
-                    <Text style={styles.prepTimeUnit}>min</Text>
-                  </View>
-                  <TouchableOpacity 
-                    style={styles.prepTimeButton}
-                    onPress={() => setPreparationTime((parseInt(preparationTime || 0) + 5).toString())}
-                  >
-                    <Ionicons name="add" size={22} color={ZOMATO_RED} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
               {/* Food Type */}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Food Type</Text>
@@ -514,54 +471,6 @@ export default function MenuItemFormScreen({ route, navigation }) {
                   ))}
                 </View>
               </View>
-
-              {/* Applied Offers (Read-only) */}
-              {existingItem?.offerType && (Array.isArray(existingItem.offerType) ? existingItem.offerType.length > 0 : existingItem.offerType) && (() => {
-                // Filter to only show offers that still exist
-                const itemOfferTypes = Array.isArray(existingItem.offerType) ? existingItem.offerType : [existingItem.offerType];
-                const validOfferTypes = itemOfferTypes.filter(offerType => 
-                  offers.some(offer => offer.offerType === offerType)
-                );
-                
-                // Only show section if there are valid offers
-                if (validOfferTypes.length === 0) return null;
-                
-                return (
-                  <View style={styles.appliedOffersSection}>
-                    <View style={styles.appliedOffersHeader}>
-                      <Ionicons name="pricetag" size={20} color="#22C55E" />
-                      <Text style={styles.appliedOffersTitle}>Applied Offers</Text>
-                    </View>
-                    <Text style={styles.appliedOffersHint}>These offers are applied from the Offers page</Text>
-                    <View style={styles.appliedOffersList}>
-                      {validOfferTypes.map((offerType, index) => {
-                        const offer = offers.find(o => o.offerType === offerType);
-                        return (
-                          <View key={index} style={styles.appliedOfferTag}>
-                            <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
-                            <Text style={styles.appliedOfferTagText}>{offerType}</Text>
-                            {offer?.percentage && (
-                              <Text style={styles.appliedOfferPercentage}> ({offer.percentage}% OFF)</Text>
-                            )}
-                          </View>
-                        );
-                      })}
-                    </View>
-                    {existingItem?.offerPrice && (
-                      <View style={styles.offerPriceInfo}>
-                        <Text style={styles.offerPriceLabel}>Offer Price:</Text>
-                        <Text style={styles.offerPriceValue}>₹{existingItem.offerPrice}</Text>
-                        <View style={styles.discountBadge}>
-                          <Ionicons name="trending-down" size={14} color="#22C55E" />
-                          <Text style={styles.discountText}>
-                            {Math.round(((existingItem.price - existingItem.offerPrice) / existingItem.price) * 100)}% OFF
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                );
-              })()}
 
               {/* Tags */}
               <View style={styles.inputGroup}>
@@ -661,6 +570,44 @@ export default function MenuItemFormScreen({ route, navigation }) {
                       />
                     </View>
 
+                    {/* Price */}
+                    <View style={styles.variantField}>
+                      <Text style={styles.variantFieldLabel}>Price <Text style={styles.required}>*</Text></Text>
+                      <View style={styles.variantPriceInput}>
+                        <Text style={styles.variantCurrency}>₹</Text>
+                        <TextInput
+                          style={styles.variantPriceTextInput}
+                          value={variant.price?.toString() || ''}
+                          onChangeText={(val) => updateVariant(index, 'price', val)}
+                          placeholder="0"
+                          placeholderTextColor="#9CA3AF"
+                          keyboardType="numeric"
+                        />
+                      </View>
+                    </View>
+
+                    {/* Quantity & Unit */}
+                    <View style={styles.variantPriceRow}>
+                      <View style={[styles.variantField, { flex: 1 }]}>
+                        <Text style={styles.variantFieldLabel}>Quantity</Text>
+                        <TextInput
+                          style={styles.variantInput}
+                          value={variant.quantity?.toString() || '1'}
+                          onChangeText={(val) => updateVariant(index, 'quantity', val)}
+                          placeholder="1"
+                          placeholderTextColor="#9CA3AF"
+                          keyboardType="numeric"
+                        />
+                      </View>
+                      <View style={[styles.variantField, { flex: 1 }]}>
+                        <Text style={styles.variantFieldLabel}>Unit</Text>
+                        <TouchableOpacity style={styles.pickerButton} onPress={() => setVariantUnitPickerIndex(index)}>
+                          <Text style={styles.pickerValue}>{variant.unit || 'piece'}</Text>
+                          <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
                     {/* Type */}
                     <View style={styles.variantField}>
                       <Text style={styles.variantFieldLabel}>Type</Text>
@@ -690,38 +637,6 @@ export default function MenuItemFormScreen({ route, navigation }) {
                       </View>
                     </View>
 
-                    {/* Price & Offer Price */}
-                    <View style={styles.variantPriceRow}>
-                      <View style={[styles.variantField, { flex: 1 }]}>
-                        <Text style={styles.variantFieldLabel}>Price</Text>
-                        <View style={styles.variantPriceInput}>
-                          <Text style={styles.variantCurrency}>₹</Text>
-                          <TextInput
-                            style={styles.variantPriceTextInput}
-                            value={variant.price?.toString() || ''}
-                            onChangeText={(val) => updateVariant(index, 'price', val)}
-                            placeholder="0"
-                            placeholderTextColor="#9CA3AF"
-                            keyboardType="numeric"
-                          />
-                        </View>
-                      </View>
-                      <View style={[styles.variantField, { flex: 1 }]}>
-                        <Text style={styles.variantFieldLabel}>Offer Price</Text>
-                        <View style={styles.variantPriceInput}>
-                          <Text style={styles.variantCurrency}>₹</Text>
-                          <TextInput
-                            style={styles.variantPriceTextInput}
-                            value={variant.offerPrice?.toString() || ''}
-                            onChangeText={(val) => updateVariant(index, 'offerPrice', val)}
-                            placeholder="0"
-                            placeholderTextColor="#9CA3AF"
-                            keyboardType="numeric"
-                          />
-                        </View>
-                      </View>
-                    </View>
-
                     {/* Available Toggle */}
                     <View style={styles.variantAvailableRow}>
                       <Text style={styles.variantFieldLabel}>Available</Text>
@@ -735,6 +650,120 @@ export default function MenuItemFormScreen({ route, navigation }) {
                   </View>
                 ))}
               </View>
+
+              {/* Price, Qty, Unit – only when no variants */}
+              {variants.length === 0 && (
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Price <Text style={styles.required}>*</Text></Text>
+                    <View style={styles.priceInputContainer}>
+                      <Text style={styles.currencySymbol}>₹</Text>
+                      <TextInput
+                        style={styles.priceInput}
+                        value={price}
+                        onChangeText={setPrice}
+                        placeholder="0"
+                        placeholderTextColor="#9CA3AF"
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.rowInputs}>
+                    <View style={[styles.inputGroup, { flex: 1 }]}>
+                      <Text style={styles.label}>Quantity</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={quantity}
+                        onChangeText={setQuantity}
+                        placeholder="1"
+                        placeholderTextColor="#9CA3AF"
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    <View style={[styles.inputGroup, { flex: 1 }]}>
+                      <Text style={styles.label}>Unit</Text>
+                      <TouchableOpacity style={styles.pickerButton} onPress={() => setShowUnitPicker(true)}>
+                        <Text style={styles.pickerValue}>{unit}</Text>
+                        <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </>
+              )}
+
+              {/* Preparation Time */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Preparation Time</Text>
+                <View style={styles.prepTimeContainer}>
+                  <TouchableOpacity 
+                    style={styles.prepTimeButton}
+                    onPress={() => setPreparationTime(Math.max(0, parseInt(preparationTime || 0) - 5).toString())}
+                  >
+                    <Ionicons name="remove" size={22} color={ZOMATO_RED} />
+                  </TouchableOpacity>
+                  <View style={styles.prepTimeInputWrapper}>
+                    <TextInput
+                      style={styles.prepTimeInput}
+                      value={preparationTime}
+                      onChangeText={setPreparationTime}
+                      keyboardType="numeric"
+                      textAlign="center"
+                    />
+                    <Text style={styles.prepTimeUnit}>min</Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.prepTimeButton}
+                    onPress={() => setPreparationTime((parseInt(preparationTime || 0) + 5).toString())}
+                  >
+                    <Ionicons name="add" size={22} color={ZOMATO_RED} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Applied Offers (Read-only) */}
+              {existingItem?.offerType && (Array.isArray(existingItem.offerType) ? existingItem.offerType.length > 0 : existingItem.offerType) && (() => {
+                const itemOfferTypes = Array.isArray(existingItem.offerType) ? existingItem.offerType : [existingItem.offerType];
+                const validOfferTypes = itemOfferTypes.filter(offerType => 
+                  offers.some(offer => offer.offerType === offerType)
+                );
+                if (validOfferTypes.length === 0) return null;
+                return (
+                  <View style={styles.appliedOffersSection}>
+                    <View style={styles.appliedOffersHeader}>
+                      <Ionicons name="pricetag" size={20} color="#22C55E" />
+                      <Text style={styles.appliedOffersTitle}>Applied Offers</Text>
+                    </View>
+                    <Text style={styles.appliedOffersHint}>These offers are applied from the Offers page</Text>
+                    <View style={styles.appliedOffersList}>
+                      {validOfferTypes.map((offerType, index) => {
+                        const offer = offers.find(o => o.offerType === offerType);
+                        return (
+                          <View key={index} style={styles.appliedOfferTag}>
+                            <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
+                            <Text style={styles.appliedOfferTagText}>{offerType}</Text>
+                            {offer?.percentage && (
+                              <Text style={styles.appliedOfferPercentage}> ({offer.percentage}% OFF)</Text>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                    {existingItem?.offerPrice && (
+                      <View style={styles.offerPriceInfo}>
+                        <Text style={styles.offerPriceLabel}>Offer Price:</Text>
+                        <Text style={styles.offerPriceValue}>₹{existingItem.offerPrice}</Text>
+                        <View style={styles.discountBadge}>
+                          <Ionicons name="trending-down" size={14} color="#22C55E" />
+                          <Text style={styles.discountText}>
+                            {Math.round(((existingItem.price - existingItem.offerPrice) / existingItem.price) * 100)}% OFF
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                );
+              })()}
 
               {/* Available Switch */}
               <View style={styles.switchCard}>
@@ -840,6 +869,39 @@ export default function MenuItemFormScreen({ route, navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* Variant Unit Picker Modal */}
+      <Modal visible={variantUnitPickerIndex !== null} animationType="slide" transparent={true} onRequestClose={() => setVariantUnitPickerIndex(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Unit (Variant {variantUnitPickerIndex !== null ? variantUnitPickerIndex + 1 : ''})</Text>
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setVariantUnitPickerIndex(null)}>
+                <Ionicons name="close" size={24} color="#696969" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={UNITS}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => {
+                const currentUnit = variantUnitPickerIndex !== null ? (variants[variantUnitPickerIndex]?.unit || 'piece') : '';
+                return (
+                  <TouchableOpacity
+                    style={[styles.unitOption, currentUnit === item && styles.unitOptionSelected]}
+                    onPress={() => { updateVariant(variantUnitPickerIndex, 'unit', item); setVariantUnitPickerIndex(null); }}
+                  >
+                    <Text style={[styles.unitOptionText, currentUnit === item && styles.unitOptionTextSelected]}>{item}</Text>
+                    {currentUnit === item && <Ionicons name="checkmark-circle" size={22} color={ZOMATO_RED} />}
+                  </TouchableOpacity>
+                );
+              }}
+              contentContainerStyle={styles.modalList}
+            />
+          </View>
+        </View>
+      </Modal>
+
       {/* Loading Overlay */}
       {loading && (
         <View style={styles.loadingOverlay}>

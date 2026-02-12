@@ -161,6 +161,8 @@ router.post('/', authMiddleware, menuUpload, async (req, res) => {
             variantType: v.variantType || 'size',
             price: parseFloat(v.price),
             offerPrice: v.offerPrice ? parseFloat(v.offerPrice) : undefined,
+            quantity: v.quantity ? parseFloat(v.quantity) : 1,
+            unit: v.unit || 'piece',
             image: variantImage,
             available: v.available !== false && v.available !== 'false'
           };
@@ -332,6 +334,8 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
             variantType: v.variantType || 'size',
             price: parseFloat(v.price),
             offerPrice: v.offerPrice ? parseFloat(v.offerPrice) : undefined,
+            quantity: v.quantity ? parseFloat(v.quantity) : 1,
+            unit: v.unit || 'piece',
             image: variantImage,
             available: v.available !== false && v.available !== 'false'
           };
