@@ -608,35 +608,6 @@ export default function MenuItemFormScreen({ route, navigation }) {
                       </View>
                     </View>
 
-                    {/* Type */}
-                    <View style={styles.variantField}>
-                      <Text style={styles.variantFieldLabel}>Type</Text>
-                      <View style={styles.variantTypeRow}>
-                        {['size', 'color'].map((t) => (
-                          <TouchableOpacity
-                            key={t}
-                            style={[
-                              styles.variantTypeChip,
-                              variant.variantType === t && styles.variantTypeChipActive,
-                            ]}
-                            onPress={() => updateVariant(index, 'variantType', t)}
-                          >
-                            <Ionicons 
-                              name={t === 'size' ? 'resize-outline' : 'color-palette-outline'} 
-                              size={16} 
-                              color={variant.variantType === t ? '#fff' : '#696969'} 
-                            />
-                            <Text style={[
-                              styles.variantTypeChipText,
-                              variant.variantType === t && styles.variantTypeChipTextActive,
-                            ]}>
-                              {t.charAt(0).toUpperCase() + t.slice(1)}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-
                     {/* Available Toggle */}
                     <View style={styles.variantAvailableRow}>
                       <Text style={styles.variantFieldLabel}>Available</Text>

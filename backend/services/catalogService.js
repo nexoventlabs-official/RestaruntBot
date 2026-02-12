@@ -373,10 +373,8 @@ const catalogService = {
         if (item.variants && item.variants.length > 0) {
           // Each variant becomes its own catalog product with item_group_id
           item.variants.forEach((v, idx) => {
-            let pillLabel = v.label;
-            if (v.quantity && v.unit && !v.label.toLowerCase().includes(v.unit.toLowerCase())) {
-              pillLabel = `${v.label} (${v.quantity} ${v.unit})`;
-            }
+            // Pill label: quantity+unit (e.g., "1 kg", "500 gm") — label is just internal name
+            const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : v.label;
             variantProducts.push({
               retailerId: `${item._id.toString()}_v${idx}`,
               name: item.name,
@@ -387,7 +385,7 @@ const catalogService = {
               category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
               availability: (v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
               itemGroupId: item._id.toString(),
-              variantType: v.variantType || 'size',
+              variantType: 'size',
               variantLabel: pillLabel,
               salePrice: (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : null
             });
@@ -524,17 +522,12 @@ const catalogService = {
         parts.push(`${variant.quantity} ${variant.unit}`);
       }
     } else if (menuItem.variants && menuItem.variants.length > 0) {
-      const variantTypeName = menuItem.variants[0]?.variantType === 'color' ? 'Colors' : 'Sizes';
       const labels = menuItem.variants
         .filter(v => v.available !== false)
-        .map(v => {
-          let lbl = v.label;
-          if (v.quantity && v.unit) lbl += ` (${v.quantity} ${v.unit})`;
-          return lbl;
-        })
+        .map(v => (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : v.label)
         .join(', ');
       if (labels) {
-        parts.push(`${variantTypeName}: ${labels}`);
+        parts.push(`Sizes: ${labels}`);
       }
     } else if (menuItem.quantity && menuItem.unit) {
       parts.push(`${menuItem.quantity} ${menuItem.unit}`);
@@ -596,12 +589,8 @@ const catalogService = {
         const variantProducts = menuItem.variants.map((v, idx) => {
           const variantRetailerId = `${retailerId}_v${idx}`;
 
-          // Build the size/color pill label — include qty+unit if different from just the label
-          // e.g., "Large (500 ml)" or "Red" or "1 kg"
-          let pillLabel = v.label;
-          if (v.quantity && v.unit && !v.label.toLowerCase().includes(v.unit.toLowerCase())) {
-            pillLabel = `${v.label} (${v.quantity} ${v.unit})`;
-          }
+          // Pill label: quantity+unit (e.g., "1 kg", "500 gm")
+          const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : v.label;
 
           const variantProduct = {
             retailerId: variantRetailerId,
@@ -617,7 +606,7 @@ const catalogService = {
             category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
             availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
             itemGroupId: retailerId,  // Groups all variants together — enables size/color pills
-            variantType: v.variantType || 'size',
+            variantType: 'size',
             variantLabel: pillLabel
           };
 
@@ -996,10 +985,7 @@ const catalogService = {
         if (item.variants && item.variants.length > 0) {
           // Re-sync all variants with updated description (includes new ratings)
           item.variants.forEach((v, idx) => {
-            let pillLabel = v.label;
-            if (v.quantity && v.unit && !v.label.toLowerCase().includes(v.unit.toLowerCase())) {
-              pillLabel = `${v.label} (${v.quantity} ${v.unit})`;
-            }
+            const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : v.label;
             variantProducts.push({
               retailerId: `${item._id.toString()}_v${idx}`,
               name: item.name,
@@ -1010,7 +996,7 @@ const catalogService = {
               category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
               availability: (v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
               itemGroupId: item._id.toString(),
-              variantType: v.variantType || 'size',
+              variantType: 'size',
               variantLabel: pillLabel
             });
           });
