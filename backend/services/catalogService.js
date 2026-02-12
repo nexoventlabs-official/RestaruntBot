@@ -380,7 +380,7 @@ const catalogService = {
                 const sizeLabel = `${q.quantity} ${q.unit}`;
                 variantProducts.push({
                   retailerId: `${item._id.toString()}_v${vIdx}_q${qIdx}`,
-                  name: item.name,
+                  name: v.label || item.name,
                   description: this.buildProductDescription(item, v),
                   price: q.price,
                   currency: 'INR',
@@ -398,7 +398,7 @@ const catalogService = {
               const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : v.label;
               variantProducts.push({
                 retailerId: `${item._id.toString()}_v${vIdx}`,
-                name: item.name,
+                name: v.label || item.name,
                 description: this.buildProductDescription(item, v),
                 price: v.price,
                 currency: 'INR',
@@ -612,7 +612,7 @@ const catalogService = {
               const sizeLabel = `${q.quantity} ${q.unit}`;
               const prod = {
                 retailerId: `${retailerId}_v${vIdx}_q${qIdx}`,
-                name: menuItem.name,
+                name: v.label || menuItem.name,
                 description: this.buildProductDescription(menuItem, v),
                 price: q.price,
                 currency: 'INR',
@@ -631,7 +631,7 @@ const catalogService = {
             const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : v.label;
             const prod = {
               retailerId: `${retailerId}_v${vIdx}`,
-              name: menuItem.name,
+              name: v.label || menuItem.name,
               description: this.buildProductDescription(menuItem, v),
               price: v.price,
               currency: 'INR',
@@ -1035,7 +1035,7 @@ const catalogService = {
               v.quantities.forEach((q, qIdx) => {
                 variantProducts.push({
                   retailerId: `${item._id.toString()}_v${vIdx}_q${qIdx}`,
-                  name: item.name,
+                  name: v.label || item.name,
                   description: this.buildProductDescription(item, v),
                   price: q.price,
                   currency: 'INR',
@@ -1051,7 +1051,7 @@ const catalogService = {
               const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : v.label;
               variantProducts.push({
                 retailerId: `${item._id.toString()}_v${vIdx}`,
-                name: item.name,
+                name: v.label || item.name,
                 description: this.buildProductDescription(item, v),
                 price: v.price,
                 currency: 'INR',
