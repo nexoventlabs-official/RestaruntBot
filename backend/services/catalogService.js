@@ -969,32 +969,6 @@ const catalogService = {
         return [itemId];
       };
 
-      // First: create an "All Items" collection with every mapped item
-      try {
-        const allMappedItems = items.filter(item => map.has(item._id.toString()));
-        if (allMappedItems.length > 0) {
-          const allRetailerIds = allMappedItems.flatMap(getAllRetailerIds);
-          const allItemsData = {
-            name: 'All Items',
-            retailerIds: allRetailerIds,
-            description: `${allMappedItems.length} items available`
-          };
-          const existingAllId = existingMap.get('All Items');
-          if (existingAllId) {
-            allItemsData.productSetId = existingAllId;
-            await metaCloud.createOrUpdateCollection(catalogId, allItemsData);
-            updated++;
-          } else {
-            await metaCloud.createOrUpdateCollection(catalogId, allItemsData);
-            created++;
-          }
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      } catch (err) {
-        failed++;
-        logger.error('Failed to sync All Items collection', { error: err.message });
-      }
-
       for (const category of categories) {
         try {
           // Find items in this category that have catalog mappings
