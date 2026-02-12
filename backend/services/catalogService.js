@@ -278,6 +278,55 @@ const catalogService = {
   },
 
   /**
+   * Build product_list sections for a specific menu item filtered by variant food type.
+   * Returns only the retailer IDs of variants whose foodType matches.
+   *
+   * @param {Object} menuItem - The full MenuItem document (with variants)
+   * @param {string} foodType - 'veg', 'nonveg', 'egg', or 'both'
+   * @returns {Object|null} { sections, totalMapped } or null
+   */
+  async buildTitleVariantSections(menuItem, foodType) {
+    if (!this.isEnabled()) return null;
+
+    const itemId = menuItem._id.toString();
+    const hasVariants = menuItem.variants && menuItem.variants.length > 0;
+    if (!hasVariants) return null;
+
+    // Ensure mappings exist
+    await this.ensureCatalogMapping(menuItem);
+
+    const retailerIds = [];
+    menuItem.variants.forEach((v, vIdx) => {
+      // Check food type match
+      const vFoodType = v.foodType || menuItem.foodType || 'none';
+      const matches = foodType === 'both' ||
+        (foodType === 'veg' && vFoodType === 'veg') ||
+        (foodType === 'nonveg' && (vFoodType === 'nonveg' || vFoodType === 'egg')) ||
+        (foodType === 'egg' && vFoodType === 'egg');
+
+      if (matches) {
+        if (v.quantities && v.quantities.length > 0) {
+          v.quantities.forEach((_, qIdx) => {
+            retailerIds.push(`${itemId}_v${vIdx}_q${qIdx}`);
+          });
+        } else {
+          retailerIds.push(`${itemId}_v${vIdx}`);
+        }
+      }
+    });
+
+    if (retailerIds.length === 0) return null;
+
+    return {
+      sections: [{
+        title: menuItem.name.substring(0, 24),
+        productRetailerIds: retailerIds.slice(0, 30)
+      }],
+      totalMapped: retailerIds.length
+    };
+  },
+
+  /**
    * Build product sections for cart items.
    * Auto-ensures catalog mappings for any unmapped items (real-time sync).
    * Puts all cart items into a single section for clean native cart display.
