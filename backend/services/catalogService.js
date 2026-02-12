@@ -565,10 +565,6 @@ const catalogService = {
     const descText = menuItem.description || menuItem.name;
     parts.push(descText);
 
-    // Bold the first line and separate each part with a blank line
-    if (parts.length > 0) {
-      parts[0] = `*${parts[0]}*`;
-    }
     return parts.join('\n\n').substring(0, 5000); // Meta catalog description limit
   },
 
