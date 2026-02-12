@@ -6034,7 +6034,7 @@ const chatbot = {
           const bodyText = `${foodIcon} ${ratingStr}\n⏱️ ${item.preparationTime || 15} mins prep time\nTap to add to cart!`;
           await whatsapp.sendProduct(phone, catalogId, retailerId, bodyText, 'Perivi Hotel');
           // Send action buttons below the catalog card
-          await whatsapp.sendButtons(phone, `📋 *${item.name}*`, [
+          await whatsapp.sendButtons(phone, 'What would you like to do?', [
             { id: `confirm_add_${item._id}`, text: 'Quick Add to Cart' },
             { id: 'view_menu', text: 'Back to Menu' },
             { id: 'review_pay', text: 'Review & Order' }
@@ -6076,7 +6076,7 @@ const chatbot = {
           const foodIcon = item.foodType === 'veg' ? '🌿 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
           const bodyText = `${foodIcon} ${ratingStr}\n⏱️ ${item.preparationTime || 15} mins prep time\nTap to add to cart!`;
           await whatsapp.sendProduct(phone, catalogId, retailerId, bodyText, 'Perivi Hotel');
-          await whatsapp.sendButtons(phone, `📋 *${item.name}*`, [
+          await whatsapp.sendButtons(phone, 'What would you like to do?', [
             { id: `confirm_add_${item._id}`, text: 'Quick Add to Cart' },
             { id: 'add_more', text: 'Back to Menu' },
             { id: 'review_pay', text: 'Review & Order' }
