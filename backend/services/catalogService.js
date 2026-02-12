@@ -327,6 +327,24 @@ const catalogService = {
     let metaPushed = 0;
     let metaFailed = 0;
 
+    // Step 0: Clean up stale mappings (menuItem was deleted)
+    try {
+      const allMappings = await CatalogProduct.find({}).lean();
+      const activeItemIds = new Set(items.map(i => i._id.toString()));
+      let cleaned = 0;
+      for (const mapping of allMappings) {
+        if (!mapping.menuItem || !activeItemIds.has(mapping.menuItem.toString())) {
+          await CatalogProduct.deleteOne({ _id: mapping._id });
+          cleaned++;
+        }
+      }
+      if (cleaned > 0) {
+        logger.info('Cleaned stale catalog mappings', { cleaned });
+      }
+    } catch (err) {
+      logger.error('Failed to clean stale mappings', { error: err.message });
+    }
+
     // Step 1: Create all local CatalogProduct mappings first
     for (const item of items) {
       const itemId = item._id.toString();
@@ -338,9 +356,10 @@ const catalogService = {
           continue;
         }
 
-        // For variant items, store the first variant's retailer_id
+        // For variant items, store the first variant's retailer_id (must match actual Meta product ID)
         const hasVariants = item.variants && item.variants.length > 0;
-        const mappingRetailerId = hasVariants ? `${itemId}_v0` : itemId;
+        const hasQuantities = hasVariants && item.variants[0].quantities && item.variants[0].quantities.length > 0;
+        const mappingRetailerId = hasQuantities ? `${itemId}_v0_q0` : (hasVariants ? `${itemId}_v0` : itemId);
 
         await CatalogProduct.findOneAndUpdate(
           { menuItem: item._id },
@@ -567,17 +586,24 @@ const catalogService = {
       parts.push(`${starLine} No reviews yet`);
     }
 
-    // ── Part 3: Food type icon + label ──
-    if (menuItem.foodType === 'veg') {
+    // ── Part 3: Food type icon + label (prefer variant-level, fallback to item-level) ──
+    const foodType = (variant && variant.foodType) ? variant.foodType : menuItem.foodType;
+    if (foodType === 'veg') {
       parts.push('🟢 Veg');
-    } else if (menuItem.foodType === 'nonveg') {
+    } else if (foodType === 'nonveg') {
       parts.push('🔴 Non-Veg');
-    } else if (menuItem.foodType === 'egg') {
+    } else if (foodType === 'egg') {
       parts.push('🟡 Egg');
     }
 
-    // ── Part 4: Description ──
-    const descText = menuItem.description || menuItem.name;
+    // ── Part 4: Tags (variant-level tags if available) ──
+    const tags = (variant && variant.tags && variant.tags.length > 0) ? variant.tags : menuItem.tags;
+    if (tags && tags.length > 0) {
+      parts.push(tags.map(t => `#${t}`).join(' '));
+    }
+
+    // ── Part 5: Description (prefer variant-level, fallback to item-level) ──
+    const descText = (variant && variant.description) ? variant.description : (menuItem.description || menuItem.name);
     parts.push(descText);
 
     return parts.join('\n\n').substring(0, 5000); // Meta catalog description limit
@@ -893,6 +919,49 @@ const catalogService = {
         existingMap.set(col.name, col.id);
       }
 
+      // Helper: get ALL retailer IDs for an item (all variant×quantity combos)
+      const getAllRetailerIds = (item) => {
+        const itemId = item._id.toString();
+        if (item.variants && item.variants.length > 0) {
+          const ids = [];
+          item.variants.forEach((v, vIdx) => {
+            if (v.quantities && v.quantities.length > 0) {
+              v.quantities.forEach((_, qIdx) => ids.push(`${itemId}_v${vIdx}_q${qIdx}`));
+            } else {
+              ids.push(`${itemId}_v${vIdx}`);
+            }
+          });
+          return ids;
+        }
+        return [itemId];
+      };
+
+      // First: create an "All Items" collection with every mapped item
+      try {
+        const allMappedItems = items.filter(item => map.has(item._id.toString()));
+        if (allMappedItems.length > 0) {
+          const allRetailerIds = allMappedItems.flatMap(getAllRetailerIds);
+          const allItemsData = {
+            name: 'All Items',
+            retailerIds: allRetailerIds,
+            description: `${allMappedItems.length} items available`
+          };
+          const existingAllId = existingMap.get('All Items');
+          if (existingAllId) {
+            allItemsData.productSetId = existingAllId;
+            await metaCloud.createOrUpdateCollection(catalogId, allItemsData);
+            updated++;
+          } else {
+            await metaCloud.createOrUpdateCollection(catalogId, allItemsData);
+            created++;
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } catch (err) {
+        failed++;
+        logger.error('Failed to sync All Items collection', { error: err.message });
+      }
+
       for (const category of categories) {
         try {
           // Find items in this category that have catalog mappings
@@ -906,7 +975,8 @@ const catalogService = {
             continue;
           }
 
-          const retailerIds = categoryItems.map(item => map.get(item._id.toString()));
+          // Get ALL retailer IDs for each item (all variant×quantity combos)
+          const retailerIds = categoryItems.flatMap(getAllRetailerIds);
 
           const collectionData = {
             name: category.name,
