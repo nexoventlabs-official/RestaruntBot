@@ -567,7 +567,7 @@ const catalogService = {
     const descText = menuItem.description || menuItem.name;
     parts.push(descText);
 
-    return parts.join(' | ').substring(0, 5000); // Meta catalog description limit
+    return parts.join('\n').substring(0, 5000); // Meta catalog description limit
   },
 
   /**
