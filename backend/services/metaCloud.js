@@ -1171,6 +1171,7 @@ const metaCloud = {
             currency: product.currency || 'INR',
             url: link,
             category: 'Food, Beverages & Tobacco > Food Items',
+            google_product_category: 'Food, Beverages & Tobacco > Food Items',
           }
         };
 

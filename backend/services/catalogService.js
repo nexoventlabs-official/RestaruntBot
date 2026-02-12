@@ -506,12 +506,14 @@ const catalogService = {
     try {
       if (hasVariants) {
         // ===== VARIANT PRODUCTS: each variant is a separate catalog product =====
-        // They share the same item_group_id so WhatsApp groups them together
+        // Per Meta docs: ALL products in a group MUST have variant fields populated.
+        // Do NOT push a base product without size/color — it breaks variant grouping.
+        // Only push variant products, all sharing the same item_group_id.
         const variantProducts = menuItem.variants.map((v, idx) => {
           const variantRetailerId = `${retailerId}_v${idx}`;
           const variantProduct = {
             retailerId: variantRetailerId,
-            name: `${menuItem.name} - ${v.label}`,
+            name: menuItem.name,  // Same name for all variants (Meta requirement)
             description: this.buildProductDescription(menuItem),
             price: v.price,
             currency: 'INR',
@@ -535,33 +537,16 @@ const catalogService = {
           return variantProduct;
         });
 
-        // Also push the base product (first variant is the default)
-        const baseProduct = {
-          retailerId,
-          name: menuItem.name,
-          description: this.buildProductDescription(menuItem),
-          price: menuItem.price,
-          currency: 'INR',
-          imageUrl: menuItem.image || null,
-          category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
-          availability: (menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
-          itemGroupId: retailerId
-        };
+        // Push ONLY variant products to Meta (no base product without variant attrs)
+        const metaResult = await metaCloud.batchCreateOrUpdateProducts(catalogId, variantProducts);
 
-        if (menuItem.offerPrice && menuItem.offerPrice < menuItem.price) {
-          baseProduct.salePrice = menuItem.offerPrice;
-        }
-
-        // Push base + all variants to Meta
-        const allProducts = [baseProduct, ...variantProducts];
-        const metaResult = await metaCloud.batchCreateOrUpdateProducts(catalogId, allProducts);
-
-        // Upsert local mapping for the base item
+        // Upsert local mapping — use first variant's retailer_id so product cards work
+        const firstVariantRetailerId = `${retailerId}_v0`;
         await CatalogProduct.findOneAndUpdate(
           { menuItem: menuItem._id },
           {
             menuItem: menuItem._id,
-            retailerId,
+            retailerId: firstVariantRetailerId,
             isActive: menuItem.available && !menuItem.isPaused,
             lastSyncedAt: new Date()
           },
@@ -570,7 +555,8 @@ const catalogService = {
 
         this.clearCache();
         logger.info('Product with variants synced to Meta catalog', { 
-          itemId: retailerId, name: menuItem.name, variantCount: menuItem.variants.length 
+          itemId: retailerId, name: menuItem.name, variantCount: menuItem.variants.length,
+          retailerIds: variantProducts.map(v => v.retailerId)
         });
         return metaResult;
       }
@@ -642,7 +628,9 @@ const catalogService = {
     try {
       logger.info('Auto-creating catalog mapping for item', { itemId, name: menuItem.name });
       await this.syncProductToMeta(menuItem);
-      return itemId; // retailerId = menuItemId by convention
+      // For variant products, retailerId is {itemId}_v0; for single products, it's itemId
+      const hasVariants = menuItem.variants && menuItem.variants.length > 0;
+      return hasVariants ? `${itemId}_v0` : itemId;
     } catch (err) {
       logger.error('Failed to auto-create catalog mapping', {
         itemId,
@@ -667,12 +655,21 @@ const catalogService = {
     const metaCloud = require('./metaCloud');
 
     try {
-      // Find the mapping to get the retailer ID
+      // Find the menu item to check for variants
+      const menuItem = await MenuItem.findById(menuItemId).lean();
       const mapping = await CatalogProduct.findOne({ menuItem: menuItemId }).lean();
-      const retailerId = mapping?.retailerId || menuItemId.toString();
+      const baseRetailerId = menuItemId.toString();
 
-      // Delete from Meta catalog
-      const metaResult = await metaCloud.deleteCatalogProduct(catalogId, retailerId);
+      // Delete all variant products from Meta catalog if they exist
+      if (menuItem?.variants?.length > 0) {
+        const deletePromises = menuItem.variants.map((_, idx) =>
+          metaCloud.deleteCatalogProduct(catalogId, `${baseRetailerId}_v${idx}`).catch(() => null)
+        );
+        await Promise.all(deletePromises);
+      }
+
+      // Also delete the base product (in case it was synced before variants were added)
+      const metaResult = await metaCloud.deleteCatalogProduct(catalogId, mapping?.retailerId || baseRetailerId).catch(() => null);
 
       // Remove local mapping
       await CatalogProduct.deleteOne({ menuItem: menuItemId });
