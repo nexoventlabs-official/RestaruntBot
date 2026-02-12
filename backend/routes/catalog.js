@@ -179,4 +179,30 @@ router.delete('/flow/:flowId', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/catalog/products-review - Check product review status from Meta
+router.get('/products-review', authMiddleware, async (req, res) => {
+  try {
+    const metaCloud = require('../services/metaCloud');
+    const catalogId = catalogService.getCatalogId();
+    if (!catalogId) return res.json({ error: 'No catalog ID configured' });
+
+    const accessToken = process.env.META_ACCESS_TOKEN;
+    const axios = require('axios');
+    const response = await axios.get(
+      `https://graph.facebook.com/v24.0/${catalogId}/products`,
+      {
+        params: {
+          fields: 'id,retailer_id,name,review_status,visibility,image_url,price,availability',
+          limit: 100,
+          access_token: accessToken
+        }
+      }
+    );
+    res.json(response.data?.data || []);
+  } catch (error) {
+    logger.error('Products review check error', { error: error.response?.data?.error?.message || error.message });
+    res.status(500).json({ error: error.response?.data?.error?.message || error.message });
+  }
+});
+
 module.exports = router;
