@@ -737,9 +737,15 @@ export default function AdminMenuScreen({ navigation, route }) {
     }));
   }, [items]);
 
-  // Filter items - memoized
-  const filteredItems = useMemo(() => {
-    return items.filter(item => {
+  // Total variant count for "All" label
+  const totalVariantCount = useMemo(() => {
+    return items.reduce((sum, item) => sum + (item.variants?.length || 1), 0);
+  }, [items]);
+
+  // Flatten menu items into individual variant rows
+  const flattenedVariants = useMemo(() => {
+    const result = [];
+    items.forEach(item => {
       const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
       const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         itemCategories.some(cat => cat?.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -749,8 +755,60 @@ export default function AdminMenuScreen({ navigation, route }) {
         (statusFilter === 'unavailable' && !item.available);
       const matchesFoodType = foodTypeFilter === 'all' || item.foodType === foodTypeFilter;
       const matchesTitle = selectedTitle === 'all' || item._id === selectedTitle;
-      return matchesSearch && matchesCategory && matchesStatus && matchesFoodType && matchesTitle;
+      if (!matchesSearch || !matchesCategory || !matchesStatus || !matchesFoodType || !matchesTitle) return;
+
+      if (item.variants && item.variants.length > 0) {
+        item.variants.forEach((v, vIdx) => {
+          // Food type filter also applies at variant level
+          if (foodTypeFilter !== 'all' && v.foodType && v.foodType !== foodTypeFilter) return;
+          result.push({
+            _id: `${item._id}_v${vIdx}`,
+            parentId: item._id,
+            parentItem: item,
+            variantIndex: vIdx,
+            name: v.label,
+            parentName: item.name,
+            image: v.image || item.image || null,
+            foodType: v.foodType || item.foodType,
+            price: v.price || (v.quantities?.[0]?.price) || item.price,
+            offerPrice: v.offerPrice || (v.quantities?.[0]?.offerPrice) || null,
+            available: v.available !== false && item.available && !item.isPaused,
+            quantities: v.quantities || null,
+            quantity: v.quantity,
+            unit: v.unit,
+            description: v.description || item.description,
+            category: item.category,
+            preparationTime: item.preparationTime,
+            isPaused: item.isPaused,
+            variant: v,
+          });
+        });
+      } else {
+        // No variants - show as single item
+        result.push({
+          _id: item._id,
+          parentId: item._id,
+          parentItem: item,
+          variantIndex: -1,
+          name: item.name,
+          parentName: item.name,
+          image: item.image || null,
+          foodType: item.foodType,
+          price: item.price,
+          offerPrice: item.offerPrice,
+          available: item.available && !item.isPaused,
+          quantities: null,
+          quantity: item.quantity,
+          unit: item.unit,
+          description: item.description,
+          category: item.category,
+          preparationTime: item.preparationTime,
+          isPaused: item.isPaused,
+          variant: null,
+        });
+      }
     });
+    return result;
   }, [items, searchTerm, selectedCategory, statusFilter, foodTypeFilter, selectedTitle]);
 
   // Stats - memoized
@@ -762,191 +820,80 @@ export default function AdminMenuScreen({ navigation, route }) {
     return { totalItems, availableCount, unavailableCount, uniqueCategories };
   }, [items]);
 
-  const renderItem = useCallback(({ item, index }) => {
-    const isCategoryUnavailable = isItemCategoryUnavailable(item);
-    const isScheduledLocked = isItemScheduledLocked(item);
-    const isManuallyPaused = isItemManuallyPaused(item);
-    const lockedCategories = getItemLockedCategories(item);
-    const manuallyPausedCategories = getItemManuallyPausedCategories(item);
-    
-    // Item has some lock if it's scheduled locked OR manually paused
-    const hasAnyLock = isScheduledLocked || isManuallyPaused;
+  const renderVariantItem = useCallback(({ item: vItem }) => {
+    const parentItem = vItem.parentItem;
+    const isAvail = vItem.available;
 
     return (
-      <Animated.View style={{
-        opacity: fadeAnim,
-        transform: [{ scale: scaleAnim }],
-      }}>
+      <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
         <TouchableOpacity
-          style={[
-            styles.itemCard, 
-            isScheduledLocked && styles.itemCardScheduled,
-            isManuallyPaused && !isScheduledLocked && styles.itemCardPaused,
-            !item.available && styles.itemCardOutOfStock
-          ]}
-          onPress={() => navigation.navigate('MenuItemForm', { item })}
+          style={[styles.itemCard, !isAvail && styles.itemCardOutOfStock]}
+          onPress={() => navigation.navigate('MenuItemForm', { item: parentItem })}
           activeOpacity={0.7}
         >
           <View style={styles.itemImageContainer}>
-            {item.image ? (
+            {vItem.image ? (
               <Image
-                source={{ uri: item.image, cache: 'force-cache' }}
-                style={[styles.itemImage, hasAnyLock && styles.itemImagePaused]}
+                source={{ uri: vItem.image, cache: 'force-cache' }}
+                style={styles.itemImage}
                 defaultSource={require('../../../assets/icon.png')}
                 resizeMode="cover"
               />
             ) : (
-              <View style={[styles.itemImage, styles.placeholderImage, hasAnyLock && styles.placeholderImagePaused]}>
-                <Ionicons name="restaurant-outline" size={32} color={hasAnyLock ? '#9ca3af' : '#d1d5db'} />
+              <View style={[styles.itemImage, styles.placeholderImage]}>
+                <Ionicons name="restaurant-outline" size={32} color="#d1d5db" />
               </View>
             )}
-            {/* Lock Icon for Scheduled or Paused Items */}
-            {hasAnyLock && (
-              <View style={styles.itemLockOverlay}>
-                <View style={[styles.itemLockBadge, isManuallyPaused && !isScheduledLocked && { backgroundColor: '#ef4444' }]}>
-                  <Ionicons name="lock-closed" size={16} color="#fff" />
-                </View>
-              </View>
-            )}
-            {/* Discount Badge */}
-            {item.offerPrice && item.offerPrice < item.price && (
-              <View style={styles.discountBadge}>
-                <Text style={styles.discountText}>
-                  {Math.round(((item.price - item.offerPrice) / item.price) * 100)}% OFF
-                </Text>
-              </View>
-            )}
-            {item.foodType && item.foodType !== 'none' && (
+            {vItem.foodType && vItem.foodType !== 'none' && (
               <View style={[styles.foodTypeBadge, {
-                borderColor: hasAnyLock ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
+                borderColor: vItem.foodType === 'veg' ? '#22c55e' : vItem.foodType === 'egg' ? '#f59e0b' : '#ef4444'
               }]}>
                 <View style={[styles.foodTypeDot, {
-                  backgroundColor: hasAnyLock ? '#9ca3af' : (item.foodType === 'veg' ? '#22c55e' : item.foodType === 'egg' ? '#f59e0b' : '#ef4444')
+                  backgroundColor: vItem.foodType === 'veg' ? '#22c55e' : vItem.foodType === 'egg' ? '#f59e0b' : '#ef4444'
                 }]} />
               </View>
             )}
           </View>
 
           <View style={styles.itemInfo}>
-            <Text style={[styles.itemName, hasAnyLock && styles.textPaused]} numberOfLines={1}>{item.name}</Text>
-            <Text style={[styles.itemCategory, hasAnyLock && styles.textPaused]} numberOfLines={1}>
-              {Array.isArray(item.category) ? item.category.join(', ') : item.category}
-            </Text>
-            {/* Variant count badge */}
-            {item.variants && item.variants.length > 0 && (
-              <View style={styles.variantCountRow}>
-                <Ionicons name="layers-outline" size={12} color="#8b5cf6" />
-                <Text style={styles.variantCountText}>{item.variants.length} variant{item.variants.length > 1 ? 's' : ''}</Text>
-              </View>
-            )}
-            {item.preparationTime > 0 && (
-              <View style={styles.prepTimeRow}>
-                <Ionicons name="time-outline" size={12} color="#9ca3af" />
-                <Text style={styles.prepTimeText}>{item.preparationTime} min</Text>
-              </View>
-            )}
-            <View style={styles.itemFooter}>
-              <View style={styles.priceContainer}>
-                {item.offerPrice && item.offerPrice < item.price ? (
-                  <View style={styles.priceRow}>
-                    <Text style={[styles.originalPrice, hasAnyLock && styles.pricePaused]}>₹{item.price}</Text>
-                    <Text style={[styles.offerPrice, hasAnyLock && styles.pricePaused]}>₹{item.offerPrice}</Text>
+            <Text style={styles.itemName} numberOfLines={1}>{vItem.name}</Text>
+            <Text style={styles.itemCategory} numberOfLines={1}>{vItem.parentName}</Text>
+            {/* Quantity options */}
+            {vItem.quantities && vItem.quantities.length > 0 ? (
+              <View style={styles.variantQtyRow}>
+                {vItem.quantities.map((q, qIdx) => (
+                  <View key={qIdx} style={styles.variantQtyChip}>
+                    <Text style={styles.variantQtyText}>{q.quantity} {q.unit} — ₹{q.price}</Text>
                   </View>
-                ) : (
-                  <Text style={[styles.itemPrice, hasAnyLock && styles.pricePaused]}>₹{item.price}</Text>
-                )}
+                ))}
               </View>
-              {isScheduledLocked ? (
-                <View style={styles.scheduledStatusBadge}>
-                  <Ionicons name="lock-closed" size={10} color="#6366f1" />
-                  <Text style={styles.scheduledStatusText} numberOfLines={1}>
-                    {lockedCategories.length === 1 ? lockedCategories[0] : `${lockedCategories.length} Cat.`}
-                  </Text>
-                </View>
-              ) : isManuallyPaused ? (
-                <View style={styles.pausedStatusBadge}>
-                  <Ionicons name="lock-closed" size={10} color="#ef4444" />
-                  <Text style={styles.pausedStatusText} numberOfLines={1}>
-                    {manuallyPausedCategories.length === 1 ? manuallyPausedCategories[0] : `${manuallyPausedCategories.length} Cat.`}
-                  </Text>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  style={[styles.availabilityToggle, { backgroundColor: item.available ? '#DCFCE7' : '#FEE2E2' }]}
-                  onPress={() => toggleAvailability(item)}
-                  disabled={togglingId === item._id}
-                >
-                  {togglingId === item._id ? (
-                    <ActivityIndicator size="small" color={item.available ? '#22c55e' : '#ef4444'} />
-                  ) : (
-                    <Text style={[styles.availabilityText, { color: item.available ? '#16A34A' : '#DC2626' }]}>
-                      {item.available ? 'In Stock' : 'Out'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-
-          <TouchableOpacity 
-            style={styles.deleteButton} 
-            onPress={() => deleteItem(item)}
-            disabled={togglingId === item._id}
-          >
-            {togglingId === item._id ? (
-              <ActivityIndicator size="small" color={ZOMATO_RED} />
             ) : (
-              <Ionicons name="trash-outline" size={20} color={ZOMATO_RED} />
-            )}
-          </TouchableOpacity>
-        </TouchableOpacity>
-
-        {/* Expanded Variant Details when title is selected */}
-        {selectedTitle !== 'all' && item.variants && item.variants.length > 0 && (
-          <View style={styles.variantSection}>
-            <Text style={styles.variantSectionTitle}>Variants</Text>
-            {item.variants.map((v, vIdx) => (
-              <View key={vIdx} style={styles.variantCard}>
-                <View style={styles.variantCardLeft}>
-                  {v.image ? (
-                    <Image source={{ uri: v.image, cache: 'force-cache' }} style={styles.variantThumb} resizeMode="cover" />
-                  ) : (
-                    <View style={[styles.variantThumb, styles.variantThumbPlaceholder]}>
-                      <Ionicons name="image-outline" size={16} color="#d1d5db" />
+              <View style={styles.itemFooter}>
+                <View style={styles.priceContainer}>
+                  {vItem.offerPrice && vItem.offerPrice < vItem.price ? (
+                    <View style={styles.priceRow}>
+                      <Text style={styles.originalPrice}>₹{vItem.price}</Text>
+                      <Text style={styles.offerPrice}>₹{vItem.offerPrice}</Text>
                     </View>
+                  ) : (
+                    <Text style={styles.itemPrice}>₹{vItem.price}{vItem.quantity && vItem.unit ? ` / ${vItem.quantity} ${vItem.unit}` : ''}</Text>
                   )}
-                  <View style={styles.variantCardInfo}>
-                    <Text style={styles.variantCardName} numberOfLines={1}>{v.label}</Text>
-                    <Text style={styles.variantCardFoodType}>
-                      {v.foodType === 'veg' ? '🟢 Veg' : v.foodType === 'nonveg' ? '🔴 Non-Veg' : v.foodType === 'egg' ? '🟡 Egg' : ''}
-                    </Text>
-                    {v.quantities && v.quantities.length > 0 ? (
-                      <View style={styles.variantQtyRow}>
-                        {v.quantities.map((q, qIdx) => (
-                          <View key={qIdx} style={styles.variantQtyChip}>
-                            <Text style={styles.variantQtyText}>{q.quantity} {q.unit} — ₹{q.price}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    ) : (
-                      <Text style={styles.variantCardPrice}>₹{v.price}{v.quantity && v.unit ? ` / ${v.quantity} ${v.unit}` : ''}</Text>
-                    )}
-                  </View>
-                </View>
-                <View style={[styles.variantAvailBadge, { backgroundColor: v.available !== false ? '#DCFCE7' : '#FEE2E2' }]}>
-                  <Text style={{ fontSize: 10, fontWeight: '700', color: v.available !== false ? '#16A34A' : '#DC2626' }}>
-                    {v.available !== false ? 'Active' : 'Off'}
-                  </Text>
                 </View>
               </View>
-            ))}
+            )}
           </View>
-        )}
+
+          <View style={[styles.variantAvailBadge, { backgroundColor: isAvail ? '#DCFCE7' : '#FEE2E2' }]}>
+            <Text style={{ fontSize: 10, fontWeight: '700', color: isAvail ? '#16A34A' : '#DC2626' }}>
+              {isAvail ? 'Active' : 'Off'}
+            </Text>
+          </View>
+        </TouchableOpacity>
       </Animated.View>
     );
-  }, [fadeAnim, scaleAnim, isItemCategoryUnavailable, isItemScheduledLocked, isItemManuallyPaused, getItemLockedCategories, getItemManuallyPausedCategories, navigation, togglingId, selectedTitle]);
+  }, [fadeAnim, scaleAnim, navigation]);
 
-  const keyExtractor = useCallback((item) => item._id, []);
+  const variantKeyExtractor = useCallback((item) => item._id, []);
 
   return (
     <View style={styles.container}>
@@ -1254,7 +1201,7 @@ export default function AdminMenuScreen({ navigation, route }) {
                 </LinearGradient>
               </View>
               <Text style={[styles.titleName, selectedTitle === 'all' && styles.titleNameActive]}>All Items</Text>
-              <Text style={styles.titleVariantCount}>{items.length} items</Text>
+              <Text style={styles.titleVariantCount}>{totalVariantCount} items</Text>
               {selectedTitle === 'all' && <View style={styles.titleUnderline} />}
             </TouchableOpacity>
             {titleCards.map(tc => (
@@ -1294,9 +1241,9 @@ export default function AdminMenuScreen({ navigation, route }) {
         </View>
       ) : (
         <FlatList
-          data={filteredItems}
-          renderItem={renderItem}
-          keyExtractor={keyExtractor}
+          data={flattenedVariants}
+          renderItem={renderVariantItem}
+          keyExtractor={variantKeyExtractor}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[ZOMATO_RED]} tintColor={ZOMATO_RED} />}
           showsVerticalScrollIndicator={false}
