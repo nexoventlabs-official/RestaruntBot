@@ -518,13 +518,11 @@ const catalogService = {
   buildProductDescription(menuItem, variant = null) {
     const parts = [];
 
-    // ── Part 1: Variant label + quantity/unit (or base unit info) ──
+    // ── Part 1: Quantity/unit for variants (variant name already shown as size pill) ──
     if (variant) {
-      let variantInfo = variant.label;
       if (variant.quantity && variant.unit) {
-        variantInfo += ` (${variant.quantity} ${variant.unit})`;
+        parts.push(`${variant.quantity} ${variant.unit}`);
       }
-      parts.push(variantInfo);
     } else if (menuItem.variants && menuItem.variants.length > 0) {
       const variantTypeName = menuItem.variants[0]?.variantType === 'color' ? 'Colors' : 'Sizes';
       const labels = menuItem.variants
