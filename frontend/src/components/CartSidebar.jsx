@@ -51,6 +51,11 @@ export default function CartSidebar({
       if (item.offerInfo) {
         msg += ` 🎁`;
       }
+      // Include item ID and variant index for chatbot matching
+      msg += ` #${item._id}`;
+      if (item.variantIndex !== null && item.variantIndex !== undefined) {
+        msg += `_v${item.variantIndex}`;
+      }
       msg += `\n`;
     });
     msg += `\n💰 *Total: ₹${availableCartTotal}*`;

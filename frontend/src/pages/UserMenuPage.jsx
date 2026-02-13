@@ -251,29 +251,10 @@ export default function UserMenuPage() {
     e?.stopPropagation();
     if (!isItemAvailable(item._id)) return;
     
-    // Format food type
-    const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : 
-                          item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
-                          item.foodType === 'egg' ? '🥚 Egg' : '';
-    
-    // Rating display with gold stars
-    let ratingDisplay = '';
-    if (item.totalRatings > 0) {
-      const fullStars = Math.floor(item.avgRating || 0);
-      const emptyStars = 5 - fullStars;
-      const goldStars = '★'.repeat(fullStars) + '☆'.repeat(emptyStars);
-      ratingDisplay = `${goldStars} ${item.avgRating} (${item.totalRatings} reviews)`;
-    } else {
-      ratingDisplay = '☆☆☆☆☆ No ratings yet';
-    }
-    
-    // Build message like chatbot format
-    let msg = `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n\n`;
-    msg += `${ratingDisplay}\n\n`;
-    msg += `💰 *Price:* ₹${item.price} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
-    msg += `⏱️ *Prep Time:* ${item.preparationTime || 15} mins\n`;
-    if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
-    msg += `\n📝 ${item.description || 'Delicious dish prepared fresh!'}`;
+    // Simple message with item ID for chatbot to send catalog product card
+    let msg = `I'd like to order *${item.name}*`;
+    msg += `\n💰 ₹${item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}`;
+    msg += `\n#WEB_${item._id}`;
     
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
   };
@@ -347,17 +328,14 @@ export default function UserMenuPage() {
     const variant = selectedVariantIndex !== null ? item.variants?.[selectedVariantIndex] : null;
     const unitPrice = details.offerPrice || details.price;
     
-    const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : 
-                          item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
-                          item.foodType === 'egg' ? '🥚 Egg' : '';
-    
-    let msg = `Hi! I'd like to order:\n\n`;
-    msg += `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}`;
+    // Simple message with item ID & variant for chatbot to send catalog product card
+    let msg = `I'd like to order *${item.name}*`;
     if (variant) msg += ` - ${variant.label}`;
-    msg += `\n`;
-    msg += `📦 *Quantity:* ${dialogQuantity}\n`;
-    msg += `💰 *Price:* ₹${unitPrice} x ${dialogQuantity} = ₹${unitPrice * dialogQuantity}\n`;
-    msg += `\nPlease confirm my order. Thank you!`;
+    msg += ` x${dialogQuantity}`;
+    msg += `\n💰 ₹${unitPrice * dialogQuantity}`;
+    msg += `\n#WEB_${item._id}`;
+    if (selectedVariantIndex !== null) msg += `_v${selectedVariantIndex}`;
+    msg += `_q${dialogQuantity}`;
     
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
     closeItemDialog();

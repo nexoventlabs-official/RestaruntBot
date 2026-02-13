@@ -1154,15 +1154,25 @@ const chatbot = {
     const lines = text.split('\n').map(l => l.trim()).filter(l => l);
     
     for (const line of lines) {
-      // Pattern: "1. Item Name x2 - ₹398" or "1. Item Name x2 - Rs398" (may have 🎁 at end)
+      // Pattern: "1. Item Name (Variant) x2 - ₹398 🎁 #itemId_v0" or without ID
       const itemMatch = line.match(/^\d+\.\s*(.+?)\s*x(\d+)\s*[-–]\s*₹?(\d+)/i);
       if (itemMatch) {
-        const name = itemMatch[1].trim();
+        const rawName = itemMatch[1].trim();
         const quantity = parseInt(itemMatch[2]);
         const price = parseInt(itemMatch[3]);
         const hasOffer = line.includes('🎁');
-        items.push({ name, quantity, price, hasOffer });
-        logger.info('Found cart item', { name, quantity, price, hasOffer });
+        
+        // Extract item ID if present: #<24-char hex>_v<N> or #<24-char hex>
+        const idMatch = line.match(/#([a-f0-9]{24})(?:_v(\d+))?/i);
+        const itemId = idMatch ? idMatch[1] : null;
+        const variantIndex = idMatch && idMatch[2] !== undefined ? parseInt(idMatch[2]) : null;
+        
+        // Clean name: strip variant label in parentheses for name matching
+        const name = rawName.replace(/\s*\([^)]+\)\s*$/, '').trim();
+        const variantLabel = rawName.match(/\(([^)]+)\)$/)?.[1] || null;
+        
+        items.push({ name, quantity, price, hasOffer, itemId, variantIndex, variantLabel });
+        logger.info('Found cart item', { name, quantity, price, hasOffer, itemId, variantIndex, variantLabel });
       }
       
       // Extract total
@@ -1188,13 +1198,33 @@ const chatbot = {
   },
 
   // Helper to detect website order format (single item)
-  // Detects messages from website with item name and price
-  // Returns: { itemName: string, price: number } or null
+  // Detects messages from website with item name and price, or #WEB_<itemId> format
+  // Returns: { itemName: string, price: number, itemId: string|null, variantIndex: number|null, quantity: number } or null
   isWebsiteOrderIntent(text) {
     if (!text || typeof text !== 'string') return null;
     
     const lowerText = text.toLowerCase();
     
+    // Method 1: Check for #WEB_<itemId> pattern (new format from website)
+    const webIdMatch = text.match(/#WEB_([a-f0-9]{24})(?:_v(\d+))?(?:_q(\d+))?/i);
+    if (webIdMatch) {
+      const itemId = webIdMatch[1];
+      const variantIndex = webIdMatch[2] !== undefined ? parseInt(webIdMatch[2]) : null;
+      const quantity = webIdMatch[3] ? parseInt(webIdMatch[3]) : 1;
+      
+      // Extract item name from bold text
+      const nameMatch = text.match(/\*([^*]+)\*/);
+      const itemName = nameMatch ? nameMatch[1].trim() : null;
+      
+      // Extract price
+      const priceMatch = text.match(/₹\s*(\d+)/);
+      const price = priceMatch ? parseInt(priceMatch[1]) : null;
+      
+      logger.info('Website order (ID format)', { itemId, variantIndex, quantity, itemName, price });
+      return { itemName, price, itemId, variantIndex, quantity };
+    }
+    
+    // Method 2: Legacy format detection (text-based)
     // Must contain order-related phrases or website format markers
     const hasOrderPhrase = lowerText.includes('like to order') || 
                           lowerText.includes('want to order') ||
@@ -1254,7 +1284,7 @@ const chatbot = {
     
     if (itemName && itemName.length > 1) {
       logger.info('Website order extracted', { itemName, price });
-      return { itemName, price };
+      return { itemName, price, itemId: null, variantIndex: null, quantity: 1 };
     }
     
     logger.info('Could not extract item name from website order');
@@ -4172,10 +4202,17 @@ const chatbot = {
         let totalDiscount = 0;
         
         for (const cartItem of cartOrder.items) {
-          // Find exact match for each item
-          const menuItem = menuItems.find(m => 
-            m.name.toLowerCase().trim() === cartItem.name.toLowerCase().trim()
-          );
+          // Find menu item: try by ID first, then by name
+          let menuItem = null;
+          if (cartItem.itemId) {
+            menuItem = menuItems.find(m => m._id.toString() === cartItem.itemId) ||
+                       allMenuItems.find(m => m._id.toString() === cartItem.itemId);
+          }
+          if (!menuItem) {
+            menuItem = menuItems.find(m => 
+              m.name.toLowerCase().trim() === cartItem.name.toLowerCase().trim()
+            );
+          }
           
           if (menuItem) {
             // Calculate offer discount if item has offer and customer is eligible
@@ -4212,10 +4249,14 @@ const chatbot = {
               }
             }
             
-            // Check if already in cart
-            const existingIndex = customer.cart.findIndex(c => 
-              c.menuItem?.toString() === menuItem._id.toString()
-            );
+            // Check if already in cart (match by item + variant)
+            const existingIndex = customer.cart.findIndex(c => {
+              const sameItem = c.menuItem?.toString() === menuItem._id.toString();
+              if (cartItem.variantIndex !== null && cartItem.variantIndex !== undefined) {
+                return sameItem && c.variantIndex === cartItem.variantIndex;
+              }
+              return sameItem && (c.variantIndex === null || c.variantIndex === undefined);
+            });
             
             if (existingIndex >= 0) {
               customer.cart[existingIndex].quantity += cartItem.quantity;
@@ -4233,6 +4274,11 @@ const chatbot = {
                 quantity: cartItem.quantity, 
                 addedAt: new Date() 
               };
+              // Add variant info if present
+              if (cartItem.variantIndex !== null && cartItem.variantIndex !== undefined && menuItem.variants?.[cartItem.variantIndex]) {
+                cartEntry.variantIndex = cartItem.variantIndex;
+                cartEntry.variantLabel = cartItem.variantLabel || menuItem.variants[cartItem.variantIndex].label || null;
+              }
               if (appliedOffer) {
                 cartEntry.appliedOffer = {
                   offerId: appliedOffer._id,
@@ -4283,26 +4329,68 @@ const chatbot = {
         }
       }
       // ========== WEBSITE ORDER DETECTION (exact match on item name) ==========
-      // Detect orders coming from website with format "Hi! I'd like to order: * ItemName *"
+      // Detect orders coming from website with #WEB_<itemId> or "Hi! I'd like to order: * ItemName *"
       else if (!selectedId && message && this.isWebsiteOrderIntent(message)) {
         const websiteOrder = this.isWebsiteOrderIntent(message);
         logger.info('Website order detected', { order: websiteOrder });
         
-        // Try exact match first (case-insensitive, trimmed)
-        const searchName = websiteOrder.itemName.toLowerCase().trim();
-        const exactMatch = menuItems.find(item => 
-          item.name.toLowerCase().trim() === searchName
-        );
+        let matchedItem = null;
         
-        if (exactMatch) {
-          // Found exact match - show item details with Add to Cart option
-          logger.info('Exact match found', { match: exactMatch.name });
-          state.selectedItem = exactMatch._id.toString();
+        // Method 1: Direct ID lookup (new format from website)
+        if (websiteOrder.itemId) {
+          matchedItem = menuItems.find(item => item._id.toString() === websiteOrder.itemId) ||
+                        allMenuItems.find(item => item._id.toString() === websiteOrder.itemId);
+          if (matchedItem) {
+            logger.info('Direct ID match found', { match: matchedItem.name, id: websiteOrder.itemId });
+          }
+        }
+        
+        // Method 2: Name-based matching (legacy format)
+        if (!matchedItem && websiteOrder.itemName) {
+          const searchName = websiteOrder.itemName.toLowerCase().trim();
+          matchedItem = menuItems.find(item => 
+            item.name.toLowerCase().trim() === searchName
+          );
+        }
+        
+        if (matchedItem) {
+          // Add item to cart with variant and quantity if specified
+          if (websiteOrder.quantity > 1 || websiteOrder.variantIndex !== null) {
+            customer.cart = customer.cart || [];
+            const cartEntry = { 
+              menuItem: matchedItem._id, 
+              quantity: websiteOrder.quantity || 1, 
+              addedAt: new Date() 
+            };
+            if (websiteOrder.variantIndex !== null && matchedItem.variants?.[websiteOrder.variantIndex]) {
+              cartEntry.variantIndex = websiteOrder.variantIndex;
+              cartEntry.variantLabel = matchedItem.variants[websiteOrder.variantIndex].label || null;
+            }
+            // Check if already in cart (same item + variant)
+            const existingIdx = customer.cart.findIndex(c => {
+              const sameItem = c.menuItem?.toString() === matchedItem._id.toString();
+              if (websiteOrder.variantIndex !== null) {
+                return sameItem && c.variantIndex === websiteOrder.variantIndex;
+              }
+              return sameItem && (c.variantIndex === null || c.variantIndex === undefined);
+            });
+            if (existingIdx >= 0) {
+              customer.cart[existingIdx].quantity = cartEntry.quantity;
+              customer.cart[existingIdx].addedAt = new Date();
+            } else {
+              customer.cart.push(cartEntry);
+            }
+            await customer.save();
+          }
+          
+          // Show catalog product card for this item
+          state.selectedItem = matchedItem._id.toString();
           customer.conversationState = state;
           await customer.save();
-          await this.sendItemDetailsForOrder(phone, exactMatch);
+          await this.sendItemDetailsForOrder(phone, matchedItem);
           state.currentStep = 'viewing_item_details';
-        } else {
+        } else if (websiteOrder.itemName) {
+          const searchName = websiteOrder.itemName.toLowerCase().trim();
           // No exact match - try to find items that START with the search term
           // This prevents "Chicken" from matching "Gongura Chicken"
           let partialMatches = menuItems.filter(item => 
@@ -4350,6 +4438,15 @@ const chatbot = {
             ]);
             state.currentStep = 'main_menu';
           }
+        } else {
+          // Item ID provided but not found in menu
+          logger.info('Website order item not found by ID', { itemId: websiteOrder.itemId });
+          const itemNotAvailableImageUrl = await chatbotImagesService.getImageUrl('item_not_available');
+          await sendWithOptionalImage(phone, itemNotAvailableImageUrl, `❌ Sorry, this item is currently not available.\n\nPlease browse our menu!`, [
+            { id: 'view_menu', text: 'View Menu' },
+            { id: 'home', text: 'Main Menu' }
+          ]);
+          state.currentStep = 'main_menu';
         }
       }
       // ========== GLOBAL COMMANDS (work from any state) ==========
