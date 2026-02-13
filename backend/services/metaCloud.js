@@ -1172,9 +1172,11 @@ const metaCloud = {
             condition: 'new',
           };
 
-          // item_group_id for iOS variant picker on product detail page
+          // Clear item_group_id so each variant is independent — WhatsApp shows "Related items" automatically
           if (product.itemGroupId) {
             data.item_group_id = product.itemGroupId;
+          } else {
+            data.item_group_id = '';
           }
           if (product.colorLabel) {
             data.color = product.colorLabel;
