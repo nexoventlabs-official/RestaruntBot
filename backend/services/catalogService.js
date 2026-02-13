@@ -729,8 +729,7 @@ const catalogService = {
     try {
       if (hasVariants) {
         // ===== VARIANT PRODUCTS: each variant is a separate catalog product =====
-        // item_group_id groups them so iOS shows variant picker on product detail page.
-        // Catalog browse view still shows all variants as separate products on both platforms.
+        // Each variant shows as a separate browsable item in the catalog.
         const variantProducts = [];
         menuItem.variants.forEach((v, vIdx) => {
           if (v.quantities && v.quantities.length > 0) {
@@ -747,9 +746,6 @@ const catalogService = {
                 imageUrl: v.image || menuItem.image || null,
                 category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
                 availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
-                itemGroupId: retailerId,
-                colorLabel: v.label,
-                sizeLabel: sizeLabel,
                 salePrice: (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : null
               };
               variantProducts.push(prod);
@@ -767,9 +763,6 @@ const catalogService = {
               imageUrl: v.image || menuItem.image || null,
               category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
               availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
-              itemGroupId: retailerId,
-              colorLabel: v.label,
-              sizeLabel: pillLabel,
               salePrice: (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : null
             };
             variantProducts.push(prod);
