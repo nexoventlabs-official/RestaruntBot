@@ -7521,11 +7521,21 @@ const chatbot = {
         }
 
         if (sent) {
-          // Build compact cart summary with item names (in case product list card doesn't render)
+          // Build compact cart summary with variant names
           let summaryLines = [];
           freshCustomer.cart.forEach((item) => {
             if (item.menuItem) {
-              const name = item.menuItem.name;
+              let name = item.menuItem.name;
+              // Show variant label instead of just title name
+              if (item.variantIndex !== null && item.variantIndex !== undefined && item.menuItem.variants?.[item.variantIndex]) {
+                const variant = item.menuItem.variants[item.variantIndex];
+                if (item.quantityIndex !== null && item.quantityIndex !== undefined && variant.quantities?.[item.quantityIndex]) {
+                  const q = variant.quantities[item.quantityIndex];
+                  name = `${variant.label} (${q.quantity} ${q.unit})`;
+                } else {
+                  name = variant.label;
+                }
+              }
               const qty = item.quantity;
               summaryLines.push(`• ${name} × ${qty}`);
             }
