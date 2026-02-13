@@ -3912,26 +3912,8 @@ const chatbot = {
           }
           await customer.save();
 
-          // Build summary text
-          const itemsSummary = parsed.items
-            .filter(i => i.menuItem)
-            .map(i => {
-              const variantSuffix = i.variantLabel ? ` (${i.variantLabel})` : '';
-              return `• ${i.name}${variantSuffix} × ${i.quantity} — ₹${i.price * i.quantity}`;
-            })
-            .join('\n');
-          const unmapped = parsed.items.filter(i => !i.menuItem);
-
-          let summaryMsg = `🛒 *Cart Updated from Catalog*\n\n${itemsSummary}\n\n💰 *Subtotal:* ₹${parsed.totalAmount}`;
-          if (unmapped.length > 0) {
-            summaryMsg += `\n\n⚠️ ${unmapped.length} item(s) couldn't be matched and were skipped.`;
-          }
-
-          await whatsapp.sendButtons(phone, summaryMsg, [
-            { id: 'review_pay', text: 'Review & Order' },
-            { id: 'add_more', text: 'Add More' },
-            { id: 'clear_cart', text: 'Clear Cart' }
-          ]);
+          // Show native catalog cart (product list with images + Place Order buttons)
+          await this.showCartAsProducts(phone, customer);
 
           state.currentStep = 'item_added';
           customer.conversationState = state;
