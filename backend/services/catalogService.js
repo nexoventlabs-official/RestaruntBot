@@ -728,15 +728,14 @@ const catalogService = {
 
     try {
       if (hasVariants) {
-        // ===== VARIANT PRODUCTS: each variant is a separate catalog product =====
-        // 3-level hierarchy: Title (item_group_id) → Variant Items (color) → Quantities (size)
-        // Meta supports both color + size attributes for dual-selector pills.
+        // ===== VARIANT PRODUCTS: each variant is a separate standalone catalog product =====
+        // No item_group_id — Android doesn't support variant picker, so each variant
+        // must appear as its own independent product in the catalog.
         const variantProducts = [];
         menuItem.variants.forEach((v, vIdx) => {
           if (v.quantities && v.quantities.length > 0) {
-            // New format: variant × quantity combos with color + size
+            // Variant × quantity combos — each combo is a standalone product
             v.quantities.forEach((q, qIdx) => {
-              const sizeLabel = `${q.quantity} ${q.unit}`;
               const variantTitle = `${v.label}, ${q.quantity} ${q.unit}`;
               const prod = {
                 retailerId: `${retailerId}_v${vIdx}_q${qIdx}`,
@@ -747,16 +746,12 @@ const catalogService = {
                 imageUrl: v.image || menuItem.image || null,
                 category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
                 availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
-                itemGroupId: retailerId,
-                colorLabel: v.label,
-                sizeLabel: sizeLabel,
                 salePrice: (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : null
               };
               variantProducts.push(prod);
             });
           } else {
-            // Single quantity variant — dual color+size for proper grouping
-            const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : 'Standard';
+            // Single quantity variant — standalone product
             const variantTitle = (v.quantity && v.unit) ? `${v.label}, ${v.quantity} ${v.unit}` : v.label;
             const prod = {
               retailerId: `${retailerId}_v${vIdx}`,
@@ -767,9 +762,6 @@ const catalogService = {
               imageUrl: v.image || menuItem.image || null,
               category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
               availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
-              itemGroupId: retailerId,
-              colorLabel: v.label,
-              sizeLabel: pillLabel,
               salePrice: (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : null
             };
             variantProducts.push(prod);

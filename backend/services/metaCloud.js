@@ -1152,11 +1152,10 @@ const metaCloud = {
         throw new Error('META_CATALOG_ID not configured');
       }
 
-      const hasVariants = products.some(p => p.itemGroupId);
-      logger.info('Meta batchCreateOrUpdateProducts', { catalogId, count: products.length, hasVariants });
+      logger.info('Meta batchCreateOrUpdateProducts', { catalogId, count: products.length });
 
-      if (hasVariants) {
-        // ── items_batch endpoint: supports item_group_id, size, color, google_product_category ──
+      // Always use items_batch endpoint — supports sale_price as string and standalone products
+      {
         const itemsBatchRequests = products.map(product => {
           const currency = product.currency || 'INR';
           const link = product.url || process.env.WEBSITE_URL || process.env.BACKEND_URL || 'https://wa.me/' + (process.env.META_PHONE_NUMBER_ID || '');
@@ -1171,7 +1170,6 @@ const metaCloud = {
             google_product_category: 'Food, Beverages & Tobacco > Food Items',
             brand: process.env.BUSINESS_NAME || 'Restaurant',
             condition: 'new',
-            item_group_id: product.itemGroupId,
           };
 
           if (product.salePrice && product.salePrice < product.price) {
@@ -1180,17 +1178,6 @@ const metaCloud = {
 
           if (product.imageUrl) {
             data.image_link = product.imageUrl;
-          }
-
-          // Variant attributes - support dual color+size for 3-level hierarchy
-          if (product.colorLabel && product.sizeLabel) {
-            // New format: color = item name, size = quantity+unit
-            data.color = product.colorLabel;
-            data.size = product.sizeLabel;
-          } else if (product.variantType === 'size' && product.variantLabel) {
-            data.size = product.variantLabel;
-          } else if (product.variantType === 'color' && product.variantLabel) {
-            data.color = product.variantLabel;
           }
 
           return { method: 'UPDATE', data };
@@ -1213,52 +1200,6 @@ const metaCloud = {
 
         return batchResponse.data;
       }
-
-      // ── batch endpoint: simpler, for single products without variants ──
-      const batchRequests = products.map(product => {
-        // Price must be integer in smallest currency unit (paise for INR)
-        const priceInPaise = Math.round(product.price * 100);
-        const link = product.url || process.env.WEBSITE_URL || process.env.BACKEND_URL || 'https://wa.me/' + (process.env.META_PHONE_NUMBER_ID || '');
-
-        const req = {
-          method: 'UPDATE',
-          retailer_id: product.retailerId,
-          data: {
-            name: product.name,
-            description: product.description || product.name,
-            availability: product.availability || 'in stock',
-            price: priceInPaise,
-            currency: product.currency || 'INR',
-            url: link,
-            category: 'Food, Beverages & Tobacco > Food Items',
-          }
-        };
-
-        // If sale price is provided and less than regular price, set it
-        if (product.salePrice && product.salePrice < product.price) {
-          req.data.sale_price = Math.round(product.salePrice * 100);
-          req.data.sale_price_effective_date = product.salePriceEffectiveDate || '';
-        }
-
-        if (product.imageUrl) {
-          req.data.image_url = product.imageUrl;
-        }
-
-        return req;
-      });
-
-      const batchResponse = await metaApi.post(
-        `https://graph.facebook.com/v24.0/${catalogId}/batch`,
-        { requests: batchRequests },
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-
-      logger.info('Meta batchCreateOrUpdateProducts success', {
-        count: products.length,
-        handles: batchResponse.data?.handles
-      });
-
-      return batchResponse.data;
     } catch (error) {
       const errorData = error.response?.data?.error || error.response?.data;
       logger.error('Meta batchCreateOrUpdateProducts error', {
