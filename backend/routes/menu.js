@@ -733,4 +733,62 @@ router.get('/catalog-debug', authMiddleware, async (req, res) => {
   }
 });
 
+// ===== DEBUG: Check WABA catalog connection =====
+router.get('/catalog-connection', authMiddleware, async (req, res) => {
+  try {
+    const accessToken = process.env.META_ACCESS_TOKEN;
+    const wabaId = process.env.META_WABA_ID;
+    const catalogId = process.env.META_CATALOG_ID;
+    const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
+    const axios = require('axios');
+
+    // 1. Check which catalogs are connected to WABA
+    let wabaCatalogs = null;
+    try {
+      const r1 = await axios.get(
+        `https://graph.facebook.com/v24.0/${wabaId}/product_catalogs`,
+        { params: { access_token: accessToken } }
+      );
+      wabaCatalogs = r1.data;
+    } catch (e) {
+      wabaCatalogs = { error: e.response?.data?.error?.message || e.message };
+    }
+
+    // 2. Check phone number commerce settings
+    let phoneCommerce = null;
+    try {
+      const r2 = await axios.get(
+        `https://graph.facebook.com/v24.0/${phoneNumberId}`,
+        { params: { fields: 'id,display_phone_number,verified_name,is_official_business_account', access_token: accessToken } }
+      );
+      phoneCommerce = r2.data;
+    } catch (e) {
+      phoneCommerce = { error: e.response?.data?.error?.message || e.message };
+    }
+
+    // 3. Check catalog product count from Meta
+    let catalogInfo = null;
+    try {
+      const r3 = await axios.get(
+        `https://graph.facebook.com/v24.0/${catalogId}`,
+        { params: { fields: 'id,name,product_count,vertical', access_token: accessToken } }
+      );
+      catalogInfo = r3.data;
+    } catch (e) {
+      catalogInfo = { error: e.response?.data?.error?.message || e.message };
+    }
+
+    res.json({
+      wabaId,
+      catalogId,
+      phoneNumberId,
+      wabaCatalogs,
+      phoneCommerce,
+      catalogInfo
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
