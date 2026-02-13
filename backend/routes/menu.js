@@ -667,13 +667,20 @@ router.post('/sync-catalog', authMiddleware, async (req, res) => {
 
     for (const item of items) {
       try {
-        await catalogService.syncProductToMeta(item);
+        const metaResponse = await catalogService.syncProductToMeta(item);
         const hasVariants = item.variants && item.variants.length > 0;
         const productCount = hasVariants 
           ? item.variants.reduce((sum, v) => sum + (v.quantities?.length || 1), 0)
           : 1;
         results.synced += productCount;
-        results.details.push({ name: item.name, status: 'synced', products: productCount });
+        results.details.push({ 
+          name: item.name, status: 'synced', products: productCount,
+          metaResponse: metaResponse,
+          variants: hasVariants ? item.variants.map((v, i) => ({
+            label: v.label, price: v.price, image: v.image,
+            retailerId: v.quantities?.length ? `${item._id}_v${i}_q0` : `${item._id}_v${i}`
+          })) : null
+        });
       } catch (err) {
         results.failed++;
         results.details.push({ name: item.name, status: 'failed', error: err.message });
@@ -685,6 +692,44 @@ router.post('/sync-catalog', authMiddleware, async (req, res) => {
     res.json({ success: true, ...results });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ===== DEBUG: List products in Meta catalog =====
+router.get('/catalog-debug', authMiddleware, async (req, res) => {
+  try {
+    const catalogId = process.env.META_CATALOG_ID;
+    if (!catalogId) {
+      return res.status(400).json({ error: 'META_CATALOG_ID not set' });
+    }
+
+    const accessToken = process.env.META_ACCESS_TOKEN;
+    
+    // Query Meta for all products in catalog
+    const axios = require('axios');
+    const response = await axios.get(
+      `https://graph.facebook.com/v24.0/${catalogId}/products`,
+      {
+        params: {
+          fields: 'id,retailer_id,name,price,availability,image_url,item_group_id,color,size',
+          limit: 50,
+          access_token: accessToken
+        }
+      }
+    );
+
+    res.json({
+      catalogId,
+      productCount: response.data?.data?.length || 0,
+      products: response.data?.data || [],
+      paging: response.data?.paging
+    });
+  } catch (error) {
+    const errorData = error.response?.data?.error || error.response?.data;
+    res.status(500).json({ 
+      error: errorData?.message || error.message,
+      details: errorData 
+    });
   }
 });
 
