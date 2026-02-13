@@ -13,19 +13,6 @@ const catalogService = require('./catalogService');
 const axios = require('axios');
 const logger = require('./logger');
 
-// ============ PER-PHONE MESSAGE QUEUE ============
-// Prevents race conditions when user clicks two buttons quickly.
-// Messages from the same phone are processed sequentially, not concurrently.
-const _phoneQueues = new Map();
-function enqueueForPhone(phone, fn) {
-  const prev = _phoneQueues.get(phone) || Promise.resolve();
-  const next = prev.then(fn, fn); // run even if previous rejected
-  _phoneQueues.set(phone, next);
-  // Cleanup after completion to prevent memory leak
-  next.finally(() => { if (_phoneQueues.get(phone) === next) _phoneQueues.delete(phone); });
-  return next;
-}
-
 // Helper: Count items including variants for accurate WhatsApp display
 // If an item has variants, count each variant as a separate item (matches Meta catalog)
 function countItemsWithVariants(items) {
@@ -574,11 +561,6 @@ const calculateOfferDiscount = (menuItem, activeOffers) => {
 };
 
 const chatbot = {
-  // Queue wrapper — ensures messages from the same phone are processed sequentially
-  enqueueMessage(phone, message, messageType, selectedId, senderName) {
-    return enqueueForPhone(phone, () => this.handleMessage(phone, message, messageType, selectedId, senderName));
-  },
-
   // Helper to detect cancel order intent from text/voice
   // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
   // Enhanced with voice recognition alternatives
