@@ -4465,9 +4465,14 @@ const chatbot = {
         const labelMap = { veg_only: '🌿 Veg Menu', nonveg_only: '🍗 Non-Veg Menu', egg_only: '🥚 Egg Menu', show_all: '🍽️ All Menu' };
         
         if (filteredItems.length > 0) {
-          // Show category browsing for all flows (order flow and browse flow)
-          await this.sendMenuCategoriesWithLabel(phone, filteredItems, labelMap[selection]);
-          state.currentStep = 'select_category';
+          // If coming from order flow (Add More / Order Food), show title list; otherwise category browsing
+          if (state.currentStep === 'select_food_type_order') {
+            await this.sendTitleListForOrder(phone, menuItems, state.foodTypePreference, labelMap[selection]);
+            state.currentStep = 'select_title_order';
+          } else {
+            await this.sendMenuCategoriesWithLabel(phone, filteredItems, labelMap[selection]);
+            state.currentStep = 'select_category';
+          }
         } else {
           await whatsapp.sendButtons(phone, `❌ No ${labelMap[selection]} items available right now.`, [
             { id: 'view_menu', text: '📋 View All Menu' },
@@ -4537,9 +4542,14 @@ const chatbot = {
           egg: '🟡 Egg Menu'
         };
         
-        // Show category browsing for all flows (order flow and browse flow)
-        await this.sendMenuCategoriesWithLabel(phone, filteredItems, foodTypeLabels[state.foodTypePreference]);
-        state.currentStep = 'select_category';
+        // If coming from order flow, show title list; otherwise category browsing
+        if (state.currentStep === 'select_food_type_order') {
+          await this.sendTitleListForOrder(phone, menuItems, state.foodTypePreference, foodTypeLabels[state.foodTypePreference]);
+          state.currentStep = 'select_title_order';
+        } else {
+          await this.sendMenuCategoriesWithLabel(phone, filteredItems, foodTypeLabels[state.foodTypePreference]);
+          state.currentStep = 'select_category';
+        }
       }
       else if (selection === 'place_order' || selection === 'order_now' || (!selectedId && msg === 'order')) {
         // Skip service type selection and go directly to food type selection
@@ -6247,18 +6257,8 @@ const chatbot = {
    * User picks a title → we send catalog with only matching variants.
    */
   async sendTitleListForOrder(phone, menuItems, foodType, label = 'Select Item') {
-    // Find items that have at least one variant matching the food type
-    const matchingItems = menuItems.filter(item => {
-      if (!item.variants || item.variants.length === 0) return false;
-      return item.variants.some(v => {
-        const vFoodType = v.foodType || item.foodType || 'none';
-        if (foodType === 'both') return true;
-        if (foodType === 'veg') return vFoodType === 'veg';
-        if (foodType === 'nonveg') return vFoodType === 'nonveg' || vFoodType === 'egg';
-        if (foodType === 'egg') return vFoodType === 'egg';
-        return true;
-      });
-    });
+    // Find ALL items matching the food type (including items without variants)
+    const matchingItems = this.filterByFoodType(menuItems, foodType);
 
     if (!matchingItems.length) {
       await whatsapp.sendButtons(phone, '📋 No matching items found.', [
@@ -6270,20 +6270,21 @@ const chatbot = {
 
     const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
 
-    // Build list rows — each row is a parent menu item title
+    // Build list rows — each row is a menu item title
     const rows = matchingItems.slice(0, 10).map(item => {
-      const variantCount = item.variants.filter(v => {
-        const vFoodType = v.foodType || item.foodType || 'none';
-        if (foodType === 'both') return true;
-        if (foodType === 'veg') return vFoodType === 'veg';
-        if (foodType === 'nonveg') return vFoodType === 'nonveg' || vFoodType === 'egg';
-        return true;
-      }).length;
       const safeId = item._id.toString();
+      const icon = getFoodTypeIcon(item.foodType);
+      let description;
+      if (item.variants && item.variants.length > 0) {
+        const variantCount = item.variants.length;
+        description = `${variantCount} variant${variantCount > 1 ? 's' : ''} available`;
+      } else {
+        description = `₹${item.offerPrice || item.price}`;
+      }
       return {
         rowId: `order_title_${safeId}`,
-        title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
-        description: `${variantCount} variant${variantCount > 1 ? 's' : ''} available`
+        title: `${icon} ${item.name}`.substring(0, 24),
+        description
       };
     });
 
@@ -6304,11 +6305,17 @@ const chatbot = {
   async sendTitleVariantsForOrder(phone, menuItems, titleItemId, foodType) {
     const menuItem = menuItems.find(m => m._id.toString() === titleItemId);
 
-    if (!menuItem || !menuItem.variants || menuItem.variants.length === 0) {
-      await whatsapp.sendButtons(phone, '📋 Item not found or has no variants.', [
+    if (!menuItem) {
+      await whatsapp.sendButtons(phone, '📋 Item not found.', [
         { id: 'order_food', text: '🍽️ Order Food' },
         { id: 'home', text: 'Main Menu' }
       ]);
+      return;
+    }
+
+    // Non-variant item — show item details directly
+    if (!menuItem.variants || menuItem.variants.length === 0) {
+      await this.sendItemDetails(phone, menuItems, titleItemId);
       return;
     }
 
