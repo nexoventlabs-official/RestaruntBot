@@ -4452,16 +4452,22 @@ const chatbot = {
         await this.sendFoodTypeSelection(phone);
         state.currentStep = 'select_food_type';
       }
-      // Handle veg_only / nonveg_only / show_all (from "Item Not Available" browse menu buttons)
-      else if (selection === 'veg_only' || selection === 'nonveg_only' || selection === 'show_all') {
-        const foodTypeMap = { veg_only: 'veg', nonveg_only: 'nonveg', show_all: 'both' };
+      // Handle veg_only / nonveg_only / egg_only / show_all (from "Item Not Available" browse menu buttons or "Add More")
+      else if (selection === 'veg_only' || selection === 'nonveg_only' || selection === 'egg_only' || selection === 'show_all') {
+        const foodTypeMap = { veg_only: 'veg', nonveg_only: 'nonveg', egg_only: 'egg', show_all: 'both' };
         state.foodTypePreference = foodTypeMap[selection];
         const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference);
-        const labelMap = { veg_only: '🌿 Veg Menu', nonveg_only: '🍗 Non-Veg Menu', show_all: '🍽️ All Menu' };
+        const labelMap = { veg_only: '🌿 Veg Menu', nonveg_only: '🍗 Non-Veg Menu', egg_only: '🥚 Egg Menu', show_all: '🍽️ All Menu' };
         
         if (filteredItems.length > 0) {
-          await this.sendMenuCategoriesWithLabel(phone, filteredItems, labelMap[selection]);
-          state.currentStep = 'select_category';
+          // If coming from Add More (order flow), show title list for ordering; otherwise show category browsing
+          if (state.currentStep === 'select_food_type_order') {
+            await this.sendTitleListForOrder(phone, menuItems, state.foodTypePreference, labelMap[selection]);
+            state.currentStep = 'select_title_order';
+          } else {
+            await this.sendMenuCategoriesWithLabel(phone, filteredItems, labelMap[selection]);
+            state.currentStep = 'select_category';
+          }
         } else {
           await whatsapp.sendButtons(phone, `❌ No ${labelMap[selection]} items available right now.`, [
             { id: 'view_menu', text: '📋 View All Menu' },
@@ -4845,15 +4851,23 @@ const chatbot = {
         }
       }
       else if (selection === 'add_more') {
-        // Ask user to select food type before showing menu
-        await whatsapp.sendButtons(phone, 
-          '🍽️ *Add More Items*\n\nWhat would you like to browse?',
-          [
-            { id: 'food_veg', text: 'Veg' },
-            { id: 'food_nonveg', text: 'Non-Veg' },
-            { id: 'food_both', text: 'All Items' }
-          ]
-        );
+        // Show Browse Menu with image and food type filter buttons
+        const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
+        const browseMessage = `🍽️ *Browse Menu*\n\nWhat would you like to see?`;
+        
+        if (browseMenuImg) {
+          await whatsapp.sendImageWithButtons(phone, browseMenuImg, browseMessage, [
+            { id: 'veg_only', text: '🌿 Veg Only' },
+            { id: 'nonveg_only', text: '🍗 Non-Veg Only' },
+            { id: 'egg_only', text: '🥚 Egg Only' }
+          ]);
+        } else {
+          await whatsapp.sendButtons(phone, browseMessage, [
+            { id: 'veg_only', text: '🌿 Veg Only' },
+            { id: 'nonveg_only', text: '🍗 Non-Veg Only' },
+            { id: 'egg_only', text: '🥚 Egg Only' }
+          ]);
+        }
         state.currentStep = 'select_food_type_order';
       }
 
