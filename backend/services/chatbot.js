@@ -4442,14 +4442,9 @@ const chatbot = {
         const labelMap = { veg_only: '🌿 Veg Menu', nonveg_only: '🍗 Non-Veg Menu', egg_only: '🥚 Egg Menu', show_all: '🍽️ All Menu' };
         
         if (filteredItems.length > 0) {
-          // If coming from Add More (order flow), show title list for ordering; otherwise show category browsing
-          if (state.currentStep === 'select_food_type_order') {
-            await this.sendTitleListForOrder(phone, menuItems, state.foodTypePreference, labelMap[selection]);
-            state.currentStep = 'select_title_order';
-          } else {
-            await this.sendMenuCategoriesWithLabel(phone, filteredItems, labelMap[selection]);
-            state.currentStep = 'select_category';
-          }
+          // Show category browsing for all flows (order flow and browse flow)
+          await this.sendMenuCategoriesWithLabel(phone, filteredItems, labelMap[selection]);
+          state.currentStep = 'select_category';
         } else {
           await whatsapp.sendButtons(phone, `❌ No ${labelMap[selection]} items available right now.`, [
             { id: 'view_menu', text: '📋 View All Menu' },
@@ -4519,14 +4514,9 @@ const chatbot = {
           egg: '🟡 Egg Menu'
         };
         
-        // If coming from order flow, show title list (items with matching variants); otherwise show browse menu
-        if (state.currentStep === 'select_food_type_order') {
-          await this.sendTitleListForOrder(phone, menuItems, state.foodTypePreference, foodTypeLabels[state.foodTypePreference]);
-          state.currentStep = 'select_title_order';
-        } else {
-          await this.sendMenuCategoriesWithLabel(phone, filteredItems, foodTypeLabels[state.foodTypePreference]);
-          state.currentStep = 'select_category';
-        }
+        // Show category browsing for all flows (order flow and browse flow)
+        await this.sendMenuCategoriesWithLabel(phone, filteredItems, foodTypeLabels[state.foodTypePreference]);
+        state.currentStep = 'select_category';
       }
       else if (selection === 'place_order' || selection === 'order_now' || (!selectedId && msg === 'order')) {
         // Skip service type selection and go directly to food type selection
