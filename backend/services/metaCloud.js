@@ -1172,18 +1172,16 @@ const metaCloud = {
             condition: 'new',
           };
 
-          // Clear item_group_id so each variant is independent — WhatsApp shows "Related items" automatically
+          // Set item_group_id to unique retailerId so each variant is its own "group" — no picker
+          // Also clear color/size to remove old variant picker attributes
           if (product.itemGroupId) {
             data.item_group_id = product.itemGroupId;
           } else {
-            data.item_group_id = '';
+            data.item_group_id = product.retailerId; // unique per variant = no grouping
           }
-          if (product.colorLabel) {
-            data.color = product.colorLabel;
-          }
-          if (product.sizeLabel) {
-            data.size = product.sizeLabel;
-          }
+          // Clear color/size so picker doesn't appear from old cached values
+          data.color = product.colorLabel || '';
+          data.size = product.sizeLabel || '';
 
           if (product.salePrice && product.salePrice < product.price) {
             data.sale_price = `${product.salePrice.toFixed(2)} ${currency}`;
