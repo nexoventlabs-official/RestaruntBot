@@ -6493,12 +6493,20 @@ const chatbot = {
       const safeId = item._id.toString();
       let description;
       if (item.variants && item.variants.length > 0) {
-        // Count only variants matching the selected food type
+        // Count only variants matching the selected food type, including quantity options
         const matchingVariants = foodType === 'both' ? item.variants : item.variants.filter(v => {
           const vft = v.foodType || item.foodType;
           return matchesFoodType(vft, foodType);
         });
-        const variantCount = matchingVariants.length;
+        // Count total products (expand quantity options like catalog does)
+        let variantCount = 0;
+        matchingVariants.forEach(v => {
+          if (v.quantities && v.quantities.length > 0) {
+            variantCount += v.quantities.length;
+          } else {
+            variantCount += 1;
+          }
+        });
         description = `${variantCount} variant${variantCount > 1 ? 's' : ''} available`;
       } else {
         description = `₹${item.offerPrice || item.price}`;
