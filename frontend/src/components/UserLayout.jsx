@@ -88,7 +88,9 @@ export default function UserLayout() {
         .map(cat => cat.name);
       
       const available = itemRes.data.filter(item => {
-        const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+        const itemCategories = Array.isArray(item.category) ? item.category.filter(Boolean) : [item.category].filter(Boolean);
+        // Items with no categories are always available
+        if (itemCategories.length === 0) return true;
         return itemCategories.some(cat => activeCategoryNames.includes(cat));
       });
       

@@ -15,25 +15,36 @@ export default function CartSidebar({
   availableItems = []
 }) {
   // Check if item is available (has itemStatus === 'available')
-  const isItemAvailable = (itemId) => {
+  const isItemAvailable = (itemId, variantIndex) => {
     const item = availableItems.find(item => item._id === itemId);
-    return item && item.itemStatus === 'available';
+    if (!item) return false;
+    if (item.itemStatus !== 'available') return false;
+    // Check variant-level availability if variantIndex is provided
+    if (variantIndex != null && item.variants && item.variants[variantIndex]) {
+      return item.variants[variantIndex].available !== false;
+    }
+    return true;
   };
 
   // Get item status for display
-  const getItemStatus = (itemId) => {
+  const getItemStatus = (itemId, variantIndex) => {
     const item = availableItems.find(item => item._id === itemId);
-    return item?.itemStatus || 'unavailable';
+    if (!item) return 'unavailable';
+    if (item.itemStatus !== 'available') return item.itemStatus || 'unavailable';
+    if (variantIndex != null && item.variants && item.variants[variantIndex]?.available === false) {
+      return 'soldout';
+    }
+    return item.itemStatus || 'unavailable';
   };
 
   // Get available cart items only
-  const availableCartItems = cart.filter(item => isItemAvailable(item._id));
-  const unavailableCartItems = cart.filter(item => !isItemAvailable(item._id));
+  const availableCartItems = cart.filter(item => isItemAvailable(item._id, item.variantIndex));
+  const unavailableCartItems = cart.filter(item => !isItemAvailable(item._id, item.variantIndex));
   const availableCartTotal = availableCartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const hasUnavailableItems = unavailableCartItems.length > 0;
 
   // Check if wishlist item is available
-  const unavailableWishlistItems = wishlist.filter(item => !isItemAvailable(item._id));
+  const unavailableWishlistItems = wishlist.filter(item => !isItemAvailable(item._id, item.variantIndex));
   const hasUnavailableWishlistItems = unavailableWishlistItems.length > 0;
 
   // Check if any cart items have offer info
@@ -201,12 +212,13 @@ export default function CartSidebar({
                       <p className="text-sm font-medium text-gray-500 mb-3">Unavailable Items</p>
                     </div>
                     {unavailableCartItems.map(item => {
-                      const status = getItemStatus(item._id);
+                      const status = getItemStatus(item._id, item.variantIndex);
                       const isSoldOut = status === 'soldout';
+                      const cartDisplayName = item.variantLabel ? `${item.name} - ${item.variantLabel}` : item.name;
                       return (
                       <div key={item.cartKey || item._id} className="flex gap-3 bg-gray-100 rounded-xl p-3 opacity-60">
                         {item.image ? (
-                          <img src={item.image} alt={item.name} className="w-20 h-20 rounded-lg object-cover grayscale" />
+                          <img src={item.image} alt={cartDisplayName} className="w-20 h-20 rounded-lg object-cover grayscale" />
                         ) : (
                           <div className="w-20 h-20 rounded-lg bg-gray-200 flex items-center justify-center">
                             <span className="text-2xl">🍽️</span>
@@ -214,7 +226,7 @@ export default function CartSidebar({
                         )}
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <h4 className="font-medium text-gray-600">{item.name}</h4>
+                            <h4 className="font-medium text-gray-600">{cartDisplayName}</h4>
                             <span className={`px-2 py-0.5 text-xs rounded-full ${isSoldOut ? 'bg-red-100 text-red-600' : 'bg-gray-200 text-gray-600'}`}>
                               {isSoldOut ? 'Sold Out' : 'Unavailable'}
                             </span>
@@ -251,11 +263,13 @@ export default function CartSidebar({
                 )}
 
                 {wishlist.map(item => {
-                  const available = isItemAvailable(item._id);
-                  const status = getItemStatus(item._id);
+                  const available = isItemAvailable(item._id, item.variantIndex);
+                  const status = getItemStatus(item._id, item.variantIndex);
                   const isSoldOut = status === 'soldout';
+                  const displayName = item.variantLabel ? `${item.name} - ${item.variantLabel}` : item.name;
+                  const itemKey = item.wishlistKey || item._id;
                   return (
-                    <div key={item._id} className={`flex gap-3 rounded-xl p-3 ${available ? 'bg-gray-50' : 'bg-gray-100 opacity-60'}`}>
+                    <div key={itemKey} className={`flex gap-3 rounded-xl p-3 ${available ? 'bg-gray-50' : 'bg-gray-100 opacity-60'}`}>
                       <div className="relative">
                         {item.image ? (
                           <img src={item.image} alt={item.name} className={`w-20 h-20 rounded-lg object-cover ${!available ? 'grayscale' : ''}`} />
@@ -273,7 +287,7 @@ export default function CartSidebar({
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <h4 className={`font-medium ${available ? 'text-gray-900' : 'text-gray-600'}`}>{item.name}</h4>
+                          <h4 className={`font-medium ${available ? 'text-gray-900' : 'text-gray-600'}`}>{displayName}</h4>
                           {!available && (
                             <span className={`px-2 py-0.5 text-xs rounded-full ${isSoldOut ? 'bg-red-100 text-red-600' : 'bg-gray-200 text-gray-600'}`}>
                               {isSoldOut ? 'Sold Out' : 'Unavailable'}
@@ -301,7 +315,7 @@ export default function CartSidebar({
                         </div>
                         <div className="flex gap-2 mt-2">
                           {available ? (
-                            <button onClick={() => { addToCart(item, 1, item.offerInfo); removeFromWishlist(item._id); }} className="px-3 py-1 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600">
+                            <button onClick={() => { addToCart(item, 1, item.offerInfo, item.variantIndex != null ? { variantIndex: item.variantIndex, label: item.variantLabel, price: item.price, image: item.image } : null); removeFromWishlist(itemKey); }} className="px-3 py-1 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600">
                               Add to Cart
                             </button>
                           ) : (
@@ -309,7 +323,7 @@ export default function CartSidebar({
                               {isSoldOut ? 'Sold Out' : 'Unavailable'}
                             </span>
                           )}
-                          <button onClick={() => removeFromWishlist(item._id)} className="p-1 text-red-500 hover:bg-red-50 rounded-full">
+                          <button onClick={() => removeFromWishlist(itemKey)} className="p-1 text-red-500 hover:bg-red-50 rounded-full">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
