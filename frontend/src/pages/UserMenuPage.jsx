@@ -211,17 +211,17 @@ export default function UserMenuPage() {
     return null;
   };
 
-  // Get item count for a category from all items
+  // Get item count for a category (count variants individually)
   const getCategoryItemCount = (categoryName) => {
     return allItems.filter(item => {
       const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
       return itemCategories.includes(categoryName);
-    }).length;
+    }).reduce((count, item) => count + (item.variants && item.variants.length > 0 ? item.variants.length : 1), 0);
   };
 
-  // Get total items count
+  // Get total items count (count variants individually)
   const getTotalItemsCount = () => {
-    return allItems.length;
+    return allItems.reduce((count, item) => count + (item.variants && item.variants.length > 0 ? item.variants.length : 1), 0);
   };
 
   const isItemAvailable = (itemId) => {
@@ -937,9 +937,17 @@ export default function UserMenuPage() {
               <div className="relative w-36 md:w-44">
                 <div className={`${selectedCategory === 'all' ? 'bg-[#3f9065]' : 'bg-[#F5F1E8] group-hover:bg-[#3f9065]'} rounded-t-full rounded-b-3xl pt-6 pb-14 px-4 transition-all duration-300`}>
                   <div className="flex justify-center mb-4">
-                    <div className={`w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center ${selectedCategory === 'all' ? 'bg-white/20' : 'bg-orange-100'} transition-all duration-300`}>
-                      <span className={`text-lg md:text-xl font-bold ${selectedCategory === 'all' ? 'text-white' : 'text-orange-500 group-hover:text-white'} transition-colors duration-300`}>All</span>
-                    </div>
+                    {allItems.length > 0 && allItems[0].image ? (
+                      <img 
+                        src={allItems[0].image} 
+                        alt="All Items" 
+                        className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-lg transition-transform group-hover:scale-110"
+                      />
+                    ) : (
+                      <div className={`w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center ${selectedCategory === 'all' ? 'bg-white/20' : 'bg-orange-100'} transition-all duration-300`}>
+                        <span className="text-3xl">🍽️</span>
+                      </div>
+                    )}
                   </div>
                   <div className="text-center">
                     <h3 className={`font-semibold text-sm md:text-base transition-colors duration-300 ${selectedCategory === 'all' ? 'text-yellow-400' : 'text-gray-900 group-hover:text-white'}`}>All Items</h3>
