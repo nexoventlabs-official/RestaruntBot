@@ -102,9 +102,24 @@ export default function AdminOffersScreen({ navigation }) {
   const toggleActive = async (offer) => {
     try {
       setTogglingOffer(offer._id);
-      await api.patch(`/offers/${offer._id}/toggle`);
+      const res = await api.patch(`/offers/${offer._id}/toggle`);
+      const wasActivating = !offer.isActive;
       setOffers(offers.map(o => o._id === offer._id ? { ...o, isActive: !o.isActive } : o));
-      showToast(offer.isActive ? 'Offer deactivated' : 'Offer activated');
+      
+      if (wasActivating) {
+        // Activating
+        if (res.data?.broadcastResult?.status === 'sending') {
+          showToast('✅ Offer activated • Discounts applied to catalog • Broadcasting to customers...');
+        } else if (offer.templateStatus === 'approved') {
+          showToast('✅ Offer activated • Discounts applied to catalog');
+        } else if (offer.templateStatus === 'pending') {
+          showToast('✅ Offer activated • Discounts applied • Template pending approval');
+        } else {
+          showToast('✅ Offer activated • Discounts applied to catalog');
+        }
+      } else {
+        showToast('⏸ Offer deactivated • Discounts removed from catalog');
+      }
     } catch (error) { Alert.alert('Error', 'Failed to update offer'); }
     finally { setTogglingOffer(null); }
   };

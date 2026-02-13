@@ -1274,7 +1274,73 @@ router.patch('/:id/toggle', auth, async (req, res) => {
       })();
     }
     
-    res.json(offer);
+    // Auto-broadcast to targeted customers when activating an approved offer
+    let broadcastResult = null;
+    if (!wasActive && offer.isActive && offer.templateStatus === 'approved') {
+      try {
+        const offerImageUrl = offer.imageDesktop || offer.imageTablet || offer.imageMobile || offer.image;
+        const isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(offer.targetType);
+        
+        let targetedCustomers = null;
+        let offerData = null;
+        
+        if (isTargeted && offer.targetedCustomers && offer.targetedCustomers.length > 0) {
+          targetedCustomers = offer.targetedCustomers;
+          offerData = {
+            offerId: offer._id,
+            offerType: offer.offerType,
+            title: offer.title,
+            discountType: offer.discountType,
+            discountValue: offer.discountValue,
+            percentage: offer.percentage,
+            appliedItems: offer.appliedItems || [],
+            appliedVariants: offer.appliedVariants || [],
+            appliedCategories: offer.appliedCategories || [],
+            validUntil: offer.validUntil
+          };
+        }
+        
+        logger.info('Auto-broadcasting offer on activate', { offerId: offer._id, targeted: !!targetedCustomers });
+        
+        // Fire in background - don't block toggle response
+        (async () => {
+          try {
+            const result = await whatsappBroadcast.sendOfferToAll(
+              offerImageUrl,
+              offer.title,
+              offer.description,
+              offer.offerType,
+              targetedCustomers,
+              offer._id.toString(),
+              offerData
+            );
+            
+            await Offer.findByIdAndUpdate(offer._id, {
+              broadcastSentAt: new Date(),
+              broadcastResult: {
+                total: result.total,
+                sent: result.sent,
+                sentViaInteractive: result.sentViaInteractive,
+                sentViaTemplate: result.sentViaTemplate,
+                failed: result.failed
+              }
+            });
+            
+            logger.info('Auto-broadcast completed on activate', { 
+              offerId: offer._id, sent: result.sent, failed: result.failed 
+            });
+          } catch (broadcastErr) {
+            logger.error('Auto-broadcast on activate failed', { error: broadcastErr.message });
+          }
+        })();
+        
+        broadcastResult = { status: 'sending', message: 'Broadcasting to customers in background...' };
+      } catch (err) {
+        logger.error('Auto-broadcast setup failed', { error: err.message });
+      }
+    }
+    
+    res.json({ ...offer.toObject(), broadcastResult });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
