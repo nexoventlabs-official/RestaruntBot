@@ -260,11 +260,14 @@ export default function UserMenuPage() {
   };
 
   // Open item detail dialog
-  const openItemDialog = (item) => {
+  const openItemDialog = (item, preselectedVariantIndex = null) => {
     setSelectedItem(item);
     setDialogQuantity(cart?.find(c => c._id === item._id)?.quantity || 1);
-    // Auto-select first available variant if item has variants
-    if (item.variants && item.variants.length > 0) {
+    // If a specific variant was pre-selected (e.g., from variant card click), use it
+    if (preselectedVariantIndex !== null) {
+      setSelectedVariantIndex(preselectedVariantIndex);
+    } else if (item.variants && item.variants.length > 0) {
+      // Auto-select first available variant
       const firstAvailable = item.variants.findIndex(v => v.available !== false);
       setSelectedVariantIndex(firstAvailable >= 0 ? firstAvailable : 0);
     } else {
@@ -437,6 +440,203 @@ export default function UserMenuPage() {
       }
       return stars;
     };
+
+    // --- VARIANT CARDS as section under parent header ---
+    if (item.variants && item.variants.length > 0) {
+      return (
+        <div key={item._id} className="mb-8">
+          {/* Parent Item Header (image + title like app SectionList header) */}
+          <div 
+            className="flex items-center gap-3 mb-4 bg-white rounded-2xl p-3 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-all"
+            onClick={() => available && openItemDialog(item)}
+          >
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 flex-shrink-0">
+              {item.image ? (
+                <img src={item.image} alt={item.name} className={`w-full h-full object-cover ${!available ? 'grayscale' : ''}`} />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <span className="text-2xl">🍽️</span>
+                </div>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-bold text-gray-900 text-base sm:text-lg line-clamp-1">{item.name}</h3>
+              <div className="flex items-center gap-2 mt-0.5">
+                <div className="flex">{renderStars()}</div>
+                <span className="text-xs text-gray-500">({totalRatings})</span>
+                {item.foodType && item.foodType !== 'none' && (
+                  <div className={`w-4 h-4 border-2 rounded flex items-center justify-center ml-1 ${
+                    item.foodType === 'veg' ? 'border-green-600' : item.foodType === 'nonveg' ? 'border-red-600' : 'border-yellow-600'
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${
+                      item.foodType === 'veg' ? 'bg-green-600' : item.foodType === 'nonveg' ? 'bg-red-600' : 'bg-yellow-600'
+                    }`} />
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" />{item.preparationTime || 15}m</span>
+                <span className="text-blue-600 font-medium">{item.variants.length} {item.variants[0]?.variantType === 'color' ? 'colors' : 'sizes'}</span>
+              </div>
+            </div>
+            <button 
+              onClick={(e) => handleToggleWishlist(item, e)} 
+              className="p-1.5 hover:scale-110 transition-transform flex-shrink-0 bg-gray-50 rounded-full"
+            >
+              <Heart className={`w-5 h-5 ${isInWishlist && isInWishlist(item._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
+            </button>
+            {/* Sold Out / Unavailable badge on header */}
+            {itemStatus === 'soldout' && (
+              <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs font-bold rounded-full">Sold Out</span>
+            )}
+            {itemStatus === 'unavailable' && (
+              <span className="px-2 py-0.5 bg-gray-200 text-gray-600 text-xs font-bold rounded-full">Unavailable</span>
+            )}
+          </div>
+
+          {/* Variant Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pl-2 sm:pl-4">
+            {item.variants.map((v, vIdx) => {
+              const variantAvailable = available && v.available !== false;
+              const variantFoodType = v.foodType || item.foodType;
+              const variantImage = v.image || item.image;
+              const variantPrice = v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price;
+              const cartKey = `${item._id}_v${vIdx}`;
+              const variantInCart = cart?.some(c => c.cartKey === cartKey);
+              const variantCartQty = cart?.filter(c => c.cartKey === cartKey).reduce((sum, c) => sum + c.quantity, 0) || 0;
+
+              return (
+                <div 
+                  key={`${item._id}_v${vIdx}`}
+                  className={`group relative bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 ease-out flex sm:flex-col ${!variantAvailable ? 'opacity-75' : ''}`}
+                  onClick={() => {
+                    if (variantAvailable) {
+                      openItemDialog(item, vIdx);
+                    }
+                  }}
+                >
+                  {/* Variant Image */}
+                  <div className="relative w-36 sm:w-full h-full sm:h-48 md:h-56 flex-shrink-0 overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 p-2">
+                    {variantImage ? (
+                      <img src={variantImage} alt={v.label} className={`w-full h-full object-contain group-hover:scale-105 transition-transform duration-700 ease-out ${!variantAvailable ? 'grayscale' : ''}`} />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <span className="text-5xl sm:text-6xl">🍽️</span>
+                      </div>
+                    )}
+                    
+                    {/* Food Type */}
+                    {variantFoodType && variantFoodType !== 'none' && (
+                      <div className={`absolute top-3 left-3 w-6 h-6 border-2 rounded flex items-center justify-center z-20 ${
+                        variantFoodType === 'veg' ? 'border-green-600 bg-white' : variantFoodType === 'nonveg' ? 'border-red-600 bg-white' : 'border-yellow-600 bg-white'
+                      }`}>
+                        <span className={`w-3 h-3 rounded-full ${
+                          variantFoodType === 'veg' ? 'bg-green-600' : variantFoodType === 'nonveg' ? 'bg-red-600' : 'bg-yellow-600'
+                        }`} />
+                      </div>
+                    )}
+                    
+                    {/* WhatsApp */}
+                    {variantAvailable && (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          let msg = `I'd like to order *${item.name}* - ${v.label}`;
+                          msg += `\n💰 ₹${variantPrice}`;
+                          msg += `\n#WEB_${item._id}_v${vIdx}_q1`;
+                          window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
+                        }}
+                        className="absolute bottom-3 right-3 w-10 h-10 bg-green-500 text-white rounded-full flex items-center justify-center hover:bg-green-600 transition-all hover:scale-110 shadow-lg z-20"
+                        title="Order via WhatsApp"
+                      >
+                        <WhatsAppIcon className="w-5 h-5" />
+                      </button>
+                    )}
+
+                    {/* Sold Out / Unavailable Overlay */}
+                    {!variantAvailable && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
+                        <span className={`${v.available === false ? 'bg-red-600' : 'bg-gray-700'} text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg`}>
+                          {v.available === false ? 'Sold Out' : 'Unavailable'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Variant Content */}
+                  <div className="p-4 flex flex-col flex-grow min-w-0">
+                    <h3 className="font-bold text-gray-900 text-base sm:text-lg line-clamp-1 mb-1">{v.label}</h3>
+                    <p className="text-xs text-gray-500 mb-2 line-clamp-1">{item.name}</p>
+
+                    {/* Price */}
+                    <div className="flex items-center gap-3 mb-3 flex-wrap">
+                      <span className="text-xl sm:text-2xl font-bold text-orange-600">₹{variantPrice}</span>
+                      {v.offerPrice && v.offerPrice < v.price && (
+                        <>
+                          <span className="text-sm text-gray-400 line-through">₹{v.price}</span>
+                          <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2.5 py-1 rounded-full text-xs font-bold shadow-md">
+                            {Math.round(((v.price - v.offerPrice) / v.price) * 100)}% OFF
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Quantities (if variant has multiple quantity options) */}
+                    {v.quantities && v.quantities.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {v.quantities.map((q, qIdx) => (
+                          <span key={qIdx} className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full font-medium">
+                            {q.quantity} {q.unit} — ₹{q.price}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Unit + Cart */}
+                    <div className="flex items-center justify-between text-sm text-gray-600 mt-auto">
+                      <div className="flex items-center gap-1">
+                        <Package className="w-4 h-4 text-gray-500" />
+                        <span className="font-medium whitespace-nowrap">{v.quantity || item.quantity || 1} {v.unit || item.unit || 'piece'}</span>
+                      </div>
+
+                      {!variantAvailable ? (
+                        <button className="w-10 h-10 bg-red-100 text-red-500 rounded-xl cursor-not-allowed flex items-center justify-center" disabled>
+                          <ShoppingCart className="w-5 h-5" />
+                        </button>
+                      ) : variantInCart ? (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setSidebarOpen(true); setActiveTab('cart'); }} 
+                          className="w-10 h-10 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl flex items-center justify-center hover:from-green-600 hover:to-green-700 transition-all shadow-md hover:shadow-lg relative flex-shrink-0"
+                          title="View Cart"
+                        >
+                          <ShoppingCart className="w-5 h-5" />
+                          <span className="absolute -top-1 -right-1 w-5 h-5 bg-white text-green-600 rounded-full text-xs font-bold flex items-center justify-center">
+                            {variantCartQty}
+                          </span>
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            if (addToCart) addToCart(item, 1, null, { variantIndex: vIdx, label: v.label, price: variantPrice, offerPrice: v.offerPrice, image: variantImage }); 
+                          }} 
+                          className="w-10 h-10 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl flex items-center justify-center hover:from-orange-600 hover:to-orange-700 transition-all shadow-md hover:shadow-lg flex-shrink-0"
+                          title="Add to Cart"
+                        >
+                          <ShoppingCart className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    // --- NON-VARIANT ITEMS: show as before ---
     
     return (
       <div 
@@ -524,39 +724,17 @@ export default function UserMenuPage() {
             <span className="text-xs text-gray-500 font-medium">({totalRatings})</span>
           </div>
 
-          {/* Price Section with more spacing */}
+          {/* Price Section */}
           <div className="flex items-center gap-3 mb-4 flex-wrap">
-            {item.variants && item.variants.length > 0 ? (
+            <span className="text-xl sm:text-2xl font-bold text-orange-600">
+              ₹{item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}
+            </span>
+            {item.offerPrice && item.offerPrice < item.price && (
               <>
-                {(() => {
-                  const prices = item.variants.filter(v => v.available !== false).map(v => v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price);
-                  const minPrice = Math.min(...prices);
-                  const maxPrice = Math.max(...prices);
-                  return (
-                    <>
-                      <span className="text-xl sm:text-2xl font-bold text-orange-600">
-                        {minPrice === maxPrice ? `₹${minPrice}` : `₹${minPrice} - ₹${maxPrice}`}
-                      </span>
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
-                        {item.variants.length} {item.variants[0]?.variantType === 'color' ? 'colors' : 'sizes'}
-                      </span>
-                    </>
-                  );
-                })()}
-              </>
-            ) : (
-              <>
-                <span className="text-xl sm:text-2xl font-bold text-orange-600">
-                  ₹{item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}
+                <span className="text-sm text-gray-400 line-through">₹{item.price}</span>
+                <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2.5 py-1 rounded-full text-xs font-bold shadow-md">
+                  {Math.round(((item.price - item.offerPrice) / item.price) * 100)}% OFF
                 </span>
-                {item.offerPrice && item.offerPrice < item.price && (
-                  <>
-                    <span className="text-sm text-gray-400 line-through">₹{item.price}</span>
-                    <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2.5 py-1 rounded-full text-xs font-bold shadow-md">
-                      {Math.round(((item.price - item.offerPrice) / item.price) * 100)}% OFF
-                    </span>
-                  </>
-                )}
               </>
             )}
           </div>
@@ -860,42 +1038,56 @@ export default function UserMenuPage() {
           </div>
         </div>
 
-        {/* Items Grid */}
-        <div className={`space-y-10 transition-opacity duration-300 ${itemsLoading ? 'opacity-50' : 'opacity-100'}`}>
+        {/* Items - Grouped by Item Title (like app: image+title header with variant cards) */}
+        <div className={`space-y-6 transition-opacity duration-300 ${itemsLoading ? 'opacity-50' : 'opacity-100'}`}>
           {itemsLoading && (
             <div className="flex justify-center py-8">
               <div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
           )}
           
-          {!itemsLoading && (selectedCategory !== 'all' ? [selectedCategory] : filteredCategories).map(cat => {
-            const itemsInCategory = displayItems.filter(i => 
-              (Array.isArray(i.category) ? i.category : [i.category]).includes(cat)
-            );
-            if (itemsInCategory.length === 0) return null;
+          {!itemsLoading && (() => {
+            // Filter items by selected category
+            const filteredItems = selectedCategory !== 'all' 
+              ? displayItems.filter(i => (Array.isArray(i.category) ? i.category : [i.category]).includes(selectedCategory))
+              : displayItems;
             
-            return (
-              <div key={cat}>
-                <div className="flex items-center gap-3 mb-6">
-                  <h2 className="text-xl font-bold text-gray-900">{cat}</h2>
-                  <span className="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-sm font-medium">
-                    {itemsInCategory.length} items
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {itemsInCategory.map(renderItemCard)}
-                </div>
+            if (filteredItems.length === 0) return (
+              <div className="bg-white rounded-2xl shadow-sm p-12 text-center">
+                <span className="text-6xl mb-4 block">🍽️</span>
+                <h3 className="text-lg font-semibold text-gray-700">No items found</h3>
+                <p className="text-gray-400 mt-1">Try a different filter</p>
               </div>
             );
-          })}
-          
-          {!itemsLoading && filteredCategories.length === 0 && (
-            <div className="bg-white rounded-2xl shadow-sm p-12 text-center">
-              <span className="text-6xl mb-4 block">🍽️</span>
-              <h3 className="text-lg font-semibold text-gray-700">No items found</h3>
-              <p className="text-gray-400 mt-1">Try a different filter</p>
-            </div>
-          )}
+
+            // Separate variant items and non-variant items
+            const variantItems = filteredItems.filter(i => i.variants && i.variants.length > 0);
+            const nonVariantItems = filteredItems.filter(i => !i.variants || i.variants.length === 0);
+
+            return (
+              <>
+                {/* Variant items: each renders its own header + variant grid */}
+                {variantItems.map(renderItemCard)}
+
+                {/* Non-variant items: shown in a grid */}
+                {nonVariantItems.length > 0 && (
+                  <div>
+                    {variantItems.length > 0 && (
+                      <div className="flex items-center gap-3 mb-4 mt-4">
+                        <h2 className="text-lg font-bold text-gray-900">Other Items</h2>
+                        <span className="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-sm font-medium">
+                          {nonVariantItems.length}
+                        </span>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {nonVariantItems.map(renderItemCard)}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
 
