@@ -445,47 +445,27 @@ export default function UserMenuPage() {
     if (item.variants && item.variants.length > 0) {
       return (
         <div key={item._id} className="mb-8">
-          {/* Parent Item Header (image + title like app SectionList header) */}
-          <div 
-            className="flex items-center gap-3 mb-4 bg-white rounded-2xl p-3 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-all"
-            onClick={() => available && openItemDialog(item)}
-          >
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 flex-shrink-0">
+          {/* Parent Item Category-Style Header */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 flex-shrink-0 border-2 border-orange-200 shadow-sm">
               {item.image ? (
                 <img src={item.image} alt={item.name} className={`w-full h-full object-cover ${!available ? 'grayscale' : ''}`} />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
-                  <span className="text-2xl">🍽️</span>
+                  <span className="text-xl">🍽️</span>
                 </div>
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-gray-900 text-base sm:text-lg line-clamp-1">{item.name}</h3>
-              <div className="flex items-center gap-2 mt-0.5">
-                <div className="flex">{renderStars()}</div>
-                <span className="text-xs text-gray-500">({totalRatings})</span>
-                {item.foodType && item.foodType !== 'none' && (
-                  <div className={`w-4 h-4 border-2 rounded flex items-center justify-center ml-1 ${
-                    item.foodType === 'veg' ? 'border-green-600' : item.foodType === 'nonveg' ? 'border-red-600' : 'border-yellow-600'
-                  }`}>
-                    <span className={`w-2 h-2 rounded-full ${
-                      item.foodType === 'veg' ? 'bg-green-600' : item.foodType === 'nonveg' ? 'bg-red-600' : 'bg-yellow-600'
-                    }`} />
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" />{item.preparationTime || 15}m</span>
-                <span className="text-blue-600 font-medium">{item.variants.length} {item.variants[0]?.variantType === 'color' ? 'colors' : 'sizes'}</span>
-              </div>
+              <h3 className="font-bold text-gray-900 text-lg sm:text-xl line-clamp-1">{item.name}</h3>
+              <span className="text-xs text-gray-500">{item.variants.length} {item.variants[0]?.variantType === 'color' ? 'colors' : 'sizes'}</span>
             </div>
             <button 
               onClick={(e) => handleToggleWishlist(item, e)} 
-              className="p-1.5 hover:scale-110 transition-transform flex-shrink-0 bg-gray-50 rounded-full"
+              className="p-1.5 hover:scale-110 transition-transform flex-shrink-0"
             >
               <Heart className={`w-5 h-5 ${isInWishlist && isInWishlist(item._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
             </button>
-            {/* Sold Out / Unavailable badge on header */}
             {itemStatus === 'soldout' && (
               <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs font-bold rounded-full">Sold Out</span>
             )}
@@ -566,7 +546,17 @@ export default function UserMenuPage() {
                   {/* Variant Content */}
                   <div className="p-4 flex flex-col flex-grow min-w-0">
                     <h3 className="font-bold text-gray-900 text-base sm:text-lg line-clamp-1 mb-1">{v.label}</h3>
-                    <p className="text-xs text-gray-500 mb-2 line-clamp-1">{item.name}</p>
+                    <p className="text-xs text-gray-500 mb-1 line-clamp-1">{item.name}</p>
+
+                    {/* Variant Rating */}
+                    {(v.avgRating > 0 || v.totalRatings > 0) && (
+                      <div className="flex items-center gap-1 mb-2">
+                        {[1, 2, 3, 4, 5].map(i => (
+                          <Star key={i} className={`w-3 h-3 ${i <= Math.round(v.avgRating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                        ))}
+                        <span className="text-xs text-gray-500 ml-0.5">({v.totalRatings || 0})</span>
+                      </div>
+                    )}
 
                     {/* Price */}
                     <div className="flex items-center gap-3 mb-3 flex-wrap">
