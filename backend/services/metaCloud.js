@@ -1172,11 +1172,9 @@ const metaCloud = {
             condition: 'new',
           };
 
-          // Clear item_group_id so each variant shows separately on iOS
+          // item_group_id for iOS variant picker on product detail page
           if (product.itemGroupId) {
             data.item_group_id = product.itemGroupId;
-          } else {
-            data.item_group_id = product.retailerId; // unique per variant = no grouping
           }
           if (product.colorLabel) {
             data.color = product.colorLabel;

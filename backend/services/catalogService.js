@@ -729,7 +729,8 @@ const catalogService = {
     try {
       if (hasVariants) {
         // ===== VARIANT PRODUCTS: each variant is a separate catalog product =====
-        // No item_group_id — all variants show individually on both iOS and Android.
+        // item_group_id groups them for iOS variant picker on product detail page.
+        // All variants still show individually in catalog browse on both platforms.
         const variantProducts = [];
         menuItem.variants.forEach((v, vIdx) => {
           if (v.quantities && v.quantities.length > 0) {
@@ -746,6 +747,9 @@ const catalogService = {
                 imageUrl: v.image || menuItem.image || null,
                 category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
                 availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
+                itemGroupId: retailerId,
+                colorLabel: v.label,
+                sizeLabel: sizeLabel,
                 salePrice: (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : null
               };
               variantProducts.push(prod);
@@ -763,6 +767,9 @@ const catalogService = {
               imageUrl: v.image || menuItem.image || null,
               category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
               availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
+              itemGroupId: retailerId,
+              colorLabel: v.label,
+              sizeLabel: pillLabel,
               salePrice: (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : null
             };
             variantProducts.push(prod);
