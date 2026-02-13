@@ -4901,6 +4901,99 @@ const chatbot = {
         state.selectedTitle = titleItemId;
         state.currentStep = 'selecting_item';
       }
+      // User selected a specific variant from the fallback list (Android users)
+      else if (selection.startsWith('add_variant_')) {
+        const parts = selection.replace('add_variant_', '').split('_');
+        const variantIndex = parseInt(parts.pop());
+        const menuItemId = parts.join('_');
+        const menuItem = menuItems.find(m => m._id.toString() === menuItemId);
+
+        if (menuItem && menuItem.variants && menuItem.variants[variantIndex]) {
+          const variant = menuItem.variants[variantIndex];
+          // If variant has quantities, show quantity options as buttons
+          if (variant.quantities && variant.quantities.length > 0) {
+            const rows = variant.quantities.slice(0, 10).map((q, qIdx) => {
+              const price = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+              return {
+                rowId: `addqty_${menuItemId}_${variantIndex}_${qIdx}`,
+                title: `${q.quantity} ${q.unit}`.substring(0, 24),
+                description: `₹${price}`
+              };
+            });
+            await whatsapp.sendList(
+              phone,
+              `${variant.label}`.substring(0, 24),
+              `📋 *${menuItem.name} — ${variant.label}*\nSelect quantity:`,
+              'Choose Size',
+              [{ title: 'Quantities', rows }],
+              'Pick a size'
+            );
+            state.currentStep = 'selecting_quantity';
+          } else {
+            // No quantities — add variant directly to cart
+            customer.cart = customer.cart || [];
+            const existingIdx = customer.cart.findIndex(c =>
+              c.menuItem?.toString() === menuItemId && c.variantIndex === variantIndex
+            );
+            if (existingIdx >= 0) {
+              customer.cart[existingIdx].quantity += 1;
+            } else {
+              customer.cart.push({
+                menuItem: menuItem._id,
+                quantity: 1,
+                variantIndex,
+                variantLabel: variant.label,
+                addedAt: new Date()
+              });
+            }
+            await customer.save();
+            await this.sendCart(phone, customer);
+            state.currentStep = 'item_added';
+          }
+        } else {
+          await whatsapp.sendButtons(phone, '❌ Variant not found.', [
+            { id: 'order_food', text: '🍽️ Order Food' },
+            { id: 'home', text: 'Main Menu' }
+          ]);
+        }
+      }
+      // User selected a quantity for a variant (from add_variant flow)
+      else if (selection.startsWith('addqty_')) {
+        const parts = selection.replace('addqty_', '').split('_');
+        const qIdx = parseInt(parts.pop());
+        const vIdx = parseInt(parts.pop());
+        const menuItemId = parts.join('_');
+        const menuItem = menuItems.find(m => m._id.toString() === menuItemId);
+
+        if (menuItem && menuItem.variants?.[vIdx]?.quantities?.[qIdx]) {
+          customer.cart = customer.cart || [];
+          const existingIdx = customer.cart.findIndex(c =>
+            c.menuItem?.toString() === menuItemId && c.variantIndex === vIdx && c.quantityIndex === qIdx
+          );
+          if (existingIdx >= 0) {
+            customer.cart[existingIdx].quantity += 1;
+          } else {
+            const variant = menuItem.variants[vIdx];
+            const qty = variant.quantities[qIdx];
+            customer.cart.push({
+              menuItem: menuItem._id,
+              quantity: 1,
+              variantIndex: vIdx,
+              variantLabel: `${variant.label} - ${qty.quantity} ${qty.unit}`,
+              quantityIndex: qIdx,
+              addedAt: new Date()
+            });
+          }
+          await customer.save();
+          await this.sendCart(phone, customer);
+          state.currentStep = 'item_added';
+        } else {
+          await whatsapp.sendButtons(phone, '❌ Option not found.', [
+            { id: 'order_food', text: '🍽️ Order Food' },
+            { id: 'home', text: 'Main Menu' }
+          ]);
+        }
+      }
       else if (selection.startsWith('order_cat_')) {
         const sanitizedCat = selection.replace('order_cat_', '');
         const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
@@ -6351,7 +6444,28 @@ const chatbot = {
       return;
     }
 
-    // Try sending via catalog product_list with food-type-filtered variant IDs
+    // Build matching variants list (needed for both catalog and fallback)
+    const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
+    const matchingVariants = menuItem.variants
+      .map((v, idx) => ({ ...v, originalIndex: idx }))
+      .filter(v => {
+        const vFoodType = v.foodType || menuItem.foodType || 'none';
+        if (foodType === 'both') return true;
+        if (foodType === 'veg') return vFoodType === 'veg';
+        if (foodType === 'nonveg') return vFoodType === 'nonveg' || vFoodType === 'egg';
+        return true;
+      });
+
+    if (!matchingVariants.length) {
+      await whatsapp.sendButtons(phone, `📋 No matching variants in ${menuItem.name}.`, [
+        { id: 'order_food', text: '🍽️ Order Food' },
+        { id: 'home', text: 'Main Menu' }
+      ]);
+      return;
+    }
+
+    // Try sending via catalog product_list (iOS gets variant picker via item_group_id)
+    let catalogSent = false;
     try {
       if (catalogService.isEnabled()) {
         const catalogResult = await catalogService.buildTitleVariantSections(menuItem, foodType);
@@ -6365,45 +6479,46 @@ const chatbot = {
             catalogResult.sections,
             'View & order!'
           );
-          return;
+          catalogSent = true;
         }
       }
     } catch (catalogErr) {
       logger.info('Catalog fallback for title variants', { error: catalogErr.message });
     }
 
-    // Fallback: text list of matching variants
-    const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
-    const matchingVariants = menuItem.variants.filter(v => {
-      const vFoodType = v.foodType || menuItem.foodType || 'none';
-      if (foodType === 'both') return true;
-      if (foodType === 'veg') return vFoodType === 'veg';
-      if (foodType === 'nonveg') return vFoodType === 'nonveg' || vFoodType === 'egg';
-      return true;
-    });
-
-    if (!matchingVariants.length) {
-      await whatsapp.sendButtons(phone, `📋 No matching variants in ${menuItem.name}.`, [
-        { id: 'order_food', text: '🍽️ Order Food' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
-      return;
-    }
-
-    let msg = `📋 *${menuItem.name}*\n\n`;
-    matchingVariants.forEach((v, idx) => {
+    // Always send a WhatsApp list with all variants below the product card.
+    // iOS users can use the product card's variant picker OR this list.
+    // Android users (no variant picker) use this list to select their variant.
+    const itemId = menuItem._id.toString();
+    const rows = matchingVariants.slice(0, 10).map(v => {
       const icon = getFoodTypeIcon(v.foodType || menuItem.foodType);
-      const price = v.quantities && v.quantities.length > 0
-        ? v.quantities.map(q => `${q.quantity} ${q.unit} — ₹${q.price}`).join(', ')
-        : `₹${v.price}`;
-      msg += `${idx + 1}. ${icon} ${v.label} — ${price}\n`;
+      let price;
+      if (v.quantities && v.quantities.length > 0) {
+        const cheapest = Math.min(...v.quantities.map(q => q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price));
+        price = `from ₹${cheapest}`;
+      } else {
+        price = `₹${v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price}`;
+      }
+      const sizeInfo = (v.quantity && v.unit) ? ` (${v.quantity} ${v.unit})` : '';
+      return {
+        rowId: `add_variant_${itemId}_${v.originalIndex}`,
+        title: `${icon} ${v.label}${sizeInfo}`.substring(0, 24),
+        description: price
+      };
     });
-    msg += '\nReply with the variant number to add to cart, or tap below:';
 
-    await whatsapp.sendButtons(phone, msg, [
-      { id: 'order_food', text: '🍽️ Back to Menu' },
-      { id: 'home', text: 'Main Menu' }
-    ]);
+    const listBody = catalogSent
+      ? `📱 *Can't see variant options above?*\nPick from the list below:`
+      : `📋 *${menuItem.name}*\nSelect a variant to add to cart:`;
+
+    await whatsapp.sendList(
+      phone,
+      menuItem.name.substring(0, 24),
+      listBody,
+      'Choose Variant',
+      [{ title: 'Variants', rows }],
+      'Select a variant'
+    );
   },
 
   async sendItemsForOrder(phone, menuItems, category, page = 0) {

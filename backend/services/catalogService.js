@@ -728,14 +728,15 @@ const catalogService = {
 
     try {
       if (hasVariants) {
-        // ===== VARIANT PRODUCTS: each variant is a separate standalone catalog product =====
-        // No item_group_id — Android doesn't support variant picker, so each variant
-        // must appear as its own independent product in the catalog.
+        // ===== VARIANT PRODUCTS: each variant grouped under item_group_id =====
+        // iOS WhatsApp shows variant picker (Color/Size pills) via item_group_id.
+        // Android doesn't support variant picker, so chatbot sends a fallback list.
         const variantProducts = [];
         menuItem.variants.forEach((v, vIdx) => {
           if (v.quantities && v.quantities.length > 0) {
-            // Variant × quantity combos — each combo is a standalone product
+            // Variant × quantity combos with color + size grouping
             v.quantities.forEach((q, qIdx) => {
+              const sizeLabel = `${q.quantity} ${q.unit}`;
               const variantTitle = `${v.label}, ${q.quantity} ${q.unit}`;
               const prod = {
                 retailerId: `${retailerId}_v${vIdx}_q${qIdx}`,
@@ -746,12 +747,16 @@ const catalogService = {
                 imageUrl: v.image || menuItem.image || null,
                 category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
                 availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
+                itemGroupId: retailerId,
+                colorLabel: v.label,
+                sizeLabel: sizeLabel,
                 salePrice: (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : null
               };
               variantProducts.push(prod);
             });
           } else {
-            // Single quantity variant — standalone product
+            // Single quantity variant with color + size grouping
+            const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : 'Standard';
             const variantTitle = (v.quantity && v.unit) ? `${v.label}, ${v.quantity} ${v.unit}` : v.label;
             const prod = {
               retailerId: `${retailerId}_v${vIdx}`,
@@ -762,6 +767,9 @@ const catalogService = {
               imageUrl: v.image || menuItem.image || null,
               category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
               availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
+              itemGroupId: retailerId,
+              colorLabel: v.label,
+              sizeLabel: pillLabel,
               salePrice: (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : null
             };
             variantProducts.push(prod);
