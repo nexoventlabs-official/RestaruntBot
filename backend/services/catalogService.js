@@ -504,9 +504,6 @@ const catalogService = {
                   imageUrl: v.image || item.image || null,
                   category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
                   availability: (v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
-                  itemGroupId: item._id.toString(),
-                  colorLabel: v.label,    // Item name as "color" selector
-                  sizeLabel: sizeLabel,    // Quantity+unit as "size" selector
                   salePrice: (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : null
                 });
               });
@@ -523,9 +520,6 @@ const catalogService = {
                 imageUrl: v.image || item.image || null,
                 category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
                 availability: (v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
-                itemGroupId: item._id.toString(),
-                colorLabel: v.label,     // Item name as "color" selector
-                sizeLabel: pillLabel,    // Quantity+unit as "size" selector
                 salePrice: (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : null
               });
             }
