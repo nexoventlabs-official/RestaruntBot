@@ -413,6 +413,41 @@ export default function AdminMenuScreen({ navigation, route }) {
     );
   };
 
+  // Delete a single variant (Cloudinary + Meta + MongoDB)
+  const deleteVariant = (vItem) => {
+    const parentId = vItem.parentId;
+    const vIdx = vItem.variantIndex;
+    const variantName = vItem.name || `Variant ${vIdx + 1}`;
+    const parentName = vItem.parentName;
+
+    Alert.alert(
+      'Delete Variant',
+      `Are you sure you want to delete "${variantName}" from "${parentName}"?\n\nThis will permanently remove the variant, its image from Cloudinary, and its listing from Meta catalog.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setTogglingId(`${parentId}_v${vIdx}`);
+              const response = await api.delete(`/menu/${parentId}/variant/${vIdx}`);
+              // Update local state with the returned updated item
+              setItems(prev => prev.map(i => {
+                if (i._id !== parentId) return i;
+                return response.data;
+              }));
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete variant');
+            } finally {
+              setTogglingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Category functions
   const openCategoryModal = (category = null) => {
     if (category) {
@@ -1024,15 +1059,26 @@ export default function AdminMenuScreen({ navigation, route }) {
             )}
           </View>
 
-          <TouchableOpacity
-            onPress={() => toggleVariantAvailability(vItem)}
-            activeOpacity={0.6}
-            style={[styles.variantAvailBadge, { backgroundColor: isAvail ? '#DCFCE7' : '#FEE2E2' }]}
-          >
-            <Text style={{ fontSize: 10, fontWeight: '700', color: isAvail ? '#16A34A' : '#DC2626' }}>
-              {isAvail ? 'Active' : 'Off'}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.variantActionColumn}>
+            <TouchableOpacity
+              onPress={() => toggleVariantAvailability(vItem)}
+              activeOpacity={0.6}
+              style={[styles.variantAvailBadge, { backgroundColor: isAvail ? '#DCFCE7' : '#FEE2E2' }]}
+            >
+              <Text style={{ fontSize: 10, fontWeight: '700', color: isAvail ? '#16A34A' : '#DC2626' }}>
+                {isAvail ? 'Active' : 'Off'}
+              </Text>
+            </TouchableOpacity>
+            {vItem.variantIndex >= 0 && (
+              <TouchableOpacity
+                onPress={() => deleteVariant(vItem)}
+                activeOpacity={0.6}
+                style={styles.variantDeleteBtn}
+              >
+                <Ionicons name="trash-outline" size={14} color="#DC2626" />
+              </TouchableOpacity>
+            )}
+          </View>
         </TouchableOpacity>
       </Animated.View>
     );
@@ -2476,11 +2522,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#4b5563',
   },
+  variantActionColumn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+    gap: 6,
+  },
   variantAvailBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
-    marginLeft: 8,
+  },
+  variantDeleteBtn: {
+    padding: 4,
+    borderRadius: 6,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   itemFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
   priceContainer: { flexDirection: 'row', alignItems: 'center' },

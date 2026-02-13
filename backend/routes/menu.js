@@ -515,6 +515,57 @@ router.patch('/bulk-pause', authMiddleware, async (req, res) => {
   }
 });
 
+// Delete a single variant from a menu item (Cloudinary + Meta + MongoDB)
+router.delete('/:id/variant/:variantIndex', authMiddleware, async (req, res) => {
+  try {
+    const item = await MenuItem.findById(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    const vIdx = parseInt(req.params.variantIndex);
+    if (!item.variants || !item.variants[vIdx]) {
+      return res.status(404).json({ error: 'Variant not found' });
+    }
+
+    const variant = item.variants[vIdx];
+
+    // 1. Delete variant image from Cloudinary
+    if (variant.image && variant.image.includes('cloudinary.com')) {
+      try {
+        const pid = cloudinaryService.extractPublicId(variant.image);
+        if (pid) await cloudinaryService.deleteImage(pid);
+        logger.info('Deleted variant image from Cloudinary', { itemId: item._id, variantIndex: vIdx, publicId: pid });
+      } catch (e) {
+        logger.info('Could not delete variant image:', e.message);
+      }
+    }
+
+    // 2. Delete variant product(s) from Meta Commerce Catalog (non-blocking)
+    const oldVariants = [...item.variants];
+    const newVariants = item.variants.filter((_, idx) => idx !== vIdx);
+    catalogService.deleteRemovedVariantProducts(req.params.id, oldVariants, newVariants).catch(err => {
+      logger.info('Meta variant cleanup skipped', { error: err.message });
+    });
+
+    // 3. Remove variant from MongoDB
+    item.variants.splice(vIdx, 1);
+
+    // If no variants left, optionally keep the item with empty variants
+    // (the admin can add new variants via the form)
+    await item.save();
+
+    // Re-sync updated item to Meta catalog so remaining variant IDs are correct
+    catalogService.syncProductToMeta(item).catch(err => {
+      logger.info('Catalog sync skipped after variant delete', { itemId: item._id, error: err.message });
+    });
+
+    // Emit event for real-time updates
+    dataEvents.emit('menu');
+
+    res.json(item);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Toggle availability for a single variant
 router.patch('/:id/variant/:variantIndex/toggle', authMiddleware, async (req, res) => {
   try {
