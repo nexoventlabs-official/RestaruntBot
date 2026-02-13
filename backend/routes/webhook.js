@@ -505,8 +505,9 @@ router.post('/meta', webhookRateLimiter, async (req, res) => {
 
               const hasContent = text || selectedId || messageType === 'location' || messageType === 'order';
               if (phone && hasContent) {
-                // Process message in the background
-                chatbot.handleMessage(phone, text, messageType, selectedId, senderName)
+                // Queue messages per phone to prevent race conditions
+                // (e.g. user clicks "Place Order" then "Add More" quickly)
+                chatbot.enqueueMessage(phone, text, messageType, selectedId, senderName)
                   .catch(err => logger.error('❌ Async Chatbot Error:', err));
               }
             }
