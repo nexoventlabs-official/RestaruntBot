@@ -5733,9 +5733,9 @@ const chatbot = {
     await sendWithOptionalImage(phone, browseMenuImageUrl,
       '🍽️ *Browse Menu*\n\nWhat would you like to see?',
       [
-        { id: 'food_veg', text: 'Veg Only' },
-        { id: 'food_nonveg', text: 'Non-Veg Only' },
-        { id: 'food_egg', text: 'Egg Only' }
+        { id: 'food_veg', text: '🟢 Veg' },
+        { id: 'food_nonveg', text: '🔴 Non-Veg' },
+        { id: 'food_egg', text: '🟡 Egg' }
       ]
     );
   },
