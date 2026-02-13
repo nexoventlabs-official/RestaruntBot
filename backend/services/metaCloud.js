@@ -1154,7 +1154,7 @@ const metaCloud = {
 
       logger.info('Meta batchCreateOrUpdateProducts', { catalogId, count: products.length });
 
-      // Use items_batch endpoint — supports sale_price, item_group_id, color, size
+      // Use items_batch endpoint — supports sale_price as string format
       {
         const itemsBatchRequests = products.map(product => {
           const currency = product.currency || 'INR';
@@ -1171,15 +1171,6 @@ const metaCloud = {
             brand: process.env.BUSINESS_NAME || 'Restaurant',
             condition: 'new',
           };
-
-          // Variant grouping for iOS variant picker
-          if (product.itemGroupId) {
-            data.item_group_id = product.itemGroupId;
-          }
-          if (product.colorLabel && product.sizeLabel) {
-            data.color = product.colorLabel;
-            data.size = product.sizeLabel;
-          }
 
           if (product.salePrice && product.salePrice < product.price) {
             data.sale_price = `${product.salePrice.toFixed(2)} ${currency}`;
