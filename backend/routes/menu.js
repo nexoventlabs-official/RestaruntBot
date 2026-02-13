@@ -655,4 +655,37 @@ router.post('/regenerate-tags', authMiddleware, async (req, res) => {
   }
 });
 
+// ===== BULK SYNC ALL ITEMS TO META CATALOG =====
+router.post('/sync-catalog', authMiddleware, async (req, res) => {
+  try {
+    if (!catalogService.isEnabled()) {
+      return res.status(400).json({ error: 'Catalog not enabled (META_CATALOG_ID not set)' });
+    }
+
+    const items = await MenuItem.find();
+    const results = { synced: 0, failed: 0, details: [] };
+
+    for (const item of items) {
+      try {
+        await catalogService.syncProductToMeta(item);
+        const hasVariants = item.variants && item.variants.length > 0;
+        const productCount = hasVariants 
+          ? item.variants.reduce((sum, v) => sum + (v.quantities?.length || 1), 0)
+          : 1;
+        results.synced += productCount;
+        results.details.push({ name: item.name, status: 'synced', products: productCount });
+      } catch (err) {
+        results.failed++;
+        results.details.push({ name: item.name, status: 'failed', error: err.message });
+      }
+    }
+
+    catalogService.clearCache();
+    logger.info('Bulk catalog sync completed', results);
+    res.json({ success: true, ...results });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
