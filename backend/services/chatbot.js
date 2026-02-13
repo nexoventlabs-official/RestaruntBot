@@ -3633,10 +3633,28 @@ const chatbot = {
   // Helper to filter items by food type preference
   filterByFoodType(menuItems, preference) {
     if (preference === 'both') return menuItems;
-    if (preference === 'veg') return menuItems.filter(item => item.foodType === 'veg');
-    if (preference === 'egg') return menuItems.filter(item => item.foodType === 'egg');
-    if (preference === 'nonveg') return menuItems.filter(item => item.foodType === 'nonveg' || item.foodType === 'egg');
-    return menuItems;
+
+    // Check both parent foodType AND variant-level foodType
+    const matchesFoodType = (item, pref) => {
+      // Check parent item foodType
+      if (pref === 'veg' && item.foodType === 'veg') return true;
+      if (pref === 'egg' && item.foodType === 'egg') return true;
+      if (pref === 'nonveg' && (item.foodType === 'nonveg' || item.foodType === 'egg')) return true;
+
+      // Also check variant-level foodType (items may have food type only on variants)
+      if (item.variants && item.variants.length > 0) {
+        return item.variants.some(v => {
+          const vFoodType = v.foodType || item.foodType;
+          if (pref === 'veg') return vFoodType === 'veg';
+          if (pref === 'egg') return vFoodType === 'egg';
+          if (pref === 'nonveg') return vFoodType === 'nonveg' || vFoodType === 'egg';
+          return false;
+        });
+      }
+      return false;
+    };
+
+    return menuItems.filter(item => matchesFoodType(item, preference));
   },
 
   // Reverse geocode coordinates to get readable address
