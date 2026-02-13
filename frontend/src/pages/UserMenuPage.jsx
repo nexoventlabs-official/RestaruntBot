@@ -160,9 +160,9 @@ export default function UserMenuPage() {
 
   // Show all items including unavailable ones
   const displayItems = items.filter(item => {
-    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-    // Item is shown if at least one of its categories exists
-    const hasCategory = itemCategories.some(cat => allCategoryNames.includes(cat));
+    const itemCategories = Array.isArray(item.category) ? item.category.filter(Boolean) : [item.category].filter(Boolean);
+    // Items with no categories assigned → always show
+    const hasCategory = itemCategories.length === 0 || itemCategories.some(cat => allCategoryNames.includes(cat));
     
     // Apply search filter
     if (searchQuery.trim()) {
