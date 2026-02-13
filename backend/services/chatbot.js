@@ -4833,23 +4833,8 @@ const chatbot = {
         }
       }
       else if (selection === 'add_more') {
-        // Show Browse Menu with image and food type filter buttons
-        const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
-        const browseMessage = `🍽️ *Browse Menu*\n\nWhat would you like to see?`;
-        
-        if (browseMenuImg) {
-          await whatsapp.sendImageWithButtons(phone, browseMenuImg, browseMessage, [
-            { id: 'veg_only', text: '🌿 Veg Only' },
-            { id: 'nonveg_only', text: '🍗 Non-Veg Only' },
-            { id: 'egg_only', text: '🥚 Egg Only' }
-          ]);
-        } else {
-          await whatsapp.sendButtons(phone, browseMessage, [
-            { id: 'veg_only', text: '🌿 Veg Only' },
-            { id: 'nonveg_only', text: '🍗 Non-Veg Only' },
-            { id: 'egg_only', text: '🥚 Egg Only' }
-          ]);
-        }
+        // Show Browse Menu with image (same as Order Food)
+        await this.sendFoodTypeSelection(phone);
         state.currentStep = 'select_food_type_order';
       }
 
