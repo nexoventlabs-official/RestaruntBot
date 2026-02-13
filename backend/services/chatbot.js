@@ -7304,10 +7304,21 @@ const chatbot = {
         }
 
         if (sent) {
-          // Always send action buttons below the native catalog cart
+          // Build compact cart summary with item names (in case product list card doesn't render)
+          let summaryLines = [];
+          freshCustomer.cart.forEach((item) => {
+            if (item.menuItem) {
+              const name = item.menuItem.name;
+              const qty = item.quantity;
+              summaryLines.push(`• ${name} × ${qty}`);
+            }
+          });
+          const itemsSummary = summaryLines.join('\n');
+          const discountText = totalDiscount > 0 ? `\n🎁 Save ₹${totalDiscount}` : '';
+
           await whatsapp.sendButtons(
             phone,
-            `🛒 *${validItems} items* • Total: *₹${total}*${totalDiscount > 0 ? ` (🎁 Save ₹${totalDiscount})` : ''}\n\nReady to order? Tap Place Order below 👇`,
+            `🛒 *${validItems} items* • Total: *₹${total}*${discountText}\n\n${itemsSummary}\n\nReady to order? Tap Place Order below 👇`,
             [
               { id: 'review_pay', text: 'Place Order ✅' },
               { id: 'add_more', text: 'Add More' },
