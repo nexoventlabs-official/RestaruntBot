@@ -3945,7 +3945,7 @@ const chatbot = {
               return sameItem && (c.variantIndex === null || c.variantIndex === undefined);
             });
             if (existingIndex >= 0) {
-              customer.cart[existingIndex].quantity = item.quantity;
+              customer.cart[existingIndex].quantity += item.quantity;
               customer.cart[existingIndex].addedAt = new Date();
             } else {
               const cartEntry = {
@@ -4375,7 +4375,7 @@ const chatbot = {
               return sameItem && (c.variantIndex === null || c.variantIndex === undefined);
             });
             if (existingIdx >= 0) {
-              customer.cart[existingIdx].quantity = cartEntry.quantity;
+              customer.cart[existingIdx].quantity += cartEntry.quantity;
               customer.cart[existingIdx].addedAt = new Date();
             } else {
               customer.cart.push(cartEntry);
