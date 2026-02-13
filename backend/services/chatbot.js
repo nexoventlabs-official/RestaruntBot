@@ -7203,26 +7203,55 @@ const chatbot = {
     try {
       if (catalogService.isEnabled()) {
         const validCartItems = freshCustomer.cart.filter(item => item.menuItem);
-        const cartSections = await catalogService.buildCartSections(validCartItems);
+
+        // Build discount info for body text
+        let bodyText = `${validItems} items • Total: ₹${total}`;
+        if (totalDiscount > 0) {
+          bodyText += ` (Save ₹${totalDiscount})`;
+        }
+        bodyText += '\nTap "View items" to modify quantities';
+
+        const catalogId = catalogService.getCatalogId();
+        let cartSections = await catalogService.buildCartSections(validCartItems);
+        let sent = false;
+
         if (cartSections && cartSections.sections.length > 0) {
-          const catalogId = catalogService.getCatalogId();
-
-          // Build discount info for body text
-          let bodyText = `${validItems} items • Total: ₹${total}`;
-          if (totalDiscount > 0) {
-            bodyText += ` (Save ₹${totalDiscount})`;
+          try {
+            await whatsapp.sendProductList(
+              phone, catalogId, '🛒 Your Cart', bodyText,
+              cartSections.sections, 'Perivi Hotel'
+            );
+            sent = true;
+          } catch (sendErr) {
+            // On Meta #131009 (invalid parameter), force re-sync items to Meta and retry once
+            const errCode = sendErr.response?.data?.error?.code;
+            if (errCode === 131009) {
+              logger.info('Product list #131009 — forcing re-sync and retry', { phone });
+              for (const item of validCartItems) {
+                if (item.menuItem) {
+                  await catalogService.syncProductToMeta(item.menuItem);
+                }
+              }
+              catalogService.clearCache();
+              cartSections = await catalogService.buildCartSections(validCartItems);
+              if (cartSections && cartSections.sections.length > 0) {
+                try {
+                  await whatsapp.sendProductList(
+                    phone, catalogId, '🛒 Your Cart', bodyText,
+                    cartSections.sections, 'Perivi Hotel'
+                  );
+                  sent = true;
+                } catch (retryErr) {
+                  logger.error('Product list retry also failed', { phone, error: retryErr.message });
+                }
+              }
+            } else {
+              logger.error('sendProductList non-131009 error', { phone, code: errCode, error: sendErr.message });
+            }
           }
-          bodyText += '\nTap "View items" to modify quantities';
+        }
 
-          await whatsapp.sendProductList(
-            phone,
-            catalogId,
-            '🛒 Your Cart',
-            bodyText,
-            cartSections.sections,
-            'Perivi Hotel'
-          );
-
+        if (sent) {
           // Always send action buttons below the native catalog cart
           await whatsapp.sendButtons(
             phone,

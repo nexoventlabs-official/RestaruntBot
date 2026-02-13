@@ -335,16 +335,31 @@ const catalogService = {
     if (!this.isEnabled()) return null;
     if (!cartItems || cartItems.length === 0) return null;
 
-    // Auto-ensure every cart item has a catalog mapping
-    const retailerIds = [];
+    // Auto-ensure every cart item has a catalog mapping, using correct variant retailer IDs
+    const retailerIdSet = new Set(); // Deduplicate: same base product in cart multiple times
     for (const item of cartItems) {
       if (!item.menuItem) continue;
-      const retailerId = await this.ensureCatalogMapping(item.menuItem);
-      if (retailerId) {
-        retailerIds.push(retailerId);
+
+      const itemId = item.menuItem._id.toString();
+      const hasVariants = item.menuItem.variants && item.menuItem.variants.length > 0;
+
+      // Ensure catalog mapping exists (syncs to Meta if needed)
+      const baseRetailerId = await this.ensureCatalogMapping(item.menuItem);
+      if (!baseRetailerId) continue;
+
+      // Build the correct retailer ID based on cart item's variant/quantity selection
+      if (hasVariants && item.variantIndex !== null && item.variantIndex !== undefined) {
+        if (item.quantityIndex !== null && item.quantityIndex !== undefined) {
+          retailerIdSet.add(`${itemId}_v${item.variantIndex}_q${item.quantityIndex}`);
+        } else {
+          retailerIdSet.add(`${itemId}_v${item.variantIndex}`);
+        }
+      } else {
+        retailerIdSet.add(baseRetailerId);
       }
     }
 
+    const retailerIds = [...retailerIdSet];
     if (retailerIds.length === 0) return null;
 
     // Put all cart items in a single section (avoids multi-section rendering issues)
@@ -851,7 +866,13 @@ const catalogService = {
     // No mapping found — auto-create one on the fly
     try {
       logger.info('Auto-creating catalog mapping for item', { itemId, name: menuItem.name });
-      await this.syncProductToMeta(menuItem);
+      const syncResult = await this.syncProductToMeta(menuItem);
+      // syncProductToMeta returns null on failure (catches its own errors)
+      // Don't return a retailer ID if sync actually failed
+      if (!syncResult) {
+        logger.warn('Catalog sync returned null — product may not exist in Meta', { itemId, name: menuItem.name });
+        return null;
+      }
       // For variant products, retailerId is {itemId}_v0; for single products, it's itemId
       const hasVariants = menuItem.variants && menuItem.variants.length > 0;
       return hasVariants ? `${itemId}_v0` : itemId;

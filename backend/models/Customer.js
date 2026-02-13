@@ -20,6 +20,7 @@ const customerSchema = new mongoose.Schema({
     menuItem: { type: mongoose.Schema.Types.ObjectId, ref: 'MenuItem' },
     quantity: Number,
     variantIndex: { type: Number, default: null },
+    quantityIndex: { type: Number, default: null },
     variantLabel: { type: String, default: null },
     addedAt: { type: Date, default: Date.now }
   }],
