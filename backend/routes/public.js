@@ -487,11 +487,17 @@ router.get('/menu', async (req, res) => {
     
     // Helper to determine item status
     const getItemStatus = (item) => {
-      const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+      const rawCategories = Array.isArray(item.category) ? item.category : [item.category];
+      const itemCategories = rawCategories.filter(c => c != null && c !== '');
       
       // If item itself is not available (sold out at item level)
-      if (!item.available) {
+      if (item.available === false) {
         return 'soldout';
+      }
+      
+      // Items with no categories assigned are available by default
+      if (itemCategories.length === 0) {
+        return 'available';
       }
       
       // Check if ALL item's categories are sold out

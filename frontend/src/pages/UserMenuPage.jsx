@@ -556,8 +556,8 @@ export default function UserMenuPage() {
                     {/* Sold Out / Unavailable Overlay */}
                     {!variantAvailable && (
                       <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
-                        <span className={`${v.available === false ? 'bg-red-600' : 'bg-gray-700'} text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg`}>
-                          {v.available === false ? 'Sold Out' : 'Unavailable'}
+                        <span className={`${v.available === false || itemStatus === 'soldout' ? 'bg-red-600' : 'bg-gray-700'} text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg`}>
+                          {v.available === false || itemStatus === 'soldout' ? 'Sold Out' : 'Unavailable'}
                         </span>
                       </div>
                     )}
