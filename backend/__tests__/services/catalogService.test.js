@@ -47,6 +47,9 @@ describe('catalogService.ensureCatalogMapping', () => {
     jest.clearAllMocks();
     catalogService.clearCache();
     process.env.META_CATALOG_ID = 'test-catalog-123';
+    // Re-set mock implementations (resetMocks: true in jest.config clears them between tests)
+    metaCloud.createOrUpdateCatalogProduct.mockResolvedValue({ success: true });
+    metaCloud.batchCreateOrUpdateProducts.mockResolvedValue({ success: true });
   });
 
   afterEach(() => {
@@ -247,6 +250,9 @@ describe('catalogService.buildCartSections', () => {
     jest.clearAllMocks();
     catalogService.clearCache();
     process.env.META_CATALOG_ID = 'test-catalog-123';
+    // Re-set mock implementations (resetMocks: true in jest.config clears them between tests)
+    metaCloud.createOrUpdateCatalogProduct.mockResolvedValue({ success: true });
+    metaCloud.batchCreateOrUpdateProducts.mockResolvedValue({ success: true });
   });
 
   afterEach(() => {
