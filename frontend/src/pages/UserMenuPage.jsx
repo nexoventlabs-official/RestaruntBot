@@ -61,7 +61,7 @@ export default function UserMenuPage() {
 
   const context = useOutletContext();
   const { 
-    cart, addToCart, updateQuantity, 
+    cart, wishlist, addToCart, updateQuantity, 
     addToWishlist, removeFromWishlist, isInWishlist, isInCart,
     setSidebarOpen, setActiveTab
   } = context || {};
@@ -445,37 +445,8 @@ export default function UserMenuPage() {
     if (item.variants && item.variants.length > 0) {
       return (
         <div key={item._id} className="mb-8">
-          {/* Parent Item Category-Style Header */}
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 flex-shrink-0 border-2 border-orange-200 shadow-sm">
-              {item.image ? (
-                <img src={item.image} alt={item.name} className={`w-full h-full object-cover ${!available ? 'grayscale' : ''}`} />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <span className="text-xl">🍽️</span>
-                </div>
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-gray-900 text-lg sm:text-xl line-clamp-1">{item.name}</h3>
-              <span className="text-xs text-gray-500">{item.variants.length} {item.variants[0]?.variantType === 'color' ? 'colors' : 'sizes'}</span>
-            </div>
-            <button 
-              onClick={(e) => handleToggleWishlist(item, e)} 
-              className="p-1.5 hover:scale-110 transition-transform flex-shrink-0"
-            >
-              <Heart className={`w-5 h-5 ${isInWishlist && isInWishlist(item._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
-            </button>
-            {itemStatus === 'soldout' && (
-              <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs font-bold rounded-full">Sold Out</span>
-            )}
-            {itemStatus === 'unavailable' && (
-              <span className="px-2 py-0.5 bg-gray-200 text-gray-600 text-xs font-bold rounded-full">Unavailable</span>
-            )}
-          </div>
-
           {/* Variant Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pl-2 sm:pl-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {item.variants.map((v, vIdx) => {
               const variantAvailable = available && v.available !== false;
               const variantFoodType = v.foodType || item.foodType;
@@ -532,6 +503,24 @@ export default function UserMenuPage() {
                         <WhatsAppIcon className="w-5 h-5" />
                       </button>
                     )}
+
+                    {/* Wishlist */}
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!addToWishlist || !removeFromWishlist) return;
+                        const wishlistKey = `${item._id}_v${vIdx}`;
+                        const inWish = wishlist?.some(w => w.wishlistKey === wishlistKey);
+                        if (inWish) {
+                          removeFromWishlist(wishlistKey);
+                        } else {
+                          addToWishlist({ ...item, wishlistKey, variantIndex: vIdx, variantLabel: v.label, image: variantImage, price: variantPrice });
+                        }
+                      }}
+                      className="absolute top-3 right-3 p-1.5 bg-white/90 rounded-full hover:scale-110 transition-transform z-20 shadow-sm"
+                    >
+                      <Heart className={`w-4 h-4 ${wishlist?.some(w => w.wishlistKey === `${item._id}_v${vIdx}`) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
+                    </button>
 
                     {/* Sold Out / Unavailable Overlay */}
                     {!variantAvailable && (
@@ -937,17 +926,9 @@ export default function UserMenuPage() {
               <div className="relative w-36 md:w-44">
                 <div className={`${selectedCategory === 'all' ? 'bg-[#3f9065]' : 'bg-[#F5F1E8] group-hover:bg-[#3f9065]'} rounded-t-full rounded-b-3xl pt-6 pb-14 px-4 transition-all duration-300`}>
                   <div className="flex justify-center mb-4">
-                    {allItems.length > 0 && allItems[0].image ? (
-                      <img 
-                        src={allItems[0].image} 
-                        alt="All Items" 
-                        className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-lg transition-transform group-hover:scale-110"
-                      />
-                    ) : (
-                      <div className={`w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center ${selectedCategory === 'all' ? 'bg-white/20' : 'bg-orange-100'} transition-all duration-300`}>
-                        <span className="text-3xl">🍽️</span>
-                      </div>
-                    )}
+                    <div className={`w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center ${selectedCategory === 'all' ? 'bg-white/20' : 'bg-orange-100'} transition-all duration-300`}>
+                      <span className={`text-lg md:text-xl font-bold ${selectedCategory === 'all' ? 'text-white' : 'text-orange-500 group-hover:text-white'} transition-colors duration-300`}>All</span>
+                    </div>
                   </div>
                   <div className="text-center">
                     <h3 className={`font-semibold text-sm md:text-base transition-colors duration-300 ${selectedCategory === 'all' ? 'text-yellow-400' : 'text-gray-900 group-hover:text-white'}`}>All Items</h3>
@@ -962,26 +943,25 @@ export default function UserMenuPage() {
               </div>
             </button>
 
-            {/* Category Items */}
-            {categories.filter(cat => cat.isActive).map(cat => {
-              const itemCount = getCategoryItemCount(cat.name);
-              const isUnavailable = cat.categoryStatus !== 'available';
-              const isSoldOut = cat.categoryStatus === 'soldout';
+            {/* Item Titles as Categories */}
+            {allItems.map(item => {
+              const variantCount = item.variants && item.variants.length > 0 ? item.variants.length : 1;
+              const isSelected = selectedCategory === `item_${item._id}`;
               
               return (
                 <button 
-                  key={cat._id} 
-                  onClick={() => !isUnavailable && setSelectedCategory(cat.name)} 
-                  className={`flex-shrink-0 group ${isUnavailable ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  key={item._id} 
+                  onClick={() => setSelectedCategory(`item_${item._id}`)}
+                  className="flex-shrink-0 group"
                 >
                   <div className="relative w-36 md:w-44">
-                    <div className={`${selectedCategory === cat.name ? 'bg-[#3f9065]' : isUnavailable ? 'bg-gray-200' : 'bg-[#F5F1E8] group-hover:bg-[#3f9065]'} rounded-t-full rounded-b-3xl pt-6 pb-14 px-4 transition-all duration-300`}>
+                    <div className={`${isSelected ? 'bg-[#3f9065]' : 'bg-[#F5F1E8] group-hover:bg-[#3f9065]'} rounded-t-full rounded-b-3xl pt-6 pb-14 px-4 transition-all duration-300`}>
                       <div className="flex justify-center mb-4">
-                        {cat.image ? (
+                        {item.image ? (
                           <img 
-                            src={cat.image} 
-                            alt={cat.name} 
-                            className={`w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-lg transition-transform group-hover:scale-110 ${isUnavailable ? 'grayscale' : ''}`}
+                            src={item.image} 
+                            alt={item.name} 
+                            className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-lg transition-transform group-hover:scale-110"
                           />
                         ) : (
                           <div className="w-20 h-20 md:w-24 md:h-24 bg-orange-100 rounded-full flex items-center justify-center">
@@ -990,16 +970,8 @@ export default function UserMenuPage() {
                         )}
                       </div>
                       <div className="text-center">
-                        <h3 className={`font-semibold text-sm md:text-base transition-colors duration-300 line-clamp-1 ${selectedCategory === cat.name ? 'text-yellow-400' : isUnavailable ? 'text-gray-500' : 'text-gray-900 group-hover:text-white'}`}>{cat.name}</h3>
-                        {isSoldOut ? (
-                          <p className="text-xs mt-0.5 text-red-500 font-semibold">Sold Out</p>
-                        ) : isUnavailable && cat.scheduleInfo ? (
-                          <p className="text-xs mt-0.5 text-indigo-500 font-medium">{getCategoryScheduleText(cat)}</p>
-                        ) : isUnavailable ? (
-                          <p className="text-xs mt-0.5 text-gray-400">Unavailable</p>
-                        ) : (
-                          <p className={`text-xs mt-0.5 transition-colors duration-300 ${selectedCategory === cat.name ? 'text-white/80' : 'text-gray-400 group-hover:text-white/80'}`}>{itemCount} Items</p>
-                        )}
+                        <h3 className={`font-semibold text-sm md:text-base transition-colors duration-300 line-clamp-1 ${isSelected ? 'text-yellow-400' : 'text-gray-900 group-hover:text-white'}`}>{item.name}</h3>
+                        <p className={`text-xs mt-0.5 transition-colors duration-300 ${isSelected ? 'text-white/80' : 'text-gray-400 group-hover:text-white/80'}`}>{variantCount} {variantCount === 1 ? 'Item' : 'Items'}</p>
                       </div>
                     </div>
                     <img 
@@ -1045,10 +1017,16 @@ export default function UserMenuPage() {
           )}
           
           {!itemsLoading && (() => {
-            // Filter items by selected category
-            const filteredItems = selectedCategory !== 'all' 
-              ? displayItems.filter(i => (Array.isArray(i.category) ? i.category : [i.category]).includes(selectedCategory))
-              : displayItems;
+            // Filter items by selected category (item title or 'all')
+            let filteredItems;
+            if (selectedCategory === 'all') {
+              filteredItems = displayItems;
+            } else if (selectedCategory.startsWith('item_')) {
+              const itemId = selectedCategory.replace('item_', '');
+              filteredItems = displayItems.filter(i => i._id === itemId);
+            } else {
+              filteredItems = displayItems.filter(i => (Array.isArray(i.category) ? i.category : [i.category]).includes(selectedCategory));
+            }
             
             if (filteredItems.length === 0) return (
               <div className="bg-white rounded-2xl shadow-sm p-12 text-center">

@@ -314,22 +314,26 @@ export function useCart() {
     }
     
     setWishlist(prev => {
-      if (prev.find(w => w._id === item._id)) return prev;
+      const key = item.wishlistKey || item._id;
+      if (prev.find(w => (w.wishlistKey || w._id) === key)) return prev;
       return [...prev, { 
         _id: item._id, 
+        wishlistKey: item.wishlistKey || item._id,
         name: item.name, 
         price: finalPrice, 
-        originalPrice: finalOriginalPrice, // Store original price if exists
+        originalPrice: finalOriginalPrice,
         image: item.image, 
         unit: item.unit || 'piece', 
         unitQty: item.quantity || 1,
-        offerInfo: finalOfferInfo // Store offer info with wishlist item
+        offerInfo: finalOfferInfo,
+        variantIndex: item.variantIndex ?? null,
+        variantLabel: item.variantLabel || null
       }];
     });
   };
 
-  const removeFromWishlist = (itemId) => {
-    setWishlist(prev => prev.filter(w => w._id !== itemId));
+  const removeFromWishlist = (keyOrId) => {
+    setWishlist(prev => prev.filter(w => (w.wishlistKey || w._id) !== keyOrId));
   };
 
   // Remove all items associated with a specific offer
@@ -367,7 +371,7 @@ export function useCart() {
     }));
   }, []);
 
-  const isInWishlist = (itemId) => wishlist.some(w => w._id === itemId);
+  const isInWishlist = (keyOrId) => wishlist.some(w => (w.wishlistKey || w._id) === keyOrId);
   const isInCart = (itemId) => cart.some(c => c._id === itemId);
 
   return {
