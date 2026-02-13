@@ -6257,8 +6257,35 @@ const chatbot = {
    * User picks a title → we send catalog with only matching variants.
    */
   async sendTitleListForOrder(phone, menuItems, foodType, label = 'Select Item') {
-    // Find ALL items matching the food type (including items without variants)
-    const matchingItems = this.filterByFoodType(menuItems, foodType);
+    // Strict food-type filtering: for variant items, only include if at least one variant matches
+    const matchesFoodType = (ft, pref) => {
+      if (!ft || ft === 'none') return false; // unset = no match (strict)
+      if (pref === 'veg') return ft === 'veg';
+      if (pref === 'nonveg') return ft === 'nonveg' || ft === 'egg';
+      if (pref === 'egg') return ft === 'egg';
+      return false;
+    };
+
+    let matchingItems;
+    if (foodType === 'both') {
+      matchingItems = menuItems;
+    } else {
+      matchingItems = menuItems.filter(item => {
+        if (item.variants && item.variants.length > 0) {
+          // Item has variants — check if ANY variant matches the food type
+          return item.variants.some(v => {
+            const vft = v.foodType || item.foodType;
+            return matchesFoodType(vft, foodType);
+          });
+        } else {
+          // Non-variant item — check item's own foodType
+          // Items with 'none'/unset foodType are included in all filters
+          const ft = item.foodType;
+          if (!ft || ft === 'none') return true;
+          return matchesFoodType(ft, foodType);
+        }
+      });
+    }
 
     if (!matchingItems.length) {
       await whatsapp.sendButtons(phone, '📋 No matching items found.', [
@@ -6268,22 +6295,27 @@ const chatbot = {
       return;
     }
 
-    const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
+    // Use the selected food type's icon for all items in this list
+    const foodTypeIcon = foodType === 'veg' ? '🟢' : foodType === 'nonveg' ? '🔴' : foodType === 'egg' ? '🟡' : '';
 
     // Build list rows — each row is a menu item title
     const rows = matchingItems.slice(0, 10).map(item => {
       const safeId = item._id.toString();
-      const icon = getFoodTypeIcon(item.foodType);
       let description;
       if (item.variants && item.variants.length > 0) {
-        const variantCount = item.variants.length;
+        // Count only variants matching the selected food type
+        const matchingVariants = foodType === 'both' ? item.variants : item.variants.filter(v => {
+          const vft = v.foodType || item.foodType;
+          return matchesFoodType(vft, foodType);
+        });
+        const variantCount = matchingVariants.length;
         description = `${variantCount} variant${variantCount > 1 ? 's' : ''} available`;
       } else {
         description = `₹${item.offerPrice || item.price}`;
       }
       return {
         rowId: `order_title_${safeId}`,
-        title: `${icon} ${item.name}`.substring(0, 24),
+        title: `${foodTypeIcon} ${item.name}`.substring(0, 24),
         description
       };
     });
