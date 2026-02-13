@@ -6591,39 +6591,36 @@ const chatbot = {
       logger.info('Catalog fallback for title variants', { error: catalogErr.message });
     }
 
-    // Always send a WhatsApp list with all variants below the product card.
-    // iOS users can use the product card's variant picker OR this list.
-    // Android users (no variant picker) use this list to select their variant.
-    const itemId = menuItem._id.toString();
-    const rows = matchingVariants.slice(0, 10).map(v => {
-      const icon = getFoodTypeIcon(v.foodType || menuItem.foodType);
-      let price;
-      if (v.quantities && v.quantities.length > 0) {
-        const cheapest = Math.min(...v.quantities.map(q => q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price));
-        price = `from ₹${cheapest}`;
-      } else {
-        price = `₹${v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price}`;
-      }
-      const sizeInfo = (v.quantity && v.unit) ? ` (${v.quantity} ${v.unit})` : '';
-      return {
-        rowId: `add_variant_${itemId}_${v.originalIndex}`,
-        title: `${icon} ${v.label}${sizeInfo}`.substring(0, 24),
-        description: price
-      };
-    });
+    // Only send a WhatsApp list fallback if catalog message was NOT sent.
+    // When catalog is sent, users can tap products directly from the catalog card.
+    if (!catalogSent) {
+      const itemId = menuItem._id.toString();
+      const rows = matchingVariants.slice(0, 10).map(v => {
+        const icon = getFoodTypeIcon(v.foodType || menuItem.foodType);
+        let price;
+        if (v.quantities && v.quantities.length > 0) {
+          const cheapest = Math.min(...v.quantities.map(q => q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price));
+          price = `from ₹${cheapest}`;
+        } else {
+          price = `₹${v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price}`;
+        }
+        const sizeInfo = (v.quantity && v.unit) ? ` (${v.quantity} ${v.unit})` : '';
+        return {
+          rowId: `add_variant_${itemId}_${v.originalIndex}`,
+          title: `${icon} ${v.label}${sizeInfo}`.substring(0, 24),
+          description: price
+        };
+      });
 
-    const listBody = catalogSent
-      ? `📱 *Can't see variant options above?*\nPick from the list below:`
-      : `📋 *${menuItem.name}*\nSelect a variant to add to cart:`;
-
-    await whatsapp.sendList(
-      phone,
-      menuItem.name.substring(0, 24),
-      listBody,
-      'Choose Variant',
-      [{ title: 'Variants', rows }],
-      'Select a variant'
-    );
+      await whatsapp.sendList(
+        phone,
+        menuItem.name.substring(0, 24),
+        `📋 *${menuItem.name}*\nSelect a variant to add to cart:`,
+        'Choose Variant',
+        [{ title: 'Variants', rows }],
+        'Select a variant'
+      );
+    }
   },
 
   async sendItemsForOrder(phone, menuItems, category, page = 0) {
