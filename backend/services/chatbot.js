@@ -3913,7 +3913,7 @@ const chatbot = {
           await customer.save();
 
           // Show native catalog cart (product list with images + Place Order buttons)
-          await this.showCartAsProducts(phone, customer);
+          await this.sendCart(phone, customer);
 
           state.currentStep = 'item_added';
           customer.conversationState = state;
