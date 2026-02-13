@@ -728,14 +728,15 @@ const catalogService = {
 
     try {
       if (hasVariants) {
-        // ===== VARIANT PRODUCTS: each variant is a standalone catalog product =====
-        // No item_group_id — all variants appear as separate products on both iOS and Android.
-        // Both platforms show every variant in the catalog shop and product_list messages.
+        // ===== VARIANT PRODUCTS: each variant is a separate catalog product =====
+        // item_group_id groups them so iOS shows variant picker on product detail page.
+        // Catalog browse view still shows all variants as separate products on both platforms.
         const variantProducts = [];
         menuItem.variants.forEach((v, vIdx) => {
           if (v.quantities && v.quantities.length > 0) {
-            // Variant × quantity combos — each is a standalone product
+            // Variant × quantity combos
             v.quantities.forEach((q, qIdx) => {
+              const sizeLabel = `${q.quantity} ${q.unit}`;
               const variantTitle = `${v.label}, ${q.quantity} ${q.unit}`;
               const prod = {
                 retailerId: `${retailerId}_v${vIdx}_q${qIdx}`,
@@ -746,12 +747,16 @@ const catalogService = {
                 imageUrl: v.image || menuItem.image || null,
                 category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
                 availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
+                itemGroupId: retailerId,
+                colorLabel: v.label,
+                sizeLabel: sizeLabel,
                 salePrice: (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : null
               };
               variantProducts.push(prod);
             });
           } else {
-            // Single quantity variant — standalone product
+            // Single quantity variant
+            const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : 'Standard';
             const variantTitle = (v.quantity && v.unit) ? `${v.label}, ${v.quantity} ${v.unit}` : v.label;
             const prod = {
               retailerId: `${retailerId}_v${vIdx}`,
@@ -762,6 +767,9 @@ const catalogService = {
               imageUrl: v.image || menuItem.image || null,
               category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
               availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
+              itemGroupId: retailerId,
+              colorLabel: v.label,
+              sizeLabel: pillLabel,
               salePrice: (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : null
             };
             variantProducts.push(prod);
