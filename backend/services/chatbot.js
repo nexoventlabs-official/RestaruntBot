@@ -3635,16 +3635,21 @@ const chatbot = {
     if (preference === 'both') return menuItems;
 
     // Check both parent foodType AND variant-level foodType
+    // Items with foodType 'none' (unset) are included in ALL food type filters
     const matchesFoodType = (item, pref) => {
+      // If parent foodType is 'none' (never set), include in all filters
+      if (item.foodType === 'none' || !item.foodType) return true;
+
       // Check parent item foodType
       if (pref === 'veg' && item.foodType === 'veg') return true;
       if (pref === 'egg' && item.foodType === 'egg') return true;
       if (pref === 'nonveg' && (item.foodType === 'nonveg' || item.foodType === 'egg')) return true;
 
-      // Also check variant-level foodType (items may have food type only on variants)
+      // Also check variant-level foodType
       if (item.variants && item.variants.length > 0) {
         return item.variants.some(v => {
           const vFoodType = v.foodType || item.foodType;
+          if (!vFoodType || vFoodType === 'none') return true;
           if (pref === 'veg') return vFoodType === 'veg';
           if (pref === 'egg') return vFoodType === 'egg';
           if (pref === 'nonveg') return vFoodType === 'nonveg' || vFoodType === 'egg';
