@@ -1203,18 +1203,23 @@ const chatbot = {
 
   // Helper to detect website order format (single item)
   // Detects messages from website with item name and price, or #WEB_<itemId> format
-  // Returns: { itemName: string, price: number, itemId: string|null, variantIndex: number|null, quantity: number } or null
+  // Returns: { itemName: string, price: number, itemId: string|null, variantIndex: number|null, quantityIndex: number|null, quantity: number } or null
   isWebsiteOrderIntent(text) {
     if (!text || typeof text !== 'string') return null;
     
     const lowerText = text.toLowerCase();
     
     // Method 1: Check for #WEB_<itemId> pattern (new format from website)
+    // Format: #WEB_<itemId>[_v<variantIndex>][_q<quantityOptionIndex>]
     const webIdMatch = text.match(/#WEB_([a-f0-9]{24})(?:_v(\d+))?(?:_q(\d+))?/i);
     if (webIdMatch) {
       const itemId = webIdMatch[1];
       const variantIndex = webIdMatch[2] !== undefined ? parseInt(webIdMatch[2]) : null;
-      const quantity = webIdMatch[3] ? parseInt(webIdMatch[3]) : 1;
+      const quantityIndex = webIdMatch[3] !== undefined ? parseInt(webIdMatch[3]) : null;
+      
+      // Extract purchase quantity from "x{number}" in message
+      const qtyMatch = text.match(/\sx(\d+)\s/);
+      const quantity = qtyMatch ? parseInt(qtyMatch[1]) : 1;
       
       // Extract item name from bold text
       const nameMatch = text.match(/\*([^*]+)\*/);
@@ -1224,8 +1229,8 @@ const chatbot = {
       const priceMatch = text.match(/₹\s*(\d+)/);
       const price = priceMatch ? parseInt(priceMatch[1]) : null;
       
-      logger.info('Website order (ID format)', { itemId, variantIndex, quantity, itemName, price });
-      return { itemName, price, itemId, variantIndex, quantity };
+      logger.info('Website order (ID format)', { itemId, variantIndex, quantityIndex, quantity, itemName, price });
+      return { itemName, price, itemId, variantIndex, quantityIndex, quantity };
     }
     
     // Method 2: Legacy format detection (text-based)
@@ -4370,29 +4375,58 @@ const chatbot = {
         
         if (matchedItem) {
           // Add item to cart with variant and quantity if specified
-          if (websiteOrder.quantity > 1 || websiteOrder.variantIndex !== null) {
+          const needsCartUpdate = websiteOrder.quantity > 1 || websiteOrder.variantIndex !== null || websiteOrder.quantityIndex !== null;
+          
+          if (needsCartUpdate) {
             customer.cart = customer.cart || [];
             const cartEntry = { 
               menuItem: matchedItem._id, 
               quantity: websiteOrder.quantity || 1, 
-              addedAt: new Date() 
+              addedAt: new Date(),
+              _addedFrom: 'website'  // Track source for debugging
             };
             if (websiteOrder.variantIndex !== null && matchedItem.variants?.[websiteOrder.variantIndex]) {
               cartEntry.variantIndex = websiteOrder.variantIndex;
               cartEntry.variantLabel = matchedItem.variants[websiteOrder.variantIndex].label || null;
+              logger.info('Website order: added variantIndex', { variantIndex: websiteOrder.variantIndex, variantLabel: cartEntry.variantLabel });
             }
-            // Check if already in cart (same item + variant)
+            // Add quantity option index if specified (for size selection)
+            if (websiteOrder.quantityIndex !== null && websiteOrder.variantIndex !== null && 
+                matchedItem.variants?.[websiteOrder.variantIndex]?.quantities?.[websiteOrder.quantityIndex]) {
+              cartEntry.quantityIndex = websiteOrder.quantityIndex;
+              const q = matchedItem.variants[websiteOrder.variantIndex].quantities[websiteOrder.quantityIndex];
+              cartEntry.quantityLabel = `${q.quantity} ${q.unit}`;
+              logger.info('Website order: added quantityIndex', { quantityIndex: websiteOrder.quantityIndex, quantityLabel: cartEntry.quantityLabel });
+            }
+            
+            logger.info('Website order: cart entry created', { 
+              itemId: matchedItem._id, 
+              variantIndex: cartEntry.variantIndex, 
+              quantityIndex: cartEntry.quantityIndex,
+              quantity: cartEntry.quantity
+            });
+            
+            // Check if already in cart (same item + variant + quantityIndex)
             const existingIdx = customer.cart.findIndex(c => {
               const sameItem = c.menuItem?.toString() === matchedItem._id.toString();
               if (websiteOrder.variantIndex !== null) {
-                return sameItem && c.variantIndex === websiteOrder.variantIndex;
+                const sameVariant = c.variantIndex === websiteOrder.variantIndex;
+                if (websiteOrder.quantityIndex !== null) {
+                  // Match on variant + quantity option
+                  return sameItem && sameVariant && c.quantityIndex === websiteOrder.quantityIndex;
+                }
+                // Match on variant only
+                return sameItem && sameVariant && (c.quantityIndex === null || c.quantityIndex === undefined);
               }
               return sameItem && (c.variantIndex === null || c.variantIndex === undefined);
             });
+            
             if (existingIdx >= 0) {
+              logger.info('Website order: merging with existing cart item', { existingIdx, addQuantity: cartEntry.quantity });
               customer.cart[existingIdx].quantity += cartEntry.quantity;
               customer.cart[existingIdx].addedAt = new Date();
             } else {
+              logger.info('Website order: adding new cart item');
               customer.cart.push(cartEntry);
             }
             await customer.save();
@@ -4402,7 +4436,7 @@ const chatbot = {
           state.selectedItem = matchedItem._id.toString();
           customer.conversationState = state;
           await customer.save();
-          await this.sendItemDetailsForOrder(phone, matchedItem);
+          await this.sendItemDetailsForOrder(phone, matchedItem, websiteOrder.variantIndex, websiteOrder.quantityIndex);
           state.currentStep = 'viewing_item_details';
         } else if (websiteOrder.itemName) {
           const searchName = websiteOrder.itemName.toLowerCase().trim();
@@ -6272,13 +6306,41 @@ const chatbot = {
   },
 
   // Send item details for order flow (with Add to Cart focus)
-  async sendItemDetailsForOrder(phone, item) {
+  async sendItemDetailsForOrder(phone, item, variantIndex = null, quantityIndex = null) {
     // Try WhatsApp Catalog single product card
     try {
       if (catalogService.isEnabled()) {
-        // Auto-ensure catalog mapping exists (creates on-the-fly if missing)
-        const retailerId = await catalogService.ensureCatalogMapping(item);
-        if (retailerId) {
+        // Ensure product is synced to Meta and get the correct retailer ID
+        const baseRetailerId = await catalogService.ensureCatalogMapping(item);
+        if (baseRetailerId) {
+          // Determine which product variant to show
+          let retailerId = baseRetailerId;
+          if (item.variants && item.variants.length > 0) {
+            // If specific variant+quantityIndex was selected, use that exact product
+            if (variantIndex !== null && quantityIndex !== null && 
+                item.variants[variantIndex]?.quantities?.[quantityIndex]) {
+              retailerId = `${item._id.toString()}_v${variantIndex}_q${quantityIndex}`;
+            } 
+            // If only variant was selected (no quantity option), use first quantity option or base variant
+            else if (variantIndex !== null && item.variants[variantIndex]) {
+              const variant = item.variants[variantIndex];
+              if (variant.quantities && variant.quantities.length > 0) {
+                retailerId = `${item._id.toString()}_v${variantIndex}_q0`;
+              } else {
+                retailerId = `${item._id.toString()}_v${variantIndex}`;
+              }
+            } 
+            // If no variant specified, show first variant (first quantity if has quantities)
+            else {
+              const firstVariant = item.variants[0];
+              if (firstVariant && firstVariant.quantities && firstVariant.quantities.length > 0) {
+                retailerId = `${item._id.toString()}_v0_q0`;
+              } else {
+                retailerId = `${item._id.toString()}_v0`;
+              }
+            }
+          }
+          
           const catalogId = catalogService.getCatalogId();
           const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating} (${item.totalRatings} reviews)` : '';
           const foodIcon = item.foodType === 'veg' ? '🌿 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
@@ -7426,18 +7488,22 @@ const chatbot = {
         let unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
 
         // If variant was selected, use variant price & label
-        if (item.variantIndex !== null && item.variantIndex !== undefined && item.menuItem.variants?.[item.variantIndex]) {
+        if (item.variantIndex !== null && item.variantIndex !== undefined && item.menuItem.variants && item.menuItem.variants.length > item.variantIndex) {
           const variant = item.menuItem.variants[item.variantIndex];
-          if (item.quantityIndex !== null && item.quantityIndex !== undefined && variant.quantities?.[item.quantityIndex]) {
-            const q = variant.quantities[item.quantityIndex];
-            effectivePrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
-            displayName = variant.label;
-            unitInfo = `${q.quantity || 1} ${q.unit || 'piece'}`;
-          } else {
-            effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
-              ? variant.offerPrice : variant.price;
-            displayName = variant.label;
-            unitInfo = `${variant.quantity || 1} ${variant.unit || item.menuItem.unit || 'piece'}`;
+          if (variant) {
+            if (item.quantityIndex !== null && item.quantityIndex !== undefined && variant.quantities && variant.quantities.length > item.quantityIndex) {
+              const q = variant.quantities[item.quantityIndex];
+              if (q) {
+                effectivePrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+                displayName = variant.label;  // Just the variant label, no quantity
+                unitInfo = `${q.quantity} ${q.unit}`;  // Quantity in unitInfo only
+              }
+            } else {
+              effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
+                ? variant.offerPrice : variant.price;
+              displayName = variant.label;
+              unitInfo = `${variant.quantity || 1} ${variant.unit || item.menuItem.unit || 'piece'}`;
+            }
           }
         }
         

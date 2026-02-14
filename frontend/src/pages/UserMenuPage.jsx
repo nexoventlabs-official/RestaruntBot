@@ -287,7 +287,13 @@ export default function UserMenuPage() {
     e?.stopPropagation();
     if (!isItemAvailable(item._id)) return;
     
-    // Simple message with item ID for chatbot to send catalog product card
+    // If item has variants/sizes, open dialog for user to select
+    if (item.variants && item.variants.length > 0) {
+      openItemDialog(item);
+      return;
+    }
+    
+    // Simple item without variants - send WhatsApp directly
     let msg = `I'd like to order *${item.name}*`;
     msg += `\n💰 ₹${item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}`;
     msg += `\n#WEB_${item._id}`;
@@ -414,14 +420,18 @@ export default function UserMenuPage() {
     const variant = selectedVariantIndex !== null ? item.variants?.[selectedVariantIndex] : null;
     const unitPrice = details.offerPrice || details.price;
     
-    // Simple message with item ID & variant for chatbot to send catalog product card
+    // Message with item ID & variant for chatbot to send catalog product card
     let msg = `I'd like to order *${item.name}*`;
     if (variant) msg += ` - ${variant.label}`;
+    if (selectedQuantityIndex !== null && variant?.quantities?.[selectedQuantityIndex]) {
+      const q = variant.quantities[selectedQuantityIndex];
+      msg += ` (${q.quantity} ${q.unit})`;
+    }
     msg += ` x${dialogQuantity}`;
     msg += `\n💰 ₹${unitPrice * dialogQuantity}`;
     msg += `\n#WEB_${item._id}`;
     if (selectedVariantIndex !== null) msg += `_v${selectedVariantIndex}`;
-    msg += `_q${dialogQuantity}`;
+    if (selectedQuantityIndex !== null) msg += `_q${selectedQuantityIndex}`;
     
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
     closeItemDialog();
