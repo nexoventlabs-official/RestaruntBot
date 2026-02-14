@@ -18,7 +18,7 @@ const brevoMail = {
       <p><strong>Total:</strong> ₹${orderDetails.totalAmount}</p>
       <p><strong>Service:</strong> ${orderDetails.serviceType}</p>
       <h3>Items:</h3>
-      <ul>${orderDetails.items.map(i => `<li>${i.name} x ${i.quantity} - ₹${i.price * i.quantity}</li>`).join('')}</ul>
+      <ul>${orderDetails.items.map(i => `<li>${i.name} — Qty: ${i.quantity} × ₹${i.price} = ₹${i.price * i.quantity}</li>`).join('')}</ul>
       <p>We'll notify you when your order is ready!</p>
     `;
     sendSmtpEmail.sender = { name: process.env.BREVO_FROM_NAME, email: process.env.BREVO_FROM_EMAIL };

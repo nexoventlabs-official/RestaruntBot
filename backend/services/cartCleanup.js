@@ -47,21 +47,22 @@ const sendExpiryWarnings = async () => {
             // Resolve variant name and price
             if (item.variantIndex != null && menuItem.variants && menuItem.variants[item.variantIndex]) {
               const variant = menuItem.variants[item.variantIndex];
-              displayName = variant.label || displayName;
               price = variant.price != null ? variant.price : price;
 
               // Resolve quantity option name and price
               if (item.quantityIndex != null && variant.quantities && variant.quantities[item.quantityIndex]) {
                 const q = variant.quantities[item.quantityIndex];
-                displayName += ` (${q.quantity} ${q.unit || ''})`.trim();
+                displayName = `${menuItem.name} - ${variant.label} (${q.quantity} ${q.unit || 'piece'})`;
                 price = q.price != null ? q.price : price;
+              } else {
+                displayName = `${menuItem.name} - ${variant.label} (${variant.quantity || 1} ${variant.unit || menuItem.unit || 'piece'})`;
               }
             }
 
             const itemTotal = price * item.quantity;
             totalAmount += itemTotal;
             message += `${index + 1}. *${displayName}*\n`;
-            message += `   ${item.quantity} × ₹${price} = ₹${itemTotal}\n\n`;
+            message += `   Qty: ${item.quantity} × ₹${price} = ₹${itemTotal}\n\n`;
           }
         });
         
@@ -152,21 +153,22 @@ const cleanupExpiredCartItems = async () => {
               // Resolve variant name and price
               if (item.variantIndex != null && menuItem.variants && menuItem.variants[item.variantIndex]) {
                 const variant = menuItem.variants[item.variantIndex];
-                displayName = variant.label || displayName;
                 price = variant.price != null ? variant.price : price;
 
                 // Resolve quantity option name and price
                 if (item.quantityIndex != null && variant.quantities && variant.quantities[item.quantityIndex]) {
                   const q = variant.quantities[item.quantityIndex];
-                  displayName += ` (${q.quantity} ${q.unit || ''})`.trim();
+                  displayName = `${menuItem.name} - ${variant.label} (${q.quantity} ${q.unit || 'piece'})`;
                   price = q.price != null ? q.price : price;
+                } else {
+                  displayName = `${menuItem.name} - ${variant.label} (${variant.quantity || 1} ${variant.unit || menuItem.unit || 'piece'})`;
                 }
               }
 
               const itemTotal = price * item.quantity;
               totalLostValue += itemTotal;
               message += `${index + 1}. *${displayName}*\n`;
-              message += `   ${item.quantity} × ₹${price} = ₹${itemTotal}\n\n`;
+              message += `   Qty: ${item.quantity} × ₹${price} = ₹${itemTotal}\n\n`;
             }
           });
           

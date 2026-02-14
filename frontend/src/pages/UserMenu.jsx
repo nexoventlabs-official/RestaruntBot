@@ -144,7 +144,7 @@ export default function UserMenu() {
 
   const handleOrderSingle = (item) => {
     if (!isItemAvailable(item._id)) return;
-    const msg = encodeURIComponent(`Hi! I'd like to order:\n\n🍽️ *${item.name}*\n💰 Price: ₹${item.price}\n\nPlease confirm availability!`);
+    const msg = encodeURIComponent(`Hi! I'd like to order:\n\n🍽️ *${item.name}*\n💰 Price: ₹${item.price} / ${item.quantity || 1} ${item.unit || 'piece'}\n\nPlease confirm availability!`);
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, '_blank');
   };
 

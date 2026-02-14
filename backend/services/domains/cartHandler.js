@@ -103,8 +103,7 @@ async function addToCart(customer, phone, params) {
     });
     
     const message = `✅ *${item.name}* added to cart!\n\n` +
-      `Quantity: ${quantity}\n` +
-      `Price: ₹${item.price * quantity}\n\n` +
+      `Qty: ${quantity} × ₹${item.price} = ₹${item.price * quantity}\n\n` +
       `Cart total: ${customer.cart.length} item(s)`;
     
     await whatsapp.sendButtons(phone, message, [

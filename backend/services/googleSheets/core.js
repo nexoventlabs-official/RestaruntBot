@@ -346,7 +346,7 @@ const googleSheets = {
 
       const date = new Date(order.createdAt || Date.now());
       const istOptions = { timeZone: 'Asia/Kolkata' };
-      const itemsStr = order.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
+      const itemsStr = order.items.map(item => `${item.name} Qty: ${item.quantity} × ₹${item.price} = ₹${item.price * item.quantity}`).join(', ');
 
       // Get delivery address for logging
       const deliveryAddress = order.serviceType === 'pickup' ? 'Self Pickup' : (order.deliveryAddress?.address || '');
@@ -518,7 +518,7 @@ const googleSheets = {
             if (dbOrder) {
               const date = new Date(dbOrder.createdAt || Date.now());
               const istOptions = { timeZone: 'Asia/Kolkata' };
-              const itemsStr = dbOrder.items.map(item => `${item.name} x${item.quantity} (₹${item.price * item.quantity})`).join(', ');
+              const itemsStr = dbOrder.items.map(item => `${item.name} Qty: ${item.quantity} × ₹${item.price} = ₹${item.price * item.quantity}`).join(', ');
               
               // Determine payment method label
               let paymentMethodLabel = 'UPI/App';

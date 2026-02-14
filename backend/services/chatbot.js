@@ -6945,7 +6945,7 @@ const chatbot = {
     const addedToCartImageUrl = await chatbotImagesService.getImageUrl('added_to_cart');
     
     await sendWithOptionalImage(phone, addedToCartImageUrl,
-      `✅ *Added to Cart!*\n\n${qty}x ${item.name} (${unitInfo})\n💰 ${priceDisplay} × ${qty} = ₹${effectivePrice * qty}\n\n🛒 Cart: ${cartCount} items`,
+      `✅ *Added to Cart!*\n\n*${item.name}* (${unitInfo})\nQty: ${qty} × ₹${effectivePrice} = ₹${effectivePrice * qty}\n\n🛒 Cart: ${cartCount} items`,
       [
         { id: 'add_more', text: 'Add More' },
         { id: 'view_cart', text: 'View Cart' },

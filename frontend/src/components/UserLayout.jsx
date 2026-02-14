@@ -292,7 +292,7 @@ export default function UserLayout() {
     let msg = `Hi! I'd like to order:\n\n`;
     msg += `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n`;
     msg += `📦 *Quantity:* ${dialogQuantity}\n`;
-    msg += `💰 *Price:* ₹${item.price} x ${dialogQuantity} = ₹${item.price * dialogQuantity}\n`;
+    msg += `💰 *Price:* Qty: ${dialogQuantity} × ₹${item.price} = ₹${item.price * dialogQuantity}\n`;
     msg += `\nPlease confirm my order. Thank you!`;
     
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
