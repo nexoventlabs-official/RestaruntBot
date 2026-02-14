@@ -4437,6 +4437,9 @@ const chatbot = {
           customer.conversationState = state;
           await customer.save();
           await this.sendItemDetailsForOrder(phone, matchedItem, websiteOrder.variantIndex, websiteOrder.quantityIndex);
+          
+          // Also send the full cart after showing the product
+          await this.sendCart(phone, customer);
           state.currentStep = 'viewing_item_details';
         } else if (websiteOrder.itemName) {
           const searchName = websiteOrder.itemName.toLowerCase().trim();
@@ -4462,6 +4465,9 @@ const chatbot = {
             customer.conversationState = state;
             await customer.save();
             await this.sendItemDetailsForOrder(phone, item);
+            
+            // Also send the full cart after showing the product
+            await this.sendCart(phone, customer);
             state.currentStep = 'viewing_item_details';
           } else if (partialMatches.length > 1) {
             // Multiple matches - show options as list
@@ -7527,10 +7533,14 @@ const chatbot = {
         
         // Show price with discount if applicable
         let priceDisplay;
+        // Always use effectivePrice (which accounts for variant/quantity options)
         if (offerApplied && itemDiscount > 0) {
-          priceDisplay = `~₹${item.menuItem.price}~ ➜ *₹${effectivePrice}* 🎁`;
+          const originalPrice = item.variantIndex !== null ? 
+            (item.menuItem.variants[item.variantIndex]?.price || item.menuItem.price) : 
+            item.menuItem.price;
+          priceDisplay = `~₹${originalPrice}~ ➜ *₹${effectivePrice}* 🎁`;
         } else {
-          priceDisplay = formatPriceWithActiveOffers(item.menuItem, activeOffers);
+          priceDisplay = `*₹${effectivePrice}*`;
         }
         
         cartMsg += `${validItems}. *${displayName}* (${unitInfo})\n`;

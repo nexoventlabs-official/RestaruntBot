@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/3753</span>
+                <span class='fraction'>0/3756</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/2831</span>
+                <span class='fraction'>0/2835</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/3447</span>
+                <span class='fraction'>0/3450</span>
             </div>
         
             
@@ -8684,7 +8684,17 @@
 <a name='L8619'></a><a href='#L8619'>8619</a>
 <a name='L8620'></a><a href='#L8620'>8620</a>
 <a name='L8621'></a><a href='#L8621'>8621</a>
-<a name='L8622'></a><a href='#L8622'>8622</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L8622'></a><a href='#L8622'>8622</a>
+<a name='L8623'></a><a href='#L8623'>8623</a>
+<a name='L8624'></a><a href='#L8624'>8624</a>
+<a name='L8625'></a><a href='#L8625'>8625</a>
+<a name='L8626'></a><a href='#L8626'>8626</a>
+<a name='L8627'></a><a href='#L8627'>8627</a>
+<a name='L8628'></a><a href='#L8628'>8628</a>
+<a name='L8629'></a><a href='#L8629'>8629</a>
+<a name='L8630'></a><a href='#L8630'>8630</a>
+<a name='L8631'></a><a href='#L8631'>8631</a>
+<a name='L8632'></a><a href='#L8632'>8632</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -13123,9 +13133,12 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -13147,6 +13160,9 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -16210,10 +16226,14 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -21744,6 +21764,9 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
 <span class="cstat-no" title="statement not covered" >          customer.conversationState = state;</span>
 <span class="cstat-no" title="statement not covered" >          await customer.save();</span>
 <span class="cstat-no" title="statement not covered" >          await this.sendItemDetailsForOrder(phone, matchedItem, websiteOrder.variantIndex, websiteOrder.quantityIndex);</span>
+          
+          // Also send the full cart after showing the product
+<span class="cstat-no" title="statement not covered" >          await this.sendCart(phone, customer);</span>
 <span class="cstat-no" title="statement not covered" >          state.currentStep = 'viewing_item_details';</span>
         } else <span class="cstat-no" title="statement not covered" >if (websiteOrder.itemName) {</span>
           const searchName = <span class="cstat-no" title="statement not covered" >websiteOrder.itemName.toLowerCase().trim();</span>
@@ -21769,6 +21792,9 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
 <span class="cstat-no" title="statement not covered" >            customer.conversationState = state;</span>
 <span class="cstat-no" title="statement not covered" >            await customer.save();</span>
 <span class="cstat-no" title="statement not covered" >            await this.sendItemDetailsForOrder(phone, item);</span>
+            
+            // Also send the full cart after showing the product
+<span class="cstat-no" title="statement not covered" >            await this.sendCart(phone, customer);</span>
 <span class="cstat-no" title="statement not covered" >            state.currentStep = 'viewing_item_details';</span>
           } else <span class="cstat-no" title="statement not covered" >if (partialMatches.length &gt; 1) {</span>
             // Multiple matches - show options as list
@@ -24834,10 +24860,14 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
         
         // Show price with discount if applicable
         let priceDisplay;
+        // Always use effectivePrice (which accounts for variant/quantity options)
 <span class="cstat-no" title="statement not covered" >        if (offerApplied &amp;&amp; itemDiscount &gt; 0) {</span>
-<span class="cstat-no" title="statement not covered" >          priceDisplay = `~₹${item.menuItem.price}~ ➜ *₹${effectivePrice}* 🎁`;</span>
+          const originalPrice = <span class="cstat-no" title="statement not covered" >item.variantIndex !== null ? </span>
+            (item.menuItem.variants[item.variantIndex]?.price || item.menuItem.price) : 
+            item.menuItem.price;
+<span class="cstat-no" title="statement not covered" >          priceDisplay = `~₹${originalPrice}~ ➜ *₹${effectivePrice}* 🎁`;</span>
         } else {
-<span class="cstat-no" title="statement not covered" >          priceDisplay = formatPriceWithActiveOffers(item.menuItem, activeOffers);</span>
+<span class="cstat-no" title="statement not covered" >          priceDisplay = `*₹${effectivePrice}*`;</span>
         }
         
 <span class="cstat-no" title="statement not covered" >        cartMsg += `${validItems}. *${displayName}* (${unitInfo})\n`;</span>
@@ -25933,7 +25963,7 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-14T07:07:08.519Z
+                at 2026-02-14T07:20:33.744Z
             </div>
         <script src="../prettify.js"></script>
         <script>
