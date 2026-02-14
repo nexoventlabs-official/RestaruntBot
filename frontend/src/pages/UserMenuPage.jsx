@@ -242,23 +242,17 @@ export default function UserMenuPage() {
       if (existingWish) {
         removeFromWishlist(existingWish.wishlistKey);
       } else {
-        // Wishlist the first available variant
+        // Wishlist the first available variant (key per variant, no _q)
         const firstAvailIdx = item.variants.findIndex(v => v.available !== false);
         const vIdx = firstAvailIdx >= 0 ? firstAvailIdx : 0;
         const v = item.variants[vIdx];
-        const hasQty = v.quantities?.length > 0;
-        const qIdx = hasQty ? 0 : null;
-        const q = hasQty ? v.quantities[0] : null;
-        let wishlistKey = `${item._id}_v${vIdx}`;
-        if (qIdx !== null) wishlistKey += `_q${qIdx}`;
-        const price = q ? (q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price) : (v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price);
+        const wishlistKey = `${item._id}_v${vIdx}`;
+        const price = v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price;
         addToWishlist({
           ...item,
           wishlistKey,
           variantIndex: vIdx,
           variantLabel: v.label,
-          quantityIndex: qIdx,
-          quantityLabel: q ? `${q.quantity} ${q.unit}` : null,
           image: v.image || item.image,
           price
         });
@@ -770,7 +764,13 @@ export default function UserMenuPage() {
         <div className="p-4 flex flex-col flex-grow min-w-0">
           {/* Name & Wishlist */}
           <div className="flex items-start justify-between gap-2 mb-2">
-            <h3 className="font-bold text-gray-900 text-base sm:text-lg line-clamp-1 sm:line-clamp-2 flex-1 sm:min-h-[3rem]">{item.name}</h3>
+            <h3 className="font-bold text-gray-900 text-base sm:text-lg line-clamp-1 sm:line-clamp-2 flex-1 sm:min-h-[3rem]">
+              {(() => {
+                const wish = wishlist?.find(w => w._id === item._id && w.variantLabel);
+                if (wish) return wish.variantLabel;
+                return item.name;
+              })()}
+            </h3>
             <button 
               onClick={(e) => handleToggleWishlist(item, e)} 
               className="p-1.5 hover:scale-110 transition-transform flex-shrink-0 bg-gray-50 rounded-full"
@@ -1218,14 +1218,10 @@ export default function UserMenuPage() {
                 </h2>
                 {(() => {
                   const variant = selectedVariantIndex !== null ? selectedItem.variants?.[selectedVariantIndex] : null;
-                  const qOption = variant && selectedQuantityIndex !== null ? variant.quantities?.[selectedQuantityIndex] : null;
-                  let wishlistKey = selectedItem._id;
-                  if (selectedVariantIndex !== null && variant) {
-                    wishlistKey = `${selectedItem._id}_v${selectedVariantIndex}`;
-                    if (selectedQuantityIndex !== null && qOption) {
-                      wishlistKey += `_q${selectedQuantityIndex}`;
-                    }
-                  }
+                  // Wishlist key is per-variant (no _q) to stay in sync with card and variant grid hearts
+                  const wishlistKey = selectedVariantIndex !== null && variant
+                    ? `${selectedItem._id}_v${selectedVariantIndex}`
+                    : selectedItem._id;
                   const inWish = wishlist?.some(w => (w.wishlistKey || w._id) === wishlistKey);
                   return (
                     <button
@@ -1240,8 +1236,6 @@ export default function UserMenuPage() {
                             wishlistKey,
                             variantIndex: selectedVariantIndex,
                             variantLabel: variant?.label || null,
-                            quantityIndex: selectedQuantityIndex,
-                            quantityLabel: qOption ? `${qOption.quantity} ${qOption.unit}` : null,
                             image: details.image || selectedItem.image,
                             price: details.offerPrice || details.price
                           });
