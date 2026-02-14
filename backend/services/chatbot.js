@@ -8403,34 +8403,62 @@ const chatbot = {
     for (const cartItem of freshCustomer.cart) {
       if (!cartItem.menuItem) continue;
       const item = cartItem.menuItem;
-      let price = item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price;
+      let effectivePrice = item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price;
       let itemDiscount = 0;
+      let itemName = item.name;
+      let itemUnit = item.unit || 'piece';
+      let itemUnitQty = item.quantity || 1;
+      let originalPrice = item.price;
+      
+      // Resolve variant-specific pricing and labels
+      if (cartItem.variantIndex !== null && cartItem.variantIndex !== undefined && item.variants?.[cartItem.variantIndex]) {
+        const variant = item.variants[cartItem.variantIndex];
+        if (cartItem.quantityIndex !== null && cartItem.quantityIndex !== undefined && variant.quantities?.[cartItem.quantityIndex]) {
+          const q = variant.quantities[cartItem.quantityIndex];
+          originalPrice = q.price;
+          effectivePrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+          itemName = `${item.name} - ${variant.label} (${q.quantity} ${q.unit})`;
+          itemUnit = q.unit || variant.unit || item.unit || 'piece';
+          itemUnitQty = q.quantity || 1;
+        } else {
+          originalPrice = variant.price;
+          effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
+            ? variant.offerPrice : variant.price;
+          itemName = `${item.name} (${variant.label})`;
+          itemUnit = variant.unit || item.unit || 'piece';
+          itemUnitQty = variant.quantity || 1;
+        }
+      }
       
       // If no offerPrice, check customer's activeOffers for applicable discount
       if (!(item.offerPrice && item.offerPrice < item.price) && activeOffers.length > 0) {
         const offerResult = calculateOfferDiscount(item, activeOffers);
         if (offerResult.discountedPrice !== null) {
-          price = offerResult.discountedPrice;
+          effectivePrice = offerResult.discountedPrice;
           itemDiscount = offerResult.discountAmount * cartItem.quantity;
         }
       }
       
-      const itemTotal = price * cartItem.quantity;
+      const itemTotal = effectivePrice * cartItem.quantity;
       total += itemTotal;
       totalDiscount += itemDiscount;
       items.push({
-        name: item.name,
+        name: itemName,
         quantity: cartItem.quantity,
-        price: itemTotal
+        price: effectivePrice,
+        unit: itemUnit,
+        unitQty: itemUnitQty
       });
     }
 
     // Build order summary message
     let msg = '📋 *Order Summary (Self-Pickup)*\n\n';
-    items.forEach(item => {
-      msg += `• ${item.name} x${item.quantity} - ₹${item.price}\n`;
+    items.forEach((item, index) => {
+      msg += `${index + 1}. *${item.name}*\n`;
+      msg += `   Qty: ${item.quantity} × ₹${item.price} = ₹${item.price * item.quantity}\n\n`;
     });
-    msg += `\n💰 *Total: ₹${total}*\n`;
+    msg += `━━━━━━━━━━━━━━━\n`;
+    msg += `💰 *Total: ₹${total}*\n`;
     if (totalDiscount > 0) {
       msg += `🎁 *You Save: ₹${totalDiscount}*\n`;
     }
@@ -8469,15 +8497,39 @@ const chatbot = {
       for (const cartItem of freshCustomer.cart) {
         if (!cartItem.menuItem) continue;
         const item = cartItem.menuItem;
-        let price = item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price;
+        let effectivePrice = item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price;
         let itemDiscount = 0;
         let appliedOfferId = null;
+        let itemName = item.name;
+        let itemUnit = item.unit || 'piece';
+        let itemUnitQty = item.quantity || 1;
+        let originalPrice = item.price;
+        
+        // Resolve variant-specific pricing and labels
+        if (cartItem.variantIndex !== null && cartItem.variantIndex !== undefined && item.variants?.[cartItem.variantIndex]) {
+          const variant = item.variants[cartItem.variantIndex];
+          if (cartItem.quantityIndex !== null && cartItem.quantityIndex !== undefined && variant.quantities?.[cartItem.quantityIndex]) {
+            const q = variant.quantities[cartItem.quantityIndex];
+            originalPrice = q.price;
+            effectivePrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+            itemName = `${item.name} - ${variant.label} (${q.quantity} ${q.unit})`;
+            itemUnit = q.unit || variant.unit || item.unit || 'piece';
+            itemUnitQty = q.quantity || 1;
+          } else {
+            originalPrice = variant.price;
+            effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
+              ? variant.offerPrice : variant.price;
+            itemName = `${item.name} (${variant.label})`;
+            itemUnit = variant.unit || item.unit || 'piece';
+            itemUnitQty = variant.quantity || 1;
+          }
+        }
         
         // If no offerPrice, check customer's activeOffers for applicable discount
         if (!(item.offerPrice && item.offerPrice < item.price) && activeOffers.length > 0) {
           const offerResult = calculateOfferDiscount(item, activeOffers);
           if (offerResult.discountedPrice !== null) {
-            price = offerResult.discountedPrice;
+            effectivePrice = offerResult.discountedPrice;
             itemDiscount = offerResult.discountAmount * cartItem.quantity;
             if (offerResult.appliedOffer?.offerId) {
               appliedOfferId = offerResult.appliedOffer.offerId;
@@ -8486,18 +8538,21 @@ const chatbot = {
           }
         }
         
-        const itemTotal = price * cartItem.quantity;
+        const itemTotal = effectivePrice * cartItem.quantity;
         total += itemTotal;
         totalDiscount += itemDiscount;
         items.push({
           menuItem: item._id,
-          name: item.name,
+          name: itemName,
           quantity: cartItem.quantity,
-          price: itemTotal,
-          originalPrice: item.price,
-          unit: item.unit || 'piece',
-          unitQty: item.unitQty || 1,
+          price: effectivePrice,
+          originalPrice,
+          unit: itemUnit,
+          unitQty: itemUnitQty,
           image: item.image,
+          variantIndex: cartItem.variantIndex ?? null,
+          variantLabel: cartItem.variantLabel || null,
+          quantityIndex: cartItem.quantityIndex ?? null,
           appliedOfferId
         });
       }
@@ -8551,8 +8606,8 @@ const chatbot = {
       msg += `📋 *Order Details*\n`;
       msg += `━━━━━━━━━━━━━━━\n`;
       items.forEach((item, index) => {
-        msg += `${index + 1}. ${item.name}\n`;
-        msg += `   ${item.quantity} × ₹${item.price} = ₹${item.price * item.quantity}\n`;
+        msg += `${index + 1}. *${item.name}*\n`;
+        msg += `   Qty: ${item.quantity} × ₹${item.price} = ₹${item.price * item.quantity}\n\n`;
       });
       msg += `━━━━━━━━━━━━━━━\n\n`;
       
