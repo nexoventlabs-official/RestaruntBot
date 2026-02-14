@@ -1174,19 +1174,41 @@ export default function UserMenuPage() {
             >
               {/* Name & Wishlist */}
               <div className="flex items-start justify-between gap-3 mb-3">
-                <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 flex-1">{selectedItem.name}</h2>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (isInWishlist && isInWishlist(selectedItem._id)) {
-                      removeFromWishlist(selectedItem._id);
-                    } else {
-                      addToWishlist(selectedItem);
-                    }
-                  }}
-                  className="p-2 hover:scale-110 transition-transform flex-shrink-0 bg-gray-50 rounded-full"
-                >
-                  <Heart className={`w-6 h-6 ${isInWishlist && isInWishlist(selectedItem._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
+                <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 flex-1">
+                  {selectedVariantIndex !== null && selectedItem.variants?.[selectedVariantIndex]
+                    ? selectedItem.variants[selectedVariantIndex].label
+                    : selectedItem.name}
+                </h2>
+                {(() => {
+                  const wishlistKey = selectedVariantIndex !== null && selectedItem.variants?.[selectedVariantIndex]
+                    ? `${selectedItem._id}_v${selectedVariantIndex}`
+                    : selectedItem._id;
+                  const inWish = wishlist?.some(w => (w.wishlistKey || w._id) === wishlistKey);
+                  return (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (inWish) {
+                          removeFromWishlist(wishlistKey);
+                        } else {
+                          const variant = selectedVariantIndex !== null ? selectedItem.variants?.[selectedVariantIndex] : null;
+                          const details = getDialogItemDetails();
+                          addToWishlist({
+                            ...selectedItem,
+                            wishlistKey,
+                            variantIndex: selectedVariantIndex,
+                            variantLabel: variant?.label || null,
+                            image: details.image || selectedItem.image,
+                            price: details.offerPrice || details.price
+                          });
+                        }
+                      }}
+                      className="p-2 hover:scale-110 transition-transform flex-shrink-0 bg-gray-50 rounded-full"
+                    >
+                      <Heart className={`w-6 h-6 ${inWish ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
+                    </button>
+                  );
+                })()}
                 </button>
               </div>
 
