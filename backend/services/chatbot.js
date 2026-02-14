@@ -4432,13 +4432,12 @@ const chatbot = {
             await customer.save();
           }
           
-          // Show catalog product card for this item
+          // Set selected item state
           state.selectedItem = matchedItem._id.toString();
           customer.conversationState = state;
           await customer.save();
-          await this.sendItemDetailsForOrder(phone, matchedItem, websiteOrder.variantIndex, websiteOrder.quantityIndex);
           
-          // Also send the full cart after showing the product
+          // Send the full cart with catalog (no need for separate product card)
           await this.sendCart(phone, customer);
           state.currentStep = 'viewing_item_details';
         } else if (websiteOrder.itemName) {
