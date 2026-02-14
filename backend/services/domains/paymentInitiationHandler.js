@@ -249,7 +249,7 @@ async function initiateOnlinePayment(customer, phone, params = {}) {
         originalPrice = variant.price;
         effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
           ? variant.offerPrice : variant.price;
-        itemName = `${item.menuItem.name} - ${variant.label}`;
+        itemName = `${item.menuItem.name} - ${variant.label} (${variant.quantity || 1} ${variant.unit || item.menuItem.unit || 'piece'})`;
         itemUnit = variant.unit || item.menuItem.unit || 'piece';
         itemUnitQty = variant.quantity || 1;
       }
@@ -492,7 +492,7 @@ async function processCODOrder(customer, phone, params = {}) {
         originalPrice = variant.price;
         effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
           ? variant.offerPrice : variant.price;
-        itemName = `${item.menuItem.name} - ${variant.label}`;
+        itemName = `${item.menuItem.name} - ${variant.label} (${variant.quantity || 1} ${variant.unit || item.menuItem.unit || 'piece'})`;
         itemUnit = variant.unit || item.menuItem.unit || 'piece';
         itemUnitQty = variant.quantity || 1;
       }
