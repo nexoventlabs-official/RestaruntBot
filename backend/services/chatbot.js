@@ -7407,6 +7407,24 @@ const chatbot = {
         let effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
         let itemDiscount = 0;
         let offerApplied = null;
+        let displayName = item.menuItem.name;
+        let unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
+
+        // If variant was selected, use variant price & label
+        if (item.variantIndex !== null && item.variantIndex !== undefined && item.menuItem.variants?.[item.variantIndex]) {
+          const variant = item.menuItem.variants[item.variantIndex];
+          if (item.quantityIndex !== null && item.quantityIndex !== undefined && variant.quantities?.[item.quantityIndex]) {
+            const q = variant.quantities[item.quantityIndex];
+            effectivePrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+            displayName = `${variant.label} (${q.quantity} ${q.unit})`;
+            unitInfo = `${q.quantity || 1} ${q.unit || 'piece'}`;
+          } else {
+            effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
+              ? variant.offerPrice : variant.price;
+            displayName = variant.label;
+            unitInfo = `${variant.quantity || 1} ${variant.unit || item.menuItem.unit || 'piece'}`;
+          }
+        }
         
         // If no offerPrice, check customer's activeOffers for applicable discount
         if (!item.menuItem.offerPrice && activeOffers.length > 0) {
@@ -7425,7 +7443,6 @@ const chatbot = {
         total += subtotal;
         totalDiscount += itemDiscount;
         validItems++;
-        const unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
         
         // Show price with discount if applicable
         let priceDisplay;
@@ -7435,7 +7452,7 @@ const chatbot = {
           priceDisplay = formatPriceWithActiveOffers(item.menuItem, activeOffers);
         }
         
-        cartMsg += `${validItems}. *${item.menuItem.name}* (${unitInfo})\n`;
+        cartMsg += `${validItems}. *${displayName}* (${unitInfo})\n`;
         cartMsg += `   ${item.quantity} × ${priceDisplay} = ₹${subtotal}\n\n`;
       }
     });
@@ -7521,31 +7538,12 @@ const chatbot = {
         }
 
         if (sent) {
-          // Build compact cart summary with variant names
-          let summaryLines = [];
-          freshCustomer.cart.forEach((item) => {
-            if (item.menuItem) {
-              let name = item.menuItem.name;
-              // Show variant label instead of just title name
-              if (item.variantIndex !== null && item.variantIndex !== undefined && item.menuItem.variants?.[item.variantIndex]) {
-                const variant = item.menuItem.variants[item.variantIndex];
-                if (item.quantityIndex !== null && item.quantityIndex !== undefined && variant.quantities?.[item.quantityIndex]) {
-                  const q = variant.quantities[item.quantityIndex];
-                  name = `${variant.label} (${q.quantity} ${q.unit})`;
-                } else {
-                  name = variant.label;
-                }
-              }
-              const qty = item.quantity;
-              summaryLines.push(`• ${name} × ${qty}`);
-            }
-          });
-          const itemsSummary = summaryLines.join('\n');
-          const discountText = totalDiscount > 0 ? `\n🎁 Save ₹${totalDiscount}` : '';
+          // Catalog card already shows items — just send brief buttons message
+          const discountText = totalDiscount > 0 ? ` (Save ₹${totalDiscount})` : '';
 
           await whatsapp.sendButtons(
             phone,
-            `🛒 *${validItems} items* • Total: *₹${total}*${discountText}\n\n${itemsSummary}\n\nReady to order? Tap Place Order below 👇`,
+            `🛒 *${validItems} items* • Total: *₹${total}*${discountText}\n\nReady to order? 👇`,
             [
               { id: 'review_pay', text: 'Place Order ✅' },
               { id: 'add_more', text: 'Add More' },
