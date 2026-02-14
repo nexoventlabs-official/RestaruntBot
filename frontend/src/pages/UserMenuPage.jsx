@@ -111,8 +111,8 @@ export default function UserMenuPage() {
 
   const loadData = async () => {
     try {
-      // Use cached data if available
-      if (cachedData.isLoaded && cachedData.categories && cachedData.menu) {
+      // Use cached data if available and not empty
+      if (cachedData.isLoaded && cachedData.categories?.length > 0 && cachedData.menu?.length > 0) {
         setCategories(cachedData.categories);
         setItems(cachedData.menu);
         setAllItems(cachedData.menu);
