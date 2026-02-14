@@ -7191,7 +7191,7 @@ const chatbot = {
           const q = variant.quantities[item.quantityIndex];
           originalPrice = q.price;
           effectivePrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
-          itemName = `${item.menuItem.name} - ${variant.label}`;
+          itemName = `${item.menuItem.name} - ${variant.label} (${q.quantity} ${q.unit})`;
           itemUnit = q.unit || variant.unit || item.menuItem.unit || 'piece';
           itemUnitQty = q.quantity || 1;
         } else {
@@ -7406,8 +7406,29 @@ const chatbot = {
     
     freshCustomer.cart.forEach((item, i) => {
       if (item.menuItem) {
-        // Check activeOffers for discount
+        // Resolve variant-specific name and pricing
         let effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+        let itemName = item.menuItem.name;
+        let itemUnit = item.menuItem.unit || 'piece';
+        let itemUnitQty = item.menuItem.quantity || 1;
+        
+        if (item.variantIndex !== null && item.variantIndex !== undefined && item.menuItem.variants?.[item.variantIndex]) {
+          const variant = item.menuItem.variants[item.variantIndex];
+          if (item.quantityIndex !== null && item.quantityIndex !== undefined && variant.quantities?.[item.quantityIndex]) {
+            const q = variant.quantities[item.quantityIndex];
+            effectivePrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+            itemName = `${item.menuItem.name} - ${variant.label} (${q.quantity} ${q.unit})`;
+            itemUnit = q.unit || variant.unit || item.menuItem.unit || 'piece';
+            itemUnitQty = q.quantity || 1;
+          } else {
+            effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
+              ? variant.offerPrice : variant.price;
+            itemName = `${item.menuItem.name} (${variant.label})`;
+            itemUnit = variant.unit || item.menuItem.unit || 'piece';
+            itemUnitQty = variant.quantity || 1;
+          }
+        }
+        
         if (!item.menuItem.offerPrice && activeOffers.length > 0) {
           const offerResult = calculateOfferDiscount(item.menuItem, activeOffers);
           if (offerResult.discountedPrice !== null) {
@@ -7417,10 +7438,8 @@ const chatbot = {
         const subtotal = effectivePrice * item.quantity;
         total += subtotal;
         validItems++;
-        const unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
-        const priceDisplay = formatPriceWithActiveOffers(item.menuItem, activeOffers);
-        reviewMsg += `${validItems}. *${item.menuItem.name}* (${unitInfo})\n`;
-        reviewMsg += `   Qty: ${item.quantity} × ${priceDisplay} = ₹${subtotal}\n\n`;
+        reviewMsg += `${validItems}. *${itemName}*\n`;
+        reviewMsg += `   Qty: ${item.quantity} × ₹${effectivePrice} = ₹${subtotal}\n\n`;
       }
     });
     
@@ -7678,6 +7697,30 @@ const chatbot = {
       let effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
       let itemDiscount = 0;
       let appliedOfferId = null;
+      let itemName = item.menuItem.name;
+      let itemUnit = item.menuItem.unit || 'piece';
+      let itemUnitQty = item.menuItem.quantity || 1;
+      let originalPrice = item.menuItem.price;
+      
+      // Resolve variant-specific pricing and labels
+      if (item.variantIndex !== null && item.variantIndex !== undefined && item.menuItem.variants?.[item.variantIndex]) {
+        const variant = item.menuItem.variants[item.variantIndex];
+        if (item.quantityIndex !== null && item.quantityIndex !== undefined && variant.quantities?.[item.quantityIndex]) {
+          const q = variant.quantities[item.quantityIndex];
+          originalPrice = q.price;
+          effectivePrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+          itemName = `${item.menuItem.name} - ${variant.label} (${q.quantity} ${q.unit})`;
+          itemUnit = q.unit || variant.unit || item.menuItem.unit || 'piece';
+          itemUnitQty = q.quantity || 1;
+        } else {
+          originalPrice = variant.price;
+          effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
+            ? variant.offerPrice : variant.price;
+          itemName = `${item.menuItem.name} (${variant.label})`;
+          itemUnit = variant.unit || item.menuItem.unit || 'piece';
+          itemUnitQty = variant.quantity || 1;
+        }
+      }
       
       // If no offerPrice, check customer's activeOffers for applicable discount
       if (!item.menuItem.offerPrice && activeOffers.length > 0) {
@@ -7698,14 +7741,17 @@ const chatbot = {
       
       return {
         menuItem: item.menuItem._id,
-        name: item.menuItem.name,
+        name: itemName,
         quantity: item.quantity,
         price: effectivePrice,
-        originalPrice: item.menuItem.price, // Store original price for reference
-        unit: item.menuItem.unit || 'piece',
-        unitQty: item.menuItem.quantity || 1,
+        originalPrice,
+        unit: itemUnit,
+        unitQty: itemUnitQty,
         image: item.menuItem.image,
-        appliedOfferId // Track which offer was applied to this item
+        variantIndex: item.variantIndex ?? null,
+        variantLabel: item.variantLabel || null,
+        quantityIndex: item.quantityIndex ?? null,
+        appliedOfferId
       };
     });
 

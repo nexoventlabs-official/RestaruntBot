@@ -124,17 +124,16 @@ router.post('/verify-upi', publicRateLimiter, async (req, res) => {
     );
 
     // Build detailed order confirmation message
-    let itemsList = order.items.map(item => 
-      `• ${item.name} x${item.quantity} - ₹${item.price * item.quantity}`
-    ).join('\n');
-
     let confirmMsg = `✅ *Payment Successful!*\n\n`;
     confirmMsg += `📦 *Order ID:* ${order.orderId}\n`;
     confirmMsg += `💳 *Payment:* UPI\n`;
     confirmMsg += `💰 *Amount Paid:* ₹${order.totalAmount}\n`;
     confirmMsg += `🍽️ *Service:* ${order.serviceType.replace('_', ' ')}\n\n`;
     confirmMsg += `━━━━━━━━━━━━━━━\n`;
-    confirmMsg += `*Your Items:*\n${itemsList}\n`;
+    confirmMsg += `📋 *Your Items:*\n`;
+    order.items.forEach((item, i) => {
+      confirmMsg += `${i + 1}. *${item.name}*\n   Qty: ${item.quantity} × ₹${item.price} = ₹${item.price * item.quantity}\n\n`;
+    });
     confirmMsg += `━━━━━━━━━━━━━━━\n\n`;
     
     if (order.deliveryAddress?.address) {
@@ -478,17 +477,16 @@ router.get('/callback', publicRateLimiter, async (req, res) => {
         );
 
         // Build detailed order confirmation message
-        let itemsList = order.items.map(item => 
-          `• ${item.name} x${item.quantity} - ₹${item.price * item.quantity}`
-        ).join('\n');
-
         let confirmMsg = `✅ *Payment Successful!*\n\n`;
         confirmMsg += `📦 *Order ID:* ${order.orderId}\n`;
         confirmMsg += `💳 *Payment:* UPI/Online\n`;
         confirmMsg += `💰 *Amount Paid:* ₹${order.totalAmount}\n`;
         confirmMsg += `🍽️ *Service:* ${order.serviceType.replace('_', ' ')}\n\n`;
         confirmMsg += `━━━━━━━━━━━━━━━\n`;
-        confirmMsg += `*Your Items:*\n${itemsList}\n`;
+        confirmMsg += `📋 *Your Items:*\n`;
+        order.items.forEach((item, i) => {
+          confirmMsg += `${i + 1}. *${item.name}*\n   Qty: ${item.quantity} × ₹${item.price} = ₹${item.price * item.quantity}\n\n`;
+        });
         confirmMsg += `━━━━━━━━━━━━━━━\n\n`;
         
         if (order.deliveryAddress?.address) {

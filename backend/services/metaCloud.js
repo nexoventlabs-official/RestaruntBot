@@ -224,7 +224,8 @@ const metaCloud = {
       // Build order message
       let orderMsg = `Order #${order.orderId}\n⏳ Order pending\n\n`;
       items.forEach(item => {
-        orderMsg += `*${item.name}*\nQuantity ${item.quantity}    ₹${item.quantity * item.price}.00\n\n`;
+        orderMsg += `*${item.name}*\n`;
+        orderMsg += `Qty: ${item.quantity} × ₹${item.price} = ₹${item.quantity * item.price}\n\n`;
       });
       orderMsg += `━━━━━━━━━━━━━━━\n`;
       

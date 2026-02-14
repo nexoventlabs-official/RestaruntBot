@@ -61,9 +61,9 @@ const orderScheduler = {
       // Build order details message
       let itemsList = '';
       if (order.items && order.items.length > 0) {
-        itemsList = order.items.map(item => 
-          `• ${item.name} x${item.quantity} - ₹${item.price * item.quantity}`
-        ).join('\n');
+        itemsList = order.items.map((item, i) => 
+          `${i + 1}. *${item.name}*\n   Qty: ${item.quantity} × ₹${item.price} = ₹${item.price * item.quantity}`
+        ).join('\n\n');
       }
       
       // Send WhatsApp notification to customer
@@ -71,7 +71,8 @@ const orderScheduler = {
         `📦 *Order ID:* ${order.orderId}\n` +
         `💰 *Total:* ₹${order.totalAmount}\n` +
         `🍽️ *Service:* ${order.serviceType}\n\n` +
-        `*Items:*\n${itemsList}\n\n` +
+        `━━━━━━━━━━━━━━━\n` +
+        `📋 *Items:*\n${itemsList}\n\n` +
         `━━━━━━━━━━━━━━━\n` +
         `⚠️ *Reason:* Payment not received within 15 minutes.\n\n` +
         `If you still want to order, please start a new order by sending "hi".`;

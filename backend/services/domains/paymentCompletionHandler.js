@@ -268,10 +268,10 @@ async function sendPaymentConfirmation(order) {
     message += `💳 Payment ID: ${order.razorpayPaymentId}\n`;
     message += `💰 Amount: ₹${order.totalAmount}\n\n`;
     message += `━━━━━━━━━━━━━━━\n`;
-    message += `*Items:*\n`;
+    message += `📋 *Items:*\n`;
     
     order.items.forEach((item, i) => {
-      message += `${i + 1}. ${item.name} x${item.quantity} - ₹${item.price * item.quantity}\n`;
+      message += `${i + 1}. *${item.name}*\n   Qty: ${item.quantity} × ₹${item.price} = ₹${item.price * item.quantity}\n\n`;
     });
     
     message += `━━━━━━━━━━━━━━━\n`;
@@ -361,7 +361,7 @@ async function sendEmailConfirmation(order) {
     html += `<ul>`;
     
     order.items.forEach(item => {
-      html += `<li>${item.name} x${item.quantity} - ₹${item.price * item.quantity}</li>`;
+      html += `<li>${item.name} — Qty: ${item.quantity} × ₹${item.price} = ₹${item.price * item.quantity}</li>`;
     });
     
     html += `</ul>`;

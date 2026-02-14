@@ -791,9 +791,7 @@
 <a name='L726'></a><a href='#L726'>726</a>
 <a name='L727'></a><a href='#L727'>727</a>
 <a name='L728'></a><a href='#L728'>728</a>
-<a name='L729'></a><a href='#L729'>729</a>
-<a name='L730'></a><a href='#L730'>730</a>
-<a name='L731'></a><a href='#L731'>731</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L729'></a><a href='#L729'>729</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -921,8 +919,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -930,6 +926,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1275,8 +1272,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1284,6 +1279,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1649,17 +1645,16 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
     );
 &nbsp;
     // Build detailed order confirmation message
-    let itemsList = <span class="cstat-no" title="statement not covered" >order.items.map(<span class="fstat-no" title="function not covered" >it</span>em =&gt; </span>
-<span class="cstat-no" title="statement not covered" >      `• ${item.name} x${item.quantity} - ₹${item.price * item.quantity}`</span>
-    ).join('\n');
-&nbsp;
     let confirmMsg = <span class="cstat-no" title="statement not covered" >`✅ *Payment Successful!*\n\n`;</span>
 <span class="cstat-no" title="statement not covered" >    confirmMsg += `📦 *Order ID:* ${order.orderId}\n`;</span>
 <span class="cstat-no" title="statement not covered" >    confirmMsg += `💳 *Payment:* UPI\n`;</span>
 <span class="cstat-no" title="statement not covered" >    confirmMsg += `💰 *Amount Paid:* ₹${order.totalAmount}\n`;</span>
 <span class="cstat-no" title="statement not covered" >    confirmMsg += `🍽️ *Service:* ${order.serviceType.replace('_', ' ')}\n\n`;</span>
 <span class="cstat-no" title="statement not covered" >    confirmMsg += `━━━━━━━━━━━━━━━\n`;</span>
-<span class="cstat-no" title="statement not covered" >    confirmMsg += `*Your Items:*\n${itemsList}\n`;</span>
+<span class="cstat-no" title="statement not covered" >    confirmMsg += `📋 *Your Items:*\n`;</span>
+<span class="cstat-no" title="statement not covered" >    order.items.forEach(<span class="fstat-no" title="function not covered" >(i</span>tem, i) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >      confirmMsg += `${i + 1}. *${item.name}*\n   Qty: ${item.quantity} × ₹${item.price} = ₹${item.price * item.quantity}\n\n`;</span>
+    });
 <span class="cstat-no" title="statement not covered" >    confirmMsg += `━━━━━━━━━━━━━━━\n\n`;</span>
     
 <span class="cstat-no" title="statement not covered" >    if (order.deliveryAddress?.address) {</span>
@@ -2003,17 +1998,16 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
         );
 &nbsp;
         // Build detailed order confirmation message
-        let itemsList = <span class="cstat-no" title="statement not covered" >order.items.map(<span class="fstat-no" title="function not covered" >it</span>em =&gt; </span>
-<span class="cstat-no" title="statement not covered" >          `• ${item.name} x${item.quantity} - ₹${item.price * item.quantity}`</span>
-        ).join('\n');
-&nbsp;
         let confirmMsg = <span class="cstat-no" title="statement not covered" >`✅ *Payment Successful!*\n\n`;</span>
 <span class="cstat-no" title="statement not covered" >        confirmMsg += `📦 *Order ID:* ${order.orderId}\n`;</span>
 <span class="cstat-no" title="statement not covered" >        confirmMsg += `💳 *Payment:* UPI/Online\n`;</span>
 <span class="cstat-no" title="statement not covered" >        confirmMsg += `💰 *Amount Paid:* ₹${order.totalAmount}\n`;</span>
 <span class="cstat-no" title="statement not covered" >        confirmMsg += `🍽️ *Service:* ${order.serviceType.replace('_', ' ')}\n\n`;</span>
 <span class="cstat-no" title="statement not covered" >        confirmMsg += `━━━━━━━━━━━━━━━\n`;</span>
-<span class="cstat-no" title="statement not covered" >        confirmMsg += `*Your Items:*\n${itemsList}\n`;</span>
+<span class="cstat-no" title="statement not covered" >        confirmMsg += `📋 *Your Items:*\n`;</span>
+<span class="cstat-no" title="statement not covered" >        order.items.forEach(<span class="fstat-no" title="function not covered" >(i</span>tem, i) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >          confirmMsg += `${i + 1}. *${item.name}*\n   Qty: ${item.quantity} × ₹${item.price} = ₹${item.price * item.quantity}\n\n`;</span>
+        });
 <span class="cstat-no" title="statement not covered" >        confirmMsg += `━━━━━━━━━━━━━━━\n\n`;</span>
         
 <span class="cstat-no" title="statement not covered" >        if (order.deliveryAddress?.address) {</span>
@@ -2260,7 +2254,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-14T10:02:43.303Z
+                at 2026-02-14T12:52:16.865Z
             </div>
         <script src="../prettify.js"></script>
         <script>

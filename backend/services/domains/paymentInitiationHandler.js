@@ -230,6 +230,30 @@ async function initiateOnlinePayment(customer, phone, params = {}) {
     let effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
     let itemDiscount = 0;
     let appliedOfferId = null;
+    let itemName = item.menuItem.name;
+    let itemUnit = item.menuItem.unit || 'piece';
+    let itemUnitQty = item.menuItem.quantity || 1;
+    let originalPrice = item.menuItem.price;
+    
+    // Resolve variant-specific pricing and labels
+    if (item.variantIndex !== null && item.variantIndex !== undefined && item.menuItem.variants?.[item.variantIndex]) {
+      const variant = item.menuItem.variants[item.variantIndex];
+      if (item.quantityIndex !== null && item.quantityIndex !== undefined && variant.quantities?.[item.quantityIndex]) {
+        const q = variant.quantities[item.quantityIndex];
+        originalPrice = q.price;
+        effectivePrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+        itemName = `${item.menuItem.name} - ${variant.label} (${q.quantity} ${q.unit})`;
+        itemUnit = q.unit || variant.unit || item.menuItem.unit || 'piece';
+        itemUnitQty = q.quantity || 1;
+      } else {
+        originalPrice = variant.price;
+        effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
+          ? variant.offerPrice : variant.price;
+        itemName = `${item.menuItem.name} (${variant.label})`;
+        itemUnit = variant.unit || item.menuItem.unit || 'piece';
+        itemUnitQty = variant.quantity || 1;
+      }
+    }
     
     // Check customer's activeOffers for applicable discount
     if (!item.menuItem.offerPrice && activeOffers.length > 0) {
@@ -250,13 +274,16 @@ async function initiateOnlinePayment(customer, phone, params = {}) {
     
     return {
       menuItem: item.menuItem._id,
-      name: item.menuItem.name,
+      name: itemName,
       quantity: item.quantity,
       price: effectivePrice,
-      originalPrice: item.menuItem.price,
-      unit: item.menuItem.unit || 'piece',
-      unitQty: item.menuItem.quantity || 1,
+      originalPrice,
+      unit: itemUnit,
+      unitQty: itemUnitQty,
       image: item.menuItem.image,
+      variantIndex: item.variantIndex ?? null,
+      variantLabel: item.variantLabel || null,
+      quantityIndex: item.quantityIndex ?? null,
       appliedOfferId
     };
   });
@@ -446,6 +473,30 @@ async function processCODOrder(customer, phone, params = {}) {
     let effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
     let itemDiscount = 0;
     let appliedOfferId = null;
+    let itemName = item.menuItem.name;
+    let itemUnit = item.menuItem.unit || 'piece';
+    let itemUnitQty = item.menuItem.quantity || 1;
+    let originalPrice = item.menuItem.price;
+    
+    // Resolve variant-specific pricing and labels
+    if (item.variantIndex !== null && item.variantIndex !== undefined && item.menuItem.variants?.[item.variantIndex]) {
+      const variant = item.menuItem.variants[item.variantIndex];
+      if (item.quantityIndex !== null && item.quantityIndex !== undefined && variant.quantities?.[item.quantityIndex]) {
+        const q = variant.quantities[item.quantityIndex];
+        originalPrice = q.price;
+        effectivePrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+        itemName = `${item.menuItem.name} - ${variant.label} (${q.quantity} ${q.unit})`;
+        itemUnit = q.unit || variant.unit || item.menuItem.unit || 'piece';
+        itemUnitQty = q.quantity || 1;
+      } else {
+        originalPrice = variant.price;
+        effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
+          ? variant.offerPrice : variant.price;
+        itemName = `${item.menuItem.name} (${variant.label})`;
+        itemUnit = variant.unit || item.menuItem.unit || 'piece';
+        itemUnitQty = variant.quantity || 1;
+      }
+    }
     
     // If no offerPrice, check customer's activeOffers for applicable discount
     if (!item.menuItem.offerPrice && activeOffers.length > 0) {
@@ -466,13 +517,16 @@ async function processCODOrder(customer, phone, params = {}) {
     
     return {
       menuItem: item.menuItem._id,
-      name: item.menuItem.name,
+      name: itemName,
       quantity: item.quantity,
       price: effectivePrice,
-      originalPrice: item.menuItem.price,
-      unit: item.menuItem.unit || 'piece',
-      unitQty: item.menuItem.quantity || 1,
+      originalPrice,
+      unit: itemUnit,
+      unitQty: itemUnitQty,
       image: item.menuItem.image,
+      variantIndex: item.variantIndex ?? null,
+      variantLabel: item.variantLabel || null,
+      quantityIndex: item.quantityIndex ?? null,
       appliedOfferId
     };
   });
@@ -612,7 +666,7 @@ async function processCODOrder(customer, phone, params = {}) {
   confirmMsg += `━━━━━━━━━━━━━━━\n`;
   confirmMsg += `*Items:*\n`;
   items.forEach((item, i) => {
-    confirmMsg += `${i + 1}. ${item.name} (${item.unitQty} ${item.unit}) x${item.quantity} - ₹${item.price * item.quantity}\n`;
+    confirmMsg += `${i + 1}. *${item.name}*\n   Qty: ${item.quantity} × ₹${item.price} = ₹${item.price * item.quantity}\n\n`;
   });
   confirmMsg += `━━━━━━━━━━━━━━━\n`;
   confirmMsg += `*Items Total:* ₹${itemsTotal}\n`;

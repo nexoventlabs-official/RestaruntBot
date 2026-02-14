@@ -150,10 +150,24 @@ async function viewCart(customer, phone) {
   customer.cart.forEach((cartItem, index) => {
     const item = cartItem.menuItem;
     if (item) {
-      const itemTotal = item.price * cartItem.quantity;
+      // Resolve variant name and price
+      let itemName = item.name;
+      let itemPrice = item.price;
+      if (cartItem.variantIndex !== null && cartItem.variantIndex !== undefined && item.variants?.[cartItem.variantIndex]) {
+        const variant = item.variants[cartItem.variantIndex];
+        if (cartItem.quantityIndex !== null && cartItem.quantityIndex !== undefined && variant.quantities?.[cartItem.quantityIndex]) {
+          const q = variant.quantities[cartItem.quantityIndex];
+          itemPrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+          itemName = `${item.name} - ${variant.label} (${q.quantity} ${q.unit})`;
+        } else {
+          itemPrice = variant.offerPrice && variant.offerPrice < variant.price ? variant.offerPrice : variant.price;
+          itemName = `${item.name} (${variant.label})`;
+        }
+      }
+      const itemTotal = itemPrice * cartItem.quantity;
       total += itemTotal;
-      message += `${index + 1}. ${item.name}\n`;
-      message += `   Qty: ${cartItem.quantity} × ₹${item.price} = ₹${itemTotal}\n\n`;
+      message += `${index + 1}. *${itemName}*\n`;
+      message += `   Qty: ${cartItem.quantity} × ₹${itemPrice} = ₹${itemTotal}\n\n`;
     }
   });
   
@@ -443,12 +457,26 @@ async function formatCart(customer) {
   customer.cart.forEach((cartItem, index) => {
     const item = cartItem.menuItem;
     if (item) {
-      const itemTotal = item.price * cartItem.quantity;
+      // Resolve variant name and price
+      let itemName = item.name;
+      let itemPrice = item.price;
+      if (cartItem.variantIndex !== null && cartItem.variantIndex !== undefined && item.variants?.[cartItem.variantIndex]) {
+        const variant = item.variants[cartItem.variantIndex];
+        if (cartItem.quantityIndex !== null && cartItem.quantityIndex !== undefined && variant.quantities?.[cartItem.quantityIndex]) {
+          const q = variant.quantities[cartItem.quantityIndex];
+          itemPrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+          itemName = `${item.name} - ${variant.label} (${q.quantity} ${q.unit})`;
+        } else {
+          itemPrice = variant.offerPrice && variant.offerPrice < variant.price ? variant.offerPrice : variant.price;
+          itemName = `${item.name} (${variant.label})`;
+        }
+      }
+      const itemTotal = itemPrice * cartItem.quantity;
       total += itemTotal;
       itemCount += cartItem.quantity;
       
-      message += `${index + 1}. ${item.name}\n`;
-      message += `   Qty: ${cartItem.quantity} × ₹${item.price} = ₹${itemTotal}\n`;
+      message += `${index + 1}. *${itemName}*\n`;
+      message += `   Qty: ${cartItem.quantity} × ₹${itemPrice} = ₹${itemTotal}\n`;
       
       if (!item.available) {
         message += `   ⚠️ *Not Available*\n`;
