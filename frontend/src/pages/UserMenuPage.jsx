@@ -111,8 +111,8 @@ export default function UserMenuPage() {
 
   const loadData = async () => {
     try {
-      // Use cached data if available
-      if (cachedData.isLoaded && cachedData.categories && cachedData.menu) {
+      // Use cached data if available and non-empty
+      if (cachedData.isLoaded && cachedData.categories?.length > 0 && cachedData.menu?.length > 0) {
         setCategories(cachedData.categories);
         setItems(cachedData.menu);
         setAllItems(cachedData.menu);
@@ -629,6 +629,9 @@ export default function UserMenuPage() {
                   <div className="p-4 flex flex-col flex-grow min-w-0">
                     <h3 className="font-bold text-gray-900 text-base sm:text-lg line-clamp-1 mb-1">{v.label}</h3>
                     <p className="text-xs text-gray-500 mb-1 line-clamp-1">{item.name}</p>
+                    {v.description && (
+                      <p className="text-xs text-gray-400 mb-1 line-clamp-2">{v.description}</p>
+                    )}
 
                     {/* Variant Rating */}
                     {(v.avgRating > 0 || v.totalRatings > 0) && (
@@ -1376,6 +1379,12 @@ export default function UserMenuPage() {
                       );
                     })}
                   </div>
+                  {/* Selected Variant Description */}
+                  {selectedVariantIndex !== null && selectedItem.variants?.[selectedVariantIndex]?.description && (
+                    <p className="mt-2 text-sm text-gray-500 italic leading-relaxed">
+                      {selectedItem.variants[selectedVariantIndex].description}
+                    </p>
+                  )}
                 </div>
               )}
 
