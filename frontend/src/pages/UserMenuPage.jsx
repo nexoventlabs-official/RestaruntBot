@@ -111,8 +111,8 @@ export default function UserMenuPage() {
 
   const loadData = async () => {
     try {
-      // Use cached data if available and not empty
-      if (cachedData.isLoaded && cachedData.categories?.length > 0 && cachedData.menu?.length > 0) {
+      // Use cached data if available
+      if (cachedData.isLoaded && cachedData.categories && cachedData.menu) {
         setCategories(cachedData.categories);
         setItems(cachedData.menu);
         setAllItems(cachedData.menu);
@@ -138,8 +138,8 @@ export default function UserMenuPage() {
     setItemsLoading(true);
     try {
       const params = new URLSearchParams();
-      // Only send actual category names to API
-      if (selectedCategory !== 'all') {
+      // Only send actual category names to API, not item_<id> format (those are filtered client-side)
+      if (selectedCategory !== 'all' && !selectedCategory.startsWith('item_')) {
         params.append('category', selectedCategory);
       }      if (foodType !== 'all') params.append('foodType', foodType);
       const res = await axios.get(`${API_URL}/menu?${params}`);
@@ -629,9 +629,6 @@ export default function UserMenuPage() {
                   <div className="p-4 flex flex-col flex-grow min-w-0">
                     <h3 className="font-bold text-gray-900 text-base sm:text-lg line-clamp-1 mb-1">{v.label}</h3>
                     <p className="text-xs text-gray-500 mb-1 line-clamp-1">{item.name}</p>
-                    {v.description && (
-                      <p className="text-xs text-gray-400 mb-1 line-clamp-2">{v.description}</p>
-                    )}
 
                     {/* Variant Rating */}
                     {(v.avgRating > 0 || v.totalRatings > 0) && (
@@ -1057,52 +1054,46 @@ export default function UserMenuPage() {
               </div>
             </button>
 
-            {/* Categories */}
-            {categories
-              .filter(cat => cat.isActive)
-              .map(cat => {
-                const isSelected = selectedCategory === cat.name;
-                const itemCount = getCategoryItemCount(cat.name);
-                
-                return (
-                  <button 
-                    key={cat._id} 
-                    onClick={() => setSelectedCategory(cat.name)}
-                    className="flex-shrink-0 group"
-                  >
-                    <div className="relative w-36 md:w-44">
-                      <div className={`${isSelected ? 'bg-[#3f9065]' : 'bg-[#F5F1E8] group-hover:bg-[#3f9065]'} rounded-t-full rounded-b-3xl pt-6 pb-14 px-4 transition-all duration-300 relative overflow-hidden`}>
-                        {/* Moving shine effect */}
-                        <div className="absolute inset-0 w-full h-full overflow-hidden rounded-t-full rounded-b-3xl z-20 pointer-events-none">
-                          <div className="absolute top-0 -left-full w-full h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12 group-hover:left-full transition-all duration-700 ease-in-out"></div>
-                        </div>
-                        <div className="flex justify-center mb-4">
-                          {cat.image ? (
-                            <img 
-                              src={cat.image} 
-                              alt={cat.name} 
-                              className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-lg transition-transform group-hover:scale-110"
-                            />
-                          ) : (
-                            <div className="w-20 h-20 md:w-24 md:h-24 bg-orange-100 rounded-full flex items-center justify-center">
-                              <span className="text-3xl">🍽️</span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-center">
-                          <h3 className={`font-semibold text-sm md:text-base transition-colors duration-300 line-clamp-1 ${isSelected ? 'text-yellow-400' : 'text-gray-900 group-hover:text-white'}`}>{cat.name}</h3>
-                          <p className={`text-xs mt-0.5 transition-colors duration-300 ${isSelected ? 'text-white/80' : 'text-gray-400 group-hover:text-white/80'}`}>{itemCount} Items</p>
-                        </div>
+            {/* Item Titles as Categories */}
+            {allItems.map(item => {
+              const variantCount = item.variants && item.variants.length > 0 ? item.variants.length : 1;
+              const isSelected = selectedCategory === `item_${item._id}`;
+              
+              return (
+                <button 
+                  key={item._id} 
+                  onClick={() => setSelectedCategory(`item_${item._id}`)}
+                  className="flex-shrink-0 group"
+                >
+                  <div className="relative w-36 md:w-44">
+                    <div className={`${isSelected ? 'bg-[#3f9065]' : 'bg-[#F5F1E8] group-hover:bg-[#3f9065]'} rounded-t-full rounded-b-3xl pt-6 pb-14 px-4 transition-all duration-300`}>
+                      <div className="flex justify-center mb-4">
+                        {item.image ? (
+                          <img 
+                            src={item.image} 
+                            alt={item.name} 
+                            className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-lg transition-transform group-hover:scale-110"
+                          />
+                        ) : (
+                          <div className="w-20 h-20 md:w-24 md:h-24 bg-orange-100 rounded-full flex items-center justify-center">
+                            <span className="text-3xl">🍽️</span>
+                          </div>
+                        )}
                       </div>
-                      <img 
-                        src="/cat-1-bottom.png" 
-                        alt="" 
-                        className="absolute -bottom-2 left-0 right-0 w-full h-auto pointer-events-none"
-                      />
+                      <div className="text-center">
+                        <h3 className={`font-semibold text-sm md:text-base transition-colors duration-300 line-clamp-1 ${isSelected ? 'text-yellow-400' : 'text-gray-900 group-hover:text-white'}`}>{item.name}</h3>
+                        <p className={`text-xs mt-0.5 transition-colors duration-300 ${isSelected ? 'text-white/80' : 'text-gray-400 group-hover:text-white/80'}`}>{variantCount} {variantCount === 1 ? 'Item' : 'Items'}</p>
+                      </div>
                     </div>
-                  </button>
-                );
-              })}
+                    <img 
+                      src="/cat-1-bottom.png" 
+                      alt="" 
+                      className="absolute -bottom-2 left-0 right-0 w-full h-auto pointer-events-none"
+                    />
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -1137,10 +1128,13 @@ export default function UserMenuPage() {
           )}
           
           {!itemsLoading && (() => {
-            // Filter items by selected category or 'all'
+            // Filter items by selected category (item title or 'all')
             let filteredItems;
             if (selectedCategory === 'all') {
               filteredItems = displayItems;
+            } else if (selectedCategory.startsWith('item_')) {
+              const itemId = selectedCategory.replace('item_', '');
+              filteredItems = displayItems.filter(i => i._id === itemId);
             } else {
               filteredItems = displayItems.filter(i => (Array.isArray(i.category) ? i.category : [i.category]).includes(selectedCategory));
             }
@@ -1379,12 +1373,6 @@ export default function UserMenuPage() {
                       );
                     })}
                   </div>
-                  {/* Selected Variant Description */}
-                  {selectedVariantIndex !== null && selectedItem.variants?.[selectedVariantIndex]?.description && (
-                    <p className="mt-2 text-sm text-gray-500 italic leading-relaxed">
-                      {selectedItem.variants[selectedVariantIndex].description}
-                    </p>
-                  )}
                 </div>
               )}
 
