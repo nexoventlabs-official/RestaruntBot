@@ -7431,7 +7431,7 @@ const chatbot = {
           if (item.quantityIndex !== null && item.quantityIndex !== undefined && variant.quantities?.[item.quantityIndex]) {
             const q = variant.quantities[item.quantityIndex];
             effectivePrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
-            displayName = `${variant.label} (${q.quantity} ${q.unit})`;
+            displayName = variant.label;
             unitInfo = `${q.quantity || 1} ${q.unit || 'piece'}`;
           } else {
             effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
@@ -7501,59 +7501,27 @@ const chatbot = {
     cartMsg += `*Total: ₹${total}*`;
 
     // Try showing cart items as WhatsApp Catalog product_list (native cart with images/prices/Place Order)
-    try {
-      if (catalogService.isEnabled()) {
-        const validCartItems = freshCustomer.cart.filter(item => item.menuItem);
+    if (catalogService.isEnabled()) {
+      const validCartItems = freshCustomer.cart.filter(item => item.menuItem);
 
-        // Build discount info for body text
-        let bodyText = `${validItems} items • Total: ₹${total}`;
-        if (totalDiscount > 0) {
-          bodyText += ` (Save ₹${totalDiscount})`;
-        }
-        bodyText += '\nTap "View items" to modify quantities';
+      // Build discount info for body text
+      let bodyText = `${validItems} items • Total: ₹${total}`;
+      if (totalDiscount > 0) {
+        bodyText += ` (Save ₹${totalDiscount})`;
+      }
+      bodyText += '\nTap "View items" to modify quantities';
 
-        const catalogId = catalogService.getCatalogId();
-        let cartSections = await catalogService.buildCartSections(validCartItems);
-        let sent = false;
+      const catalogId = catalogService.getCatalogId();
+      let cartSections = await catalogService.buildCartSections(validCartItems);
 
-        if (cartSections && cartSections.sections.length > 0) {
-          try {
-            await whatsapp.sendProductList(
-              phone, catalogId, '🛒 Your Cart', bodyText,
-              cartSections.sections, 'Perivi Hotel'
-            );
-            sent = true;
-          } catch (sendErr) {
-            // On Meta #131009 (invalid parameter), force re-sync items to Meta and retry once
-            const errCode = sendErr.response?.data?.error?.code;
-            if (errCode === 131009) {
-              logger.info('Product list #131009 — forcing re-sync and retry', { phone });
-              for (const item of validCartItems) {
-                if (item.menuItem) {
-                  await catalogService.syncProductToMeta(item.menuItem);
-                }
-              }
-              catalogService.clearCache();
-              cartSections = await catalogService.buildCartSections(validCartItems);
-              if (cartSections && cartSections.sections.length > 0) {
-                try {
-                  await whatsapp.sendProductList(
-                    phone, catalogId, '🛒 Your Cart', bodyText,
-                    cartSections.sections, 'Perivi Hotel'
-                  );
-                  sent = true;
-                } catch (retryErr) {
-                  logger.error('Product list retry also failed', { phone, error: retryErr.message });
-                }
-              }
-            } else {
-              logger.error('sendProductList non-131009 error', { phone, code: errCode, error: sendErr.message });
-            }
-          }
-        }
-
-        if (sent) {
-          // Send image-based cart summary (same as fallback style)
+      if (cartSections && cartSections.sections.length > 0) {
+        try {
+          await whatsapp.sendProductList(
+            phone, catalogId, '🛒 Your Cart', bodyText,
+            cartSections.sections, 'Perivi Hotel'
+          );
+          
+          // After catalog succeeds, send image-based cart message
           const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
           await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [
             { id: 'review_pay', text: 'Place Order ✅' },
@@ -7561,13 +7529,45 @@ const chatbot = {
             { id: 'clear_cart', text: 'Clear Cart' }
           ]);
           return;
+        } catch (sendErr) {
+          // On Meta #131009 (invalid parameter), force re-sync items to Meta and retry once
+          const errCode = sendErr.response?.data?.error?.code;
+          if (errCode === 131009) {
+            logger.info('Product list #131009 — forcing re-sync and retry', { phone });
+            for (const item of validCartItems) {
+              if (item.menuItem) {
+                await catalogService.syncProductToMeta(item.menuItem);
+              }
+            }
+            catalogService.clearCache();
+            cartSections = await catalogService.buildCartSections(validCartItems);
+            if (cartSections && cartSections.sections.length > 0) {
+              try {
+                await whatsapp.sendProductList(
+                  phone, catalogId, '🛒 Your Cart', bodyText,
+                  cartSections.sections, 'Perivi Hotel'
+                );
+                
+                // After retry succeeds, send image-based cart message
+                const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
+                await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [
+                  { id: 'review_pay', text: 'Place Order ✅' },
+                  { id: 'add_more', text: 'Add More' },
+                  { id: 'clear_cart', text: 'Clear Cart' }
+                ]);
+                return;
+              } catch (retryErr) {
+                logger.error('Product list retry also failed', { phone, error: retryErr.message });
+              }
+            }
+          } else {
+            logger.error('sendProductList non-131009 error', { phone, code: errCode, error: sendErr.message });
+          }
         }
       }
-    } catch (catalogErr) {
-      logger.info('Catalog fallback for cart', { error: catalogErr.message });
     }
 
-    // Fallback: text-based cart
+    // Fallback: text-based cart (if catalog failed or not enabled)
     const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
     await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [
       { id: 'review_pay', text: 'Place Order ✅' },
