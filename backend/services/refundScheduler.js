@@ -1,4 +1,5 @@
 // Refund Scheduler - Processes refund after delay and sends success message
+// Uses persistent DB flag + periodic scanner (survives restarts)
 const Order = require('../models/Order');
 const logger = require('./logger');
 const whatsapp = require('./whatsapp');
@@ -6,6 +7,7 @@ const googleSheets = require('./googleSheets');
 const razorpayService = require('./razorpay');
 
 const pendingRefunds = new Map();
+let scanInterval = null;
 
 const refundScheduler = {
   // Schedule refund to be processed after delay (default 5 minutes)
@@ -15,12 +17,61 @@ const refundScheduler = {
     // Cancel any existing scheduled refund for this order
     this.cancelScheduledRefund(orderId);
     
+    // Persist the schedule in DB so it survives restarts
+    Order.findOneAndUpdate(
+      { orderId },
+      { refundStatus: 'scheduled', refundScheduledAt: new Date(Date.now() + delayMs) },
+      { new: true }
+    ).catch(err => logger.error('Failed to persist refund schedule', { orderId, error: err.message }));
+    
     const timeoutId = setTimeout(async () => {
       await this.processRefund(orderId);
       pendingRefunds.delete(orderId);
     }, delayMs);
     
     pendingRefunds.set(orderId, timeoutId);
+  },
+
+  // Start periodic scanner for recovery after restarts
+  start() {
+    // Scan every 2 minutes for any scheduled refunds that were lost
+    scanInterval = setInterval(() => this.recoverScheduledRefunds(), 2 * 60 * 1000);
+    // Also run immediately on startup
+    this.recoverScheduledRefunds();
+    logger.info('Refund scheduler started with recovery scanner');
+  },
+
+  stop() {
+    if (scanInterval) {
+      clearInterval(scanInterval);
+      scanInterval = null;
+    }
+    // Clear all pending timeouts
+    for (const [orderId, timeoutId] of pendingRefunds.entries()) {
+      clearTimeout(timeoutId);
+    }
+    pendingRefunds.clear();
+    logger.info('Refund scheduler stopped');
+  },
+
+  async recoverScheduledRefunds() {
+    try {
+      const now = new Date();
+      const scheduledOrders = await Order.find({
+        refundStatus: 'scheduled',
+        status: 'cancelled',
+        refundScheduledAt: { $lte: now }
+      }).select('orderId');
+
+      for (const order of scheduledOrders) {
+        if (!pendingRefunds.has(order.orderId)) {
+          logger.info(`Recovering scheduled refund for ${order.orderId}`);
+          await this.processRefund(order.orderId);
+        }
+      }
+    } catch (err) {
+      logger.error('Refund recovery scan error', { error: err.message });
+    }
   },
 
   async processRefund(orderId) {

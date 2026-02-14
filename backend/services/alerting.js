@@ -95,7 +95,7 @@ async function sendSlackAlert(title, message, severity = 'error', metadata = {})
             },
             {
               title: 'Server',
-              value: process.env.BACKEND_URL || 'https://restaruntbot.onrender.com',
+              value: process.env.BACKEND_URL || 'unknown',
               short: true
             }
           ]

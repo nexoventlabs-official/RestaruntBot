@@ -10,6 +10,7 @@ const chatbotImagesService = require('../services/chatbotImages');
 const authMiddleware = require('../middleware/auth');
 const { adminRateLimiter } = require('../middleware/rateLimiter');
 const { validators } = require('../middleware/inputValidation');
+const { validateTransition, transitionStatus } = require('../services/orderStateMachine');
 const logger = require('../services/logger');
 const router = express.Router();
 
@@ -198,13 +199,21 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     if (!order) return res.status(404).json({ error: 'Order not found' });
     logger.info('Found order', { orderId: order.orderId, currentStatus: order.status, newStatus: status });
 
+    // Validate state transition
+    const transition = validateTransition(order.status, status);
+    if (!transition.valid) {
+      logger.warn('Invalid order status transition rejected', { orderId: order.orderId, from: order.status, to: status, reason: transition.reason });
+      return res.status(400).json({ error: transition.reason });
+    }
+
     const statusLabels = {
       pending: 'Pending', confirmed: 'Confirmed', preparing: 'Preparing', ready: 'Ready',
       out_for_delivery: 'On the Way', delivered: 'Delivered', cancelled: 'Cancelled', refunded: 'Refunded'
     };
 
     order.status = status;
-    order.trackingUpdates.push({ status, message: message || `Status updated to ${statusLabels[status] || status}` });
+    order.statusUpdatedAt = new Date();
+    order.trackingUpdates.push({ status, message: message || `Status updated to ${statusLabels[status] || status}`, timestamp: new Date() });
     
     // Handle actual payment method for pickup orders (Pay at Hotel)
     if (actualPaymentMethod && order.serviceType === 'pickup') {
@@ -255,12 +264,14 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             stats.todayRevenue = 0;
             stats.todayOrders = 0;
             stats.todayDate = today;
+            await stats.save();
           }
           
-          stats.todayRevenue += order.totalAmount || 0;
-          stats.todayOrders += 1;
-          stats.lastUpdated = new Date();
-          await stats.save();
+          // Atomic increment to prevent race conditions
+          await DashboardStats.findByIdAndUpdate(stats._id, {
+            $inc: { todayRevenue: order.totalAmount || 0, todayOrders: 1 },
+            $set: { lastUpdated: new Date() }
+          });
           
           logger.info(`Today's revenue updated: +₹${order.totalAmount} (Total: ₹${stats.todayRevenue})`);
           

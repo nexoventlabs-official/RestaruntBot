@@ -3,6 +3,7 @@ const logger = require('../services/logger');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { authRateLimiter, strictRateLimiter } = require('../middleware/rateLimiter');
+const { generateTokenPair, rotateRefreshToken, revokeRefreshToken } = require('../services/jwtRefresh');
 const { body, validationResult } = require('express-validator');
 const router = express.Router();
 
@@ -67,9 +68,15 @@ router.post('/login',
         logger.info('📱 Created admin user in database for push notifications');
       }
       
-      // Include user ID in token so push token can be saved
-      const token = jwt.sign({ id: adminUser._id, username, role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '24h' });
-      return res.json({ token, user: { username, role: 'admin' } });
+      // Issue short-lived access token + refresh token pair
+      const tokens = generateTokenPair(adminUser._id.toString(), 'admin');
+      // Also issue a legacy-compatible 'token' field (short-lived access token)
+      return res.json({
+        token: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresIn: tokens.accessTokenExpiresIn,
+        user: { username, role: 'admin' }
+      });
     }
 
     const user = await User.findOne({ username });
@@ -77,8 +84,13 @@ router.post('/login',
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = jwt.sign({ id: user._id, username: user.username, role: user.role }, process.env.JWT_SECRET, { expiresIn: '24h' });
-    res.json({ token, user: { username: user.username, role: user.role } });
+    const tokens = generateTokenPair(user._id.toString(), user.role);
+    res.json({
+      token: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.accessTokenExpiresIn,
+      user: { username: user.username, role: user.role }
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -95,6 +107,42 @@ router.get('/verify', (req, res) => {
     res.status(401).json({ error: 'Invalid token' });
   }
 });
+
+// Refresh access token using refresh token
+router.post('/refresh',
+  authRateLimiter,
+  body('refreshToken').notEmpty().withMessage('Refresh token is required'),
+  handleValidation,
+  async (req, res) => {
+    try {
+      const { refreshToken } = req.body;
+      const tokens = rotateRefreshToken(refreshToken);
+      res.json({
+        token: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresIn: tokens.accessTokenExpiresIn
+      });
+    } catch (error) {
+      logger.warn('Refresh token rejected', { error: error.message });
+      res.status(401).json({ error: error.message });
+    }
+  }
+);
+
+// Revoke refresh token on logout
+router.post('/revoke',
+  body('refreshToken').notEmpty().withMessage('Refresh token is required'),
+  handleValidation,
+  async (req, res) => {
+    try {
+      const { refreshToken } = req.body;
+      revokeRefreshToken(refreshToken);
+      res.json({ message: 'Token revoked' });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+);
 
 // Update push notification token for admin
 router.post('/push-token', async (req, res) => {

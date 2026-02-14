@@ -18,6 +18,8 @@
  * }
  */
 
+const logger = require('./logger');
+
 /**
  * Get conversation state from customer
  * Returns default state if not set
@@ -65,18 +67,26 @@ function transitionTo(customer, newStep, additionalUpdates = {}) {
     'welcome',
     'main_menu',
     'browsing_category',
+    'browsing_menu',
     'viewing_item_details',
     'viewing_cart',
+    'cart_options',
     'awaiting_location',
+    'select_service_type',
     'select_payment_method',
     'awaiting_payment',
     'order_placed',
+    'order_confirmed',
     'item_added',
-    'offer_not_eligible'
+    'offer_not_eligible',
+    'order_history',
+    'my_orders_menu',
+    'select_food_type'
   ];
   
   if (!validSteps.includes(newStep)) {
-    logger.warn(`⚠️ Invalid step transition: ${newStep}`);
+    logger.warn(`⚠️ Invalid step transition rejected: ${newStep}`);
+    return getState(customer); // Return current state unchanged
   }
   
   return updateState(customer, {

@@ -27,11 +27,11 @@ const orderSchema = new mongoose.Schema({
     appliedOfferId: { type: mongoose.Schema.Types.ObjectId, ref: 'Offer' } // Offer applied to this item
   }],
   itemsTotal: { type: Number }, // Total of items before delivery charge
-  deliveryCharge: { type: Number, default: 0 }, // Extra delivery charge for distances beyond free radius
+  deliveryCharge: { type: Number, default: 0, min: 0 }, // Extra delivery charge for distances beyond free radius
   deliveryDistance: { type: Number }, // Distance in KM from restaurant to delivery address
-  discountAmount: { type: Number, default: 0 }, // Total discount from applied offers
+  discountAmount: { type: Number, default: 0, min: 0 }, // Total discount from applied offers
   appliedOfferIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Offer' }], // Offers used in this order
-  totalAmount: { type: Number, required: true },
+  totalAmount: { type: Number, required: true, min: [0, 'Total amount cannot be negative'] },
   status: {
     type: String,
     enum: ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled', 'refunded', 'refund_failed'],
@@ -52,6 +52,7 @@ const orderSchema = new mongoose.Schema({
   refundStatus: { type: String, enum: ['none', 'pending', 'scheduled', 'approved', 'completed', 'rejected', 'failed'], default: 'none' },
   refundRequestedAt: { type: Date },
   refundProcessedAt: { type: Date },
+  refundScheduledAt: { type: Date },
   refundedAt: { type: Date },
   refundInitiatedAt: { type: Date },
   returnReason: { type: String },

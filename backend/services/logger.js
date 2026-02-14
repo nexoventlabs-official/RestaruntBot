@@ -23,10 +23,53 @@ require('winston-daily-rotate-file'); // Phase 6.5: Daily rotation
 const isDevelopment = process.env.NODE_ENV !== 'production';
 const logLevel = process.env.LOG_LEVEL || (isDevelopment ? 'debug' : 'info');
 
-// Custom format for development (human-readable)
+// Sensitive field names to redact from log metadata
+const SENSITIVE_FIELDS = new Set([
+  'password', 'secret', 'token', 'authorization', 'apikey', 'api_key',
+  'access_token', 'refresh_token', 'credit_card', 'card_number', 'cvv',
+  'ssn', 'private_key', 'webhook_secret', 'otp', 'pin',
+  'razorpay_key_secret', 'meta_app_secret', 'jwt_secret',
+  'pushtoken', 'push_token'
+]);
+
+/**
+ * Recursively redact sensitive fields from an object
+ */
+function redactSensitive(obj, depth = 0) {
+  if (depth > 5 || obj === null || obj === undefined) return obj;
+  if (typeof obj === 'string') return obj;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(item => redactSensitive(item, depth + 1));
+
+  const redacted = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const lowerKey = key.toLowerCase().replace(/[-_]/g, '_');
+    if (SENSITIVE_FIELDS.has(lowerKey)) {
+      redacted[key] = typeof value === 'string' && value.length > 0
+        ? value.substring(0, 4) + '***REDACTED***'
+        : '***REDACTED***';
+    } else if (typeof value === 'object' && value !== null) {
+      redacted[key] = redactSensitive(value, depth + 1);
+    } else {
+      redacted[key] = value;
+    }
+  }
+  return redacted;
+}
+
+// Winston format that redacts sensitive metadata
+const redactFormat = winston.format((info) => {
+  // Redact any metadata beyond standard fields
+  const { level, message, timestamp, ...meta } = info;
+  const cleanMeta = redactSensitive(meta);
+  return { level, message, timestamp, ...cleanMeta };
+});
+
+// Custom format for development (human-readable with redaction)
 const devFormat = winston.format.combine(
   winston.format.colorize(),
   winston.format.timestamp({ format: 'HH:mm:ss' }),
+  redactFormat(),
   winston.format.printf(({ timestamp, level, message, ...meta }) => {
     let metaStr = '';
     if (Object.keys(meta).length > 0) {
@@ -36,10 +79,11 @@ const devFormat = winston.format.combine(
   })
 );
 
-// Custom format for production (JSON)
+// Custom format for production (JSON with redaction)
 const prodFormat = winston.format.combine(
   winston.format.timestamp(),
   winston.format.errors({ stack: true }),
+  redactFormat(),
   winston.format.json()
 );
 

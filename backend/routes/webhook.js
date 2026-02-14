@@ -8,6 +8,9 @@ const groqAi = require('../services/groqAi');
 const pushNotification = require('../services/pushNotification');
 const authMiddleware = require('../middleware/auth');
 const { webhookRateLimiter } = require('../middleware/rateLimiter');
+const { verifyWebhookSignature } = require('../middleware/webhookVerification');
+const { validateMetaWebhook, sanitizeWebhookPayload } = require('../middleware/webhookValidation');
+const { transitionStatus } = require('../services/orderStateMachine');
 const router = express.Router();
 
 // ============================================================
@@ -139,8 +142,8 @@ router.get('/meta', (req, res) => {
   }
 });
 
-// Meta WhatsApp Cloud API webhook endpoint (rate limited)
-router.post('/meta', webhookRateLimiter, async (req, res) => {
+// Meta WhatsApp Cloud API webhook endpoint (signature verified, validated, rate limited)
+router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWebhook, sanitizeWebhookPayload, async (req, res) => {
   if (process.env.NODE_ENV !== 'production') {
     logger.info('📥 Webhook POST received');
   }
@@ -246,12 +249,11 @@ router.post('/meta', webhookRateLimiter, async (req, res) => {
                         if (paymentStatus === 'success' || paymentStatus === 'completed') {
                           order.paymentStatus = 'paid';
                           order.paymentMethod = 'whatsapp_upi';
-                          order.status = 'confirmed';
-                          order.trackingUpdates.push({
-                            status: 'confirmed',
-                            message: `Payment received via WhatsApp UPI${paymentMethod ? ' (' + paymentMethod + ')' : ''}`,
-                            timestamp: new Date()
-                          });
+                          const txResult = transitionStatus(order, 'confirmed', `Payment received via WhatsApp UPI${paymentMethod ? ' (' + paymentMethod + ')' : ''}`);
+                          if (!txResult.success) {
+                            logger.warn('Status transition blocked for WhatsApp payment', { orderId: referenceId, reason: txResult.reason });
+                            continue;
+                          }
                           await order.save();
 
                           // Send order_status confirmation to customer
@@ -505,6 +507,29 @@ router.post('/meta', webhookRateLimiter, async (req, res) => {
 
               const hasContent = text || selectedId || messageType === 'location' || messageType === 'order';
               if (phone && hasContent) {
+                const messageId = message.id || null;
+                // Deduplicate using InboundMessage unique index
+                if (messageId) {
+                  try {
+                    const InboundMessage = require('../models/InboundMessage');
+                    const inbound = new InboundMessage({
+                      messageId,
+                      phone,
+                      messageType,
+                      content: typeof text === 'string' ? text.substring(0, 500) : JSON.stringify(text).substring(0, 500),
+                      status: 'processing',
+                      receivedAt: new Date()
+                    });
+                    await inbound.save();
+                  } catch (dedupErr) {
+                    if (dedupErr.code === 11000) {
+                      logger.info('Duplicate message skipped', { messageId, phone });
+                      continue; // Skip duplicate
+                    }
+                    // Non-dedup error, log and continue processing
+                    logger.warn('InboundMessage save warning', { error: dedupErr.message });
+                  }
+                }
                 // Process message in the background
                 chatbot.handleMessage(phone, text, messageType, selectedId, senderName)
                   .catch(err => logger.error('❌ Async Chatbot Error:', err));

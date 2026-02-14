@@ -18,7 +18,7 @@ const customerSchema = new mongoose.Schema({
   },
   cart: [{
     menuItem: { type: mongoose.Schema.Types.ObjectId, ref: 'MenuItem' },
-    quantity: Number,
+    quantity: { type: Number, min: [1, 'Cart quantity must be at least 1'] },
     variantIndex: { type: Number, default: null },
     quantityIndex: { type: Number, default: null },
     variantLabel: { type: String, default: null },
@@ -49,8 +49,8 @@ const customerSchema = new mongoose.Schema({
     context: mongoose.Schema.Types.Mixed
   },
   orderHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Order' }],
-  totalOrders: { type: Number, default: 0 },
-  totalSpent: { type: Number, default: 0 },
+  totalOrders: { type: Number, default: 0, min: 0 },
+  totalSpent: { type: Number, default: 0, min: 0 },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

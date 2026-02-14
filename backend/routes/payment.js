@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const Order = require('../models/Order');
 const Customer = require('../models/Customer');
+const PaymentEvent = require('../models/PaymentEvent');
 const whatsapp = require('../services/whatsapp');
 const brevoMail = require('../services/brevoMail');
 const razorpayService = require('../services/razorpay');
@@ -9,6 +10,7 @@ const googleSheets = require('../services/googleSheets');
 const chatbotImagesService = require('../services/chatbotImages');
 const authMiddleware = require('../middleware/auth');
 const { publicRateLimiter, webhookRateLimiter } = require('../middleware/rateLimiter');
+const { transitionStatus } = require('../services/orderStateMachine');
 const logger = require('../services/logger');
 const router = express.Router();
 
@@ -31,8 +33,16 @@ router.post('/create-upi-order', publicRateLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Order already paid' });
     }
 
+    // Validate amount matches order total (prevent underpayment attack)
+    const expectedAmountPaise = Math.round(order.totalAmount * 100);
+    const requestedAmountPaise = Math.round(amount * 100);
+    if (requestedAmountPaise !== expectedAmountPaise) {
+      logger.warn('Payment amount mismatch', { orderId, requested: amount, expected: order.totalAmount });
+      return res.status(400).json({ error: `Amount mismatch. Expected ₹${order.totalAmount}` });
+    }
+
     // Create Razorpay order
-    const razorpayOrder = await razorpayService.createOrder(amount, orderId);
+    const razorpayOrder = await razorpayService.createOrder(order.totalAmount, orderId);
     
     // Update order with Razorpay order ID
     order.razorpayOrderId = razorpayOrder.id;
@@ -73,15 +83,34 @@ router.post('/verify-upi', publicRateLimiter, async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    // Idempotency guard: skip if already paid
+    if (order.paymentStatus === 'paid') {
+      logger.info('verify-upi: Order already paid, skipping', { orderId });
+      return res.json({ success: true, message: 'Payment already verified' });
+    }
+
+    // Amount verification: fetch payment from Razorpay and compare
+    try {
+      const rzpPayment = await razorpayService.getPaymentDetails(razorpay_payment_id);
+      const paidAmountPaise = rzpPayment.amount;
+      const expectedAmountPaise = Math.round(order.totalAmount * 100);
+      if (paidAmountPaise !== expectedAmountPaise) {
+        logger.warn('Payment amount mismatch in verify-upi', { orderId, paid: paidAmountPaise / 100, expected: order.totalAmount });
+        return res.status(400).json({ error: `Payment amount mismatch. Paid ₹${paidAmountPaise / 100}, expected ₹${order.totalAmount}` });
+      }
+    } catch (rzpErr) {
+      logger.warn('Could not verify payment amount from Razorpay', { error: rzpErr.message });
+      // Continue but log warning — signature is already verified
+    }
+
     order.paymentStatus = 'paid';
     order.paymentId = razorpay_payment_id;
     order.razorpayPaymentId = razorpay_payment_id;
-    order.status = 'confirmed';
-    order.trackingUpdates.push({ 
-      status: 'confirmed', 
-      message: 'Payment received via UPI', 
-      timestamp: new Date() 
-    });
+    const txResult = transitionStatus(order, 'confirmed', 'Payment received via UPI');
+    if (!txResult.success) {
+      logger.warn('verify-upi: Status transition blocked', { orderId, reason: txResult.reason });
+      return res.status(409).json({ error: txResult.reason });
+    }
     await order.save();
 
     // Emit event for real-time updates
@@ -187,24 +216,47 @@ router.post('/razorpay-webhook', webhookRateLimiter, express.raw({ type: 'applic
   try {
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
     
-    // Verify webhook signature if secret is configured
-    if (webhookSecret) {
-      const signature = req.headers['x-razorpay-signature'];
-      const body = req.body.toString();
-      
-      const expectedSignature = crypto
-        .createHmac('sha256', webhookSecret)
-        .update(body)
-        .digest('hex');
-      
-      if (signature !== expectedSignature) {
-        logger.info('Razorpay webhook signature mismatch');
-        return res.status(400).json({ error: 'Invalid signature' });
-      }
+    // Signature verification is MANDATORY
+    if (!webhookSecret) {
+      logger.error('RAZORPAY_WEBHOOK_SECRET not configured — rejecting webhook');
+      return res.status(500).json({ error: 'Server configuration error' });
+    }
+
+    const signature = req.headers['x-razorpay-signature'];
+    if (!signature) {
+      return res.status(401).json({ error: 'Missing signature header' });
+    }
+
+    const body = req.body.toString();
+    const expectedSignature = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(body)
+      .digest('hex');
+
+    // Use timing-safe comparison to prevent timing attacks
+    const sigBuffer = Buffer.from(signature);
+    const expectedBuffer = Buffer.from(expectedSignature);
+    if (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
+      logger.warn('Razorpay webhook signature mismatch');
+      return res.status(401).json({ error: 'Invalid signature' });
     }
     
     const event = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     logger.info('Razorpay webhook event', { event: event.event });
+
+    // Payment event idempotency: reject duplicate event IDs
+    const razorpayEventId = event.event_id || event.id;
+    if (razorpayEventId) {
+      try {
+        await PaymentEvent.create({ eventId: razorpayEventId, eventType: event.event });
+      } catch (dedupErr) {
+        if (dedupErr.code === 11000) {
+          logger.info('Duplicate Razorpay webhook event skipped', { eventId: razorpayEventId });
+          return res.json({ status: 'ok', duplicate: true });
+        }
+        logger.warn('PaymentEvent save warning', { error: dedupErr.message });
+      }
+    }
     
     const payload = event.payload;
     
@@ -239,13 +291,7 @@ router.post('/razorpay-webhook', webhookRateLimiter, express.raw({ type: 'applic
         order.refundId = refund.id;
         order.refundProcessedAt = new Date();
         order.paymentStatus = 'refunded';
-        order.status = 'refunded';
-        order.statusUpdatedAt = new Date();
-        order.trackingUpdates.push({ 
-          status: 'refunded', 
-          message: `Refund of ₹${refund.amount / 100} processed. Refund ID: ${refund.id}`, 
-          timestamp: new Date() 
-        });
+        transitionStatus(order, 'refunded', `Refund of ₹${refund.amount / 100} processed. Refund ID: ${refund.id}`);
         await order.save();
         
         logger.info('Order updated with refund', { orderId: order.orderId });
@@ -302,13 +348,7 @@ router.post('/razorpay-webhook', webhookRateLimiter, express.raw({ type: 'applic
       order.refundStatus = 'failed';
       order.refundError = refund.failure_reason || 'Refund failed';
       order.paymentStatus = 'refund_failed';
-      order.status = 'cancelled';
-      order.statusUpdatedAt = new Date();
-      order.trackingUpdates.push({ 
-        status: 'refund_failed', 
-        message: `Refund failed: ${refund.failure_reason || 'Unknown error'}`, 
-        timestamp: new Date() 
-      });
+      transitionStatus(order, 'cancelled', `Refund failed: ${refund.failure_reason || 'Unknown error'}`);
       await order.save();
       
       // Emit event for real-time updates
@@ -347,8 +387,7 @@ router.post('/razorpay-webhook', webhookRateLimiter, express.raw({ type: 'applic
         if (order && order.paymentStatus !== 'paid') {
           order.paymentStatus = 'paid';
           order.razorpayPaymentId = payment.id;
-          order.status = 'confirmed';
-          order.trackingUpdates.push({ status: 'confirmed', message: 'Payment received via webhook', timestamp: new Date() });
+          transitionStatus(order, 'confirmed', 'Payment received via webhook');
           await order.save();
           
           logger.info('Payment captured via webhook', { orderId: order.orderId });
@@ -396,18 +435,36 @@ router.post('/razorpay-webhook', webhookRateLimiter, express.raw({ type: 'applic
   }
 });
 
-router.get('/callback', async (req, res) => {
+router.get('/callback', publicRateLimiter, async (req, res) => {
   try {
-    const { razorpay_payment_id, razorpay_payment_link_id, razorpay_payment_link_status } = req.query;
+    const { razorpay_payment_id, razorpay_payment_link_id, razorpay_payment_link_status, razorpay_signature } = req.query;
+
+    // Signature verification for payment link callbacks
+    if (razorpay_payment_link_id && razorpay_payment_id) {
+      const secret = process.env.RAZORPAY_KEY_SECRET;
+      if (secret) {
+        const body = razorpay_payment_link_id + '|' + razorpay_payment_link_id + '|' + razorpay_payment_id + '|' + razorpay_payment_link_status;
+        const expectedSig = crypto.createHmac('sha256', secret).update(body).digest('hex');
+        if (razorpay_signature) {
+          const sigBuf = Buffer.from(razorpay_signature);
+          const expBuf = Buffer.from(expectedSig);
+          if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+            logger.warn('Payment callback signature mismatch');
+            return res.status(400).send('<html><body><h1>Invalid Signature</h1></body></html>');
+          }
+        } else {
+          logger.warn('Payment callback missing signature — proceeding with caution');
+        }
+      }
+    }
     
     if (razorpay_payment_link_status === 'paid') {
       const order = await Order.findOne({ razorpayOrderId: razorpay_payment_link_id });
-      if (order) {
-        order.paymentStatus = 'paid';
+      if (order && order.paymentStatus !== 'paid') {
         order.paymentId = razorpay_payment_id;
         order.razorpayPaymentId = razorpay_payment_id; // Store for refunds
-        order.status = 'confirmed';
-        order.trackingUpdates.push({ status: 'confirmed', message: 'Payment received, order confirmed' });
+        transitionStatus(order, 'confirmed', 'Payment received, order confirmed');
+        order.paymentStatus = 'paid';
         await order.save();
 
         // Emit event for real-time updates
@@ -498,7 +555,6 @@ router.get('/callback', async (req, res) => {
         logger.info(`Payment confirmed for order ${order.orderId}`);
       }
     }
-    
     res.send(`
       <html>
         <head>
@@ -537,15 +593,13 @@ router.post('/refund/:orderId', authMiddleware, async (req, res) => {
     try {
       const refund = await razorpayService.refund(paymentId, order.totalAmount);
       
-      order.status = 'refunded';
       order.refundStatus = 'completed';
       order.refundId = refund.id;
       order.refundAmount = order.totalAmount;
       order.refundRequestedAt = new Date();
       order.refundProcessedAt = new Date();
       order.paymentStatus = 'refunded';
-      order.statusUpdatedAt = new Date();
-      order.trackingUpdates.push({ status: 'refunded', message: `Refund of ₹${order.totalAmount} processed. Refund ID: ${refund.id}`, timestamp: new Date() });
+      transitionStatus(order, 'refunded', `Refund of ₹${order.totalAmount} processed. Refund ID: ${refund.id}`);
       await order.save();
 
       // Emit event for real-time updates
@@ -570,14 +624,12 @@ router.post('/refund/:orderId', authMiddleware, async (req, res) => {
     } catch (refundError) {
       logger.error('Refund failed', { error: refundError.message });
       
-      order.status = 'cancelled';
       order.refundStatus = 'failed';
       order.refundAmount = order.totalAmount;
       order.refundRequestedAt = new Date();
       order.refundError = refundError.message;
       order.paymentStatus = 'refund_failed';
-      order.statusUpdatedAt = new Date();
-      order.trackingUpdates.push({ status: 'refund_failed', message: `Refund failed: ${refundError.message}`, timestamp: new Date() });
+      transitionStatus(order, 'cancelled', `Refund failed: ${refundError.message}`);
       await order.save();
 
       // Emit event for real-time updates
@@ -622,14 +674,12 @@ router.post('/process-refund/:orderId', authMiddleware, async (req, res) => {
     try {
       const refund = await razorpayService.refund(paymentId, order.totalAmount);
       
-      order.status = 'refunded';
       order.refundStatus = 'completed';
       order.refundId = refund.id;
       order.refundAmount = order.totalAmount;
       order.refundProcessedAt = new Date();
       order.paymentStatus = 'refunded';
-      order.statusUpdatedAt = new Date();
-      order.trackingUpdates.push({ status: 'refunded', message: `Refund of ₹${order.totalAmount} processed. Refund ID: ${refund.id}`, timestamp: new Date() });
+      transitionStatus(order, 'refunded', `Refund of ₹${order.totalAmount} processed. Refund ID: ${refund.id}`);
       await order.save();
 
       // Emit event for real-time updates
@@ -657,9 +707,7 @@ router.post('/process-refund/:orderId', authMiddleware, async (req, res) => {
       order.refundStatus = 'failed';
       order.refundError = refundError.message;
       order.paymentStatus = 'refund_failed';
-      order.status = 'cancelled';
-      order.statusUpdatedAt = new Date();
-      order.trackingUpdates.push({ status: 'refund_failed', message: `Refund failed: ${refundError.message}`, timestamp: new Date() });
+      transitionStatus(order, 'cancelled', `Refund failed: ${refundError.message}`);
       await order.save();
 
       // Emit event for real-time updates

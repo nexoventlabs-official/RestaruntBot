@@ -340,7 +340,7 @@ async function showHelp(customer, phone) {
  * Show website link
  */
 async function showWebsiteLink(customer, phone) {
-  const websiteUrl = process.env.WEBSITE_URL || 'https://example.com';
+  const websiteUrl = process.env.WEBSITE_URL || process.env.FRONTEND_URL;
   
   const message = `🌐 *Visit Our Website*\n\n` +
     `Browse our full menu, check offers, and place orders online!\n\n` +

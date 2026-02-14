@@ -10,6 +10,7 @@ const { validateEnv } = require('./config/envValidation');
 const { corsOptions } = require('./config/corsConfig');
 const errorHandler = require('./middleware/errorHandler');
 const { sanitizeInputs } = require('./middleware/inputValidation');
+const { correlationMiddleware } = require('./services/correlationContext');
 const logger = require('./services/logger');
 const { swaggerUi, swaggerSpec } = require('./swagger');
 
@@ -32,6 +33,7 @@ const settingsRoutes = require('./routes/settings');
 const healthRoutes = require('./routes/health');
 const catalogRoutes = require('./routes/catalog');
 const orderScheduler = require('./services/orderScheduler');
+const refundScheduler = require('./services/refundScheduler');
 const dailyCleanup = require('./services/dailyCleanup');
 const categoryScheduler = require('./services/categoryScheduler');
 const orderCleanup = require('./services/orderCleanup');
@@ -39,8 +41,8 @@ const cartCleanup = require('./services/cartCleanup');
 const catalogReviewPoller = require('./services/catalogReviewPoller');
 const googleSheets = require('./services/googleSheets');
 
-// Validate environment variables at startup
-validateEnv(process.env.NODE_ENV === 'production');
+// Validate environment variables at startup (always strict for critical vars)
+validateEnv(true);
 
 const app = express();
 
@@ -60,12 +62,22 @@ app.use(compression());
 app.options('*', cors(corsOptions));
 app.use(cors(corsOptions));
 
+// Capture raw body for webhook signature verification (before JSON parsing)
+app.use('/api/webhook/meta', (req, res, next) => {
+  req.rawBody = '';
+  req.on('data', chunk => { req.rawBody += chunk.toString(); });
+  req.on('end', () => next());
+});
+
 // Body parsing with size limits
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // Global input sanitization
 app.use(sanitizeInputs);
+
+// Correlation ID middleware for request tracing
+app.use(correlationMiddleware);
 
 // Static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -88,8 +100,10 @@ if (process.env.NODE_ENV !== 'production') {
     customSiteTitle: 'FoodAdmin API Docs'
   }));
 }
-// Swagger JSON spec always available for tools
-app.get('/api-docs.json', (req, res) => res.json(swaggerSpec));
+// Swagger JSON spec only available in development
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/api-docs.json', (req, res) => res.json(swaggerSpec));
+}
 
 // MongoDB connection with reconnection handling
 const connectMongoDB = async () => {
@@ -102,6 +116,7 @@ const connectMongoDB = async () => {
     
     // Start schedulers after DB connection
     orderScheduler.start();
+    refundScheduler.start();
     dailyCleanup.start();
     categoryScheduler.start();
     orderCleanup.start();
@@ -184,8 +199,17 @@ app.get('/', (req, res) => res.json({
 const sseClients = new Set();
 
 app.get('/api/events', (req, res) => {
-  // SSE is a notification-only channel (sends event type names, no sensitive data)
-  // Actual data is fetched via authenticated API endpoints
+  // Require valid JWT for SSE connection
+  const token = req.query.token || req.headers.authorization?.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  try {
+    require('jsonwebtoken').verify(token, process.env.JWT_SECRET);
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');

@@ -1,193 +1,162 @@
 /**
- * Rate Limiting Middleware
+ * Rate Limiting Middleware (Redis-backed with in-memory fallback)
  * 
- * Purpose: Prevent abuse and DoS attacks
- * Strategy: In-memory store (simple, no Redis needed for single instance)
+ * Strategy: Uses Redis via rate-limiter-flexible for persistence across restarts.
+ * Falls back to in-memory if Redis is unavailable (logs a warning).
  * 
  * Rate Limits:
  * - Auth endpoints: 20 requests per 15 minutes per IP
  * - Admin endpoints: 500 requests per 15 minutes per IP
  * - Webhook endpoints: 1000 requests per minute per IP
  * - Public endpoints: 500 requests per 15 minutes per IP
+ * - Strict (login): 5 requests per 15 minutes per IP (30-min block)
  */
 
-// In-memory store for rate limiting
-// Structure: { ip: { count: number, resetTime: timestamp } }
-const rateLimitStore = new Map();
+const { RateLimiterRedis, RateLimiterMemory } = require('rate-limiter-flexible');
 const logger = require('../services/logger');
 
-// Cleanup old entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, data] of rateLimitStore.entries()) {
-    if (data.resetTime < now) {
-      rateLimitStore.delete(ip);
-    }
+let redisClient = null;
+let useRedis = false;
+
+// Attempt to load Redis client
+try {
+  const { getClient } = require('../services/redis');
+  redisClient = getClient();
+  if (redisClient) {
+    useRedis = true;
+    logger.info('✅ Rate limiter using Redis store (persistent across restarts)');
   }
-}, 5 * 60 * 1000).unref();
+} catch (err) {
+  logger.warn('⚠️ Redis not available for rate limiting, using in-memory fallback', { error: err.message });
+}
 
 /**
- * Create rate limiter middleware
- * 
- * @param {Object} options - Rate limit configuration
- * @param {number} options.maxRequests - Maximum requests allowed
- * @param {number} options.windowMs - Time window in milliseconds
- * @param {string} options.message - Error message
- * @param {string} options.keyPrefix - Prefix for rate limit key (to separate different limits)
- * @returns {Function} Express middleware
+ * Create a rate limiter instance (Redis first, memory fallback)
  */
-function createRateLimiter(options) {
-  const {
-    maxRequests,
-    windowMs,
-    message = 'Too many requests, please try again later',
-    keyPrefix = 'default'
-  } = options;
-  
-  return (req, res, next) => {
-    // Get client IP
-    const ip = req.ip || req.connection.remoteAddress || 'unknown';
-    const key = `${keyPrefix}:${ip}`;
-    
-    const now = Date.now();
-    const limitData = rateLimitStore.get(key);
-    
-    // First request or window expired
-    if (!limitData || limitData.resetTime < now) {
-      rateLimitStore.set(key, {
-        count: 1,
-        resetTime: now + windowMs
+function createRateLimiterInstance(options) {
+  const { points, duration, keyPrefix = 'rl', blockDuration = 0 } = options;
+
+  if (useRedis && redisClient) {
+    try {
+      return new RateLimiterRedis({
+        storeClient: redisClient,
+        keyPrefix,
+        points,
+        duration,
+        blockDuration,
+        execEvenly: false,
+        // If Redis connection fails at runtime, insurance limiter takes over
+        insuranceLimiter: new RateLimiterMemory({ points, duration, blockDuration })
       });
-      
-      // Set rate limit headers
-      res.setHeader('X-RateLimit-Limit', maxRequests);
-      res.setHeader('X-RateLimit-Remaining', maxRequests - 1);
-      res.setHeader('X-RateLimit-Reset', new Date(now + windowMs).toISOString());
-      
-      return next();
+    } catch (err) {
+      logger.warn(`⚠️ Redis rate limiter creation failed for ${keyPrefix}, using memory`, { error: err.message });
     }
-    
-    // Increment count
-    limitData.count++;
-    
-    // Check if limit exceeded
-    if (limitData.count > maxRequests) {
-      const retryAfter = Math.ceil((limitData.resetTime - now) / 1000);
-      
-      res.setHeader('X-RateLimit-Limit', maxRequests);
+  }
+
+  return new RateLimiterMemory({ points, duration, blockDuration });
+}
+
+/**
+ * Wrap a rate limiter instance into Express middleware
+ */
+function createMiddleware(limiter, message = 'Too many requests') {
+  return async (req, res, next) => {
+    const key = req.ip || req.connection.remoteAddress || 'unknown';
+
+    try {
+      const result = await limiter.consume(key);
+
+      res.setHeader('X-RateLimit-Limit', limiter.points);
+      res.setHeader('X-RateLimit-Remaining', result.remainingPoints);
+      res.setHeader('X-RateLimit-Reset', new Date(Date.now() + result.msBeforeNext).toISOString());
+      next();
+    } catch (rateLimiterRes) {
+      // rateLimiterRes may be a RateLimiterRes or an Error
+      if (rateLimiterRes instanceof Error) {
+        // Internal error in rate limiter — let request through rather than blocking
+        logger.error('Rate limiter internal error', { error: rateLimiterRes.message });
+        return next();
+      }
+
+      const retryAfter = Math.ceil(rateLimiterRes.msBeforeNext / 1000);
+
+      res.setHeader('X-RateLimit-Limit', limiter.points);
       res.setHeader('X-RateLimit-Remaining', 0);
-      res.setHeader('X-RateLimit-Reset', new Date(limitData.resetTime).toISOString());
+      res.setHeader('X-RateLimit-Reset', new Date(Date.now() + rateLimiterRes.msBeforeNext).toISOString());
       res.setHeader('Retry-After', retryAfter);
-      
-      logger.warn(`⚠️ Rate limit exceeded: ${ip} (${keyPrefix})`);
-      
+
+      logger.warn(`⚠️ Rate limit exceeded: ${key} (${limiter.keyPrefix || 'unknown'})`);
+
       return res.status(429).json({
         error: message,
         code: 'RATE_LIMIT_EXCEEDED',
-        retryAfter: retryAfter,
-        limit: maxRequests,
-        window: `${windowMs / 1000}s`
+        retryAfter,
+        limit: limiter.points,
+        window: `${limiter.duration}s`
       });
     }
-    
-    // Update headers
-    res.setHeader('X-RateLimit-Limit', maxRequests);
-    res.setHeader('X-RateLimit-Remaining', maxRequests - limitData.count);
-    res.setHeader('X-RateLimit-Reset', new Date(limitData.resetTime).toISOString());
-    
-    next();
   };
 }
 
-/**
- * Pre-configured rate limiters
- */
+// ─── Pre-configured limiters ───────────────────────────────────────
 
-// Auth endpoints (login, register) - strict limit
-const authRateLimiter = createRateLimiter({
-  maxRequests: 20,
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  message: 'Too many authentication attempts, please try again later',
-  keyPrefix: 'auth'
+const authLimiter = createRateLimiterInstance({
+  points: 20,
+  duration: 15 * 60,
+  keyPrefix: 'rl:auth',
+  blockDuration: 15 * 60
 });
 
-// Admin endpoints - generous limit (mobile app makes many parallel calls)
-const adminRateLimiter = createRateLimiter({
-  maxRequests: 500,
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  message: 'Too many admin requests, please slow down',
-  keyPrefix: 'admin'
+const adminLimiter = createRateLimiterInstance({
+  points: 500,
+  duration: 15 * 60,
+  keyPrefix: 'rl:admin'
 });
 
-// Webhook endpoints - high limit (Meta sends many webhooks)
-const webhookRateLimiter = createRateLimiter({
-  maxRequests: 1000,
-  windowMs: 60 * 1000, // 1 minute
-  message: 'Webhook rate limit exceeded',
-  keyPrefix: 'webhook'
+const webhookLimiter = createRateLimiterInstance({
+  points: 1000,
+  duration: 60,
+  keyPrefix: 'rl:webhook'
 });
 
-// Public endpoints - generous limit
-const publicRateLimiter = createRateLimiter({
-  maxRequests: 500,
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  message: 'Too many requests, please try again later',
-  keyPrefix: 'public'
+const publicLimiter = createRateLimiterInstance({
+  points: 500,
+  duration: 15 * 60,
+  keyPrefix: 'rl:public'
 });
 
-// Strict rate limiter for sensitive operations
-const strictRateLimiter = createRateLimiter({
-  maxRequests: 5,
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  message: 'Too many attempts, please try again later',
-  keyPrefix: 'strict'
+const strictLimiter = createRateLimiterInstance({
+  points: 5,
+  duration: 15 * 60,
+  keyPrefix: 'rl:strict',
+  blockDuration: 30 * 60
 });
 
-/**
- * Get rate limit statistics (for monitoring)
- */
+// ─── Utility helpers ───────────────────────────────────────────────
+
 function getRateLimitStats() {
-  const stats = {
-    totalKeys: rateLimitStore.size,
-    byPrefix: {}
+  return {
+    store: useRedis ? 'redis' : 'memory',
+    presets: ['auth', 'admin', 'webhook', 'public', 'strict']
   };
-  
-  for (const [key, data] of rateLimitStore.entries()) {
-    const prefix = key.split(':')[0];
-    if (!stats.byPrefix[prefix]) {
-      stats.byPrefix[prefix] = { count: 0, totalRequests: 0 };
-    }
-    stats.byPrefix[prefix].count++;
-    stats.byPrefix[prefix].totalRequests += data.count;
-  }
-  
-  return stats;
 }
 
-/**
- * Clear rate limit for specific IP (admin function)
- */
 function clearRateLimit(ip, prefix = null) {
-  if (prefix) {
-    const key = `${prefix}:${ip}`;
-    rateLimitStore.delete(key);
-  } else {
-    // Clear all prefixes for this IP
-    for (const key of rateLimitStore.keys()) {
-      if (key.endsWith(`:${ip}`)) {
-        rateLimitStore.delete(key);
-      }
-    }
-  }
+  const limiters = [authLimiter, adminLimiter, webhookLimiter, publicLimiter, strictLimiter];
+  const targets = prefix
+    ? limiters.filter(l => l.keyPrefix && l.keyPrefix.includes(prefix))
+    : limiters;
+
+  return Promise.all(targets.map(l => l.delete(ip).catch(() => {})));
 }
 
 module.exports = {
-  createRateLimiter,
-  authRateLimiter,
-  adminRateLimiter,
-  webhookRateLimiter,
-  publicRateLimiter,
-  strictRateLimiter,
+  createRateLimiter: createRateLimiterInstance,
+  authRateLimiter: createMiddleware(authLimiter, 'Too many authentication attempts, please try again later'),
+  adminRateLimiter: createMiddleware(adminLimiter, 'Too many admin requests, please slow down'),
+  webhookRateLimiter: createMiddleware(webhookLimiter, 'Webhook rate limit exceeded'),
+  publicRateLimiter: createMiddleware(publicLimiter, 'Too many requests, please try again later'),
+  strictRateLimiter: createMiddleware(strictLimiter, 'Too many attempts, please try again later'),
   getRateLimitStats,
   clearRateLimit
 };
