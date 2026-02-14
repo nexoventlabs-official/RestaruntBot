@@ -440,8 +440,8 @@ async function formatOrderDetails(order) {
   
   message += `📦 *Items:*\n`;
   order.items.forEach((item, index) => {
-    message += `${index + 1}. ${item.name}\n`;
-    message += `   Qty: ${item.quantity} × ₹${item.price} = ₹${item.quantity * item.price}\n`;
+    message += `${index + 1}. *${item.name}*\n`;
+    message += `   Qty: ${item.quantity} × ₹${item.price} = ₹${item.quantity * item.price}\n\n`;
   });
   
   message += `\n💰 *Total: ₹${order.totalAmount}*\n`;

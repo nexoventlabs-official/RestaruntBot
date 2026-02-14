@@ -24522,7 +24522,7 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
           } else {
 <span class="cstat-no" title="statement not covered" >            effectivePrice = variant.offerPrice &amp;&amp; variant.offerPrice &lt; variant.price</span>
               ? variant.offerPrice : variant.price;
-<span class="cstat-no" title="statement not covered" >            displayName = `${item.menuItem.name} (${variant.label})`;</span>
+<span class="cstat-no" title="statement not covered" >            displayName = `${item.menuItem.name} - ${variant.label}`;</span>
 <span class="cstat-no" title="statement not covered" >            unitInfo = `${variant.quantity || 1} ${variant.unit || item.menuItem.unit || 'piece'}`;</span>
           }
         } else <span class="cstat-no" title="statement not covered" >if (!item.menuItem.offerPrice &amp;&amp; activeOffers.length &gt; 0) {</span>
@@ -24605,7 +24605,7 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
           } else {
 <span class="cstat-no" title="statement not covered" >            effectivePrice = variant.offerPrice &amp;&amp; variant.offerPrice &lt; variant.price</span>
               ? variant.offerPrice : variant.price;
-<span class="cstat-no" title="statement not covered" >            displayName = `${item.menuItem.name} (${variant.label})`;</span>
+<span class="cstat-no" title="statement not covered" >            displayName = `${item.menuItem.name} - ${variant.label}`;</span>
 <span class="cstat-no" title="statement not covered" >            unitInfo = `${variant.quantity || 1} ${variant.unit || item.menuItem.unit || 'piece'}`;</span>
           }
         } else <span class="cstat-no" title="statement not covered" >if (!item.menuItem.offerPrice &amp;&amp; activeOffers.length &gt; 0) {</span>
@@ -24727,7 +24727,7 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
 <span class="cstat-no" title="statement not covered" >          originalPrice = variant.price;</span>
 <span class="cstat-no" title="statement not covered" >          effectivePrice = variant.offerPrice &amp;&amp; variant.offerPrice &lt; variant.price</span>
             ? variant.offerPrice : variant.price;
-<span class="cstat-no" title="statement not covered" >          itemName = `${item.menuItem.name} (${variant.label})`;</span>
+<span class="cstat-no" title="statement not covered" >          itemName = `${item.menuItem.name} - ${variant.label}`;</span>
 <span class="cstat-no" title="statement not covered" >          itemUnit = variant.unit || item.menuItem.unit || 'piece';</span>
 <span class="cstat-no" title="statement not covered" >          itemUnitQty = variant.quantity || 1;</span>
         }
@@ -24952,7 +24952,7 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
           } else {
 <span class="cstat-no" title="statement not covered" >            effectivePrice = variant.offerPrice &amp;&amp; variant.offerPrice &lt; variant.price</span>
               ? variant.offerPrice : variant.price;
-<span class="cstat-no" title="statement not covered" >            itemName = `${item.menuItem.name} (${variant.label})`;</span>
+<span class="cstat-no" title="statement not covered" >            itemName = `${item.menuItem.name} - ${variant.label}`;</span>
 <span class="cstat-no" title="statement not covered" >            itemUnit = variant.unit || item.menuItem.unit || 'piece';</span>
 <span class="cstat-no" title="statement not covered" >            itemUnitQty = variant.quantity || 1;</span>
           }
@@ -25245,7 +25245,7 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
 <span class="cstat-no" title="statement not covered" >          originalPrice = variant.price;</span>
 <span class="cstat-no" title="statement not covered" >          effectivePrice = variant.offerPrice &amp;&amp; variant.offerPrice &lt; variant.price</span>
             ? variant.offerPrice : variant.price;
-<span class="cstat-no" title="statement not covered" >          itemName = `${item.menuItem.name} (${variant.label})`;</span>
+<span class="cstat-no" title="statement not covered" >          itemName = `${item.menuItem.name} - ${variant.label}`;</span>
 <span class="cstat-no" title="statement not covered" >          itemUnit = variant.unit || item.menuItem.unit || 'piece';</span>
 <span class="cstat-no" title="statement not covered" >          itemUnitQty = variant.quantity || 1;</span>
         }
@@ -25999,7 +25999,7 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
 <span class="cstat-no" title="statement not covered" >          originalPrice = variant.price;</span>
 <span class="cstat-no" title="statement not covered" >          effectivePrice = variant.offerPrice &amp;&amp; variant.offerPrice &lt; variant.price</span>
             ? variant.offerPrice : variant.price;
-<span class="cstat-no" title="statement not covered" >          itemName = `${item.name} (${variant.label})`;</span>
+<span class="cstat-no" title="statement not covered" >          itemName = `${item.name} - ${variant.label}`;</span>
 <span class="cstat-no" title="statement not covered" >          itemUnit = variant.unit || item.unit || 'piece';</span>
 <span class="cstat-no" title="statement not covered" >          itemUnitQty = variant.quantity || 1;</span>
         }
@@ -26094,7 +26094,7 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
 <span class="cstat-no" title="statement not covered" >            originalPrice = variant.price;</span>
 <span class="cstat-no" title="statement not covered" >            effectivePrice = variant.offerPrice &amp;&amp; variant.offerPrice &lt; variant.price</span>
               ? variant.offerPrice : variant.price;
-<span class="cstat-no" title="statement not covered" >            itemName = `${item.name} (${variant.label})`;</span>
+<span class="cstat-no" title="statement not covered" >            itemName = `${item.name} - ${variant.label}`;</span>
 <span class="cstat-no" title="statement not covered" >            itemUnit = variant.unit || item.unit || 'piece';</span>
 <span class="cstat-no" title="statement not covered" >            itemUnitQty = variant.quantity || 1;</span>
           }
@@ -26266,7 +26266,7 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-14T12:52:16.865Z
+                at 2026-02-14T13:11:06.475Z
             </div>
         <script src="../prettify.js"></script>
         <script>

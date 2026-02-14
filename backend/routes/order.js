@@ -397,8 +397,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           // Add each item
           order.items.forEach((item, index) => {
             const itemTotal = item.price * item.quantity;
-            msg += `${index + 1}. ${item.name}\n`;
-            msg += `   ${item.quantity} × ₹${item.price} = ₹${itemTotal}\n`;
+            msg += `${index + 1}. *${item.name}*\n`;
+            msg += `   Qty: ${item.quantity} × ₹${item.price} = ₹${itemTotal}\n\n`;
           });
           
           msg += `\n━━━━━━━━━━━━━━━\n`;

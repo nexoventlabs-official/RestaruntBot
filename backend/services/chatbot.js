@@ -6993,7 +6993,7 @@ const chatbot = {
           } else {
             effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
               ? variant.offerPrice : variant.price;
-            displayName = `${item.menuItem.name} (${variant.label})`;
+            displayName = `${item.menuItem.name} - ${variant.label}`;
             unitInfo = `${variant.quantity || 1} ${variant.unit || item.menuItem.unit || 'piece'}`;
           }
         } else if (!item.menuItem.offerPrice && activeOffers.length > 0) {
@@ -7076,7 +7076,7 @@ const chatbot = {
           } else {
             effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
               ? variant.offerPrice : variant.price;
-            displayName = `${item.menuItem.name} (${variant.label})`;
+            displayName = `${item.menuItem.name} - ${variant.label}`;
             unitInfo = `${variant.quantity || 1} ${variant.unit || item.menuItem.unit || 'piece'}`;
           }
         } else if (!item.menuItem.offerPrice && activeOffers.length > 0) {
@@ -7198,7 +7198,7 @@ const chatbot = {
           originalPrice = variant.price;
           effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
             ? variant.offerPrice : variant.price;
-          itemName = `${item.menuItem.name} (${variant.label})`;
+          itemName = `${item.menuItem.name} - ${variant.label}`;
           itemUnit = variant.unit || item.menuItem.unit || 'piece';
           itemUnitQty = variant.quantity || 1;
         }
@@ -7423,7 +7423,7 @@ const chatbot = {
           } else {
             effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
               ? variant.offerPrice : variant.price;
-            itemName = `${item.menuItem.name} (${variant.label})`;
+            itemName = `${item.menuItem.name} - ${variant.label}`;
             itemUnit = variant.unit || item.menuItem.unit || 'piece';
             itemUnitQty = variant.quantity || 1;
           }
@@ -7716,7 +7716,7 @@ const chatbot = {
           originalPrice = variant.price;
           effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
             ? variant.offerPrice : variant.price;
-          itemName = `${item.menuItem.name} (${variant.label})`;
+          itemName = `${item.menuItem.name} - ${variant.label}`;
           itemUnit = variant.unit || item.menuItem.unit || 'piece';
           itemUnitQty = variant.quantity || 1;
         }
@@ -8470,7 +8470,7 @@ const chatbot = {
           originalPrice = variant.price;
           effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
             ? variant.offerPrice : variant.price;
-          itemName = `${item.name} (${variant.label})`;
+          itemName = `${item.name} - ${variant.label}`;
           itemUnit = variant.unit || item.unit || 'piece';
           itemUnitQty = variant.quantity || 1;
         }
@@ -8565,7 +8565,7 @@ const chatbot = {
             originalPrice = variant.price;
             effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
               ? variant.offerPrice : variant.price;
-            itemName = `${item.name} (${variant.label})`;
+            itemName = `${item.name} - ${variant.label}`;
             itemUnit = variant.unit || item.unit || 'piece';
             itemUnitQty = variant.quantity || 1;
           }

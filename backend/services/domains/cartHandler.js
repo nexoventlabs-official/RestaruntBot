@@ -161,7 +161,7 @@ async function viewCart(customer, phone) {
           itemName = `${item.name} - ${variant.label} (${q.quantity} ${q.unit})`;
         } else {
           itemPrice = variant.offerPrice && variant.offerPrice < variant.price ? variant.offerPrice : variant.price;
-          itemName = `${item.name} (${variant.label})`;
+          itemName = `${item.name} - ${variant.label}`;
         }
       }
       const itemTotal = itemPrice * cartItem.quantity;
@@ -468,7 +468,7 @@ async function formatCart(customer) {
           itemName = `${item.name} - ${variant.label} (${q.quantity} ${q.unit})`;
         } else {
           itemPrice = variant.offerPrice && variant.offerPrice < variant.price ? variant.offerPrice : variant.price;
-          itemName = `${item.name} (${variant.label})`;
+          itemName = `${item.name} - ${variant.label}`;
         }
       }
       const itemTotal = itemPrice * cartItem.quantity;
