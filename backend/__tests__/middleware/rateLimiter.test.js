@@ -1,5 +1,10 @@
 /**
  * Rate Limiter Middleware Tests
+ *
+ * The rate limiter now uses rate-limiter-flexible (Redis-backed with
+ * in-memory fallback). createRateLimiter returns a RateLimiter *instance*,
+ * while the pre-configured exports (authRateLimiter, etc.) are async
+ * Express middleware functions wrapping those instances.
  */
 const { createRateLimiter, adminRateLimiter, publicRateLimiter, authRateLimiter, strictRateLimiter, webhookRateLimiter } = require('../../middleware/rateLimiter');
 
@@ -20,71 +25,45 @@ describe('Rate Limiter Middleware', () => {
   });
 
   describe('createRateLimiter', () => {
-    it('should return a middleware function', () => {
-      const limiter = createRateLimiter({ maxRequests: 10, windowMs: 60000 });
-      expect(typeof limiter).toBe('function');
+    it('should return a rate-limiter-flexible instance with consume method', () => {
+      const limiter = createRateLimiter({ points: 10, duration: 60, keyPrefix: 'test-obj' });
+      expect(limiter).toBeDefined();
+      expect(typeof limiter.consume).toBe('function');
     });
 
-    it('should call next for requests within limit', () => {
+    it('should allow consumption within limit', async () => {
       const limiter = createRateLimiter({
-        maxRequests: 5,
-        windowMs: 60000,
-        keyPrefix: 'test-within'
+        points: 5,
+        duration: 60,
+        keyPrefix: 'test-consume-ok'
       });
 
-      limiter(req, res, next);
-      expect(next).toHaveBeenCalled();
-      expect(res.status).not.toHaveBeenCalled();
+      const result = await limiter.consume('test-ip');
+      expect(result.remainingPoints).toBe(4);
     });
 
-    it('should block requests exceeding the limit', () => {
+    it('should reject consumption exceeding limit', async () => {
       const limiter = createRateLimiter({
-        maxRequests: 2,
-        windowMs: 60000,
-        keyPrefix: 'test-exceed'
+        points: 2,
+        duration: 60,
+        keyPrefix: 'test-consume-exceed'
       });
 
-      // Use a unique IP for this test
-      req.ip = '10.0.0.99';
+      await limiter.consume('exceed-ip');
+      await limiter.consume('exceed-ip');
 
-      // First 2 requests should pass
-      limiter(req, res, next);
-      limiter(req, res, next);
-      expect(next).toHaveBeenCalledTimes(2);
-
-      // 3rd request should be blocked
-      limiter(req, res, next);
-      expect(res.status).toHaveBeenCalledWith(429);
+      // 3rd consume should throw (rate limited)
+      await expect(limiter.consume('exceed-ip')).rejects.toBeDefined();
     });
 
-    it('should use custom error message', () => {
-      const limiter = createRateLimiter({
-        maxRequests: 1,
-        windowMs: 60000,
-        message: 'Custom rate limit message',
-        keyPrefix: 'test-msg'
-      });
+    it('should separate limits by keyPrefix', async () => {
+      const limiter1 = createRateLimiter({ points: 1, duration: 60, keyPrefix: 'prefix-a' });
+      const limiter2 = createRateLimiter({ points: 1, duration: 60, keyPrefix: 'prefix-b' });
 
-      req.ip = '10.0.0.100';
-      limiter(req, res, next);
-      limiter(req, res, next);
-
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: 'Custom rate limit message' })
-      );
-    });
-
-    it('should separate limits by keyPrefix', () => {
-      const limiter1 = createRateLimiter({ maxRequests: 1, windowMs: 60000, keyPrefix: 'prefix-a' });
-      const limiter2 = createRateLimiter({ maxRequests: 1, windowMs: 60000, keyPrefix: 'prefix-b' });
-
-      req.ip = '10.0.0.101';
-
-      limiter1(req, res, next);
-      expect(next).toHaveBeenCalledTimes(1);
-
-      limiter2(req, res, next);
-      expect(next).toHaveBeenCalledTimes(2); // Different prefix, still allowed
+      await limiter1.consume('same-ip');
+      // Different prefix — should still be allowed
+      const result = await limiter2.consume('same-ip');
+      expect(result.remainingPoints).toBe(0);
     });
   });
 
@@ -109,15 +88,15 @@ describe('Rate Limiter Middleware', () => {
       expect(typeof webhookRateLimiter).toBe('function');
     });
 
-    it('adminRateLimiter should allow requests', () => {
+    it('adminRateLimiter should call next for a valid request', async () => {
       req.ip = '10.0.0.200';
-      adminRateLimiter(req, res, next);
+      await adminRateLimiter(req, res, next);
       expect(next).toHaveBeenCalled();
     });
 
-    it('publicRateLimiter should allow requests', () => {
+    it('publicRateLimiter should call next for a valid request', async () => {
       req.ip = '10.0.0.201';
-      publicRateLimiter(req, res, next);
+      await publicRateLimiter(req, res, next);
       expect(next).toHaveBeenCalled();
     });
   });

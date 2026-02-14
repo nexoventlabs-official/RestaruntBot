@@ -111,7 +111,7 @@ function rotateRefreshToken(refreshToken) {
   setTimeout(() => {
     refreshTokens.delete(refreshToken);
     blacklistedTokens.delete(refreshToken);
-  }, 5 * 60 * 1000);
+  }, 5 * 60 * 1000).unref();
   
   return newTokens;
 }
@@ -190,7 +190,7 @@ function getTokenStats() {
 }
 
 // Schedule automatic cleanup every hour
-setInterval(cleanupExpiredTokens, 60 * 60 * 1000);
+setInterval(cleanupExpiredTokens, 60 * 60 * 1000).unref();
 
 module.exports = {
   generateAccessToken,

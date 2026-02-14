@@ -10,10 +10,24 @@ jest.mock('mongoose', () => {
     on: jest.fn(),
     close: jest.fn().mockResolvedValue(true)
   };
+  const SchemaFn = jest.fn().mockReturnValue({
+    index: jest.fn(),
+    pre: jest.fn(),
+    post: jest.fn(),
+    virtual: jest.fn().mockReturnValue({ get: jest.fn() }),
+    set: jest.fn()
+  });
+  SchemaFn.Types = {
+    ObjectId: 'ObjectId',
+    String: String,
+    Number: Number,
+    Date: Date,
+    Mixed: 'Mixed'
+  };
   return {
     connect: jest.fn().mockResolvedValue(true),
     connection,
-    Schema: jest.fn().mockReturnValue({}),
+    Schema: SchemaFn,
     model: jest.fn().mockReturnValue({})
   };
 });
@@ -32,6 +46,7 @@ jest.mock('../../services/eventEmitter', () => ({
 }));
 
 jest.mock('../../services/orderScheduler', () => ({ start: jest.fn(), stop: jest.fn() }));
+jest.mock('../../services/refundScheduler', () => ({ start: jest.fn(), stop: jest.fn(), scheduleRefund: jest.fn(), cancelScheduledRefund: jest.fn() }));
 jest.mock('../../services/dailyCleanup', () => ({ start: jest.fn(), stop: jest.fn() }));
 jest.mock('../../services/categoryScheduler', () => ({ start: jest.fn(), stop: jest.fn() }));
 jest.mock('../../services/orderCleanup', () => ({ start: jest.fn(), stop: jest.fn() }));
