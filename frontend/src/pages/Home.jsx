@@ -118,7 +118,7 @@ export default function Home() {
     try {
       // Use cached data if available
       let menuData;
-      if (cachedData.isLoaded && cachedData.menu && cachedData.menu.length > 0) {
+      if (cachedData.isLoaded && cachedData.menu) {
         menuData = cachedData.menu;
       } else {
         const res = await axios.get(`${API_URL}/menu`);
@@ -140,9 +140,9 @@ export default function Home() {
 
   const loadCategories = async () => {
     try {
-      // Use cached data if available and non-empty
+      // Use cached data if available
       let catData;
-      if (cachedData.isLoaded && cachedData.categories && cachedData.categories.length > 0) {
+      if (cachedData.isLoaded && cachedData.categories) {
         catData = cachedData.categories;
       } else {
         const res = await axios.get(`${API_URL}/categories`);
