@@ -1209,7 +1209,6 @@ export default function UserMenuPage() {
                     </button>
                   );
                 })()}
-                </button>
               </div>
 
               {/* Price */}
