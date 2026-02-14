@@ -7363,7 +7363,8 @@ const chatbot = {
     confirmMsg += `━━━━━━━━━━━━━━━\n`;
     confirmMsg += `*Items:*\n`;
     items.forEach((item, i) => {
-      confirmMsg += `${i + 1}. ${item.name} (${item.unitQty} ${item.unit}) x${item.quantity} - ₹${item.price * item.quantity}\n`;
+      confirmMsg += `${i + 1}. *${item.name}* (${item.unitQty} ${item.unit})\n`;
+      confirmMsg += `   Qty: ${item.quantity} × ₹${item.price} = ₹${item.price * item.quantity}\n\n`;
     });
     confirmMsg += `━━━━━━━━━━━━━━━\n`;
     confirmMsg += `*Items Total:* ₹${itemsTotal}\n`;
