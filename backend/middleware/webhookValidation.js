@@ -68,6 +68,11 @@ const logger = require('../services/logger');
         });
       }
       
+      // Template status updates have a different structure — allow them through
+      if (change.field === 'message_template_status_update') {
+        continue;
+      }
+      
       // Check for messages or statuses
       const hasMessages = Array.isArray(change.value.messages);
       const hasStatuses = Array.isArray(change.value.statuses);

@@ -62,15 +62,17 @@ app.use(compression());
 app.options('*', cors(corsOptions));
 app.use(cors(corsOptions));
 
-// Capture raw body for webhook signature verification (before JSON parsing)
-app.use('/api/webhook/meta', (req, res, next) => {
-  req.rawBody = '';
-  req.on('data', chunk => { req.rawBody += chunk.toString(); });
-  req.on('end', () => next());
-});
-
 // Body parsing with size limits
-app.use(express.json({ limit: '2mb' }));
+// The verify callback captures the raw body buffer for webhook signature verification
+app.use(express.json({
+  limit: '2mb',
+  verify: (req, _res, buf) => {
+    // Only store rawBody for webhook routes that need signature verification
+    if (req.originalUrl && req.originalUrl.startsWith('/api/webhook/meta')) {
+      req.rawBody = buf.toString();
+    }
+  }
+}));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // Global input sanitization
