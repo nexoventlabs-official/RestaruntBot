@@ -138,8 +138,10 @@ export default function UserMenuPage() {
     setItemsLoading(true);
     try {
       const params = new URLSearchParams();
-      if (selectedCategory !== 'all') params.append('category', selectedCategory);
-      if (foodType !== 'all') params.append('foodType', foodType);
+      // Only send actual category names to API, not item_<id> format (those are filtered client-side)
+      if (selectedCategory !== 'all' && !selectedCategory.startsWith('item_')) {
+        params.append('category', selectedCategory);
+      }      if (foodType !== 'all') params.append('foodType', foodType);
       const res = await axios.get(`${API_URL}/menu?${params}`);
       setItems(res.data);
     } catch (err) { 
@@ -234,9 +236,33 @@ export default function UserMenuPage() {
   const handleToggleWishlist = (item, e) => {
     e.stopPropagation();
     if (!addToWishlist || !removeFromWishlist) return;
-    // If item has variants, open dialog so user can pick which variant to wishlist
     if (item.variants && item.variants.length > 0) {
-      openItemDialog(item);
+      // Check if any variant is already wishlisted
+      const existingWish = wishlist?.find(w => w._id === item._id && w.wishlistKey?.startsWith(`${item._id}_v`));
+      if (existingWish) {
+        removeFromWishlist(existingWish.wishlistKey);
+      } else {
+        // Wishlist the first available variant
+        const firstAvailIdx = item.variants.findIndex(v => v.available !== false);
+        const vIdx = firstAvailIdx >= 0 ? firstAvailIdx : 0;
+        const v = item.variants[vIdx];
+        const hasQty = v.quantities?.length > 0;
+        const qIdx = hasQty ? 0 : null;
+        const q = hasQty ? v.quantities[0] : null;
+        let wishlistKey = `${item._id}_v${vIdx}`;
+        if (qIdx !== null) wishlistKey += `_q${qIdx}`;
+        const price = q ? (q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price) : (v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price);
+        addToWishlist({
+          ...item,
+          wishlistKey,
+          variantIndex: vIdx,
+          variantLabel: v.label,
+          quantityIndex: qIdx,
+          quantityLabel: q ? `${q.quantity} ${q.unit}` : null,
+          image: v.image || item.image,
+          price
+        });
+      }
       return;
     }
     isInWishlist(item._id) ? removeFromWishlist(item._id) : addToWishlist(item);
@@ -280,12 +306,23 @@ export default function UserMenuPage() {
         setSelectedQuantityIndex(null);
       }
     } else if (item.variants && item.variants.length > 0) {
-      // Auto-select first available variant
-      const firstAvailable = item.variants.findIndex(v => v.available !== false);
-      const idx = firstAvailable >= 0 ? firstAvailable : 0;
+      // Check if a variant of this item is wishlisted, and pre-select it
+      const wishedVariant = wishlist?.find(w => w._id === item._id && w.wishlistKey?.startsWith(`${item._id}_v`));
+      let idx;
+      let qIdx = null;
+      if (wishedVariant && wishedVariant.variantIndex !== null && wishedVariant.variantIndex !== undefined) {
+        idx = wishedVariant.variantIndex;
+        qIdx = wishedVariant.quantityIndex ?? null;
+      } else {
+        // Auto-select first available variant
+        const firstAvailable = item.variants.findIndex(v => v.available !== false);
+        idx = firstAvailable >= 0 ? firstAvailable : 0;
+      }
       setSelectedVariantIndex(idx);
-      // Auto-select first quantity option
-      if (item.variants[idx]?.quantities?.length > 0) {
+      // Set quantity index: from wishlist or default to first
+      if (qIdx !== null && item.variants[idx]?.quantities?.[qIdx]) {
+        setSelectedQuantityIndex(qIdx);
+      } else if (item.variants[idx]?.quantities?.length > 0) {
         setSelectedQuantityIndex(0);
       } else {
         setSelectedQuantityIndex(null);
