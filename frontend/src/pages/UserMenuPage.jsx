@@ -234,6 +234,11 @@ export default function UserMenuPage() {
   const handleToggleWishlist = (item, e) => {
     e.stopPropagation();
     if (!addToWishlist || !removeFromWishlist) return;
+    // If item has variants, open dialog so user can pick which variant to wishlist
+    if (item.variants && item.variants.length > 0) {
+      openItemDialog(item);
+      return;
+    }
     isInWishlist(item._id) ? removeFromWishlist(item._id) : addToWishlist(item);
   };
 
@@ -733,7 +738,12 @@ export default function UserMenuPage() {
               onClick={(e) => handleToggleWishlist(item, e)} 
               className="p-1.5 hover:scale-110 transition-transform flex-shrink-0 bg-gray-50 rounded-full"
             >
-              <Heart className={`w-5 h-5 ${isInWishlist && isInWishlist(item._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
+              <Heart className={`w-5 h-5 ${
+                (item.variants?.length > 0 
+                  ? wishlist?.some(w => w._id === item._id)
+                  : isInWishlist && isInWishlist(item._id))
+                ? 'fill-red-500 text-red-500' : 'text-gray-400'
+              }`} />
             </button>
           </div>
 

@@ -63,10 +63,13 @@ export default function CartSidebar({
       if (item.offerInfo) {
         msg += ` 🎁`;
       }
-      // Include item ID and variant index for chatbot matching
+      // Include item ID, variant index and quantity index for chatbot matching
       msg += ` #${item._id}`;
       if (item.variantIndex !== null && item.variantIndex !== undefined) {
         msg += `_v${item.variantIndex}`;
+        if (item.quantityIndex !== null && item.quantityIndex !== undefined) {
+          msg += `_q${item.quantityIndex}`;
+        }
       }
       msg += `\n`;
     });

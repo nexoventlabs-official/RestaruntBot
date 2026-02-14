@@ -1162,17 +1162,21 @@ const chatbot = {
         const price = parseInt(itemMatch[3]);
         const hasOffer = line.includes('🎁');
         
-        // Extract item ID if present: #<24-char hex>_v<N> or #<24-char hex>
-        const idMatch = line.match(/#([a-f0-9]{24})(?:_v(\d+))?/i);
+        // Extract item ID if present: #<24-char hex>_v<N>_q<N> or #<24-char hex>_v<N> or #<24-char hex>
+        const idMatch = line.match(/#([a-f0-9]{24})(?:_v(\d+))?(?:_q(\d+))?/i);
         const itemId = idMatch ? idMatch[1] : null;
         const variantIndex = idMatch && idMatch[2] !== undefined ? parseInt(idMatch[2]) : null;
+        const quantityIndex = idMatch && idMatch[3] !== undefined ? parseInt(idMatch[3]) : null;
         
-        // Clean name: strip variant label in parentheses for name matching
-        const name = rawName.replace(/\s*\([^)]+\)\s*$/, '').trim();
+        // Clean name: strip variant label in parentheses and quantity in brackets for name matching
+        const name = rawName.replace(/\s*\([^)]+\)\s*/g, ' ').replace(/\s*\[[^\]]+\]\s*/g, ' ').trim();
         const variantLabel = rawName.match(/\(([^)]+)\)$/)?.[1] || null;
+        // Extract quantity label from square brackets e.g. [1 kg]
+        const quantityLabelMatch = rawName.match(/\[([^\]]+)\]/);
+        const quantityLabel = quantityLabelMatch ? quantityLabelMatch[1] : null;
         
-        items.push({ name, quantity, price, hasOffer, itemId, variantIndex, variantLabel });
-        logger.info('Found cart item', { name, quantity, price, hasOffer, itemId, variantIndex, variantLabel });
+        items.push({ name, quantity, price, hasOffer, itemId, variantIndex, variantLabel, quantityIndex, quantityLabel });
+        logger.info('Found cart item', { name, quantity, price, hasOffer, itemId, variantIndex, variantLabel, quantityIndex, quantityLabel });
       }
       
       // Extract total
@@ -4249,11 +4253,15 @@ const chatbot = {
               }
             }
             
-            // Check if already in cart (match by item + variant)
+            // Check if already in cart (match by item + variant + quantityIndex)
             const existingIndex = customer.cart.findIndex(c => {
               const sameItem = c.menuItem?.toString() === menuItem._id.toString();
               if (cartItem.variantIndex !== null && cartItem.variantIndex !== undefined) {
-                return sameItem && c.variantIndex === cartItem.variantIndex;
+                const sameVariant = c.variantIndex === cartItem.variantIndex;
+                if (cartItem.quantityIndex !== null && cartItem.quantityIndex !== undefined) {
+                  return sameItem && sameVariant && c.quantityIndex === cartItem.quantityIndex;
+                }
+                return sameItem && sameVariant && (c.quantityIndex === null || c.quantityIndex === undefined);
               }
               return sameItem && (c.variantIndex === null || c.variantIndex === undefined);
             });
@@ -4278,6 +4286,13 @@ const chatbot = {
               if (cartItem.variantIndex !== null && cartItem.variantIndex !== undefined && menuItem.variants?.[cartItem.variantIndex]) {
                 cartEntry.variantIndex = cartItem.variantIndex;
                 cartEntry.variantLabel = cartItem.variantLabel || menuItem.variants[cartItem.variantIndex].label || null;
+                // Add quantity option index if present
+                if (cartItem.quantityIndex !== null && cartItem.quantityIndex !== undefined) {
+                  const variant = menuItem.variants[cartItem.variantIndex];
+                  if (variant.quantities?.[cartItem.quantityIndex]) {
+                    cartEntry.quantityIndex = cartItem.quantityIndex;
+                  }
+                }
               }
               if (appliedOffer) {
                 cartEntry.appliedOffer = {
@@ -7538,39 +7553,13 @@ const chatbot = {
         }
 
         if (sent) {
-          // Build item summary with variant names and prices
-          let summaryLines = [];
-          freshCustomer.cart.forEach((item) => {
-            if (item.menuItem) {
-              let name = item.menuItem.name;
-              let price = item.menuItem.offerPrice || item.menuItem.price;
-              // Resolve variant name & price
-              if (item.variantIndex !== null && item.variantIndex !== undefined && item.menuItem.variants?.[item.variantIndex]) {
-                const variant = item.menuItem.variants[item.variantIndex];
-                if (item.quantityIndex !== null && item.quantityIndex !== undefined && variant.quantities?.[item.quantityIndex]) {
-                  const q = variant.quantities[item.quantityIndex];
-                  price = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
-                  name = `${variant.label} (${q.quantity} ${q.unit})`;
-                } else {
-                  price = variant.offerPrice && variant.offerPrice < variant.price ? variant.offerPrice : variant.price;
-                  name = variant.label;
-                }
-              }
-              summaryLines.push(`• ${name} × ${item.quantity} — ₹${price * item.quantity}`);
-            }
-          });
-          const itemsSummary = summaryLines.join('\n');
-          const discountText = totalDiscount > 0 ? `\n🎁 Save ₹${totalDiscount}` : '';
-
-          await whatsapp.sendButtons(
-            phone,
-            `🛒 *${validItems} items* • Total: *₹${total}*${discountText}\n\n${itemsSummary}\n\nReady to order? 👇`,
-            [
-              { id: 'review_pay', text: 'Place Order ✅' },
-              { id: 'add_more', text: 'Add More' },
-              { id: 'clear_cart', text: 'Clear Cart' }
-            ]
-          );
+          // Send image-based cart summary (same as fallback style)
+          const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
+          await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [
+            { id: 'review_pay', text: 'Place Order ✅' },
+            { id: 'add_more', text: 'Add More' },
+            { id: 'clear_cart', text: 'Clear Cart' }
+          ]);
           return;
         }
       }
