@@ -7883,7 +7883,7 @@ const chatbot = {
 
     try {
       // Generate payment page URL (UPI app selection page)
-      const frontendUrl = process.env.FRONTEND_URL;
+      const frontendUrl = process.env.FRONTEND_URL || process.env.WEBSITE_URL || 'https://restarunt-bot.vercel.app';
       const paymentPageUrl = `${frontendUrl}/pay/${orderId}`;
 
       const orderDetailsImageUrl = await chatbotImagesService.getImageUrl('order_details');
