@@ -242,17 +242,27 @@ export default function UserMenuPage() {
       if (existingWish) {
         removeFromWishlist(existingWish.wishlistKey);
       } else {
-        // Wishlist the first available variant (key per variant, no _q)
+        // Wishlist the first available variant with first quantity option
         const firstAvailIdx = item.variants.findIndex(v => v.available !== false);
         const vIdx = firstAvailIdx >= 0 ? firstAvailIdx : 0;
         const v = item.variants[vIdx];
-        const wishlistKey = `${item._id}_v${vIdx}`;
-        const price = v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price;
+        const hasQty = v.quantities?.length > 0;
+        let wishlistKey = `${item._id}_v${vIdx}`;
+        let qIdx = null;
+        let q = null;
+        if (hasQty) {
+          qIdx = 0;
+          q = v.quantities[0];
+          wishlistKey += `_q${qIdx}`;
+        }
+        const price = q ? (q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price) : (v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price);
         addToWishlist({
           ...item,
           wishlistKey,
           variantIndex: vIdx,
           variantLabel: v.label,
+          quantityIndex: qIdx,
+          quantityLabel: q ? `${q.quantity} ${q.unit}` : null,
           image: v.image || item.image,
           price
         });
@@ -766,8 +776,12 @@ export default function UserMenuPage() {
           <div className="flex items-start justify-between gap-2 mb-2">
             <h3 className="font-bold text-gray-900 text-base sm:text-lg line-clamp-1 sm:line-clamp-2 flex-1 sm:min-h-[3rem]">
               {(() => {
-                const wish = wishlist?.find(w => w._id === item._id && w.variantLabel);
-                if (wish) return wish.variantLabel;
+                const wish = wishlist?.find(w => w._id === item._id && w.wishlistKey?.startsWith(`${item._id}_v`));
+                if (wish) {
+                  let label = wish.variantLabel || item.name;
+                  if (wish.quantityLabel) label += ` (${wish.quantityLabel})`;
+                  return label;
+                }
                 return item.name;
               })()}
             </h3>
@@ -1218,10 +1232,15 @@ export default function UserMenuPage() {
                 </h2>
                 {(() => {
                   const variant = selectedVariantIndex !== null ? selectedItem.variants?.[selectedVariantIndex] : null;
-                  // Wishlist key is per-variant (no _q) to stay in sync with card and variant grid hearts
-                  const wishlistKey = selectedVariantIndex !== null && variant
-                    ? `${selectedItem._id}_v${selectedVariantIndex}`
-                    : selectedItem._id;
+                  const qOption = variant && selectedQuantityIndex !== null ? variant.quantities?.[selectedQuantityIndex] : null;
+                  // Wishlist key includes quantity index for per-size wishlisting
+                  let wishlistKey = selectedItem._id;
+                  if (selectedVariantIndex !== null && variant) {
+                    wishlistKey = `${selectedItem._id}_v${selectedVariantIndex}`;
+                    if (selectedQuantityIndex !== null && qOption) {
+                      wishlistKey += `_q${selectedQuantityIndex}`;
+                    }
+                  }
                   const inWish = wishlist?.some(w => (w.wishlistKey || w._id) === wishlistKey);
                   return (
                     <button
@@ -1236,6 +1255,8 @@ export default function UserMenuPage() {
                             wishlistKey,
                             variantIndex: selectedVariantIndex,
                             variantLabel: variant?.label || null,
+                            quantityIndex: selectedQuantityIndex,
+                            quantityLabel: qOption ? `${qOption.quantity} ${qOption.unit}` : null,
                             image: details.image || selectedItem.image,
                             price: details.offerPrice || details.price
                           });
