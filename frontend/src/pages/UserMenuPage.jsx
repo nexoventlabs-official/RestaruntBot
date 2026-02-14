@@ -1180,9 +1180,15 @@ export default function UserMenuPage() {
                     : selectedItem.name}
                 </h2>
                 {(() => {
-                  const wishlistKey = selectedVariantIndex !== null && selectedItem.variants?.[selectedVariantIndex]
-                    ? `${selectedItem._id}_v${selectedVariantIndex}`
-                    : selectedItem._id;
+                  const variant = selectedVariantIndex !== null ? selectedItem.variants?.[selectedVariantIndex] : null;
+                  const qOption = variant && selectedQuantityIndex !== null ? variant.quantities?.[selectedQuantityIndex] : null;
+                  let wishlistKey = selectedItem._id;
+                  if (selectedVariantIndex !== null && variant) {
+                    wishlistKey = `${selectedItem._id}_v${selectedVariantIndex}`;
+                    if (selectedQuantityIndex !== null && qOption) {
+                      wishlistKey += `_q${selectedQuantityIndex}`;
+                    }
+                  }
                   const inWish = wishlist?.some(w => (w.wishlistKey || w._id) === wishlistKey);
                   return (
                     <button
@@ -1191,13 +1197,14 @@ export default function UserMenuPage() {
                         if (inWish) {
                           removeFromWishlist(wishlistKey);
                         } else {
-                          const variant = selectedVariantIndex !== null ? selectedItem.variants?.[selectedVariantIndex] : null;
                           const details = getDialogItemDetails();
                           addToWishlist({
                             ...selectedItem,
                             wishlistKey,
                             variantIndex: selectedVariantIndex,
                             variantLabel: variant?.label || null,
+                            quantityIndex: selectedQuantityIndex,
+                            quantityLabel: qOption ? `${qOption.quantity} ${qOption.unit}` : null,
                             image: details.image || selectedItem.image,
                             price: details.offerPrice || details.price
                           });

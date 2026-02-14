@@ -333,7 +333,9 @@ export function useCart() {
         unitQty: item.quantity || 1,
         offerInfo: finalOfferInfo,
         variantIndex: item.variantIndex ?? null,
-        variantLabel: item.variantLabel || null
+        variantLabel: item.variantLabel || null,
+        quantityIndex: item.quantityIndex ?? null,
+        quantityLabel: item.quantityLabel || null
       }];
     });
   };
