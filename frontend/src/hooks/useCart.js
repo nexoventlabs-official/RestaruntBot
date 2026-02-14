@@ -237,8 +237,12 @@ export function useCart() {
       finalPrice = item.price;
     }
 
-    // Cart key: use _id + variantIndex to distinguish variants of the same item
-    const cartKey = variantInfo ? `${item._id}_v${variantInfo.variantIndex}` : item._id;
+    // Cart key: use _id + variantIndex + quantityIndex to distinguish variants and quantity options
+    const cartKey = variantInfo 
+      ? (variantInfo.quantityIndex !== null && variantInfo.quantityIndex !== undefined 
+          ? `${item._id}_v${variantInfo.variantIndex}_q${variantInfo.quantityIndex}` 
+          : `${item._id}_v${variantInfo.variantIndex}`) 
+      : item._id;
     
     setCart(prev => {
       const existing = prev.find(c => c.cartKey === cartKey);
@@ -267,7 +271,9 @@ export function useCart() {
         unitQty: item.quantity || 1,
         offerInfo: finalOfferInfo, // Store offer info with cart item
         variantLabel: variantInfo?.label || null, // Store variant label for display
-        variantIndex: variantInfo?.variantIndex ?? null
+        variantIndex: variantInfo?.variantIndex ?? null,
+        quantityIndex: variantInfo?.quantityIndex ?? null,
+        quantityLabel: variantInfo?.quantityLabel || null
       }];
     });
   };

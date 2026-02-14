@@ -53,6 +53,7 @@ export default function UserMenuPage() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [dialogQuantity, setDialogQuantity] = useState(1);
   const [selectedVariantIndex, setSelectedVariantIndex] = useState(null);
+  const [selectedQuantityIndex, setSelectedQuantityIndex] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const eventSourceRef = useRef(null);
 
@@ -266,12 +267,27 @@ export default function UserMenuPage() {
     // If a specific variant was pre-selected (e.g., from variant card click), use it
     if (preselectedVariantIndex !== null) {
       setSelectedVariantIndex(preselectedVariantIndex);
+      // Auto-select first quantity option if variant has quantities
+      const variant = item.variants?.[preselectedVariantIndex];
+      if (variant?.quantities?.length > 0) {
+        setSelectedQuantityIndex(0);
+      } else {
+        setSelectedQuantityIndex(null);
+      }
     } else if (item.variants && item.variants.length > 0) {
       // Auto-select first available variant
       const firstAvailable = item.variants.findIndex(v => v.available !== false);
-      setSelectedVariantIndex(firstAvailable >= 0 ? firstAvailable : 0);
+      const idx = firstAvailable >= 0 ? firstAvailable : 0;
+      setSelectedVariantIndex(idx);
+      // Auto-select first quantity option
+      if (item.variants[idx]?.quantities?.length > 0) {
+        setSelectedQuantityIndex(0);
+      } else {
+        setSelectedQuantityIndex(null);
+      }
     } else {
       setSelectedVariantIndex(null);
+      setSelectedQuantityIndex(null);
     }
     // Prevent body scroll when dialog is open
     document.body.style.overflow = 'hidden';
@@ -285,6 +301,7 @@ export default function UserMenuPage() {
     setSelectedItem(null);
     setDialogQuantity(1);
     setSelectedVariantIndex(null);
+    setSelectedQuantityIndex(null);
     // Restore body scroll
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
@@ -297,6 +314,18 @@ export default function UserMenuPage() {
     if (!selectedItem) return { price: 0, offerPrice: null, image: null };
     if (selectedVariantIndex !== null && selectedItem.variants?.[selectedVariantIndex]) {
       const v = selectedItem.variants[selectedVariantIndex];
+      // If quantity option is selected, use its price
+      if (selectedQuantityIndex !== null && v.quantities?.[selectedQuantityIndex]) {
+        const q = v.quantities[selectedQuantityIndex];
+        return {
+          price: q.price,
+          offerPrice: q.offerPrice && q.offerPrice < q.price ? q.offerPrice : null,
+          image: v.image || selectedItem.image,
+          label: `${v.label} (${q.quantity} ${q.unit})`,
+          available: v.available !== false,
+          quantityUnit: `${q.quantity} ${q.unit}`
+        };
+      }
       return {
         price: v.price,
         offerPrice: v.offerPrice && v.offerPrice < v.price ? v.offerPrice : null,
@@ -319,7 +348,15 @@ export default function UserMenuPage() {
     if (!selectedItem || !addToCart) return;
     const details = getDialogItemDetails();
     const variant = selectedVariantIndex !== null ? selectedItem.variants?.[selectedVariantIndex] : null;
-    addToCart(selectedItem, dialogQuantity, null, variant ? { variantIndex: selectedVariantIndex, label: variant.label, price: details.price, offerPrice: details.offerPrice, image: details.image } : null);
+    const cartVariantOpts = variant ? { variantIndex: selectedVariantIndex, label: variant.label, price: details.price, offerPrice: details.offerPrice, image: details.image } : null;
+    if (cartVariantOpts && selectedQuantityIndex !== null && variant?.quantities?.[selectedQuantityIndex]) {
+      cartVariantOpts.quantityIndex = selectedQuantityIndex;
+      const q = variant.quantities[selectedQuantityIndex];
+      cartVariantOpts.quantityLabel = `${q.quantity} ${q.unit}`;
+      cartVariantOpts.price = q.price;
+      cartVariantOpts.offerPrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : null;
+    }
+    addToCart(selectedItem, dialogQuantity, null, cartVariantOpts);
     closeItemDialog();
   };
 
@@ -560,14 +597,12 @@ export default function UserMenuPage() {
                       )}
                     </div>
 
-                    {/* Quantities (if variant has multiple quantity options) */}
+                    {/* Quantity options count badge */}
                     {v.quantities && v.quantities.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mb-3">
-                        {v.quantities.map((q, qIdx) => (
-                          <span key={qIdx} className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full font-medium">
-                            {q.quantity} {q.unit} — ₹{q.price}
-                          </span>
-                        ))}
+                        <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full font-medium">
+                          {v.quantities.length} size{v.quantities.length > 1 ? 's' : ''} available
+                        </span>
                       </div>
                     )}
 
@@ -597,7 +632,12 @@ export default function UserMenuPage() {
                         <button 
                           onClick={(e) => { 
                             e.stopPropagation(); 
-                            if (addToCart) addToCart(item, 1, null, { variantIndex: vIdx, label: v.label, price: variantPrice, offerPrice: v.offerPrice, image: variantImage }); 
+                            if (v.quantities && v.quantities.length > 0) {
+                              // Has quantity options — open dialog to let user choose
+                              openItemDialog(item, vIdx);
+                            } else {
+                              if (addToCart) addToCart(item, 1, null, { variantIndex: vIdx, label: v.label, price: variantPrice, offerPrice: v.offerPrice, image: variantImage }); 
+                            }
                           }} 
                           className="w-10 h-10 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl flex items-center justify-center hover:from-orange-600 hover:to-orange-700 transition-all shadow-md hover:shadow-lg flex-shrink-0"
                           title="Add to Cart"
@@ -1201,7 +1241,16 @@ export default function UserMenuPage() {
                       return (
                         <button
                           key={idx}
-                          onClick={() => isAvailable && setSelectedVariantIndex(idx)}
+                          onClick={() => {
+                            if (!isAvailable) return;
+                            setSelectedVariantIndex(idx);
+                            // Reset quantity index when switching variants
+                            if (v.quantities?.length > 0) {
+                              setSelectedQuantityIndex(0);
+                            } else {
+                              setSelectedQuantityIndex(null);
+                            }
+                          }}
                           disabled={!isAvailable}
                           className={`px-4 py-2 rounded-xl text-sm font-medium border-2 transition-all ${
                             isSelected
@@ -1212,7 +1261,7 @@ export default function UserMenuPage() {
                           }`}
                         >
                           {v.label}
-                          {isAvailable && (
+                          {isAvailable && !v.quantities?.length && (
                             <span className="ml-1.5 text-xs text-gray-400">
                               ₹{v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price}
                             </span>
@@ -1220,6 +1269,33 @@ export default function UserMenuPage() {
                           {!isAvailable && (
                             <span className="ml-1.5 text-xs">Sold Out</span>
                           )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Quantity Option Selector (e.g., 750 ml, 1 kg) */}
+              {selectedVariantIndex !== null && selectedItem.variants?.[selectedVariantIndex]?.quantities?.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-sm font-semibold text-gray-700 mb-2">Choose Size</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedItem.variants[selectedVariantIndex].quantities.map((q, qIdx) => {
+                      const isSelected = selectedQuantityIndex === qIdx;
+                      const qPrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+                      return (
+                        <button
+                          key={qIdx}
+                          onClick={() => setSelectedQuantityIndex(qIdx)}
+                          className={`px-4 py-2 rounded-xl text-sm font-medium border-2 transition-all ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm'
+                              : 'border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50'
+                          }`}
+                        >
+                          {q.quantity} {q.unit}
+                          <span className="ml-1.5 text-xs text-gray-400">₹{qPrice}</span>
                         </button>
                       );
                     })}
@@ -1250,7 +1326,17 @@ export default function UserMenuPage() {
                   <Package className="w-5 h-5 text-orange-500" />
                   <div>
                     <p className="text-xs text-gray-500">Unit</p>
-                    <p className="font-semibold text-gray-900">{selectedItem.quantity || 1} {selectedItem.unit || 'piece'}</p>
+                    <p className="font-semibold text-gray-900">
+                      {(() => {
+                        const d = getDialogItemDetails();
+                        if (d.quantityUnit) return d.quantityUnit;
+                        if (selectedVariantIndex !== null && selectedItem.variants?.[selectedVariantIndex]) {
+                          const v = selectedItem.variants[selectedVariantIndex];
+                          return `${v.quantity || selectedItem.quantity || 1} ${v.unit || selectedItem.unit || 'piece'}`;
+                        }
+                        return `${selectedItem.quantity || 1} ${selectedItem.unit || 'piece'}`;
+                      })()}
+                    </p>
                   </div>
                 </div>
               </div>

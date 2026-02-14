@@ -58,6 +58,7 @@ export default function CartSidebar({
     availableCartItems.forEach((item, i) => {
       msg += `${i + 1}. ${item.name}`;
       if (item.variantLabel) msg += ` (${item.variantLabel})`;
+      if (item.quantityLabel) msg += ` [${item.quantityLabel}]`;
       msg += ` x${item.quantity} - ₹${item.price * item.quantity}`;
       if (item.offerInfo) {
         msg += ` 🎁`;
@@ -169,6 +170,9 @@ export default function CartSidebar({
                       <h4 className="font-medium text-gray-900">{item.name}</h4>
                       {item.variantLabel && (
                         <span className="inline-block text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium mt-0.5">{item.variantLabel}</span>
+                      )}
+                      {item.quantityLabel && (
+                        <span className="inline-block text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full font-medium mt-0.5 ml-1">{item.quantityLabel}</span>
                       )}
                       <p className="text-sm text-gray-500">{item.quantity || 1} {item.unit}</p>
                       {/* Show offer info if present */}

@@ -7538,12 +7538,33 @@ const chatbot = {
         }
 
         if (sent) {
-          // Catalog card already shows items — just send brief buttons message
-          const discountText = totalDiscount > 0 ? ` (Save ₹${totalDiscount})` : '';
+          // Build item summary with variant names and prices
+          let summaryLines = [];
+          freshCustomer.cart.forEach((item) => {
+            if (item.menuItem) {
+              let name = item.menuItem.name;
+              let price = item.menuItem.offerPrice || item.menuItem.price;
+              // Resolve variant name & price
+              if (item.variantIndex !== null && item.variantIndex !== undefined && item.menuItem.variants?.[item.variantIndex]) {
+                const variant = item.menuItem.variants[item.variantIndex];
+                if (item.quantityIndex !== null && item.quantityIndex !== undefined && variant.quantities?.[item.quantityIndex]) {
+                  const q = variant.quantities[item.quantityIndex];
+                  price = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+                  name = `${variant.label} (${q.quantity} ${q.unit})`;
+                } else {
+                  price = variant.offerPrice && variant.offerPrice < variant.price ? variant.offerPrice : variant.price;
+                  name = variant.label;
+                }
+              }
+              summaryLines.push(`• ${name} × ${item.quantity} — ₹${price * item.quantity}`);
+            }
+          });
+          const itemsSummary = summaryLines.join('\n');
+          const discountText = totalDiscount > 0 ? `\n🎁 Save ₹${totalDiscount}` : '';
 
           await whatsapp.sendButtons(
             phone,
-            `🛒 *${validItems} items* • Total: *₹${total}*${discountText}\n\nReady to order? 👇`,
+            `🛒 *${validItems} items* • Total: *₹${total}*${discountText}\n\n${itemsSummary}\n\nReady to order? 👇`,
             [
               { id: 'review_pay', text: 'Place Order ✅' },
               { id: 'add_more', text: 'Add More' },

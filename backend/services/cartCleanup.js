@@ -41,10 +41,27 @@ const sendExpiryWarnings = async () => {
         expiringItems.forEach((item, index) => {
           const menuItem = item.menuItem;
           if (menuItem) {
-            const itemTotal = menuItem.price * item.quantity;
+            let displayName = menuItem.name;
+            let price = menuItem.price;
+
+            // Resolve variant name and price
+            if (item.variantIndex != null && menuItem.variants && menuItem.variants[item.variantIndex]) {
+              const variant = menuItem.variants[item.variantIndex];
+              displayName = variant.label || displayName;
+              price = variant.price != null ? variant.price : price;
+
+              // Resolve quantity option name and price
+              if (item.quantityIndex != null && variant.quantities && variant.quantities[item.quantityIndex]) {
+                const q = variant.quantities[item.quantityIndex];
+                displayName += ` (${q.quantity} ${q.unit || ''})`.trim();
+                price = q.price != null ? q.price : price;
+              }
+            }
+
+            const itemTotal = price * item.quantity;
             totalAmount += itemTotal;
-            message += `${index + 1}. *${menuItem.name}*\n`;
-            message += `   ${item.quantity} × ₹${menuItem.price} = ₹${itemTotal}\n\n`;
+            message += `${index + 1}. *${displayName}*\n`;
+            message += `   ${item.quantity} × ₹${price} = ₹${itemTotal}\n\n`;
           }
         });
         
@@ -129,10 +146,27 @@ const cleanupExpiredCartItems = async () => {
           itemsToRemove.forEach((item, index) => {
             const menuItem = item.menuItem;
             if (menuItem) {
-              const itemTotal = menuItem.price * item.quantity;
+              let displayName = menuItem.name;
+              let price = menuItem.price;
+
+              // Resolve variant name and price
+              if (item.variantIndex != null && menuItem.variants && menuItem.variants[item.variantIndex]) {
+                const variant = menuItem.variants[item.variantIndex];
+                displayName = variant.label || displayName;
+                price = variant.price != null ? variant.price : price;
+
+                // Resolve quantity option name and price
+                if (item.quantityIndex != null && variant.quantities && variant.quantities[item.quantityIndex]) {
+                  const q = variant.quantities[item.quantityIndex];
+                  displayName += ` (${q.quantity} ${q.unit || ''})`.trim();
+                  price = q.price != null ? q.price : price;
+                }
+              }
+
+              const itemTotal = price * item.quantity;
               totalLostValue += itemTotal;
-              message += `${index + 1}. *${menuItem.name}*\n`;
-              message += `   ${item.quantity} × ₹${menuItem.price} = ₹${itemTotal}\n\n`;
+              message += `${index + 1}. *${displayName}*\n`;
+              message += `   ${item.quantity} × ₹${price} = ₹${itemTotal}\n\n`;
             }
           });
           
