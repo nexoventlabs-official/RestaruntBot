@@ -2348,6 +2348,40 @@ const chatbot = {
         }
       }
       
+      // Check variant labels (variant names like "Chicken Biryani", "Mutton Biryani")
+      if (item.variants && item.variants.length > 0) {
+        for (const variant of item.variants) {
+          if (variant.label) {
+            const variantLabelScore = checkAllVariations(variant.label);
+            if (variantLabelScore > bestScore) {
+              bestScore = variantLabelScore;
+              matchedOn = 'variant';
+            }
+            // Check individual words in variant label
+            const variantWords = variant.label.toLowerCase().split(/\s+/);
+            for (const word of variantWords) {
+              if (word.length >= 3) {
+                const wordScore = checkAllVariations(word);
+                if (wordScore > bestScore) {
+                  bestScore = wordScore;
+                  matchedOn = 'variant';
+                }
+              }
+            }
+          }
+          // Check variant tags
+          if (variant.tags && variant.tags.length > 0) {
+            for (const tag of variant.tags) {
+              const vTagScore = checkAllVariations(tag);
+              if (vTagScore > bestScore) {
+                bestScore = vTagScore;
+                matchedOn = 'variant_tag';
+              }
+            }
+          }
+        }
+      }
+      
       // If best score meets threshold, add to results
       if (bestScore >= threshold) {
         fuzzyMatches.push({
@@ -3115,8 +3149,11 @@ const chatbot = {
     
     // ========== AI-POWERED TAG MATCHING ==========
     // Use Groq AI to match native language or variations to actual tags
-    // Collect all available tags from menu items
-    const allAvailableTags = [...new Set(menuItems.flatMap(item => item.tags || []))];
+    // Collect all available tags from menu items (including variant labels and variant tags)
+    const allAvailableTags = [...new Set(menuItems.flatMap(item => [
+      ...(item.tags || []),
+      ...((item.variants || []).flatMap(v => [v.label, ...(v.tags || [])].filter(Boolean)))
+    ]))];
     
     // If search has non-English characters OR limited matches, use AI to find matching tags
     const hasNonEnglish = /[^\x00-\x7F]/.test(text);
@@ -3164,7 +3201,13 @@ const chatbot = {
         searchableItems = menuItems.filter(item => {
           const inName = this.smartIncludes(ingredient, item.name);
           const inTags = item.tags?.some(tag => this.smartIncludes(ingredient, tag));
-          return inName || inTags;
+          // Also check variant labels and variant tags
+          const inVariants = (item.variants || []).some(v => {
+            if (v.label && this.smartIncludes(ingredient, v.label)) return true;
+            if (v.tags?.some(tag => this.smartIncludes(ingredient, tag))) return true;
+            return false;
+          });
+          return inName || inTags || inVariants;
         });
         foodTypeLabel = `🍗 ${ingredient.charAt(0).toUpperCase() + ingredient.slice(1)}`;
         logger.info(`FILTERED BY INGREDIENT "${ingredient}": ${searchableItems.length} items out of ${menuItems.length}`);
@@ -3199,6 +3242,7 @@ const chatbot = {
         const termWords = searchLower.split(/\s+/).filter(w => w.length >= 2);
         
         // Find ALL items with exact name match (not just first one) - use searchableItems (filtered by food type)
+        // Also checks variant labels for matches
         const exactMatches = searchableItems.filter(item => {
           const nameLower = item.name.toLowerCase();
           const nameNorm = normalizeForMatch(item.name);
@@ -3206,6 +3250,18 @@ const chatbot = {
           if (nameLower === searchLower || nameNorm === searchNorm) return true;
           // Match words in any order (e.g., "idli sambar" matches "sambar idli")
           if (termWords.length > 1 && matchesInAnyOrder(termWords, item.name)) return true;
+          // Check variant labels for exact match
+          if (item.variants && item.variants.length > 0) {
+            const variantMatch = item.variants.some(v => {
+              if (!v.label) return false;
+              const vLower = v.label.toLowerCase();
+              const vNorm = normalizeForMatch(v.label);
+              if (vLower === searchLower || vNorm === searchNorm) return true;
+              if (termWords.length > 1 && matchesInAnyOrder(termWords, v.label)) return true;
+              return false;
+            });
+            if (variantMatch) return true;
+          }
           return false;
         });
         
@@ -3251,8 +3307,21 @@ const chatbot = {
           if (this.smartIncludes(kwLower, cat)) return true;
           return false;
         });
+        if (categoryMatch) return true;
         
-        return categoryMatch;
+        // Check variant labels and variant tags
+        if (item.variants && item.variants.length > 0) {
+          const variantMatch = item.variants.some(v => {
+            // Check variant label (name)
+            if (v.label && (v.label.toLowerCase().trim() === kwLower || this.smartIncludes(kwLower, v.label))) return true;
+            // Check variant tags
+            if (v.tags?.some(tag => tag.toLowerCase().trim() === kwLower || this.smartIncludes(kwLower, tag))) return true;
+            return false;
+          });
+          if (variantMatch) return true;
+        }
+        
+        return false;
       };
       
       // First try: Find items where ALL keywords match tags or category exactly - use searchableItems (filtered by food type)
@@ -3376,8 +3445,19 @@ const chatbot = {
         // Check category names
         const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
         const categoryMatch = itemCategories.some(cat => strictMatch(cat, term));
+        if (categoryMatch) return true;
         
-        return categoryMatch;
+        // Check variant labels and variant tags
+        if (item.variants && item.variants.length > 0) {
+          const variantMatch = item.variants.some(v => {
+            if (v.label && strictMatch(v.label, term)) return true;
+            if (v.tags?.some(tag => strictMatch(tag, term))) return true;
+            return false;
+          });
+          if (variantMatch) return true;
+        }
+        
+        return false;
       });
     };
     
@@ -3442,8 +3522,19 @@ const chatbot = {
           if (this.smartIncludes(kwLower, cat)) return true;
           return false;
         });
+        if (categoryMatch) return true;
         
-        return categoryMatch;
+        // Check VARIANT labels and variant tags
+        if (item.variants && item.variants.length > 0) {
+          const variantMatch = item.variants.some(v => {
+            if (v.label && (v.label.toLowerCase().trim() === kwLower || this.smartIncludes(kwLower, v.label))) return true;
+            if (v.tags?.some(tag => tag.toLowerCase().trim() === kwLower || this.smartIncludes(kwLower, tag))) return true;
+            return false;
+          });
+          if (variantMatch) return true;
+        }
+        
+        return false;
       };
       
       // PRIORITY 1: Items where ALL primary search keywords match (name, tags, or category)
@@ -3545,7 +3636,21 @@ const chatbot = {
         return strictMatch(item.name, term);
       });
       
-      return [...tagMatches, ...categoryMatches, ...nameMatches];
+      const nameMatchIds = new Set(nameMatches.map(i => i._id.toString()));
+      
+      // Then check variant labels and variant tags using strict matching
+      const variantMatches = items.filter(item => {
+        const id = item._id.toString();
+        if (tagMatchIds.has(id) || catMatchIds.has(id) || nameMatchIds.has(id)) return false;
+        if (!item.variants || item.variants.length === 0) return false;
+        return item.variants.some(v => {
+          if (v.label && strictMatch(v.label, term)) return true;
+          if (v.tags?.some(tag => strictMatch(tag, term))) return true;
+          return false;
+        });
+      });
+      
+      return [...tagMatches, ...categoryMatches, ...nameMatches, ...variantMatches];
     };
     
     // Helper to search by multiple terms/keywords and combine results
@@ -3598,6 +3703,39 @@ const chatbot = {
               itemMatches.set(id, { item, score: 0 });
             }
             itemMatches.get(id).score += 20; // Smart tag match = 20 points
+          }
+        }
+        
+        // Check variant labels for exact match (high priority - same as name)
+        for (const item of items) {
+          if (item.variants?.some(v => v.label && v.label.toLowerCase() === termLower)) {
+            const id = item._id.toString();
+            if (!itemMatches.has(id)) {
+              itemMatches.set(id, { item, score: 0 });
+            }
+            itemMatches.get(id).score += 90; // Exact variant label match = 90 points
+          }
+        }
+        
+        // Check variant labels for smart boundary match
+        for (const item of items) {
+          if (item.variants?.some(v => v.label && this.smartIncludes(termLower, v.label))) {
+            const id = item._id.toString();
+            if (!itemMatches.has(id)) {
+              itemMatches.set(id, { item, score: 0 });
+            }
+            itemMatches.get(id).score += 25; // Smart variant label match = 25 points
+          }
+        }
+        
+        // Check variant tags for exact/smart match
+        for (const item of items) {
+          if (item.variants?.some(v => v.tags?.some(tag => tag.toLowerCase() === termLower || this.smartIncludes(termLower, tag)))) {
+            const id = item._id.toString();
+            if (!itemMatches.has(id)) {
+              itemMatches.set(id, { item, score: 0 });
+            }
+            itemMatches.get(id).score += 20; // Variant tag match = 20 points
           }
         }
       }
@@ -6209,6 +6347,13 @@ const chatbot = {
     msg += `💰 *Price:* ${formatPriceWithActiveOffers(item, activeOffers)} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
     msg += `⏱️ *Prep Time:* ${item.preparationTime || 15} mins\n`;
     if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
+    // Show variant names if item has variants
+    if (item.variants && item.variants.length > 0) {
+      const variantLabels = item.variants.filter(v => v.label && v.available !== false).map(v => v.label);
+      if (variantLabels.length > 0) {
+        msg += `🔖 *Variants:* ${variantLabels.join(', ')}\n`;
+      }
+    }
     msg += formatOfferTypes(item);
     msg += `\n\n📝 ${item.description || 'Delicious dish prepared fresh!'}`;
     

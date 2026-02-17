@@ -255,7 +255,11 @@ export const useMenuStore = create(
         const query = state.searchQuery.toLowerCase();
         filtered = filtered.filter(item =>
           item.name.toLowerCase().includes(query) ||
-          item.description?.toLowerCase().includes(query)
+          item.description?.toLowerCase().includes(query) ||
+          (item.variants || []).some(v => 
+            (v.label || '').toLowerCase().includes(query) ||
+            (v.tags || []).some(tag => tag.toLowerCase().includes(query))
+          )
         );
       }
       

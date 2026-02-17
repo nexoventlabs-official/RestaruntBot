@@ -217,9 +217,12 @@ export default function UserLayout() {
         : (item.category || '').toLowerCase();
       const itemTags = (item.tags || []).join(' ').toLowerCase();
       const itemFoodType = (item.foodType || '').toLowerCase();
+      // Include variant labels and variant tags in searchable text
+      const variantLabels = (item.variants || []).map(v => (v.label || '').toLowerCase()).join(' ');
+      const variantTags = (item.variants || []).flatMap(v => v.tags || []).join(' ').toLowerCase();
       
       // Create searchable text with and without spaces
-      const searchableText = `${itemName} ${itemDescription} ${itemCategories} ${itemTags} ${itemFoodType}`;
+      const searchableText = `${itemName} ${itemDescription} ${itemCategories} ${itemTags} ${itemFoodType} ${variantLabels} ${variantTags}`;
       const searchableTextNoSpaces = searchableText.replace(/\s+/g, '');
       const searchTermNoSpaces = searchTerm.replace(/\s+/g, '');
       
@@ -510,7 +513,24 @@ export default function UserLayout() {
                   No items found for "{searchQuery}"
                 </div>
               )}
-              {searchResults.map(item => (
+              {searchResults.map(item => {
+                // Find matching variant labels for the current search query
+                const matchingVariants = searchQuery && item.variants?.length > 0
+                  ? item.variants.filter(v => {
+                      if (!v.label) return false;
+                      const qLower = searchQuery.toLowerCase();
+                      const qWords = qLower.split(/\s+/).filter(w => w.length > 0);
+                      const vLabel = v.label.toLowerCase();
+                      const vTags = (v.tags || []).join(' ').toLowerCase();
+                      const vText = `${vLabel} ${vTags}`;
+                      // Check if variant label/tags match the search query
+                      if (vText.includes(qLower)) return true;
+                      if (qWords.every(w => vText.includes(w))) return true;
+                      return false;
+                    }).map(v => v.label)
+                  : [];
+                
+                return (
                 <button
                   key={item._id}
                   onClick={() => openItemDetail(item)}
@@ -526,6 +546,15 @@ export default function UserLayout() {
                   <div className="flex-1 text-left">
                     <h4 className="font-semibold text-gray-900">{item.name}</h4>
                     <p className="text-sm text-gray-500 line-clamp-1">{item.description}</p>
+                    {matchingVariants.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {matchingVariants.map((vLabel, idx) => (
+                          <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                            🔖 {vLabel}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-orange-500 font-bold">₹{item.price}</span>
                       {item.avgRating > 0 && (
@@ -537,7 +566,8 @@ export default function UserLayout() {
                     </div>
                   </div>
                 </button>
-              ))}
+                );
+              })}
               {!searchQuery && (
                 <div className="p-8 text-center text-gray-400">
                   <span className="text-4xl block mb-2">🍔</span>

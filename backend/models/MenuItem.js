@@ -63,7 +63,7 @@ menuItemSchema.pre('save', function(next) {
 // Indexes for performance
 menuItemSchema.index({ category: 1, available: 1 });
 menuItemSchema.index({ available: 1, isPaused: 1 });
-menuItemSchema.index({ name: 'text', tags: 'text' });
+menuItemSchema.index({ name: 'text', tags: 'text', 'variants.label': 'text', 'variants.tags': 'text' });
 menuItemSchema.index({ foodType: 1 });
 menuItemSchema.index({ createdAt: -1 });
 
