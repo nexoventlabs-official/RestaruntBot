@@ -150,11 +150,19 @@ router.post('/', authMiddleware, menuUpload, async (req, res) => {
       let parsedVariants = typeof variants === 'string' ? JSON.parse(variants) : variants;
       if (Array.isArray(parsedVariants) && parsedVariants.length > 0) {
         const variantImages = req.files?.variantImages || [];
+        // Map uploaded files to their correct variant indices
+        const variantImageIndices = req.body.variantImageIndices
+          ? JSON.parse(req.body.variantImageIndices)
+          : variantImages.map((_, i) => i); // fallback: sequential
+        const imageFileMap = {};
+        variantImageIndices.forEach((variantIdx, fileIdx) => {
+          if (variantImages[fileIdx]) imageFileMap[variantIdx] = variantImages[fileIdx];
+        });
         itemData.variants = await Promise.all(parsedVariants.map(async (v, idx) => {
           let variantImage = v.image || null;
           // Check if there's an uploaded file for this variant index
-          if (variantImages[idx]) {
-            variantImage = await cloudinaryService.uploadFromBuffer(variantImages[idx].buffer, 'restaurant-bot/menu-variants');
+          if (imageFileMap[idx]) {
+            variantImage = await cloudinaryService.uploadFromBuffer(imageFileMap[idx].buffer, 'restaurant-bot/menu-variants');
           }
           const variantData = {
             label: v.label,
@@ -346,10 +354,19 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
           logger.info('Meta variant cleanup skipped', { error: err.message });
         });
 
+        // Map uploaded files to their correct variant indices
+        const variantImageIndices = req.body.variantImageIndices
+          ? JSON.parse(req.body.variantImageIndices)
+          : variantImages.map((_, i) => i); // fallback: sequential
+        const imageFileMap = {};
+        variantImageIndices.forEach((variantIdx, fileIdx) => {
+          if (variantImages[fileIdx]) imageFileMap[variantIdx] = variantImages[fileIdx];
+        });
+
         update.variants = await Promise.all(parsedVariants.map(async (v, idx) => {
           let variantImage = v.image || null;
           // Check if there's a newly uploaded file for this variant index
-          if (variantImages[idx]) {
+          if (imageFileMap[idx]) {
             // Delete old variant image from Cloudinary
             const oldImage = existingVariants[idx]?.image;
             if (oldImage && oldImage.includes('cloudinary.com')) {
@@ -358,7 +375,7 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
                 if (pid) await cloudinaryService.deleteImage(pid);
               } catch (e) { /* ignore */ }
             }
-            variantImage = await cloudinaryService.uploadFromBuffer(variantImages[idx].buffer, 'restaurant-bot/menu-variants');
+            variantImage = await cloudinaryService.uploadFromBuffer(imageFileMap[idx].buffer, 'restaurant-bot/menu-variants');
           }
           const variantData = {
             label: v.label,

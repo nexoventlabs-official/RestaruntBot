@@ -1,13 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, Image, Alert, ActivityIndicator, Switch, Modal, FlatList,
-  Animated, Platform, KeyboardAvoidingView, StatusBar
+  Animated, Platform, KeyboardAvoidingView, StatusBar, LayoutAnimation, UIManager, Dimensions
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import api from '../../config/api';
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+let _variantIdCounter = Date.now();
 
 // Zomato Theme Colors
 const ZOMATO_RED = '#E23744';
@@ -45,9 +54,11 @@ export default function MenuItemFormScreen({ route, navigation }) {
   const [tagsAiLoading, setTagsAiLoading] = useState(false);
   
   // Variants state - enhanced with description, foodType, tags, quantities
+  // Each variant gets a stable _uid to prevent re-ordering on re-render
   const [variants, setVariants] = useState(
-    existingItem?.variants?.map(v => ({ 
+    existingItem?.variants?.map((v, i) => ({ 
       ...v, 
+      _uid: `existing_${v._id || i}_${Date.now()}`,
       price: v.price?.toString() || '', 
       quantity: v.quantity?.toString() || '1', 
       unit: v.unit || 'piece', 
@@ -60,7 +71,8 @@ export default function MenuItemFormScreen({ route, navigation }) {
         price: q.price?.toString() || '', 
         offerPrice: q.offerPrice?.toString() || '' 
       })) || [],
-      newImageFile: null 
+      newImageFile: null,
+      _collapsed: false
     })) || []
   );
   
@@ -177,21 +189,33 @@ export default function MenuItemFormScreen({ route, navigation }) {
 
   // ── Variant helpers ──
   const addVariant = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    _variantIdCounter++;
     setVariants([...variants, { 
+      _uid: `new_${_variantIdCounter}`,
       label: '', variantType: 'size', price: '', quantity: '1', unit: 'piece',
       image: null, newImageFile: null, available: true,
       description: '', foodType: 'veg', tags: '',
-      quantities: []
+      quantities: [],
+      _collapsed: false
     }]);
   };
 
   const removeVariant = (index) => {
-    Alert.alert('Remove Variant', 'Are you sure?', [
+    Alert.alert('Remove Variant', `Remove "${variants[index]?.label || `Item ${index + 1}`}"?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: () => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setVariants(variants.filter((_, i) => i !== index));
       }},
     ]);
+  };
+
+  const toggleVariantCollapse = (index) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    const updated = [...variants];
+    updated[index] = { ...updated[index], _collapsed: !updated[index]._collapsed };
+    setVariants(updated);
   };
 
   const updateVariant = (index, field, value) => {
@@ -410,15 +434,19 @@ export default function MenuItemFormScreen({ route, navigation }) {
         }));
         formData.append('variants', JSON.stringify(variantsPayload));
 
-        // Append new variant image files
-        variants.forEach((v) => {
+        // Append new variant image files with index tracking
+        const newImageIndices = [];
+        variants.forEach((v, index) => {
           if (v.newImageFile) {
+            newImageIndices.push(index);
             const fname = v.newImageFile.uri.split('/').pop();
             const ext = /\.(\w+)$/.exec(fname);
             const mimeType = ext ? `image/${ext[1]}` : 'image/jpeg';
             formData.append('variantImages', { uri: v.newImageFile.uri, name: fname, type: mimeType });
           }
         });
+        // Tell the backend which variant index each uploaded file belongs to
+        formData.append('variantImageIndices', JSON.stringify(newImageIndices));
       } else {
         // Send empty array to clear variants if all removed
         formData.append('variants', JSON.stringify([]));
@@ -544,266 +572,379 @@ export default function MenuItemFormScreen({ route, navigation }) {
                     <View style={styles.variantsIconContainer}>
                       <Ionicons name="layers-outline" size={20} color={ZOMATO_RED} />
                     </View>
-                    <View>
+                    <View style={{ flex: 1 }}>
                       <Text style={styles.variantsSectionTitle}>Item Variants</Text>
-                      <Text style={styles.variantsSectionHint}>Each variant = an item with its own image, name, price & sizes</Text>
+                      <Text style={styles.variantsSectionHint}>Add items with their own image, name, price & sizes</Text>
                     </View>
                   </View>
-                  <TouchableOpacity style={styles.addVariantButton} onPress={addVariant}>
+                  <TouchableOpacity style={styles.addVariantButton} onPress={addVariant} activeOpacity={0.7}>
                     <Ionicons name="add" size={18} color="#fff" />
                     <Text style={styles.addVariantButtonText}>Add</Text>
                   </TouchableOpacity>
                 </View>
 
-                {variants.length === 0 && (
-                  <View style={styles.noVariantsContainer}>
-                    <Ionicons name="cube-outline" size={28} color="#D1D5DB" />
-                    <Text style={styles.noVariantsText}>No variants added</Text>
-                    <Text style={styles.noVariantsHint}>Add item variants (e.g., Chicken Biryani, Mutton Biryani)</Text>
+                {/* Variant count badge */}
+                {variants.length > 0 && (
+                  <View style={styles.variantCountRow}>
+                    <View style={styles.variantCountBadge}>
+                      <Text style={styles.variantCountText}>{variants.length} variant{variants.length !== 1 ? 's' : ''}</Text>
+                    </View>
+                    {variants.length > 1 && (
+                      <TouchableOpacity 
+                        style={styles.collapseAllButton}
+                        onPress={() => {
+                          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                          const allCollapsed = variants.every(v => v._collapsed);
+                          setVariants(variants.map(v => ({ ...v, _collapsed: !allCollapsed })));
+                        }}
+                      >
+                        <Ionicons name={variants.every(v => v._collapsed) ? "chevron-down" : "chevron-up"} size={14} color="#6B7280" />
+                        <Text style={styles.collapseAllText}>
+                          {variants.every(v => v._collapsed) ? 'Expand All' : 'Collapse All'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 )}
 
+                {variants.length === 0 && (
+                  <TouchableOpacity style={styles.noVariantsContainer} onPress={addVariant} activeOpacity={0.7}>
+                    <View style={styles.noVariantsIconCircle}>
+                      <Ionicons name="add-circle-outline" size={32} color={ZOMATO_RED} />
+                    </View>
+                    <Text style={styles.noVariantsText}>No variants added yet</Text>
+                    <Text style={styles.noVariantsHint}>Tap to add item variants (e.g., Chicken Biryani, Mutton Biryani)</Text>
+                  </TouchableOpacity>
+                )}
+
                 {variants.map((variant, index) => (
-                  <View key={index} style={styles.variantCard}>
-                    {/* Variant Header */}
-                    <View style={styles.variantCardHeader}>
-                      <Text style={styles.variantCardNumber}>Item {index + 1}</Text>
-                      <TouchableOpacity onPress={() => removeVariant(index)}>
-                        <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Variant Image */}
-                    <View style={styles.variantImageRow}>
-                      <TouchableOpacity style={styles.variantImagePicker} onPress={() => pickVariantImage(index)}>
-                        {variant.image ? (
-                          <Image source={{ uri: variant.image }} style={styles.variantImagePreview} />
-                        ) : (
-                          <View style={styles.variantImagePlaceholder}>
-                            <Ionicons name="camera-outline" size={20} color="#9CA3AF" />
+                  <View key={variant._uid} style={[
+                    styles.variantCard,
+                    !variant.available && styles.variantCardDisabled,
+                  ]}>
+                    {/* Variant Header - always visible */}
+                    <TouchableOpacity 
+                      style={styles.variantCardHeader}
+                      onPress={() => toggleVariantCollapse(index)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.variantHeaderLeft}>
+                        <View style={[styles.variantNumberBadge, !variant.available && { backgroundColor: '#F3F4F6' }]}>
+                          <Text style={[styles.variantNumberText, !variant.available && { color: '#9CA3AF' }]}>{index + 1}</Text>
+                        </View>
+                        <View style={styles.variantHeaderInfo}>
+                          <Text style={styles.variantCardTitle} numberOfLines={1}>
+                            {variant.label || `Item ${index + 1}`}
+                          </Text>
+                          <View style={styles.variantHeaderMeta}>
+                            {variant.image && <Ionicons name="image" size={11} color="#22C55E" />}
+                            {variant.price ? (
+                              <Text style={styles.variantHeaderPrice}>₹{variant.price}</Text>
+                            ) : variant.quantities?.length > 0 ? (
+                              <Text style={styles.variantHeaderPrice}>
+                                {variant.quantities.length} size{variant.quantities.length !== 1 ? 's' : ''}
+                              </Text>
+                            ) : null}
+                            <View style={[styles.variantFoodDot, { 
+                              backgroundColor: variant.foodType === 'veg' ? '#22C55E' : variant.foodType === 'egg' ? '#F59E0B' : '#EF4444' 
+                            }]} />
+                            {!variant.available && (
+                              <View style={styles.soldOutMini}>
+                                <Text style={styles.soldOutMiniText}>Sold Out</Text>
+                              </View>
+                            )}
                           </View>
-                        )}
-                      </TouchableOpacity>
-                      {variant.image && (
-                        <TouchableOpacity style={styles.variantImageRemove} onPress={() => removeVariantImage(index)}>
-                          <Ionicons name="close-circle" size={20} color="#EF4444" />
-                        </TouchableOpacity>
-                      )}
-                      <View style={styles.variantImageHintContainer}>
-                        <Text style={styles.variantImageHintText}>Tap to set item image</Text>
-                      </View>
-                    </View>
-
-                    {/* Item Name (Label) */}
-                    <View style={styles.variantField}>
-                      <Text style={styles.variantFieldLabel}>Item Name <Text style={styles.required}>*</Text></Text>
-                      <TextInput
-                        style={styles.variantInput}
-                        value={variant.label}
-                        onChangeText={(val) => updateVariant(index, 'label', val)}
-                        placeholder="e.g., Chicken Biryani"
-                        placeholderTextColor="#9CA3AF"
-                      />
-                    </View>
-
-                    {/* Description with AI */}
-                    <View style={styles.variantField}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <Text style={[styles.variantFieldLabel, { marginBottom: 0 }]}>Description</Text>
-                        <TouchableOpacity 
-                          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3E8FF', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 }}
-                          onPress={() => generateVariantDescription(index)}
-                          disabled={variant._aiDescLoading}
-                        >
-                          {variant._aiDescLoading ? (
-                            <ActivityIndicator size="small" color="#8B5CF6" />
-                          ) : (
-                            <>
-                              <Ionicons name="sparkles" size={12} color="#8B5CF6" />
-                              <Text style={{ color: '#8B5CF6', fontSize: 11, fontWeight: '600', marginLeft: 3 }}>AI</Text>
-                            </>
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                      <TextInput
-                        style={[styles.variantInput, { height: 60, textAlignVertical: 'top' }]}
-                        value={variant.description || ''}
-                        onChangeText={(val) => updateVariant(index, 'description', val)}
-                        placeholder="Describe this item..."
-                        placeholderTextColor="#9CA3AF"
-                        multiline
-                        numberOfLines={2}
-                      />
-                    </View>
-
-                    {/* Food Type */}
-                    <View style={styles.variantField}>
-                      <Text style={styles.variantFieldLabel}>Food Type</Text>
-                      <View style={styles.foodTypeContainer}>
-                        {FOOD_TYPES.map((type) => (
-                          <TouchableOpacity
-                            key={type.value}
-                            style={[styles.foodTypeButton, { flex: 1, paddingVertical: 6 }, variant.foodType === type.value && { backgroundColor: type.color, borderColor: type.color }]}
-                            onPress={() => updateVariant(index, 'foodType', type.value)}
-                          >
-                            <View style={[styles.foodTypeIcon, { borderColor: variant.foodType === type.value ? '#fff' : type.color }]}>
-                              <View style={[styles.foodTypeDot, { backgroundColor: variant.foodType === type.value ? '#fff' : type.color }]} />
-                            </View>
-                            <Text style={[styles.foodTypeText, { fontSize: 11 }, variant.foodType === type.value && { color: '#fff' }]}>{type.label}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-
-                    {/* Tags with AI */}
-                    <View style={styles.variantField}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <Text style={[styles.variantFieldLabel, { marginBottom: 0 }]}>Tags</Text>
-                        <TouchableOpacity 
-                          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: ZOMATO_RED, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 }}
-                          onPress={() => generateVariantTags(index)}
-                          disabled={variant._aiTagsLoading}
-                        >
-                          {variant._aiTagsLoading ? (
-                            <ActivityIndicator size="small" color="#fff" />
-                          ) : (
-                            <>
-                              <Ionicons name="sparkles" size={12} color="#fff" />
-                              <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600', marginLeft: 3 }}>AI</Text>
-                            </>
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                      <TextInput
-                        style={styles.variantInput}
-                        value={variant.tags || ''}
-                        onChangeText={(val) => updateVariant(index, 'tags', val)}
-                        placeholder="spicy, popular, bestseller"
-                        placeholderTextColor="#9CA3AF"
-                      />
-                    </View>
-
-                    {/* Price (when no quantity options) */}
-                    {(!variant.quantities || variant.quantities.length === 0) && (
-                      <View style={styles.variantField}>
-                        <Text style={styles.variantFieldLabel}>Price <Text style={styles.required}>*</Text></Text>
-                        <View style={styles.variantPriceInput}>
-                          <Text style={styles.variantCurrency}>₹</Text>
-                          <TextInput
-                            style={styles.variantPriceTextInput}
-                            value={variant.price?.toString() || ''}
-                            onChangeText={(val) => updateVariant(index, 'price', val)}
-                            placeholder="0"
-                            placeholderTextColor="#9CA3AF"
-                            keyboardType="numeric"
-                          />
                         </View>
                       </View>
-                    )}
+                      <View style={styles.variantHeaderRight}>
+                        <TouchableOpacity 
+                          onPress={() => removeVariant(index)}
+                          style={styles.variantDeleteBtn}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                          <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                        </TouchableOpacity>
+                        <Ionicons 
+                          name={variant._collapsed ? "chevron-down" : "chevron-up"} 
+                          size={20} color="#9CA3AF" 
+                        />
+                      </View>
+                    </TouchableOpacity>
 
-                    {/* Quantity & Unit (when no quantity options) */}
-                    {(!variant.quantities || variant.quantities.length === 0) && (
-                      <View style={styles.variantPriceRow}>
-                        <View style={[styles.variantField, { flex: 1 }]}>
-                          <Text style={styles.variantFieldLabel}>Quantity</Text>
+                    {/* Collapsible Content */}
+                    {!variant._collapsed && (
+                      <View style={styles.variantCardBody}>
+                        {/* Variant Image */}
+                        <View style={styles.variantImageRow}>
+                          <TouchableOpacity style={styles.variantImagePicker} onPress={() => pickVariantImage(index)} activeOpacity={0.7}>
+                            {variant.image ? (
+                              <Image source={{ uri: variant.image }} style={styles.variantImagePreview} />
+                            ) : (
+                              <View style={styles.variantImagePlaceholder}>
+                                <Ionicons name="camera-outline" size={22} color={ZOMATO_RED} />
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                          {variant.image ? (
+                            <View style={styles.variantImageActions}>
+                              <TouchableOpacity style={styles.variantImageChangeBtn} onPress={() => pickVariantImage(index)}>
+                                <Ionicons name="swap-horizontal" size={14} color={ZOMATO_RED} />
+                                <Text style={styles.variantImageChangeBtnText}>Change</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity style={styles.variantImageRemoveBtn} onPress={() => removeVariantImage(index)}>
+                                <Ionicons name="close" size={14} color="#EF4444" />
+                                <Text style={styles.variantImageRemoveBtnText}>Remove</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ) : (
+                            <View style={styles.variantImageHintContainer}>
+                              <Text style={styles.variantImageHintText}>Tap to add image</Text>
+                              <Text style={styles.variantImageSubHint}>Square image recommended</Text>
+                            </View>
+                          )}
+                        </View>
+
+                        {/* Divider */}
+                        <View style={styles.variantDivider} />
+
+                        {/* Item Name (Label) */}
+                        <View style={styles.variantField}>
+                          <Text style={styles.variantFieldLabel}>Item Name <Text style={styles.required}>*</Text></Text>
                           <TextInput
                             style={styles.variantInput}
-                            value={variant.quantity?.toString() || '1'}
-                            onChangeText={(val) => updateVariant(index, 'quantity', val)}
-                            placeholder="1"
-                            placeholderTextColor="#9CA3AF"
-                            keyboardType="numeric"
+                            value={variant.label}
+                            onChangeText={(val) => updateVariant(index, 'label', val)}
+                            placeholder="e.g., Chicken Biryani"
+                            placeholderTextColor="#C4C4C4"
                           />
                         </View>
-                        <View style={[styles.variantField, { flex: 1 }]}>
-                          <Text style={styles.variantFieldLabel}>Unit</Text>
-                          <TouchableOpacity style={styles.pickerButton} onPress={() => setVariantUnitPickerIndex(index)}>
-                            <Text style={styles.pickerValue}>{variant.unit || 'piece'}</Text>
-                            <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    )}
 
-                    {/* ── Quantity Options (Sizes) ── */}
-                    <View style={[styles.variantField, { marginTop: 8 }]}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                        <Text style={[styles.variantFieldLabel, { marginBottom: 0 }]}>Quantity Options (Sizes)</Text>
-                        <TouchableOpacity 
-                          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: ZOMATO_RED, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 }}
-                          onPress={() => addQuantityOption(index)}
-                        >
-                          <Ionicons name="add" size={14} color="#fff" />
-                          <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600', marginLeft: 2 }}>Add Size</Text>
-                        </TouchableOpacity>
-                      </View>
-                      
-                      {(!variant.quantities || variant.quantities.length === 0) && (
-                        <Text style={{ fontSize: 11, color: '#9CA3AF', fontStyle: 'italic', marginBottom: 4 }}>
-                          No sizes added. Add quantity options like 0.5 kg, 1 kg etc.
-                        </Text>
-                      )}
-
-                      {variant.quantities && variant.quantities.map((q, qIdx) => (
-                        <View key={qIdx} style={{ 
-                          flexDirection: 'row', alignItems: 'center', 
-                          backgroundColor: '#F9FAFB', borderRadius: 8, padding: 8, marginBottom: 6,
-                          borderWidth: 1, borderColor: '#E5E7EB'
-                        }}>
-                          <View style={{ flex: 1, marginRight: 4 }}>
-                            <Text style={{ fontSize: 10, color: '#6B7280', marginBottom: 2 }}>Qty</Text>
-                            <TextInput
-                              style={{ backgroundColor: '#fff', borderRadius: 6, borderWidth: 1, borderColor: '#E5E7EB', paddingHorizontal: 6, paddingVertical: 4, fontSize: 13 }}
-                              value={q.quantity?.toString() || ''}
-                              onChangeText={(val) => updateQuantityOption(index, qIdx, 'quantity', val)}
-                              keyboardType="numeric"
-                              placeholder="1"
-                              placeholderTextColor="#D1D5DB"
-                            />
-                          </View>
-                          <View style={{ flex: 1, marginRight: 4 }}>
-                            <Text style={{ fontSize: 10, color: '#6B7280', marginBottom: 2 }}>Unit</Text>
+                        {/* Description with AI */}
+                        <View style={styles.variantField}>
+                          <View style={styles.variantFieldLabelRow}>
+                            <Text style={styles.variantFieldLabel}>Description</Text>
                             <TouchableOpacity 
-                              style={{ backgroundColor: '#fff', borderRadius: 6, borderWidth: 1, borderColor: '#E5E7EB', paddingHorizontal: 6, paddingVertical: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
-                              onPress={() => setQtyUnitPicker({ variantIndex: index, qtyIndex: qIdx })}
+                              style={styles.aiSmallButton}
+                              onPress={() => generateVariantDescription(index)}
+                              disabled={variant._aiDescLoading}
+                              activeOpacity={0.7}
                             >
-                              <Text style={{ fontSize: 13, color: '#1F2937' }}>{q.unit || 'piece'}</Text>
-                              <Ionicons name="chevron-down" size={14} color="#9CA3AF" />
+                              {variant._aiDescLoading ? (
+                                <ActivityIndicator size="small" color="#8B5CF6" />
+                              ) : (
+                                <>
+                                  <Ionicons name="sparkles" size={12} color="#8B5CF6" />
+                                  <Text style={styles.aiSmallButtonText}>AI Generate</Text>
+                                </>
+                              )}
                             </TouchableOpacity>
                           </View>
-                          <View style={{ flex: 1, marginRight: 4 }}>
-                            <Text style={{ fontSize: 10, color: '#6B7280', marginBottom: 2 }}>Price <Text style={{ color: ZOMATO_RED }}>*</Text></Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 6, borderWidth: 1, borderColor: '#E5E7EB', paddingHorizontal: 4 }}>
-                              <Text style={{ fontSize: 12, color: '#9CA3AF' }}>₹</Text>
+                          <TextInput
+                            style={[styles.variantInput, styles.variantTextArea]}
+                            value={variant.description || ''}
+                            onChangeText={(val) => updateVariant(index, 'description', val)}
+                            placeholder="Describe this item..."
+                            placeholderTextColor="#C4C4C4"
+                            multiline
+                            numberOfLines={2}
+                          />
+                        </View>
+
+                        {/* Food Type */}
+                        <View style={styles.variantField}>
+                          <Text style={styles.variantFieldLabel}>Food Type</Text>
+                          <View style={styles.variantFoodTypeRow}>
+                            {FOOD_TYPES.map((type) => {
+                              const isActive = variant.foodType === type.value;
+                              return (
+                                <TouchableOpacity
+                                  key={type.value}
+                                  style={[styles.variantFoodTypeBtn, isActive && { backgroundColor: type.color, borderColor: type.color }]}
+                                  onPress={() => updateVariant(index, 'foodType', type.value)}
+                                  activeOpacity={0.7}
+                                >
+                                  <View style={[styles.foodTypeIcon, { borderColor: isActive ? '#fff' : type.color }]}>
+                                    <View style={[styles.foodTypeDot, { backgroundColor: isActive ? '#fff' : type.color }]} />
+                                  </View>
+                                  <Text style={[styles.variantFoodTypeText, isActive && { color: '#fff' }]}>{type.label}</Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        </View>
+
+                        {/* Tags with AI */}
+                        <View style={styles.variantField}>
+                          <View style={styles.variantFieldLabelRow}>
+                            <Text style={styles.variantFieldLabel}>Tags</Text>
+                            <TouchableOpacity 
+                              style={[styles.aiSmallButton, { backgroundColor: '#FEF2F2' }]}
+                              onPress={() => generateVariantTags(index)}
+                              disabled={variant._aiTagsLoading}
+                              activeOpacity={0.7}
+                            >
+                              {variant._aiTagsLoading ? (
+                                <ActivityIndicator size="small" color={ZOMATO_RED} />
+                              ) : (
+                                <>
+                                  <Ionicons name="sparkles" size={12} color={ZOMATO_RED} />
+                                  <Text style={[styles.aiSmallButtonText, { color: ZOMATO_RED }]}>AI Generate</Text>
+                                </>
+                              )}
+                            </TouchableOpacity>
+                          </View>
+                          <TextInput
+                            style={styles.variantInput}
+                            value={variant.tags || ''}
+                            onChangeText={(val) => updateVariant(index, 'tags', val)}
+                            placeholder="spicy, popular, bestseller"
+                            placeholderTextColor="#C4C4C4"
+                          />
+                        </View>
+
+                        {/* Divider */}
+                        <View style={styles.variantDivider} />
+
+                        {/* Price Section Header */}
+                        <View style={styles.variantPriceSectionHeader}>
+                          <Ionicons name="pricetag-outline" size={14} color="#6B7280" />
+                          <Text style={styles.variantPriceSectionTitle}>Pricing</Text>
+                        </View>
+
+                        {/* Price (when no quantity options) */}
+                        {(!variant.quantities || variant.quantities.length === 0) && (
+                          <View style={styles.variantField}>
+                            <Text style={styles.variantFieldLabel}>Price <Text style={styles.required}>*</Text></Text>
+                            <View style={styles.variantPriceInput}>
+                              <Text style={styles.variantCurrency}>₹</Text>
                               <TextInput
-                                style={{ flex: 1, paddingHorizontal: 4, paddingVertical: 4, fontSize: 13 }}
-                                value={q.price?.toString() || ''}
-                                onChangeText={(val) => updateQuantityOption(index, qIdx, 'price', val)}
-                                keyboardType="numeric"
+                                style={styles.variantPriceTextInput}
+                                value={variant.price?.toString() || ''}
+                                onChangeText={(val) => updateVariant(index, 'price', val)}
                                 placeholder="0"
-                                placeholderTextColor="#D1D5DB"
+                                placeholderTextColor="#C4C4C4"
+                                keyboardType="numeric"
                               />
                             </View>
                           </View>
-                          <TouchableOpacity onPress={() => removeQuantityOption(index, qIdx)} style={{ padding: 4 }}>
-                            <Ionicons name="close-circle" size={20} color="#EF4444" />
-                          </TouchableOpacity>
-                        </View>
-                      ))}
-                    </View>
+                        )}
 
-                    {/* Available Toggle */}
-                    <View style={styles.variantAvailableRow}>
-                      <Text style={styles.variantFieldLabel}>Available</Text>
-                      <Switch
-                        value={variant.available !== false}
-                        onValueChange={(val) => updateVariant(index, 'available', val)}
-                        trackColor={{ false: '#E5E7EB', true: '#BBF7D0' }}
-                        thumbColor={variant.available !== false ? '#22C55E' : '#9CA3AF'}
-                      />
-                    </View>
+                        {/* Quantity & Unit (when no quantity options) */}
+                        {(!variant.quantities || variant.quantities.length === 0) && (
+                          <View style={styles.variantPriceRow}>
+                            <View style={[styles.variantField, { flex: 1 }]}>
+                              <Text style={styles.variantFieldLabel}>Quantity</Text>
+                              <TextInput
+                                style={styles.variantInput}
+                                value={variant.quantity?.toString() || '1'}
+                                onChangeText={(val) => updateVariant(index, 'quantity', val)}
+                                placeholder="1"
+                                placeholderTextColor="#C4C4C4"
+                                keyboardType="numeric"
+                              />
+                            </View>
+                            <View style={[styles.variantField, { flex: 1 }]}>
+                              <Text style={styles.variantFieldLabel}>Unit</Text>
+                              <TouchableOpacity style={styles.pickerButton} onPress={() => setVariantUnitPickerIndex(index)}>
+                                <Text style={styles.pickerValue}>{variant.unit || 'piece'}</Text>
+                                <Ionicons name="chevron-down" size={18} color="#9CA3AF" />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
+
+                        {/* ── Quantity Options (Sizes) ── */}
+                        <View style={styles.variantField}>
+                          <View style={styles.variantFieldLabelRow}>
+                            <Text style={styles.variantFieldLabel}>Quantity Options (Sizes)</Text>
+                            <TouchableOpacity 
+                              style={styles.addSizeButton}
+                              onPress={() => addQuantityOption(index)}
+                              activeOpacity={0.7}
+                            >
+                              <Ionicons name="add" size={14} color="#fff" />
+                              <Text style={styles.addSizeButtonText}>Add Size</Text>
+                            </TouchableOpacity>
+                          </View>
+                          
+                          {(!variant.quantities || variant.quantities.length === 0) && (
+                            <Text style={styles.noSizesHint}>
+                              No sizes added. Add quantity options like 0.5 kg, 1 kg etc.
+                            </Text>
+                          )}
+
+                          {variant.quantities && variant.quantities.map((q, qIdx) => (
+                            <View key={qIdx} style={styles.qtyOptionRow}>
+                              <View style={styles.qtyOptionField}>
+                                <Text style={styles.qtyOptionLabel}>Qty</Text>
+                                <TextInput
+                                  style={styles.qtyOptionInput}
+                                  value={q.quantity?.toString() || ''}
+                                  onChangeText={(val) => updateQuantityOption(index, qIdx, 'quantity', val)}
+                                  keyboardType="numeric"
+                                  placeholder="1"
+                                  placeholderTextColor="#D1D5DB"
+                                />
+                              </View>
+                              <View style={styles.qtyOptionField}>
+                                <Text style={styles.qtyOptionLabel}>Unit</Text>
+                                <TouchableOpacity 
+                                  style={styles.qtyOptionUnitPicker}
+                                  onPress={() => setQtyUnitPicker({ variantIndex: index, qtyIndex: qIdx })}
+                                >
+                                  <Text style={styles.qtyOptionUnitText}>{q.unit || 'piece'}</Text>
+                                  <Ionicons name="chevron-down" size={12} color="#9CA3AF" />
+                                </TouchableOpacity>
+                              </View>
+                              <View style={styles.qtyOptionField}>
+                                <Text style={styles.qtyOptionLabel}>Price <Text style={{ color: ZOMATO_RED }}>*</Text></Text>
+                                <View style={styles.qtyOptionPriceInput}>
+                                  <Text style={styles.qtyOptionCurrency}>₹</Text>
+                                  <TextInput
+                                    style={styles.qtyOptionPriceTextInput}
+                                    value={q.price?.toString() || ''}
+                                    onChangeText={(val) => updateQuantityOption(index, qIdx, 'price', val)}
+                                    keyboardType="numeric"
+                                    placeholder="0"
+                                    placeholderTextColor="#D1D5DB"
+                                  />
+                                </View>
+                              </View>
+                              <TouchableOpacity onPress={() => removeQuantityOption(index, qIdx)} style={styles.qtyOptionRemove}>
+                                <Ionicons name="close-circle" size={20} color="#EF4444" />
+                              </TouchableOpacity>
+                            </View>
+                          ))}
+                        </View>
+
+                        {/* Divider */}
+                        <View style={styles.variantDivider} />
+
+                        {/* Available Toggle */}
+                        <View style={styles.variantAvailableRow}>
+                          <View style={styles.variantAvailableInfo}>
+                            <Ionicons name="checkmark-circle" size={18} color={variant.available !== false ? '#22C55E' : '#D1D5DB'} />
+                            <Text style={styles.variantFieldLabel}>Available for Order</Text>
+                          </View>
+                          <Switch
+                            value={variant.available !== false}
+                            onValueChange={(val) => updateVariant(index, 'available', val)}
+                            trackColor={{ false: '#E5E7EB', true: '#BBF7D0' }}
+                            thumbColor={variant.available !== false ? '#22C55E' : '#9CA3AF'}
+                          />
+                        </View>
+                      </View>
+                    )}
                   </View>
                 ))}
+
+                {/* Add variant button at bottom when items exist */}
+                {variants.length > 0 && (
+                  <TouchableOpacity style={styles.addVariantBottomButton} onPress={addVariant} activeOpacity={0.7}>
+                    <Ionicons name="add-circle-outline" size={20} color={ZOMATO_RED} />
+                    <Text style={styles.addVariantBottomText}>Add Another Variant</Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
 
@@ -1280,7 +1421,7 @@ const styles = StyleSheet.create({
 
   // ── Variants ──
   variantsSection: {
-    gap: 14,
+    gap: 12,
   },
   variantsSectionHeader: {
     flexDirection: 'row',
@@ -1291,6 +1432,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flex: 1,
   },
   variantsIconContainer: {
     width: 36,
@@ -1301,7 +1443,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   variantsSectionTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1C1C1C',
   },
@@ -1315,47 +1457,163 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     backgroundColor: ZOMATO_RED,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 22,
+    shadowColor: ZOMATO_RED,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
   addVariantButtonText: {
     fontSize: 13,
     fontWeight: '700',
     color: '#fff',
   },
+  variantCountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  variantCountBadge: {
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  variantCountText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: ZOMATO_RED,
+  },
+  collapseAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  collapseAllText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
   noVariantsContainer: {
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: 28,
     backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: '#E8E8E8',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#F3F4F6',
     borderStyle: 'dashed',
   },
+  noVariantsIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
   noVariantsText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#9CA3AF',
-    marginTop: 8,
+    color: '#6B7280',
+    marginTop: 4,
   },
   noVariantsHint: {
     fontSize: 12,
-    color: '#D1D5DB',
-    marginTop: 2,
+    color: '#9CA3AF',
+    marginTop: 4,
+    textAlign: 'center',
+    paddingHorizontal: 32,
   },
   variantCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 16,
     borderWidth: 1.5,
     borderColor: '#E8E8E8',
-    gap: 12,
+    overflow: 'hidden',
+  },
+  variantCardDisabled: {
+    opacity: 0.7,
+    borderColor: '#F3F4F6',
   },
   variantCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: '#FAFAFA',
+  },
+  variantHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  variantNumberBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  variantNumberText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: ZOMATO_RED,
+  },
+  variantHeaderInfo: {
+    flex: 1,
+  },
+  variantCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1C1C1C',
+  },
+  variantHeaderMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+  },
+  variantHeaderPrice: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  variantFoodDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  soldOutMini: {
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  soldOutMiniText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#EF4444',
+  },
+  variantHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  variantDeleteBtn: {
+    padding: 4,
+  },
+  variantCardBody: {
+    padding: 14,
+    gap: 14,
   },
   variantCardNumber: {
     fontSize: 14,
@@ -1365,52 +1623,109 @@ const styles = StyleSheet.create({
   variantImageRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
   variantImagePicker: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
+    width: 64,
+    height: 64,
+    borderRadius: 14,
     overflow: 'hidden',
   },
   variantImagePreview: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
+    width: 64,
+    height: 64,
+    borderRadius: 14,
   },
   variantImagePlaceholder: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
+    width: 64,
+    height: 64,
+    borderRadius: 14,
+    backgroundColor: '#FEF2F2',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#E8E8E8',
+    borderColor: '#FECDD3',
     borderStyle: 'dashed',
   },
-  variantImageRemove: {
-    marginLeft: -16,
-    marginTop: -10,
+  variantImageActions: {
+    gap: 6,
+  },
+  variantImageChangeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+  },
+  variantImageChangeBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: ZOMATO_RED,
+  },
+  variantImageRemoveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+  },
+  variantImageRemoveBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#EF4444',
   },
   variantImageHintContainer: {
     flex: 1,
   },
   variantImageHintText: {
-    fontSize: 12,
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  variantImageSubHint: {
+    fontSize: 11,
     color: '#9CA3AF',
+    marginTop: 2,
+  },
+  variantDivider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginVertical: 2,
   },
   variantField: {
     gap: 6,
   },
+  variantFieldLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   variantFieldLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#696969',
+    color: '#4B5563',
+  },
+  aiSmallButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F3E8FF',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  aiSmallButtonText: {
+    color: '#8B5CF6',
+    fontSize: 11,
+    fontWeight: '600',
   },
   variantInput: {
     backgroundColor: '#F9FAFB',
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 14,
     height: 44,
     borderWidth: 1,
@@ -1419,42 +1734,140 @@ const styles = StyleSheet.create({
     color: '#1C1C1C',
     fontWeight: '500',
   },
-  variantTypeRow: {
-    flexDirection: 'row',
-    gap: 10,
+  variantTextArea: {
+    height: 70,
+    textAlignVertical: 'top',
+    paddingTop: 12,
   },
-  variantTypeChip: {
+  variantFoodTypeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  variantFoodTypeBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: '#F9FAFB',
     borderWidth: 1.5,
     borderColor: '#E8E8E8',
   },
-  variantTypeChipActive: {
-    backgroundColor: ZOMATO_RED,
-    borderColor: ZOMATO_RED,
-  },
-  variantTypeChipText: {
-    fontSize: 13,
+  variantFoodTypeText: {
+    fontSize: 12,
     fontWeight: '600',
     color: '#696969',
   },
-  variantTypeChipTextActive: {
+  variantPriceSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  variantPriceSectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  addSizeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: ZOMATO_RED,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  addSizeButtonText: {
     color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  noSizesHint: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+  },
+  qtyOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    gap: 6,
+  },
+  qtyOptionField: {
+    flex: 1,
+  },
+  qtyOptionLabel: {
+    fontSize: 10,
+    color: '#6B7280',
+    marginBottom: 3,
+    fontWeight: '500',
+  },
+  qtyOptionInput: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    fontSize: 13,
+    color: '#1C1C1C',
+  },
+  qtyOptionUnitPicker: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  qtyOptionUnitText: {
+    fontSize: 13,
+    color: '#1F2937',
+  },
+  qtyOptionPriceInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 6,
+  },
+  qtyOptionCurrency: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '600',
+  },
+  qtyOptionPriceTextInput: {
+    flex: 1,
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+    fontSize: 13,
+    color: '#1C1C1C',
+  },
+  qtyOptionRemove: {
+    padding: 4,
+    marginBottom: 2,
   },
   variantPriceRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   variantPriceInput: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F9FAFB',
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 12,
     height: 44,
     borderWidth: 1,
@@ -1476,7 +1889,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 4,
+  },
+  variantAvailableInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  addVariantBottomButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#FECDD3',
+    borderStyle: 'dashed',
+    backgroundColor: '#FFF5F5',
+  },
+  addVariantBottomText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: ZOMATO_RED,
   },
   
   // Loading Overlay
