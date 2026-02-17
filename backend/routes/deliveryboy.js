@@ -6,7 +6,6 @@ const Order = require('../models/Order');
 const auth = require('../middleware/auth');
 const { authenticateDeliveryBoy } = require('../middleware/authenticate');
 const { authRateLimiter, adminRateLimiter } = require('../middleware/rateLimiter');
-const { generateTokenPair } = require('../services/jwtRefresh');
 const brevoMail = require('../services/brevoMail');
 const cloudinaryService = require('../services/cloudinary');
 const googleSheets = require('../services/googleSheets');
@@ -371,13 +370,27 @@ router.post('/login', async (req, res) => {
     deliveryBoy.isOnline = true;
     await deliveryBoy.save();
     
-    // Generate token pair with refresh token
-    const tokens = generateTokenPair(deliveryBoy._id.toString(), 'delivery');
+    // Generate access token with all required fields for delivery verification
+    const token = jwt.sign(
+      { 
+        id: deliveryBoy._id, 
+        userId: deliveryBoy._id,
+        email: deliveryBoy.email, 
+        role: 'delivery',
+        tokenVersion: deliveryBoy.tokenVersion
+      }, 
+      process.env.JWT_SECRET, 
+      { expiresIn: '7d' }
+    );
+    
+    // Also generate a refresh token for token rotation
+    const { generateRefreshToken } = require('../services/jwtRefresh');
+    const refreshToken = generateRefreshToken(deliveryBoy._id.toString(), 'delivery');
     
     const user = deliveryBoy.toObject();
     delete user.password;
     
-    res.json({ token: tokens.accessToken, refreshToken: tokens.refreshToken, user });
+    res.json({ token, refreshToken, user });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
