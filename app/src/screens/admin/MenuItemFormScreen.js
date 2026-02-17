@@ -72,7 +72,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
         offerPrice: q.offerPrice?.toString() || '' 
       })) || [],
       newImageFile: null,
-      _collapsed: false
+      _collapsed: true
     })) || []
   );
   
@@ -197,7 +197,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
       image: null, newImageFile: null, available: true,
       description: '', foodType: 'veg', tags: '',
       quantities: [],
-      _collapsed: false
+      _collapsed: true
     }]);
   };
 
@@ -376,25 +376,31 @@ export default function MenuItemFormScreen({ route, navigation }) {
     
 
 
+    // Auto-trim whitespace from name and variant labels
+    const trimmedName = name.trim();
+    setName(trimmedName);
+    const trimmedVariants = variants.map(v => ({ ...v, label: v.label?.trim() || '' }));
+    setVariants(trimmedVariants);
+
     setLoading(true);
     try {
       const formData = new FormData();
-      formData.append('name', name);
+      formData.append('name', trimmedName);
       formData.append('description', description);
       // Auto-derive base price/qty/unit from variants
-      const lowestPrice = Math.min(...variants.map(v => {
+      const lowestPrice = Math.min(...trimmedVariants.map(v => {
         if (v.quantities && v.quantities.length > 0) {
           return Math.min(...v.quantities.map(q => parseFloat(q.price) || 0));
         }
         return parseFloat(v.price) || 0;
       }));
       formData.append('price', lowestPrice.toString());
-      if (variants[0].quantities && variants[0].quantities.length > 0) {
-        formData.append('quantity', variants[0].quantities[0].quantity || '1');
-        formData.append('unit', variants[0].quantities[0].unit || 'piece');
+      if (trimmedVariants[0].quantities && trimmedVariants[0].quantities.length > 0) {
+        formData.append('quantity', trimmedVariants[0].quantities[0].quantity || '1');
+        formData.append('unit', trimmedVariants[0].quantities[0].unit || 'piece');
       } else {
-        formData.append('quantity', variants[0].quantity || '1');
-        formData.append('unit', variants[0].unit || 'piece');
+        formData.append('quantity', trimmedVariants[0].quantity || '1');
+        formData.append('unit', trimmedVariants[0].unit || 'piece');
       }
       formData.append('category', JSON.stringify(selectedCategories));
       formData.append('foodType', foodType);
@@ -412,8 +418,8 @@ export default function MenuItemFormScreen({ route, navigation }) {
       }
 
       // ── Variants ──
-      if (variants.length > 0) {
-        const variantsPayload = variants.map(v => ({
+      if (trimmedVariants.length > 0) {
+        const variantsPayload = trimmedVariants.map(v => ({
           label: v.label,
           variantType: 'size',
           price: v.quantities?.length > 0 ? Math.min(...v.quantities.map(q => parseFloat(q.price) || 0)).toString() : v.price,
@@ -436,7 +442,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
 
         // Append new variant image files with index tracking
         const newImageIndices = [];
-        variants.forEach((v, index) => {
+        trimmedVariants.forEach((v, index) => {
           if (v.newImageFile) {
             newImageIndices.push(index);
             const fname = v.newImageFile.uri.split('/').pop();
