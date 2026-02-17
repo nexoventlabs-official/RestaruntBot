@@ -9,7 +9,7 @@ const DeliveryNotificationContext = createContext();
 const STORAGE_KEY = 'delivery_notifications';
 const LAST_CHECK_KEY = 'delivery_last_check_time';
 const SEEN_ORDERS_KEY = 'delivery_seen_orders';
-const POLL_INTERVAL = 5000; // 5 seconds for real-time updates
+const POLL_INTERVAL = 15000; // 15 seconds for real-time updates
 const HEARTBEAT_INTERVAL = 30000; // 30 seconds for heartbeat
 
 export function DeliveryNotificationProvider({ children }) {

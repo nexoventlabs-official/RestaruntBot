@@ -6,7 +6,7 @@
  * 
  * Rate Limits:
  * - Auth endpoints: 20 requests per 15 minutes per IP
- * - Admin endpoints: 500 requests per 15 minutes per IP
+ * - Admin endpoints: 5000 requests per 15 minutes per IP
  * - Webhook endpoints: 1000 requests per minute per IP
  * - Public endpoints: 500 requests per 15 minutes per IP
  * - Strict (login): 5 requests per 15 minutes per IP (30-min block)
@@ -108,7 +108,7 @@ const authLimiter = createRateLimiterInstance({
 });
 
 const adminLimiter = createRateLimiterInstance({
-  points: 500,
+  points: 5000,
   duration: 15 * 60,
   keyPrefix: 'rl:admin'
 });

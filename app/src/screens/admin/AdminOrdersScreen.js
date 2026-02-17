@@ -155,7 +155,7 @@ export default function AdminOrdersScreen({ navigation }) {
   const pollIntervalRef = useRef(null);
   const appState = useRef(AppState.currentState);
 
-  const POLL_INTERVAL = 5000; // 5 seconds for real-time updates
+  const POLL_INTERVAL = 15000; // 15 seconds for real-time updates
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();

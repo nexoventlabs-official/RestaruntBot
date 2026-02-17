@@ -12,7 +12,7 @@ import { colors, spacing, radius, typography, shadows } from '../../theme';
 
 const DELIVERY_GREEN = '#267E3E';
 const DELIVERY_DARK_GREEN = '#1B5E2E';
-const POLL_INTERVAL = 5000; // 5 seconds for real-time updates
+const POLL_INTERVAL = 15000; // 15 seconds for real-time updates
 
 // Background image
 const MY_ORDERS_BG = require('../../../assets/backgrounds/deliverymyorders.jpg');

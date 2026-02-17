@@ -16,7 +16,7 @@ const DELIVERY_DARK_GREEN = '#1B5E2E';
 // Background image
 const DETAIL_BG = require('../../../assets/backgrounds/deliveryhistory.jpg');
 
-const POLL_INTERVAL = 5000; // 5 seconds for real-time updates
+const POLL_INTERVAL = 15000; // 15 seconds for real-time updates
 
 const STATUS_CONFIG = {
   ready: { color: '#10B981', bg: '#D1FAE5', label: 'Ready for Pickup', icon: 'checkmark-circle' },
