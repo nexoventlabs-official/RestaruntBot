@@ -3231,6 +3231,91 @@ const chatbot = {
       });
     };
     
+    // ========== VARIANT-LEVEL MATCHING (HIGHEST PRIORITY) ==========
+    // Uses ORIGINAL search text (before food-type keyword removal) to match variant labels/tags
+    // This ensures "chicken biryani" matches "Chicken Biryani" variant, not "Egg Biryani"
+    {
+      const originalWords = originalText.split(/\s+/).filter(w => w.length >= 2);
+      
+      if (originalWords.length >= 1) {
+        // Collect all search words (original + translated variations)
+        const allSearchWordsSet = new Set(originalWords);
+        for (const term of uniqueSearchTerms) {
+          for (const w of term.split(/\s+/).filter(w => w.length >= 2)) {
+            allSearchWordsSet.add(w);
+          }
+        }
+        
+        // Map: itemId → { item, variantIndex, allMatch, matchCount }
+        const variantResults = new Map();
+        
+        for (const item of searchableItems) {
+          if (!item.variants || item.variants.length === 0) continue;
+          
+          for (let vi = 0; vi < item.variants.length; vi++) {
+            const variant = item.variants[vi];
+            if (!variant.label || variant.available === false) continue;
+            
+            const variantLabel = variant.label.toLowerCase();
+            const variantTagsStr = (variant.tags || []).join(' ').toLowerCase();
+            const variantText = `${variantLabel} ${variantTagsStr}`;
+            const variantNorm = normalizeForMatch(variant.label);
+            
+            // Match original words against variant label/tags
+            let matchCount = 0;
+            for (const word of originalWords) {
+              if (this.smartIncludes(word, variant.label) || variantText.includes(word)) {
+                matchCount++;
+              }
+            }
+            
+            if (matchCount === 0) continue;
+            
+            const allMatch = matchCount === originalWords.length;
+            const itemId = item._id.toString();
+            
+            // Keep the best variant match per item
+            if (!variantResults.has(itemId) || 
+                (allMatch && !variantResults.get(itemId).allMatch) ||
+                matchCount > variantResults.get(itemId).matchCount) {
+              variantResults.set(itemId, {
+                item,
+                variantIndex: vi,
+                variantLabel: variant.label,
+                allMatch,
+                matchCount
+              });
+            }
+          }
+        }
+        
+        if (variantResults.size > 0) {
+          // Separate all-keyword matches from partial matches
+          const allKeywordVariants = [...variantResults.values()].filter(m => m.allMatch);
+          const partialVariants = [...variantResults.values()].filter(m => !m.allMatch);
+          
+          const resultSet = allKeywordVariants.length > 0 ? allKeywordVariants : partialVariants;
+          resultSet.sort((a, b) => b.matchCount - a.matchCount);
+          
+          // Build matchedVariants map: itemId → variantIndex
+          const matchedVariants = {};
+          resultSet.forEach(m => { matchedVariants[m.item._id.toString()] = m.variantIndex; });
+          
+          logger.info(`VARIANT MATCH: ${resultSet.length} item(s), allKeyword=${allKeywordVariants.length}, partial=${partialVariants.length}`);
+          resultSet.forEach(m => logger.info(`  → ${m.item.name} → variant[${m.variantIndex}] "${m.variantLabel}" (${m.matchCount}/${originalWords.length} keywords)`));
+          
+          return {
+            items: resultSet.map(m => m.item),
+            foodType: detected,
+            searchTerm: originalText,
+            label: foodTypeLabel,
+            exactMatch: true,
+            matchedVariants
+          };
+        }
+      }
+    }
+    
     // ========== CHECK FOR EXACT NAME MATCH FIRST ==========
     // If search term exactly matches item name(s) (with or without spaces), return ALL exact matches
     if (hasSearchTerm) {
@@ -5631,19 +5716,21 @@ const chatbot = {
             if (matchingItems.length === 1) {
               const item = matchingItems[0];
               state.selectedItem = item._id.toString();
-              await this.sendItemDetails(phone, menuItems, item._id.toString());
+              // Pass matched variant index if available (from variant-level search)
+              const matchedVariantIdx = searchResult.matchedVariants?.[item._id.toString()] ?? null;
+              await this.sendItemDetails(phone, menuItems, item._id.toString(), matchedVariantIdx);
               state.currentStep = 'viewing_item_details';
             } else if (matchingItems.length <= 5) {
               // 2-5 items: show each as a rich catalog card with image, rating, price, buttons
               state.searchTag = msg.trim();
               state.tagSearchResults = matchingItems.map(i => i._id.toString());
-              await this.sendSearchResultCards(phone, matchingItems, displayLabel);
+              await this.sendSearchResultCards(phone, matchingItems, displayLabel, searchResult.matchedVariants || null);
               state.currentStep = 'viewing_tag_results';
             } else {
               // Multiple items - show list
               state.searchTag = msg.trim();
               state.tagSearchResults = matchingItems.map(i => i._id.toString());
-              await this.sendItemsByTag(phone, matchingItems, displayLabel);
+              await this.sendItemsByTag(phone, matchingItems, displayLabel, 0, searchResult.matchedVariants || null);
               state.currentStep = 'viewing_tag_results';
             }
           }
@@ -6208,7 +6295,7 @@ const chatbot = {
   },
 
   // Send items matching a tag keyword (for tag-based search)
-  async sendItemsByTag(phone, items, tagKeyword, page = 0) {
+  async sendItemsByTag(phone, items, tagKeyword, page = 0, matchedVariants = null) {
     if (!items.length) {
       const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
       if (itemNotAvailableImg) {
@@ -6223,12 +6310,49 @@ const chatbot = {
 
     // For small result sets (2-5 items), show individual catalog-style cards
     if (items.length <= 5 && page === 0) {
-      await this.sendSearchResultCards(phone, items, tagKeyword);
+      await this.sendSearchResultCards(phone, items, tagKeyword, matchedVariants);
       return;
     }
 
     // Try WhatsApp Catalog for search results (uses lenient threshold for search)
     try {
+      // If we have matched variant info, build variant-specific catalog sections
+      if (matchedVariants && Object.keys(matchedVariants).length > 0) {
+        const catalogId = catalogService.getCatalogId();
+        const retailerIds = [];
+        
+        for (const item of items) {
+          const itemId = item._id.toString();
+          const baseRetailerId = await catalogService.ensureCatalogMapping(item);
+          if (!baseRetailerId) continue;
+          
+          const vi = matchedVariants[itemId];
+          if (vi !== undefined && vi !== null && item.variants?.[vi]) {
+            const variant = item.variants[vi];
+            if (variant.quantities && variant.quantities.length > 0) {
+              retailerIds.push(`${itemId}_v${vi}_q0`);
+            } else {
+              retailerIds.push(`${itemId}_v${vi}`);
+            }
+          } else {
+            retailerIds.push(baseRetailerId);
+          }
+        }
+        
+        if (retailerIds.length > 0) {
+          const sections = [{ title: `🏷️ ${tagKeyword}`.substring(0, 24), product_items: retailerIds.map(id => ({ product_retailer_id: id })) }];
+          await whatsapp.sendProductList(
+            phone,
+            catalogId,
+            `🏷️ ${tagKeyword}`.substring(0, 60),
+            `Found ${items.length} items matching "${tagKeyword}"\nTap to view details & add to cart`,
+            sections,
+            'Perivi Hotel'
+          );
+          return;
+        }
+      }
+
       const catalogResult = await catalogService.buildSearchResultSections(items);
       if (catalogResult) {
         const catalogId = catalogService.getCatalogId();
@@ -6260,10 +6384,13 @@ const chatbot = {
     const rows = pageItems.map(item => {
       const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
       const priceDisplay = formatPriceWithActiveOffers(item, activeOffers);
+      // Show matched variant name in description if available
+      const vi = matchedVariants?.[item._id.toString()];
+      const variantInfo = vi !== undefined && vi !== null && item.variants?.[vi]?.label ? `🔖 ${item.variants[vi].label} • ` : '';
       return {
         rowId: `view_${item._id}`,
         title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
-        description: `${ratingStr} • ${priceDisplay} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
+        description: `${variantInfo}${ratingStr} • ${priceDisplay} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
       };
     });
 
@@ -6361,9 +6488,46 @@ const chatbot = {
   },
 
   // Send multiple items as individual catalog-style cards (for 2-5 search results)
-  async sendSearchResultCards(phone, items, searchLabel) {
+  async sendSearchResultCards(phone, items, searchLabel, matchedVariants = null) {
     // Try WhatsApp Catalog product_list for search results (native catalog cards)
     try {
+      // If we have matched variant info, build variant-specific catalog sections
+      if (matchedVariants && Object.keys(matchedVariants).length > 0) {
+        const catalogId = catalogService.getCatalogId();
+        const retailerIds = [];
+        
+        for (const item of items) {
+          const itemId = item._id.toString();
+          const baseRetailerId = await catalogService.ensureCatalogMapping(item);
+          if (!baseRetailerId) continue;
+          
+          const vi = matchedVariants[itemId];
+          if (vi !== undefined && vi !== null && item.variants?.[vi]) {
+            const variant = item.variants[vi];
+            if (variant.quantities && variant.quantities.length > 0) {
+              retailerIds.push(`${itemId}_v${vi}_q0`);
+            } else {
+              retailerIds.push(`${itemId}_v${vi}`);
+            }
+          } else {
+            retailerIds.push(baseRetailerId);
+          }
+        }
+        
+        if (retailerIds.length > 0) {
+          const sections = [{ title: `🔍 ${searchLabel}`.substring(0, 24), product_items: retailerIds.map(id => ({ product_retailer_id: id })) }];
+          await whatsapp.sendProductList(
+            phone,
+            catalogId,
+            `🔍 ${searchLabel}`.substring(0, 60),
+            `Found ${items.length} items matching ${searchLabel}\nTap to view details & add to cart`,
+            sections,
+            'Perivi Hotel'
+          );
+          return;
+        }
+      }
+      
       const catalogResult = await catalogService.buildSearchResultSections(items);
       if (catalogResult && catalogResult.sections.length > 0) {
         const catalogId = catalogService.getCatalogId();
@@ -6390,7 +6554,15 @@ const chatbot = {
     // Send each item as a rich card with image + buttons
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      const msg = this.buildItemCardMessage(item, activeOffers);
+      let msg = this.buildItemCardMessage(item, activeOffers);
+      
+      // Highlight matched variant in fallback card
+      const vi = matchedVariants?.[item._id.toString()];
+      if (vi !== undefined && vi !== null && item.variants?.[vi]?.label) {
+        const mv = item.variants[vi];
+        const mvPrice = mv.offerPrice && mv.offerPrice < mv.price ? `~₹${mv.price}~ ₹${mv.offerPrice}` : `₹${mv.price}`;
+        msg = `🔖 *Matched: ${mv.label}* (${mvPrice})\n\n${msg}`;
+      }
       
       const buttons = [
         { id: `confirm_add_${item._id}`, text: 'Add to Cart' },
@@ -6411,7 +6583,7 @@ const chatbot = {
     }
   },
 
-  async sendItemDetails(phone, menuItems, itemId) {
+  async sendItemDetails(phone, menuItems, itemId, matchedVariantIndex = null) {
     const item = menuItems.find(m => m._id.toString() === itemId);
     if (!item) {
       await whatsapp.sendButtons(phone, '❌ Item not found.', [
@@ -6424,12 +6596,36 @@ const chatbot = {
     try {
       if (catalogService.isEnabled()) {
         // Auto-ensure catalog mapping exists (creates on-the-fly if missing)
-        const retailerId = await catalogService.ensureCatalogMapping(item);
-        if (retailerId) {
+        const baseRetailerId = await catalogService.ensureCatalogMapping(item);
+        if (baseRetailerId) {
+          // Determine the correct retailer ID (use matched variant if available)
+          let retailerId = baseRetailerId;
+          if (matchedVariantIndex !== null && item.variants && item.variants[matchedVariantIndex]) {
+            const variant = item.variants[matchedVariantIndex];
+            if (variant.quantities && variant.quantities.length > 0) {
+              retailerId = `${item._id.toString()}_v${matchedVariantIndex}_q0`;
+            } else {
+              retailerId = `${item._id.toString()}_v${matchedVariantIndex}`;
+            }
+          } else if (item.variants && item.variants.length > 0 && matchedVariantIndex === null) {
+            // No variant specified but item has variants - show first variant (default behavior)
+            const firstVariant = item.variants[0];
+            if (firstVariant && firstVariant.quantities && firstVariant.quantities.length > 0) {
+              retailerId = `${item._id.toString()}_v0_q0`;
+            } else {
+              retailerId = `${item._id.toString()}_v0`;
+            }
+          }
+          
           const catalogId = catalogService.getCatalogId();
           const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating} (${item.totalRatings} reviews)` : '';
           const foodIcon = item.foodType === 'veg' ? '🌿 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
-          const bodyText = `${foodIcon} ${ratingStr}\n⏱️ ${item.preparationTime || 15} mins prep time\nTap to add to cart!`;
+          let bodyText = `${foodIcon} ${ratingStr}\n⏱️ ${item.preparationTime || 15} mins prep time`;
+          // Show matched variant name prominently
+          if (matchedVariantIndex !== null && item.variants?.[matchedVariantIndex]?.label) {
+            bodyText = `🔖 *${item.variants[matchedVariantIndex].label}*\n${bodyText}`;
+          }
+          bodyText += '\nTap to add to cart!';
           await whatsapp.sendProduct(phone, catalogId, retailerId, bodyText, 'Perivi Hotel');
           return;
         }
@@ -6440,7 +6636,13 @@ const chatbot = {
 
     // Fallback: rich card with image + buttons
     const activeOffers = await getCachedActiveOffers(phone);
-    const msg = this.buildItemCardMessage(item, activeOffers);
+    let msg = this.buildItemCardMessage(item, activeOffers);
+    // Highlight matched variant in fallback card
+    if (matchedVariantIndex !== null && item.variants?.[matchedVariantIndex]?.label) {
+      const mv = item.variants[matchedVariantIndex];
+      const mvPrice = mv.offerPrice && mv.offerPrice < mv.price ? `~₹${mv.price}~ ₹${mv.offerPrice}` : `₹${mv.price}`;
+      msg = `🔖 *Matched: ${mv.label}* (${mvPrice})\n\n${msg}`;
+    }
 
     const buttons = [
       { id: `confirm_add_${item._id}`, text: 'Add to Cart' },
