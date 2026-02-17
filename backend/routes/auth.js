@@ -42,7 +42,6 @@ router.post('/test-push', async (req, res) => {
 });
 
 router.post('/login',
-  authRateLimiter,
   body('username').trim().notEmpty().withMessage('Username is required').isLength({ max: 100 }),
   body('password').trim().notEmpty().withMessage('Password is required').isLength({ max: 128 }),
   handleValidation,

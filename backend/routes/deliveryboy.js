@@ -17,8 +17,14 @@ const razorpayService = require('../services/razorpay');
 const multer = require('multer');
 const router = express.Router();
 
-// Apply admin rate limiting (most routes are admin)
-router.use(adminRateLimiter);
+// Apply admin rate limiting to most routes (login/verify/public routes are excluded below)
+router.use((req, res, next) => {
+  // Skip rate limiting for login and verify routes
+  if (req.path === '/login' || req.path === '/verify') {
+    return next();
+  }
+  return adminRateLimiter(req, res, next);
+});
 
 // Configure multer for memory storage
 const upload = multer({
@@ -325,7 +331,7 @@ router.post('/:id/reset-password', adminRateLimiter, auth, async (req, res) => {
 // ============ DELIVERY BOY AUTH ROUTES (Public, rate limited) ============
 
 // Delivery boy login (supports email or phone)
-router.post('/login', authRateLimiter, async (req, res) => {
+router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     
