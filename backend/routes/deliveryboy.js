@@ -6,6 +6,7 @@ const Order = require('../models/Order');
 const auth = require('../middleware/auth');
 const { authenticateDeliveryBoy } = require('../middleware/authenticate');
 const { authRateLimiter, adminRateLimiter } = require('../middleware/rateLimiter');
+const { generateTokenPair } = require('../services/jwtRefresh');
 const brevoMail = require('../services/brevoMail');
 const cloudinaryService = require('../services/cloudinary');
 const googleSheets = require('../services/googleSheets');
@@ -364,22 +365,13 @@ router.post('/login', authRateLimiter, async (req, res) => {
     deliveryBoy.isOnline = true;
     await deliveryBoy.save();
     
-    // Generate token with tokenVersion
-    const token = jwt.sign(
-      { 
-        id: deliveryBoy._id, 
-        email: deliveryBoy.email, 
-        role: 'delivery',
-        tokenVersion: deliveryBoy.tokenVersion
-      }, 
-      process.env.JWT_SECRET, 
-      { expiresIn: '7d' }
-    );
+    // Generate token pair with refresh token
+    const tokens = generateTokenPair(deliveryBoy._id.toString(), 'delivery');
     
     const user = deliveryBoy.toObject();
     delete user.password;
     
-    res.json({ token, user });
+    res.json({ token: tokens.accessToken, refreshToken: tokens.refreshToken, user });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

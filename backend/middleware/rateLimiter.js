@@ -101,10 +101,10 @@ function createMiddleware(limiter, message = 'Too many requests') {
 // ─── Pre-configured limiters ───────────────────────────────────────
 
 const authLimiter = createRateLimiterInstance({
-  points: 20,
+  points: 50,
   duration: 15 * 60,
   keyPrefix: 'rl:auth',
-  blockDuration: 15 * 60
+  blockDuration: 5 * 60
 });
 
 const adminLimiter = createRateLimiterInstance({

@@ -27,6 +27,7 @@ export const AuthProvider = ({ children }) => {
     pushNotifications.unregisterPushToken().catch(() => {});
     // Clear local auth state immediately
     SecureStore.deleteItemAsync('token').catch(() => {});
+    SecureStore.deleteItemAsync('refreshToken').catch(() => {});
     SecureStore.deleteItemAsync('user').catch(() => {});
     SecureStore.deleteItemAsync('role').catch(() => {});
     SecureStore.deleteItemAsync(NOTIFICATION_PERMISSION_GRANTED_KEY).catch(() => {});
@@ -199,9 +200,12 @@ export const AuthProvider = ({ children }) => {
 
   const loginAdmin = async (username, password) => {
     const response = await api.post('/auth/login', { username, password });
-    const { token, user: userData } = response.data;
+    const { token, refreshToken, user: userData } = response.data;
     
     await SecureStore.setItemAsync('token', token);
+    if (refreshToken) {
+      await SecureStore.setItemAsync('refreshToken', refreshToken);
+    }
     await SecureStore.setItemAsync('user', JSON.stringify(userData));
     await SecureStore.setItemAsync('role', 'admin');
     
@@ -216,9 +220,12 @@ export const AuthProvider = ({ children }) => {
 
   const loginDelivery = async (email, password) => {
     const response = await api.post('/delivery/login', { email, password });
-    const { token, user: userData } = response.data;
+    const { token, refreshToken, user: userData } = response.data;
     
     await SecureStore.setItemAsync('token', token);
+    if (refreshToken) {
+      await SecureStore.setItemAsync('refreshToken', refreshToken);
+    }
     await SecureStore.setItemAsync('user', JSON.stringify(userData));
     await SecureStore.setItemAsync('role', 'delivery');
     
@@ -249,6 +256,7 @@ export const AuthProvider = ({ children }) => {
     }
     
     await SecureStore.deleteItemAsync('token');
+    await SecureStore.deleteItemAsync('refreshToken');
     await SecureStore.deleteItemAsync('user');
     await SecureStore.deleteItemAsync('role');
     // Clear notification permission flag on logout so it prompts again on next login

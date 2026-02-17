@@ -19,8 +19,8 @@ const refreshTokens = new Map();
 const blacklistedTokens = new Set();
 
 // Token expiration times
-const ACCESS_TOKEN_EXPIRY = '15m'; // 15 minutes
-const REFRESH_TOKEN_EXPIRY = '7d'; // 7 days
+const ACCESS_TOKEN_EXPIRY = '7d'; // 7 days (mobile app stays logged in)
+const REFRESH_TOKEN_EXPIRY = '30d'; // 30 days
 
 /**
  * Generate access token (short-lived)
