@@ -847,6 +847,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
                                 placeholder="1"
                                 placeholderTextColor="#C4C4C4"
                                 keyboardType="numeric"
+                                selectTextOnFocus={true}
                               />
                             </View>
                             <View style={[styles.variantField, { flex: 1 }]}>
@@ -885,11 +886,12 @@ export default function MenuItemFormScreen({ route, navigation }) {
                                 <Text style={styles.qtyOptionLabel}>Qty</Text>
                                 <TextInput
                                   style={styles.qtyOptionInput}
-                                  value={q.quantity?.toString() || ''}
+                                  value={q.quantity?.toString() || '1'}
                                   onChangeText={(val) => updateQuantityOption(index, qIdx, 'quantity', val)}
                                   keyboardType="numeric"
                                   placeholder="1"
                                   placeholderTextColor="#D1D5DB"
+                                  selectTextOnFocus={true}
                                 />
                               </View>
                               <View style={styles.qtyOptionField}>
