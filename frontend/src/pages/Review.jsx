@@ -4,6 +4,7 @@ import axios from 'axios';
 import { StarIcon, ArrowLeftIcon, CheckCircleIcon, XCircleIcon, TruckIcon } from '../components/Icons';
 
 const API_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api') + '/public';
+const API_BASE_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api').replace('/api', '');
 
 export default function Review() {
   const { phone, orderId } = useParams();
@@ -24,9 +25,11 @@ export default function Review() {
       const res = await axios.get(`${API_URL}/review/${phone}/${orderId}`);
       setOrder(res.data);
       const existingRatings = {};
-      res.data.items.forEach(item => {
+      res.data.items.forEach((item, idx) => {
+        // Use composite key: menuItemId_variantIndex (or just menuItemId if no variant)
+        const ratingKey = item.variantIndex != null ? `${item.menuItemId}_v${item.variantIndex}` : item.menuItemId;
         if (item.existingRating) {
-          existingRatings[item.menuItemId] = item.existingRating;
+          existingRatings[ratingKey] = item.existingRating;
         }
       });
       setRatings(existingRatings);
@@ -45,10 +48,14 @@ export default function Review() {
   };
 
   const handleSubmit = async () => {
-    const ratingsArray = Object.entries(ratings).map(([menuItemId, rating]) => ({
-      menuItemId,
-      rating
-    }));
+    const ratingsArray = Object.entries(ratings).map(([key, rating]) => {
+      // Parse composite key: "menuItemId_vN" or just "menuItemId"
+      const vMatch = key.match(/^(.+)_v(\d+)$/);
+      if (vMatch) {
+        return { menuItemId: vMatch[1], variantIndex: parseInt(vMatch[2]), rating };
+      }
+      return { menuItemId: key, rating };
+    });
 
     if (ratingsArray.length === 0 && !deliveryRating) {
       alert('Please rate at least one item or the delivery partner');
@@ -228,12 +235,17 @@ export default function Review() {
         </h3>
         
         <div className="space-y-4">
-          {order.items.map(item => (
-            <div key={item.menuItemId} className="bg-white rounded-2xl shadow-sm p-4">
+          {order.items.map((item, idx) => {
+            const ratingKey = item.variantIndex != null ? `${item.menuItemId}_v${item.variantIndex}` : item.menuItemId;
+            const imageUrl = item.image 
+              ? (item.image.startsWith('http') ? item.image : `${API_BASE_URL}${item.image}`)
+              : null;
+            return (
+            <div key={`${ratingKey}_${idx}`} className="bg-white rounded-2xl shadow-sm p-4">
               <div className="flex gap-4">
-                {item.image ? (
+                {imageUrl ? (
                   <img 
-                    src={item.image} 
+                    src={imageUrl} 
                     alt={item.name} 
                     className="w-20 h-20 rounded-xl object-cover flex-shrink-0" 
                   />
@@ -246,6 +258,9 @@ export default function Review() {
                 )}
                 <div className="flex-1">
                   <h3 className="font-semibold text-gray-900">{item.name}</h3>
+                  {item.variantLabel && (
+                    <p className="text-xs text-orange-600 font-medium">{item.variantLabel}</p>
+                  )}
                   <p className="text-sm text-gray-500">Qty: {item.quantity} × ₹{item.price}</p>
                   {item.avgRating > 0 && (
                     <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
@@ -258,12 +273,13 @@ export default function Review() {
                     <p className="text-sm text-gray-600 mb-2">
                       {item.existingRating ? 'Update your rating:' : 'Rate this item:'}
                     </p>
-                    <StarRating itemId={item.menuItemId} />
+                    <StarRating itemId={ratingKey} />
                   </div>
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Submit Button */}

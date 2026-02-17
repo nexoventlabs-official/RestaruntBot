@@ -46,6 +46,7 @@ const menuItemSchema = new mongoose.Schema({
     phone: { type: String, required: true },
     orderId: { type: String, required: true },
     rating: { type: Number, required: true, min: 1, max: 5 },
+    variantIndex: { type: Number, default: null },  // Which variant this rating is for (null = parent item)
     createdAt: { type: Date, default: Date.now }
   }],
   avgRating: { type: Number, default: 0 },

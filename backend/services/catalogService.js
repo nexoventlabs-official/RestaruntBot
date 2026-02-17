@@ -1215,6 +1215,8 @@ const catalogService = {
       for (const item of items) {
         if (item.variants && item.variants.length > 0) {
           // Re-sync all variants with updated description (includes new ratings)
+          // IMPORTANT: Must match syncProductToMeta format — NO itemGroupId/colorLabel/sizeLabel
+          // Adding those fields changes the product type in Meta catalog and invalidates existing product links
           item.variants.forEach((v, vIdx) => {
             if (v.quantities && v.quantities.length > 0) {
               v.quantities.forEach((q, qIdx) => {
@@ -1228,13 +1230,10 @@ const catalogService = {
                   imageUrl: v.image || item.image || null,
                   category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
                   availability: (v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
-                  itemGroupId: item._id.toString(),
-                  colorLabel: v.label,
-                  sizeLabel: `${q.quantity} ${q.unit}`
+                  salePrice: (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : null
                 });
               });
             } else {
-              const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : 'Standard';
               const variantTitle = (v.quantity && v.unit) ? `${v.label}, ${v.quantity} ${v.unit}` : v.label;
               variantProducts.push({
                 retailerId: `${item._id.toString()}_v${vIdx}`,
@@ -1245,9 +1244,7 @@ const catalogService = {
                 imageUrl: v.image || item.image || null,
                 category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
                 availability: (v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
-                itemGroupId: item._id.toString(),
-                colorLabel: v.label,
-                sizeLabel: pillLabel
+                salePrice: (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : null
               });
             }
           });

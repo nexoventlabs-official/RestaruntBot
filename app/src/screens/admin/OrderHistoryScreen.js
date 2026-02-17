@@ -13,11 +13,12 @@ import {
   RefreshControl,
   Platform,
   InteractionManager,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import api from '../../config/api';
+import api, { API_BASE_URL } from '../../config/api';
 
 // Status colors matching AdminOrdersScreen
 const STATUS_CONFIG = {
@@ -200,32 +201,75 @@ const OrderHistoryScreen = ({ navigation }) => {
     }
   }, [loadingMore, hasMore, loading]);
 
+  // Helper: find matching menu item image for a given item name
+  const findItemImage = useCallback((itemName) => {
+    if (!itemName || !menuItems.length) return null;
+    const name = itemName.toLowerCase();
+    for (const m of menuItems) {
+      // Check variant labels first for more specific match
+      if (m.variants && m.variants.length > 0) {
+        const matchedVariant = m.variants.find(v => {
+          const label = v.label?.toLowerCase();
+          return label && (label === name || name.includes(label) || label.includes(name));
+        });
+        if (matchedVariant) {
+          return matchedVariant.image || m.image;
+        }
+      }
+      // Fallback to parent item name match
+      const mName = m.name?.toLowerCase();
+      if (mName && (mName === name || name.includes(mName) || mName.includes(name))) {
+        return m.image;
+      }
+    }
+    return null;
+  }, [menuItems]);
+
+  // Helper: parse items string from Google Sheets into structured items array
+  // Format: "Name Qty: 1 × ₹99 = ₹99, Name2 Qty: 2 × ₹50 = ₹100"
+  const parseItemsString = useCallback((itemsStr) => {
+    if (typeof itemsStr !== 'string' || !itemsStr.trim()) return [];
+    return itemsStr.split(',').map(i => {
+      const str = i.trim();
+      // Match: "Curry - Egg curry (5 piece) Qty: 1 × ₹99 = ₹99"
+      const match = str.match(/^(.+?)\s*Qty:\s*(\d+)\s*[×x]\s*₹([\d.]+)\s*=\s*₹([\d.]+)$/);
+      if (match) {
+        const itemName = match[1].trim();
+        const quantity = parseInt(match[2]);
+        const unitPrice = parseFloat(match[3]);
+        const totalPrice = parseFloat(match[4]);
+        return {
+          name: itemName,
+          quantity,
+          price: unitPrice,
+          totalPrice,
+          image: findItemImage(itemName),
+        };
+      }
+      // Fallback: try old format "name x2 (₹200)"
+      const matchOld = str.match(/^(.+?)\s*x(\d+)\s*\(₹([\d.]+)\)$/);
+      if (matchOld) {
+        const itemName = matchOld[1].trim();
+        const quantity = parseInt(matchOld[2]);
+        const totalPrice = parseFloat(matchOld[3]);
+        return {
+          name: itemName,
+          quantity,
+          price: totalPrice / quantity,
+          totalPrice,
+          image: findItemImage(itemName),
+        };
+      }
+      return { name: str, quantity: 1, price: 0, totalPrice: 0, image: null };
+    });
+  }, [findItemImage]);
+
   // Navigate to order detail with constructed order object
   const handleOrderPress = (item) => {
     // Parse items from string and match with menu items for images
     let parsedItems = [];
     if (typeof item.items === 'string') {
-      parsedItems = item.items.split(',').map(i => {
-        const match = i.trim().match(/^(.+?)\s*x(\d+)\s*\(₹(\d+)\)$/);
-        if (match) {
-          const itemName = match[1].trim();
-          const quantity = parseInt(match[2]);
-          const totalPrice = parseInt(match[3]);
-          // Try to find matching menu item for image
-          const menuItem = menuItems.find(m => 
-            m.name.toLowerCase() === itemName.toLowerCase() ||
-            m.name.toLowerCase().includes(itemName.toLowerCase()) ||
-            itemName.toLowerCase().includes(m.name.toLowerCase())
-          );
-          return { 
-            name: itemName, 
-            quantity: quantity, 
-            price: totalPrice / quantity,
-            image: menuItem?.image || null
-          };
-        }
-        return { name: i.trim(), quantity: 1, price: 0, image: null };
-      });
+      parsedItems = parseItemsString(item.items);
     } else {
       parsedItems = item.items || [];
     }
@@ -334,8 +378,36 @@ const OrderHistoryScreen = ({ navigation }) => {
         </View>
         
         <View style={styles.itemsContainer}>
-          <Ionicons name="fast-food-outline" size={16} color="#888" />
-          <Text style={styles.itemsText} numberOfLines={2}>{item.items}</Text>
+          <View style={styles.itemsHeader}>
+            <Ionicons name="fast-food-outline" size={16} color="#888" />
+            <Text style={styles.itemsLabel}>Items</Text>
+          </View>
+          {(() => {
+            const parsedItems = typeof item.items === 'string' ? parseItemsString(item.items) : [];
+            return parsedItems.map((pItem, idx) => {
+              const imageUri = pItem.image
+                ? (pItem.image.startsWith('http') ? pItem.image : `${API_BASE_URL}${pItem.image}`)
+                : null;
+              return (
+                <View key={idx} style={styles.itemCard}>
+                  {imageUri ? (
+                    <Image source={{ uri: imageUri }} style={styles.itemImage} />
+                  ) : (
+                    <View style={styles.itemImagePlaceholder}>
+                      <Ionicons name="fast-food" size={18} color="#ccc" />
+                    </View>
+                  )}
+                  <View style={styles.itemDetails}>
+                    <Text style={styles.itemName} numberOfLines={1}>{pItem.name}</Text>
+                    <Text style={styles.itemQty}>x{pItem.quantity}{pItem.price > 0 ? ` @ ₹${pItem.price.toFixed(0)}` : ''}</Text>
+                  </View>
+                  {pItem.totalPrice > 0 && (
+                    <Text style={styles.itemPrice}>₹{pItem.totalPrice.toFixed(0)}</Text>
+                  )}
+                </View>
+              );
+            });
+          })()}
         </View>
         
         <View style={styles.orderFooter}>
@@ -504,11 +576,6 @@ const OrderHistoryScreen = ({ navigation }) => {
           maxToRenderPerBatch={10}
           windowSize={10}
           initialNumToRender={10}
-          getItemLayout={(data, index) => ({
-            length: 180, // Approximate item height
-            offset: 180 * index,
-            index,
-          })}
         />
       )}
     </View>
@@ -707,20 +774,71 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   itemsContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     backgroundColor: '#f9f9f9',
-    borderRadius: 8,
+    borderRadius: 10,
     marginBottom: 12,
   },
-  itemsText: {
+  itemsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  itemsLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#888',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  itemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  itemImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  itemImagePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itemDetails: {
     flex: 1,
+    marginLeft: 10,
+  },
+  itemName: {
     fontSize: 13,
-    color: '#555',
-    lineHeight: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  itemQty: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 2,
+  },
+  itemPrice: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#E23744',
+    marginLeft: 8,
   },
   orderFooter: {
     flexDirection: 'row',

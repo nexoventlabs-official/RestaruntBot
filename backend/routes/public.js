@@ -581,19 +581,33 @@ router.get('/review/:phone/:orderId', async (req, res) => {
     const itemIds = order.items.map(i => i.menuItem).filter(Boolean);
     const menuItems = await MenuItem.find({ _id: { $in: itemIds } });
     
-    const itemsWithRatings = order.items.map(orderItem => {
+    const itemsWithRatings = order.items.map((orderItem, idx) => {
       const menuItem = menuItems.find(m => m._id.toString() === orderItem.menuItem?.toString());
-      const existingRating = menuItem?.ratings?.find(r => r.orderId === orderId);
+      const vIdx = orderItem.variantIndex != null ? orderItem.variantIndex : null;
+      // Find existing rating for this specific variant (or parent if no variant)
+      const existingRating = menuItem?.ratings?.find(r => 
+        r.orderId === orderId && 
+        r.phone?.includes(cleanPhone) &&
+        (r.variantIndex ?? null) === vIdx
+      );
+      // Use variant-specific image and ratings if available
+      const variant = (vIdx != null && menuItem?.variants?.[vIdx]) ? menuItem.variants[vIdx] : null;
+      const itemImage = orderItem.image || variant?.image || menuItem?.image;
+      // Calculate variant-specific avg rating
+      const variantAvg = variant?.avgRating || 0;
+      const variantTotal = variant?.totalRatings || 0;
       
       return {
         menuItemId: orderItem.menuItem,
+        variantIndex: vIdx,
         name: orderItem.name,
+        variantLabel: orderItem.variantLabel || variant?.label || null,
         quantity: orderItem.quantity,
         price: orderItem.price,
-        image: menuItem?.image,
+        image: itemImage,
         existingRating: existingRating?.rating || null,
-        avgRating: menuItem?.avgRating || 0,
-        totalRatings: menuItem?.totalRatings || 0
+        avgRating: variantAvg > 0 ? variantAvg : (menuItem?.avgRating || 0),
+        totalRatings: variantTotal > 0 ? variantTotal : (menuItem?.totalRatings || 0)
       };
     });
     
@@ -631,7 +645,7 @@ router.get('/review/:phone/:orderId', async (req, res) => {
 router.post('/review/:phone/:orderId', async (req, res) => {
   try {
     const { phone, orderId } = req.params;
-    const { ratings, deliveryRating } = req.body; // ratings: Array of { menuItemId, rating }, deliveryRating: number
+    const { ratings, deliveryRating } = req.body; // ratings: Array of { menuItemId, rating, variantIndex? }, deliveryRating: number
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
     
     // Verify order exists and is delivered
@@ -645,29 +659,44 @@ router.post('/review/:phone/:orderId', async (req, res) => {
       return res.status(404).json({ error: 'Order not found or not delivered yet' });
     }
     
-    // Update ratings for each item
-    for (const { menuItemId, rating } of ratings) {
+    // Update ratings for each item (with per-variant support)
+    for (const { menuItemId, rating, variantIndex } of ratings) {
       if (!menuItemId || !rating || rating < 1 || rating > 5) continue;
       
       const menuItem = await MenuItem.findById(menuItemId);
       if (!menuItem) continue;
       
-      // Check if user already rated this item for this order
-      const existingRatingIndex = menuItem.ratings.findIndex(r => r.orderId === orderId && r.phone.includes(cleanPhone));
+      const vIdx = variantIndex != null ? variantIndex : null;
+      
+      // Check if user already rated this specific variant for this order
+      const existingRatingIndex = menuItem.ratings.findIndex(r => 
+        r.orderId === orderId && 
+        r.phone.includes(cleanPhone) &&
+        (r.variantIndex ?? null) === vIdx
+      );
       
       if (existingRatingIndex >= 0) {
         // Update existing rating
         menuItem.ratings[existingRatingIndex].rating = rating;
       } else {
-        // Add new rating
-        menuItem.ratings.push({ phone: cleanPhone, orderId, rating });
+        // Add new rating with variant info
+        menuItem.ratings.push({ phone: cleanPhone, orderId, rating, variantIndex: vIdx });
       }
       
-      // Recalculate average
+      // Recalculate overall average (all ratings across all variants)
       const totalRatings = menuItem.ratings.length;
       const sumRatings = menuItem.ratings.reduce((sum, r) => sum + r.rating, 0);
       menuItem.avgRating = totalRatings > 0 ? Math.round((sumRatings / totalRatings) * 10) / 10 : 0;
       menuItem.totalRatings = totalRatings;
+      
+      // Recalculate per-variant average if this rating is for a specific variant
+      if (vIdx != null && menuItem.variants && menuItem.variants[vIdx]) {
+        const variantRatings = menuItem.ratings.filter(r => (r.variantIndex ?? null) === vIdx);
+        const variantTotal = variantRatings.length;
+        const variantSum = variantRatings.reduce((sum, r) => sum + r.rating, 0);
+        menuItem.variants[vIdx].avgRating = variantTotal > 0 ? Math.round((variantSum / variantTotal) * 10) / 10 : 0;
+        menuItem.variants[vIdx].totalRatings = variantTotal;
+      }
       
       await menuItem.save();
     }

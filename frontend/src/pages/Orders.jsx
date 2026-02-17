@@ -121,6 +121,9 @@ const StatusDropdown = ({ value, onChange, options }) => {
   );
 };
 
+// API base URL for images
+const API_BASE_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api').replace('/api', '');
+
 // Scrollable Items List Component
 const ScrollableItemsList = ({ items }) => {
   const scrollRef = useRef(null);
@@ -155,18 +158,51 @@ const ScrollableItemsList = ({ items }) => {
     <div className="relative">
       <div 
         ref={scrollRef} 
-        className="space-y-2 h-36 overflow-y-auto" 
+        className="space-y-2.5 max-h-64 overflow-y-auto pr-1" 
         onScroll={checkScroll}
       >
-        {items?.map((item, i) => (
-          <div key={i} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2">
-            <div className="w-6 h-6 bg-primary-50 rounded-md flex items-center justify-center flex-shrink-0">
-              <span className="text-xs font-bold text-primary-600">{item.quantity}</span>
+        {items?.map((item, i) => {
+          // Resolve image: item.image > variant image from populated menuItem > menuItem.image
+          const variantImg = item.variantIndex != null && item.menuItem?.variants?.[item.variantIndex]?.image 
+            ? item.menuItem.variants[item.variantIndex].image 
+            : null;
+          const rawImg = item.image || variantImg || item.menuItem?.image;
+          const imgSrc = rawImg ? (rawImg.startsWith('http') ? rawImg : `${API_BASE_URL}${rawImg}`) : null;
+          
+          return (
+            <div key={i} className="flex items-center gap-3 bg-white rounded-xl p-2.5 shadow-sm border border-dark-100/60">
+              {/* Item Image */}
+              <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-dark-100">
+                {imgSrc ? (
+                  <img 
+                    src={imgSrc} 
+                    alt={item.name} 
+                    className="w-full h-full object-cover"
+                    onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                  />
+                ) : null}
+                <div className={`w-full h-full items-center justify-center bg-primary-50 ${imgSrc ? 'hidden' : 'flex'}`}>
+                  <span className="text-lg">🍽️</span>
+                </div>
+              </div>
+              {/* Item Details */}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-dark-800 truncate">{item.name}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-xs text-dark-400">Qty: {item.quantity}</span>
+                  {item.unitQty && item.unit && (
+                    <span className="text-xs text-dark-400">• {item.unitQty} {item.unit}</span>
+                  )}
+                  <span className="text-xs text-dark-400">• ₹{item.price} each</span>
+                </div>
+              </div>
+              {/* Item Total Price */}
+              <div className="flex-shrink-0 text-right">
+                <p className="text-sm font-bold text-dark-900">₹{item.price * item.quantity}</p>
+              </div>
             </div>
-            <span className="text-sm text-dark-700 truncate flex-1">{item.name}</span>
-            {item.price && <span className="text-xs text-dark-400 flex-shrink-0">₹{item.price * item.quantity}</span>}
-          </div>
-        ))}
+          );
+        })}
       </div>
       {(showDownArrow || showUpArrow) && (
         <button
