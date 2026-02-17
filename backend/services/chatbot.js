@@ -6683,15 +6683,19 @@ const chatbot = {
         if (baseRetailerId) {
           const catalogId = catalogService.getCatalogId();
           
-          // === MULTI-VARIANT PRODUCT LIST ===
-          // When no specific variant matched (matchedVariantIndex === null) AND item has multiple variants,
-          // show ALL variants as a product list ("X variants • Tap to add to cart" format)
-          if (matchedVariantIndex === null && item.variants && item.variants.length > 1) {
+          // === MULTI-VARIANT/SIZE PRODUCT LIST ===
+          // When no specific variant matched (matchedVariantIndex === null) AND item has multiple
+          // variants OR a variant with multiple quantity/size options,
+          // show ALL as a product list ("X variants • Tap to add to cart" format)
+          const totalCatalogProducts = item.variants ? item.variants.reduce((sum, v) => {
+            if (v.available === false) return sum;
+            return sum + (v.quantities && v.quantities.length > 0 ? v.quantities.length : 1);
+          }, 0) : 0;
+          
+          if (matchedVariantIndex === null && totalCatalogProducts > 1) {
             const allRetailerIds = await catalogService.ensureAllCatalogMappings(item);
             if (allRetailerIds && allRetailerIds.length > 1) {
-              const availableVariants = item.variants.filter(v => v.available !== false);
-              const variantCount = availableVariants.length;
-              const bodyText = `${variantCount} variants • Tap to add to cart 🛒`;
+              const bodyText = `${allRetailerIds.length} variants • Tap to add to cart 🛒`;
               const sections = [{
                 title: item.name.substring(0, 24),
                 productRetailerIds: allRetailerIds.slice(0, 30)
@@ -6752,16 +6756,24 @@ const chatbot = {
       const mv = item.variants[matchedVariantIndex];
       const mvPrice = mv.offerPrice && mv.offerPrice < mv.price ? `~₹${mv.price}~ ₹${mv.offerPrice}` : `₹${mv.price}`;
       msg = `🔖 *Matched: ${mv.label}* (${mvPrice})\n\n${msg}`;
-    } else if (matchedVariantIndex === null && item.variants && item.variants.length > 1) {
-      // Show all variants in fallback text when no specific variant matched
-      const variantLines = item.variants
-        .filter(v => v.label && v.available !== false)
-        .map((v, i) => {
+    } else if (matchedVariantIndex === null && item.variants && item.variants.length > 0) {
+      // Show all variants/sizes in fallback text when no specific variant matched
+      const variantLines = [];
+      item.variants.filter(v => v.available !== false).forEach((v, vi) => {
+        if (v.quantities && v.quantities.length > 0) {
+          // Show each quantity/size option
+          v.quantities.forEach((q, qi) => {
+            const qPrice = q.offerPrice && q.offerPrice < q.price ? `~₹${q.price}~ ₹${q.offerPrice}` : `₹${q.price}`;
+            const label = v.label ? `${v.label} - ${q.label || q.quantity + ' ' + (q.unit || '')}` : (q.label || `${q.quantity} ${q.unit || ''}`);
+            variantLines.push(`  ${variantLines.length + 1}. ${label.trim()} - ${qPrice}`);
+          });
+        } else if (v.label) {
           const vPrice = v.offerPrice && v.offerPrice < v.price ? `~₹${v.price}~ ₹${v.offerPrice}` : `₹${v.price}`;
-          return `  ${i + 1}. ${v.label} - ${vPrice}`;
-        }).join('\n');
-      if (variantLines) {
-        msg = `🔖 *${item.variants.filter(v => v.label && v.available !== false).length} Variants Available:*\n${variantLines}\n\n${msg}`;
+          variantLines.push(`  ${variantLines.length + 1}. ${v.label} - ${vPrice}`);
+        }
+      });
+      if (variantLines.length > 1) {
+        msg = `🔖 *${variantLines.length} Options Available:*\n${variantLines.join('\n')}\n\n${msg}`;
       }
     }
 
