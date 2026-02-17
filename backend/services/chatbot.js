@@ -3234,6 +3234,7 @@ const chatbot = {
     // ========== VARIANT-LEVEL MATCHING (HIGHEST PRIORITY) ==========
     // Uses ORIGINAL search text (before food-type keyword removal) to match variant labels/tags
     // This ensures "chicken biryani" matches "Chicken Biryani" variant, not "Egg Biryani"
+    // When search matches parent name broadly (e.g. "biryani" → "Biryani"), shows ALL variants as catalog list
     {
       const originalWords = originalText.split(/\s+/).filter(w => w.length >= 2);
       
@@ -3246,11 +3247,15 @@ const chatbot = {
           }
         }
         
-        // Map: itemId → { item, variantIndex, allMatch, matchCount }
-        const variantResults = new Map();
+        // Track ALL matching variants per item (not just the best)
+        // Map: itemId → { item, matches: [{ vi, matchCount, allMatch, label }] }
+        const variantMatchesPerItem = new Map();
         
         for (const item of searchableItems) {
           if (!item.variants || item.variants.length === 0) continue;
+          
+          const itemId = item._id.toString();
+          const matches = [];
           
           for (let vi = 0; vi < item.variants.length; vi++) {
             const variant = item.variants[vi];
@@ -3259,7 +3264,6 @@ const chatbot = {
             const variantLabel = variant.label.toLowerCase();
             const variantTagsStr = (variant.tags || []).join(' ').toLowerCase();
             const variantText = `${variantLabel} ${variantTagsStr}`;
-            const variantNorm = normalizeForMatch(variant.label);
             
             // Match original words against variant label/tags
             let matchCount = 0;
@@ -3271,41 +3275,63 @@ const chatbot = {
             
             if (matchCount === 0) continue;
             
-            const allMatch = matchCount === originalWords.length;
-            const itemId = item._id.toString();
-            
-            // Keep the best variant match per item
-            if (!variantResults.has(itemId) || 
-                (allMatch && !variantResults.get(itemId).allMatch) ||
-                matchCount > variantResults.get(itemId).matchCount) {
-              variantResults.set(itemId, {
-                item,
-                variantIndex: vi,
-                variantLabel: variant.label,
-                allMatch,
-                matchCount
-              });
-            }
+            matches.push({
+              vi,
+              matchCount,
+              allMatch: matchCount === originalWords.length,
+              label: variant.label
+            });
+          }
+          
+          if (matches.length > 0) {
+            variantMatchesPerItem.set(itemId, { item, matches });
           }
         }
         
-        if (variantResults.size > 0) {
-          // Separate all-keyword matches from partial matches
-          const allKeywordVariants = [...variantResults.values()].filter(m => m.allMatch);
-          const partialVariants = [...variantResults.values()].filter(m => !m.allMatch);
-          
-          const resultSet = allKeywordVariants.length > 0 ? allKeywordVariants : partialVariants;
-          resultSet.sort((a, b) => b.matchCount - a.matchCount);
-          
-          // Build matchedVariants map: itemId → variantIndex
+        if (variantMatchesPerItem.size > 0) {
           const matchedVariants = {};
-          resultSet.forEach(m => { matchedVariants[m.item._id.toString()] = m.variantIndex; });
+          const resultItems = [];
           
-          logger.info(`VARIANT MATCH: ${resultSet.length} item(s), allKeyword=${allKeywordVariants.length}, partial=${partialVariants.length}`);
-          resultSet.forEach(m => logger.info(`  → ${m.item.name} → variant[${m.variantIndex}] "${m.variantLabel}" (${m.matchCount}/${originalWords.length} keywords)`));
+          for (const [itemId, { item, matches }] of variantMatchesPerItem) {
+            // Check if ALL search words appear in the parent item name
+            const parentNameLower = item.name.toLowerCase();
+            const parentNorm = normalizeForMatch(item.name);
+            const parentMatchesAll = originalWords.every(w =>
+              parentNameLower.includes(w.toLowerCase()) || parentNorm.includes(w.toLowerCase())
+            );
+            
+            // Count variants where ALL keywords match
+            const allKeywordMatches = matches.filter(m => m.allMatch);
+            
+            if (allKeywordMatches.length === 1 && !parentMatchesAll) {
+              // Exactly ONE variant matches ALL keywords AND parent name doesn't match
+              // → show that specific variant (e.g. "chicken biryani" → Chicken Biryani)
+              matchedVariants[itemId] = allKeywordMatches[0].vi;
+            } else {
+              // Multiple variants match OR parent name matches the search
+              // → show ALL variants as product list (e.g. "biryani" → all 5 biryani variants)
+              matchedVariants[itemId] = null;
+            }
+            
+            resultItems.push(item);
+          }
+          
+          // Sort by best match count across variants
+          resultItems.sort((a, b) => {
+            const aMax = Math.max(...variantMatchesPerItem.get(a._id.toString()).matches.map(m => m.matchCount));
+            const bMax = Math.max(...variantMatchesPerItem.get(b._id.toString()).matches.map(m => m.matchCount));
+            return bMax - aMax;
+          });
+          
+          logger.info(`VARIANT MATCH: ${resultItems.length} item(s)`);
+          for (const [itemId, { item, matches }] of variantMatchesPerItem) {
+            const mode = matchedVariants[itemId] === null ? 'ALL VARIANTS' : `specific[${matchedVariants[itemId]}]`;
+            logger.info(`  → ${item.name}: ${matches.length} variant(s) matched, mode=${mode}`);
+            matches.forEach(m => logger.info(`    variant[${m.vi}] "${m.label}" (${m.matchCount}/${originalWords.length} keywords, allMatch=${m.allMatch})`));
+          }
           
           return {
-            items: resultSet.map(m => m.item),
+            items: resultItems,
             foodType: detected,
             searchTerm: originalText,
             label: foodTypeLabel,
@@ -6328,11 +6354,20 @@ const chatbot = {
           
           const vi = matchedVariants[itemId];
           if (vi !== undefined && vi !== null && item.variants?.[vi]) {
+            // Specific variant matched → include only that variant
             const variant = item.variants[vi];
             if (variant.quantities && variant.quantities.length > 0) {
               retailerIds.push(`${itemId}_v${vi}_q0`);
             } else {
               retailerIds.push(`${itemId}_v${vi}`);
+            }
+          } else if (vi === null && item.variants && item.variants.length > 1) {
+            // Show ALL variants for this item
+            const allIds = await catalogService.ensureAllCatalogMappings(item);
+            if (allIds && allIds.length > 0) {
+              retailerIds.push(...allIds);
+            } else {
+              retailerIds.push(baseRetailerId);
             }
           } else {
             retailerIds.push(baseRetailerId);
@@ -6340,12 +6375,12 @@ const chatbot = {
         }
         
         if (retailerIds.length > 0) {
-          const sections = [{ title: `🏷️ ${tagKeyword}`.substring(0, 24), product_items: retailerIds.map(id => ({ product_retailer_id: id })) }];
+          const sections = [{ title: `🏷️ ${tagKeyword}`.substring(0, 24), productRetailerIds: retailerIds }];
           await whatsapp.sendProductList(
             phone,
             catalogId,
             `🏷️ ${tagKeyword}`.substring(0, 60),
-            `Found ${items.length} items matching "${tagKeyword}"\nTap to view details & add to cart`,
+            `Found ${retailerIds.length} items matching "${tagKeyword}"\nTap to view details & add to cart`,
             sections,
             'Perivi Hotel'
           );
@@ -6503,11 +6538,20 @@ const chatbot = {
           
           const vi = matchedVariants[itemId];
           if (vi !== undefined && vi !== null && item.variants?.[vi]) {
+            // Specific variant matched → include only that variant
             const variant = item.variants[vi];
             if (variant.quantities && variant.quantities.length > 0) {
               retailerIds.push(`${itemId}_v${vi}_q0`);
             } else {
               retailerIds.push(`${itemId}_v${vi}`);
+            }
+          } else if (vi === null && item.variants && item.variants.length > 1) {
+            // Show ALL variants for this item (e.g. "biryani" → all biryani variants)
+            const allIds = await catalogService.ensureAllCatalogMappings(item);
+            if (allIds && allIds.length > 0) {
+              retailerIds.push(...allIds);
+            } else {
+              retailerIds.push(baseRetailerId);
             }
           } else {
             retailerIds.push(baseRetailerId);
@@ -6515,12 +6559,12 @@ const chatbot = {
         }
         
         if (retailerIds.length > 0) {
-          const sections = [{ title: `🔍 ${searchLabel}`.substring(0, 24), product_items: retailerIds.map(id => ({ product_retailer_id: id })) }];
+          const sections = [{ title: `🔍 ${searchLabel}`.substring(0, 24), productRetailerIds: retailerIds }];
           await whatsapp.sendProductList(
             phone,
             catalogId,
             `🔍 ${searchLabel}`.substring(0, 60),
-            `Found ${items.length} items matching ${searchLabel}\nTap to view details & add to cart`,
+            `Found ${retailerIds.length} items matching ${searchLabel}\nTap to view details & add to cart`,
             sections,
             'Perivi Hotel'
           );
@@ -6592,12 +6636,40 @@ const chatbot = {
       return;
     }
 
-    // Try WhatsApp Catalog single product card (native catalog display with image, price, rating)
+    // Try WhatsApp Catalog product card (native catalog display with image, price, rating)
     try {
       if (catalogService.isEnabled()) {
         // Auto-ensure catalog mapping exists (creates on-the-fly if missing)
         const baseRetailerId = await catalogService.ensureCatalogMapping(item);
         if (baseRetailerId) {
+          const catalogId = catalogService.getCatalogId();
+          
+          // === MULTI-VARIANT PRODUCT LIST ===
+          // When no specific variant matched (matchedVariantIndex === null) AND item has multiple variants,
+          // show ALL variants as a product list ("X variants • Tap to add to cart" format)
+          if (matchedVariantIndex === null && item.variants && item.variants.length > 1) {
+            const allRetailerIds = await catalogService.ensureAllCatalogMappings(item);
+            if (allRetailerIds && allRetailerIds.length > 1) {
+              const availableVariants = item.variants.filter(v => v.available !== false);
+              const variantCount = availableVariants.length;
+              const bodyText = `${variantCount} variants • Tap to add to cart 🛒`;
+              const sections = [{
+                title: item.name.substring(0, 24),
+                productRetailerIds: allRetailerIds.slice(0, 30)
+              }];
+              await whatsapp.sendProductList(
+                phone,
+                catalogId,
+                `🛒 ${item.name}`.substring(0, 60),
+                bodyText,
+                sections,
+                'View & order!'
+              );
+              return;
+            }
+          }
+          
+          // === SINGLE VARIANT PRODUCT CARD ===
           // Determine the correct retailer ID (use matched variant if available)
           let retailerId = baseRetailerId;
           if (matchedVariantIndex !== null && item.variants && item.variants[matchedVariantIndex]) {
@@ -6608,7 +6680,7 @@ const chatbot = {
               retailerId = `${item._id.toString()}_v${matchedVariantIndex}`;
             }
           } else if (item.variants && item.variants.length > 0 && matchedVariantIndex === null) {
-            // No variant specified but item has variants - show first variant (default behavior)
+            // Single variant item - show the only variant
             const firstVariant = item.variants[0];
             if (firstVariant && firstVariant.quantities && firstVariant.quantities.length > 0) {
               retailerId = `${item._id.toString()}_v0_q0`;
@@ -6617,7 +6689,6 @@ const chatbot = {
             }
           }
           
-          const catalogId = catalogService.getCatalogId();
           const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating} (${item.totalRatings} reviews)` : '';
           const foodIcon = item.foodType === 'veg' ? '🌿 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
           let bodyText = `${foodIcon} ${ratingStr}\n⏱️ ${item.preparationTime || 15} mins prep time`;
@@ -6642,6 +6713,17 @@ const chatbot = {
       const mv = item.variants[matchedVariantIndex];
       const mvPrice = mv.offerPrice && mv.offerPrice < mv.price ? `~₹${mv.price}~ ₹${mv.offerPrice}` : `₹${mv.price}`;
       msg = `🔖 *Matched: ${mv.label}* (${mvPrice})\n\n${msg}`;
+    } else if (matchedVariantIndex === null && item.variants && item.variants.length > 1) {
+      // Show all variants in fallback text when no specific variant matched
+      const variantLines = item.variants
+        .filter(v => v.label && v.available !== false)
+        .map((v, i) => {
+          const vPrice = v.offerPrice && v.offerPrice < v.price ? `~₹${v.price}~ ₹${v.offerPrice}` : `₹${v.price}`;
+          return `  ${i + 1}. ${v.label} - ${vPrice}`;
+        }).join('\n');
+      if (variantLines) {
+        msg = `🔖 *${item.variants.filter(v => v.label && v.available !== false).length} Variants Available:*\n${variantLines}\n\n${msg}`;
+      }
     }
 
     const buttons = [
