@@ -3338,8 +3338,37 @@ const chatbot = {
           }
           
           // PRIORITY: Only use all-keyword matches if any exist; fall back to partial only if none
-          const selectedItems = allKeywordItems.length > 0 ? allKeywordItems : partialOnlyItems;
+          // But for partial-only: only keep items that have at least one variant-specific match
+          // This prevents "egg idli" from returning ALL egg items just because "egg" matches parent name
+          let selectedItems;
+          if (allKeywordItems.length > 0) {
+            selectedItems = allKeywordItems;
+          } else {
+            // For partial matches, only keep items where at least one variant matches in its own text
+            const variantSpecificPartialItems = partialOnlyItems.filter(({ matches }) =>
+              matches.some(m => m.variantSpecific)
+            );
+            selectedItems = variantSpecificPartialItems;
+          }
           
+          // Also check for non-variant items whose name matches ALL search words
+          // These would be missed since variant matching only checks items WITH variants
+          const nonVariantMatches = searchableItems.filter(item => {
+            if (item.variants && item.variants.length > 0) return false; // already handled above
+            const nameLower = item.name.toLowerCase();
+            const nameNorm = normalizeForMatch(item.name);
+            const tagStr = (item.tags || []).join(' ').toLowerCase();
+            const combined = `${nameLower} ${tagStr}`;
+            return originalWords.every(w => 
+              combined.includes(w) || this.smartIncludes(w, item.name)
+            );
+          });
+          
+          // If no meaningful variant matches remain, skip variant matching entirely
+          // and let the search fall through to name/tag matching phases
+          if (selectedItems.length === 0 && nonVariantMatches.length === 0) {
+            logger.info('VARIANT MATCH: No variant-specific matches found, falling through to name/tag search');
+          } else {
           const matchedVariants = {};
           const resultItems = [];
           
@@ -3387,12 +3416,17 @@ const chatbot = {
             resultItems.push(item);
           }
           
-          // Sort by best match count across variants
+          // Include non-variant items that match by name/tags
+          for (const nvItem of nonVariantMatches) {
+            resultItems.push(nvItem);
+          }
+          
+          // Sort by best match count across variants (non-variant items sort last)
           resultItems.sort((a, b) => {
-            const aMatches = variantMatchesPerItem.get(a._id.toString()).matches;
-            const bMatches = variantMatchesPerItem.get(b._id.toString()).matches;
-            const aMax = Math.max(...aMatches.map(m => m.matchCount));
-            const bMax = Math.max(...bMatches.map(m => m.matchCount));
+            const aEntry = variantMatchesPerItem.get(a._id.toString());
+            const bEntry = variantMatchesPerItem.get(b._id.toString());
+            const aMax = aEntry ? Math.max(...aEntry.matches.map(m => m.matchCount)) : 0;
+            const bMax = bEntry ? Math.max(...bEntry.matches.map(m => m.matchCount)) : 0;
             return bMax - aMax;
           });
           
@@ -3411,6 +3445,7 @@ const chatbot = {
             exactMatch: true,
             matchedVariants
           };
+          } // end else (selectedItems.length > 0)
         }
       }
     }
