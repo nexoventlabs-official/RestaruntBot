@@ -3282,15 +3282,25 @@ const chatbot = {
             
             const variantLabel = variant.label.toLowerCase();
             const variantTagsStr = (variant.tags || []).join(' ').toLowerCase();
-            // Combine parent item name + tags + variant label + tags for matching
-            // This way "egg curry" matches parent "Egg Curry" with size variants like "Half"/"Full"
-            const combinedText = `${parentNameLower} ${parentTagsStr} ${variantLabel} ${variantTagsStr}`;
+            // Variant-specific text (label + variant tags only)
+            const variantOwnText = `${variantLabel} ${variantTagsStr}`;
+            // Parent-level text (parent name + parent tags)
+            const parentText = `${parentNameLower} ${parentTagsStr}`;
+            // Combined for overall matching
+            const combinedText = `${parentText} ${variantOwnText}`;
             
             // Match original words against combined parent + variant text
+            // Also track whether the match comes from variant's own text
             let matchCount = 0;
+            let variantOwnMatchCount = 0;
             for (const word of originalWords) {
-              if (combinedText.includes(word) || this.smartIncludes(word, item.name) || this.smartIncludes(word, variant.label)) {
+              const matchesInCombined = combinedText.includes(word) || this.smartIncludes(word, item.name) || this.smartIncludes(word, variant.label);
+              if (matchesInCombined) {
                 matchCount++;
+                // Check if this word matches in the variant's own text (label/tags)
+                if (variantOwnText.includes(word) || this.smartIncludes(word, variant.label)) {
+                  variantOwnMatchCount++;
+                }
               }
             }
             
@@ -3299,7 +3309,11 @@ const chatbot = {
             matches.push({
               vi,
               matchCount,
+              variantOwnMatchCount,
               allMatch: matchCount === originalWords.length,
+              // A variant is a "true" variant-level match only if at least one
+              // search word matched in the variant's own label/tags (not just parent)
+              variantSpecific: variantOwnMatchCount > 0,
               label: variant.label
             });
           }
@@ -3340,19 +3354,34 @@ const chatbot = {
             // Count variants where ALL keywords match
             const allKeywordMatches = matches.filter(m => m.allMatch);
             
-            if (allKeywordMatches.length === 1 && !parentMatchesAll) {
-              // Exactly ONE variant matches ALL keywords AND parent name doesn't match
+            // Filter to only variants that have at least one word matching in their own label/tags
+            // This prevents parent tags (e.g. "idli" tag on parent "Break Fast") from
+            // making ALL variants (Puri, Parotta, etc.) appear as matches
+            const variantSpecificMatches = allKeywordMatches.filter(m => m.variantSpecific);
+            
+            if (variantSpecificMatches.length === 1 && !parentMatchesAll) {
+              // Exactly ONE variant matches ALL keywords in its own text AND parent name doesn't match
               // → show that specific variant (e.g. "chicken biryani" → Chicken Biryani variant)
-              matchedVariants[itemId] = allKeywordMatches[0].vi;
+              matchedVariants[itemId] = variantSpecificMatches[0].vi;
+            } else if (variantSpecificMatches.length > 1 && !parentMatchesAll) {
+              // Multiple variants match in their own label/tags — show only those
+              matchedVariants[itemId] = variantSpecificMatches.map(m => m.vi);
             } else if (parentMatchesAll) {
               // Parent name matches ALL keywords (e.g. "biryani" → parent "Biryani")
               // → show ALL variants as product list
               matchedVariants[itemId] = null;
+            } else if (allKeywordMatches.length >= 1 && variantSpecificMatches.length === 0) {
+              // All matches come ONLY from parent tags, not variant text
+              // → treat as parent-level match: show ALL variants
+              matchedVariants[itemId] = null;
             } else {
               // Multiple partial matches - show ONLY the matched variants (not all)
-              // e.g. "egg panner" → show Egg curry + Panner curry, NOT Fish curry
-              const matchedIndices = matches.map(m => m.vi);
-              matchedVariants[itemId] = matchedIndices;
+              const specificPartial = matches.filter(m => m.variantSpecific);
+              if (specificPartial.length > 0) {
+                matchedVariants[itemId] = specificPartial.map(m => m.vi);
+              } else {
+                matchedVariants[itemId] = null;
+              }
             }
             
             resultItems.push(item);
@@ -3371,7 +3400,7 @@ const chatbot = {
           for (const { itemId, item, matches } of selectedItems) {
             const mode = matchedVariants[itemId] === null ? 'ALL VARIANTS' : Array.isArray(matchedVariants[itemId]) ? `array[${matchedVariants[itemId]}]` : `specific[${matchedVariants[itemId]}]`;
             logger.info(`  → ${item.name}: ${matches.length} variant(s) matched, mode=${mode}`);
-            matches.forEach(m => logger.info(`    variant[${m.vi}] "${m.label}" (${m.matchCount}/${originalWords.length} keywords, allMatch=${m.allMatch})`));
+            matches.forEach(m => logger.info(`    variant[${m.vi}] "${m.label}" (${m.matchCount}/${originalWords.length} keywords, allMatch=${m.allMatch}, variantSpecific=${m.variantSpecific})`));
           }
           
           return {
