@@ -7,9 +7,6 @@ const { generateTokenPair, rotateRefreshToken, revokeRefreshToken } = require('.
 const { body, validationResult } = require('express-validator');
 const router = express.Router();
 
-// Apply rate limiting to all auth routes
-router.use(authRateLimiter);
-
 // Validation helper
 const handleValidation = (req, res, next) => {
   const errors = validationResult(req);
@@ -44,7 +41,8 @@ router.post('/test-push', async (req, res) => {
   }
 });
 
-router.post('/login', 
+router.post('/login',
+  authRateLimiter,
   body('username').trim().notEmpty().withMessage('Username is required').isLength({ max: 100 }),
   body('password').trim().notEmpty().withMessage('Password is required').isLength({ max: 128 }),
   handleValidation,
@@ -109,7 +107,6 @@ router.get('/verify', (req, res) => {
 
 // Refresh access token using refresh token
 router.post('/refresh',
-  authRateLimiter,
   body('refreshToken').notEmpty().withMessage('Refresh token is required'),
   handleValidation,
   async (req, res) => {
