@@ -6687,13 +6687,50 @@ const chatbot = {
           // When no specific variant matched (matchedVariantIndex === null) AND item has multiple
           // variants OR a variant with multiple quantity/size options,
           // show ALL as a product list ("X variants • Tap to add to cart" format)
-          const totalCatalogProducts = item.variants ? item.variants.reduce((sum, v) => {
+          const variantsArr = item.variants || [];
+          const totalCatalogProducts = variantsArr.reduce((sum, v) => {
             if (v.available === false) return sum;
             return sum + (v.quantities && v.quantities.length > 0 ? v.quantities.length : 1);
-          }, 0) : 0;
+          }, 0);
           
+          logger.info(`sendItemDetails: item="${item.name}", matchedVariantIndex=${matchedVariantIndex}, variantsCount=${variantsArr.length}, totalCatalogProducts=${totalCatalogProducts}`);
+          variantsArr.forEach((v, i) => {
+            logger.info(`  variant[${i}]: label="${v.label}", available=${v.available}, quantities=${v.quantities?.length || 0}, tags=${JSON.stringify(v.tags || [])}`);
+          });
+          
+          // === CASE 1: Specific variant matched AND has multiple sizes/quantities ===
+          // e.g., "egg curry" → variant[1] "Egg curry" has 2 quantities (5 piece, 10 piece)
+          // Show a product list with all sizes of that specific variant
+          if (matchedVariantIndex !== null && item.variants?.[matchedVariantIndex]) {
+            const matchedVariant = item.variants[matchedVariantIndex];
+            if (matchedVariant.quantities && matchedVariant.quantities.length > 1) {
+              const itemId = item._id.toString();
+              const variantRetailerIds = matchedVariant.quantities.map((_, qIdx) => 
+                `${itemId}_v${matchedVariantIndex}_q${qIdx}`
+              );
+              logger.info(`  Matched variant has ${matchedVariant.quantities.length} sizes, showing product list: ${JSON.stringify(variantRetailerIds)}`);
+              const variantLabel = matchedVariant.label || item.name;
+              const sections = [{
+                title: variantLabel.trim().substring(0, 24),
+                productRetailerIds: variantRetailerIds
+              }];
+              await whatsapp.sendProductList(
+                phone,
+                catalogId,
+                `🛒 ${variantLabel.trim()}`.substring(0, 60),
+                `${matchedVariant.quantities.length} sizes • Tap to add to cart 🛒`,
+                sections,
+                'View & order!'
+              );
+              return;
+            }
+          }
+          
+          // === CASE 2: No specific variant matched, item has multiple catalog products ===
+          // e.g., "biryani" → show all 5 biryani variants, or "curry" → show all curry variants
           if (matchedVariantIndex === null && totalCatalogProducts > 1) {
             const allRetailerIds = await catalogService.ensureAllCatalogMappings(item);
+            logger.info(`  ensureAllCatalogMappings returned: ${JSON.stringify(allRetailerIds)}`);
             if (allRetailerIds && allRetailerIds.length > 1) {
               const bodyText = `${allRetailerIds.length} variants • Tap to add to cart 🛒`;
               const sections = [{
@@ -6712,7 +6749,7 @@ const chatbot = {
             }
           }
           
-          // === SINGLE VARIANT PRODUCT CARD ===
+          // === CASE 3: Single product card (no sizes, or single variant) ===
           // Determine the correct retailer ID (use matched variant if available)
           let retailerId = baseRetailerId;
           if (matchedVariantIndex !== null && item.variants && item.variants[matchedVariantIndex]) {
@@ -6754,8 +6791,18 @@ const chatbot = {
     // Highlight matched variant in fallback card
     if (matchedVariantIndex !== null && item.variants?.[matchedVariantIndex]?.label) {
       const mv = item.variants[matchedVariantIndex];
-      const mvPrice = mv.offerPrice && mv.offerPrice < mv.price ? `~₹${mv.price}~ ₹${mv.offerPrice}` : `₹${mv.price}`;
-      msg = `🔖 *Matched: ${mv.label}* (${mvPrice})\n\n${msg}`;
+      // If matched variant has multiple quantities/sizes, show all of them
+      if (mv.quantities && mv.quantities.length > 1) {
+        const sizeLines = mv.quantities.map((q, qi) => {
+          const qPrice = q.offerPrice && q.offerPrice < q.price ? `~₹${q.price}~ ₹${q.offerPrice}` : `₹${q.price}`;
+          const sizeLabel = q.quantity ? `${q.quantity} ${q.unit || ''}`.trim() : `Option ${qi + 1}`;
+          return `  ${qi + 1}. ${sizeLabel} - ${qPrice}`;
+        });
+        msg = `🔖 *${mv.label}* - ${mv.quantities.length} sizes:\n${sizeLines.join('\n')}\n\n${msg}`;
+      } else {
+        const mvPrice = mv.offerPrice && mv.offerPrice < mv.price ? `~₹${mv.price}~ ₹${mv.offerPrice}` : `₹${mv.price}`;
+        msg = `🔖 *Matched: ${mv.label}* (${mvPrice})\n\n${msg}`;
+      }
     } else if (matchedVariantIndex === null && item.variants && item.variants.length > 0) {
       // Show all variants/sizes in fallback text when no specific variant matched
       const variantLines = [];
