@@ -126,10 +126,10 @@ const publicLimiter = createRateLimiterInstance({
 });
 
 const strictLimiter = createRateLimiterInstance({
-  points: 5,
+  points: 15,
   duration: 15 * 60,
   keyPrefix: 'rl:strict',
-  blockDuration: 30 * 60
+  blockDuration: 5 * 60
 });
 
 // ─── Utility helpers ───────────────────────────────────────────────
