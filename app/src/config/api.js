@@ -33,6 +33,7 @@ api.interceptors.request.use(
 
 // Response interceptor for error handling with automatic token refresh
 let isRefreshing = false;
+let isLoggingOut = false;
 let failedQueue = [];
 
 const processQueue = (error, token = null) => {
@@ -46,10 +47,30 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
+const doForceLogout = async () => {
+  if (isLoggingOut) return; // Prevent recursive logout loop
+  isLoggingOut = true;
+  try {
+    await SecureStore.deleteItemAsync('token');
+    await SecureStore.deleteItemAsync('refreshToken');
+    await SecureStore.deleteItemAsync('user');
+    await SecureStore.deleteItemAsync('role');
+    if (authLogoutCallback) authLogoutCallback();
+  } finally {
+    // Reset after a short delay to allow state to settle
+    setTimeout(() => { isLoggingOut = false; }, 2000);
+  }
+};
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+
+    // If we're already logging out, don't process 401s — just reject
+    if (isLoggingOut) {
+      return Promise.reject(error);
+    }
 
     // Only attempt refresh on 401 and if not already retrying
     if (error.response?.status === 401 && !originalRequest._retry) {
@@ -58,12 +79,7 @@ api.interceptors.response.use(
                           originalRequest.url?.includes('/auth/login') ||
                           originalRequest.url?.includes('/delivery/login');
       if (isAuthRoute) {
-        // Auth routes failing means credentials are bad — force logout
-        await SecureStore.deleteItemAsync('token');
-        await SecureStore.deleteItemAsync('refreshToken');
-        await SecureStore.deleteItemAsync('user');
-        await SecureStore.deleteItemAsync('role');
-        if (authLogoutCallback) authLogoutCallback();
+        await doForceLogout();
         return Promise.reject(error);
       }
 
@@ -99,12 +115,7 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        // Refresh failed — force logout
-        await SecureStore.deleteItemAsync('token');
-        await SecureStore.deleteItemAsync('refreshToken');
-        await SecureStore.deleteItemAsync('user');
-        await SecureStore.deleteItemAsync('role');
-        if (authLogoutCallback) authLogoutCallback();
+        await doForceLogout();
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

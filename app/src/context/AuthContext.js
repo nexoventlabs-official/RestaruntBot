@@ -19,13 +19,14 @@ export const AuthProvider = ({ children }) => {
   const permissionCheckInterval = useRef(null);
 
   // Force logout function (called from API interceptor on 401)
+  const forceLogoutRef = useRef(false);
   const forceLogout = useCallback(async () => {
+    // Guard against being called multiple times in a loop
+    if (forceLogoutRef.current) return;
+    forceLogoutRef.current = true;
     console.log('🔒 Force logout triggered - session invalidated');
-    // unregisterPushToken now has a fallback path that works even when
-    // the JWT is expired — it sends the raw push token to a dedicated
-    // backend endpoint. We still don't await it to avoid blocking UI.
-    pushNotifications.unregisterPushToken().catch(() => {});
-    // Clear local auth state immediately
+    // Clear local auth state immediately (do NOT make API calls here
+    // as they would trigger 401 → interceptor → forceLogout again)
     SecureStore.deleteItemAsync('token').catch(() => {});
     SecureStore.deleteItemAsync('refreshToken').catch(() => {});
     SecureStore.deleteItemAsync('user').catch(() => {});
@@ -33,6 +34,8 @@ export const AuthProvider = ({ children }) => {
     SecureStore.deleteItemAsync(NOTIFICATION_PERMISSION_GRANTED_KEY).catch(() => {});
     setUser(null);
     setRole(null);
+    // Reset guard after state settles
+    setTimeout(() => { forceLogoutRef.current = false; }, 2000);
   }, []);
 
   // Check notification permission and prompt if not granted
