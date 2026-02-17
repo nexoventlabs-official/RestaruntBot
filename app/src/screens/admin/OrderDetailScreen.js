@@ -324,7 +324,11 @@ export default function OrderDetailScreen({ route, navigation }) {
             </View>
             <View style={styles.card}>
               {order.items?.map((item, index) => {
-                const itemImage = item.image || item.menuItem?.image;
+                // Use variant-specific image if available
+                const variantImage = (item.variantIndex != null && item.menuItem?.variants?.[item.variantIndex]?.image) 
+                  ? item.menuItem.variants[item.variantIndex].image 
+                  : null;
+                const itemImage = item.image || variantImage || item.menuItem?.image;
                 return (
                 <View key={index} style={[styles.orderItemRow, index > 0 && styles.orderItemBorder]}>
                   <View style={styles.orderItemImageContainer}>

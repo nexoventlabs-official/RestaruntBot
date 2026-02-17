@@ -83,7 +83,7 @@ router.get('/', authMiddleware, async (req, res) => {
     const query = { isHidden: { $ne: true } };
     if (status) query.status = status;
     const orders = await Order.find(query)
-      .populate('items.menuItem', 'image')
+      .populate('items.menuItem', 'image variants.image')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit));

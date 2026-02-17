@@ -8358,6 +8358,12 @@ const chatbot = {
       itemsTotal += subtotal;
       totalDiscount += itemDiscount;
       
+      // Use variant-specific image if available, else parent item image
+      let itemImage = item.menuItem.image;
+      if (item.variantIndex !== null && item.variantIndex !== undefined && item.menuItem.variants?.[item.variantIndex]?.image) {
+        itemImage = item.menuItem.variants[item.variantIndex].image;
+      }
+      
       return {
         menuItem: item.menuItem._id,
         name: itemName,
@@ -8366,7 +8372,7 @@ const chatbot = {
         originalPrice,
         unit: itemUnit,
         unitQty: itemUnitQty,
-        image: item.menuItem.image,
+        image: itemImage,
         variantIndex: item.variantIndex ?? null,
         variantLabel: item.variantLabel || null,
         quantityIndex: item.quantityIndex ?? null,
@@ -9206,6 +9212,13 @@ const chatbot = {
         const itemTotal = effectivePrice * cartItem.quantity;
         total += itemTotal;
         totalDiscount += itemDiscount;
+        
+        // Use variant-specific image if available, else parent item image
+        let itemImage = item.image;
+        if (cartItem.variantIndex !== null && cartItem.variantIndex !== undefined && item.variants?.[cartItem.variantIndex]?.image) {
+          itemImage = item.variants[cartItem.variantIndex].image;
+        }
+        
         items.push({
           menuItem: item._id,
           name: itemName,
@@ -9214,7 +9227,7 @@ const chatbot = {
           originalPrice,
           unit: itemUnit,
           unitQty: itemUnitQty,
-          image: item.image,
+          image: itemImage,
           variantIndex: cartItem.variantIndex ?? null,
           variantLabel: cartItem.variantLabel || null,
           quantityIndex: cartItem.quantityIndex ?? null,
