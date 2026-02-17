@@ -2585,6 +2585,12 @@ const chatbot = {
     
     // Check for egg specifically
     if (/\begg\b/.test(lowerText) && !/\beggless\b/.test(lowerText)) {
+      // If "egg" appears with other meaningful words (e.g. "egg curry", "egg biryani"),
+      // treat as specific ingredient search so it matches by name/tags, not just foodType
+      const withoutEgg = lowerText.replace(/\begg\b/g, '').trim();
+      if (withoutEgg.replace(/\s+/g, '').length >= 2) {
+        return { type: 'specific', ingredient: 'egg' };
+      }
       return { type: 'egg' };
     }
     
@@ -3188,7 +3194,18 @@ const chatbot = {
         logger.info(`FILTERED TO VEG ITEMS: ${searchableItems.length} items out of ${menuItems.length}`);
         logger.info(`VEG item names: ${searchableItems.slice(0, 5).map(i => i.name).join(', ')}...`);
       } else if (detected.type === 'egg') {
-        searchableItems = menuItems.filter(item => item.foodType === 'egg');
+        // Include items with foodType 'egg' AND items whose name/tags/variants mention 'egg'
+        searchableItems = menuItems.filter(item => {
+          if (item.foodType === 'egg') return true;
+          if (this.smartIncludes('egg', item.name)) return true;
+          if (item.tags?.some(tag => this.smartIncludes('egg', tag))) return true;
+          if ((item.variants || []).some(v => {
+            if (v.label && this.smartIncludes('egg', v.label)) return true;
+            if (v.tags?.some(tag => this.smartIncludes('egg', tag))) return true;
+            return false;
+          })) return true;
+          return false;
+        });
         foodTypeLabel = '🥚 Egg';
         logger.info(`FILTERED TO EGG ITEMS: ${searchableItems.length} items out of ${menuItems.length}`);
       } else if (detected.type === 'nonveg') {
@@ -3256,6 +3273,8 @@ const chatbot = {
           
           const itemId = item._id.toString();
           const matches = [];
+          const parentNameLower = item.name.toLowerCase();
+          const parentTagsStr = (item.tags || []).join(' ').toLowerCase();
           
           for (let vi = 0; vi < item.variants.length; vi++) {
             const variant = item.variants[vi];
@@ -3263,12 +3282,14 @@ const chatbot = {
             
             const variantLabel = variant.label.toLowerCase();
             const variantTagsStr = (variant.tags || []).join(' ').toLowerCase();
-            const variantText = `${variantLabel} ${variantTagsStr}`;
+            // Combine parent item name + tags + variant label + tags for matching
+            // This way "egg curry" matches parent "Egg Curry" with size variants like "Half"/"Full"
+            const combinedText = `${parentNameLower} ${parentTagsStr} ${variantLabel} ${variantTagsStr}`;
             
-            // Match original words against variant label/tags
+            // Match original words against combined parent + variant text
             let matchCount = 0;
             for (const word of originalWords) {
-              if (this.smartIncludes(word, variant.label) || variantText.includes(word)) {
+              if (combinedText.includes(word) || this.smartIncludes(word, item.name) || this.smartIncludes(word, variant.label)) {
                 matchCount++;
               }
             }
@@ -3289,10 +3310,26 @@ const chatbot = {
         }
         
         if (variantMatchesPerItem.size > 0) {
+          // Separate items into: those with ALL-keyword variant matches vs partial-only
+          const allKeywordItems = []; // items where at least one variant matches ALL search words
+          const partialOnlyItems = []; // items where variants only partially match
+          
+          for (const [itemId, { item, matches }] of variantMatchesPerItem) {
+            const hasAllKeywordMatch = matches.some(m => m.allMatch);
+            if (hasAllKeywordMatch) {
+              allKeywordItems.push({ itemId, item, matches });
+            } else {
+              partialOnlyItems.push({ itemId, item, matches });
+            }
+          }
+          
+          // PRIORITY: Only use all-keyword matches if any exist; fall back to partial only if none
+          const selectedItems = allKeywordItems.length > 0 ? allKeywordItems : partialOnlyItems;
+          
           const matchedVariants = {};
           const resultItems = [];
           
-          for (const [itemId, { item, matches }] of variantMatchesPerItem) {
+          for (const { itemId, item, matches } of selectedItems) {
             // Check if ALL search words appear in the parent item name
             const parentNameLower = item.name.toLowerCase();
             const parentNorm = normalizeForMatch(item.name);
@@ -3305,7 +3342,7 @@ const chatbot = {
             
             if (allKeywordMatches.length === 1 && !parentMatchesAll) {
               // Exactly ONE variant matches ALL keywords AND parent name doesn't match
-              // → show that specific variant (e.g. "chicken biryani" → Chicken Biryani)
+              // → show that specific variant (e.g. "chicken biryani" → Chicken Biryani variant)
               matchedVariants[itemId] = allKeywordMatches[0].vi;
             } else {
               // Multiple variants match OR parent name matches the search
@@ -3318,13 +3355,15 @@ const chatbot = {
           
           // Sort by best match count across variants
           resultItems.sort((a, b) => {
-            const aMax = Math.max(...variantMatchesPerItem.get(a._id.toString()).matches.map(m => m.matchCount));
-            const bMax = Math.max(...variantMatchesPerItem.get(b._id.toString()).matches.map(m => m.matchCount));
+            const aMatches = variantMatchesPerItem.get(a._id.toString()).matches;
+            const bMatches = variantMatchesPerItem.get(b._id.toString()).matches;
+            const aMax = Math.max(...aMatches.map(m => m.matchCount));
+            const bMax = Math.max(...bMatches.map(m => m.matchCount));
             return bMax - aMax;
           });
           
-          logger.info(`VARIANT MATCH: ${resultItems.length} item(s)`);
-          for (const [itemId, { item, matches }] of variantMatchesPerItem) {
+          logger.info(`VARIANT MATCH: ${resultItems.length} item(s), allKeyword=${allKeywordItems.length}, partialOnly=${partialOnlyItems.length}`);
+          for (const { itemId, item, matches } of selectedItems) {
             const mode = matchedVariants[itemId] === null ? 'ALL VARIANTS' : `specific[${matchedVariants[itemId]}]`;
             logger.info(`  → ${item.name}: ${matches.length} variant(s) matched, mode=${mode}`);
             matches.forEach(m => logger.info(`    variant[${m.vi}] "${m.label}" (${m.matchCount}/${originalWords.length} keywords, allMatch=${m.allMatch})`));
