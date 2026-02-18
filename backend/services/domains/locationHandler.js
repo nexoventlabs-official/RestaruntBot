@@ -21,6 +21,7 @@
 const Settings = require('../../models/Settings');
 const conversationState = require('../conversationState');
 const whatsapp = require('../whatsapp');
+const chatbotImagesService = require('../chatbotImages');
 const { logger } = require('../correlationContext');
 
 // Location validation constants
@@ -43,10 +44,17 @@ async function requestLocation(customer, phone) {
     `• Ensure we deliver to your area\n\n` +
     `Tap the 📎 button and select Location`;
   
-  await whatsapp.sendButtons(phone, message, [
+  const buttons = [
     { id: 'view_cart', text: '🛒 Back to Cart' },
     { id: 'service_pickup', text: '🏪 Switch to Pickup' }
-  ]);
+  ];
+  
+  const locationImg = await chatbotImagesService.getImageUrl('delivery_location');
+  if (locationImg) {
+    await whatsapp.sendImageWithButtons(phone, locationImg, message, buttons);
+  } else {
+    await whatsapp.sendButtons(phone, message, buttons);
+  }
   
   conversationState.transitionTo(customer, 'awaiting_location');
   await customer.save();
@@ -71,29 +79,37 @@ async function handleLocation(customer, phone, params) {
   
   // Beyond max radius
   if (deliveryResult.beyondMaxRadius) {
-    await whatsapp.sendButtons(phone, 
-      `❌ *Delivery Not Available*\n\n${deliveryResult.message}\n\n` +
-      `Would you like to try a different address or opt for self-pickup?`,
-      [
-        { id: 'service_pickup', text: '🏪 Self-Pickup' },
-        { id: 'share_location', text: '📍 New Location' },
-        { id: 'home', text: '🏠 Main Menu' }
-      ]
-    );
+    const outOfRangeImg = await chatbotImagesService.getImageUrl('out_of_delivery_range');
+    const msg = `❌ *Delivery Not Available*\n\n${deliveryResult.message}\n\n` +
+      `Would you like to try a different address or opt for self-pickup?`;
+    const btns = [
+      { id: 'service_pickup', text: '🏪 Self-Pickup' },
+      { id: 'share_location', text: '📍 New Location' },
+      { id: 'home', text: '🏠 Main Menu' }
+    ];
+    if (outOfRangeImg) {
+      await whatsapp.sendImageWithButtons(phone, outOfRangeImg, msg, btns);
+    } else {
+      await whatsapp.sendButtons(phone, msg, btns);
+    }
     return;
   }
   
   // Outside free radius and delivery not available
   if (deliveryResult.deliveryNotAvailable) {
-    await whatsapp.sendButtons(phone,
-      `❌ *Delivery Not Available*\n\n${deliveryResult.message}\n\n` +
-      `Would you like to try a different address or opt for self-pickup?`,
-      [
-        { id: 'service_pickup', text: '🏪 Self-Pickup' },
-        { id: 'share_location', text: '📍 New Location' },
-        { id: 'home', text: '🏠 Main Menu' }
-      ]
-    );
+    const outOfRangeImg = await chatbotImagesService.getImageUrl('out_of_delivery_range');
+    const msg = `❌ *Delivery Not Available*\n\n${deliveryResult.message}\n\n` +
+      `Would you like to try a different address or opt for self-pickup?`;
+    const btns = [
+      { id: 'service_pickup', text: '🏪 Self-Pickup' },
+      { id: 'share_location', text: '📍 New Location' },
+      { id: 'home', text: '🏠 Main Menu' }
+    ];
+    if (outOfRangeImg) {
+      await whatsapp.sendImageWithButtons(phone, outOfRangeImg, msg, btns);
+    } else {
+      await whatsapp.sendButtons(phone, msg, btns);
+    }
     return;
   }
   
@@ -445,10 +461,17 @@ function hasCustomerLocation(customer) {
  * Request location with custom message
  */
 async function requestLocationWithMessage(customer, phone, message) {
-  await whatsapp.sendButtons(phone, message, [
+  const buttons = [
     { id: 'view_cart', text: '🛒 Back to Cart' },
     { id: 'service_pickup', text: '🏪 Switch to Pickup' }
-  ]);
+  ];
+  
+  const locationImg = await chatbotImagesService.getImageUrl('delivery_location');
+  if (locationImg) {
+    await whatsapp.sendImageWithButtons(phone, locationImg, message, buttons);
+  } else {
+    await whatsapp.sendButtons(phone, message, buttons);
+  }
   
   conversationState.transitionTo(customer, 'awaiting_location');
   await customer.save();

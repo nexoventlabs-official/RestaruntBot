@@ -26,6 +26,7 @@
 const MenuItem = require('../../models/MenuItem');
 const conversationState = require('../conversationState');
 const whatsapp = require('../whatsapp');
+const chatbotImagesService = require('../chatbotImages');
 const idempotencyService = require('../idempotencyService');
 const transactionManager = require('../transactionManager');
 const { logger } = require('../correlationContext');
@@ -106,11 +107,18 @@ async function addToCart(customer, phone, params) {
       `Qty: ${quantity} × ₹${item.price} = ₹${item.price * quantity}\n\n` +
       `Cart total: ${customer.cart.length} item(s)`;
     
-    await whatsapp.sendButtons(phone, message, [
+    const buttons = [
       { id: 'view_cart', text: '🛒 View Cart' },
       { id: 'view_menu', text: '📋 Continue Shopping' },
       { id: 'checkout', text: '✅ Checkout' }
-    ]);
+    ];
+    
+    const addedImg = await chatbotImagesService.getImageUrl('added_to_cart');
+    if (addedImg) {
+      await whatsapp.sendImageWithButtons(phone, addedImg, message, buttons);
+    } else {
+      await whatsapp.sendButtons(phone, message, buttons);
+    }
     
     conversationState.clearSelectedItem(customer);
     conversationState.transitionTo(customer, 'item_added');
@@ -133,10 +141,18 @@ async function addToCart(customer, phone, params) {
 async function viewCart(customer, phone) {
   if (!customer.cart || customer.cart.length === 0) {
     await whatsapp.sendMessage(phone, '🛒 Your cart is empty.\n\nStart adding items from our menu!');
-    await whatsapp.sendButtons(phone, 'What would you like to do?', [
-      { id: 'view_menu', text: '📋 Browse Menu' },
-      { id: 'home', text: '🏠 Main Menu' }
-    ]);
+    const emptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+    if (emptyImg) {
+      await whatsapp.sendImageWithButtons(phone, emptyImg, 'What would you like to do?', [
+        { id: 'view_menu', text: '📋 Browse Menu' },
+        { id: 'home', text: '🏠 Main Menu' }
+      ]);
+    } else {
+      await whatsapp.sendButtons(phone, 'What would you like to do?', [
+        { id: 'view_menu', text: '📋 Browse Menu' },
+        { id: 'home', text: '🏠 Main Menu' }
+      ]);
+    }
     return;
   }
   
@@ -178,7 +194,12 @@ async function viewCart(customer, phone) {
     { id: 'clear_cart', text: '🗑️ Clear Cart' }
   ];
   
-  await whatsapp.sendButtons(phone, message, buttons);
+  const cartImg = await chatbotImagesService.getImageUrl('view_cart');
+  if (cartImg) {
+    await whatsapp.sendImageWithButtons(phone, cartImg, message, buttons);
+  } else {
+    await whatsapp.sendButtons(phone, message, buttons);
+  }
   
   conversationState.transitionTo(customer, 'viewing_cart');
   await customer.save();
@@ -278,10 +299,18 @@ async function clearCart(customer, phone) {
     
     await whatsapp.sendMessage(phone, '🗑️ Cart cleared successfully.');
     
-    await whatsapp.sendButtons(phone, 'What would you like to do next?', [
-      { id: 'view_menu', text: '📋 Browse Menu' },
-      { id: 'home', text: '🏠 Main Menu' }
-    ]);
+    const clearedImg = await chatbotImagesService.getImageUrl('cart_cleared');
+    if (clearedImg) {
+      await whatsapp.sendImageWithButtons(phone, clearedImg, 'What would you like to do next?', [
+        { id: 'view_menu', text: '📋 Browse Menu' },
+        { id: 'home', text: '🏠 Main Menu' }
+      ]);
+    } else {
+      await whatsapp.sendButtons(phone, 'What would you like to do next?', [
+        { id: 'view_menu', text: '📋 Browse Menu' },
+        { id: 'home', text: '🏠 Main Menu' }
+      ]);
+    }
     
     conversationState.transitionTo(customer, 'main_menu');
     await customer.save();
@@ -546,7 +575,13 @@ async function sendCartOptionsMenu(customer, phone) {
         { id: 'home', text: '🏠 Main Menu' }
       ];
   
-  await whatsapp.sendButtons(phone, 'Cart Options:', buttons);
+  const imageKey = hasItems ? 'view_cart' : 'cart_empty';
+  const imageUrl = await chatbotImagesService.getImageUrl(imageKey);
+  if (imageUrl) {
+    await whatsapp.sendImageWithButtons(phone, imageUrl, 'Cart Options:', buttons);
+  } else {
+    await whatsapp.sendButtons(phone, 'Cart Options:', buttons);
+  }
   
   conversationState.transitionTo(customer, 'cart_options');
   await customer.save();

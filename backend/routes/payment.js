@@ -307,13 +307,17 @@ router.post('/razorpay-webhook', webhookRateLimiter, express.raw({ type: 'applic
         
         // Notify customer
         try {
-          await whatsapp.sendButtons(order.customer.phone,
-            `✅ *Refund Successful!*\n\nOrder: ${order.orderId}\nAmount: ₹${refund.amount / 100}\nRefund ID: ${refund.id}\n\n💳 The amount will be credited to your account within 5-7 business days.`,
-            [
-              { id: 'place_order', text: 'New Order' },
-              { id: 'home', text: 'Main Menu' }
-            ]
-          );
+          const refundSuccessMsg = `✅ *Refund Successful!*\n\nOrder: ${order.orderId}\nAmount: ₹${refund.amount / 100}\nRefund ID: ${refund.id}\n\n💳 The amount will be credited to your account within 5-7 business days.`;
+          const refundSuccessBtns = [
+            { id: 'place_order', text: 'New Order' },
+            { id: 'home', text: 'Main Menu' }
+          ];
+          const refundSuccessImg = await chatbotImagesService.getImageUrl('refund_processed');
+          if (refundSuccessImg) {
+            await whatsapp.sendImageWithButtons(order.customer.phone, refundSuccessImg, refundSuccessMsg, refundSuccessBtns);
+          } else {
+            await whatsapp.sendButtons(order.customer.phone, refundSuccessMsg, refundSuccessBtns);
+          }
         } catch (whatsappErr) {
           logger.error('WhatsApp notification failed', { error: whatsappErr.message });
         }
@@ -362,13 +366,17 @@ router.post('/razorpay-webhook', webhookRateLimiter, express.raw({ type: 'applic
       
       // Notify customer
       try {
-        await whatsapp.sendButtons(order.customer.phone,
-          `⚠️ *Refund Issue*\n\nOrder: ${order.orderId}\nAmount: ₹${order.totalAmount}\n\nWe couldn't process your refund automatically.\nOur team will contact you within 24 hours to resolve this.`,
-          [
-            { id: 'place_order', text: 'New Order' },
-            { id: 'home', text: 'Main Menu' }
-          ]
-        );
+        const refundIssueMsg = `⚠️ *Refund Issue*\n\nOrder: ${order.orderId}\nAmount: ₹${order.totalAmount}\n\nWe couldn't process your refund automatically.\nOur team will contact you within 24 hours to resolve this.`;
+        const refundIssueBtns = [
+          { id: 'place_order', text: 'New Order' },
+          { id: 'home', text: 'Main Menu' }
+        ];
+        const refundIssueImg = await chatbotImagesService.getImageUrl('refund_failed');
+        if (refundIssueImg) {
+          await whatsapp.sendImageWithButtons(order.customer.phone, refundIssueImg, refundIssueMsg, refundIssueBtns);
+        } else {
+          await whatsapp.sendButtons(order.customer.phone, refundIssueMsg, refundIssueBtns);
+        }
       } catch (whatsappErr) {
         logger.error('WhatsApp notification failed', { error: whatsappErr.message });
       }
@@ -610,13 +618,17 @@ router.post('/refund/:orderId', authMiddleware, async (req, res) => {
         logger.error('Google Sheets sync error', { error: err.message })
       );
 
-      await whatsapp.sendButtons(order.customer.phone,
-        `✅ *Refund Successful!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.totalAmount}\nRefund ID: ${refund.id}\n\n💳 The amount will be credited to your account within 5-7 business days.`,
-        [
-          { id: 'place_order', text: 'New Order' },
-          { id: 'home', text: 'Main Menu' }
-        ]
-      );
+      const adminRefundMsg = `✅ *Refund Successful!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.totalAmount}\nRefund ID: ${refund.id}\n\n💳 The amount will be credited to your account within 5-7 business days.`;
+      const adminRefundBtns = [
+        { id: 'place_order', text: 'New Order' },
+        { id: 'home', text: 'Main Menu' }
+      ];
+      const adminRefundImg = await chatbotImagesService.getImageUrl('refund_processed');
+      if (adminRefundImg) {
+        await whatsapp.sendImageWithButtons(order.customer.phone, adminRefundImg, adminRefundMsg, adminRefundBtns);
+      } else {
+        await whatsapp.sendButtons(order.customer.phone, adminRefundMsg, adminRefundBtns);
+      }
 
       res.json({ success: true, message: 'Refund processed', refundId: refund.id, orderId: order.orderId });
     } catch (refundError) {
@@ -640,13 +652,17 @@ router.post('/refund/:orderId', authMiddleware, async (req, res) => {
         logger.error('Google Sheets sync error', { error: err.message })
       );
 
-      await whatsapp.sendButtons(order.customer.phone,
-        `⚠️ *Refund Issue*\n\nOrder: ${order.orderId}\nAmount: ₹${order.totalAmount}\n\nWe couldn't process your refund automatically.\nOur team will contact you within 24 hours to resolve this.`,
-        [
-          { id: 'place_order', text: 'New Order' },
-          { id: 'home', text: 'Main Menu' }
-        ]
-      );
+      const adminRefundIssueMsg = `⚠️ *Refund Issue*\n\nOrder: ${order.orderId}\nAmount: ₹${order.totalAmount}\n\nWe couldn't process your refund automatically.\nOur team will contact you within 24 hours to resolve this.`;
+      const adminRefundIssueBtns = [
+        { id: 'place_order', text: 'New Order' },
+        { id: 'home', text: 'Main Menu' }
+      ];
+      const adminRefundIssueImg = await chatbotImagesService.getImageUrl('refund_failed');
+      if (adminRefundIssueImg) {
+        await whatsapp.sendImageWithButtons(order.customer.phone, adminRefundIssueImg, adminRefundIssueMsg, adminRefundIssueBtns);
+      } else {
+        await whatsapp.sendButtons(order.customer.phone, adminRefundIssueMsg, adminRefundIssueBtns);
+      }
 
       res.status(500).json({ success: false, error: refundError.message, orderId: order.orderId });
     }
@@ -690,13 +706,17 @@ router.post('/process-refund/:orderId', authMiddleware, async (req, res) => {
         logger.error('Google Sheets sync error', { error: err.message })
       );
 
-      await whatsapp.sendButtons(order.customer.phone,
-        `✅ *Refund Successful!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.totalAmount}\nRefund ID: ${refund.id}\n\n💳 The amount will be credited to your account within 5-7 business days.`,
-        [
-          { id: 'place_order', text: 'New Order' },
-          { id: 'home', text: 'Main Menu' }
-        ]
-      );
+      const processRefundMsg = `✅ *Refund Successful!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.totalAmount}\nRefund ID: ${refund.id}\n\n💳 The amount will be credited to your account within 5-7 business days.`;
+      const processRefundBtns = [
+        { id: 'place_order', text: 'New Order' },
+        { id: 'home', text: 'Main Menu' }
+      ];
+      const processRefundImg = await chatbotImagesService.getImageUrl('refund_processed');
+      if (processRefundImg) {
+        await whatsapp.sendImageWithButtons(order.customer.phone, processRefundImg, processRefundMsg, processRefundBtns);
+      } else {
+        await whatsapp.sendButtons(order.customer.phone, processRefundMsg, processRefundBtns);
+      }
 
       res.json({ success: true, message: 'Refund processed', refundId: refund.id });
     } catch (refundError) {

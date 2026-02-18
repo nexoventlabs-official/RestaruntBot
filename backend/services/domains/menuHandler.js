@@ -73,7 +73,12 @@ async function showFoodTypeSelection(customer, phone) {
     { id: 'food_type_all', text: '🍽️ All Items' }
   ];
   
-  await whatsapp.sendButtons(phone, message, buttons);
+  const imageUrl = await chatbotImagesService.getImageUrl('food_type_selection') || await chatbotImagesService.getImageUrl('browse_menu');
+  if (imageUrl) {
+    await whatsapp.sendImageWithButtons(phone, imageUrl, message, buttons);
+  } else {
+    await whatsapp.sendButtons(phone, message, buttons);
+  }
   
   conversationState.transitionTo(customer, 'select_food_type');
   await customer.save();
@@ -111,14 +116,17 @@ async function browseMenu(customer, phone, foodType = FOOD_TYPES.ALL) {
   
   if (filteredItems.length === 0) {
     const foodTypeLabel = getFoodTypeLabel(foodType);
-    await whatsapp.sendButtons(
-      phone,
-      `❌ No ${foodTypeLabel} items available at the moment.`,
-      [
-        { id: 'view_menu', text: '📋 Browse Menu' },
-        { id: 'home', text: '🏠 Main Menu' }
-      ]
-    );
+    const imageUrl = await chatbotImagesService.getImageUrl('item_not_available');
+    const msg = `❌ No ${foodTypeLabel} items available at the moment.`;
+    const btns = [
+      { id: 'view_menu', text: '📋 Browse Menu' },
+      { id: 'home', text: '🏠 Main Menu' }
+    ];
+    if (imageUrl) {
+      await whatsapp.sendImageWithButtons(phone, imageUrl, msg, btns);
+    } else {
+      await whatsapp.sendButtons(phone, msg, btns);
+    }
     return;
   }
   
@@ -216,14 +224,17 @@ async function showItemDetails(customer, phone, params) {
   const item = await MenuItem.findById(itemId);
   
   if (!item || !item.available) {
-    await whatsapp.sendButtons(
-      phone,
-      '❌ Item not available.',
-      [
-        { id: 'view_menu', text: '📋 Browse Menu' },
-        { id: 'home', text: '🏠 Main Menu' }
-      ]
-    );
+    const imageUrl = await chatbotImagesService.getImageUrl('item_not_available');
+    const msg = '❌ Item not available.';
+    const btns = [
+      { id: 'view_menu', text: '📋 Browse Menu' },
+      { id: 'home', text: '🏠 Main Menu' }
+    ];
+    if (imageUrl) {
+      await whatsapp.sendImageWithButtons(phone, imageUrl, msg, btns);
+    } else {
+      await whatsapp.sendButtons(phone, msg, btns);
+    }
     return;
   }
   
@@ -283,14 +294,17 @@ async function searchItem(customer, phone, params) {
   const items = await MenuItem.find(searchQuery).limit(10);
   
   if (items.length === 0) {
-    await whatsapp.sendButtons(
-      phone,
-      `❌ No items found for "${query}"`,
-      [
-        { id: 'view_menu', text: '📋 Browse Menu' },
-        { id: 'home', text: '🏠 Main Menu' }
-      ]
-    );
+    const imageUrl = await chatbotImagesService.getImageUrl('search_no_results');
+    const msg = `❌ No items found for "${query}"`;
+    const btns = [
+      { id: 'view_menu', text: '📋 Browse Menu' },
+      { id: 'home', text: '🏠 Main Menu' }
+    ];
+    if (imageUrl) {
+      await whatsapp.sendImageWithButtons(phone, imageUrl, msg, btns);
+    } else {
+      await whatsapp.sendButtons(phone, msg, btns);
+    }
     return;
   }
   
@@ -326,11 +340,18 @@ async function showHelp(customer, phone) {
     `7️⃣ Complete your order\n\n` +
     `📞 Need help? Contact our support team`;
   
-  await whatsapp.sendButtons(phone, message, [
+  const buttons = [
     { id: 'order_food', text: '🍽️ Order Food' },
     { id: 'my_orders', text: '📦 My Orders' },
     { id: 'home', text: '🏠 Main Menu' }
-  ]);
+  ];
+  
+  const imageUrl = await chatbotImagesService.getImageUrl('help_support');
+  if (imageUrl) {
+    await whatsapp.sendImageWithButtons(phone, imageUrl, message, buttons);
+  } else {
+    await whatsapp.sendButtons(phone, message, buttons);
+  }
   
   conversationState.transitionTo(customer, 'main_menu');
   await customer.save();
@@ -346,10 +367,17 @@ async function showWebsiteLink(customer, phone) {
     `Browse our full menu, check offers, and place orders online!\n\n` +
     `${websiteUrl}`;
   
-  await whatsapp.sendButtons(phone, message, [
+  const buttons = [
     { id: 'order_food', text: '🍽️ Order Food' },
     { id: 'home', text: '🏠 Main Menu' }
-  ]);
+  ];
+  
+  const imageUrl = await chatbotImagesService.getImageUrl('open_website');
+  if (imageUrl) {
+    await whatsapp.sendImageWithButtons(phone, imageUrl, message, buttons);
+  } else {
+    await whatsapp.sendButtons(phone, message, buttons);
+  }
 }
 
 /**

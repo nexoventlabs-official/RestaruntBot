@@ -329,11 +329,17 @@ async function sendPaymentFailureNotification(order) {
     message += `Your payment could not be processed.\n\n`;
     message += `Please try again or choose a different payment method.`;
     
-    await whatsapp.sendButtons(phone, message, [
+    const payFailImg = await chatbotImagesService.getImageUrl('payment_failed');
+    const buttons = [
       { id: 'retry_payment', text: '🔄 Retry Payment' },
       { id: 'pay_cod', text: '💵 Pay COD' },
       { id: 'home', text: '🏠 Main Menu' }
-    ]);
+    ];
+    if (payFailImg) {
+      await whatsapp.sendImageWithButtons(phone, payFailImg, message, buttons);
+    } else {
+      await whatsapp.sendButtons(phone, message, buttons);
+    }
     
     logger.info('Payment failure notification sent', { orderId: order.orderId });
   } catch (error) {
@@ -529,10 +535,16 @@ async function sendRefundConfirmation(order) {
     message += `It will be credited to your account within 5-7 business days.\n\n`;
     message += `🙏 Thank you for your patience!`;
     
-    await whatsapp.sendButtons(phone, message, [
+    const refundImg = await chatbotImagesService.getImageUrl('refund_processed');
+    const buttons = [
       { id: 'view_menu', text: '📋 Browse Menu' },
       { id: 'home', text: '🏠 Main Menu' }
-    ]);
+    ];
+    if (refundImg) {
+      await whatsapp.sendImageWithButtons(phone, refundImg, message, buttons);
+    } else {
+      await whatsapp.sendButtons(phone, message, buttons);
+    }
     
     logger.info('Refund confirmation sent', { orderId: order.orderId });
   } catch (error) {

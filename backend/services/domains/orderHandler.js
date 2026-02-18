@@ -24,6 +24,7 @@
 const Order = require('../../models/Order');
 const conversationState = require('../conversationState');
 const whatsapp = require('../whatsapp');
+const chatbotImagesService = require('../chatbotImages');
 const { logger } = require('../correlationContext');
 
 // Order intent patterns
@@ -76,7 +77,12 @@ async function initiateCheckout(customer, phone) {
     { id: 'view_cart', text: '🛒 Back to Cart' }
   ];
   
-  await whatsapp.sendButtons(phone, message, buttons);
+  const checkoutImg = await chatbotImagesService.getImageUrl('checkout') || await chatbotImagesService.getImageUrl('order_summary');
+  if (checkoutImg) {
+    await whatsapp.sendImageWithButtons(phone, checkoutImg, message, buttons);
+  } else {
+    await whatsapp.sendButtons(phone, message, buttons);
+  }
   
   conversationState.transitionTo(customer, 'select_service_type');
   await customer.save();
@@ -246,7 +252,12 @@ async function showOrderStatus(phone, order) {
     buttons.unshift({ id: 'cancel_order', text: '❌ Cancel Order' });
   }
   
-  await whatsapp.sendButtons(phone, message, buttons);
+  const trackingImg = await chatbotImagesService.getImageUrl('order_tracking');
+  if (trackingImg) {
+    await whatsapp.sendImageWithButtons(phone, trackingImg, message, buttons);
+  } else {
+    await whatsapp.sendButtons(phone, message, buttons);
+  }
 }
 
 /**
@@ -265,10 +276,18 @@ async function viewOrderHistory(customer, phone, params = {}) {
   
   if (orders.length === 0) {
     await whatsapp.sendMessage(phone, '📋 No order history found.\n\nStart ordering to see your history!');
-    await whatsapp.sendButtons(phone, 'What would you like to do?', [
-      { id: 'view_menu', text: '📋 Browse Menu' },
-      { id: 'home', text: '🏠 Main Menu' }
-    ]);
+    const noOrdersImg = await chatbotImagesService.getImageUrl('no_orders_found');
+    if (noOrdersImg) {
+      await whatsapp.sendImageWithButtons(phone, noOrdersImg, 'What would you like to do?', [
+        { id: 'view_menu', text: '📋 Browse Menu' },
+        { id: 'home', text: '🏠 Main Menu' }
+      ]);
+    } else {
+      await whatsapp.sendButtons(phone, 'What would you like to do?', [
+        { id: 'view_menu', text: '📋 Browse Menu' },
+        { id: 'home', text: '🏠 Main Menu' }
+      ]);
+    }
     return;
   }
   
@@ -288,7 +307,12 @@ async function viewOrderHistory(customer, phone, params = {}) {
     { id: 'home', text: '🏠 Main Menu' }
   ];
   
-  await whatsapp.sendButtons(phone, message, buttons);
+  const historyImg = await chatbotImagesService.getImageUrl('order_history') || await chatbotImagesService.getImageUrl('your_orders');
+  if (historyImg) {
+    await whatsapp.sendImageWithButtons(phone, historyImg, message, buttons);
+  } else {
+    await whatsapp.sendButtons(phone, message, buttons);
+  }
   
   conversationState.transitionTo(customer, 'order_history');
   await customer.save();
@@ -537,7 +561,13 @@ async function sendMyOrdersMenu(customer, phone) {
         { id: 'home', text: '🏠 Main Menu' }
       ];
   
-  await whatsapp.sendButtons(phone, message, buttons);
+  const imgKey = recentOrder ? 'my_orders' : 'no_orders_found';
+  const imgUrl = await chatbotImagesService.getImageUrl(imgKey);
+  if (imgUrl) {
+    await whatsapp.sendImageWithButtons(phone, imgUrl, message, buttons);
+  } else {
+    await whatsapp.sendButtons(phone, message, buttons);
+  }
   
   conversationState.transitionTo(customer, 'my_orders_menu');
   await customer.save();

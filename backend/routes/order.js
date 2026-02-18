@@ -810,10 +810,14 @@ router.post('/:orderId/refund/approve', authMiddleware, async (req, res) => {
         
         // Notify customer
         try {
-          await whatsapp.sendButtons(order.customer.phone,
-            `✅ *Refund Successful!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.refundAmount || order.totalAmount}\nRefund ID: ${refund.id}\n\n💳 Amount will be credited to your account shortly.`,
-            [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
-          );
+          const upiRefundMsg = `✅ *Refund Successful!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.refundAmount || order.totalAmount}\nRefund ID: ${refund.id}\n\n💳 Amount will be credited to your account shortly.`;
+          const upiRefundBtns = [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }];
+          const upiRefundImg = await chatbotImagesService.getImageUrl('refund_processed');
+          if (upiRefundImg) {
+            await whatsapp.sendImageWithButtons(order.customer.phone, upiRefundImg, upiRefundMsg, upiRefundBtns);
+          } else {
+            await whatsapp.sendButtons(order.customer.phone, upiRefundMsg, upiRefundBtns);
+          }
         } catch (e) {
           logger.error('WhatsApp notification failed', { error: e.message });
         }
@@ -848,10 +852,14 @@ router.post('/:orderId/refund/approve', authMiddleware, async (req, res) => {
       
       // Notify customer
       try {
-        await whatsapp.sendButtons(order.customer.phone,
-          `✅ *Refund Approved!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.refundAmount || order.totalAmount}\n\n💵 Our team will contact you for the refund process.`,
-          [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
-        );
+        const codRefundMsg = `✅ *Refund Approved!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.refundAmount || order.totalAmount}\n\n💵 Our team will contact you for the refund process.`;
+        const codRefundBtns = [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }];
+        const codRefundImg = await chatbotImagesService.getImageUrl('refund_processed');
+        if (codRefundImg) {
+          await whatsapp.sendImageWithButtons(order.customer.phone, codRefundImg, codRefundMsg, codRefundBtns);
+        } else {
+          await whatsapp.sendButtons(order.customer.phone, codRefundMsg, codRefundBtns);
+        }
       } catch (e) {
         logger.error('WhatsApp notification failed', { error: e.message });
       }
@@ -897,10 +905,14 @@ router.post('/:orderId/refund/reject', authMiddleware, async (req, res) => {
     
     // Notify customer
     try {
-      await whatsapp.sendButtons(order.customer.phone,
-        `❌ *Refund Request Rejected*\n\nOrder: ${order.orderId}\n\nReason: ${reason || 'Your refund request has been reviewed and rejected.'}\n\nPlease contact support for more information.`,
-        [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
-      );
+      const rejectMsg = `❌ *Refund Request Rejected*\n\nOrder: ${order.orderId}\n\nReason: ${reason || 'Your refund request has been reviewed and rejected.'}\n\nPlease contact support for more information.`;
+      const rejectBtns = [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }];
+      const rejectImg = await chatbotImagesService.getImageUrl('refund_failed');
+      if (rejectImg) {
+        await whatsapp.sendImageWithButtons(order.customer.phone, rejectImg, rejectMsg, rejectBtns);
+      } else {
+        await whatsapp.sendButtons(order.customer.phone, rejectMsg, rejectBtns);
+      }
     } catch (e) {
       logger.error('WhatsApp notification failed', { error: e.message });
     }

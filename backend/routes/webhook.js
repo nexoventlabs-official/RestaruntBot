@@ -2,6 +2,7 @@ const express = require('express');
 const logger = require('../services/logger');
 const chatbot = require('../services/chatbot');
 const whatsapp = require('../services/whatsapp');
+const chatbotImagesService = require('../services/chatbotImages');
 const googleSheets = require('../services/googleSheets');
 const metaCloud = require('../services/metaCloud');
 const groqAi = require('../services/groqAi');
@@ -307,14 +308,18 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           // Notify customer
                           const chatbot = require('../services/chatbot');
                           const whatsapp = require('../services/whatsapp');
-                          await whatsapp.sendButtons(recipientPhone,
-                            `❌ *Payment ${paymentStatus === 'canceled' ? 'Cancelled' : 'Failed'}*\n\nOrder #${referenceId}\n\nPlease try again or choose a different payment method.`,
-                            [
+                          const payFailMsg = `❌ *Payment ${paymentStatus === 'canceled' ? 'Cancelled' : 'Failed'}*\n\nOrder #${referenceId}\n\nPlease try again or choose a different payment method.`;
+                          const payFailBtns = [
                               { id: 'pay_upi', text: '🔄 Retry UPI' },
                               { id: 'pay_cod', text: '💵 Pay COD' },
                               { id: 'home', text: '🏠 Main Menu' }
-                            ]
-                          );
+                          ];
+                          const payFailImg = await chatbotImagesService.getImageUrl('payment_failed');
+                          if (payFailImg) {
+                            await whatsapp.sendImageWithButtons(recipientPhone, payFailImg, payFailMsg, payFailBtns);
+                          } else {
+                            await whatsapp.sendButtons(recipientPhone, payFailMsg, payFailBtns);
+                          }
 
                           logger.warn('❌ WhatsApp payment failed/canceled', { orderId: referenceId, paymentStatus });
                         }
@@ -482,24 +487,32 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       logger.info('🎤 Normalized to:', text);
                     } else {
                       // Transcription failed, send error message
-                      await whatsapp.sendButtons(phone, 
-                        "🎤 Sorry, I couldn't understand your voice message. Please try again or type your message.",
-                        [
+                      const voiceErrMsg1 = "🎤 Sorry, I couldn't understand your voice message. Please try again or type your message.";
+                      const voiceErrBtns1 = [
                           { id: 'home', text: 'Main Menu' },
                           { id: 'help', text: 'Help' }
-                        ]
-                      );
+                      ];
+                      const voiceErrImg1 = await chatbotImagesService.getImageUrl('voice_error');
+                      if (voiceErrImg1) {
+                        await whatsapp.sendImageWithButtons(phone, voiceErrImg1, voiceErrMsg1, voiceErrBtns1);
+                      } else {
+                        await whatsapp.sendButtons(phone, voiceErrMsg1, voiceErrBtns1);
+                      }
                       continue;
                     }
                   } catch (err) {
                     logger.error('❌ Voice processing error:', err.message);
-                    await whatsapp.sendButtons(phone,
-                      "🎤 Sorry, I couldn't process your voice message. Please type your message instead.",
-                      [
+                    const voiceErrMsg2 = "🎤 Sorry, I couldn't process your voice message. Please type your message instead.";
+                    const voiceErrBtns2 = [
                         { id: 'home', text: 'Main Menu' },
                         { id: 'help', text: 'Help' }
-                      ]
-                    );
+                    ];
+                    const voiceErrImg2 = await chatbotImagesService.getImageUrl('voice_error');
+                    if (voiceErrImg2) {
+                      await whatsapp.sendImageWithButtons(phone, voiceErrImg2, voiceErrMsg2, voiceErrBtns2);
+                    } else {
+                      await whatsapp.sendButtons(phone, voiceErrMsg2, voiceErrBtns2);
+                    }
                     continue;
                   }
                 }

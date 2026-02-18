@@ -4279,7 +4279,8 @@ const chatbot = {
           const parsed = await catalogService.parseWhatsAppOrder(orderData);
 
           if (!parsed.items.length) {
-            await whatsapp.sendButtons(phone,
+            const helpImg = await chatbotImagesService.getImageUrl('help_support');
+            await sendWithOptionalImage(phone, helpImg,
               '❌ Sorry, we couldn\'t process your cart. Please try again.',
               [
                 { id: 'order_food', text: '🍽️ Order Food' },
@@ -4339,7 +4340,8 @@ const chatbot = {
           await customer.save();
         } catch (catalogOrderErr) {
           logger.error('Catalog order processing error', { phone, error: catalogOrderErr.message });
-          await whatsapp.sendButtons(phone,
+          const helpImg = await chatbotImagesService.getImageUrl('help_support');
+          await sendWithOptionalImage(phone, helpImg,
             '❌ Something went wrong processing your cart. Please try again.',
             [
               { id: 'order_food', text: '🍽️ Order Food' },
@@ -4404,19 +4406,11 @@ const chatbot = {
             const outOfRangeImg = await chatbotImagesService.getImageUrl('out_of_delivery_range');
             const message = `❌ *Delivery Not Available*\n\n${deliveryResult.message}\n\nWould you like to try a different address or opt for self-pickup?`;
             
-            if (outOfRangeImg) {
-              await whatsapp.sendImageWithButtons(phone, outOfRangeImg, message, [
-                { id: 'service_pickup', text: '🏪 Self-Pickup' },
-                { id: 'share_location', text: '📍 New Location' },
-                { id: 'home', text: '🏠 Main Menu' }
-              ]);
-            } else {
-              await whatsapp.sendButtons(phone, message, [
-                { id: 'service_pickup', text: '🏪 Self-Pickup' },
-                { id: 'share_location', text: '📍 New Location' },
-                { id: 'home', text: '🏠 Main Menu' }
-              ]);
-            }
+            await sendWithOptionalImage(phone, outOfRangeImg, message, [
+              { id: 'service_pickup', text: '🏪 Self-Pickup' },
+              { id: 'share_location', text: '📍 New Location' },
+              { id: 'home', text: '🏠 Main Menu' }
+            ]);
             state.currentStep = 'awaiting_location';
             customer.conversationState = state;
             await customer.save();
@@ -4428,19 +4422,11 @@ const chatbot = {
             const outOfRangeImg = await chatbotImagesService.getImageUrl('out_of_delivery_range');
             const message = `❌ *Delivery Not Available*\n\n${deliveryResult.message}\n\nWould you like to try a different address or opt for self-pickup?`;
             
-            if (outOfRangeImg) {
-              await whatsapp.sendImageWithButtons(phone, outOfRangeImg, message, [
-                { id: 'service_pickup', text: '🏪 Self-Pickup' },
-                { id: 'share_location', text: '📍 New Location' },
-                { id: 'home', text: '🏠 Main Menu' }
-              ]);
-            } else {
-              await whatsapp.sendButtons(phone, message, [
-                { id: 'service_pickup', text: '🏪 Self-Pickup' },
-                { id: 'share_location', text: '📍 New Location' },
-                { id: 'home', text: '🏠 Main Menu' }
-              ]);
-            }
+            await sendWithOptionalImage(phone, outOfRangeImg, message, [
+              { id: 'service_pickup', text: '🏪 Self-Pickup' },
+              { id: 'share_location', text: '📍 New Location' },
+              { id: 'home', text: '🏠 Main Menu' }
+            ]);
             state.currentStep = 'awaiting_location';
             customer.conversationState = state;
             await customer.save();
@@ -4466,7 +4452,8 @@ const chatbot = {
           state.currentStep = 'select_payment_method';
         } else {
           // No cart items, just confirm location saved
-          await whatsapp.sendButtons(phone, 
+          const deliveryLocationImg = await chatbotImagesService.getImageUrl('delivery_location');
+          await sendWithOptionalImage(phone, deliveryLocationImg,
             `📍 Location saved!\n\n${formattedAddress}\n\nStart ordering to use this address.`,
             [
               { id: 'place_order', text: 'Start Order' },
@@ -4547,7 +4534,8 @@ const chatbot = {
           });
           ineligibleMsg += `\nYou can still order at regular prices, or browse other offers!`;
           
-          await whatsapp.sendButtons(phone, ineligibleMsg, [
+          const offerNotEligibleImg = await chatbotImagesService.getImageUrl('offer_not_eligible');
+          await sendWithOptionalImage(phone, offerNotEligibleImg, ineligibleMsg, [
             { id: 'proceed_without_offer', text: '📦 Order Anyway' },
             { id: 'view_menu', text: '📋 Browse Menu' },
             { id: 'home', text: '🏠 Main Menu' }
@@ -4695,13 +4683,11 @@ const chatbot = {
           state.currentStep = 'viewing_cart';
         } else {
           // No items were added
-          await whatsapp.sendButtons(phone, 
-            `❌ Sorry, we couldn't find the items in your order.\n\nPlease browse our menu to add items.`,
-            [
-              { id: 'view_menu', text: 'View Menu' },
-              { id: 'home', text: 'Main Menu' }
-            ]
-          );
+          const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+          await sendWithOptionalImage(phone, itemNotAvailableImg, `❌ Sorry, we couldn't find the items in your order.\n\nPlease browse our menu to add items.`, [
+            { id: 'view_menu', text: 'View Menu' },
+            { id: 'home', text: 'Main Menu' }
+          ]);
           state.currentStep = 'main_menu';
         }
       }
@@ -4937,13 +4923,11 @@ const chatbot = {
             await this.sendCart(phone, customer);
             state.currentStep = 'viewing_cart';
           } else {
-            await whatsapp.sendButtons(phone, 
-              `❌ Sorry, we couldn't find the items.\n\nPlease browse our menu to add items.`,
-              [
-                { id: 'view_menu', text: 'View Menu' },
-                { id: 'home', text: 'Main Menu' }
-              ]
-            );
+            const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+            await sendWithOptionalImage(phone, itemNotAvailableImg, `❌ Sorry, we couldn't find the items.\n\nPlease browse our menu to add items.`, [
+              { id: 'view_menu', text: 'View Menu' },
+              { id: 'home', text: 'Main Menu' }
+            ]);
             state.currentStep = 'main_menu';
           }
         } else {
@@ -4982,7 +4966,8 @@ const chatbot = {
             state.currentStep = 'select_category';
           }
         } else {
-          await whatsapp.sendButtons(phone, `❌ No ${labelMap[selection]} items available right now.`, [
+          const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+          await sendWithOptionalImage(phone, itemNotAvailableImg, `❌ No ${labelMap[selection]} items available right now.`, [
             { id: 'view_menu', text: '📋 View All Menu' },
             { id: 'home', text: '🏠 Main Menu' }
           ]);
@@ -5001,7 +4986,8 @@ const chatbot = {
             await this.sendMenuCategoriesWithLabel(phone, filteredItems, '🌿 Veg Menu');
             state.currentStep = 'select_category';
           } else {
-            await whatsapp.sendButtons(phone, '🌿 No veg items available right now.', [
+            const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+            await sendWithOptionalImage(phone, itemNotAvailableImg, '🌿 No veg items available right now.', [
               { id: 'view_menu', text: 'View All Menu' },
               { id: 'home', text: 'Main Menu' }
             ]);
@@ -5014,7 +5000,8 @@ const chatbot = {
             await this.sendMenuCategoriesWithLabel(phone, filteredItems, '🥚 Egg Menu');
             state.currentStep = 'select_category';
           } else {
-            await whatsapp.sendButtons(phone, '🥚 No egg items available right now.', [
+            const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+            await sendWithOptionalImage(phone, itemNotAvailableImg, '🥚 No egg items available right now.', [
               { id: 'view_menu', text: 'View All Menu' },
               { id: 'home', text: 'Main Menu' }
             ]);
@@ -5027,7 +5014,8 @@ const chatbot = {
             await this.sendMenuCategoriesWithLabel(phone, filteredItems, '🍗 Non-Veg Menu');
             state.currentStep = 'select_category';
           } else {
-            await whatsapp.sendButtons(phone, '🍗 No non-veg items available right now.', [
+            const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+            await sendWithOptionalImage(phone, itemNotAvailableImg, '🍗 No non-veg items available right now.', [
               { id: 'view_menu', text: 'View All Menu' },
               { id: 'home', text: 'Main Menu' }
             ]);
@@ -5141,7 +5129,8 @@ const chatbot = {
           state.currentStep = 'select_item';
         } else {
           // No match found
-          await whatsapp.sendButtons(phone, `❌ No items found matching "${addIntent.itemName}"\n\nTry browsing our menu!`, [
+          const searchNoResultsImg = await chatbotImagesService.getImageUrl('search_no_results');
+          await sendWithOptionalImage(phone, searchNoResultsImg, `❌ No items found matching "${addIntent.itemName}"\n\nTry browsing our menu!`, [
             { id: 'view_menu', text: 'View Menu' },
             { id: 'home', text: 'Main Menu' }
           ]);
@@ -5182,7 +5171,8 @@ const chatbot = {
         state.selectedItem = null;
         
         if (!customer.cart?.length) {
-          await whatsapp.sendButtons(phone, 'Your cart is empty! Please add items first.', [
+          const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+          await sendWithOptionalImage(phone, cartEmptyImg, 'Your cart is empty! Please add items first.', [
             { id: 'view_menu', text: 'View Menu' },
             { id: 'home', text: 'Main Menu' }
           ]);
@@ -5251,7 +5241,8 @@ const chatbot = {
       }
       else if (selection === 'pay_upi') {
         if (!customer.cart?.length) {
-          await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+          const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+          await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
             { id: 'view_menu', text: 'View Menu' }
           ]);
           state.currentStep = 'main_menu';
@@ -5280,7 +5271,8 @@ const chatbot = {
       }
       else if (selection === 'pay_cod') {
         if (!customer.cart?.length) {
-          await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+          const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+          await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
             { id: 'view_menu', text: 'View Menu' }
           ]);
           state.currentStep = 'main_menu';
@@ -5310,7 +5302,8 @@ const chatbot = {
       else if (selection === 'pickup_pay_hotel') {
         // Self-pickup with payment at hotel
         if (!customer.cart?.length) {
-          await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+          const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+          await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
             { id: 'view_menu', text: 'View Menu' }
           ]);
           state.currentStep = 'main_menu';
@@ -5324,7 +5317,8 @@ const chatbot = {
       else if (selection === 'pickup_pay_upi') {
         // Self-pickup with UPI/App payment
         if (!customer.cart?.length) {
-          await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+          const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+          await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
             { id: 'view_menu', text: 'View Menu' }
           ]);
           state.currentStep = 'main_menu';
@@ -5354,7 +5348,8 @@ const chatbot = {
       }
       else if (selection === 'confirm_order' || selection === 'pay_now') {
         if (!customer.cart?.length) {
-          await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+          const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+          await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
             { id: 'view_menu', text: 'View Menu' }
           ]);
           state.currentStep = 'main_menu';
@@ -5459,7 +5454,8 @@ const chatbot = {
             state.currentStep = 'item_added';
           }
         } else {
-          await whatsapp.sendButtons(phone, '❌ Variant not found.', [
+          const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+          await sendWithOptionalImage(phone, itemNotAvailableImg, '❌ Variant not found.', [
             { id: 'order_food', text: '🍽️ Order Food' },
             { id: 'home', text: 'Main Menu' }
           ]);
@@ -5496,7 +5492,8 @@ const chatbot = {
           await this.sendCart(phone, customer);
           state.currentStep = 'item_added';
         } else {
-          await whatsapp.sendButtons(phone, '❌ Option not found.', [
+          const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+          await sendWithOptionalImage(phone, itemNotAvailableImg, '❌ Option not found.', [
             { id: 'order_food', text: '🍽️ Order Food' },
             { id: 'home', text: 'Main Menu' }
           ]);
@@ -5620,7 +5617,8 @@ const chatbot = {
           state.currentStep = 'viewing_item_details';
         } else {
           logger.info('Item not found for add_', { items: itemId });
-          await whatsapp.sendButtons(phone,
+          const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+          await sendWithOptionalImage(phone, itemNotAvailableImg,
             '⚠️ This item is no longer available. Please select another item.',
             [
               { id: 'place_order', text: 'View Menu' },
@@ -5642,7 +5640,8 @@ const chatbot = {
           state.currentStep = 'select_quantity';
         } else {
           logger.info('Item not found for confirm_add_', { items: itemId });
-          await whatsapp.sendButtons(phone,
+          const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+          await sendWithOptionalImage(phone, itemNotAvailableImg,
             '⚠️ This item is no longer available. Please select another item.',
             [
               { id: 'place_order', text: 'View Menu' },
@@ -5680,7 +5679,8 @@ const chatbot = {
         } else {
           // Item not found - maybe state was lost, show menu again
           logger.info('Item not found for qty selection, selectedItem', { items: state.selectedItem });
-          await whatsapp.sendButtons(phone,
+          const helpImg = await chatbotImagesService.getImageUrl('help_support');
+          await sendWithOptionalImage(phone, helpImg,
             '⚠️ Something went wrong. Please select an item again.',
             [
               { id: 'place_order', text: 'Order Again' },
@@ -5763,7 +5763,8 @@ const chatbot = {
             state.currentStep = 'viewing_items';
           }
         } else {
-          await whatsapp.sendButtons(phone, `❌ Invalid number. Please enter 0 for All Items or 1-${categories.length} for a category.`, [
+          const helpImg = await chatbotImagesService.getImageUrl('help_support');
+          await sendWithOptionalImage(phone, helpImg, `❌ Invalid number. Please enter 0 for All Items or 1-${categories.length} for a category.`, [
             { id: 'home', text: 'Main Menu' }
           ]);
         }
@@ -5789,7 +5790,8 @@ const chatbot = {
           state.selectedItem = item._id.toString();
           state.currentStep = 'viewing_item_details';
         } else {
-          await whatsapp.sendButtons(phone, `❌ Invalid number. Please enter a number between 1 and ${itemsList.length}.`, [
+          const helpImg = await chatbotImagesService.getImageUrl('help_support');
+          await sendWithOptionalImage(phone, helpImg, `❌ Invalid number. Please enter a number between 1 and ${itemsList.length}.`, [
             { id: 'home', text: 'Main Menu' }
           ]);
         }
@@ -5824,19 +5826,11 @@ const chatbot = {
             // Send Browse Menu options
             const browseMessage = `🍽️ *Browse Menu*\n\nExplore our delicious menu and select your favorite items.\n\nWhat would you like to see?`;
             
-            if (browseMenuImg) {
-              await whatsapp.sendImageWithButtons(phone, browseMenuImg, browseMessage, [
-                { id: 'veg_only', text: '🌿 Veg Only' },
-                { id: 'nonveg_only', text: '🍗 Non-Veg Only' },
-                { id: 'show_all', text: '🍽️ Show All' }
-              ]);
-            } else {
-              await whatsapp.sendButtons(phone, browseMessage, [
-                { id: 'veg_only', text: '🌿 Veg Only' },
-                { id: 'nonveg_only', text: '🍗 Non-Veg Only' },
-                { id: 'show_all', text: '🍽️ Show All' }
-              ]);
-            }
+            await sendWithOptionalImage(phone, browseMenuImg, browseMessage, [
+              { id: 'veg_only', text: '🌿 Veg Only' },
+              { id: 'nonveg_only', text: '🍗 Non-Veg Only' },
+              { id: 'show_all', text: '🍽️ Show All' }
+            ]);
             
             state.currentStep = 'main_menu';
           } else {
@@ -5881,17 +5875,10 @@ const chatbot = {
             const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
             const notFoundMessage = `❌ *Item Not Found*\n\nSorry, we couldn't find "${searchTerm}" in our menu.\n\nTry a different search or browse our menu.`;
             
-            if (itemNotAvailableImg) {
-              await whatsapp.sendImageWithButtons(phone, itemNotAvailableImg, notFoundMessage, [
-                { id: 'view_menu', text: '📋 Browse Menu' },
-                { id: 'home', text: '🏠 Main Menu' }
-              ]);
-            } else {
-              await whatsapp.sendButtons(phone, notFoundMessage, [
-                { id: 'view_menu', text: '📋 Browse Menu' },
-                { id: 'home', text: '🏠 Main Menu' }
-              ]);
-            }
+            await sendWithOptionalImage(phone, itemNotAvailableImg, notFoundMessage, [
+              { id: 'view_menu', text: '📋 Browse Menu' },
+              { id: 'home', text: '🏠 Main Menu' }
+            ]);
             state.currentStep = 'main_menu';
           } else {
             // Only food type keyword (e.g., just "veg" or "nonveg") - show that menu
@@ -5916,7 +5903,8 @@ const chatbot = {
               await this.sendMenuCategoriesWithLabel(phone, filteredItems, label);
               state.currentStep = 'select_category';
             } else {
-              await whatsapp.sendButtons(phone, 
+              const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+              await sendWithOptionalImage(phone, itemNotAvailableImg,
                 `❌ No ${label.replace(/[🌿🥚🍗🍽️]\s*/, '')} items available right now.`,
                 [
                   { id: 'view_menu', text: '📋 View All Menu' },
@@ -5957,22 +5945,16 @@ const chatbot = {
           const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
           const notFoundMessage = `❌ *Item Not Found*\n\nSorry, we couldn't find "${msg}" in our menu.\n\nTry a different search or browse our menu.`;
           
-          if (itemNotAvailableImg) {
-            await whatsapp.sendImageWithButtons(phone, itemNotAvailableImg, notFoundMessage, [
-              { id: 'view_menu', text: '📋 Browse Menu' },
-              { id: 'home', text: '🏠 Main Menu' }
-            ]);
-          } else {
-            await whatsapp.sendButtons(phone, notFoundMessage, [
-              { id: 'view_menu', text: '📋 Browse Menu' },
-              { id: 'home', text: '🏠 Main Menu' }
-            ]);
-          }
+          await sendWithOptionalImage(phone, itemNotAvailableImg, notFoundMessage, [
+            { id: 'view_menu', text: '📋 Browse Menu' },
+            { id: 'home', text: '🏠 Main Menu' }
+          ]);
           state.currentStep = 'main_menu';
         }
         // ========== FALLBACK ==========
         else {
-          await whatsapp.sendButtons(phone,
+          const helpImg = await chatbotImagesService.getImageUrl('help_support');
+          await sendWithOptionalImage(phone, helpImg,
             `🤔 I didn't understand that.\n\nPlease select an option:`,
             [
               { id: 'home', text: 'Main Menu' },
@@ -5984,7 +5966,8 @@ const chatbot = {
       }
     } catch (error) {
       logger.error('Chatbot error', { error: error.message });
-      await whatsapp.sendButtons(phone, '❌ Something went wrong. Please try again.', [
+      const helpImg = await chatbotImagesService.getImageUrl('help_support');
+      await sendWithOptionalImage(phone, helpImg, '❌ Something went wrong. Please try again.', [
         { id: 'home', text: 'Main Menu' },
         { id: 'help', text: 'Help' }
       ]);
@@ -6010,7 +5993,8 @@ const chatbot = {
       const offer = await Offer.findById(offerId);
       
       if (!offer) {
-        await whatsapp.sendButtons(phone, '❌ This offer is no longer available.', [
+        const offerNotEligibleImg = await chatbotImagesService.getImageUrl('offer_not_eligible');
+        await sendWithOptionalImage(phone, offerNotEligibleImg, '❌ This offer is no longer available.', [
           { id: 'view_menu', text: '📋 Browse Menu' },
           { id: 'home', text: '🏠 Main Menu' }
         ]);
@@ -6020,7 +6004,8 @@ const chatbot = {
       // Check if offer is active and valid
       const now = new Date();
       if (!offer.isActive) {
-        await whatsapp.sendButtons(phone, '❌ This offer is no longer active.', [
+        const offerNotEligibleImg = await chatbotImagesService.getImageUrl('offer_not_eligible');
+        await sendWithOptionalImage(phone, offerNotEligibleImg, '❌ This offer is no longer active.', [
           { id: 'view_menu', text: '📋 Browse Menu' },
           { id: 'home', text: '🏠 Main Menu' }
         ]);
@@ -6028,7 +6013,8 @@ const chatbot = {
       }
       
       if (offer.validUntil && new Date(offer.validUntil) < now) {
-        await whatsapp.sendButtons(phone, '⏰ This offer has expired.', [
+        const offerNotEligibleImg = await chatbotImagesService.getImageUrl('offer_not_eligible');
+        await sendWithOptionalImage(phone, offerNotEligibleImg, '⏰ This offer has expired.', [
           { id: 'view_menu', text: '📋 Browse Menu' },
           { id: 'home', text: '🏠 Main Menu' }
         ]);
@@ -6070,7 +6056,8 @@ const chatbot = {
               { id: 'home', text: '🏠 Main Menu' }
             ]);
           } else {
-            await whatsapp.sendButtons(phone, message, [
+            const offerFallbackImg = await chatbotImagesService.getImageUrl('offer_not_eligible');
+            await sendWithOptionalImage(phone, offerFallbackImg, message, [
               { id: 'view_menu', text: '📋 Browse Menu' },
               { id: 'home', text: '🏠 Main Menu' }
             ]);
@@ -6092,14 +6079,16 @@ const chatbot = {
           { id: 'view_cart', text: '🛒 View Cart' }
         ]);
       } else {
-        await whatsapp.sendButtons(phone, successMessage, [
+        const offerAppliedImg = await chatbotImagesService.getImageUrl('offer_applied');
+        await sendWithOptionalImage(phone, offerAppliedImg, successMessage, [
           { id: 'view_menu', text: '📋 Browse Menu' },
           { id: 'view_cart', text: '🛒 View Cart' }
         ]);
       }
     } catch (error) {
       logger.error('Error handling offer claim', { error: error.message });
-      await whatsapp.sendButtons(phone, '❌ Something went wrong. Please try again.', [
+      const helpImg = await chatbotImagesService.getImageUrl('help_support');
+      await sendWithOptionalImage(phone, helpImg, '❌ Something went wrong. Please try again.', [
         { id: 'view_menu', text: '📋 Browse Menu' },
         { id: 'home', text: '🏠 Main Menu' }
       ]);
@@ -6158,7 +6147,8 @@ const chatbot = {
     const categories = [...new Set(menuItems.flatMap(m => Array.isArray(m.category) ? m.category : [m.category]))];
     
     if (!categories.length) {
-      await whatsapp.sendButtons(phone, '📋 No menu items available right now.', [
+      const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
+      await sendWithOptionalImage(phone, browseMenuImg, '📋 No menu items available right now.', [
         { id: 'home', text: 'Main Menu' }
       ]);
       return;
@@ -6253,7 +6243,8 @@ const chatbot = {
     if (page < totalPages - 1) buttons.push({ id: `menucat_page_${page + 1}`, text: 'Next' });
     buttons.push({ id: 'home', text: 'Menu' });
 
-    await whatsapp.sendButtons(phone, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
+    const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
+    await sendWithOptionalImage(phone, browseMenuImg, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
   },
 
   async sendMenuCategoriesWithLabel(phone, menuItems, label, page = 0) {
@@ -6266,7 +6257,8 @@ const chatbot = {
     const itemCountWithVariants = countItemsWithVariants(items);
     
     if (!items.length) {
-      await whatsapp.sendButtons(phone, `📋 No items in ${category} right now.`, [
+      const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+      await sendWithOptionalImage(phone, itemNotAvailableImg, `📋 No items in ${category} right now.`, [
         { id: 'view_menu', text: 'Back to Menu' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -6332,14 +6324,16 @@ const chatbot = {
       if (page > 0) buttons.push({ id: `catpage_${safeCat}_${page - 1}`, text: 'Previous' });
       if (page < totalPages - 1) buttons.push({ id: `catpage_${safeCat}_${page + 1}`, text: 'Next' });
       buttons.push({ id: 'view_menu', text: 'Menu' });
-      await whatsapp.sendButtons(phone, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
+      const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
+      await sendWithOptionalImage(phone, browseMenuImg, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
     }
   },
 
   // Send all items (for browsing) - always use WhatsApp list with pagination
   async sendAllItems(phone, menuItems, page = 0) {
     if (!menuItems.length) {
-      await whatsapp.sendButtons(phone, '📋 No items available right now.', [
+      const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
+      await sendWithOptionalImage(phone, browseMenuImg, '📋 No items available right now.', [
         { id: 'view_menu', text: 'Back to Menu' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -6424,7 +6418,8 @@ const chatbot = {
       if (page > 0) buttons.push({ id: `allitems_page_${page - 1}`, text: 'Previous' });
       if (page < totalPages - 1) buttons.push({ id: `allitems_page_${page + 1}`, text: 'Next' });
       buttons.push({ id: 'view_menu', text: 'Menu' });
-      await whatsapp.sendButtons(phone, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
+      const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
+      await sendWithOptionalImage(phone, browseMenuImg, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
     }
   },
 
@@ -6432,10 +6427,7 @@ const chatbot = {
   async sendItemsByTag(phone, items, tagKeyword, page = 0, matchedVariants = null) {
     if (!items.length) {
       const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-      if (itemNotAvailableImg) {
-        await whatsapp.sendImage(phone, itemNotAvailableImg, `🔍 No items found for "${tagKeyword}".`);
-      }
-      await whatsapp.sendButtons(phone, itemNotAvailableImg ? 'What would you like to do?' : `🔍 No items found for "${tagKeyword}".`, [
+      await sendWithOptionalImage(phone, itemNotAvailableImg, `🔍 No items found for "${tagKeyword}".`, [
         { id: 'view_menu', text: 'Browse Menu' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -6576,7 +6568,8 @@ const chatbot = {
       if (page > 0) buttons.push({ id: `tagpage_${safeTag}_${page - 1}`, text: 'Previous' });
       if (page < totalPages - 1) buttons.push({ id: `tagpage_${safeTag}_${page + 1}`, text: 'Next' });
       buttons.push({ id: 'view_menu', text: 'Menu' });
-      await whatsapp.sendButtons(phone, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
+      const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
+      await sendWithOptionalImage(phone, browseMenuImg, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
     }
   },
 
@@ -6590,18 +6583,14 @@ const chatbot = {
       const icon = getFoodTypeIcon(item.foodType);
       const msg = `${icon} *${item.name}*\n💰 ₹${item.price}\n\n${item.description || 'Delicious!'}`;
       
-      if (item.image && !item.image.startsWith('data:')) {
-        await whatsapp.sendImageWithButtons(phone, item.image, msg, [
-          { id: `add_${item._id}`, text: 'Add to Cart' }
-        ]);
-      } else {
-        await whatsapp.sendButtons(phone, msg, [
-          { id: `add_${item._id}`, text: 'Add to Cart' }
-        ]);
-      }
+      const itemImg = (item.image && !item.image.startsWith('data:')) ? item.image : null;
+      await sendWithOptionalImage(phone, itemImg, msg, [
+        { id: `add_${item._id}`, text: 'Add to Cart' }
+      ]);
     }
     
-    await whatsapp.sendButtons(phone, 'Want to see more items?', [
+    const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
+    await sendWithOptionalImage(phone, browseMenuImg, 'Want to see more items?', [
       { id: 'food_both', text: 'Full Menu' },
       { id: 'view_cart', text: 'View Cart' },
       { id: 'home', text: 'Home' }
@@ -6772,7 +6761,8 @@ const chatbot = {
       if (item.image) {
         await whatsapp.sendImageWithButtons(phone, item.image, msg, buttons);
       } else {
-        await whatsapp.sendButtons(phone, msg, buttons);
+        const browseImg = await chatbotImagesService.getImageUrl('browse_menu');
+        await sendWithOptionalImage(phone, browseImg, msg, buttons);
       }
     }
   },
@@ -6780,7 +6770,8 @@ const chatbot = {
   async sendItemDetails(phone, menuItems, itemId, matchedVariantIndex = null) {
     const item = menuItems.find(m => m._id.toString() === itemId);
     if (!item) {
-      await whatsapp.sendButtons(phone, '❌ Item not found.', [
+      const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+      await sendWithOptionalImage(phone, itemNotAvailableImg, '❌ Item not found.', [
         { id: 'view_menu', text: 'View Menu' }
       ]);
       return;
@@ -6989,7 +6980,8 @@ const chatbot = {
     if (item.image) {
       await whatsapp.sendImageWithButtons(phone, item.image, msg, buttons);
     } else {
-      await whatsapp.sendButtons(phone, msg, buttons);
+      const browseImg = await chatbotImagesService.getImageUrl('browse_menu');
+      await sendWithOptionalImage(phone, browseImg, msg, buttons);
     }
   },
 
@@ -7054,13 +7046,15 @@ const chatbot = {
     if (item.image) {
       await whatsapp.sendImageWithButtons(phone, item.image, msg, buttons);
     } else {
-      await whatsapp.sendButtons(phone, msg, buttons);
+      const browseImg = await chatbotImagesService.getImageUrl('browse_menu');
+      await sendWithOptionalImage(phone, browseImg, msg, buttons);
     }
   },
 
   // ============ ORDERING ============
   async sendServiceType(phone) {
-    await whatsapp.sendButtons(phone,
+    const checkoutImg = await chatbotImagesService.getImageUrl('checkout');
+    await sendWithOptionalImage(phone, checkoutImg,
       '🛒 *Place Order*\n\nHow would you like to receive your order?',
       [
         { id: 'delivery', text: 'Delivery' },
@@ -7075,7 +7069,8 @@ const chatbot = {
     const categories = [...new Set(menuItems.flatMap(m => Array.isArray(m.category) ? m.category : [m.category]))];
     
     if (!categories.length) {
-      await whatsapp.sendButtons(phone, '📋 No menu items available.', [
+      const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
+      await sendWithOptionalImage(phone, browseMenuImg, '📋 No menu items available.', [
         { id: 'home', text: 'Main Menu' }
       ]);
       return;
@@ -7200,7 +7195,8 @@ const chatbot = {
     if (page < totalPages - 1) buttons.push({ id: `ordercat_page_${page + 1}`, text: 'Next' });
     buttons.push({ id: 'home', text: 'Menu' });
 
-    await whatsapp.sendButtons(phone, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
+    const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
+    await sendWithOptionalImage(phone, browseMenuImg, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
   },
 
   async sendMenuForOrderWithLabel(phone, menuItems, label, page = 0) {
@@ -7243,7 +7239,8 @@ const chatbot = {
     }
 
     if (!matchingItems.length) {
-      await whatsapp.sendButtons(phone, '📋 No matching items found.', [
+      const searchNoResultsImg = await chatbotImagesService.getImageUrl('search_no_results');
+      await sendWithOptionalImage(phone, searchNoResultsImg, '📋 No matching items found.', [
         { id: 'order_food', text: '🍽️ Order Food' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -7301,7 +7298,8 @@ const chatbot = {
     const menuItem = menuItems.find(m => m._id.toString() === titleItemId);
 
     if (!menuItem) {
-      await whatsapp.sendButtons(phone, '📋 Item not found.', [
+      const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+      await sendWithOptionalImage(phone, itemNotAvailableImg, '📋 Item not found.', [
         { id: 'order_food', text: '🍽️ Order Food' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -7327,7 +7325,8 @@ const chatbot = {
       });
 
     if (!matchingVariants.length) {
-      await whatsapp.sendButtons(phone, `📋 No matching variants in ${menuItem.name}.`, [
+      const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+      await sendWithOptionalImage(phone, itemNotAvailableImg, `📋 No matching variants in ${menuItem.name}.`, [
         { id: 'order_food', text: '🍽️ Order Food' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -7393,7 +7392,8 @@ const chatbot = {
     const items = menuItems.filter(m => Array.isArray(m.category) ? m.category.includes(category) : m.category === category);
     
     if (!items.length) {
-      await whatsapp.sendButtons(phone, `📋 No items in ${category}.`, [
+      const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+      await sendWithOptionalImage(phone, itemNotAvailableImg, `📋 No items in ${category}.`, [
         { id: 'add_more', text: 'Other Categories' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -7458,14 +7458,16 @@ const chatbot = {
       if (page > 0) buttons.push({ id: `ordercatpage_${safeCat}_${page - 1}`, text: 'Previous' });
       if (page < totalPages - 1) buttons.push({ id: `ordercatpage_${safeCat}_${page + 1}`, text: 'Next' });
       buttons.push({ id: 'home', text: 'Menu' });
-      await whatsapp.sendButtons(phone, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
+      const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
+      await sendWithOptionalImage(phone, browseMenuImg, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
     }
   },
 
   // Send all items for ordering with pagination
   async sendAllItemsForOrder(phone, menuItems, page = 0) {
     if (!menuItems.length) {
-      await whatsapp.sendButtons(phone, '📋 No items available.', [
+      const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
+      await sendWithOptionalImage(phone, browseMenuImg, '📋 No items available.', [
         { id: 'add_more', text: 'Other Categories' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -7546,7 +7548,8 @@ const chatbot = {
       if (page > 0) buttons.push({ id: `orderitems_page_${page - 1}`, text: 'Previous' });
       if (page < totalPages - 1) buttons.push({ id: `orderitems_page_${page + 1}`, text: 'Next' });
       buttons.push({ id: 'home', text: 'Menu' });
-      await whatsapp.sendButtons(phone, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
+      const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
+      await sendWithOptionalImage(phone, browseMenuImg, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
     }
   },
 
@@ -7643,7 +7646,8 @@ const chatbot = {
     const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
     if (!freshCustomer?.cart?.length) {
-      await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+      const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
         { id: 'view_menu', text: 'View Menu' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -7698,7 +7702,8 @@ const chatbot = {
       freshCustomer.cart = [];
       await freshCustomer.save();
       
-      await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+      const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
         { id: 'view_menu', text: 'View Menu' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -7709,7 +7714,8 @@ const chatbot = {
     cartMsg += `*Total: ₹${total}*`;
 
     // Show Review & Order, Add More, Cancel buttons
-    await whatsapp.sendButtons(phone, cartMsg, [
+    const viewCartImg = await chatbotImagesService.getImageUrl('view_cart');
+    await sendWithOptionalImage(phone, viewCartImg, cartMsg, [
       { id: 'review_pay', text: 'Review & Order' },
       { id: 'add_more', text: 'Add More' },
       { id: 'clear_cart', text: 'Cancel' }
@@ -7728,7 +7734,8 @@ const chatbot = {
     const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
     if (!freshCustomer?.cart?.length) {
-      await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+      const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
         { id: 'view_menu', text: 'View Menu' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -7781,7 +7788,8 @@ const chatbot = {
       freshCustomer.cart = [];
       await freshCustomer.save();
       
-      await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+      const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
         { id: 'view_menu', text: 'View Menu' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -7841,7 +7849,8 @@ const chatbot = {
     const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
     if (!freshCustomer?.cart?.length) {
-      await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+      const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
         { id: 'view_menu', text: 'View Menu' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -7919,7 +7928,8 @@ const chatbot = {
     });
 
     if (!items.length) {
-      await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+      const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
         { id: 'view_menu', text: 'View Menu' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -8073,7 +8083,8 @@ const chatbot = {
     const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
     if (!freshCustomer?.cart?.length) {
-      await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+      const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
         { id: 'view_menu', text: 'View Menu' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -8131,7 +8142,8 @@ const chatbot = {
       freshCustomer.cart = [];
       await freshCustomer.save();
       
-      await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+      const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
         { id: 'view_menu', text: 'View Menu' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -8142,7 +8154,8 @@ const chatbot = {
     reviewMsg += `*Total: ₹${total}*\n\n`;
     reviewMsg += `Please confirm your order to proceed with payment.`;
 
-    await whatsapp.sendButtons(phone, reviewMsg, [
+    const orderSummaryImg = await chatbotImagesService.getImageUrl('order_summary');
+    await sendWithOptionalImage(phone, orderSummaryImg, reviewMsg, [
       { id: 'confirm_order', text: 'Confirm & Pay' },
       { id: 'add_more', text: 'Add More' },
       { id: 'clear_cart', text: 'Cancel' }
@@ -8166,7 +8179,8 @@ const chatbot = {
     const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
     if (!freshCustomer?.cart?.length) {
-      await whatsapp.sendButtons(phone,
+      const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+      await sendWithOptionalImage(phone, cartEmptyImg,
         '🛒 *Your Cart is Empty*\n\nTap the 🛒 cart icon at the top right to view your WhatsApp cart, or browse our menu to add items!',
         [
           { id: 'view_menu', text: '📋 View Menu' },
@@ -8256,7 +8270,8 @@ const chatbot = {
       freshCustomer.cart = [];
       await freshCustomer.save();
       
-      await whatsapp.sendButtons(phone,
+      const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+      await sendWithOptionalImage(phone, cartEmptyImg,
         '🛒 *Your Cart is Empty*\n\nTap the 🛒 cart icon at the top right to view your WhatsApp cart, or browse our menu to add items!',
         [
           { id: 'view_menu', text: '📋 View Menu' },
@@ -8359,7 +8374,8 @@ const chatbot = {
     const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
     if (!freshCustomer?.cart?.length) {
-      await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+      const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
         { id: 'view_menu', text: 'View Menu' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -8445,7 +8461,8 @@ const chatbot = {
     });
 
     if (!items.length) {
-      await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+      const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
         { id: 'view_menu', text: 'View Menu' },
         { id: 'home', text: 'Main Menu' }
       ]);
@@ -8626,7 +8643,8 @@ const chatbot = {
       return { success: true };
     } catch (err) {
       logger.error('Payment page error', { error: err.message });
-      await whatsapp.sendButtons(phone,
+      const paymentFailedImg = await chatbotImagesService.getImageUrl('payment_failed');
+      await sendWithOptionalImage(phone, paymentFailedImg,
         `✅ *Order Created!*\n\nOrder ID: ${orderId}\nTotal: ₹${total}\n\n⚠️ Payment link unavailable.\nPlease contact us.`,
         [
           { id: 'order_status', text: 'Check Status' },
@@ -8733,7 +8751,8 @@ const chatbot = {
     const order = await Order.findOne({ orderId, 'customer.phone': phone });
     
     if (!order) {
-      await whatsapp.sendButtons(phone, '❌ Order not found.', [{ id: 'home', text: 'Main Menu' }]);
+      const noOrdersImg = await chatbotImagesService.getImageUrl('no_orders_found');
+      await sendWithOptionalImage(phone, noOrdersImg, '❌ Order not found.', [{ id: 'home', text: 'Main Menu' }]);
       return;
     }
 
@@ -8839,13 +8858,15 @@ const chatbot = {
     const order = await Order.findOne({ orderId, 'customer.phone': phone });
     
     if (!order) {
-      await whatsapp.sendButtons(phone, '❌ Order not found.', [{ id: 'home', text: 'Main Menu' }]);
+      const noOrdersImg = await chatbotImagesService.getImageUrl('no_orders_found');
+      await sendWithOptionalImage(phone, noOrdersImg, '❌ Order not found.', [{ id: 'home', text: 'Main Menu' }]);
       return;
     }
 
     // Cannot cancel delivered, cancelled, or refunded orders
     if (['delivered', 'cancelled', 'refunded'].includes(order.status)) {
-      await whatsapp.sendButtons(phone,
+      const orderCancelledImg = await chatbotImagesService.getImageUrl('order_cancelled');
+      await sendWithOptionalImage(phone, orderCancelledImg,
         `❌ *Cannot Cancel*\n\nOrder is already ${order.status.replace('_', ' ')}.`,
         [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
       );
@@ -8975,7 +8996,8 @@ const chatbot = {
     }).sort({ createdAt: -1 }).limit(5);
 
     if (!orders.length) {
-      await whatsapp.sendButtons(phone,
+      const refundFailedImg = await chatbotImagesService.getImageUrl('refund_failed');
+      await sendWithOptionalImage(phone, refundFailedImg,
         '💰 *No Refundable Orders*\n\nNo paid orders available for refund.\n\nNote: Delivered orders cannot be refunded.',
         [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
       );
@@ -9007,28 +9029,33 @@ const chatbot = {
     const order = await Order.findOne({ orderId, 'customer.phone': phone });
     
     if (!order) {
-      await whatsapp.sendButtons(phone, '❌ Order not found.', [{ id: 'home', text: 'Main Menu' }]);
+      const noOrdersImg = await chatbotImagesService.getImageUrl('no_orders_found');
+      await sendWithOptionalImage(phone, noOrdersImg, '❌ Order not found.', [{ id: 'home', text: 'Main Menu' }]);
       return;
     }
 
     if (order.paymentStatus !== 'paid' && order.paymentStatus !== 'refund_processing') {
-      await whatsapp.sendButtons(phone, '❌ No payment found for this order.', [{ id: 'home', text: 'Main Menu' }]);
+      const refundFailedImg = await chatbotImagesService.getImageUrl('refund_failed');
+      await sendWithOptionalImage(phone, refundFailedImg, '❌ No payment found for this order.', [{ id: 'home', text: 'Main Menu' }]);
       return;
     }
 
     // Cannot refund delivered orders
     if (order.status === 'delivered') {
-      await whatsapp.sendButtons(phone, '❌ Delivered orders cannot be refunded.', [{ id: 'home', text: 'Main Menu' }]);
+      const refundFailedImg = await chatbotImagesService.getImageUrl('refund_failed');
+      await sendWithOptionalImage(phone, refundFailedImg, '❌ Delivered orders cannot be refunded.', [{ id: 'home', text: 'Main Menu' }]);
       return;
     }
 
     if (order.refundStatus === 'completed' || order.paymentStatus === 'refunded') {
-      await whatsapp.sendButtons(phone, '❌ This order is already refunded.', [{ id: 'home', text: 'Main Menu' }]);
+      const refundProcessedImg = await chatbotImagesService.getImageUrl('refund_processed');
+      await sendWithOptionalImage(phone, refundProcessedImg, '❌ This order is already refunded.', [{ id: 'home', text: 'Main Menu' }]);
       return;
     }
 
     if (order.refundStatus === 'pending' || order.refundStatus === 'scheduled') {
-      await whatsapp.sendButtons(phone, 
+      const refundProcessedImg = await chatbotImagesService.getImageUrl('refund_processed');
+      await sendWithOptionalImage(phone, refundProcessedImg,
         `⏳ *Refund Already Processing*\n\nYour refund of ₹${order.totalAmount} is being processed.\n\n⏱️ You'll receive a confirmation within 5-7 business days.`,
         [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
       );
@@ -9056,7 +9083,8 @@ const chatbot = {
       logger.error('Google Sheets sync error', { error: err.message })
     );
 
-    await whatsapp.sendButtons(phone, 
+    const refundProcessedImg = await chatbotImagesService.getImageUrl('refund_processed');
+    await sendWithOptionalImage(phone, refundProcessedImg,
       `✅ *Refund Requested!*\n\nOrder: ${orderId}\nAmount: ₹${order.totalAmount}\n\n⏱️ Your refund will be processed within 5-7 business days.`,
       [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
     );
@@ -9106,7 +9134,8 @@ const chatbot = {
 
   // ============ SERVICE TYPE SELECTION ============
   async sendServiceTypeSelection(phone) {
-    await whatsapp.sendButtons(phone,
+    const checkoutImg = await chatbotImagesService.getImageUrl('checkout');
+    await sendWithOptionalImage(phone, checkoutImg,
       '🚚 *Choose Service Type*\n\nHow would you like to receive your order?',
       [
         { id: 'service_delivery', text: 'Delivery' },
@@ -9121,7 +9150,8 @@ const chatbot = {
     // Refresh customer from database to ensure we have latest cart data
     const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     if (!freshCustomer || !freshCustomer.cart?.length) {
-      await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+      const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
         { id: 'view_menu', text: 'View Menu' }
       ]);
       return;
@@ -9214,7 +9244,8 @@ const chatbot = {
       // Refresh customer from database
       const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
       if (!freshCustomer || !freshCustomer.cart?.length) {
-        await whatsapp.sendButtons(phone, '🛒 Your cart is empty!', [
+        const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
+        await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
           { id: 'view_menu', text: 'View Menu' }
         ]);
         return { success: false };
@@ -9414,7 +9445,8 @@ const chatbot = {
       return { success: true, orderId };
     } catch (error) {
       logger.error('Pickup checkout error', { error: error.message });
-      await whatsapp.sendButtons(phone, '❌ Failed to process your order. Please try again.', [
+      const helpImg = await chatbotImagesService.getImageUrl('help_support');
+      await sendWithOptionalImage(phone, helpImg, '❌ Failed to process your order. Please try again.', [
         { id: 'view_cart', text: 'View Cart' },
         { id: 'home', text: 'Main Menu' }
       ]);

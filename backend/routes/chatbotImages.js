@@ -250,6 +250,66 @@ const defaultImages = [
     name: 'Offer Not Eligible',
     description: 'Shown when customer tries to claim a targeted offer they are not eligible for (shared link)',
     imageUrl: ''
+  },
+  {
+    key: 'search_no_results',
+    name: 'Search No Results',
+    description: 'Shown when menu search returns no matching items',
+    imageUrl: ''
+  },
+  {
+    key: 'delivery_location',
+    name: 'Delivery Location',
+    description: 'Shown when requesting customer to share their delivery location',
+    imageUrl: ''
+  },
+  {
+    key: 'out_of_delivery_range',
+    name: 'Out of Delivery Range',
+    description: 'Shown when customer location is beyond the delivery radius',
+    imageUrl: ''
+  },
+  {
+    key: 'payment_failed',
+    name: 'Payment Failed',
+    description: 'Shown when online payment fails or is cancelled',
+    imageUrl: ''
+  },
+  {
+    key: 'refund_processed',
+    name: 'Refund Processed',
+    description: 'Shown when refund is successfully processed for an order',
+    imageUrl: ''
+  },
+  {
+    key: 'refund_failed',
+    name: 'Refund Failed',
+    description: 'Shown when refund fails or is rejected for an order',
+    imageUrl: ''
+  },
+  {
+    key: 'voice_error',
+    name: 'Voice Message Error',
+    description: 'Shown when voice message transcription or processing fails',
+    imageUrl: ''
+  },
+  {
+    key: 'food_type_selection',
+    name: 'Food Type Selection',
+    description: 'Shown when customer selects food type preference (Veg/Non-Veg/All)',
+    imageUrl: ''
+  },
+  {
+    key: 'checkout',
+    name: 'Checkout',
+    description: 'Shown when customer proceeds to checkout and selects service type',
+    imageUrl: ''
+  },
+  {
+    key: 'order_history',
+    name: 'Order History',
+    description: 'Shown when displaying customer order history list',
+    imageUrl: ''
   }
 ];
 

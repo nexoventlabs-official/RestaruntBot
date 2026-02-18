@@ -436,13 +436,17 @@ async function initiateOnlinePayment(customer, phone, params = {}) {
     return { success: true, orderId };
   } catch (err) {
     logger.error('Payment page error', { error: err.message });
-    await whatsapp.sendButtons(phone,
-      `✅ *Order Created!*\n\nOrder ID: ${orderId}\nTotal: ₹${total}\n\n⚠️ Payment link unavailable.\nPlease contact us.`,
-      [
-        { id: 'order_status', text: 'Check Status' },
-        { id: 'home', text: 'Main Menu' }
-      ]
-    );
+    const orderDetailsImg = await chatbotImagesService.getImageUrl('order_details');
+    const msg = `\u2705 *Order Created!*\n\nOrder ID: ${orderId}\nTotal: \u20b9${total}\n\n\u26a0\ufe0f Payment link unavailable.\nPlease contact us.`;
+    const btns = [
+      { id: 'order_status', text: 'Check Status' },
+      { id: 'home', text: 'Main Menu' }
+    ];
+    if (orderDetailsImg) {
+      await whatsapp.sendImageWithButtons(phone, orderDetailsImg, msg, btns);
+    } else {
+      await whatsapp.sendButtons(phone, msg, btns);
+    }
     return { success: true, orderId };
   }
 }

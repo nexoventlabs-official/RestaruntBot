@@ -15,6 +15,7 @@
  */
 
 const whatsapp = require('../../whatsapp');
+const chatbotImagesService = require('../../chatbotImages');
 
 /**
  * Send message with optional image and buttons
@@ -67,7 +68,8 @@ async function sendEmptyCartMessage(phone, includeMenuButton = true) {
   const message = '🛒 Your cart is empty. Add items first!';
   
   if (includeMenuButton) {
-    await whatsapp.sendButtons(phone, message, [
+    const imageUrl = await chatbotImagesService.getImageUrl('cart_empty');
+    await sendWithOptionalImage(phone, imageUrl, message, [
       { id: 'view_menu', text: '📋 Browse Menu' },
       { id: 'home', text: '🏠 Main Menu' }
     ]);
@@ -84,7 +86,8 @@ async function sendItemNotAvailableMessage(phone, itemName = null) {
     ? `❌ ${itemName} is not available at the moment.`
     : '❌ Item not available.';
   
-  await whatsapp.sendButtons(phone, message, [
+  const imageUrl = await chatbotImagesService.getImageUrl('item_not_available');
+  await sendWithOptionalImage(phone, imageUrl, message, [
     { id: 'view_menu', text: '📋 Browse Menu' },
     { id: 'home', text: '🏠 Main Menu' }
   ]);
@@ -94,7 +97,8 @@ async function sendItemNotAvailableMessage(phone, itemName = null) {
  * Send order not found message
  */
 async function sendOrderNotFoundMessage(phone) {
-  await whatsapp.sendButtons(phone, '❌ Order not found.', [
+  const imageUrl = await chatbotImagesService.getImageUrl('no_orders_found');
+  await sendWithOptionalImage(phone, imageUrl, '❌ Order not found.', [
     { id: 'my_orders', text: '📦 My Orders' },
     { id: 'home', text: '🏠 Main Menu' }
   ]);
@@ -113,7 +117,8 @@ async function sendErrorMessage(phone, errorText, retryButtons = []) {
   
   const buttons = retryButtons.length > 0 ? retryButtons : defaultButtons;
   
-  await whatsapp.sendButtons(phone, message, buttons);
+  const imageUrl = await chatbotImagesService.getImageUrl('help_support');
+  await sendWithOptionalImage(phone, imageUrl, message, buttons);
 }
 
 /**
@@ -129,7 +134,8 @@ async function sendSuccessMessage(phone, successText, nextActionButtons = []) {
   
   const buttons = nextActionButtons.length > 0 ? nextActionButtons : defaultButtons;
   
-  await whatsapp.sendButtons(phone, message, buttons);
+  const imageUrl = await chatbotImagesService.getImageUrl('welcome');
+  await sendWithOptionalImage(phone, imageUrl, message, buttons);
 }
 
 /**
