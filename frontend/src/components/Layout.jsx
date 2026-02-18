@@ -35,7 +35,7 @@ export default function Layout() {
   const currentPage = navItems.find(item => item.path === location.pathname);
 
   return (
-    <div className="flex min-h-screen h-full bg-[#f8f9fb]">
+    <div className="flex h-screen bg-[#f8f9fb]" data-lenis-prevent>
       {/* Sidebar - Desktop Only */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 z-50 w-72 bg-dark-900 text-white flex-col shadow-sidebar">
         {/* Logo Section */}
@@ -103,7 +103,7 @@ export default function Layout() {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 lg:ml-72 pb-20 lg:pb-0">
+      <div className="flex-1 flex flex-col min-w-0 lg:ml-72 pb-20 lg:pb-0 h-screen">
         {/* Top Header */}
         <header className="bg-white border-b border-dark-100 px-4 lg:px-6 py-4 flex items-center justify-between sticky top-0 z-30">
           <div className="flex items-center gap-3">
@@ -127,7 +127,7 @@ export default function Layout() {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto p-4 lg:p-6">
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6 admin-scrollbar">
           <Outlet />
         </main>
       </div>

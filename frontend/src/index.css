@@ -121,6 +121,21 @@
   scrollbar-width: thin;
   scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
   -ms-overflow-style: auto;
+  overscroll-behavior: contain;
+}
+
+/* Ensure admin layout and modals get native scrolling */
+[data-lenis-prevent] {
+  overflow: auto !important;
+}
+
+[data-lenis-prevent] .overflow-y-auto,
+[data-lenis-prevent] .overflow-auto,
+.fixed.inset-0 .overflow-y-auto,
+.fixed.inset-0 .overflow-auto,
+.fixed.inset-0 form {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
 }
 
 .admin-scrollbar::-webkit-scrollbar,

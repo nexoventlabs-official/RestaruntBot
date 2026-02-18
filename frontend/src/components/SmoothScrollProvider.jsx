@@ -42,24 +42,15 @@ export default function SmoothScrollProvider({ children }) {
         // Walk up the DOM tree from the scroll target
         let el = node;
         while (el && el !== document.body && el !== document.documentElement) {
-          // Respect data-lenis-prevent attribute on any ancestor
-          if (el.hasAttribute && el.hasAttribute('data-lenis-prevent')) {
-            return true;
+          // Respect data-lenis-prevent attribute on any ancestor (admin layout, etc.)
+          if (el.hasAttribute?.('data-lenis-prevent')) return true;
+          // Detect full-screen fixed overlays (modals/dialogs) by class name
+          if (el.classList?.contains('fixed') && el.classList?.contains('inset-0')) return true;
+          // Detect any scrollable container (overflow-y-auto / overflow-auto)
+          if (el.classList?.contains('overflow-y-auto') || el.classList?.contains('overflow-auto')) {
+            // If this element can actually scroll, let browser handle it
+            if (el.scrollHeight > el.clientHeight) return true;
           }
-          // Detect full-screen fixed overlays (modals/dialogs)
-          // These use "fixed inset-0" which sets top/right/bottom/left all to 0
-          try {
-            const style = window.getComputedStyle(el);
-            if (
-              style.position === 'fixed' &&
-              style.top === '0px' &&
-              style.right === '0px' &&
-              style.bottom === '0px' &&
-              style.left === '0px'
-            ) {
-              return true; // Inside a modal overlay — let browser handle scroll
-            }
-          } catch (e) { /* ignore */ }
           el = el.parentElement;
         }
         return false;
