@@ -310,9 +310,9 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           const whatsapp = require('../services/whatsapp');
                           const payFailMsg = `❌ *Payment ${paymentStatus === 'canceled' ? 'Cancelled' : 'Failed'}*\n\nOrder #${referenceId}\n\nPlease try again or choose a different payment method.`;
                           const payFailBtns = [
-                              { id: 'pay_upi', text: '🔄 Retry UPI' },
-                              { id: 'pay_cod', text: '💵 Pay COD' },
-                              { id: 'home', text: '🏠 Main Menu' }
+                              { id: 'pay_upi', text: 'Retry UPI' },
+                              { id: 'pay_cod', text: 'Pay COD' },
+                              { id: 'home', text: 'Main Menu' }
                           ];
                           const payFailImg = await chatbotImagesService.getImageUrl('payment_failed');
                           if (payFailImg) {

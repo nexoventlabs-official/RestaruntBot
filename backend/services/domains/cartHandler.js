@@ -108,9 +108,9 @@ async function addToCart(customer, phone, params) {
       `Cart total: ${customer.cart.length} item(s)`;
     
     const buttons = [
-      { id: 'view_cart', text: '🛒 View Cart' },
-      { id: 'view_menu', text: '📋 Continue Shopping' },
-      { id: 'checkout', text: '✅ Checkout' }
+      { id: 'view_cart', text: 'View Cart' },
+      { id: 'view_menu', text: 'Continue Shopping' },
+      { id: 'checkout', text: 'Checkout' }
     ];
     
     const addedImg = await chatbotImagesService.getImageUrl('added_to_cart');
@@ -144,13 +144,13 @@ async function viewCart(customer, phone) {
     const emptyImg = await chatbotImagesService.getImageUrl('cart_empty');
     if (emptyImg) {
       await whatsapp.sendImageWithButtons(phone, emptyImg, 'What would you like to do?', [
-        { id: 'view_menu', text: '📋 Browse Menu' },
-        { id: 'home', text: '🏠 Main Menu' }
+        { id: 'view_menu', text: 'Browse Menu' },
+        { id: 'home', text: 'Main Menu' }
       ]);
     } else {
       await whatsapp.sendButtons(phone, 'What would you like to do?', [
-        { id: 'view_menu', text: '📋 Browse Menu' },
-        { id: 'home', text: '🏠 Main Menu' }
+        { id: 'view_menu', text: 'Browse Menu' },
+        { id: 'home', text: 'Main Menu' }
       ]);
     }
     return;
@@ -189,9 +189,9 @@ async function viewCart(customer, phone) {
   message += `💰 *Total: ₹${total}*`;
   
   const buttons = [
-    { id: 'checkout', text: '✅ Proceed to Checkout' },
-    { id: 'view_menu', text: '📋 Add More Items' },
-    { id: 'clear_cart', text: '🗑️ Clear Cart' }
+    { id: 'checkout', text: 'Proceed to Checkout' },
+    { id: 'view_menu', text: 'Add More Items' },
+    { id: 'clear_cart', text: 'Clear Cart' }
   ];
   
   const cartImg = await chatbotImagesService.getImageUrl('view_cart');
@@ -302,13 +302,13 @@ async function clearCart(customer, phone) {
     const clearedImg = await chatbotImagesService.getImageUrl('cart_cleared');
     if (clearedImg) {
       await whatsapp.sendImageWithButtons(phone, clearedImg, 'What would you like to do next?', [
-        { id: 'view_menu', text: '📋 Browse Menu' },
-        { id: 'home', text: '🏠 Main Menu' }
+        { id: 'view_menu', text: 'Browse Menu' },
+        { id: 'home', text: 'Main Menu' }
       ]);
     } else {
       await whatsapp.sendButtons(phone, 'What would you like to do next?', [
-        { id: 'view_menu', text: '📋 Browse Menu' },
-        { id: 'home', text: '🏠 Main Menu' }
+        { id: 'view_menu', text: 'Browse Menu' },
+        { id: 'home', text: 'Main Menu' }
       ]);
     }
     
@@ -566,13 +566,13 @@ async function sendCartOptionsMenu(customer, phone) {
   
   const buttons = hasItems
     ? [
-        { id: 'view_cart', text: '🛒 View Cart' },
-        { id: 'checkout', text: '✅ Checkout' },
-        { id: 'clear_cart', text: '🗑️ Clear Cart' }
+        { id: 'view_cart', text: 'View Cart' },
+        { id: 'checkout', text: 'Checkout' },
+        { id: 'clear_cart', text: 'Clear Cart' }
       ]
     : [
-        { id: 'view_menu', text: '📋 Browse Menu' },
-        { id: 'home', text: '🏠 Main Menu' }
+        { id: 'view_menu', text: 'Browse Menu' },
+        { id: 'home', text: 'Main Menu' }
       ];
   
   const imageKey = hasItems ? 'view_cart' : 'cart_empty';

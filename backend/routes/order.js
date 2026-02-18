@@ -457,8 +457,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
               confirmedImageUrl,
               msg,
               [
-                { id: 'track_order', text: '📍 Track Order' },
-                { id: 'home', text: '🏠 Main Menu' }
+                { id: 'track_order', text: 'Track Order' },
+                { id: 'home', text: 'Main Menu' }
               ]
             );
           }
@@ -482,8 +482,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
               readyImageUrl,
               msg,
               [
-                { id: 'track_order', text: '📍 View Order' },
-                { id: 'home', text: '🏠 Main Menu' }
+                { id: 'track_order', text: 'View Order' },
+                { id: 'home', text: 'Main Menu' }
               ]
             );
           }
@@ -568,8 +568,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
               cancelledByRestaurantImageUrl,
               cancelMsg,
               [
-                { id: 'view_menu', text: '📋 Menu' },
-                { id: 'help', text: '❓ Help' }
+                { id: 'view_menu', text: 'Menu' },
+                { id: 'help', text: 'Help' }
               ]
             );
           } else if (!isPickupOrder && order.paymentMethod === 'cod') {
@@ -582,8 +582,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
               cancelledByRestaurantImageUrl,
               cancelMsg,
               [
-                { id: 'view_menu', text: '📋 Menu' },
-                { id: 'help', text: '❓ Help' }
+                { id: 'view_menu', text: 'Menu' },
+                { id: 'help', text: 'Help' }
               ]
             );
           } else {
@@ -596,8 +596,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
               cancelledImageUrl,
               msg,
               [
-                { id: 'view_menu', text: '📋 Menu' },
-                { id: 'help', text: '❓ Help' }
+                { id: 'view_menu', text: 'Menu' },
+                { id: 'help', text: 'Help' }
               ]
             );
           }

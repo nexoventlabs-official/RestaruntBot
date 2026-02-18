@@ -45,9 +45,9 @@ async function showMainMenu(customer, phone) {
     `We're delighted to serve you delicious food. How can we help you today?`;
   
   const buttons = [
-    { id: 'order_food', text: '🍽️ Order Food' },
-    { id: 'my_orders', text: '📦 My Orders' },
-    { id: 'open_website', text: '🌐 Website' }
+    { id: 'order_food', text: 'Order Food' },
+    { id: 'my_orders', text: 'My Orders' },
+    { id: 'open_website', text: 'Website' }
   ];
   
   if (welcomeImg) {
@@ -68,9 +68,9 @@ async function showFoodTypeSelection(customer, phone) {
     `Please select your food preference:`;
   
   const buttons = [
-    { id: 'food_type_veg', text: '🌿 Veg' },
-    { id: 'food_type_nonveg', text: '🍗 Non-Veg' },
-    { id: 'food_type_all', text: '🍽️ All Items' }
+    { id: 'food_type_veg', text: 'Veg' },
+    { id: 'food_type_nonveg', text: 'Non-Veg' },
+    { id: 'food_type_all', text: 'All Items' }
   ];
   
   const imageUrl = await chatbotImagesService.getImageUrl('food_type_selection') || await chatbotImagesService.getImageUrl('browse_menu');
@@ -119,8 +119,8 @@ async function browseMenu(customer, phone, foodType = FOOD_TYPES.ALL) {
     const imageUrl = await chatbotImagesService.getImageUrl('item_not_available');
     const msg = `❌ No ${foodTypeLabel} items available at the moment.`;
     const btns = [
-      { id: 'view_menu', text: '📋 Browse Menu' },
-      { id: 'home', text: '🏠 Main Menu' }
+      { id: 'view_menu', text: 'Browse Menu' },
+      { id: 'home', text: 'Main Menu' }
     ];
     if (imageUrl) {
       await whatsapp.sendImageWithButtons(phone, imageUrl, msg, btns);
@@ -227,8 +227,8 @@ async function showItemDetails(customer, phone, params) {
     const imageUrl = await chatbotImagesService.getImageUrl('item_not_available');
     const msg = '❌ Item not available.';
     const btns = [
-      { id: 'view_menu', text: '📋 Browse Menu' },
-      { id: 'home', text: '🏠 Main Menu' }
+      { id: 'view_menu', text: 'Browse Menu' },
+      { id: 'home', text: 'Main Menu' }
     ];
     if (imageUrl) {
       await whatsapp.sendImageWithButtons(phone, imageUrl, msg, btns);
@@ -248,9 +248,9 @@ async function showItemDetails(customer, phone, params) {
     `📦 Category: ${item.category}`;
   
   const buttons = [
-    { id: `add_to_cart_${item._id}`, text: '➕ Add to Cart' },
-    { id: 'view_menu', text: '📋 Back to Menu' },
-    { id: 'view_cart', text: '🛒 View Cart' }
+    { id: `add_to_cart_${item._id}`, text: 'Add to Cart' },
+    { id: 'view_menu', text: 'Back to Menu' },
+    { id: 'view_cart', text: 'View Cart' }
   ];
   
   if (item.image) {
@@ -297,8 +297,8 @@ async function searchItem(customer, phone, params) {
     const imageUrl = await chatbotImagesService.getImageUrl('search_no_results');
     const msg = `❌ No items found for "${query}"`;
     const btns = [
-      { id: 'view_menu', text: '📋 Browse Menu' },
-      { id: 'home', text: '🏠 Main Menu' }
+      { id: 'view_menu', text: 'Browse Menu' },
+      { id: 'home', text: 'Main Menu' }
     ];
     if (imageUrl) {
       await whatsapp.sendImageWithButtons(phone, imageUrl, msg, btns);
@@ -341,9 +341,9 @@ async function showHelp(customer, phone) {
     `📞 Need help? Contact our support team`;
   
   const buttons = [
-    { id: 'order_food', text: '🍽️ Order Food' },
-    { id: 'my_orders', text: '📦 My Orders' },
-    { id: 'home', text: '🏠 Main Menu' }
+    { id: 'order_food', text: 'Order Food' },
+    { id: 'my_orders', text: 'My Orders' },
+    { id: 'home', text: 'Main Menu' }
   ];
   
   const imageUrl = await chatbotImagesService.getImageUrl('help_support');
@@ -368,8 +368,8 @@ async function showWebsiteLink(customer, phone) {
     `${websiteUrl}`;
   
   const buttons = [
-    { id: 'order_food', text: '🍽️ Order Food' },
-    { id: 'home', text: '🏠 Main Menu' }
+    { id: 'order_food', text: 'Order Food' },
+    { id: 'home', text: 'Main Menu' }
   ];
   
   const imageUrl = await chatbotImagesService.getImageUrl('open_website');

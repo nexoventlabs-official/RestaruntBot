@@ -70,8 +70,8 @@ async function sendEmptyCartMessage(phone, includeMenuButton = true) {
   if (includeMenuButton) {
     const imageUrl = await chatbotImagesService.getImageUrl('cart_empty');
     await sendWithOptionalImage(phone, imageUrl, message, [
-      { id: 'view_menu', text: '📋 Browse Menu' },
-      { id: 'home', text: '🏠 Main Menu' }
+      { id: 'view_menu', text: 'Browse Menu' },
+      { id: 'home', text: 'Main Menu' }
     ]);
   } else {
     await whatsapp.sendMessage(phone, message);
@@ -88,8 +88,8 @@ async function sendItemNotAvailableMessage(phone, itemName = null) {
   
   const imageUrl = await chatbotImagesService.getImageUrl('item_not_available');
   await sendWithOptionalImage(phone, imageUrl, message, [
-    { id: 'view_menu', text: '📋 Browse Menu' },
-    { id: 'home', text: '🏠 Main Menu' }
+    { id: 'view_menu', text: 'Browse Menu' },
+    { id: 'home', text: 'Main Menu' }
   ]);
 }
 
@@ -99,8 +99,8 @@ async function sendItemNotAvailableMessage(phone, itemName = null) {
 async function sendOrderNotFoundMessage(phone) {
   const imageUrl = await chatbotImagesService.getImageUrl('no_orders_found');
   await sendWithOptionalImage(phone, imageUrl, '❌ Order not found.', [
-    { id: 'my_orders', text: '📦 My Orders' },
-    { id: 'home', text: '🏠 Main Menu' }
+    { id: 'my_orders', text: 'My Orders' },
+    { id: 'home', text: 'Main Menu' }
   ]);
 }
 
@@ -111,8 +111,8 @@ async function sendErrorMessage(phone, errorText, retryButtons = []) {
   const message = `❌ ${errorText}`;
   
   const defaultButtons = [
-    { id: 'home', text: '🏠 Main Menu' },
-    { id: 'help', text: '❓ Help' }
+    { id: 'home', text: 'Main Menu' },
+    { id: 'help', text: 'Help' }
   ];
   
   const buttons = retryButtons.length > 0 ? retryButtons : defaultButtons;
@@ -128,8 +128,8 @@ async function sendSuccessMessage(phone, successText, nextActionButtons = []) {
   const message = `✅ ${successText}`;
   
   const defaultButtons = [
-    { id: 'view_menu', text: '📋 Browse Menu' },
-    { id: 'home', text: '🏠 Main Menu' }
+    { id: 'view_menu', text: 'Browse Menu' },
+    { id: 'home', text: 'Main Menu' }
   ];
   
   const buttons = nextActionButtons.length > 0 ? nextActionButtons : defaultButtons;

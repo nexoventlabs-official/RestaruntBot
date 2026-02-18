@@ -297,13 +297,13 @@ async function sendPaymentConfirmation(order) {
     
     if (confirmedImageUrl) {
       await whatsapp.sendImage(phone, confirmedImageUrl, message, [
-        { id: 'track_order', text: '📍 Track Order' },
-        { id: 'home', text: '🏠 Main Menu' }
+        { id: 'track_order', text: 'Track Order' },
+        { id: 'home', text: 'Main Menu' }
       ]);
     } else {
       await whatsapp.sendButtons(phone, message, [
-        { id: 'track_order', text: '📍 Track Order' },
-        { id: 'home', text: '🏠 Main Menu' }
+        { id: 'track_order', text: 'Track Order' },
+        { id: 'home', text: 'Main Menu' }
       ]);
     }
     
@@ -331,9 +331,9 @@ async function sendPaymentFailureNotification(order) {
     
     const payFailImg = await chatbotImagesService.getImageUrl('payment_failed');
     const buttons = [
-      { id: 'retry_payment', text: '🔄 Retry Payment' },
-      { id: 'pay_cod', text: '💵 Pay COD' },
-      { id: 'home', text: '🏠 Main Menu' }
+      { id: 'retry_payment', text: 'Retry Payment' },
+      { id: 'pay_cod', text: 'Pay COD' },
+      { id: 'home', text: 'Main Menu' }
     ];
     if (payFailImg) {
       await whatsapp.sendImageWithButtons(phone, payFailImg, message, buttons);
@@ -537,8 +537,8 @@ async function sendRefundConfirmation(order) {
     
     const refundImg = await chatbotImagesService.getImageUrl('refund_processed');
     const buttons = [
-      { id: 'view_menu', text: '📋 Browse Menu' },
-      { id: 'home', text: '🏠 Main Menu' }
+      { id: 'view_menu', text: 'Browse Menu' },
+      { id: 'home', text: 'Main Menu' }
     ];
     if (refundImg) {
       await whatsapp.sendImageWithButtons(phone, refundImg, message, buttons);

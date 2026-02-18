@@ -4283,8 +4283,8 @@ const chatbot = {
             await sendWithOptionalImage(phone, helpImg,
               '❌ Sorry, we couldn\'t process your cart. Please try again.',
               [
-                { id: 'order_food', text: '🍽️ Order Food' },
-                { id: 'home', text: '🏠 Main Menu' }
+                { id: 'order_food', text: 'Order Food' },
+                { id: 'home', text: 'Main Menu' }
               ]
             );
             state.currentStep = 'main_menu';
@@ -4344,8 +4344,8 @@ const chatbot = {
           await sendWithOptionalImage(phone, helpImg,
             '❌ Something went wrong processing your cart. Please try again.',
             [
-              { id: 'order_food', text: '🍽️ Order Food' },
-              { id: 'home', text: '🏠 Main Menu' }
+              { id: 'order_food', text: 'Order Food' },
+              { id: 'home', text: 'Main Menu' }
             ]
           );
           state.currentStep = 'main_menu';
@@ -4407,9 +4407,9 @@ const chatbot = {
             const message = `❌ *Delivery Not Available*\n\n${deliveryResult.message}\n\nWould you like to try a different address or opt for self-pickup?`;
             
             await sendWithOptionalImage(phone, outOfRangeImg, message, [
-              { id: 'service_pickup', text: '🏪 Self-Pickup' },
-              { id: 'share_location', text: '📍 New Location' },
-              { id: 'home', text: '🏠 Main Menu' }
+              { id: 'service_pickup', text: 'Self-Pickup' },
+              { id: 'share_location', text: 'New Location' },
+              { id: 'home', text: 'Main Menu' }
             ]);
             state.currentStep = 'awaiting_location';
             customer.conversationState = state;
@@ -4423,9 +4423,9 @@ const chatbot = {
             const message = `❌ *Delivery Not Available*\n\n${deliveryResult.message}\n\nWould you like to try a different address or opt for self-pickup?`;
             
             await sendWithOptionalImage(phone, outOfRangeImg, message, [
-              { id: 'service_pickup', text: '🏪 Self-Pickup' },
-              { id: 'share_location', text: '📍 New Location' },
-              { id: 'home', text: '🏠 Main Menu' }
+              { id: 'service_pickup', text: 'Self-Pickup' },
+              { id: 'share_location', text: 'New Location' },
+              { id: 'home', text: 'Main Menu' }
             ]);
             state.currentStep = 'awaiting_location';
             customer.conversationState = state;
@@ -4536,9 +4536,9 @@ const chatbot = {
           
           const offerNotEligibleImg = await chatbotImagesService.getImageUrl('offer_not_eligible');
           await sendWithOptionalImage(phone, offerNotEligibleImg, ineligibleMsg, [
-            { id: 'proceed_without_offer', text: '📦 Order Anyway' },
-            { id: 'view_menu', text: '📋 Browse Menu' },
-            { id: 'home', text: '🏠 Main Menu' }
+            { id: 'proceed_without_offer', text: 'Order Anyway' },
+            { id: 'view_menu', text: 'Browse Menu' },
+            { id: 'home', text: 'Main Menu' }
           ]);
           
           // Store cart order in state for "proceed_without_offer"
@@ -4879,8 +4879,8 @@ const chatbot = {
         message += `🍽️ Browse our delicious menu and discover your favorites! 😋`;
         
         await sendWithOptionalImage(phone, cartClearedImageUrl, message, [
-          { id: 'view_menu', text: '📋 View Menu' },
-          { id: 'home', text: '🏠 Main Menu' }
+          { id: 'view_menu', text: 'View Menu' },
+          { id: 'home', text: 'Main Menu' }
         ]);
         state.currentStep = 'main_menu';
       }
@@ -4968,8 +4968,8 @@ const chatbot = {
         } else {
           const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
           await sendWithOptionalImage(phone, itemNotAvailableImg, `❌ No ${labelMap[selection]} items available right now.`, [
-            { id: 'view_menu', text: '📋 View All Menu' },
-            { id: 'home', text: '🏠 Main Menu' }
+            { id: 'view_menu', text: 'View All Menu' },
+            { id: 'home', text: 'Main Menu' }
           ]);
           state.currentStep = 'main_menu';
         }
@@ -5456,7 +5456,7 @@ const chatbot = {
         } else {
           const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
           await sendWithOptionalImage(phone, itemNotAvailableImg, '❌ Variant not found.', [
-            { id: 'order_food', text: '🍽️ Order Food' },
+            { id: 'order_food', text: 'Order Food' },
             { id: 'home', text: 'Main Menu' }
           ]);
         }
@@ -5494,7 +5494,7 @@ const chatbot = {
         } else {
           const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
           await sendWithOptionalImage(phone, itemNotAvailableImg, '❌ Option not found.', [
-            { id: 'order_food', text: '🍽️ Order Food' },
+            { id: 'order_food', text: 'Order Food' },
             { id: 'home', text: 'Main Menu' }
           ]);
         }
@@ -5827,9 +5827,9 @@ const chatbot = {
             const browseMessage = `🍽️ *Browse Menu*\n\nExplore our delicious menu and select your favorite items.\n\nWhat would you like to see?`;
             
             await sendWithOptionalImage(phone, browseMenuImg, browseMessage, [
-              { id: 'veg_only', text: '🌿 Veg Only' },
-              { id: 'nonveg_only', text: '🍗 Non-Veg Only' },
-              { id: 'show_all', text: '🍽️ Show All' }
+              { id: 'veg_only', text: 'Veg Only' },
+              { id: 'nonveg_only', text: 'Non-Veg Only' },
+              { id: 'show_all', text: 'Show All' }
             ]);
             
             state.currentStep = 'main_menu';
@@ -5876,8 +5876,8 @@ const chatbot = {
             const notFoundMessage = `❌ *Item Not Found*\n\nSorry, we couldn't find "${searchTerm}" in our menu.\n\nTry a different search or browse our menu.`;
             
             await sendWithOptionalImage(phone, itemNotAvailableImg, notFoundMessage, [
-              { id: 'view_menu', text: '📋 Browse Menu' },
-              { id: 'home', text: '🏠 Main Menu' }
+              { id: 'view_menu', text: 'Browse Menu' },
+              { id: 'home', text: 'Main Menu' }
             ]);
             state.currentStep = 'main_menu';
           } else {
@@ -5907,8 +5907,8 @@ const chatbot = {
               await sendWithOptionalImage(phone, itemNotAvailableImg,
                 `❌ No ${label.replace(/[🌿🥚🍗🍽️]\s*/, '')} items available right now.`,
                 [
-                  { id: 'view_menu', text: '📋 View All Menu' },
-                  { id: 'home', text: '🏠 Main Menu' }
+                  { id: 'view_menu', text: 'View All Menu' },
+                  { id: 'home', text: 'Main Menu' }
                 ]
               );
               state.currentStep = 'main_menu';
@@ -5946,8 +5946,8 @@ const chatbot = {
           const notFoundMessage = `❌ *Item Not Found*\n\nSorry, we couldn't find "${msg}" in our menu.\n\nTry a different search or browse our menu.`;
           
           await sendWithOptionalImage(phone, itemNotAvailableImg, notFoundMessage, [
-            { id: 'view_menu', text: '📋 Browse Menu' },
-            { id: 'home', text: '🏠 Main Menu' }
+            { id: 'view_menu', text: 'Browse Menu' },
+            { id: 'home', text: 'Main Menu' }
           ]);
           state.currentStep = 'main_menu';
         }
@@ -5995,8 +5995,8 @@ const chatbot = {
       if (!offer) {
         const offerNotEligibleImg = await chatbotImagesService.getImageUrl('offer_not_eligible');
         await sendWithOptionalImage(phone, offerNotEligibleImg, '❌ This offer is no longer available.', [
-          { id: 'view_menu', text: '📋 Browse Menu' },
-          { id: 'home', text: '🏠 Main Menu' }
+          { id: 'view_menu', text: 'Browse Menu' },
+          { id: 'home', text: 'Main Menu' }
         ]);
         return;
       }
@@ -6006,8 +6006,8 @@ const chatbot = {
       if (!offer.isActive) {
         const offerNotEligibleImg = await chatbotImagesService.getImageUrl('offer_not_eligible');
         await sendWithOptionalImage(phone, offerNotEligibleImg, '❌ This offer is no longer active.', [
-          { id: 'view_menu', text: '📋 Browse Menu' },
-          { id: 'home', text: '🏠 Main Menu' }
+          { id: 'view_menu', text: 'Browse Menu' },
+          { id: 'home', text: 'Main Menu' }
         ]);
         return;
       }
@@ -6015,8 +6015,8 @@ const chatbot = {
       if (offer.validUntil && new Date(offer.validUntil) < now) {
         const offerNotEligibleImg = await chatbotImagesService.getImageUrl('offer_not_eligible');
         await sendWithOptionalImage(phone, offerNotEligibleImg, '⏰ This offer has expired.', [
-          { id: 'view_menu', text: '📋 Browse Menu' },
-          { id: 'home', text: '🏠 Main Menu' }
+          { id: 'view_menu', text: 'Browse Menu' },
+          { id: 'home', text: 'Main Menu' }
         ]);
         return;
       }
@@ -6052,14 +6052,14 @@ const chatbot = {
           
           if (notEligibleImage) {
             await whatsapp.sendImageWithButtons(phone, notEligibleImage, message, [
-              { id: 'view_menu', text: '📋 Browse Menu' },
-              { id: 'home', text: '🏠 Main Menu' }
+              { id: 'view_menu', text: 'Browse Menu' },
+              { id: 'home', text: 'Main Menu' }
             ]);
           } else {
             const offerFallbackImg = await chatbotImagesService.getImageUrl('offer_not_eligible');
             await sendWithOptionalImage(phone, offerFallbackImg, message, [
-              { id: 'view_menu', text: '📋 Browse Menu' },
-              { id: 'home', text: '🏠 Main Menu' }
+              { id: 'view_menu', text: 'Browse Menu' },
+              { id: 'home', text: 'Main Menu' }
             ]);
           }
           return;
@@ -6075,22 +6075,22 @@ const chatbot = {
       
       if (offer.image) {
         await whatsapp.sendImageWithButtons(phone, offer.image, successMessage, [
-          { id: 'view_menu', text: '📋 Browse Menu' },
-          { id: 'view_cart', text: '🛒 View Cart' }
+          { id: 'view_menu', text: 'Browse Menu' },
+          { id: 'view_cart', text: 'View Cart' }
         ]);
       } else {
         const offerAppliedImg = await chatbotImagesService.getImageUrl('offer_applied');
         await sendWithOptionalImage(phone, offerAppliedImg, successMessage, [
-          { id: 'view_menu', text: '📋 Browse Menu' },
-          { id: 'view_cart', text: '🛒 View Cart' }
+          { id: 'view_menu', text: 'Browse Menu' },
+          { id: 'view_cart', text: 'View Cart' }
         ]);
       }
     } catch (error) {
       logger.error('Error handling offer claim', { error: error.message });
       const helpImg = await chatbotImagesService.getImageUrl('help_support');
       await sendWithOptionalImage(phone, helpImg, '❌ Something went wrong. Please try again.', [
-        { id: 'view_menu', text: '📋 Browse Menu' },
-        { id: 'home', text: '🏠 Main Menu' }
+        { id: 'view_menu', text: 'Browse Menu' },
+        { id: 'home', text: 'Main Menu' }
       ]);
     }
   },
@@ -6104,9 +6104,9 @@ const chatbot = {
       `We're delighted to serve you delicious food. How can we help you today?`;
     
     await sendWithOptionalImage(phone, welcomeImageUrl, welcomeMessage, [
-      { id: 'order_food', text: '🍽️ Order Food' },
-      { id: 'my_orders', text: '📦 My Orders' },
-      { id: 'open_website', text: '🌐 Website' }
+      { id: 'order_food', text: 'Order Food' },
+      { id: 'my_orders', text: 'My Orders' },
+      { id: 'open_website', text: 'Website' }
     ], 'Perivi Hotel');
   },
 
@@ -6135,9 +6135,9 @@ const chatbot = {
     await sendWithOptionalImage(phone, browseMenuImageUrl,
       '🍽️ *Browse Menu*\n\nWhat would you like to see?',
       [
-        { id: 'food_veg', text: '🟢 Veg' },
-        { id: 'food_nonveg', text: '🔴 Non-Veg' },
-        { id: 'food_egg', text: '🟡 Egg' }
+        { id: 'food_veg', text: 'Veg' },
+        { id: 'food_nonveg', text: 'Non-Veg' },
+        { id: 'food_egg', text: 'Egg' }
       ]
     );
   },
@@ -7241,7 +7241,7 @@ const chatbot = {
     if (!matchingItems.length) {
       const searchNoResultsImg = await chatbotImagesService.getImageUrl('search_no_results');
       await sendWithOptionalImage(phone, searchNoResultsImg, '📋 No matching items found.', [
-        { id: 'order_food', text: '🍽️ Order Food' },
+        { id: 'order_food', text: 'Order Food' },
         { id: 'home', text: 'Main Menu' }
       ]);
       return;
@@ -7300,7 +7300,7 @@ const chatbot = {
     if (!menuItem) {
       const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
       await sendWithOptionalImage(phone, itemNotAvailableImg, '📋 Item not found.', [
-        { id: 'order_food', text: '🍽️ Order Food' },
+        { id: 'order_food', text: 'Order Food' },
         { id: 'home', text: 'Main Menu' }
       ]);
       return;
@@ -7327,7 +7327,7 @@ const chatbot = {
     if (!matchingVariants.length) {
       const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
       await sendWithOptionalImage(phone, itemNotAvailableImg, `📋 No matching variants in ${menuItem.name}.`, [
-        { id: 'order_food', text: '🍽️ Order Food' },
+        { id: 'order_food', text: 'Order Food' },
         { id: 'home', text: 'Main Menu' }
       ]);
       return;
@@ -8168,9 +8168,9 @@ const chatbot = {
     const message = `🛒 *Cart Options*\n\nWhat would you like to do?`;
     
     await sendWithOptionalImage(phone, cartOptionsImageUrl, message, [
-      { id: 'view_cart', text: '🛒 My Cart' },
-      { id: 'clear_cart', text: '🗑️ Clear Cart' },
-      { id: 'view_menu', text: '📋 Menu' }
+      { id: 'view_cart', text: 'My Cart' },
+      { id: 'clear_cart', text: 'Clear Cart' },
+      { id: 'view_menu', text: 'Menu' }
     ]);
   },
 
@@ -8183,9 +8183,9 @@ const chatbot = {
       await sendWithOptionalImage(phone, cartEmptyImg,
         '🛒 *Your Cart is Empty*\n\nTap the 🛒 cart icon at the top right to view your WhatsApp cart, or browse our menu to add items!',
         [
-          { id: 'view_menu', text: '📋 View Menu' },
-          { id: 'order_food', text: '🍽️ Order Food' },
-          { id: 'home', text: '🏠 Main Menu' }
+          { id: 'view_menu', text: 'View Menu' },
+          { id: 'order_food', text: 'Order Food' },
+          { id: 'home', text: 'Main Menu' }
         ]
       );
       return;
@@ -8274,9 +8274,9 @@ const chatbot = {
       await sendWithOptionalImage(phone, cartEmptyImg,
         '🛒 *Your Cart is Empty*\n\nTap the 🛒 cart icon at the top right to view your WhatsApp cart, or browse our menu to add items!',
         [
-          { id: 'view_menu', text: '📋 View Menu' },
-          { id: 'order_food', text: '🍽️ Order Food' },
-          { id: 'home', text: '🏠 Main Menu' }
+          { id: 'view_menu', text: 'View Menu' },
+          { id: 'order_food', text: 'Order Food' },
+          { id: 'home', text: 'Main Menu' }
         ]
       );
       return;
@@ -8317,7 +8317,7 @@ const chatbot = {
           // After catalog succeeds, send image-based cart message
           const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
           await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [
-            { id: 'review_pay', text: 'Place Order ✅' },
+            { id: 'review_pay', text: 'Place Order ' },
             { id: 'add_more', text: 'Add More' },
             { id: 'clear_cart', text: 'Clear Cart' }
           ]);
@@ -8344,7 +8344,7 @@ const chatbot = {
                 // After retry succeeds, send image-based cart message
                 const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
                 await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [
-                  { id: 'review_pay', text: 'Place Order ✅' },
+                  { id: 'review_pay', text: 'Place Order ' },
                   { id: 'add_more', text: 'Add More' },
                   { id: 'clear_cart', text: 'Clear Cart' }
                 ]);
@@ -8363,7 +8363,7 @@ const chatbot = {
     // Fallback: text-based cart (if catalog failed or not enabled)
     const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
     await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [
-      { id: 'review_pay', text: 'Place Order ✅' },
+      { id: 'review_pay', text: 'Place Order ' },
       { id: 'add_more', text: 'Add More' },
       { id: 'clear_cart', text: 'Clear Cart' }
     ]);

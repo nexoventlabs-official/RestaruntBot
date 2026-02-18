@@ -45,8 +45,8 @@ async function requestLocation(customer, phone) {
     `Tap the 📎 button and select Location`;
   
   const buttons = [
-    { id: 'view_cart', text: '🛒 Back to Cart' },
-    { id: 'service_pickup', text: '🏪 Switch to Pickup' }
+    { id: 'view_cart', text: 'Back to Cart' },
+    { id: 'service_pickup', text: 'Switch to Pickup' }
   ];
   
   const locationImg = await chatbotImagesService.getImageUrl('delivery_location');
@@ -83,9 +83,9 @@ async function handleLocation(customer, phone, params) {
     const msg = `❌ *Delivery Not Available*\n\n${deliveryResult.message}\n\n` +
       `Would you like to try a different address or opt for self-pickup?`;
     const btns = [
-      { id: 'service_pickup', text: '🏪 Self-Pickup' },
-      { id: 'share_location', text: '📍 New Location' },
-      { id: 'home', text: '🏠 Main Menu' }
+      { id: 'service_pickup', text: 'Self-Pickup' },
+      { id: 'share_location', text: 'New Location' },
+      { id: 'home', text: 'Main Menu' }
     ];
     if (outOfRangeImg) {
       await whatsapp.sendImageWithButtons(phone, outOfRangeImg, msg, btns);
@@ -101,9 +101,9 @@ async function handleLocation(customer, phone, params) {
     const msg = `❌ *Delivery Not Available*\n\n${deliveryResult.message}\n\n` +
       `Would you like to try a different address or opt for self-pickup?`;
     const btns = [
-      { id: 'service_pickup', text: '🏪 Self-Pickup' },
-      { id: 'share_location', text: '📍 New Location' },
-      { id: 'home', text: '🏠 Main Menu' }
+      { id: 'service_pickup', text: 'Self-Pickup' },
+      { id: 'share_location', text: 'New Location' },
+      { id: 'home', text: 'Main Menu' }
     ];
     if (outOfRangeImg) {
       await whatsapp.sendImageWithButtons(phone, outOfRangeImg, msg, btns);
@@ -462,8 +462,8 @@ function hasCustomerLocation(customer) {
  */
 async function requestLocationWithMessage(customer, phone, message) {
   const buttons = [
-    { id: 'view_cart', text: '🛒 Back to Cart' },
-    { id: 'service_pickup', text: '🏪 Switch to Pickup' }
+    { id: 'view_cart', text: 'Back to Cart' },
+    { id: 'service_pickup', text: 'Switch to Pickup' }
   ];
   
   const locationImg = await chatbotImagesService.getImageUrl('delivery_location');

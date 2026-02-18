@@ -72,9 +72,9 @@ async function initiateCheckout(customer, phone) {
     `How would you like to receive your order?`;
   
   const buttons = [
-    { id: 'service_delivery', text: '🚚 Home Delivery' },
-    { id: 'service_pickup', text: '🏪 Self Pickup' },
-    { id: 'view_cart', text: '🛒 Back to Cart' }
+    { id: 'service_delivery', text: 'Home Delivery' },
+    { id: 'service_pickup', text: 'Self Pickup' },
+    { id: 'view_cart', text: 'Back to Cart' }
   ];
   
   const checkoutImg = await chatbotImagesService.getImageUrl('checkout') || await chatbotImagesService.getImageUrl('order_summary');
@@ -245,11 +245,11 @@ async function showOrderStatus(phone, order) {
   }
   
   const buttons = [
-    { id: 'home', text: '🏠 Main Menu' }
+    { id: 'home', text: 'Main Menu' }
   ];
   
   if (order.status === 'pending' || order.status === 'confirmed') {
-    buttons.unshift({ id: 'cancel_order', text: '❌ Cancel Order' });
+    buttons.unshift({ id: 'cancel_order', text: 'Cancel Order' });
   }
   
   const trackingImg = await chatbotImagesService.getImageUrl('order_tracking');
@@ -279,13 +279,13 @@ async function viewOrderHistory(customer, phone, params = {}) {
     const noOrdersImg = await chatbotImagesService.getImageUrl('no_orders_found');
     if (noOrdersImg) {
       await whatsapp.sendImageWithButtons(phone, noOrdersImg, 'What would you like to do?', [
-        { id: 'view_menu', text: '📋 Browse Menu' },
-        { id: 'home', text: '🏠 Main Menu' }
+        { id: 'view_menu', text: 'Browse Menu' },
+        { id: 'home', text: 'Main Menu' }
       ]);
     } else {
       await whatsapp.sendButtons(phone, 'What would you like to do?', [
-        { id: 'view_menu', text: '📋 Browse Menu' },
-        { id: 'home', text: '🏠 Main Menu' }
+        { id: 'view_menu', text: 'Browse Menu' },
+        { id: 'home', text: 'Main Menu' }
       ]);
     }
     return;
@@ -302,9 +302,9 @@ async function viewOrderHistory(customer, phone, params = {}) {
   });
   
   const buttons = [
-    { id: 'track_order', text: '📍 Track Latest Order' },
-    { id: 'view_menu', text: '📋 Order Again' },
-    { id: 'home', text: '🏠 Main Menu' }
+    { id: 'track_order', text: 'Track Latest Order' },
+    { id: 'view_menu', text: 'Order Again' },
+    { id: 'home', text: 'Main Menu' }
   ];
   
   const historyImg = await chatbotImagesService.getImageUrl('order_history') || await chatbotImagesService.getImageUrl('your_orders');
@@ -552,13 +552,13 @@ async function sendMyOrdersMenu(customer, phone) {
   
   const buttons = recentOrder
     ? [
-        { id: 'track_order', text: '📍 Track Order' },
-        { id: 'order_history', text: '📋 Order History' },
-        { id: 'cancel_order', text: '❌ Cancel Order' }
+        { id: 'track_order', text: 'Track Order' },
+        { id: 'order_history', text: 'Order History' },
+        { id: 'cancel_order', text: 'Cancel Order' }
       ]
     : [
-        { id: 'view_menu', text: '📋 Browse Menu' },
-        { id: 'home', text: '🏠 Main Menu' }
+        { id: 'view_menu', text: 'Browse Menu' },
+        { id: 'home', text: 'Main Menu' }
       ];
   
   const imgKey = recentOrder ? 'my_orders' : 'no_orders_found';

@@ -176,13 +176,13 @@ async function showPaymentOptions(customer, phone, params = {}) {
   
   const buttons = serviceType === 'pickup'
     ? [
-        { id: 'pickup_pay_hotel', text: '💵 Pay at Hotel' },
-        { id: 'pickup_pay_upi', text: '💳 UPI/App' }
+        { id: 'pickup_pay_hotel', text: 'Pay at Hotel' },
+        { id: 'pickup_pay_upi', text: 'UPI/App' }
       ]
     : [
-        { id: 'pay_upi', text: '💳 UPI/APP' },
-        { id: 'pay_cod', text: '💵 COD' },
-        { id: 'clear_cart', text: '🗑️ Cancel' }
+        { id: 'pay_upi', text: 'UPI/APP' },
+        { id: 'pay_cod', text: 'COD' },
+        { id: 'clear_cart', text: 'Cancel' }
       ];
   
   const orderSummaryImageUrl = await chatbotImagesService.getImageUrl('order_summary');
@@ -684,15 +684,15 @@ async function processCODOrder(customer, phone, params = {}) {
   
   if (confirmedImageUrl) {
     await whatsapp.sendImage(phone, confirmedImageUrl, confirmMsg, [
-      { id: 'track_order', text: '📍 Track Order' },
-      { id: `cancel_${orderId}`, text: '❌ Cancel Order' },
-      { id: 'home', text: '🏠 Main Menu' }
+      { id: 'track_order', text: 'Track Order' },
+      { id: `cancel_${orderId}`, text: 'Cancel Order' },
+      { id: 'home', text: 'Main Menu' }
     ]);
   } else {
     await whatsapp.sendButtons(phone, confirmMsg, [
-      { id: 'track_order', text: '📍 Track Order' },
-      { id: `cancel_${orderId}`, text: '❌ Cancel Order' },
-      { id: 'home', text: '🏠 Main Menu' }
+      { id: 'track_order', text: 'Track Order' },
+      { id: `cancel_${orderId}`, text: 'Cancel Order' },
+      { id: 'home', text: 'Main Menu' }
     ]);
   }
   
