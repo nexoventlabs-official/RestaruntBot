@@ -56,6 +56,7 @@ jest.mock('../../services/cartCleanup', () => ({
   stopCartCleanupScheduler: jest.fn()
 }));
 jest.mock('../../services/googleSheets', () => ({
+  ensureAllSheetsExist: jest.fn().mockResolvedValue(true),
   initializeDailyReportsSheet: jest.fn().mockResolvedValue(true),
   initializeDashboardStatsSheet: jest.fn().mockResolvedValue(true),
   initializeCustomersSheet: jest.fn().mockResolvedValue(true),
@@ -75,6 +76,10 @@ jest.mock('../../config/corsConfig', () => ({
     allowedHeaders: ['Content-Type', 'Authorization'],
     optionsSuccessStatus: 200
   }
+}));
+
+jest.mock('../../services/correlationContext', () => ({
+  correlationMiddleware: jest.fn((req, res, next) => next())
 }));
 
 jest.mock('../../middleware/errorHandler', () => jest.fn((err, req, res, next) => {
@@ -115,14 +120,22 @@ jest.mock('../../routes/catalog', () => mockRouter);
 jest.mock('../../middleware/auth', () => jest.fn((req, res, next) => next()));
 
 describe('Server Configuration', () => {
+  let serverModule;
+
+  afterAll(async () => {
+    if (serverModule && serverModule.server) {
+      await new Promise(resolve => serverModule.server.close(resolve));
+    }
+  });
+
   it('should validate environment at startup', () => {
     const { validateEnv } = require('../../config/envValidation');
-    require('../../server');
+    serverModule = require('../../server');
     expect(validateEnv).toHaveBeenCalled();
   });
 
   it('should export app and server', () => {
-    const serverModule = require('../../server');
+    serverModule = require('../../server');
     expect(serverModule).toHaveProperty('app');
     expect(serverModule).toHaveProperty('server');
   });

@@ -167,7 +167,9 @@ mongoose.connection.on('error', (err) => {
   logger.error('MongoDB connection error', { error: err.message });
 });
 
-connectMongoDB();
+if (process.env.NODE_ENV !== 'test') {
+  connectMongoDB();
+}
 
 app.use('/api/auth', authRoutes);
 app.use('/api/menu', menuRoutes);
@@ -287,9 +289,12 @@ app.get('/api/admin/sync-pending-refunds', authMiddleware, async (req, res) => {
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
-const server = app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
-});
+let server;
+if (process.env.NODE_ENV !== 'test') {
+  server = app.listen(PORT, () => {
+    logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+  });
+}
 
 // ============ GRACEFUL SHUTDOWN ============
 const SHUTDOWN_TIMEOUT = 15000; // 15 seconds max
@@ -301,9 +306,11 @@ const gracefulShutdown = async (signal) => {
   logger.info(`${signal} received. Starting graceful shutdown...`);
 
   // Stop accepting new connections
-  server.close(() => {
-    logger.info('HTTP server closed - no longer accepting connections');
-  });
+  if (server) {
+    server.close(() => {
+      logger.info('HTTP server closed - no longer accepting connections');
+    });
+  }
 
   // Close SSE connections
   sseClients.forEach(client => {
