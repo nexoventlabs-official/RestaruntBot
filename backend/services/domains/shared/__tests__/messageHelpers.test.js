@@ -13,6 +13,11 @@ jest.mock('../../../whatsapp', () => ({
   sendImageWithCtaUrl: jest.fn()
 }));
 
+// Mock chatbot images service - return null so sendWithOptionalImage falls back to sendButtons
+jest.mock('../../../chatbotImages', () => ({
+  getImageUrl: jest.fn().mockResolvedValue(null)
+}));
+
 const whatsapp = require('../../../whatsapp');
 const messageHelpers = require('../messageHelpers');
 
@@ -34,7 +39,8 @@ describe('Message Helpers', () => {
         expect.arrayContaining([
           expect.objectContaining({ id: 'view_menu' }),
           expect.objectContaining({ id: 'home' })
-        ])
+        ]),
+        ''
       );
     });
     
@@ -91,7 +97,8 @@ describe('Message Helpers', () => {
       expect(whatsapp.sendButtons).toHaveBeenCalledWith(
         testPhone,
         expect.stringContaining('Pizza'),
-        expect.any(Array)
+        expect.any(Array),
+        ''
       );
     });
     
@@ -102,7 +109,8 @@ describe('Message Helpers', () => {
       expect(whatsapp.sendButtons).toHaveBeenCalledWith(
         testPhone,
         expect.stringContaining('not available'),
-        expect.any(Array)
+        expect.any(Array),
+        ''
       );
     });
   });
@@ -118,7 +126,8 @@ describe('Message Helpers', () => {
         expect.arrayContaining([
           expect.objectContaining({ id: 'view_menu' }),
           expect.objectContaining({ id: 'home' })
-        ])
+        ]),
+        ''
       );
     });
     
@@ -129,7 +138,8 @@ describe('Message Helpers', () => {
       expect(whatsapp.sendButtons).toHaveBeenCalledWith(
         testPhone,
         expect.stringContaining('✅'),
-        customButtons
+        customButtons,
+        ''
       );
     });
   });
@@ -142,7 +152,8 @@ describe('Message Helpers', () => {
       expect(whatsapp.sendButtons).toHaveBeenCalledWith(
         testPhone,
         expect.stringContaining('❌'),
-        expect.any(Array)
+        expect.any(Array),
+        ''
       );
     });
   });
