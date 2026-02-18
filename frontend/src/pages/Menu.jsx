@@ -506,14 +506,9 @@ export default function Menu() {
           <h1 className="text-2xl font-bold text-dark-900">Menu</h1>
           <p className="text-dark-500 mt-0.5">{stats.totalItems} items &bull; {stats.totalVariants} variants</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => openCategoryModal()} className="flex items-center gap-1.5 px-3 py-2 bg-dark-100 text-dark-700 rounded-xl text-sm font-medium hover:bg-dark-200 transition-colors">
-            <FolderPlus className="w-4 h-4" /> Category
-          </button>
-          <button onClick={() => openModal()} className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white rounded-xl text-sm font-medium hover:bg-primary-700 transition-colors">
-            <Plus className="w-4 h-4" /> Add Item
-          </button>
-        </div>
+        <button onClick={() => openModal()} className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white rounded-xl text-sm font-medium hover:bg-primary-700 transition-colors">
+          <Plus className="w-4 h-4" /> Add Item
+        </button>
       </div>
 
       {/* ── SEARCH ── */}
