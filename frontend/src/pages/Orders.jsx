@@ -110,6 +110,15 @@ export default function Orders() {
   }, []);
 
   /* ═══════════ SSE + POLLING ═══════════ */
+  const startPolling = useCallback(() => {
+    if (pollRef.current) return;
+    pollRef.current = setInterval(fetchOrders, POLL_INTERVAL);
+  }, [fetchOrders]);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }, []);
+
   const connectSSE = useCallback(() => {
     try {
       const token = localStorage.getItem('token');
@@ -127,15 +136,6 @@ export default function Orders() {
       sseRef.current = es;
     } catch { startPolling(); }
   }, [fetchOrders, startPolling]);
-
-  const startPolling = useCallback(() => {
-    if (pollRef.current) return;
-    pollRef.current = setInterval(fetchOrders, POLL_INTERVAL);
-  }, [fetchOrders]);
-
-  const stopPolling = useCallback(() => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-  }, []);
 
   useEffect(() => {
     fetchOrders().finally(() => setLoading(false));
@@ -240,6 +240,21 @@ export default function Orders() {
   }, []);
 
   /* ═══════════ STATUS UPDATE ═══════════ */
+  const confirmStatusUpdate = useCallback(async (order, newStatus, deliveryBoyId = null, actualPaymentMethod = null) => {
+    setUpdatingStatus(true);
+    try {
+      const body = { status: newStatus };
+      if (actualPaymentMethod) body.actualPaymentMethod = actualPaymentMethod;
+      const res = await api.put(`/orders/${order._id}/status`, body);
+      if (deliveryBoyId) await api.put(`/orders/${order._id}/assign-delivery`, { deliveryBoyId });
+      setSelectedOrder(res.data || { ...order, status: newStatus });
+      setShowDeliveryModal(false);
+      setShowPaymentMethodModal(false);
+      await fetchOrders();
+    } catch (err) { alert(err.response?.data?.error || 'Failed to update status'); }
+    finally { setUpdatingStatus(false); setAssigningPartnerId(null); }
+  }, [fetchOrders]);
+
   const handleStatusAction = useCallback((order) => {
     const nextStatus = getNextStatus(order);
     if (!nextStatus) return;
@@ -261,21 +276,6 @@ export default function Orders() {
     // Regular status update
     confirmStatusUpdate(order, nextStatus);
   }, [getNextStatus, confirmStatusUpdate]);
-
-  const confirmStatusUpdate = useCallback(async (order, newStatus, deliveryBoyId = null, actualPaymentMethod = null) => {
-    setUpdatingStatus(true);
-    try {
-      const body = { status: newStatus };
-      if (actualPaymentMethod) body.actualPaymentMethod = actualPaymentMethod;
-      const res = await api.put(`/orders/${order._id}/status`, body);
-      if (deliveryBoyId) await api.put(`/orders/${order._id}/assign-delivery`, { deliveryBoyId });
-      setSelectedOrder(res.data || { ...order, status: newStatus });
-      setShowDeliveryModal(false);
-      setShowPaymentMethodModal(false);
-      await fetchOrders();
-    } catch (err) { alert(err.response?.data?.error || 'Failed to update status'); }
-    finally { setUpdatingStatus(false); setAssigningPartnerId(null); }
-  }, [fetchOrders]);
 
   const handleAssignPartner = useCallback((partner) => {
     if (!selectedOrder) return;
