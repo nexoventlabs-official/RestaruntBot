@@ -105,7 +105,8 @@ export default function Orders() {
   const fetchOrders = useCallback(async () => {
     try {
       const r = await api.get('/orders');
-      setOrders(r.data || []);
+      const list = Array.isArray(r.data) ? r.data : (r.data?.orders || []);
+      setOrders(list);
     } catch { /* silent */ }
   }, []);
 
@@ -149,8 +150,9 @@ export default function Orders() {
     setHistoryLoading(true);
     try {
       const [hRes, mRes] = await Promise.all([api.get('/orders/history?limit=1000'), api.get('/menu')]);
-      setHistoryOrders(hRes.data || []);
-      setMenuItems(mRes.data || []);
+      const hList = Array.isArray(hRes.data) ? hRes.data : (hRes.data?.orders || []);
+      setHistoryOrders(hList);
+      setMenuItems(Array.isArray(mRes.data) ? mRes.data : (mRes.data?.items || []));
       historyLoaded.current = true;
     } catch { /* silent */ }
     finally { setHistoryLoading(false); }
