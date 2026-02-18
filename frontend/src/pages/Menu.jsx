@@ -1,6 +1,64 @@
-import { useState, useEffect, useRef } from 'react';
-import { Plus, Edit, Trash2, Sparkles, X, Image, FolderPlus, Search, Clock, ChevronDown, Check, Pause, Play, Upload, Ban, CalendarClock, ToggleLeft, ToggleRight, Tag } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Plus, Edit, Trash2, Sparkles, X, Image, FolderPlus, Search, ChevronDown, Check, Pause, Play, Upload, Ban, CalendarClock, Tag, Package } from 'lucide-react';
 import api from '../api';
+
+// Day names for schedule display
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// Format time from 24-hour to 12-hour with AM/PM
+const formatTime12Hour = (time24) => {
+  if (!time24) return '';
+  const [hours, minutes] = time24.split(':').map(Number);
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours % 12 || 12;
+  return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+};
+
+// Get next schedule time for a category (handles custom days)
+const getNextScheduleTime = (schedule) => {
+  if (!schedule || !schedule.enabled) return null;
+  if (schedule.type === 'custom' && schedule.customDays && schedule.customDays.length > 0) {
+    const now = new Date();
+    const currentDay = now.getDay();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const todaySchedule = schedule.customDays.find(d => d.day === currentDay && d.enabled);
+    if (todaySchedule) {
+      const [startH, startM] = todaySchedule.startTime.split(':').map(Number);
+      const startMinutes = startH * 60 + startM;
+      if (currentMinutes < startMinutes) {
+        return { day: DAY_NAMES[currentDay], startTime: todaySchedule.startTime, endTime: todaySchedule.endTime, isToday: true };
+      }
+      const [endH, endM] = todaySchedule.endTime.split(':').map(Number);
+      const endMinutes = endH * 60 + endM;
+      if (currentMinutes < endMinutes || endMinutes < startMinutes) {
+        return { day: DAY_NAMES[currentDay], startTime: todaySchedule.startTime, endTime: todaySchedule.endTime, isToday: true, isActive: true };
+      }
+    }
+    for (let i = 1; i <= 7; i++) {
+      const nextDay = (currentDay + i) % 7;
+      const nextSchedule = schedule.customDays.find(d => d.day === nextDay && d.enabled);
+      if (nextSchedule) {
+        return { day: DAY_NAMES[nextDay], startTime: nextSchedule.startTime, endTime: nextSchedule.endTime, isToday: false };
+      }
+    }
+    return null;
+  }
+  if (schedule.startTime && schedule.endTime) {
+    return { day: null, startTime: schedule.startTime, endTime: schedule.endTime, isDaily: true };
+  }
+  return null;
+};
+
+// Format schedule display text
+const formatScheduleDisplay = (schedule) => {
+  const nextSchedule = getNextScheduleTime(schedule);
+  if (!nextSchedule) return '';
+  const startFormatted = formatTime12Hour(nextSchedule.startTime);
+  const endFormatted = formatTime12Hour(nextSchedule.endTime);
+  if (nextSchedule.isDaily) return `${startFormatted} - ${endFormatted}`;
+  if (nextSchedule.isToday) return `Today ${startFormatted} - ${endFormatted}`;
+  return `${nextSchedule.day} ${startFormatted} - ${endFormatted}`;
+};
 
 // Custom Dropdown Component
 const CustomDropdown = ({ value, onChange, options, placeholder, required }) => {
@@ -177,6 +235,7 @@ export default function Menu() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all'); // all, available, unavailable
   const [foodTypeFilter, setFoodTypeFilter] = useState('all'); // all, veg, nonveg, egg
+  const [selectedTitle, setSelectedTitle] = useState('all'); // Product/Title filter like mobile
   const [confirmDialog, setConfirmDialog] = useState({ show: false, title: '', message: '', onConfirm: null });
   const units = ['piece', 'kg', 'gram', 'liter', 'ml', 'plate', 'bowl', 'cup', 'slice', 'inch', 'full', 'half', 'small'];
   const [aiLoading, setAiLoading] = useState(false);
@@ -267,10 +326,26 @@ export default function Menu() {
   // Toggle a single variant's availability
   const toggleVariant = async (itemId, variantIdx) => {
     setTogglingId(`${itemId}_v${variantIdx}`);
+    // Optimistic update
+    setItems(prev => prev.map(i => {
+      if (i._id !== itemId) return i;
+      if (variantIdx === -1) {
+        return { ...i, available: !i.available };
+      }
+      const updatedVariants = i.variants.map((v, idx) =>
+        idx === variantIdx ? { ...v, available: !v.available } : v
+      );
+      return { ...i, variants: updatedVariants };
+    }));
     try {
-      await api.patch(`/menu/${itemId}/variant/${variantIdx}/toggle`);
+      if (variantIdx === -1) {
+        await api.patch(`/menu/${itemId}/toggle-pause`);
+      } else {
+        await api.patch(`/menu/${itemId}/variant/${variantIdx}/toggle`);
+      }
+    } catch {
+      // Revert on error
       fetchItems();
-    } catch (err) {
       alert('Failed to toggle variant');
     } finally {
       setTogglingId(null);
@@ -295,16 +370,19 @@ export default function Menu() {
     if (!scheduleSoldOutTime || !scheduleModal.item) return;
     const { item, type } = scheduleModal;
     try {
+      // Extract HH:mm from datetime-local input like mobile does
+      const timeParts = scheduleSoldOutTime.split('T');
+      const endTimeHHmm = timeParts.length > 1 ? timeParts[1].slice(0, 5) : scheduleSoldOutTime;
       if (type === 'category') {
-        await api.patch(`/categories/${item._id}/schedule-soldout`, { enabled: true, endTime: new Date(scheduleSoldOutTime).toISOString() });
+        await api.patch(`/categories/${item._id}/schedule-soldout`, { enabled: true, endTime: endTimeHHmm });
       } else {
-        await api.patch(`/menu/${item._id}/schedule-soldout`, { endTime: new Date(scheduleSoldOutTime).toISOString() });
+        await api.patch(`/menu/${item._id}/schedule-soldout`, { endTime: endTimeHHmm });
       }
       fetchItems();
       fetchCategories();
       setScheduleModal({ show: false, item: null, type: 'item' });
       setScheduleSoldOutTime('');
-    } catch (err) {
+    } catch {
       alert('Failed to schedule sold out');
     }
   };
@@ -553,33 +631,150 @@ export default function Menu() {
     });
   };
 
-  const toggleAvailability = async (item) => {
-    // Optimistic update
-    setItems(prev => prev.map(i => i._id === item._id ? { ...i, available: !i.available } : i));
-    try {
-      const tags = Array.isArray(item.tags) ? item.tags.join(', ') : (item.tags || '');
-      await api.put(`/menu/${item._id}`, { ...item, available: !item.available, tags });
-    } catch (err) {
-      // Revert on error
-      setItems(prev => prev.map(i => i._id === item._id ? { ...i, available: item.available } : i));
-      alert('Failed to update availability');
-    }
-  };
-
   const categories = [...new Set(items.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))];
   
-  // Get paused category names
-  const pausedCategoryNames = categoryList.filter(c => c.isPaused).map(c => c.name);
+  // Get unavailable category names (paused or sold out) — memoized like mobile
+  const unavailableCategoryNames = useMemo(() =>
+    categoryList.filter(c => c.isPaused || c.isSoldOut).map(c => c.name),
+    [categoryList]
+  );
+
+  // Get scheduled locked category names
+  const scheduledLockedCategoryNames = useMemo(() =>
+    categoryList.filter(c => c.schedule?.enabled && c.isPaused && !c.isSoldOut).map(c => c.name),
+    [categoryList]
+  );
+
+  // Get manually paused category names
+  const manuallyPausedCategoryNames = useMemo(() =>
+    categoryList.filter(c => (c.isPaused && !c.schedule?.enabled) || c.isSoldOut).map(c => c.name),
+    [categoryList]
+  );
   
   // Helper function to check if item is paused (either item itself or all its categories are paused)
   const isItemPaused = (item) => {
-    // Check if item itself is paused
     if (item.isPaused) return true;
-    
-    // Check if all categories of this item are paused
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-    return itemCategories.every(cat => pausedCategoryNames.includes(cat));
+    return itemCategories.every(cat => unavailableCategoryNames.includes(cat));
   };
+
+  // Unique titles (menu item names) for title filter — like mobile
+  const titleCards = useMemo(() => {
+    return items.map(item => ({
+      id: item._id,
+      name: item.name,
+      image: item.image || (item.variants?.[0]?.image) || null,
+      variantCount: item.variants?.length || 0,
+    }));
+  }, [items]);
+
+  // Total variant count for "All" label
+  const totalVariantCount = useMemo(() => {
+    return items.reduce((sum, item) => sum + (item.variants?.length || 1), 0);
+  }, [items]);
+
+  // Flatten menu items into individual variant rows — core mobile logic
+  const flattenedVariants = useMemo(() => {
+    const result = [];
+    items.forEach(item => {
+      const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
+      const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        itemCategories.some(cat => cat?.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesCategory = selectedCategory === 'all' || itemCategories.includes(selectedCategory);
+      const matchesStatus = statusFilter === 'all' ||
+        (statusFilter === 'available' && item.available) ||
+        (statusFilter === 'unavailable' && !item.available);
+      const matchesFoodType = foodTypeFilter === 'all' || item.foodType === foodTypeFilter;
+      const matchesTitle = selectedTitle === 'all' || item._id === selectedTitle;
+      if (!matchesSearch || !matchesCategory || !matchesStatus || !matchesFoodType || !matchesTitle) return;
+
+      if (item.variants && item.variants.length > 0) {
+        item.variants.forEach((v, vIdx) => {
+          if (foodTypeFilter !== 'all' && v.foodType && v.foodType !== foodTypeFilter) return;
+          result.push({
+            _id: `${item._id}_v${vIdx}`,
+            parentId: item._id,
+            parentItem: item,
+            variantIndex: vIdx,
+            name: v.label,
+            parentName: item.name,
+            image: v.image || item.image || null,
+            foodType: v.foodType || item.foodType,
+            price: v.price || (v.quantities?.[0]?.price) || item.price,
+            offerPrice: v.offerPrice || (v.quantities?.[0]?.offerPrice) || null,
+            available: v.available !== false && item.available && !item.isPaused,
+            variantAvailable: v.available !== false,
+            quantities: v.quantities || null,
+            quantity: v.quantity,
+            unit: v.unit,
+            description: v.description || item.description,
+            category: item.category,
+            preparationTime: item.preparationTime,
+            isPaused: item.isPaused,
+            variant: v,
+          });
+        });
+      } else {
+        result.push({
+          _id: item._id,
+          parentId: item._id,
+          parentItem: item,
+          variantIndex: -1,
+          name: item.name,
+          parentName: item.name,
+          image: item.image || null,
+          foodType: item.foodType,
+          price: item.price,
+          offerPrice: item.offerPrice,
+          available: item.available && !item.isPaused,
+          variantAvailable: item.available,
+          quantities: null,
+          quantity: item.quantity,
+          unit: item.unit,
+          description: item.description,
+          category: item.category,
+          preparationTime: item.preparationTime,
+          isPaused: item.isPaused,
+          variant: null,
+        });
+      }
+    });
+    return result;
+  }, [items, searchTerm, selectedCategory, statusFilter, foodTypeFilter, selectedTitle]);
+
+  // Group flattenedVariants into sections by parent item (for display)
+  const sectionData = useMemo(() => {
+    const map = new Map();
+    flattenedVariants.forEach(vItem => {
+      const pid = vItem.parentId;
+      if (!map.has(pid)) {
+        map.set(pid, { parentItem: vItem.parentItem, data: [] });
+      }
+      map.get(pid).data.push(vItem);
+    });
+    return Array.from(map.values()).map(s => ({
+      title: s.parentItem.name,
+      parentItem: s.parentItem,
+      data: s.data,
+    }));
+  }, [flattenedVariants]);
+
+  // Group sections by category for display
+  const sectionsByCategory = useMemo(() => {
+    const catMap = new Map();
+    sectionData.forEach(section => {
+      const itemCats = Array.isArray(section.parentItem.category) ? section.parentItem.category : [section.parentItem.category];
+      itemCats.forEach(cat => {
+        if (selectedCategory !== 'all' && cat !== selectedCategory) return;
+        if (!catMap.has(cat)) catMap.set(cat, []);
+        // Avoid duplicating sections across categories
+        if (!catMap.get(cat).find(s => s.parentItem._id === section.parentItem._id)) {
+          catMap.get(cat).push(section);
+        }
+      });
+    });
+    return catMap;
+  }, [sectionData, selectedCategory]);
 
   const filteredItems = items.filter(item => {
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
@@ -590,7 +785,8 @@ export default function Menu() {
       (statusFilter === 'available' && item.available) || 
       (statusFilter === 'unavailable' && !item.available);
     const matchesFoodType = foodTypeFilter === 'all' || item.foodType === foodTypeFilter;
-    return matchesSearch && matchesCategory && matchesStatus && matchesFoodType;
+    const matchesTitle = selectedTitle === 'all' || item._id === selectedTitle;
+    return matchesSearch && matchesCategory && matchesStatus && matchesFoodType && matchesTitle;
   });
   const filteredCategories = [...new Set(filteredItems.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))];
   const showSkeleton = loading && items.length === 0;
@@ -675,14 +871,18 @@ export default function Menu() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
         {showSkeleton ? (
-          <><StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton /></>
+          <><StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton /></>
         ) : (
           <>
             <div className="bg-white rounded-xl p-4 shadow-card">
               <p className="text-dark-400 text-sm">Total Items</p>
               <p className="text-2xl font-bold text-dark-900 mt-1">{items.length}</p>
+            </div>
+            <div className="bg-white rounded-xl p-4 shadow-card">
+              <p className="text-dark-400 text-sm">Variants</p>
+              <p className="text-2xl font-bold text-dark-900 mt-1">{totalVariantCount}</p>
             </div>
             <div className="bg-white rounded-xl p-4 shadow-card">
               <p className="text-dark-400 text-sm">Categories</p>
@@ -733,6 +933,9 @@ export default function Menu() {
                   )}
                 </div>
                 <span className={`text-sm font-medium ${selectedCategory === cat.name ? 'text-primary-600' : cat.isPaused ? 'text-yellow-600' : cat.isSoldOut ? 'text-red-600' : 'text-dark-600'}`}>{cat.name}</span>
+                {cat.schedule?.enabled && (
+                  <span className="text-[10px] text-primary-500 font-medium leading-tight">{formatScheduleDisplay(cat.schedule)}</span>
+                )}
                 {cat.isPaused && <span className="text-xs text-yellow-500">Paused</span>}
                 {cat.isSoldOut && !cat.isPaused && <span className="text-xs text-red-500">Sold Out</span>}
                 {cat.soldOutUntil && new Date(cat.soldOutUntil) > new Date() && (
@@ -776,6 +979,35 @@ export default function Menu() {
         </div>
       )}
 
+      {/* Product/Title Filter — like mobile */}
+      {items.length > 0 && (
+        <div className="bg-white rounded-xl p-3 shadow-card">
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            <button
+              onClick={() => setSelectedTitle('all')}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${selectedTitle === 'all' ? 'bg-dark-800 text-white' : 'bg-dark-50 text-dark-600 hover:bg-dark-100'}`}
+            >
+              <Package className="w-4 h-4" />
+              All Products ({totalVariantCount})
+            </button>
+            {titleCards.map(tc => (
+              <button
+                key={tc.id}
+                onClick={() => setSelectedTitle(selectedTitle === tc.id ? 'all' : tc.id)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${selectedTitle === tc.id ? 'bg-primary-500 text-white' : 'bg-dark-50 text-dark-600 hover:bg-dark-100'}`}
+              >
+                {tc.image ? (
+                  <img src={tc.image} alt="" className="w-6 h-6 rounded-full object-cover" />
+                ) : (
+                  <Image className="w-4 h-4" />
+                )}
+                {tc.name} {tc.variantCount > 0 ? `(${tc.variantCount})` : ''}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {showSkeleton ? (
         <div className="space-y-8">
           <div>
@@ -786,119 +1018,208 @@ export default function Menu() {
           </div>
         </div>
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-6">
           {(selectedCategory !== 'all' ? [selectedCategory] : filteredCategories).map(cat => {
-            const itemsInCategory = filteredItems.filter(i => {
+            const sectionsInCat = sectionsByCategory.get(cat) || [];
+            if (sectionsInCat.length === 0) return null;
+            const catObj = categoryList.find(c => c.name === cat);
+            const allItemsInCat = filteredItems.filter(i => {
               const itemCats = Array.isArray(i.category) ? i.category : [i.category];
               return itemCats.includes(cat);
             });
-            if (itemsInCategory.length === 0) return null;
             return (
             <div key={cat}>
               <div className="flex items-center gap-3 mb-4">
                 <h2 className="text-lg font-bold text-dark-900">{cat}</h2>
                 <span className="px-2.5 py-1 bg-dark-100 rounded-full text-xs font-medium text-dark-500">
-                  {itemsInCategory.length} items
+                  {allItemsInCat.length} items
                 </span>
+                {catObj?.schedule?.enabled && (
+                  <span className="px-2 py-1 bg-primary-50 rounded-full text-xs font-medium text-primary-600">
+                    <CalendarClock className="w-3 h-3 inline mr-1" />{formatScheduleDisplay(catObj.schedule)}
+                  </span>
+                )}
                 <button 
-                  onClick={() => handleBulkPause(cat, !itemsInCategory.some(i => !i.isPaused))}
+                  onClick={() => handleBulkPause(cat, !allItemsInCat.some(i => !i.isPaused))}
                   disabled={bulkPausingCategory === cat}
                   className={`ml-auto px-3 py-1 text-xs font-medium rounded-lg transition-colors flex items-center gap-1 ${
-                    itemsInCategory.every(i => i.isPaused) 
+                    allItemsInCat.every(i => i.isPaused) 
                       ? 'bg-green-50 text-green-600 hover:bg-green-100' 
                       : 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'
                   }`}
                 >
-                  {itemsInCategory.every(i => i.isPaused) ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
-                  {bulkPausingCategory === cat ? 'Processing...' : itemsInCategory.every(i => i.isPaused) ? 'Resume All' : 'Pause All'}
+                  {allItemsInCat.every(i => i.isPaused) ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+                  {bulkPausingCategory === cat ? 'Processing...' : allItemsInCat.every(i => i.isPaused) ? 'Resume All' : 'Pause All'}
                 </button>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
-                {itemsInCategory.map(item => {
-                  const isPaused = isItemPaused(item);
+
+              {/* Sections by parent item — variant rows inside each */}
+              <div className="space-y-4">
+                {sectionsInCat.map(section => {
+                  const parentItem = section.parentItem;
+                  const isPaused = isItemPaused(parentItem);
                   return (
-                  <div key={item._id} className={`bg-white rounded-2xl shadow-card overflow-hidden card-hover group ${isPaused ? 'ring-2 ring-yellow-300 bg-gray-50' : ''}`}>
-                    <div className={`h-44 bg-dark-100 relative overflow-hidden ${isPaused ? 'grayscale opacity-60' : ''}`}>
-                      {item.image ? (
-                        <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Image className="w-12 h-12 text-dark-300" />
-                        </div>
-                      )}
-                      {item.foodType && (
-                        <div className="absolute top-3 left-3">
-                          <span className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isPaused ? 'border-gray-400 bg-white' : item.foodType === 'veg' ? 'border-green-600 bg-white' : item.foodType === 'egg' ? 'border-yellow-500 bg-white' : 'border-red-600 bg-white'}`}>
-                            <span className={`w-2.5 h-2.5 rounded-full ${isPaused ? 'bg-gray-400' : item.foodType === 'veg' ? 'bg-green-600' : item.foodType === 'egg' ? 'bg-yellow-500' : 'bg-red-600'}`}></span>
-                          </span>
-                        </div>
-                      )}
-                      {isPaused ? (
-                        <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-400 text-yellow-900 flex items-center gap-1">
-                          <Pause className="w-3 h-3" /> Paused
-                        </div>
-                      ) : (
-                        <div className="absolute top-3 right-3 flex items-center gap-1">
-                          <button onClick={() => toggleAvailability(item)}
-                            className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${item.available ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
-                            {item.available ? 'Available' : 'Unavailable'}
-                          </button>
-                        </div>
-                      )}
-                      {/* Sold out schedule indicator */}
-                      {item.soldOutUntil && new Date(item.soldOutUntil) > new Date() && (
-                        <div className="absolute bottom-3 left-3 px-2 py-1 rounded-full text-xs font-semibold bg-orange-500 text-white flex items-center gap-1">
-                          <CalendarClock className="w-3 h-3" /> Until {new Date(item.soldOutUntil).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-4">
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <h3 className={`font-semibold line-clamp-1 ${isPaused ? 'text-gray-400' : 'text-dark-900'}`}>{item.name}</h3>
-                        <span className={`font-bold whitespace-nowrap ${isPaused ? 'text-gray-400' : 'text-primary-600'}`}>₹{item.price}</span>
+                  <div key={parentItem._id} className={`bg-white rounded-2xl shadow-card overflow-hidden ${isPaused ? 'ring-2 ring-yellow-300' : ''}`}>
+                    {/* Parent item header */}
+                    <div className={`flex items-center gap-3 p-4 border-b border-dark-100 ${isPaused ? 'bg-yellow-50' : ''}`}>
+                      <div className={`w-14 h-14 rounded-xl overflow-hidden bg-dark-100 flex-shrink-0 ${isPaused ? 'grayscale opacity-60' : ''}`}>
+                        {parentItem.image ? (
+                          <img src={parentItem.image} alt={parentItem.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Image className="w-6 h-6 text-dark-300" />
+                          </div>
+                        )}
                       </div>
-                      <p className={`text-xs mb-2 ${isPaused ? 'text-gray-400' : 'text-dark-400'}`}>{item.quantity || 1} {item.unit || 'piece'}{item.variants?.length > 0 ? ` • ${item.variants.length} variant${item.variants.length > 1 ? 's' : ''}` : ''}</p>
-                      {item.description && <p className={`text-sm line-clamp-2 mb-3 ${isPaused ? 'text-gray-400' : 'text-dark-500'}`}>{item.description}</p>}
-                      {item.preparationTime && (
-                        <div className={`flex items-center gap-1 text-xs mb-3 ${isPaused ? 'text-gray-400' : 'text-dark-400'}`}>
-                          <Clock className="w-3.5 h-3.5" />
-                          <span>{item.preparationTime} min</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className={`font-semibold truncate ${isPaused ? 'text-gray-400' : 'text-dark-900'}`}>{parentItem.name}</h3>
+                          {parentItem.foodType && (
+                            <span className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${parentItem.foodType === 'veg' ? 'border-green-600 bg-white' : parentItem.foodType === 'egg' ? 'border-yellow-500 bg-white' : 'border-red-600 bg-white'}`}>
+                              <span className={`w-2 h-2 rounded-full ${parentItem.foodType === 'veg' ? 'bg-green-600' : parentItem.foodType === 'egg' ? 'bg-yellow-500' : 'bg-red-600'}`}></span>
+                            </span>
+                          )}
+                          {isPaused && (
+                            <span className="px-2 py-0.5 bg-yellow-400 text-yellow-900 rounded-full text-xs font-semibold flex items-center gap-1">
+                              <Pause className="w-2.5 h-2.5" /> Paused
+                            </span>
+                          )}
                         </div>
-                      )}
-                      <div className="flex gap-2">
-                        <button onClick={() => openModal(item)} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-dark-50 text-dark-700 rounded-xl text-sm font-medium hover:bg-dark-100 transition-colors">
-                          <Edit className="w-4 h-4" /> Edit
+                        <p className={`text-xs ${isPaused ? 'text-gray-400' : 'text-dark-400'}`}>
+                          {section.data.length} variant{section.data.length !== 1 ? 's' : ''}
+                          {parentItem.preparationTime ? ` • ${parentItem.preparationTime} min` : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button onClick={() => openModal(parentItem)} className="p-2 bg-dark-50 text-dark-700 rounded-xl hover:bg-dark-100 transition-colors" title="Edit">
+                          <Edit className="w-4 h-4" />
                         </button>
-                        <button onClick={() => togglePauseItem(item)} disabled={togglingId === item._id}
-                          className={`flex items-center justify-center px-3 py-2 rounded-xl text-sm transition-colors ${item.isPaused ? 'bg-green-50 text-green-600 hover:bg-green-100' : 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'}`}
-                          title={item.isPaused ? 'Resume item' : 'Pause item'}>
-                          {item.isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+                        <button onClick={() => togglePauseItem(parentItem)} disabled={togglingId === parentItem._id}
+                          className={`p-2 rounded-xl transition-colors ${parentItem.isPaused ? 'bg-green-50 text-green-600 hover:bg-green-100' : 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'}`}
+                          title={parentItem.isPaused ? 'Resume' : 'Pause'}>
+                          {parentItem.isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
                         </button>
-                        <button onClick={() => setScheduleModal({ show: true, item, type: 'item' })}
-                          className="flex items-center justify-center px-3 py-2 bg-orange-50 text-orange-600 rounded-xl text-sm hover:bg-orange-100 transition-colors"
-                          title="Schedule sold out">
+                        <button onClick={() => setScheduleModal({ show: true, item: parentItem, type: 'item' })}
+                          className="p-2 bg-orange-50 text-orange-600 rounded-xl hover:bg-orange-100 transition-colors" title="Schedule sold out">
                           <CalendarClock className="w-4 h-4" />
                         </button>
-                        <button onClick={() => deleteItem(item._id, item.name)} className="flex items-center justify-center px-3 py-2 bg-red-50 text-red-600 rounded-xl text-sm hover:bg-red-100 transition-colors">
+                        <button onClick={() => deleteItem(parentItem._id, parentItem.name)}
+                          className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors" title="Delete">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                      {/* Variants quick actions */}
-                      {item.variants?.length > 0 && (
-                        <div className="mt-2 flex gap-1.5 flex-wrap">
-                          <button onClick={() => markVariantsSoldOut(item._id, true)}
-                            className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors">
-                            <Ban className="w-3 h-3 inline mr-1" />All Sold Out
-                          </button>
-                          <button onClick={() => markVariantsSoldOut(item._id, false)}
-                            className="px-2 py-1 text-xs bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors">
-                            <Check className="w-3 h-3 inline mr-1" />Restock All
-                          </button>
+                    </div>
+
+                    {/* Sold out schedule indicator */}
+                    {parentItem.soldOutUntil && new Date(parentItem.soldOutUntil) > new Date() && (
+                      <div className="px-4 py-2 bg-orange-50 border-b border-orange-100 flex items-center gap-2">
+                        <CalendarClock className="w-3.5 h-3.5 text-orange-500" />
+                        <span className="text-xs font-medium text-orange-600">Sold out until {new Date(parentItem.soldOutUntil).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                      </div>
+                    )}
+
+                    {/* Bulk variant actions */}
+                    {parentItem.variants?.length > 1 && (
+                      <div className="px-4 py-2 bg-dark-50 border-b border-dark-100 flex gap-2">
+                        <button onClick={() => markVariantsSoldOut(parentItem._id, true)}
+                          className="px-2.5 py-1 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-1">
+                          <Ban className="w-3 h-3" /> All Sold Out
+                        </button>
+                        <button onClick={() => markVariantsSoldOut(parentItem._id, false)}
+                          className="px-2.5 py-1 text-xs bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Restock All
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Variant rows — matching mobile's flattenedVariants display */}
+                    <div className="divide-y divide-dark-50">
+                      {section.data.map(vItem => {
+                        const isAvail = vItem.available;
+                        return (
+                        <div key={vItem._id} className={`flex items-center gap-3 p-3 hover:bg-dark-25 transition-colors ${!isAvail ? 'opacity-70 bg-gray-50' : ''}`}>
+                          {/* Variant image with parent fallback */}
+                          <div className="w-12 h-12 rounded-lg overflow-hidden bg-dark-100 flex-shrink-0 relative">
+                            {vItem.image ? (
+                              <img src={vItem.image} alt={vItem.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Image className="w-5 h-5 text-dark-300" />
+                              </div>
+                            )}
+                            {vItem.foodType && vItem.foodType !== 'none' && (
+                              <div className="absolute top-0.5 left-0.5">
+                                <span className={`w-3 h-3 rounded border flex items-center justify-center ${vItem.foodType === 'veg' ? 'border-green-600 bg-white' : vItem.foodType === 'egg' ? 'border-yellow-500 bg-white' : 'border-red-600 bg-white'}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${vItem.foodType === 'veg' ? 'bg-green-600' : vItem.foodType === 'egg' ? 'bg-yellow-500' : 'bg-red-600'}`}></span>
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Variant info */}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm text-dark-900 truncate">{vItem.name}</p>
+                            {vItem.variantIndex >= 0 && (
+                              <p className="text-xs text-dark-400 truncate">{vItem.parentName}</p>
+                            )}
+                            {/* Multi-quantity pricing chips — like mobile */}
+                            {vItem.quantities && vItem.quantities.length > 0 ? (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {vItem.quantities.map((q, qIdx) => (
+                                  <span key={qIdx} className="inline-flex items-center px-2 py-0.5 bg-dark-50 rounded text-xs text-dark-600">
+                                    {q.quantity} {q.unit} — ₹{q.price}
+                                    {q.offerPrice && q.offerPrice < q.price && (
+                                      <span className="ml-1 text-green-600 font-medium">₹{q.offerPrice}</span>
+                                    )}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 mt-0.5">
+                                {/* Offer price display — like mobile */}
+                                {vItem.offerPrice && vItem.offerPrice < vItem.price ? (
+                                  <>
+                                    <span className="text-xs text-dark-400 line-through">₹{vItem.price}</span>
+                                    <span className="text-sm font-bold text-green-600">₹{vItem.offerPrice}</span>
+                                  </>
+                                ) : (
+                                  <span className="text-sm font-bold text-primary-600">
+                                    ₹{vItem.price}
+                                    {vItem.quantity && vItem.unit ? <span className="text-xs font-normal text-dark-400"> / {vItem.quantity} {vItem.unit}</span> : ''}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Variant actions */}
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {/* Active/Off toggle — like mobile */}
+                            <button
+                              onClick={() => toggleVariant(vItem.parentId, vItem.variantIndex)}
+                              disabled={togglingId === vItem._id}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${isAvail ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
+                            >
+                              {isAvail ? 'Active' : 'Off'}
+                            </button>
+                            {/* Delete variant — like mobile */}
+                            {vItem.variantIndex >= 0 && (
+                              <button
+                                onClick={() => deleteVariant(vItem.parentId, vItem.variantIndex, vItem.name)}
+                                className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Delete variant"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      )}
+                        );
+                      })}
                     </div>
                   </div>
-                );})}
+                  );
+                })}
               </div>
             </div>
           );
