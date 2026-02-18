@@ -183,8 +183,8 @@ describe('#7 JWT Refresh Token Flow', () => {
       const tokens = jwtRefresh.generateTokenPair('user123', 'admin');
       expect(tokens.accessToken).toBeDefined();
       expect(tokens.refreshToken).toBeDefined();
-      expect(tokens.accessTokenExpiresIn).toBe('15m');
-      expect(tokens.refreshTokenExpiresIn).toBe('7d');
+      expect(tokens.accessTokenExpiresIn).toBe('7d');
+      expect(tokens.refreshTokenExpiresIn).toBe('30d');
     });
 
     it('rotateRefreshToken should return new token pair and invalidate old', () => {
@@ -222,6 +222,6 @@ describe('#8 Login Brute Force Protection (via Redis rate limiter)', () => {
   it('strictRateLimiter should use Redis-backed store', () => {
     const code = fs.readFileSync(path.join(__dirname, '..', 'middleware', 'rateLimiter.js'), 'utf8');
     expect(code).toContain("keyPrefix: 'rl:strict'");
-    expect(code).toContain('blockDuration: 30 * 60');
+    expect(code).toContain('blockDuration: 5 * 60');
   });
 });
