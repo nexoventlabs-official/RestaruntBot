@@ -1,2177 +1,1098 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Plus, Edit, Trash2, Sparkles, X, Image, FolderPlus, Search, ChevronDown, Check, Pause, Play, Upload, Ban, CalendarClock, Tag, Package } from 'lucide-react';
+import { Plus, Edit, Trash2, Sparkles, X, Image, FolderPlus, Search, ChevronDown, ChevronUp, Check, Pause, Play, Upload, Ban, CalendarClock, Tag, Package } from 'lucide-react';
 import api from '../api';
 
-// Day names for schedule display
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+/* ─── helpers ─── */
+const foodDot = (ft) =>
+  ft === 'veg' ? 'bg-green-500' : ft === 'egg' ? 'bg-yellow-500' : ft === 'nonveg' || ft === 'non-veg' ? 'bg-red-500' : 'bg-gray-300';
 
-// Format time from 24-hour to 12-hour with AM/PM
-const formatTime12Hour = (time24) => {
-  if (!time24) return '';
-  const [hours, minutes] = time24.split(':').map(Number);
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const hours12 = hours % 12 || 12;
-  return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+const soldOutRemaining = (cat) => {
+  if (!cat?.soldOutSchedule?.enabled || !cat?.soldOutSchedule?.endTime) return null;
+  const [h, m] = cat.soldOutSchedule.endTime.split(':').map(Number);
+  const end = new Date(); end.setHours(h, m, 0, 0);
+  const diff = end - new Date();
+  if (diff <= 0) return null;
+  const mins = Math.floor(diff / 60000);
+  return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
 };
-
-// Get next schedule time for a category (handles custom days)
-const getNextScheduleTime = (schedule) => {
-  if (!schedule || !schedule.enabled) return null;
-  if (schedule.type === 'custom' && schedule.customDays && schedule.customDays.length > 0) {
-    const now = new Date();
-    const currentDay = now.getDay();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    const todaySchedule = schedule.customDays.find(d => d.day === currentDay && d.enabled);
-    if (todaySchedule) {
-      const [startH, startM] = todaySchedule.startTime.split(':').map(Number);
-      const startMinutes = startH * 60 + startM;
-      if (currentMinutes < startMinutes) {
-        return { day: DAY_NAMES[currentDay], startTime: todaySchedule.startTime, endTime: todaySchedule.endTime, isToday: true };
-      }
-      const [endH, endM] = todaySchedule.endTime.split(':').map(Number);
-      const endMinutes = endH * 60 + endM;
-      if (currentMinutes < endMinutes || endMinutes < startMinutes) {
-        return { day: DAY_NAMES[currentDay], startTime: todaySchedule.startTime, endTime: todaySchedule.endTime, isToday: true, isActive: true };
-      }
-    }
-    for (let i = 1; i <= 7; i++) {
-      const nextDay = (currentDay + i) % 7;
-      const nextSchedule = schedule.customDays.find(d => d.day === nextDay && d.enabled);
-      if (nextSchedule) {
-        return { day: DAY_NAMES[nextDay], startTime: nextSchedule.startTime, endTime: nextSchedule.endTime, isToday: false };
-      }
-    }
-    return null;
-  }
-  if (schedule.startTime && schedule.endTime) {
-    return { day: null, startTime: schedule.startTime, endTime: schedule.endTime, isDaily: true };
-  }
-  return null;
-};
-
-// Format schedule display text
-const formatScheduleDisplay = (schedule) => {
-  const nextSchedule = getNextScheduleTime(schedule);
-  if (!nextSchedule) return '';
-  const startFormatted = formatTime12Hour(nextSchedule.startTime);
-  const endFormatted = formatTime12Hour(nextSchedule.endTime);
-  if (nextSchedule.isDaily) return `${startFormatted} - ${endFormatted}`;
-  if (nextSchedule.isToday) return `Today ${startFormatted} - ${endFormatted}`;
-  return `${nextSchedule.day} ${startFormatted} - ${endFormatted}`;
-};
-
-// Custom Dropdown Component
-const CustomDropdown = ({ value, onChange, options, placeholder, required }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const selectedOption = options.find(opt => opt.value === value);
-
-  return (
-    <div className="relative" ref={dropdownRef}>
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className={`w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all text-left flex items-center justify-between ${!value ? 'text-dark-400' : 'text-dark-900'}`}
-      >
-        <span>{selectedOption?.label || placeholder}</span>
-        <ChevronDown className={`w-5 h-5 text-dark-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-      {required && <input type="text" value={value} onChange={() => {}} required className="sr-only" tabIndex={-1} />}
-      {isOpen && (
-        <div className="absolute z-50 w-full mt-2 bg-white border border-dark-200 rounded-xl shadow-lg overflow-hidden">
-          <div className="max-h-60 overflow-y-auto">
-            {placeholder && (
-              <div
-                onClick={() => { onChange(''); setIsOpen(false); }}
-                className={`px-4 py-3 cursor-pointer transition-colors flex items-center justify-between hover:bg-dark-50 ${!value ? 'bg-primary-50 text-primary-600' : 'text-dark-400'}`}
-              >
-                <span>{placeholder}</span>
-                {!value && <Check className="w-4 h-4" />}
-              </div>
-            )}
-            {options.map((option) => (
-              <div
-                key={option.value}
-                onClick={() => { onChange(option.value); setIsOpen(false); }}
-                className={`px-4 py-3 cursor-pointer transition-colors flex items-center justify-between ${value === option.value ? 'bg-primary-500 text-white' : 'text-dark-700 hover:bg-dark-50'}`}
-              >
-                <span>{option.label}</span>
-                {value === option.value && <Check className="w-4 h-4" />}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Multi-Select Dropdown Component
-const MultiSelectDropdown = ({ value = [], onChange, options, placeholder, required }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const selectedValues = Array.isArray(value) ? value : (value ? [value] : []);
-
-  const toggleOption = (optionValue) => {
-    if (selectedValues.includes(optionValue)) {
-      onChange(selectedValues.filter(v => v !== optionValue));
-    } else {
-      onChange([...selectedValues, optionValue]);
-    }
-  };
-
-  const removeTag = (e, optionValue) => {
-    e.stopPropagation();
-    onChange(selectedValues.filter(v => v !== optionValue));
-  };
-
-  return (
-    <div className="relative" ref={dropdownRef}>
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className={`w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all text-left flex items-center justify-between min-h-[50px] ${selectedValues.length === 0 ? 'text-dark-400' : 'text-dark-900'}`}
-      >
-        <div className="flex flex-wrap gap-1.5 flex-1 pr-2">
-          {selectedValues.length === 0 ? (
-            <span>{placeholder}</span>
-          ) : (
-            selectedValues.map(val => (
-              <span key={val} className="inline-flex items-center gap-1 px-2.5 py-1 bg-primary-500 text-white text-sm rounded-lg">
-                {val}
-                <X className="w-3.5 h-3.5 cursor-pointer hover:opacity-80" onClick={(e) => removeTag(e, val)} />
-              </span>
-            ))
-          )}
-        </div>
-        <ChevronDown className={`w-5 h-5 text-dark-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-      {required && <input type="text" value={selectedValues.length > 0 ? 'valid' : ''} onChange={() => {}} required className="sr-only" tabIndex={-1} />}
-      {isOpen && (
-        <div className="absolute z-50 w-full mt-2 bg-white border border-dark-200 rounded-xl shadow-lg overflow-hidden">
-          <div className="max-h-60 overflow-y-auto">
-            {options.map((option) => {
-              const isSelected = selectedValues.includes(option.value);
-              return (
-                <div
-                  key={option.value}
-                  onClick={() => toggleOption(option.value)}
-                  className={`px-4 py-3 cursor-pointer transition-colors flex items-center gap-3 ${isSelected ? 'bg-primary-50' : 'hover:bg-dark-50'}`}
-                >
-                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-primary-500 border-primary-500' : 'border-dark-300'}`}>
-                    {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
-                  </div>
-                  <span className={`${isSelected ? 'text-primary-600 font-medium' : 'text-dark-700'}`}>{option.label}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Skeleton Components
-const StatSkeleton = () => (
-  <div className="bg-white rounded-xl p-4 shadow-card animate-pulse">
-    <div className="h-4 w-16 bg-dark-100 rounded mb-2"></div>
-    <div className="h-7 w-12 bg-dark-100 rounded"></div>
-  </div>
-);
-
-const MenuItemSkeleton = () => (
-  <div className="bg-white rounded-2xl shadow-card overflow-hidden animate-pulse">
-    <div className="h-44 bg-dark-100"></div>
-    <div className="p-4">
-      <div className="flex justify-between mb-2">
-        <div className="h-5 w-24 bg-dark-100 rounded"></div>
-        <div className="h-5 w-12 bg-dark-100 rounded"></div>
-      </div>
-      <div className="h-3 w-16 bg-dark-100 rounded mb-3"></div>
-      <div className="h-4 w-full bg-dark-100 rounded mb-2"></div>
-      <div className="h-4 w-3/4 bg-dark-100 rounded mb-4"></div>
-      <div className="flex gap-2">
-        <div className="h-9 flex-1 bg-dark-100 rounded-xl"></div>
-        <div className="h-9 w-10 bg-dark-100 rounded-xl"></div>
-      </div>
-    </div>
-  </div>
-);
 
 export default function Menu() {
+  /* ═══════════ STATE ═══════════ */
   const [items, setItems] = useState([]);
   const [categoryList, setCategoryList] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [editing, setEditing] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [form, setForm] = useState({ name: '', description: '', price: '', category: [], unit: 'piece', quantity: 1, foodType: 'veg', available: true, preparationTime: 15, tags: '', image: '', variants: [] });
-  const [categoryForm, setCategoryForm] = useState({ name: '', description: '', image: '' });
-  const [editingCategory, setEditingCategory] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all'); // all, available, unavailable
-  const [foodTypeFilter, setFoodTypeFilter] = useState('all'); // all, veg, nonveg, egg
-  const [selectedTitle, setSelectedTitle] = useState('all'); // Product/Title filter like mobile
-  const [confirmDialog, setConfirmDialog] = useState({ show: false, title: '', message: '', onConfirm: null });
-  const units = ['piece', 'kg', 'gram', 'liter', 'ml', 'plate', 'bowl', 'cup', 'slice', 'inch', 'full', 'half', 'small'];
-  const [aiLoading, setAiLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [foodTypeFilter, setFoodTypeFilter] = useState('all');
+  const [selectedTitle, setSelectedTitle] = useState('all');
+  const [togglingId, setTogglingId] = useState(null);
+
+  // Modals
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
+
+  // Item form
+  const [form, setForm] = useState({ name: '', category: [], variants: [], available: true });
   const [saving, setSaving] = useState(false);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [variantImageFiles, setVariantImageFiles] = useState({});
+  const [variantImagePreviews, setVariantImagePreviews] = useState({});
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiTagsLoading, setAiTagsLoading] = useState(false);
+  const [variantAiLoading, setVariantAiLoading] = useState({});
+
+  // Category form
+  const [categoryForm, setCategoryForm] = useState({ name: '', description: '' });
   const [savingCategory, setSavingCategory] = useState(false);
+  const [categoryImageFile, setCategoryImageFile] = useState(null);
+  const [categoryImagePreview, setCategoryImagePreview] = useState('');
+
+  // Sold-out / Schedule modals
+  const [soldOutModal, setSoldOutModal] = useState(null); // { type: 'item'|'category', target }
+  const [scheduleModal, setScheduleModal] = useState(null);
+  const [scheduleSoldOutTime, setScheduleSoldOutTime] = useState('');
+  const [bulkPausingCategory, setBulkPausingCategory] = useState(null);
+
+  // Category schedule
+  const [categoryScheduleModal, setCategoryScheduleModal] = useState(null);
+  const [categorySchedule, setCategorySchedule] = useState({ enabled: false, type: 'daily', startTime: '09:00', endTime: '22:00', days: [] });
+
   const [deleting, setDeleting] = useState(false);
   const initialLoadDone = useRef(false);
   const lastTapRef = useRef({});
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState('');
-  const [variantImageFiles, setVariantImageFiles] = useState({}); // { index: File }
-  const [variantImagePreviews, setVariantImagePreviews] = useState({}); // { index: dataURL }
-  const [categoryImageFile, setCategoryImageFile] = useState(null);
-  const [categoryImagePreview, setCategoryImagePreview] = useState('');
-  const imageInputRef = useRef(null);
-  const categoryImageInputRef = useRef(null);
-  const [togglingId, setTogglingId] = useState(null);
-  const [soldOutModal, setSoldOutModal] = useState({ show: false, item: null, type: 'item' }); // type: 'item' | 'category'
-  const [scheduleModal, setScheduleModal] = useState({ show: false, item: null, type: 'item' }); // type: 'item' | 'category'
-  const [scheduleSoldOutTime, setScheduleSoldOutTime] = useState('');
-  const [aiTagsLoading, setAiTagsLoading] = useState(false);
-  const [bulkPausingCategory, setBulkPausingCategory] = useState(null);
-  const [categoryScheduleModal, setCategoryScheduleModal] = useState({ show: false, category: null });
-  const [categorySchedule, setCategorySchedule] = useState({ startTime: '', endTime: '', daysOfWeek: [] });
 
-  // Handle image file selection for menu items
-  const handleImageFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
+  /* ═══════════ DATA FETCHING ═══════════ */
+  const fetchItems = useCallback(async () => {
+    try { const r = await api.get('/menu'); setItems(r.data || []); } catch { /* ignore */ }
+  }, []);
+  const fetchCategories = useCallback(async () => {
+    try { const r = await api.get('/categories'); setCategoryList(r.data || []); } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    Promise.all([fetchItems(), fetchCategories()]).finally(() => { setLoading(false); initialLoadDone.current = true; });
+  }, [fetchItems, fetchCategories]);
+
+  /* ═══════════ MEMOIZED DATA ═══════════ */
+  const unavailableCategoryNames = useMemo(() => {
+    const s = new Set();
+    categoryList.forEach(c => { if (c.isPaused || c.isSoldOut) s.add(c.name); });
+    return s;
+  }, [categoryList]);
+
+  const scheduledLockedCategoryNames = useMemo(() => {
+    const s = new Set();
+    categoryList.forEach(c => {
+      if (!c.schedule?.enabled) return;
+      const now = new Date();
+      const day = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][now.getDay()];
+      if (c.schedule.type === 'specific_days' && !c.schedule.days?.includes(day)) { s.add(c.name); return; }
+      const [sh,sm] = (c.schedule.startTime||'00:00').split(':').map(Number);
+      const [eh,em] = (c.schedule.endTime||'23:59').split(':').map(Number);
+      const mins = now.getHours()*60+now.getMinutes();
+      if (mins < sh*60+sm || mins > eh*60+em) s.add(c.name);
+    });
+    return s;
+  }, [categoryList]);
+
+  const manuallyPausedCategoryNames = useMemo(() => {
+    const s = new Set();
+    categoryList.forEach(c => { if (c.isPaused || c.isSoldOut) s.add(c.name); });
+    return s;
+  }, [categoryList]);
+
+  const isItemUnavailable = useCallback((item) => {
+    const cats = Array.isArray(item.category) ? item.category : [item.category];
+    return cats.every(c => unavailableCategoryNames.has(c) || scheduledLockedCategoryNames.has(c));
+  }, [unavailableCategoryNames, scheduledLockedCategoryNames]);
+
+  // Title cards (unique items for product filter)
+  const titleCards = useMemo(() => {
+    let filtered = items;
+    if (selectedCategory !== 'all') filtered = filtered.filter(i => (Array.isArray(i.category) ? i.category : [i.category]).includes(selectedCategory));
+    return filtered.map(i => ({ _id: i._id, name: i.name, image: i.image || i.variants?.[0]?.image }));
+  }, [items, selectedCategory]);
+
+  const totalVariantCount = useMemo(() => items.reduce((s, i) => s + (i.variants?.length || 1), 0), [items]);
+
+  // Flatten items into variant-level rows (matching mobile's flattenedVariants)
+  const flattenedVariants = useMemo(() => {
+    let filtered = items;
+    if (searchTerm) {
+      const q = searchTerm.toLowerCase();
+      filtered = filtered.filter(i => i.name.toLowerCase().includes(q) || i.variants?.some(v => v.label?.toLowerCase().includes(q)));
     }
-  };
+    if (selectedCategory !== 'all') filtered = filtered.filter(i => (Array.isArray(i.category) ? i.category : [i.category]).includes(selectedCategory));
+    if (selectedTitle !== 'all') filtered = filtered.filter(i => i._id === selectedTitle);
 
-  // Handle image file selection for categories
-  const handleCategoryImageFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setCategoryImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setCategoryImagePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Remove image for menu items
-  const removeImage = () => {
-    setImageFile(null);
-    setImagePreview('');
-    setForm({ ...form, image: '' });
-    if (imageInputRef.current) {
-      imageInputRef.current.value = '';
-    }
-  };
-
-  // Remove image for categories
-  const removeCategoryImage = () => {
-    setCategoryImageFile(null);
-    setCategoryImagePreview('');
-    setCategoryForm({ ...categoryForm, image: '' });
-    if (categoryImageInputRef.current) {
-      categoryImageInputRef.current.value = '';
-    }
-  };
-
-  // Toggle pause/resume for a single menu item
-  const togglePauseItem = async (item) => {
-    setTogglingId(item._id);
-    // Optimistic update
-    setItems(prev => prev.map(i => i._id === item._id ? { ...i, isPaused: !i.isPaused } : i));
-    try {
-      await api.patch(`/menu/${item._id}/toggle-pause`);
-      fetchItems();
-    } catch (err) {
-      setItems(prev => prev.map(i => i._id === item._id ? { ...i, isPaused: item.isPaused } : i));
-      alert('Failed to toggle pause status');
-    } finally {
-      setTogglingId(null);
-    }
-  };
-
-  // Toggle a single variant's availability
-  const toggleVariant = async (itemId, variantIdx) => {
-    setTogglingId(`${itemId}_v${variantIdx}`);
-    // Optimistic update
-    setItems(prev => prev.map(i => {
-      if (i._id !== itemId) return i;
-      if (variantIdx === -1) {
-        return { ...i, available: !i.available };
-      }
-      const updatedVariants = i.variants.map((v, idx) =>
-        idx === variantIdx ? { ...v, available: !v.available } : v
-      );
-      return { ...i, variants: updatedVariants };
-    }));
-    try {
-      if (variantIdx === -1) {
-        await api.patch(`/menu/${itemId}/toggle-pause`);
+    const rows = [];
+    filtered.forEach(item => {
+      if (!item.variants || item.variants.length === 0) {
+        const catUnavail = isItemUnavailable(item);
+        if (statusFilter === 'available' && (catUnavail || item.available === false)) return;
+        if (statusFilter === 'unavailable' && !catUnavail && item.available !== false) return;
+        if (foodTypeFilter !== 'all' && item.foodType !== foodTypeFilter) return;
+        rows.push({ ...item, _parentId: item._id, _parentName: item.name, _variantIndex: -1, _isVariant: false });
       } else {
-        await api.patch(`/menu/${itemId}/variant/${variantIdx}/toggle`);
+        item.variants.forEach((v, idx) => {
+          const catUnavail = isItemUnavailable(item);
+          const isOff = catUnavail || v.available === false || item.available === false;
+          if (statusFilter === 'available' && isOff) return;
+          if (statusFilter === 'unavailable' && !isOff) return;
+          const ft = v.foodType || item.foodType;
+          if (foodTypeFilter !== 'all' && ft !== foodTypeFilter) return;
+          rows.push({
+            ...v, _id: `${item._id}_v${idx}`, _parentId: item._id, _parentName: item.name,
+            _parentImage: item.image, _parentAvailable: item.available, _parentCategory: item.category,
+            _variantIndex: idx, _isVariant: true, _totalVariants: item.variants.length,
+            foodType: ft, _catUnavail: catUnavail,
+          });
+        });
       }
-    } catch {
-      // Revert on error
-      fetchItems();
-      alert('Failed to toggle variant');
-    } finally {
-      setTogglingId(null);
-    }
-  };
+    });
+    return rows;
+  }, [items, searchTerm, selectedCategory, selectedTitle, statusFilter, foodTypeFilter, isItemUnavailable]);
 
-  // Mark all variants sold out / back in stock
-  const markVariantsSoldOut = async (itemId, soldOut) => {
-    setTogglingId(itemId);
+  // Group by parent item (matching mobile's sectionData)
+  const sectionData = useMemo(() => {
+    const map = new Map();
+    flattenedVariants.forEach(row => {
+      if (!map.has(row._parentId)) map.set(row._parentId, { parentId: row._parentId, parentName: row._parentName, parentImage: row._parentImage || row.image, rows: [] });
+      map.get(row._parentId).rows.push(row);
+    });
+    return Array.from(map.values());
+  }, [flattenedVariants]);
+
+  const stats = useMemo(() => ({
+    totalItems: items.length,
+    totalVariants: totalVariantCount,
+    uniqueCategories: new Set(items.flatMap(i => Array.isArray(i.category) ? i.category : [i.category])).size,
+    availableCount: flattenedVariants.filter(r => !r._catUnavail && r.available !== false && r._parentAvailable !== false).length,
+    unavailableCount: flattenedVariants.filter(r => r._catUnavail || r.available === false || r._parentAvailable === false).length,
+  }), [items, totalVariantCount, flattenedVariants]);
+
+  /* ═══════════ ITEM / VARIANT HANDLERS ═══════════ */
+  const toggleVariant = async (parentId, variantIndex) => {
+    const item = items.find(i => i._id === parentId);
+    if (!item) return;
+    const key = variantIndex >= 0 ? `${parentId}_v${variantIndex}` : parentId;
+    setTogglingId(key);
     try {
-      await api.patch(`/menu/${itemId}/variants-soldout`, { soldOut });
-      fetchItems();
-    } catch (err) {
-      alert('Failed to update sold out status');
-    } finally {
-      setTogglingId(null);
-    }
+      if (variantIndex >= 0) {
+        await api.patch(`/menu/${parentId}/variant/${variantIndex}/toggle`);
+      } else {
+        await api.patch(`/menu/${parentId}/toggle-pause`);
+      }
+      await fetchItems();
+    } catch { alert('Failed to toggle'); }
+    finally { setTogglingId(null); }
   };
 
-  // Schedule item sold out until a specific time
+  const markVariantsSoldOut = async (parentId, soldOut) => {
+    try {
+      await api.patch(`/menu/${parentId}/variants-soldout`, { soldOut });
+      await fetchItems();
+    } catch { alert('Failed to update'); }
+  };
+
   const handleScheduleSoldOut = async () => {
-    if (!scheduleSoldOutTime || !scheduleModal.item) return;
-    const { item, type } = scheduleModal;
+    if (!scheduleModal || !scheduleSoldOutTime) return;
     try {
-      // Extract HH:mm from datetime-local input like mobile does
-      const timeParts = scheduleSoldOutTime.split('T');
-      const endTimeHHmm = timeParts.length > 1 ? timeParts[1].slice(0, 5) : scheduleSoldOutTime;
-      if (type === 'category') {
-        await api.patch(`/categories/${item._id}/schedule-soldout`, { enabled: true, endTime: endTimeHHmm });
+      if (scheduleModal.type === 'item') {
+        await api.patch(`/menu/${scheduleModal.target._id}/schedule-soldout`, { endTime: scheduleSoldOutTime });
       } else {
-        await api.patch(`/menu/${item._id}/schedule-soldout`, { endTime: endTimeHHmm });
+        await api.patch(`/categories/${scheduleModal.target._id}/schedule-soldout`, { enabled: true, endTime: scheduleSoldOutTime });
       }
-      fetchItems();
-      fetchCategories();
-      setScheduleModal({ show: false, item: null, type: 'item' });
-      setScheduleSoldOutTime('');
-    } catch {
-      alert('Failed to schedule sold out');
-    }
+      setScheduleModal(null); setScheduleSoldOutTime('');
+      await Promise.all([fetchItems(), fetchCategories()]);
+    } catch { alert('Failed to schedule'); }
   };
 
-  // Delete a single variant
-  const deleteVariant = async (itemId, variantIdx, variantLabel) => {
-    if (!confirm(`Delete variant "${variantLabel}"? This will also remove it from the catalog.`)) return;
+  const deleteVariant = async (parentId, variantIndex) => {
+    setConfirmDialog({
+      title: 'Delete Variant?', message: 'This variant will be permanently removed.',
+      onConfirm: async () => {
+        setDeleting(true);
+        try { await api.delete(`/menu/${parentId}/variant/${variantIndex}`); await fetchItems(); }
+        catch { alert('Failed to delete variant'); }
+        finally { setDeleting(false); setConfirmDialog(null); }
+      }
+    });
+  };
+
+  const deleteItem = (item) => {
+    setConfirmDialog({
+      title: 'Delete Item?', message: `Delete "${item.name}" and all its variants?`,
+      onConfirm: async () => {
+        setDeleting(true);
+        try { await api.delete(`/menu/${item._id}`); await fetchItems(); }
+        catch { alert('Failed to delete item'); }
+        finally { setDeleting(false); setConfirmDialog(null); }
+      }
+    });
+  };
+
+  const showSoldOutOptions = (type, target) => {
+    setSoldOutModal({ type, target });
+  };
+
+  /* ═══════════ CATEGORY HANDLERS ═══════════ */
+  const handleBulkPause = async (catName) => {
+    const cat = categoryList.find(c => c.name === catName);
+    if (!cat) return;
+    setBulkPausingCategory(catName);
     try {
-      await api.delete(`/menu/${itemId}/variant/${variantIdx}`);
-      fetchItems();
-    } catch (err) {
-      alert('Failed to delete variant');
-    }
+      await api.patch('/menu/bulk-pause', { categoryName: catName, isPaused: !cat.isPaused });
+      await Promise.all([fetchItems(), fetchCategories()]);
+    } catch { alert('Failed to bulk pause'); }
+    finally { setBulkPausingCategory(null); }
   };
 
-  // Bulk pause/resume all items in a category
-  const handleBulkPause = async (categoryName, isPaused) => {
-    setBulkPausingCategory(categoryName);
-    try {
-      await api.patch('/menu/bulk-pause', { categoryName, isPaused });
-      fetchItems();
-    } catch (err) {
-      alert('Failed to bulk pause/resume items');
-    } finally {
-      setBulkPausingCategory(null);
-    }
-  };
-
-  // Toggle category sold out
   const toggleCategorySoldOut = async (cat) => {
     try {
       await api.patch(`/categories/${cat._id}/toggle-soldout`);
-      fetchCategories();
-    } catch (err) {
-      alert('Failed to toggle sold out');
-    }
+      await fetchCategories();
+    } catch { alert('Failed to toggle sold-out'); }
   };
 
-  // Save category schedule
-  const handleSaveCategorySchedule = async () => {
-    if (!categoryScheduleModal.category) return;
+  const toggleCategoryPause = async (cat) => {
     try {
-      await api.patch(`/categories/${categoryScheduleModal.category._id}/schedule`, categorySchedule);
-      fetchCategories();
-      setCategoryScheduleModal({ show: false, category: null });
-      setCategorySchedule({ startTime: '', endTime: '', daysOfWeek: [] });
-    } catch (err) {
-      alert('Failed to save schedule');
-    }
+      await api.patch(`/categories/${cat._id}/toggle-pause`);
+      await fetchCategories();
+    } catch { alert('Failed to toggle pause'); }
   };
 
-  // Generate AI tags
-  const generateTags = async () => {
-    if (!form.name || form.category.length === 0) return alert('Enter name and category first');
-    setAiTagsLoading(true);
+  const saveCategory = async () => {
+    if (!categoryForm.name.trim()) return;
+    setSavingCategory(true);
     try {
-      const res = await api.post('/ai/generate-tags', { 
-        name: form.name, 
-        category: form.category,
-        foodType: form.foodType,
-        quantity: form.quantity,
-        unit: form.unit 
-      });
-      const tags = Array.isArray(res.data.tags) ? res.data.tags.join(', ') : (res.data.tags || '');
-      setForm({ ...form, tags });
-    } catch (err) {
-      alert('Failed to generate tags');
-    } finally {
-      setAiTagsLoading(false);
-    }
+      const fd = new FormData();
+      fd.append('name', categoryForm.name.trim());
+      if (categoryForm.description) fd.append('description', categoryForm.description);
+      if (categoryImageFile) fd.append('image', categoryImageFile);
+      if (editingCategory) { await api.put(`/categories/${editingCategory._id}`, fd, { timeout: 60000 }); }
+      else { await api.post('/categories', fd, { timeout: 60000 }); }
+      await fetchCategories();
+      setShowCategoryModal(false); setEditingCategory(null);
+      setCategoryForm({ name: '', description: '' }); setCategoryImageFile(null); setCategoryImagePreview('');
+    } catch (err) { alert(err.response?.data?.error || 'Failed to save category'); }
+    finally { setSavingCategory(false); }
   };
 
-  // ===== Variant form helper functions (matching mobile) =====
-  const [variantAiLoading, setVariantAiLoading] = useState({}); // { idx_desc: true, idx_tags: true }
-
-  const updateVariant = (index, field, value) => {
-    const updated = [...form.variants];
-    updated[index] = { ...updated[index], [field]: value };
-    setForm({ ...form, variants: updated });
-  };
-
-  const toggleVariantCollapse = (index) => {
-    const updated = [...form.variants];
-    updated[index] = { ...updated[index], _collapsed: !updated[index]._collapsed };
-    setForm({ ...form, variants: updated });
-  };
-
-  const addVariant = () => {
-    const newVariant = {
-      label: '',
-      variantType: 'size',
-      price: '',
-      image: '',
-      available: true,
-      description: '',
-      foodType: form.foodType || 'veg',
-      tags: '',
-      quantities: [],
-      _collapsed: false,
-    };
-    setForm({ ...form, variants: [...(form.variants || []), newVariant] });
-  };
-
-  const removeVariant = (index) => {
-    const updated = form.variants.filter((_, i) => i !== index);
-    setForm({ ...form, variants: updated });
-    const newFiles = { ...variantImageFiles };
-    delete newFiles[index];
-    setVariantImageFiles(newFiles);
-    const newPreviews = { ...variantImagePreviews };
-    delete newPreviews[index];
-    setVariantImagePreviews(newPreviews);
-  };
-
-  const handleVariantImageChange = (index, file) => {
-    if (file) {
-      setVariantImageFiles(prev => ({ ...prev, [index]: file }));
-      const reader = new FileReader();
-      reader.onloadend = () => setVariantImagePreviews(prev => ({ ...prev, [index]: reader.result }));
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const removeVariantImage = (index) => {
-    const updated = [...form.variants];
-    updated[index] = { ...updated[index], image: '' };
-    setForm({ ...form, variants: updated });
-    const nf = { ...variantImageFiles }; delete nf[index]; setVariantImageFiles(nf);
-    const np = { ...variantImagePreviews }; delete np[index]; setVariantImagePreviews(np);
-  };
-
-  const addQuantityOption = (variantIndex) => {
-    const updated = [...form.variants];
-    const qty = [...(updated[variantIndex].quantities || []), { quantity: '1', unit: 'piece', price: '', offerPrice: '' }];
-    updated[variantIndex] = { ...updated[variantIndex], quantities: qty };
-    setForm({ ...form, variants: updated });
-  };
-
-  const removeQuantityOption = (variantIndex, qtyIndex) => {
-    const updated = [...form.variants];
-    updated[variantIndex] = { ...updated[variantIndex], quantities: updated[variantIndex].quantities.filter((_, i) => i !== qtyIndex) };
-    setForm({ ...form, variants: updated });
-  };
-
-  const updateQuantityOption = (variantIndex, qtyIndex, field, value) => {
-    const updated = [...form.variants];
-    const quantities = [...updated[variantIndex].quantities];
-    quantities[qtyIndex] = { ...quantities[qtyIndex], [field]: value };
-    updated[variantIndex] = { ...updated[variantIndex], quantities };
-    setForm({ ...form, variants: updated });
-  };
-
-  const generateVariantDescription = async (index) => {
-    const variant = form.variants[index];
-    if (!variant.label && !form.name) return alert('Enter variant name or item name first');
-    setVariantAiLoading(prev => ({ ...prev, [`${index}_desc`]: true }));
-    try {
-      const res = await api.post('/ai/generate-description', { name: variant.label || form.name, category: form.category });
-      updateVariant(index, 'description', res.data.description);
-    } catch {
-      alert('Failed to generate description');
-    } finally {
-      setVariantAiLoading(prev => ({ ...prev, [`${index}_desc`]: false }));
-    }
-  };
-
-  const generateVariantTags = async (index) => {
-    const variant = form.variants[index];
-    if (!variant.label && !form.name) return alert('Enter variant name or item name first');
-    setVariantAiLoading(prev => ({ ...prev, [`${index}_tags`]: true }));
-    try {
-      const res = await api.post('/ai/generate-tags', {
-        name: variant.label || form.name,
-        category: form.category,
-        foodType: variant.foodType || form.foodType,
-        quantity: '1',
-        unit: 'piece'
-      });
-      const tags = Array.isArray(res.data.tags) ? res.data.tags.join(', ') : (res.data.tags || '');
-      updateVariant(index, 'tags', tags);
-    } catch {
-      alert('Failed to generate tags');
-    } finally {
-      setVariantAiLoading(prev => ({ ...prev, [`${index}_tags`]: false }));
-    }
-  };
-
-  // Double tap handler for pause/resume category
-  const handleCategoryDoubleTap = async (cat) => {
-    const now = Date.now();
-    const lastTap = lastTapRef.current[cat._id] || 0;
-    
-    if (now - lastTap < 300) {
-      // Double tap detected - toggle pause
-      try {
-        // Optimistic update
-        setCategoryList(prev => prev.map(c => 
-          c._id === cat._id ? { ...c, isPaused: !c.isPaused } : c
-        ));
-        await api.patch(`/categories/${cat._id}/toggle-pause`);
-        fetchCategories();
-      } catch (err) {
-        // Revert on error
-        setCategoryList(prev => prev.map(c => 
-          c._id === cat._id ? { ...c, isPaused: cat.isPaused } : c
-        ));
-        alert('Failed to toggle pause status');
+  const deleteCategory = (cat) => {
+    setConfirmDialog({
+      title: 'Delete Category?', message: `Delete "${cat.name}"? Items in this category will not be deleted.`,
+      onConfirm: async () => {
+        try { await api.delete(`/categories/${cat._id}`); await fetchCategories(); }
+        catch { alert('Failed to delete category'); }
+        finally { setConfirmDialog(null); }
       }
+    });
+  };
+
+  const openCategoryModal = (cat = null) => {
+    if (cat) {
+      setEditingCategory(cat);
+      setCategoryForm({ name: cat.name, description: cat.description || '' });
+      setCategoryImagePreview(cat.image || '');
+    } else {
+      setEditingCategory(null);
+      setCategoryForm({ name: '', description: '' });
+      setCategoryImagePreview('');
+    }
+    setCategoryImageFile(null);
+    setShowCategoryModal(true);
+  };
+
+  const handleSaveCategorySchedule = async () => {
+    if (!categoryScheduleModal) return;
+    try {
+      await api.patch(`/categories/${categoryScheduleModal._id}/schedule`, categorySchedule);
+      await fetchCategories();
+      setCategoryScheduleModal(null);
+    } catch { alert('Failed to save schedule'); }
+  };
+
+  const handleCategoryDoubleTap = (cat) => {
+    const now = Date.now();
+    const last = lastTapRef.current[cat._id] || 0;
+    if (now - last < 400) {
+      toggleCategoryPause(cat);
       lastTapRef.current[cat._id] = 0;
     } else {
-      // Single tap - select category
+      setSelectedCategory(selectedCategory === cat.name ? 'all' : cat.name);
       lastTapRef.current[cat._id] = now;
-      setSelectedCategory(cat.name);
     }
   };
 
-  const fetchItems = async () => {
-    try {
-      if (!initialLoadDone.current) setLoading(true);
-      const res = await api.get('/menu');
-      setItems(res.data || []);
-      initialLoadDone.current = true;
-    } catch (err) {
-      console.error('Failed to fetch menu:', err);
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchCategories = async () => {
-    try {
-      const res = await api.get('/categories');
-      setCategoryList(res.data || []);
-    } catch (err) {
-      console.error('Failed to fetch categories:', err);
-    }
-  };
-
-  useEffect(() => { fetchItems(); fetchCategories(); }, []);
-
+  /* ═══════════ FORM HANDLERS ═══════════ */
   const openModal = (item = null) => {
     if (item) {
       setEditing(item);
-      const categoryArray = Array.isArray(item.category) ? item.category : (item.category ? [item.category] : []);
       setForm({
-        name: item.name,
-        description: item.description || '',
-        price: item.price,
-        category: categoryArray,
-        unit: item.unit || 'piece',
-        quantity: item.quantity || 1,
-        foodType: item.foodType || 'veg',
-        available: item.available,
-        preparationTime: item.preparationTime || 15,
-        tags: item.tags?.join(', ') || '',
-        image: item.image || '',
-        variants: (item.variants || []).map(v => ({
-          ...v,
-          price: v.price?.toString() || '',
-          quantity: v.quantity?.toString() || '1',
-          unit: v.unit || 'piece',
-          description: v.description || '',
-          foodType: v.foodType || item.foodType || 'veg',
-          tags: v.tags?.join?.(', ') || (typeof v.tags === 'string' ? v.tags : '') || '',
-          quantities: (v.quantities || []).map(q => ({
-            quantity: q.quantity?.toString() || '1',
-            unit: q.unit || 'piece',
-            price: q.price?.toString() || '',
-            offerPrice: q.offerPrice?.toString() || ''
-          })),
-          available: v.available !== false,
-          _collapsed: true,
-        }))
+        name: item.name || '',
+        category: Array.isArray(item.category) ? item.category : [item.category].filter(Boolean),
+        variants: (item.variants || []).map((v, i) => ({
+          ...v, _uid: `v_${i}_${Date.now()}`, _collapsed: true,
+          quantities: v.quantities || [],
+        })),
+        available: item.available !== false,
       });
       setImagePreview(item.image || '');
-      setImageFile(null);
-      setVariantImageFiles({});
-      const vPreviews = {};
-      (item.variants || []).forEach((v, idx) => { if (v.image) vPreviews[idx] = v.image; });
-      setVariantImagePreviews(vPreviews);
+      const previews = {};
+      (item.variants || []).forEach((v, i) => { if (v.image) previews[`v_${i}_${Date.now()}`] = v.image; });
     } else {
       setEditing(null);
-      setForm({ name: '', description: '', price: '', category: [], unit: 'piece', quantity: 1, foodType: 'veg', available: true, preparationTime: 15, tags: '', image: '', variants: [] });
+      setForm({ name: '', category: [], variants: [], available: true });
       setImagePreview('');
-      setImageFile(null);
-      setVariantImageFiles({});
-      setVariantImagePreviews({});
     }
+    setImageFile(null);
+    setVariantImageFiles({});
+    setVariantImagePreviews({});
     setShowModal(true);
   };
 
-  const generateDescription = async () => {
-    if (!form.name || form.category.length === 0) return alert('Enter name and category first');
-    setAiLoading(true);
+  const addVariant = () => {
+    const uid = `v_${form.variants.length}_${Date.now()}`;
+    setForm({ ...form, variants: [...form.variants, {
+      _uid: uid, _collapsed: false, label: '', description: '', foodType: 'veg',
+      tags: '', price: '', available: true, image: null, quantities: [],
+    }]});
+  };
+
+  const removeVariant = (idx) => {
+    setConfirmDialog({
+      title: 'Remove Variant?', message: 'This variant will be removed from the form.',
+      onConfirm: () => {
+        const vs = [...form.variants]; vs.splice(idx, 1);
+        setForm({ ...form, variants: vs }); setConfirmDialog(null);
+      }
+    });
+  };
+
+  const toggleVariantCollapse = (idx) => {
+    const vs = [...form.variants]; vs[idx] = { ...vs[idx], _collapsed: !vs[idx]._collapsed };
+    setForm({ ...form, variants: vs });
+  };
+
+  const updateVariant = (idx, field, value) => {
+    const vs = [...form.variants]; vs[idx] = { ...vs[idx], [field]: value };
+    setForm({ ...form, variants: vs });
+  };
+
+  const addQuantityOption = (vi) => {
+    const vs = [...form.variants];
+    vs[vi] = { ...vs[vi], quantities: [...(vs[vi].quantities || []), { quantity: '', unit: vs[vi].unit || 'piece', price: '' }] };
+    setForm({ ...form, variants: vs });
+  };
+
+  const removeQuantityOption = (vi, qi) => {
+    const vs = [...form.variants]; vs[vi].quantities.splice(qi, 1);
+    setForm({ ...form, variants: vs });
+  };
+
+  const updateQuantityOption = (vi, qi, field, value) => {
+    const vs = [...form.variants]; vs[vi].quantities[qi] = { ...vs[vi].quantities[qi], [field]: value };
+    setForm({ ...form, variants: vs });
+  };
+
+  const handleVariantImageChange = (idx, e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const uid = form.variants[idx]._uid;
+    setVariantImageFiles(p => ({ ...p, [uid]: file }));
+    setVariantImagePreviews(p => ({ ...p, [uid]: URL.createObjectURL(file) }));
+  };
+
+  const removeVariantImage = (idx) => {
+    const uid = form.variants[idx]._uid;
+    const vs = [...form.variants]; vs[idx] = { ...vs[idx], image: null };
+    setForm({ ...form, variants: vs });
+    setVariantImageFiles(p => { const n = { ...p }; delete n[uid]; return n; });
+    setVariantImagePreviews(p => { const n = { ...p }; delete n[uid]; return n; });
+  };
+
+  const generateDescription = async (vi = null) => {
+    const key = vi !== null ? `desc_${vi}` : 'main';
+    setVariantAiLoading(p => ({ ...p, [key]: true }));
     try {
-      const res = await api.post('/ai/generate-description', { name: form.name, category: form.category });
-      setForm({ ...form, description: res.data.description });
-    } catch (err) {
-      alert('Failed to generate description');
-    } finally {
-      setAiLoading(false);
-    }
+      const name = vi !== null ? form.variants[vi].label : form.name;
+      const cat = form.category[0] || '';
+      const r = await api.post('/ai/generate-description', { name, category: cat });
+      if (vi !== null) { updateVariant(vi, 'description', r.data.description); }
+    } catch { alert('AI generation failed'); }
+    finally { setVariantAiLoading(p => ({ ...p, [key]: false })); }
+  };
+
+  const generateTags = async (vi = null) => {
+    const key = vi !== null ? `tags_${vi}` : 'main';
+    setVariantAiLoading(p => ({ ...p, [key]: true }));
+    try {
+      const v = vi !== null ? form.variants[vi] : form;
+      const r = await api.post('/ai/generate-tags', { name: v.label || v.name || form.name, category: form.category[0] || '', foodType: v.foodType || 'veg' });
+      if (vi !== null) { updateVariant(vi, 'tags', r.data.tags?.join(', ') || ''); }
+    } catch { alert('AI generation failed'); }
+    finally { setVariantAiLoading(p => ({ ...p, [key]: false })); }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (saving) return;
-    
-    const hasVariants = form.variants && form.variants.length > 0;
-    
-    // Validate variants like mobile
-    if (hasVariants) {
-      for (let i = 0; i < form.variants.length; i++) {
-        const v = form.variants[i];
-        if (!v.label || v.label.trim() === '') {
-          alert(`Variant ${i + 1}: Item name is required`);
-          return;
-        }
-        if (v.quantities && v.quantities.length > 0) {
-          const emptyQtyPrice = v.quantities.some(q => !q.price || q.price.toString().trim() === '' || parseFloat(q.price) <= 0);
-          if (emptyQtyPrice) {
-            alert(`Variant ${i + 1}: Every quantity option must have a valid price`);
-            return;
-          }
-        } else if (!v.price || v.price.toString().trim() === '' || parseFloat(v.price) <= 0) {
-          alert(`Variant ${i + 1}: Price is required`);
-          return;
-        }
-      }
-    }
-    
+    if (!form.name.trim()) return alert('Please enter a name');
+    if (form.category.length === 0) return alert('Please select at least one category');
+
     setSaving(true);
     try {
-      const formData = new FormData();
-      formData.append('name', form.name.trim());
-      formData.append('description', form.description);
-      
-      // Auto-derive base price from variants like mobile
-      if (hasVariants) {
-        const lowestPrice = Math.min(...form.variants.map(v => {
-          if (v.quantities && v.quantities.length > 0) {
-            return Math.min(...v.quantities.map(q => parseFloat(q.price) || 0));
-          }
-          return parseFloat(v.price) || 0;
-        }));
-        formData.append('price', lowestPrice.toString());
-        // Derive quantity/unit from first variant
-        if (form.variants[0].quantities && form.variants[0].quantities.length > 0) {
-          formData.append('quantity', form.variants[0].quantities[0].quantity || '1');
-          formData.append('unit', form.variants[0].quantities[0].unit || 'piece');
-        } else {
-          formData.append('quantity', form.variants[0].quantity || '1');
-          formData.append('unit', form.variants[0].unit || 'piece');
-        }
-      } else {
-        formData.append('price', form.price);
-        formData.append('quantity', form.quantity);
-        formData.append('unit', form.unit);
+      const fd = new FormData();
+      fd.append('name', form.name.trim());
+      fd.append('category', JSON.stringify(form.category));
+      fd.append('available', form.available);
+
+      // Auto-derive from variants
+      const v0 = form.variants[0];
+      if (v0) {
+        fd.append('foodType', v0.foodType || 'veg');
+        fd.append('description', v0.description || '');
+        fd.append('tags', v0.tags || '');
+        const prices = form.variants.flatMap(v => v.quantities?.length > 0 ? v.quantities.map(q => parseFloat(q.price) || 0) : [parseFloat(v.price) || 0]);
+        fd.append('price', Math.min(...prices.filter(p => p > 0)) || 0);
       }
-      
-      formData.append('category', JSON.stringify(form.category));
-      // Derive foodType, description, tags from first variant when variants exist
-      if (hasVariants) {
-        formData.append('foodType', form.variants[0].foodType || 'veg');
-        formData.append('description', form.variants[0].description || '');
-        formData.append('tags', form.variants[0].tags || '');
-      } else {
-        formData.append('foodType', form.foodType);
-        formData.append('description', form.description);
-        formData.append('tags', form.tags);
-      }
-      formData.append('available', form.available);
-      formData.append('preparationTime', form.preparationTime);
-      
-      // Handle image
-      if (imageFile) {
-        formData.append('image', imageFile);
-      } else if (!imagePreview && editing?.image) {
-        formData.append('removeImage', 'true');
-      }
+      if (imageFile) fd.append('image', imageFile);
 
-      // Handle variants — send with full details like mobile
-      if (hasVariants) {
-        const variantsPayload = form.variants.map(v => ({
-          label: v.label?.trim() || '',
-          variantType: v.variantType || 'size',
-          price: v.quantities?.length > 0 ? Math.min(...v.quantities.map(q => parseFloat(q.price) || 0)).toString() : v.price,
-          quantity: v.quantity || '1',
-          unit: v.unit || 'piece',
-          available: v.available !== false,
-          description: v.description || '',
-          foodType: v.foodType || 'veg',
-          tags: v.tags || '',
-          quantities: (v.quantities || []).map(q => ({
-            quantity: q.quantity || '1',
-            unit: q.unit || 'piece',
-            price: q.price || '0',
-            offerPrice: q.offerPrice || ''
-          })),
-          image: variantImageFiles[form.variants.indexOf(v)] ? '' : (v.image || ''),
-        }));
-        formData.append('variants', JSON.stringify(variantsPayload));
-        
-        // Append variant image files with index tracking
-        const variantImageIndices = [];
-        form.variants.forEach((v, idx) => {
-          if (variantImageFiles[idx]) {
-            formData.append('variantImages', variantImageFiles[idx]);
-            variantImageIndices.push(idx);
-          }
-        });
-        if (variantImageIndices.length > 0) {
-          formData.append('variantImageIndices', JSON.stringify(variantImageIndices));
-        }
-      } else {
-        formData.append('variants', '[]');
-      }
-      
-      if (editing) {
-        await api.put(`/menu/${editing._id}`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-      } else {
-        await api.post('/menu', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-      }
-      setShowModal(false);
-      setImageFile(null);
-      setImagePreview('');
-      setVariantImageFiles({});
-      setVariantImagePreviews({});
-      fetchItems();
-    } catch {
-      alert('Failed to save item');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const deleteItem = (id, itemName) => {
-    setConfirmDialog({
-      show: true,
-      title: 'Delete Item',
-      message: `Are you sure you want to delete "${itemName}"?`,
-      onConfirm: async () => {
-        setDeleting(true);
-        try {
-          await api.delete(`/menu/${id}`);
-          fetchItems();
-        } catch (err) {
-          alert('Failed to delete');
-        } finally {
-          setDeleting(false);
-          setConfirmDialog({ show: false, title: '', message: '', onConfirm: null });
-        }
-      }
-    });
-  };
-
-  const categories = [...new Set(items.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))];
-  
-  // Get unavailable category names (paused or sold out) — memoized like mobile
-  const unavailableCategoryNames = useMemo(() =>
-    categoryList.filter(c => c.isPaused || c.isSoldOut).map(c => c.name),
-    [categoryList]
-  );
-
-  // Get scheduled locked category names
-  const scheduledLockedCategoryNames = useMemo(() =>
-    categoryList.filter(c => c.schedule?.enabled && c.isPaused && !c.isSoldOut).map(c => c.name),
-    [categoryList]
-  );
-
-  // Get manually paused category names
-  const manuallyPausedCategoryNames = useMemo(() =>
-    categoryList.filter(c => (c.isPaused && !c.schedule?.enabled) || c.isSoldOut).map(c => c.name),
-    [categoryList]
-  );
-  
-  // Helper function to check if item is paused (either item itself or all its categories are paused)
-  const isItemPaused = (item) => {
-    if (item.isPaused) return true;
-    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-    return itemCategories.every(cat => unavailableCategoryNames.includes(cat));
-  };
-
-  // Unique titles (menu item names) for title filter — like mobile
-  const titleCards = useMemo(() => {
-    return items.map(item => ({
-      id: item._id,
-      name: item.name,
-      image: item.image || (item.variants?.[0]?.image) || null,
-      variantCount: item.variants?.length || 0,
-    }));
-  }, [items]);
-
-  // Total variant count for "All" label
-  const totalVariantCount = useMemo(() => {
-    return items.reduce((sum, item) => sum + (item.variants?.length || 1), 0);
-  }, [items]);
-
-  // Flatten menu items into individual variant rows — core mobile logic
-  const flattenedVariants = useMemo(() => {
-    const result = [];
-    items.forEach(item => {
-      const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-      const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        itemCategories.some(cat => cat?.toLowerCase().includes(searchTerm.toLowerCase()));
-      const matchesCategory = selectedCategory === 'all' || itemCategories.includes(selectedCategory);
-      const matchesStatus = statusFilter === 'all' ||
-        (statusFilter === 'available' && item.available) ||
-        (statusFilter === 'unavailable' && !item.available);
-      const matchesFoodType = foodTypeFilter === 'all' || item.foodType === foodTypeFilter;
-      const matchesTitle = selectedTitle === 'all' || item._id === selectedTitle;
-      if (!matchesSearch || !matchesCategory || !matchesStatus || !matchesFoodType || !matchesTitle) return;
-
-      if (item.variants && item.variants.length > 0) {
-        item.variants.forEach((v, vIdx) => {
-          if (foodTypeFilter !== 'all' && v.foodType && v.foodType !== foodTypeFilter) return;
-          result.push({
-            _id: `${item._id}_v${vIdx}`,
-            parentId: item._id,
-            parentItem: item,
-            variantIndex: vIdx,
-            name: v.label,
-            parentName: item.name,
-            image: v.image || item.image || null,
-            foodType: v.foodType || item.foodType,
-            price: v.price || (v.quantities?.[0]?.price) || item.price,
-            offerPrice: v.offerPrice || (v.quantities?.[0]?.offerPrice) || null,
-            available: v.available !== false && item.available && !item.isPaused,
-            variantAvailable: v.available !== false,
-            quantities: v.quantities || null,
-            quantity: v.quantity,
-            unit: v.unit,
-            description: v.description || item.description,
-            category: item.category,
-            preparationTime: item.preparationTime,
-            isPaused: item.isPaused,
-            variant: v,
-          });
-        });
-      } else {
-        result.push({
-          _id: item._id,
-          parentId: item._id,
-          parentItem: item,
-          variantIndex: -1,
-          name: item.name,
-          parentName: item.name,
-          image: item.image || null,
-          foodType: item.foodType,
-          price: item.price,
-          offerPrice: item.offerPrice,
-          available: item.available && !item.isPaused,
-          variantAvailable: item.available,
-          quantities: null,
-          quantity: item.quantity,
-          unit: item.unit,
-          description: item.description,
-          category: item.category,
-          preparationTime: item.preparationTime,
-          isPaused: item.isPaused,
-          variant: null,
-        });
-      }
-    });
-    return result;
-  }, [items, searchTerm, selectedCategory, statusFilter, foodTypeFilter, selectedTitle]);
-
-  // Group flattenedVariants into sections by parent item (for display)
-  const sectionData = useMemo(() => {
-    const map = new Map();
-    flattenedVariants.forEach(vItem => {
-      const pid = vItem.parentId;
-      if (!map.has(pid)) {
-        map.set(pid, { parentItem: vItem.parentItem, data: [] });
-      }
-      map.get(pid).data.push(vItem);
-    });
-    return Array.from(map.values()).map(s => ({
-      title: s.parentItem.name,
-      parentItem: s.parentItem,
-      data: s.data,
-    }));
-  }, [flattenedVariants]);
-
-  // Group sections by category for display
-  const sectionsByCategory = useMemo(() => {
-    const catMap = new Map();
-    sectionData.forEach(section => {
-      const itemCats = Array.isArray(section.parentItem.category) ? section.parentItem.category : [section.parentItem.category];
-      itemCats.forEach(cat => {
-        if (selectedCategory !== 'all' && cat !== selectedCategory) return;
-        if (!catMap.has(cat)) catMap.set(cat, []);
-        // Avoid duplicating sections across categories
-        if (!catMap.get(cat).find(s => s.parentItem._id === section.parentItem._id)) {
-          catMap.get(cat).push(section);
-        }
+      // Variants JSON
+      const cleanVariants = form.variants.map(v => {
+        const { _uid, _collapsed, ...rest } = v;
+        return { ...rest, quantities: (rest.quantities || []).filter(q => q.quantity && q.price) };
       });
-    });
-    return catMap;
-  }, [sectionData, selectedCategory]);
+      fd.append('variants', JSON.stringify(cleanVariants));
 
-  const filteredItems = items.filter(item => {
-    const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
-    const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      itemCategories.some(cat => cat?.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesCategory = selectedCategory === 'all' || itemCategories.includes(selectedCategory);
-    const matchesStatus = statusFilter === 'all' || 
-      (statusFilter === 'available' && item.available) || 
-      (statusFilter === 'unavailable' && !item.available);
-    const matchesFoodType = foodTypeFilter === 'all' || item.foodType === foodTypeFilter;
-    const matchesTitle = selectedTitle === 'all' || item._id === selectedTitle;
-    return matchesSearch && matchesCategory && matchesStatus && matchesFoodType && matchesTitle;
-  });
-  const filteredCategories = [...new Set(filteredItems.flatMap(i => Array.isArray(i.category) ? i.category : [i.category]))];
-  const showSkeleton = loading && items.length === 0;
+      // Variant images
+      const imgIndices = [];
+      form.variants.forEach((v, i) => {
+        const uid = v._uid;
+        if (variantImageFiles[uid]) { fd.append('variantImages', variantImageFiles[uid]); imgIndices.push(i); }
+      });
+      if (imgIndices.length > 0) fd.append('variantImageIndices', JSON.stringify(imgIndices));
 
+      if (editing) { await api.put(`/menu/${editing._id}`, fd, { timeout: 90000 }); }
+      else { await api.post('/menu', fd, { timeout: 90000 }); }
+
+      setShowModal(false); setEditing(null);
+      await fetchItems();
+    } catch (err) { alert(err.response?.data?.error || 'Failed to save item'); }
+    finally { setSaving(false); }
+  };
+
+  /* ═══════════ LOADING ═══════════ */
+  if (loading) {
+    return (
+      <div className="space-y-4 p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  /* ═══════════ RENDER ═══════════ */
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
-          <input type="text" placeholder="Search menu items..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 pr-4 py-2.5 bg-white border border-dark-200 rounded-xl w-full focus:border-primary-500 transition-colors" />
+    <div className="space-y-4">
+      {/* ── HEADER ── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-dark-900">Menu</h1>
+          <p className="text-dark-500 mt-0.5">{stats.totalItems} items &bull; {stats.totalVariants} variants</p>
         </div>
-        <button onClick={() => setShowCategoryModal(true)} className="flex items-center justify-center bg-dark-800 text-white p-2.5 rounded-xl hover:bg-dark-900 transition-colors">
-          <FolderPlus className="w-5 h-5" />
-        </button>
-        <button onClick={() => openModal()} className="flex items-center justify-center gradient-primary text-white p-2.5 rounded-xl hover:opacity-90 transition-opacity shadow-lg shadow-primary-500/30">
-          <Plus className="w-5 h-5" />
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => openCategoryModal()} className="flex items-center gap-1.5 px-3 py-2 bg-dark-100 text-dark-700 rounded-xl text-sm font-medium hover:bg-dark-200 transition-colors">
+            <FolderPlus className="w-4 h-4" /> Category
+          </button>
+          <button onClick={() => openModal()} className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white rounded-xl text-sm font-medium hover:bg-primary-700 transition-colors">
+            <Plus className="w-4 h-4" /> Add Item
+          </button>
+        </div>
       </div>
 
-      {/* Filters */}
+      {/* ── SEARCH ── */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
+        <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search items or variants..."
+          className="w-full pl-10 pr-4 py-2.5 bg-white border border-dark-200 rounded-xl text-sm focus:border-primary-500 shadow-sm" />
+      </div>
+
+      {/* ── STATS ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {[
+          { label: 'Total Items', value: stats.totalItems, color: 'text-dark-900' },
+          { label: 'Variants', value: stats.totalVariants, color: 'text-blue-600' },
+          { label: 'Categories', value: stats.uniqueCategories, color: 'text-purple-600' },
+          { label: 'In Stock', value: stats.availableCount, color: 'text-green-600' },
+          { label: 'Out', value: stats.unavailableCount, color: 'text-red-600' },
+        ].map(s => (
+          <div key={s.label} className="bg-white rounded-xl p-3 shadow-card text-center">
+            <p className="text-dark-400 text-xs">{s.label}</p>
+            <p className={`text-xl font-bold mt-0.5 ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* ── FILTER CHIPS ── */}
       <div className="flex flex-wrap gap-2">
-        {/* Status Filter */}
-        <div className="flex items-center gap-1 bg-white rounded-xl p-1 shadow-card">
-          <button
-            onClick={() => setStatusFilter('all')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${statusFilter === 'all' ? 'bg-dark-800 text-white' : 'text-dark-600 hover:bg-dark-50'}`}
-          >
-            All
+        {['all','available','unavailable'].map(f => (
+          <button key={f} onClick={() => setStatusFilter(f)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${statusFilter === f ? 'bg-primary-500 text-white' : 'bg-white text-dark-600 border border-dark-200 hover:border-dark-300'}`}>
+            {f === 'all' ? 'All' : f === 'available' ? 'In Stock' : 'Out of Stock'}
           </button>
-          <button
-            onClick={() => setStatusFilter('available')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${statusFilter === 'available' ? 'bg-green-500 text-white' : 'text-dark-600 hover:bg-dark-50'}`}
-          >
-            Available
+        ))}
+        <div className="w-px bg-dark-200 mx-1" />
+        {['all','veg','nonveg','egg'].map(f => (
+          <button key={f} onClick={() => setFoodTypeFilter(f)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${foodTypeFilter === f ? 'bg-primary-500 text-white' : 'bg-white text-dark-600 border border-dark-200 hover:border-dark-300'}`}>
+            {f === 'all' ? 'All Types' : f === 'veg' ? '🟢 Veg' : f === 'nonveg' ? '🔴 Non-Veg' : '🟡 Egg'}
           </button>
-          <button
-            onClick={() => setStatusFilter('unavailable')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${statusFilter === 'unavailable' ? 'bg-red-500 text-white' : 'text-dark-600 hover:bg-dark-50'}`}
-          >
-            Unavailable
-          </button>
-        </div>
-
-        {/* Food Type Filter */}
-        <div className="flex items-center gap-1 bg-white rounded-xl p-1 shadow-card">
-          <button
-            onClick={() => setFoodTypeFilter('all')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${foodTypeFilter === 'all' ? 'bg-dark-800 text-white' : 'text-dark-600 hover:bg-dark-50'}`}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setFoodTypeFilter('veg')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${foodTypeFilter === 'veg' ? 'bg-green-500 text-white' : 'text-dark-600 hover:bg-dark-50'}`}
-          >
-            <span className={`w-3 h-3 rounded border-2 ${foodTypeFilter === 'veg' ? 'border-white bg-white' : 'border-green-600'}`}>
-              <span className={`block w-1.5 h-1.5 rounded-full mx-auto mt-0.5 ${foodTypeFilter === 'veg' ? 'bg-green-500' : 'bg-green-600'}`}></span>
-            </span>
-            Veg
-          </button>
-          <button
-            onClick={() => setFoodTypeFilter('nonveg')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${foodTypeFilter === 'nonveg' ? 'bg-red-500 text-white' : 'text-dark-600 hover:bg-dark-50'}`}
-          >
-            <span className={`w-3 h-3 rounded border-2 ${foodTypeFilter === 'nonveg' ? 'border-white bg-white' : 'border-red-600'}`}>
-              <span className={`block w-1.5 h-1.5 rounded-full mx-auto mt-0.5 ${foodTypeFilter === 'nonveg' ? 'bg-red-500' : 'bg-red-600'}`}></span>
-            </span>
-            Non-Veg
-          </button>
-          <button
-            onClick={() => setFoodTypeFilter('egg')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${foodTypeFilter === 'egg' ? 'bg-yellow-500 text-white' : 'text-dark-600 hover:bg-dark-50'}`}
-          >
-            <span className={`w-3 h-3 rounded border-2 ${foodTypeFilter === 'egg' ? 'border-white bg-white' : 'border-yellow-500'}`}>
-              <span className={`block w-1.5 h-1.5 rounded-full mx-auto mt-0.5 ${foodTypeFilter === 'egg' ? 'bg-yellow-500' : 'bg-yellow-500'}`}></span>
-            </span>
-            Egg
-          </button>
-        </div>
+        ))}
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-        {showSkeleton ? (
-          <><StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton /></>
-        ) : (
-          <>
-            <div className="bg-white rounded-xl p-4 shadow-card">
-              <p className="text-dark-400 text-sm">Total Items</p>
-              <p className="text-2xl font-bold text-dark-900 mt-1">{items.length}</p>
-            </div>
-            <div className="bg-white rounded-xl p-4 shadow-card">
-              <p className="text-dark-400 text-sm">Variants</p>
-              <p className="text-2xl font-bold text-dark-900 mt-1">{totalVariantCount}</p>
-            </div>
-            <div className="bg-white rounded-xl p-4 shadow-card">
-              <p className="text-dark-400 text-sm">Categories</p>
-              <p className="text-2xl font-bold text-dark-900 mt-1">{categories.length}</p>
-            </div>
-            <div className="bg-white rounded-xl p-4 shadow-card">
-              <p className="text-dark-400 text-sm">Available</p>
-              <p className="text-2xl font-bold text-green-600 mt-1">{items.filter(i => i.available).length}</p>
-            </div>
-            <div className="bg-white rounded-xl p-4 shadow-card">
-              <p className="text-dark-400 text-sm">Unavailable</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">{items.filter(i => !i.available).length}</p>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Horizontal Category Filter */}
-      {categoryList.length > 0 && (
-        <div className="bg-white rounded-xl p-4 shadow-card">
-          <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-            <button
-              onClick={() => setSelectedCategory('all')}
-              className="flex flex-col items-center min-w-[80px] transition-all"
-            >
-              <div className="w-16 h-16 rounded-full overflow-hidden mb-2">
-                <div className="w-full h-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
-                  <span className="text-white text-xl font-bold">All</span>
-                </div>
-              </div>
-              <span className={`text-sm font-medium ${selectedCategory === 'all' ? 'text-primary-600' : 'text-dark-600'}`}>All</span>
-              {selectedCategory === 'all' && <div className="w-8 h-1 bg-primary-500 rounded-full mt-1"></div>}
-            </button>
-            {categoryList.map(cat => (
-              <button
-                key={cat._id}
-                onClick={() => handleCategoryDoubleTap(cat)}
-                className={`flex flex-col items-center min-w-[80px] transition-all relative group ${cat.isPaused ? 'opacity-60' : ''} ${cat.isSoldOut ? 'opacity-50' : ''}`}
-                title="Click to select • Double-click to pause/resume"
-              >
-                <div className={`w-16 h-16 rounded-full overflow-hidden mb-2 bg-dark-100 ${cat.isPaused ? 'ring-2 ring-yellow-400' : ''} ${cat.isSoldOut ? 'ring-2 ring-red-400' : ''}`}>
-                  {cat.image ? (
-                    <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-dark-200 flex items-center justify-center">
-                      <Image className="w-6 h-6 text-dark-400" />
-                    </div>
-                  )}
-                </div>
-                <span className={`text-sm font-medium ${selectedCategory === cat.name ? 'text-primary-600' : cat.isPaused ? 'text-yellow-600' : cat.isSoldOut ? 'text-red-600' : 'text-dark-600'}`}>{cat.name}</span>
-                {cat.schedule?.enabled && (
-                  <span className="text-[10px] text-primary-500 font-medium leading-tight">{formatScheduleDisplay(cat.schedule)}</span>
-                )}
-                {cat.isPaused && <span className="text-xs text-yellow-500">Paused</span>}
-                {cat.isSoldOut && !cat.isPaused && <span className="text-xs text-red-500">Sold Out</span>}
-                {cat.soldOutUntil && new Date(cat.soldOutUntil) > new Date() && (
-                  <span className="text-xs text-orange-500">Until {new Date(cat.soldOutUntil).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                )}
-                {selectedCategory === cat.name && <div className="w-8 h-1 bg-primary-500 rounded-full mt-1"></div>}
-                {/* Category quick actions on hover */}
-                <div className="absolute -top-2 right-0 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                  <button onClick={(e) => { e.stopPropagation(); toggleCategorySoldOut(cat); }}
-                    className={`p-1 rounded-full shadow-md ${cat.isSoldOut ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}
-                    title={cat.isSoldOut ? 'Mark In Stock' : 'Mark Sold Out'}>
-                    <Ban className="w-2.5 h-2.5" />
-                  </button>
-                  <button onClick={(e) => { e.stopPropagation(); setScheduleModal({ show: true, item: cat, type: 'category' }); }}
-                    className="p-1 bg-orange-500 text-white rounded-full shadow-md" title="Schedule sold out">
-                    <CalendarClock className="w-2.5 h-2.5" />
-                  </button>
-                  <button onClick={(e) => { e.stopPropagation(); handleBulkPause(cat.name, true); }}
-                    disabled={bulkPausingCategory === cat.name}
-                    className="p-1 bg-yellow-500 text-white rounded-full shadow-md" title="Bulk pause all items">
-                    <Pause className="w-2.5 h-2.5" />
-                  </button>
-                </div>
+      {/* ── CATEGORY FILTER (horizontal scroll like mobile) ── */}
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        <button onClick={() => setSelectedCategory('all')}
+          className={`flex-shrink-0 flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-xs font-medium transition-all ${selectedCategory === 'all' ? 'bg-primary-500 text-white' : 'bg-white text-dark-600 border border-dark-200'}`}>
+          <Package className="w-5 h-5" /> All
+        </button>
+        {categoryList.map(cat => {
+          const isPaused = cat.isPaused || cat.isSoldOut;
+          const rem = soldOutRemaining(cat);
+          return (
+            <div key={cat._id} className="flex-shrink-0 relative group">
+              <button onClick={() => handleCategoryDoubleTap(cat)}
+                className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-xs font-medium transition-all min-w-[70px] ${
+                  selectedCategory === cat.name ? 'bg-primary-500 text-white' :
+                  isPaused ? 'bg-red-50 text-red-600 border border-red-200' :
+                  'bg-white text-dark-600 border border-dark-200'
+                }`}>
+                {cat.image ? <img src={cat.image} alt="" className="w-7 h-7 rounded-full object-cover" /> : <FolderPlus className="w-5 h-5" />}
+                <span className="truncate max-w-[60px]">{cat.name}</span>
+                {isPaused && <span className="text-[9px] text-red-500">Paused</span>}
+                {rem && <span className="text-[9px] text-orange-500">{rem}</span>}
               </button>
-            ))}
-            {/* Add New Category Button */}
-            <button
-              onClick={() => {
-                setEditingCategory(null);
-                setCategoryForm({ name: '', description: '', image: '' });
-                setShowCategoryModal(true);
-              }}
-              className="flex flex-col items-center min-w-[80px] transition-all"
-            >
-              <div className="w-16 h-16 rounded-full overflow-hidden mb-2 bg-dark-100 hover:bg-dark-200 border-2 border-dashed border-dark-300 flex items-center justify-center transition-colors">
-                <Plus className="w-6 h-6 text-dark-400" />
-              </div>
-              <span className="text-sm font-medium text-dark-500">Add New</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Product/Title Filter — like mobile */}
-      {items.length > 0 && (
-        <div className="bg-white rounded-xl p-3 shadow-card">
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            <button
-              onClick={() => setSelectedTitle('all')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${selectedTitle === 'all' ? 'bg-dark-800 text-white' : 'bg-dark-50 text-dark-600 hover:bg-dark-100'}`}
-            >
-              <Package className="w-4 h-4" />
-              All Products ({totalVariantCount})
-            </button>
-            {titleCards.map(tc => (
-              <button
-                key={tc.id}
-                onClick={() => setSelectedTitle(selectedTitle === tc.id ? 'all' : tc.id)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${selectedTitle === tc.id ? 'bg-primary-500 text-white' : 'bg-dark-50 text-dark-600 hover:bg-dark-100'}`}
-              >
-                {tc.image ? (
-                  <img src={tc.image} alt="" className="w-6 h-6 rounded-full object-cover" />
-                ) : (
-                  <Image className="w-4 h-4" />
-                )}
-                {tc.name} {tc.variantCount > 0 ? `(${tc.variantCount})` : ''}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {showSkeleton ? (
-        <div className="space-y-8">
-          <div>
-            <div className="h-6 w-32 bg-dark-100 rounded mb-4 animate-pulse"></div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
-              <MenuItemSkeleton /><MenuItemSkeleton /><MenuItemSkeleton /><MenuItemSkeleton />
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {/* When items have categories, group by category */}
-          {filteredCategories.length > 0 && (selectedCategory !== 'all' ? [selectedCategory] : filteredCategories).map(cat => {
-            const sectionsInCat = sectionsByCategory.get(cat) || [];
-            if (sectionsInCat.length === 0) return null;
-            const catObj = categoryList.find(c => c.name === cat);
-            const allItemsInCat = filteredItems.filter(i => {
-              const itemCats = Array.isArray(i.category) ? i.category : [i.category];
-              return itemCats.includes(cat);
-            });
-            return (
-            <div key={cat}>
-              <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-lg font-bold text-dark-900">{cat}</h2>
-                <span className="px-2.5 py-1 bg-dark-100 rounded-full text-xs font-medium text-dark-500">
-                  {allItemsInCat.length} items
-                </span>
-                {catObj?.schedule?.enabled && (
-                  <span className="px-2 py-1 bg-primary-50 rounded-full text-xs font-medium text-primary-600">
-                    <CalendarClock className="w-3 h-3 inline mr-1" />{formatScheduleDisplay(catObj.schedule)}
-                  </span>
-                )}
-                <button 
-                  onClick={() => handleBulkPause(cat, !allItemsInCat.some(i => !i.isPaused))}
-                  disabled={bulkPausingCategory === cat}
-                  className={`ml-auto px-3 py-1 text-xs font-medium rounded-lg transition-colors flex items-center gap-1 ${
-                    allItemsInCat.every(i => i.isPaused) 
-                      ? 'bg-green-50 text-green-600 hover:bg-green-100' 
-                      : 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'
-                  }`}
-                >
-                  {allItemsInCat.every(i => i.isPaused) ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
-                  {bulkPausingCategory === cat ? 'Processing...' : allItemsInCat.every(i => i.isPaused) ? 'Resume All' : 'Pause All'}
+              {/* Hover quick actions (like mobile long-press) */}
+              <div className="absolute -top-1 -right-1 hidden group-hover:flex gap-0.5 z-10">
+                <button onClick={(e) => { e.stopPropagation(); showSoldOutOptions('category', cat); }} className="w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center" title="Sold Out">
+                  <Ban className="w-3 h-3" />
                 </button>
-              </div>
-
-              {/* Sections by parent item — variant rows inside each */}
-              <div className="space-y-4">
-                {sectionsInCat.map(section => {
-                  const parentItem = section.parentItem;
-                  const isPaused = isItemPaused(parentItem);
-                  return (
-                  <div key={parentItem._id} className={`bg-white rounded-2xl shadow-card overflow-hidden ${isPaused ? 'ring-2 ring-yellow-300' : ''}`}>
-                    {/* Parent item header */}
-                    <div className={`flex items-center gap-3 p-4 border-b border-dark-100 ${isPaused ? 'bg-yellow-50' : ''}`}>
-                      <div className={`w-14 h-14 rounded-xl overflow-hidden bg-dark-100 flex-shrink-0 ${isPaused ? 'grayscale opacity-60' : ''}`}>
-                        {parentItem.image ? (
-                          <img src={parentItem.image} alt={parentItem.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Image className="w-6 h-6 text-dark-300" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className={`font-semibold truncate ${isPaused ? 'text-gray-400' : 'text-dark-900'}`}>{parentItem.name}</h3>
-                          {parentItem.foodType && (
-                            <span className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${parentItem.foodType === 'veg' ? 'border-green-600 bg-white' : parentItem.foodType === 'egg' ? 'border-yellow-500 bg-white' : 'border-red-600 bg-white'}`}>
-                              <span className={`w-2 h-2 rounded-full ${parentItem.foodType === 'veg' ? 'bg-green-600' : parentItem.foodType === 'egg' ? 'bg-yellow-500' : 'bg-red-600'}`}></span>
-                            </span>
-                          )}
-                          {isPaused && (
-                            <span className="px-2 py-0.5 bg-yellow-400 text-yellow-900 rounded-full text-xs font-semibold flex items-center gap-1">
-                              <Pause className="w-2.5 h-2.5" /> Paused
-                            </span>
-                          )}
-                        </div>
-                        <p className={`text-xs ${isPaused ? 'text-gray-400' : 'text-dark-400'}`}>
-                          {section.data.length} variant{section.data.length !== 1 ? 's' : ''}
-                          {parentItem.preparationTime ? ` • ${parentItem.preparationTime} min` : ''}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <button onClick={() => openModal(parentItem)} className="p-2 bg-dark-50 text-dark-700 rounded-xl hover:bg-dark-100 transition-colors" title="Edit">
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => togglePauseItem(parentItem)} disabled={togglingId === parentItem._id}
-                          className={`p-2 rounded-xl transition-colors ${parentItem.isPaused ? 'bg-green-50 text-green-600 hover:bg-green-100' : 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'}`}
-                          title={parentItem.isPaused ? 'Resume' : 'Pause'}>
-                          {parentItem.isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
-                        </button>
-                        <button onClick={() => setScheduleModal({ show: true, item: parentItem, type: 'item' })}
-                          className="p-2 bg-orange-50 text-orange-600 rounded-xl hover:bg-orange-100 transition-colors" title="Schedule sold out">
-                          <CalendarClock className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => deleteItem(parentItem._id, parentItem.name)}
-                          className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors" title="Delete">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Sold out schedule indicator */}
-                    {parentItem.soldOutUntil && new Date(parentItem.soldOutUntil) > new Date() && (
-                      <div className="px-4 py-2 bg-orange-50 border-b border-orange-100 flex items-center gap-2">
-                        <CalendarClock className="w-3.5 h-3.5 text-orange-500" />
-                        <span className="text-xs font-medium text-orange-600">Sold out until {new Date(parentItem.soldOutUntil).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                      </div>
-                    )}
-
-                    {/* Bulk variant actions */}
-                    {parentItem.variants?.length > 1 && (
-                      <div className="px-4 py-2 bg-dark-50 border-b border-dark-100 flex gap-2">
-                        <button onClick={() => markVariantsSoldOut(parentItem._id, true)}
-                          className="px-2.5 py-1 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-1">
-                          <Ban className="w-3 h-3" /> All Sold Out
-                        </button>
-                        <button onClick={() => markVariantsSoldOut(parentItem._id, false)}
-                          className="px-2.5 py-1 text-xs bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors flex items-center gap-1">
-                          <Check className="w-3 h-3" /> Restock All
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Variant rows — matching mobile's flattenedVariants display */}
-                    <div className="divide-y divide-dark-50">
-                      {section.data.map(vItem => {
-                        const isAvail = vItem.available;
-                        return (
-                        <div key={vItem._id} className={`flex items-center gap-3 p-3 hover:bg-dark-25 transition-colors ${!isAvail ? 'opacity-70 bg-gray-50' : ''}`}>
-                          {/* Variant image with parent fallback */}
-                          <div className="w-12 h-12 rounded-lg overflow-hidden bg-dark-100 flex-shrink-0 relative">
-                            {vItem.image ? (
-                              <img src={vItem.image} alt={vItem.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <Image className="w-5 h-5 text-dark-300" />
-                              </div>
-                            )}
-                            {vItem.foodType && vItem.foodType !== 'none' && (
-                              <div className="absolute top-0.5 left-0.5">
-                                <span className={`w-3 h-3 rounded border flex items-center justify-center ${vItem.foodType === 'veg' ? 'border-green-600 bg-white' : vItem.foodType === 'egg' ? 'border-yellow-500 bg-white' : 'border-red-600 bg-white'}`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${vItem.foodType === 'veg' ? 'bg-green-600' : vItem.foodType === 'egg' ? 'bg-yellow-500' : 'bg-red-600'}`}></span>
-                                </span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Variant info */}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm text-dark-900 truncate">{vItem.name}</p>
-                            {vItem.variantIndex >= 0 && (
-                              <p className="text-xs text-dark-400 truncate">{vItem.parentName}</p>
-                            )}
-                            {/* Multi-quantity pricing chips — like mobile */}
-                            {vItem.quantities && vItem.quantities.length > 0 ? (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {vItem.quantities.map((q, qIdx) => (
-                                  <span key={qIdx} className="inline-flex items-center px-2 py-0.5 bg-dark-50 rounded text-xs text-dark-600">
-                                    {q.quantity} {q.unit} — ₹{q.price}
-                                    {q.offerPrice && q.offerPrice < q.price && (
-                                      <span className="ml-1 text-green-600 font-medium">₹{q.offerPrice}</span>
-                                    )}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2 mt-0.5">
-                                {/* Offer price display — like mobile */}
-                                {vItem.offerPrice && vItem.offerPrice < vItem.price ? (
-                                  <>
-                                    <span className="text-xs text-dark-400 line-through">₹{vItem.price}</span>
-                                    <span className="text-sm font-bold text-green-600">₹{vItem.offerPrice}</span>
-                                  </>
-                                ) : (
-                                  <span className="text-sm font-bold text-primary-600">
-                                    ₹{vItem.price}
-                                    {vItem.quantity && vItem.unit ? <span className="text-xs font-normal text-dark-400"> / {vItem.quantity} {vItem.unit}</span> : ''}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Variant actions */}
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            {/* Active/Off toggle — like mobile */}
-                            <button
-                              onClick={() => toggleVariant(vItem.parentId, vItem.variantIndex)}
-                              disabled={togglingId === vItem._id}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${isAvail ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
-                            >
-                              {isAvail ? 'Active' : 'Off'}
-                            </button>
-                            {/* Delete variant — like mobile */}
-                            {vItem.variantIndex >= 0 && (
-                              <button
-                                onClick={() => deleteVariant(vItem.parentId, vItem.variantIndex, vItem.name)}
-                                className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Delete variant"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  );
-                })}
+                <button onClick={(e) => { e.stopPropagation(); setCategoryScheduleModal(cat); setCategorySchedule(cat.schedule || { enabled: false, type: 'daily', startTime: '09:00', endTime: '22:00', days: [] }); }}
+                  className="w-5 h-5 bg-blue-500 text-white rounded-full flex items-center justify-center" title="Schedule">
+                  <CalendarClock className="w-3 h-3" />
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); openCategoryModal(cat); }} className="w-5 h-5 bg-dark-500 text-white rounded-full flex items-center justify-center" title="Edit">
+                  <Edit className="w-3 h-3" />
+                </button>
               </div>
             </div>
           );
-          })}
+        })}
+      </div>
 
-          {/* When items have NO categories, render sections directly */}
-          {filteredCategories.length === 0 && sectionData.length > 0 && (
-            <div>
-              <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-lg font-bold text-dark-900">Menu Items</h2>
-                <span className="px-2.5 py-1 bg-dark-100 rounded-full text-xs font-medium text-dark-500">
-                  {flattenedVariants.length} variant{flattenedVariants.length !== 1 ? 's' : ''}
-                </span>
-              </div>
-              <div className="space-y-4">
-                {sectionData.map(section => {
-                  const parentItem = section.parentItem;
-                  const isPaused = isItemPaused(parentItem);
-                  return (
-                  <div key={parentItem._id} className={`bg-white rounded-2xl shadow-card overflow-hidden ${isPaused ? 'ring-2 ring-yellow-300' : ''}`}>
-                    {/* Parent item header */}
-                    <div className={`flex items-center gap-3 p-4 border-b border-dark-100 ${isPaused ? 'bg-yellow-50' : ''}`}>
-                      <div className={`w-14 h-14 rounded-xl overflow-hidden bg-dark-100 flex-shrink-0 ${isPaused ? 'grayscale opacity-60' : ''}`}>
-                        {parentItem.image ? (
-                          <img src={parentItem.image} alt={parentItem.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Image className="w-6 h-6 text-dark-300" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className={`font-semibold truncate ${isPaused ? 'text-gray-400' : 'text-dark-900'}`}>{parentItem.name}</h3>
-                          {parentItem.foodType && (
-                            <span className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${parentItem.foodType === 'veg' ? 'border-green-600 bg-white' : parentItem.foodType === 'egg' ? 'border-yellow-500 bg-white' : 'border-red-600 bg-white'}`}>
-                              <span className={`w-2 h-2 rounded-full ${parentItem.foodType === 'veg' ? 'bg-green-600' : parentItem.foodType === 'egg' ? 'bg-yellow-500' : 'bg-red-600'}`}></span>
-                            </span>
-                          )}
-                          {isPaused && (
-                            <span className="px-2 py-0.5 bg-yellow-400 text-yellow-900 rounded-full text-xs font-semibold flex items-center gap-1">
-                              <Pause className="w-2.5 h-2.5" /> Paused
-                            </span>
-                          )}
-                        </div>
-                        <p className={`text-xs ${isPaused ? 'text-gray-400' : 'text-dark-400'}`}>
-                          {section.data.length} variant{section.data.length !== 1 ? 's' : ''}
-                          {parentItem.preparationTime ? ` • ${parentItem.preparationTime} min` : ''}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <button onClick={() => openModal(parentItem)} className="p-2 bg-dark-50 text-dark-700 rounded-xl hover:bg-dark-100 transition-colors" title="Edit">
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => togglePauseItem(parentItem)} disabled={togglingId === parentItem._id}
-                          className={`p-2 rounded-xl transition-colors ${parentItem.isPaused ? 'bg-green-50 text-green-600 hover:bg-green-100' : 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'}`}
-                          title={parentItem.isPaused ? 'Resume' : 'Pause'}>
-                          {parentItem.isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
-                        </button>
-                        <button onClick={() => setScheduleModal({ show: true, item: parentItem, type: 'item' })}
-                          className="p-2 bg-orange-50 text-orange-600 rounded-xl hover:bg-orange-100 transition-colors" title="Schedule sold out">
-                          <CalendarClock className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => deleteItem(parentItem._id, parentItem.name)}
-                          className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors" title="Delete">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                    {parentItem.soldOutUntil && new Date(parentItem.soldOutUntil) > new Date() && (
-                      <div className="px-4 py-2 bg-orange-50 border-b border-orange-100 flex items-center gap-2">
-                        <CalendarClock className="w-3.5 h-3.5 text-orange-500" />
-                        <span className="text-xs font-medium text-orange-600">Sold out until {new Date(parentItem.soldOutUntil).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                      </div>
-                    )}
-                    {parentItem.variants?.length > 1 && (
-                      <div className="px-4 py-2 bg-dark-50 border-b border-dark-100 flex gap-2">
-                        <button onClick={() => markVariantsSoldOut(parentItem._id, true)}
-                          className="px-2.5 py-1 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-1">
-                          <Ban className="w-3 h-3" /> All Sold Out
-                        </button>
-                        <button onClick={() => markVariantsSoldOut(parentItem._id, false)}
-                          className="px-2.5 py-1 text-xs bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors flex items-center gap-1">
-                          <Check className="w-3 h-3" /> Restock All
-                        </button>
-                      </div>
-                    )}
-                    <div className="divide-y divide-dark-50">
-                      {section.data.map(vItem => {
-                        const isAvail = vItem.available;
-                        return (
-                        <div key={vItem._id} className={`flex items-center gap-3 p-3 hover:bg-dark-25 transition-colors ${!isAvail ? 'opacity-70 bg-gray-50' : ''}`}>
-                          <div className="w-12 h-12 rounded-lg overflow-hidden bg-dark-100 flex-shrink-0 relative">
-                            {vItem.image ? (
-                              <img src={vItem.image} alt={vItem.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <Image className="w-5 h-5 text-dark-300" />
-                              </div>
-                            )}
-                            {vItem.foodType && vItem.foodType !== 'none' && (
-                              <div className="absolute top-0.5 left-0.5">
-                                <span className={`w-3 h-3 rounded border flex items-center justify-center ${vItem.foodType === 'veg' ? 'border-green-600 bg-white' : vItem.foodType === 'egg' ? 'border-yellow-500 bg-white' : 'border-red-600 bg-white'}`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${vItem.foodType === 'veg' ? 'bg-green-600' : vItem.foodType === 'egg' ? 'bg-yellow-500' : 'bg-red-600'}`}></span>
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm text-dark-900 truncate">{vItem.name}</p>
-                            {vItem.variantIndex >= 0 && (
-                              <p className="text-xs text-dark-400 truncate">{vItem.parentName}</p>
-                            )}
-                            {vItem.quantities && vItem.quantities.length > 0 ? (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {vItem.quantities.map((q, qIdx) => (
-                                  <span key={qIdx} className="inline-flex items-center px-2 py-0.5 bg-dark-50 rounded text-xs text-dark-600">
-                                    {q.quantity} {q.unit} — ₹{q.price}
-                                    {q.offerPrice && q.offerPrice < q.price && (
-                                      <span className="ml-1 text-green-600 font-medium">₹{q.offerPrice}</span>
-                                    )}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2 mt-0.5">
-                                {vItem.offerPrice && vItem.offerPrice < vItem.price ? (
-                                  <>
-                                    <span className="text-xs text-dark-400 line-through">₹{vItem.price}</span>
-                                    <span className="text-sm font-bold text-green-600">₹{vItem.offerPrice}</span>
-                                  </>
-                                ) : (
-                                  <span className="text-sm font-bold text-primary-600">
-                                    ₹{vItem.price}
-                                    {vItem.quantity && vItem.unit ? <span className="text-xs font-normal text-dark-400"> / {vItem.quantity} {vItem.unit}</span> : ''}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <button
-                              onClick={() => toggleVariant(vItem.parentId, vItem.variantIndex)}
-                              disabled={togglingId === vItem._id}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${isAvail ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
-                            >
-                              {isAvail ? 'Active' : 'Off'}
-                            </button>
-                            {vItem.variantIndex >= 0 && (
-                              <button
-                                onClick={() => deleteVariant(vItem.parentId, vItem.variantIndex, vItem.name)}
-                                className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Delete variant"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* True empty state - no items at all */}
-          {filteredCategories.length === 0 && sectionData.length === 0 && (
-            <div className="bg-white rounded-2xl shadow-card p-12 text-center">
-              <Image className="w-16 h-16 text-dark-200 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-dark-700">No items found</h3>
-              <p className="text-dark-400 mt-1">{searchTerm ? 'Try a different search' : 'Add your first menu item'}</p>
-            </div>
-          )}
+      {/* ── PRODUCT TITLE FILTER ── */}
+      {titleCards.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          <button onClick={() => setSelectedTitle('all')}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${selectedTitle === 'all' ? 'bg-primary-500 text-white' : 'bg-white text-dark-600 border border-dark-200'}`}>
+            All Items
+          </button>
+          {titleCards.map(tc => (
+            <button key={tc._id} onClick={() => setSelectedTitle(selectedTitle === tc._id ? 'all' : tc._id)}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${selectedTitle === tc._id ? 'bg-primary-500 text-white' : 'bg-white text-dark-600 border border-dark-200'}`}>
+              {tc.image && <img src={tc.image} alt="" className="w-5 h-5 rounded object-cover" />}
+              <span className="truncate max-w-[80px]">{tc.name}</span>
+            </button>
+          ))}
         </div>
       )}
 
-      {/* Add/Edit Modal */}
-      {showModal && (
-        <div className="modal-backdrop !mt-0" onClick={() => setShowModal(false)}>
-          <div className="modal-content w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 border-b border-dark-100">
-              <h2 className="text-xl font-bold text-dark-900">{editing ? 'Edit Item' : 'Add New Item'}</h2>
-              <button onClick={() => setShowModal(false)} className="p-2 hover:bg-dark-100 rounded-xl transition-colors">
-                <X className="w-5 h-5 text-dark-500" />
-              </button>
+      {/* ── VARIANT LIST (SectionList style like mobile) ── */}
+      {sectionData.length === 0 ? (
+        <div className="bg-white rounded-2xl p-12 text-center">
+          <Image className="w-16 h-16 text-dark-300 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-dark-900 mb-2">No Items Found</h3>
+          <p className="text-dark-500">Try adjusting your filters or add a new item.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {sectionData.map(section => (
+            <div key={section.parentId} className="bg-white rounded-2xl overflow-hidden shadow-card">
+              {/* Section header (parent item) */}
+              <div className="flex items-center gap-3 px-4 py-3 bg-dark-50 border-b border-dark-100 group/section">
+                <div className="w-10 h-10 rounded-xl bg-dark-100 overflow-hidden flex-shrink-0">
+                  {section.parentImage ? <img src={section.parentImage} alt="" className="w-full h-full object-cover" /> :
+                    <div className="w-full h-full flex items-center justify-center"><Image className="w-5 h-5 text-dark-300" /></div>}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm text-dark-800 truncate">{section.parentName}</p>
+                  <p className="text-[11px] text-dark-400">{section.rows.length} variant{section.rows.length > 1 ? 's' : ''}</p>
+                </div>
+                <div className="flex gap-1">
+                  <button onClick={() => openModal(items.find(i => i._id === section.parentId))}
+                    className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit Item">
+                    <Edit className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => showSoldOutOptions('item', items.find(i => i._id === section.parentId))}
+                    className="p-1.5 text-orange-500 hover:bg-orange-50 rounded-lg transition-colors" title="Sold Out Options">
+                    <Ban className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => deleteItem(items.find(i => i._id === section.parentId))}
+                    className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete Item">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Variant rows */}
+              {section.rows.map((row, ri) => {
+                const isOff = row._catUnavail || row.available === false || row._parentAvailable === false;
+                const toggleKey = row._isVariant ? `${row._parentId}_v${row._variantIndex}` : row._parentId;
+                return (
+                  <div key={ri} className={`flex items-center gap-3 px-4 py-2.5 border-b border-dark-50 last:border-0 transition-all ${isOff ? 'opacity-60 bg-dark-50/50' : 'hover:bg-dark-50/30'}`}>
+                    {/* Image */}
+                    <div className="w-12 h-12 rounded-xl bg-dark-100 overflow-hidden flex-shrink-0 relative">
+                      {(row.image || row._parentImage) ?
+                        <img src={row.image || row._parentImage} alt="" className="w-full h-full object-cover" /> :
+                        <div className="w-full h-full flex items-center justify-center"><Image className="w-5 h-5 text-dark-300" /></div>}
+                      {row.foodType && row.foodType !== 'none' && (
+                        <span className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 rounded-full border border-white ${foodDot(row.foodType)}`} />
+                      )}
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm text-dark-800 truncate">{row.label || row.name}</p>
+                      {row._isVariant && <p className="text-[10px] text-dark-400 truncate">{row._parentName}</p>}
+                      {/* Quantities / Price */}
+                      {row.quantities && row.quantities.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 mt-0.5">
+                          {row.quantities.map((q, qi) => (
+                            <span key={qi} className="px-1.5 py-0.5 bg-dark-100 rounded text-[10px] text-dark-600 font-medium">
+                              {q.quantity}{q.unit ? ` ${q.unit}` : ''} — ₹{q.price}
+                            </span>
+                          ))}
+                        </div>
+                      ) : row.price ? (
+                        <p className="text-[11px] text-dark-500 mt-0.5">₹{row.price}</p>
+                      ) : null}
+                    </div>
+
+                    {/* Toggle */}
+                    <button onClick={() => toggleVariant(row._parentId, row._variantIndex)} disabled={togglingId === toggleKey}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex-shrink-0 ${
+                        isOff ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'
+                      } ${togglingId === toggleKey ? 'opacity-50 animate-pulse' : 'hover:opacity-80'}`}>
+                      {isOff ? 'Off' : 'Active'}
+                    </button>
+
+                    {/* Delete variant */}
+                    {row._isVariant && (
+                      <button onClick={() => deleteVariant(row._parentId, row._variantIndex)}
+                        className="p-1 text-dark-300 hover:text-red-500 transition-colors flex-shrink-0">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-              {/* Name */}
+          ))}
+        </div>
+      )}
+
+      {/* ═══════════ ADD/EDIT ITEM MODAL ═══════════ */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="border-b border-dark-100 px-6 py-4 flex items-center justify-between flex-shrink-0">
+              <h2 className="text-xl font-bold text-dark-900">{editing ? 'Edit Item' : 'New Item'}</h2>
+              <button onClick={() => { setShowModal(false); setEditing(null); }} className="p-2 hover:bg-dark-100 rounded-lg"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto flex-1">
+              {/* Image */}
               <div>
-                <label className="block text-sm font-semibold text-dark-700 mb-2">Title / Name</label>
-                <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" required placeholder="Item title" />
+                <label className="block text-sm font-semibold text-dark-700 mb-1">Item Image</label>
+                <div className="flex items-center gap-4">
+                  <div className="w-24 h-24 rounded-xl bg-dark-100 overflow-hidden flex-shrink-0">
+                    {(imagePreview || imageFile) ?
+                      <img src={imagePreview} alt="" className="w-full h-full object-cover" /> :
+                      <div className="w-full h-full flex items-center justify-center"><Upload className="w-6 h-6 text-dark-300" /></div>}
+                  </div>
+                  <div className="flex gap-2">
+                    <label className="cursor-pointer px-3 py-2 bg-primary-50 text-primary-600 rounded-lg text-sm font-medium hover:bg-primary-100 transition-colors">
+                      Upload <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files[0]; if (f) { setImageFile(f); setImagePreview(URL.createObjectURL(f)); }}} className="hidden" />
+                    </label>
+                    {imagePreview && <button type="button" onClick={() => { setImageFile(null); setImagePreview(''); }} className="px-3 py-2 text-red-500 text-sm">Remove</button>}
+                  </div>
+                </div>
               </div>
 
-              {/* Category */}
+              {/* Title */}
               <div>
-                <label className="block text-sm font-semibold text-dark-700 mb-2">Category</label>
-                <MultiSelectDropdown
-                  value={form.category}
-                  onChange={(val) => setForm({ ...form, category: val })}
-                  options={categoryList.map(cat => ({ value: cat.name, label: cat.name }))}
-                  placeholder="Select Categories"
-                  required
-                />
+                <label className="block text-sm font-semibold text-dark-700 mb-1">Title <span className="text-red-500">*</span></label>
+                <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required
+                  className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" placeholder="Item name" />
               </div>
 
-              {/* ===== VARIANTS SECTION (Mobile-style collapsible cards) ===== */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="block text-sm font-bold text-dark-900">Variants</label>
-                  <button type="button" onClick={addVariant}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary-600 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors">
+              {/* Category Multi-Select */}
+              <div>
+                <label className="block text-sm font-semibold text-dark-700 mb-1">Category <span className="text-red-500">*</span></label>
+                <div className="flex flex-wrap gap-2">
+                  {categoryList.map(c => (
+                    <button key={c._id} type="button" onClick={() => {
+                      const sel = form.category.includes(c.name) ? form.category.filter(x => x !== c.name) : [...form.category, c.name];
+                      setForm({ ...form, category: sel });
+                    }} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                      form.category.includes(c.name) ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-dark-200 text-dark-600 hover:border-dark-300'
+                    }`}>
+                      {c.image && <img src={c.image} alt="" className="w-5 h-5 rounded-full object-cover" />}
+                      {c.name} {form.category.includes(c.name) && <Check className="w-3.5 h-3.5" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Variants */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-dark-700">Variants ({form.variants.length})</label>
+                  <button type="button" onClick={addVariant} className="flex items-center gap-1 px-3 py-1.5 bg-primary-50 text-primary-600 rounded-lg text-xs font-medium hover:bg-primary-100">
                     <Plus className="w-3.5 h-3.5" /> Add Variant
                   </button>
                 </div>
-
-                {(!form.variants || form.variants.length === 0) && (
-                  <div className="text-center py-6 bg-dark-50 rounded-xl border border-dark-200 border-dashed">
-                    <Package className="w-8 h-8 text-dark-300 mx-auto mb-2" />
-                    <p className="text-dark-400 text-sm">No variants added yet</p>
-                    <p className="text-dark-300 text-xs mt-1">Add variants for different sizes, quantities etc.</p>
-                    <button type="button" onClick={addVariant}
-                      className="mt-3 px-4 py-2 text-xs font-semibold text-primary-600 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors">
-                      <Plus className="w-3.5 h-3.5 inline mr-1" />Add First Variant
-                    </button>
-                  </div>
-                )}
-
-                {(form.variants || []).map((variant, idx) => (
-                  <div key={idx} className="border border-dark-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                    {/* Variant Header (always visible) */}
-                    <div
-                      className="flex items-center gap-3 px-4 py-3 bg-dark-50 cursor-pointer hover:bg-dark-100 transition-colors"
-                      onClick={() => toggleVariantCollapse(idx)}
-                    >
-                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary-500 text-white text-xs font-bold">{idx + 1}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-dark-900 truncate">{variant.label || `Variant ${idx + 1}`}</p>
-                        <p className="text-xs text-dark-400">
-                          {variant.quantities && variant.quantities.length > 0
-                            ? `${variant.quantities.length} size${variant.quantities.length > 1 ? 's' : ''} — from ₹${Math.min(...variant.quantities.map(q => parseFloat(q.price) || 0))}`
-                            : variant.price ? `₹${variant.price}` : 'No price set'}
-                        </p>
-                      </div>
-                      <span className={`w-3 h-3 rounded-full ${variant.foodType === 'nonveg' ? 'bg-red-500' : variant.foodType === 'egg' ? 'bg-yellow-500' : 'bg-green-500'}`}></span>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); removeVariant(idx); }}
-                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                        <Trash2 className="w-4 h-4" />
+                <div className="space-y-3">
+                  {form.variants.map((v, vi) => (
+                    <div key={v._uid} className="border border-dark-200 rounded-xl overflow-hidden">
+                      {/* Variant header (collapsible) */}
+                      <button type="button" onClick={() => toggleVariantCollapse(vi)}
+                        className="w-full flex items-center gap-3 px-4 py-3 bg-dark-50 hover:bg-dark-100 transition-colors text-left">
+                        <span className={`w-3 h-3 rounded-full flex-shrink-0 ${foodDot(v.foodType)}`} />
+                        <span className="flex-1 font-medium text-sm text-dark-800 truncate">{v.label || `Variant ${vi + 1}`}</span>
+                        {v.price && <span className="text-xs text-dark-500">₹{v.price}</span>}
+                        {v._collapsed ? <ChevronDown className="w-4 h-4 text-dark-400" /> : <ChevronUp className="w-4 h-4 text-dark-400" />}
                       </button>
-                      <ChevronDown className={`w-4 h-4 text-dark-400 transition-transform ${!variant._collapsed ? 'rotate-180' : ''}`} />
-                    </div>
 
-                    {/* Variant Body (collapsible) */}
-                    {!variant._collapsed && (
-                      <div className="p-4 space-y-3 border-t border-dark-100">
-                        {/* Variant Image */}
-                        <div>
-                          <label className="text-xs font-medium text-dark-500 mb-1.5 block">Variant Image</label>
+                      {/* Variant body */}
+                      {!v._collapsed && (
+                        <div className="p-4 space-y-4 border-t border-dark-100">
+                          {/* Variant image */}
                           <div className="flex items-center gap-3">
-                            {(variantImagePreviews[idx] || variant.image) ? (
-                              <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-dark-200 flex-shrink-0">
-                                <img src={variantImagePreviews[idx] || variant.image} alt="" className="w-full h-full object-cover" />
-                                <button type="button" onClick={() => removeVariantImage(idx)}
-                                  className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[9px]">✕</button>
-                              </div>
-                            ) : null}
-                            <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-xs bg-dark-50 border border-dark-200 border-dashed rounded-xl hover:bg-dark-100 cursor-pointer transition-colors text-dark-500">
-                              <Upload className="w-4 h-4" />
-                              {(variantImagePreviews[idx] || variant.image) ? 'Change' : 'Upload Image'}
-                              <input type="file" accept="image/*" className="hidden" onChange={(e) => handleVariantImageChange(idx, e.target.files[0])} />
+                            <div className="w-16 h-16 rounded-lg bg-dark-100 overflow-hidden flex-shrink-0">
+                              {(variantImagePreviews[v._uid] || v.image) ?
+                                <img src={variantImagePreviews[v._uid] || v.image} alt="" className="w-full h-full object-cover" /> :
+                                <div className="w-full h-full flex items-center justify-center"><Upload className="w-4 h-4 text-dark-300" /></div>}
+                            </div>
+                            <label className="cursor-pointer px-3 py-1.5 bg-dark-100 text-dark-600 rounded-lg text-xs font-medium hover:bg-dark-200">
+                              Upload <input type="file" accept="image/*" onChange={(e) => handleVariantImageChange(vi, e)} className="hidden" />
                             </label>
-                          </div>
-                        </div>
-
-                        {/* Item Name */}
-                        <div>
-                          <label className="text-xs font-medium text-dark-500 mb-1.5 block">Item Name *</label>
-                          <input type="text" value={variant.label} onChange={(e) => updateVariant(idx, 'label', e.target.value)}
-                            className="w-full px-3 py-2.5 text-sm bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 transition-all" placeholder="e.g., Large, 500g, Regular" required />
-                        </div>
-
-                        {/* Description + AI */}
-                        <div>
-                          <label className="text-xs font-medium text-dark-500 mb-1.5 block">Description</label>
-                          <div className="relative">
-                            <textarea value={variant.description || ''} onChange={(e) => updateVariant(idx, 'description', e.target.value)}
-                              className="w-full px-3 py-2.5 text-sm bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 transition-all pr-10" rows={2} placeholder="Describe this variant..." />
-                            <button type="button" onClick={() => generateVariantDescription(idx)} disabled={variantAiLoading[`${idx}_desc`]}
-                              className="absolute right-2 top-2 p-1.5 text-accent-500 hover:bg-accent-50 rounded-lg transition-colors" title="Generate with AI">
-                              <Sparkles className={`w-4 h-4 ${variantAiLoading[`${idx}_desc`] ? 'animate-spin' : ''}`} />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Food Type */}
-                        <div>
-                          <label className="text-xs font-medium text-dark-500 mb-1.5 block">Food Type</label>
-                          <div className="flex gap-2">
-                            {[{ value: 'veg', label: 'Veg', color: 'green' }, { value: 'nonveg', label: 'Non-Veg', color: 'red' }, { value: 'egg', label: 'Egg', color: 'yellow' }].map(type => (
-                              <label key={type.value} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border cursor-pointer transition-all text-xs ${variant.foodType === type.value ? (type.color === 'green' ? 'border-green-500 bg-green-50' : type.color === 'red' ? 'border-red-500 bg-red-50' : 'border-yellow-500 bg-yellow-50') : 'border-dark-200 hover:border-dark-300'}`}>
-                                <input type="radio" name={`variantFoodType_${idx}`} value={type.value} checked={variant.foodType === type.value} onChange={(e) => updateVariant(idx, 'foodType', e.target.value)} className="hidden" />
-                                <span className={`w-3 h-3 rounded border ${type.color === 'green' ? 'border-green-600' : type.color === 'red' ? 'border-red-600' : 'border-yellow-500'}`}>
-                                  <span className={`block w-1.5 h-1.5 rounded-full m-[1.5px] ${type.color === 'green' ? 'bg-green-600' : type.color === 'red' ? 'bg-red-600' : 'bg-yellow-500'}`}></span>
-                                </span>
-                                <span className="font-medium">{type.label}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Tags + AI */}
-                        <div>
-                          <label className="text-xs font-medium text-dark-500 mb-1.5 block">Tags</label>
-                          <div className="relative">
-                            <input type="text" value={variant.tags || ''} onChange={(e) => updateVariant(idx, 'tags', e.target.value)}
-                              className="w-full px-3 py-2.5 text-sm bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 transition-all pr-10" placeholder="spicy, popular, bestseller" />
-                            <button type="button" onClick={() => generateVariantTags(idx)} disabled={variantAiLoading[`${idx}_tags`]}
-                              className="absolute right-2 top-2 p-1.5 text-accent-500 hover:bg-accent-50 rounded-lg transition-colors" title="Generate tags with AI">
-                              <Tag className={`w-4 h-4 ${variantAiLoading[`${idx}_tags`] ? 'animate-spin' : ''}`} />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Pricing Section */}
-                        <div className="border border-dark-200 rounded-xl p-3 space-y-3 bg-dark-50/50">
-                          <div className="flex items-center justify-between">
-                            <label className="text-xs font-bold text-dark-700">Pricing & Sizes</label>
-                            <button type="button" onClick={() => addQuantityOption(idx)}
-                              className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold text-primary-600 bg-primary-50 rounded-md hover:bg-primary-100 transition-colors">
-                              <Plus className="w-3 h-3" /> Add Size
-                            </button>
+                            {(variantImagePreviews[v._uid] || v.image) &&
+                              <button type="button" onClick={() => removeVariantImage(vi)} className="text-xs text-red-500">Remove</button>}
                           </div>
 
-                          {/* Base price when no quantity options */}
-                          {(!variant.quantities || variant.quantities.length === 0) && (
-                            <div>
-                              <label className="text-[10px] text-dark-400 mb-1 block">Price (₹) *</label>
-                              <input type="number" value={variant.price || ''} onChange={(e) => updateVariant(idx, 'price', e.target.value)}
-                                className="w-full px-3 py-2 text-sm bg-white border border-dark-200 rounded-lg focus:border-primary-500 transition-all" placeholder="0" required />
+                          {/* Item Name */}
+                          <div>
+                            <label className="block text-xs font-medium text-dark-500 mb-1">Item Name</label>
+                            <input type="text" value={v.label} onChange={e => updateVariant(vi, 'label', e.target.value)}
+                              className="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-lg text-sm" placeholder="Variant name" />
+                          </div>
+
+                          {/* Description + AI */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-dark-500">Description</label>
+                              <button type="button" onClick={() => generateDescription(vi)} disabled={variantAiLoading[`desc_${vi}`]}
+                                className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-primary-600 bg-primary-50 rounded hover:bg-primary-100 disabled:opacity-50">
+                                <Sparkles className="w-3 h-3" /> {variantAiLoading[`desc_${vi}`] ? 'Generating...' : 'AI Generate'}
+                              </button>
                             </div>
-                          )}
+                            <textarea value={v.description || ''} onChange={e => updateVariant(vi, 'description', e.target.value)} rows={2}
+                              className="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-lg text-sm resize-none" />
+                          </div>
 
-                          {/* Quantity Options (sizes) */}
-                          {(variant.quantities || []).map((qty, qIdx) => (
-                            <div key={qIdx} className="bg-white rounded-lg p-2.5 border border-dark-100 space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-semibold text-dark-500">Size {qIdx + 1}</span>
-                                <button type="button" onClick={() => removeQuantityOption(idx, qIdx)}
-                                  className="p-1 text-red-400 hover:text-red-600 rounded transition-colors">
-                                  <X className="w-3 h-3" />
+                          {/* Food Type */}
+                          <div>
+                            <label className="block text-xs font-medium text-dark-500 mb-1">Food Type</label>
+                            <div className="flex gap-2">
+                              {['veg','nonveg','egg'].map(ft => (
+                                <button key={ft} type="button" onClick={() => updateVariant(vi, 'foodType', ft)}
+                                  className={`flex-1 py-2 rounded-lg text-xs font-medium border transition-all ${v.foodType === ft ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-dark-200 text-dark-600'}`}>
+                                  {ft === 'veg' ? '🟢 Veg' : ft === 'nonveg' ? '🔴 Non-Veg' : '🟡 Egg'}
                                 </button>
-                              </div>
-                              <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                  <label className="text-[10px] text-dark-400 mb-0.5 block">Quantity</label>
-                                  <input type="text" value={qty.quantity} onChange={(e) => updateQuantityOption(idx, qIdx, 'quantity', e.target.value)}
-                                    className="w-full px-2.5 py-1.5 text-xs bg-dark-50 border border-dark-200 rounded-lg" placeholder="1" />
-                                </div>
-                                <div>
-                                  <label className="text-[10px] text-dark-400 mb-0.5 block">Unit</label>
-                                  <select value={qty.unit} onChange={(e) => updateQuantityOption(idx, qIdx, 'unit', e.target.value)}
-                                    className="w-full px-2.5 py-1.5 text-xs bg-dark-50 border border-dark-200 rounded-lg">
-                                    {units.map(u => <option key={u} value={u}>{u}</option>)}
-                                  </select>
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                  <label className="text-[10px] text-dark-400 mb-0.5 block">Price (₹) *</label>
-                                  <input type="number" value={qty.price} onChange={(e) => updateQuantityOption(idx, qIdx, 'price', e.target.value)}
-                                    className="w-full px-2.5 py-1.5 text-xs bg-dark-50 border border-dark-200 rounded-lg" placeholder="0" required />
-                                </div>
-                                <div>
-                                  <label className="text-[10px] text-dark-400 mb-0.5 block">Offer Price (₹)</label>
-                                  <input type="number" value={qty.offerPrice} onChange={(e) => updateQuantityOption(idx, qIdx, 'offerPrice', e.target.value)}
-                                    className="w-full px-2.5 py-1.5 text-xs bg-dark-50 border border-dark-200 rounded-lg" placeholder="Optional" />
-                                </div>
-                              </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
+                          </div>
 
-                        {/* Available Toggle */}
-                        <div className="flex items-center justify-between py-1">
-                          <span className="text-xs font-medium text-dark-600">Available</span>
-                          <button type="button" onClick={() => updateVariant(idx, 'available', !variant.available)}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${variant.available ? 'bg-green-500' : 'bg-dark-300'}`}>
-                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${variant.available ? 'translate-x-6' : 'translate-x-1'}`} />
+                          {/* Tags + AI */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-dark-500">Tags</label>
+                              <button type="button" onClick={() => generateTags(vi)} disabled={variantAiLoading[`tags_${vi}`]}
+                                className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-primary-600 bg-primary-50 rounded hover:bg-primary-100 disabled:opacity-50">
+                                <Sparkles className="w-3 h-3" /> {variantAiLoading[`tags_${vi}`] ? 'Generating...' : 'AI Generate'}
+                              </button>
+                            </div>
+                            <input type="text" value={v.tags || ''} onChange={e => updateVariant(vi, 'tags', e.target.value)}
+                              className="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-lg text-sm" placeholder="comma separated" />
+                          </div>
+
+                          {/* Price / Quantity Options */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-dark-500">Pricing</label>
+                              <button type="button" onClick={() => addQuantityOption(vi)} className="text-[10px] font-medium text-primary-600 bg-primary-50 px-2 py-0.5 rounded hover:bg-primary-100">
+                                + Add Size
+                              </button>
+                            </div>
+                            {(!v.quantities || v.quantities.length === 0) ? (
+                              <input type="number" value={v.price || ''} onChange={e => updateVariant(vi, 'price', e.target.value)}
+                                className="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-lg text-sm" placeholder="Price ₹" />
+                            ) : (
+                              <div className="space-y-2">
+                                {v.quantities.map((q, qi) => (
+                                  <div key={qi} className="flex gap-2 items-center">
+                                    <input type="text" value={q.quantity} onChange={e => updateQuantityOption(vi, qi, 'quantity', e.target.value)}
+                                      className="w-20 px-2 py-1.5 bg-dark-50 border border-dark-200 rounded-lg text-xs" placeholder="Qty" />
+                                    <select value={q.unit || 'piece'} onChange={e => updateQuantityOption(vi, qi, 'unit', e.target.value)}
+                                      className="px-2 py-1.5 bg-dark-50 border border-dark-200 rounded-lg text-xs">
+                                      {['piece','plate','bowl','glass','bottle','kg','g','ml','l','half','full','small','medium','large','regular'].map(u => <option key={u} value={u}>{u}</option>)}
+                                    </select>
+                                    <input type="number" value={q.price} onChange={e => updateQuantityOption(vi, qi, 'price', e.target.value)}
+                                      className="w-24 px-2 py-1.5 bg-dark-50 border border-dark-200 rounded-lg text-xs" placeholder="₹ Price" />
+                                    <button type="button" onClick={() => removeQuantityOption(vi, qi)} className="text-red-400 hover:text-red-600"><X className="w-3.5 h-3.5" /></button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Available toggle */}
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-dark-500">Available</span>
+                            <button type="button" onClick={() => updateVariant(vi, 'available', !v.available)}
+                              className={`w-10 h-5 rounded-full transition-colors relative ${v.available ? 'bg-green-500' : 'bg-dark-300'}`}>
+                              <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${v.available ? 'left-5' : 'left-0.5'}`} />
+                            </button>
+                          </div>
+
+                          {/* Remove variant */}
+                          <button type="button" onClick={() => removeVariant(vi)}
+                            className="w-full py-2 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">
+                            Remove Variant
                           </button>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {/* Add Another Variant button at bottom */}
-                {form.variants && form.variants.length > 0 && (
-                  <button type="button" onClick={addVariant}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-primary-600 bg-primary-50 border border-primary-200 border-dashed rounded-xl hover:bg-primary-100 transition-colors">
-                    <Plus className="w-4 h-4" /> Add Another Variant
-                  </button>
-                )}
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              {/* Availability */}
-              <div className="flex items-center justify-between p-4 bg-dark-50 rounded-xl border border-dark-200">
-                <div className="flex items-center gap-3">
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center ${form.available ? 'bg-green-100' : 'bg-dark-200'}`}>
-                    <span className={`w-2.5 h-2.5 rounded-full ${form.available ? 'bg-green-500' : 'bg-dark-400'}`}></span>
-                  </span>
-                  <div>
-                    <span className="text-sm font-semibold text-dark-700">Available for Order</span>
-                    <p className="text-xs text-dark-400">Item will be visible to customers</p>
-                  </div>
-                </div>
+              {/* Available */}
+              <div className="flex items-center justify-between p-3 bg-dark-50 rounded-xl">
+                <span className="text-sm font-medium text-dark-700">Available</span>
                 <button type="button" onClick={() => setForm({ ...form, available: !form.available })}
-                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${form.available ? 'bg-green-500' : 'bg-dark-300'}`}>
-                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm ${form.available ? 'translate-x-6' : 'translate-x-1'}`} />
+                  className={`w-12 h-6 rounded-full transition-colors relative ${form.available ? 'bg-green-500' : 'bg-dark-300'}`}>
+                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.available ? 'left-6' : 'left-0.5'}`} />
                 </button>
               </div>
 
               {/* Submit */}
-              <button 
-                type="submit" 
-                disabled={saving}
-                className={`w-full gradient-primary text-white py-3.5 rounded-xl font-semibold transition-opacity shadow-lg shadow-primary-500/30 flex items-center justify-center gap-2 ${saving ? 'opacity-70 cursor-not-allowed' : 'hover:opacity-90'}`}
-              >
-                {saving ? (
-                  <>
-                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    {editing ? 'Updating...' : 'Adding...'}
-                  </>
-                ) : (
-                  editing ? 'Update Item' : 'Add Item'
-                )}
-              </button>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => { setShowModal(false); setEditing(null); }}
+                  className="flex-1 px-4 py-3 border border-dark-200 rounded-xl font-medium text-dark-700 hover:bg-dark-50">Cancel</button>
+                <button type="submit" disabled={saving}
+                  className="flex-1 px-4 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {saving ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving...</> : editing ? 'Update Item' : 'Add Item'}
+                </button>
+              </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Category Modal */}
+      {/* ═══════════ CATEGORY MODAL ═══════════ */}
       {showCategoryModal && (
-        <div className="modal-backdrop !mt-0" onClick={() => { setShowCategoryModal(false); setEditingCategory(null); setCategoryForm({ name: '', description: '', image: '' }); setCategoryImageFile(null); setCategoryImagePreview(''); }}>
-          <div className="modal-content w-full max-w-lg mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 border-b border-dark-100">
-              <h2 className="text-xl font-bold text-dark-900">{editingCategory ? 'Edit Category' : 'Manage Categories'}</h2>
-              <button onClick={() => { setShowCategoryModal(false); setEditingCategory(null); setCategoryForm({ name: '', description: '', image: '' }); setCategoryImageFile(null); setCategoryImagePreview(''); }} className="p-2 hover:bg-dark-100 rounded-xl transition-colors">
-                <X className="w-5 h-5 text-dark-500" />
-              </button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="border-b border-dark-100 px-6 py-4 flex items-center justify-between flex-shrink-0">
+              <h2 className="text-lg font-bold text-dark-900">{editingCategory ? 'Edit Category' : 'New Category'}</h2>
+              <button onClick={() => { setShowCategoryModal(false); setEditingCategory(null); }} className="p-2 hover:bg-dark-100 rounded-lg"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-5">
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                if (!categoryForm.name.trim()) return;
-                if (savingCategory) return; // Prevent double submission
-                setSavingCategory(true);
-                try {
-                  const formData = new FormData();
-                  formData.append('name', categoryForm.name);
-                  formData.append('description', categoryForm.description || '');
-                  
-                  // Handle image
-                  if (categoryImageFile) {
-                    formData.append('image', categoryImageFile);
-                  } else if (!categoryImagePreview && editingCategory?.image) {
-                    // Image was removed
-                    formData.append('removeImage', 'true');
-                  }
-                  
-                  if (editingCategory) {
-                    await api.put(`/categories/${editingCategory._id}`, formData, {
-                      headers: { 'Content-Type': 'multipart/form-data' }
-                    });
-                    setEditingCategory(null);
-                  } else {
-                    await api.post('/categories', formData, {
-                      headers: { 'Content-Type': 'multipart/form-data' }
-                    });
-                  }
-                  setCategoryForm({ name: '', description: '', image: '' });
-                  setCategoryImageFile(null);
-                  setCategoryImagePreview('');
-                  fetchCategories();
-                } catch (err) {
-                  alert(err.response?.data?.error || 'Failed to save category');
-                } finally {
-                  setSavingCategory(false);
-                }
-              }} className="space-y-3 mb-5">
-                <input type="text" value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
-                  placeholder="Category name" className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" required />
-                {/* Category Image Upload */}
-                <div className="space-y-2">
-                  {(categoryImagePreview || categoryForm.image) && (
-                    <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-dark-200 bg-dark-100 mx-auto">
-                      <img src={categoryImagePreview || categoryForm.image} alt="Preview" className="w-full h-full object-cover" onError={(e) => e.target.style.display = 'none'} />
-                      <button
-                        type="button"
-                        onClick={removeCategoryImage}
-                        className="absolute -top-1 -right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleCategoryImageFileChange}
-                    ref={categoryImageInputRef}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => categoryImageInputRef.current?.click()}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-dark-50 border border-dark-200 border-dashed rounded-xl hover:bg-dark-100 transition-colors text-dark-600 text-sm"
-                  >
-                    <Upload className="w-4 h-4" />
-                    {categoryImagePreview || categoryForm.image ? 'Change Image' : 'Upload Image (optional)'}
-                  </button>
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
+              {/* Image */}
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-xl bg-dark-100 overflow-hidden flex-shrink-0">
+                  {(categoryImagePreview || categoryImageFile) ?
+                    <img src={categoryImagePreview} alt="" className="w-full h-full object-cover" /> :
+                    <div className="w-full h-full flex items-center justify-center"><FolderPlus className="w-5 h-5 text-dark-300" /></div>}
                 </div>
-                <div className="flex gap-2">
-                  {editingCategory && (
-                    <button type="button" onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', description: '', image: '' }); setCategoryImageFile(null); setCategoryImagePreview(''); }}
-                      className="flex-1 bg-dark-100 text-dark-700 px-5 py-3 rounded-xl font-medium hover:bg-dark-200 transition-colors">Cancel</button>
-                  )}
-                  <button 
-                    type="submit" 
-                    disabled={savingCategory}
-                    className={`flex-1 gradient-primary text-white px-5 py-3 rounded-xl font-medium transition-opacity flex items-center justify-center gap-2 ${savingCategory ? 'opacity-70 cursor-not-allowed' : 'hover:opacity-90'}`}
-                  >
-                    {savingCategory ? (
-                      <>
-                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        {editingCategory ? 'Updating...' : 'Adding...'}
-                      </>
-                    ) : (
-                      editingCategory ? 'Update Category' : 'Add Category'
-                    )}
-                  </button>
-                </div>
-              </form>
-              <div className="flex flex-wrap gap-3 max-h-64 overflow-y-auto">
-                {categoryList.length === 0 ? (
-                  <p className="text-dark-400 text-center py-8 w-full">No categories yet</p>
-                ) : (
-                  categoryList.map(cat => (
-                    <div key={cat._id} className={`flex flex-col items-center p-3 rounded-xl relative group ${cat.isPaused ? 'bg-yellow-50 border-2 border-yellow-300' : 'bg-dark-50'}`}>
-                      <div className={`w-16 h-16 rounded-full overflow-hidden bg-dark-200 mb-2 ${cat.isPaused ? 'opacity-50' : ''}`}>
-                        {cat.image ? (
-                          <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Image className="w-6 h-6 text-dark-400" />
-                          </div>
-                        )}
+                <label className="cursor-pointer px-3 py-2 bg-primary-50 text-primary-600 rounded-lg text-sm font-medium">
+                  Upload <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files[0]; if (f) { setCategoryImageFile(f); setCategoryImagePreview(URL.createObjectURL(f)); }}} className="hidden" />
+                </label>
+                {categoryImagePreview && <button type="button" onClick={() => { setCategoryImageFile(null); setCategoryImagePreview(''); }} className="text-xs text-red-500">Remove</button>}
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-dark-700 mb-1">Name <span className="text-red-500">*</span></label>
+                <input type="text" value={categoryForm.name} onChange={e => setCategoryForm({ ...categoryForm, name: e.target.value })}
+                  className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl text-sm" placeholder="Category name" />
+              </div>
+              <button onClick={saveCategory} disabled={savingCategory || !categoryForm.name.trim()}
+                className="w-full py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 disabled:opacity-50">
+                {savingCategory ? 'Saving...' : editingCategory ? 'Update' : 'Create'}
+              </button>
+
+              {/* Category list */}
+              <div className="border-t border-dark-100 pt-4 mt-4">
+                <p className="text-sm font-semibold text-dark-700 mb-3">All Categories ({categoryList.length})</p>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {categoryList.map(cat => (
+                    <div key={cat._id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-dark-50 group">
+                      <div className="w-8 h-8 rounded-lg bg-dark-100 overflow-hidden flex-shrink-0">
+                        {cat.image ? <img src={cat.image} alt="" className="w-full h-full object-cover" /> : <FolderPlus className="w-4 h-4 text-dark-300 m-2" />}
                       </div>
-                      <span className={`font-medium text-sm text-center ${cat.isPaused ? 'text-yellow-700' : 'text-dark-800'}`}>{cat.name}</span>
-                      {cat.isPaused && <span className="text-xs text-yellow-600 font-medium">Paused</span>}
-                      {/* Pause/Resume button */}
-                      <button onClick={async () => {
-                        try {
-                          await api.patch(`/categories/${cat._id}/toggle-pause`);
-                          fetchCategories();
-                        } catch (err) {
-                          alert('Failed to toggle pause status');
-                        }
-                      }} className={`absolute -top-1 left-1/2 -translate-x-1/2 p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${cat.isPaused ? 'bg-green-500 text-white' : 'bg-yellow-500 text-white'}`} title={cat.isPaused ? 'Resume category' : 'Pause category'}>
-                        {cat.isPaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
-                      </button>
-                      {/* Edit button */}
-                      <button onClick={() => {
-                        setEditingCategory(cat);
-                        setCategoryForm({ name: cat.name, description: cat.description || '', image: cat.image || '' });
-                        setCategoryImagePreview(cat.image || '');
-                        setCategoryImageFile(null);
-                      }} className="absolute -top-1 -left-1 p-1.5 bg-primary-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Edit className="w-3 h-3" />
-                      </button>
-                      {/* Delete button */}
-                      <button onClick={() => {
-                        // Count items that will be affected
-                        const itemsInCategory = items.filter(item => {
-                          const itemCats = Array.isArray(item.category) ? item.category : [item.category];
-                          return itemCats.includes(cat.name);
-                        });
-                        const itemsToDelete = itemsInCategory.filter(item => {
-                          const itemCats = Array.isArray(item.category) ? item.category : [item.category];
-                          return itemCats.length === 1;
-                        });
-                        const itemsToUpdate = itemsInCategory.filter(item => {
-                          const itemCats = Array.isArray(item.category) ? item.category : [item.category];
-                          return itemCats.length > 1;
-                        });
-                        
-                        let warningMessage = `Are you sure you want to delete "${cat.name}" category?\n\n`;
-                        if (itemsToDelete.length > 0) {
-                          warningMessage += `⚠️ ${itemsToDelete.length} item(s) will be PERMANENTLY DELETED (they only belong to this category)\n`;
-                        }
-                        if (itemsToUpdate.length > 0) {
-                          warningMessage += `📝 ${itemsToUpdate.length} item(s) will have this category removed\n`;
-                        }
-                        if (itemsInCategory.length === 0) {
-                          warningMessage += `No items are linked to this category.`;
-                        }
-                        
-                        setConfirmDialog({
-                          show: true,
-                          title: 'Delete Category',
-                          message: warningMessage,
-                          itemsToDelete: itemsToDelete.length,
-                          itemsToUpdate: itemsToUpdate.length,
-                          onConfirm: async () => {
-                            setDeleting(true);
-                            try {
-                              await api.delete(`/categories/${cat._id}`);
-                              fetchCategories();
-                              fetchItems();
-                            } catch (err) {
-                              alert('Failed to delete category');
-                            } finally {
-                              setDeleting(false);
-                              setConfirmDialog({ show: false, title: '', message: '', onConfirm: null });
-                            }
-                          }
-                        });
-                      }} className="absolute -top-1 -right-1 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                        <X className="w-3 h-3" />
-                      </button>
+                      <span className="flex-1 text-sm text-dark-700 truncate">{cat.name}</span>
+                      {cat.isPaused && <span className="px-1.5 py-0.5 text-[9px] bg-red-100 text-red-600 rounded">Paused</span>}
+                      <div className="hidden group-hover:flex gap-1">
+                        <button onClick={() => handleBulkPause(cat.name)} disabled={bulkPausingCategory === cat.name}
+                          className="p-1 text-blue-500 hover:bg-blue-50 rounded" title={cat.isPaused ? 'Resume' : 'Pause'}>
+                          {cat.isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+                        </button>
+                        <button onClick={() => openCategoryModal(cat)} className="p-1 text-dark-500 hover:bg-dark-100 rounded"><Edit className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => deleteCategory(cat)} className="p-1 text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
                     </div>
-                  ))
-                )}
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Confirm Dialog */}
-      {confirmDialog.show && (
-        <div className="modal-backdrop !mt-0" onClick={() => !deleting && setConfirmDialog({ show: false, title: '', message: '', onConfirm: null })}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="p-6 text-center">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 className="w-8 h-8 text-red-500" />
-              </div>
-              <h3 className="text-xl font-bold text-dark-900 mb-2">{confirmDialog.title}</h3>
-              <div className="text-dark-500 text-left whitespace-pre-line">{confirmDialog.message}</div>
-              {(confirmDialog.itemsToDelete > 0) && (
-                <div className="mt-3 p-3 bg-red-50 rounded-xl border border-red-200">
-                  <p className="text-red-600 text-sm font-medium">
-                    ⚠️ {confirmDialog.itemsToDelete} item(s) will be permanently deleted!
-                  </p>
-                </div>
-              )}
-            </div>
-            <div className="flex border-t border-dark-100">
-              <button
-                onClick={() => setConfirmDialog({ show: false, title: '', message: '', onConfirm: null })}
-                disabled={deleting}
-                className={`flex-1 px-6 py-4 text-dark-600 font-medium transition-colors ${deleting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-dark-50'}`}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDialog.onConfirm}
-                disabled={deleting}
-                className={`flex-1 px-6 py-4 bg-red-500 text-white font-medium transition-colors flex items-center justify-center gap-2 ${deleting ? 'opacity-70 cursor-not-allowed' : 'hover:bg-red-600'}`}
-              >
-                {deleting ? (
-                  <>
-                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Deleting...
-                  </>
-                ) : (
-                  'Delete'
-                )}
-              </button>
+      {/* ═══════════ SOLD OUT OPTIONS MODAL (matching mobile's Alert) ═══════════ */}
+      {soldOutModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-3">
+            <h3 className="text-lg font-bold text-dark-900">
+              {soldOutModal.type === 'item' ? soldOutModal.target?.name : soldOutModal.target?.name}
+            </h3>
+            <p className="text-sm text-dark-500">Choose an action:</p>
+            <button onClick={() => {
+              if (soldOutModal.type === 'item') markVariantsSoldOut(soldOutModal.target._id, false);
+              else toggleCategorySoldOut(soldOutModal.target);
+              setSoldOutModal(null);
+            }} className="w-full py-2.5 bg-green-50 text-green-700 rounded-xl font-medium hover:bg-green-100 transition-colors">
+              ✅ Mark Available
+            </button>
+            <button onClick={() => {
+              if (soldOutModal.type === 'item') markVariantsSoldOut(soldOutModal.target._id, true);
+              else toggleCategorySoldOut(soldOutModal.target);
+              setSoldOutModal(null);
+            }} className="w-full py-2.5 bg-red-50 text-red-700 rounded-xl font-medium hover:bg-red-100 transition-colors">
+              🚫 Sold Out Now
+            </button>
+            <button onClick={() => {
+              setScheduleModal(soldOutModal);
+              setScheduleSoldOutTime('');
+              setSoldOutModal(null);
+            }} className="w-full py-2.5 bg-orange-50 text-orange-700 rounded-xl font-medium hover:bg-orange-100 transition-colors">
+              ⏰ Schedule Sold Out
+            </button>
+            <button onClick={() => setSoldOutModal(null)} className="w-full py-2 text-dark-500 text-sm">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ SCHEDULE SOLD OUT MODAL ═══════════ */}
+      {scheduleModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="text-lg font-bold text-dark-900">Schedule Sold Out</h3>
+            <p className="text-sm text-dark-500">Mark as sold out until:</p>
+            <input type="time" value={scheduleSoldOutTime} onChange={e => setScheduleSoldOutTime(e.target.value)}
+              className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl text-sm" />
+            <div className="flex gap-3">
+              <button onClick={() => setScheduleModal(null)} className="flex-1 py-2.5 border border-dark-200 rounded-xl font-medium text-dark-700">Cancel</button>
+              <button onClick={handleScheduleSoldOut} disabled={!scheduleSoldOutTime}
+                className="flex-1 py-2.5 bg-primary-600 text-white rounded-xl font-medium disabled:opacity-50">Schedule</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Schedule Sold Out Modal */}
-      {scheduleModal.show && (
-        <div className="modal-backdrop !mt-0" onClick={() => { setScheduleModal({ show: false, item: null, type: 'item' }); setScheduleSoldOutTime(''); }}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-                  <CalendarClock className="w-6 h-6 text-orange-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-dark-900">Schedule Sold Out</h3>
-                  <p className="text-sm text-dark-500">{scheduleModal.item?.name}</p>
-                </div>
+      {/* ═══════════ CATEGORY SCHEDULE MODAL ═══════════ */}
+      {categoryScheduleModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-lg font-bold text-dark-900">Schedule: {categoryScheduleModal.name}</h3>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-dark-700">Enabled</span>
+              <button type="button" onClick={() => setCategorySchedule(p => ({ ...p, enabled: !p.enabled }))}
+                className={`w-10 h-5 rounded-full transition-colors relative ${categorySchedule.enabled ? 'bg-green-500' : 'bg-dark-300'}`}>
+                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${categorySchedule.enabled ? 'left-5' : 'left-0.5'}`} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-dark-500 mb-1">Start Time</label>
+                <input type="time" value={categorySchedule.startTime} onChange={e => setCategorySchedule(p => ({ ...p, startTime: e.target.value }))}
+                  className="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-lg text-sm" />
               </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-dark-700 mb-2">Sold out until</label>
-                  <input
-                    type="datetime-local"
-                    value={scheduleSoldOutTime}
-                    onChange={(e) => setScheduleSoldOutTime(e.target.value)}
-                    min={new Date().toISOString().slice(0, 16)}
-                    className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all"
-                  />
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => { setScheduleModal({ show: false, item: null, type: 'item' }); setScheduleSoldOutTime(''); }}
-                    className="flex-1 px-4 py-3 bg-dark-100 text-dark-700 rounded-xl font-medium hover:bg-dark-200 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleScheduleSoldOut}
-                    disabled={!scheduleSoldOutTime}
-                    className="flex-1 px-4 py-3 bg-orange-500 text-white rounded-xl font-medium hover:bg-orange-600 transition-colors disabled:opacity-50"
-                  >
-                    Schedule
-                  </button>
-                </div>
+              <div>
+                <label className="block text-xs text-dark-500 mb-1">End Time</label>
+                <input type="time" value={categorySchedule.endTime} onChange={e => setCategorySchedule(p => ({ ...p, endTime: e.target.value }))}
+                  className="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-lg text-sm" />
               </div>
+            </div>
+            <div>
+              <label className="block text-xs text-dark-500 mb-1">Type</label>
+              <div className="flex gap-2">
+                {['daily','specific_days'].map(t => (
+                  <button key={t} type="button" onClick={() => setCategorySchedule(p => ({ ...p, type: t }))}
+                    className={`flex-1 py-2 rounded-lg text-xs font-medium border ${categorySchedule.type === t ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-dark-200 text-dark-600'}`}>
+                    {t === 'daily' ? 'Daily' : 'Specific Days'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {categorySchedule.type === 'specific_days' && (
+              <div className="flex flex-wrap gap-1.5">
+                {['sunday','monday','tuesday','wednesday','thursday','friday','saturday'].map(d => (
+                  <button key={d} type="button" onClick={() => {
+                    const days = categorySchedule.days?.includes(d) ? categorySchedule.days.filter(x => x !== d) : [...(categorySchedule.days || []), d];
+                    setCategorySchedule(p => ({ ...p, days }));
+                  }} className={`px-2.5 py-1 rounded-lg text-xs font-medium capitalize ${categorySchedule.days?.includes(d) ? 'bg-primary-500 text-white' : 'bg-dark-100 text-dark-600'}`}>
+                    {d.slice(0, 3)}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button onClick={() => setCategoryScheduleModal(null)} className="flex-1 py-2.5 border border-dark-200 rounded-xl font-medium text-dark-700">Cancel</button>
+              <button onClick={handleSaveCategorySchedule} className="flex-1 py-2.5 bg-primary-600 text-white rounded-xl font-medium">Save Schedule</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ CONFIRM DIALOG ═══════════ */}
+      {confirmDialog && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="text-lg font-bold text-dark-900">{confirmDialog.title}</h3>
+            <p className="text-sm text-dark-500">{confirmDialog.message}</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDialog(null)} className="flex-1 py-2.5 border border-dark-200 rounded-xl font-medium text-dark-700">Cancel</button>
+              <button onClick={confirmDialog.onConfirm} disabled={deleting}
+                className="flex-1 py-2.5 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 disabled:opacity-50">
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
             </div>
           </div>
         </div>

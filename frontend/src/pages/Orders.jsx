@@ -1,1117 +1,916 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  RefreshCw, X, Truck, ChefHat, CheckCircle, Package, Clock, 
-  Filter, Search, MapPin, CreditCard, ExternalLink, ChevronDown, ChevronUp, User,
-  History
-} from 'lucide-react';
+/* eslint-disable no-alert */
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Search, X, Filter, Phone, Truck, ShoppingBag, Clock, CheckCircle, Package, ArrowRight, RefreshCw, User, MapPin, CreditCard, Image, ChevronLeft } from 'lucide-react';
 import api from '../api';
 
-// Smart diff function to detect actual changes
-const getOrderChanges = (oldOrders, newOrders) => {
-  const changedIds = new Set();
-  const oldMap = new Map(oldOrders.map(o => [o._id, o]));
-  const newMap = new Map(newOrders.map(o => [o._id, o]));
-  
-  // Check for new or modified orders
-  newOrders.forEach(newOrder => {
-    const oldOrder = oldMap.get(newOrder._id);
-    if (!oldOrder) {
-      changedIds.add(newOrder._id); // New order
-    } else if (
-      oldOrder.status !== newOrder.status ||
-      oldOrder.paymentStatus !== newOrder.paymentStatus ||
-      oldOrder.refundStatus !== newOrder.refundStatus ||
-      oldOrder.deliveryPartnerName !== newOrder.deliveryPartnerName ||
-      oldOrder.assignedTo !== newOrder.assignedTo ||
-      oldOrder.updatedAt !== newOrder.updatedAt
-    ) {
-      changedIds.add(newOrder._id); // Modified order
-    }
-  });
-  
-  // Check for removed orders
-  oldOrders.forEach(oldOrder => {
-    if (!newMap.has(oldOrder._id)) {
-      changedIds.add(oldOrder._id);
-    }
-  });
-  
-  return changedIds;
+/* ─── constants ─── */
+const STATUS_CONFIG = {
+  pending:          { color: '#F59E0B', bg: '#FEF3C7', label: 'Pending' },
+  confirmed:        { color: '#3B82F6', bg: '#DBEAFE', label: 'Confirmed' },
+  preparing:        { color: '#8B5CF6', bg: '#EDE9FE', label: 'Preparing' },
+  ready:            { color: '#10B981', bg: '#D1FAE5', label: 'Ready' },
+  out_for_delivery: { color: '#06B6D4', bg: '#CFFAFE', label: 'Out for Delivery' },
+  delivered:        { color: '#22C55E', bg: '#DCFCE7', label: 'Delivered' },
+  cancelled:        { color: '#EF4444', bg: '#FEE2E2', label: 'Cancelled' },
+  refunded:         { color: '#6B7280', bg: '#F3F4F6', label: 'Refunded' },
 };
-
-const statusConfig = {
-  pending: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500', icon: Clock, label: 'Pending' },
-  confirmed: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500', icon: CheckCircle, label: 'Confirmed' },
-  preparing: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500', icon: ChefHat, label: 'Preparing' },
-  ready: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', dot: 'bg-purple-500', icon: Package, label: 'Ready' },
-  out_for_delivery: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-500', icon: Truck, label: 'On the Way' },
-  delivered: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', dot: 'bg-green-500', icon: CheckCircle, label: 'Delivered' },
-  cancelled: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', dot: 'bg-red-500', icon: X, label: 'Cancelled' },
-  refunded: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-300', dot: 'bg-green-600', icon: RefreshCw, label: 'Refunded' },
-  refund_failed: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', dot: 'bg-red-600', icon: X, label: 'Refund Failed' },
-  refund_processing: { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200', dot: 'bg-pink-500', icon: RefreshCw, label: 'Refund Processing' }
-};
-
-const filterOptions = [
-  { value: '', label: 'All Orders', color: 'bg-dark-100 text-dark-700' },
-  { value: 'pending', label: 'Pending', color: 'bg-amber-50 text-amber-700' },
-  { value: 'confirmed', label: 'Confirmed', color: 'bg-blue-50 text-blue-700' },
-  { value: 'preparing', label: 'Preparing', color: 'bg-orange-50 text-orange-700' },
-  { value: 'ready', label: 'Ready', color: 'bg-purple-50 text-purple-700' },
-  { value: 'out_for_delivery', label: 'On the Way', color: 'bg-indigo-50 text-indigo-700' },
-  { value: 'delivered', label: 'Delivered', color: 'bg-green-50 text-green-700' },
-  { value: 'cancelled', label: 'Cancelled', color: 'bg-red-50 text-red-700' },
+const DELIVERY_STATUS_FLOW = ['pending','confirmed','preparing','ready','out_for_delivery','delivered'];
+const PICKUP_STATUS_FLOW = ['pending','confirmed','ready','delivered'];
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'Newest First' },
+  { value: 'oldest', label: 'Oldest First' },
+  { value: 'amount_high', label: 'Amount: High → Low' },
+  { value: 'amount_low', label: 'Amount: Low → High' },
 ];
-
-// Custom Dropdown Component
-const StatusDropdown = ({ value, onChange, options }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
-  const selected = options.find(opt => opt.value === value) || options[0];
-
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  return (
-    <div ref={dropdownRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 pl-3 pr-8 py-2.5 bg-white border border-dark-200 rounded-xl cursor-pointer focus:border-primary-500 transition-colors min-w-[160px]"
-      >
-        <Filter className="w-4 h-4 text-dark-400" />
-        <span className={`px-2 py-0.5 rounded-md text-sm font-medium ${selected.color}`}>
-          {selected.label}
-        </span>
-        <svg className={`absolute right-3 w-4 h-4 text-dark-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-      
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-full bg-white border border-dark-200 rounded-xl shadow-lg z-50 overflow-hidden">
-          {options.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => {
-                onChange(opt.value);
-                setIsOpen(false);
-              }}
-              className={`w-full px-3 py-2.5 text-left text-sm font-medium transition-colors flex items-center gap-2
-                ${value === opt.value ? 'bg-primary-50' : 'hover:bg-dark-50'}
-              `}
-            >
-              <span className={`w-2 h-2 rounded-full ${opt.color.replace('bg-', 'bg-').replace('-50', '-500').replace('-100', '-500')}`}></span>
-              <span className={opt.color.split(' ')[1]}>{opt.label}</span>
-              {value === opt.value && (
-                <CheckCircle className="w-4 h-4 text-primary-500 ml-auto" />
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+const HISTORY_PAYMENT_STATUS = {
+  paid: { color: '#22C55E', label: 'Paid' },
+  'upi/app': { color: '#3B82F6', label: 'UPI/App' },
+  'paid (upi)': { color: '#22C55E', label: 'Paid (UPI)' },
+  'paid (cash)': { color: '#22C55E', label: 'Paid (Cash)' },
+  'paid at hotel': { color: '#22C55E', label: 'Paid at Hotel' },
+  unpaid: { color: '#EF4444', label: 'Unpaid' },
+  refunded: { color: '#8B5CF6', label: 'Refunded' },
+  pending: { color: '#F59E0B', label: 'Pending' },
+  cod: { color: '#22C55E', label: 'COD Paid' },
+  cancelled_upi: { color: '#EF4444', label: 'UPI/App' },
+  cancelled_payathotel: { color: '#EF4444', label: 'Pay at Hotel' },
+  cancelled_cod: { color: '#EF4444', label: 'COD' },
+  cancelled: { color: '#EF4444', label: 'Cancelled' },
 };
 
-// API base URL for images
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api').replace('/api', '');
+/* helpers */
+const fmtDate = (d) => { if (!d) return ''; const dt = new Date(d); return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); };
+const fmtTime = (d) => { if (!d) return ''; return new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); };
+const isToday = (d) => { const dt = new Date(d); const now = new Date(); return dt.toDateString() === now.toDateString(); };
+const isYesterday = (d) => { const dt = new Date(d); const y = new Date(); y.setDate(y.getDate() - 1); return dt.toDateString() === y.toDateString(); };
+const isThisWeek = (d) => { const dt = new Date(d); const now = new Date(); const diff = now - dt; return diff < 7 * 86400000; };
+const isThisMonth = (d) => { const dt = new Date(d); const now = new Date(); return dt.getMonth() === now.getMonth() && dt.getFullYear() === now.getFullYear(); };
 
-// Scrollable Items List Component
-const ScrollableItemsList = ({ items }) => {
-  const scrollRef = useRef(null);
-  const [showDownArrow, setShowDownArrow] = useState(false);
-  const [showUpArrow, setShowUpArrow] = useState(false);
-
-  const checkScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const isAtTop = el.scrollTop <= 5;
-    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 5;
-    const hasScroll = el.scrollHeight > el.clientHeight;
-    
-    setShowUpArrow(hasScroll && !isAtTop);
-    setShowDownArrow(hasScroll && !isAtBottom);
-  }, []);
-
-  useEffect(() => {
-    checkScroll();
-  }, [items, checkScroll]);
-
-  const scrollToEnd = (direction) => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTo({
-      top: direction === 'down' ? el.scrollHeight : 0,
-      behavior: 'smooth'
-    });
-  };
-
-  return (
-    <div className="relative">
-      <div 
-        ref={scrollRef} 
-        className="space-y-2.5 max-h-64 overflow-y-auto pr-1" 
-        onScroll={checkScroll}
-      >
-        {items?.map((item, i) => {
-          // Resolve image: item.image > variant image from populated menuItem > menuItem.image
-          const variantImg = item.variantIndex !== null && item.menuItem?.variants?.[item.variantIndex]?.image 
-            ? item.menuItem.variants[item.variantIndex].image 
-            : null;
-          const rawImg = item.image || variantImg || item.menuItem?.image;
-          const imgSrc = rawImg ? (rawImg.startsWith('http') ? rawImg : `${API_BASE_URL}${rawImg}`) : null;
-          
-          return (
-            <div key={i} className="flex items-center gap-3 bg-white rounded-xl p-2.5 shadow-sm border border-dark-100/60">
-              {/* Item Image */}
-              <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-dark-100">
-                {imgSrc ? (
-                  <img 
-                    src={imgSrc} 
-                    alt={item.name} 
-                    className="w-full h-full object-cover"
-                    onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                  />
-                ) : null}
-                <div className={`w-full h-full items-center justify-center bg-primary-50 ${imgSrc ? 'hidden' : 'flex'}`}>
-                  <span className="text-lg">🍽️</span>
-                </div>
-              </div>
-              {/* Item Details */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-dark-800 truncate">{item.name}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs text-dark-400">Qty: {item.quantity}</span>
-                  {item.unitQty && item.unit && (
-                    <span className="text-xs text-dark-400">• {item.unitQty} {item.unit}</span>
-                  )}
-                  <span className="text-xs text-dark-400">• ₹{item.price} each</span>
-                </div>
-              </div>
-              {/* Item Total Price */}
-              <div className="flex-shrink-0 text-right">
-                <p className="text-sm font-bold text-dark-900">₹{item.price * item.quantity}</p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      {(showDownArrow || showUpArrow) && (
-        <button
-          onClick={() => scrollToEnd(showDownArrow ? 'down' : 'up')}
-          className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-6 h-6 bg-white rounded-full shadow-md flex items-center justify-center hover:bg-dark-50 transition-colors border border-dark-100"
-        >
-          {showDownArrow ? (
-            <ChevronDown className="w-4 h-4 text-dark-500" />
-          ) : (
-            <ChevronUp className="w-4 h-4 text-dark-500" />
-          )}
-        </button>
-      )}
-    </div>
-  );
+/* parse history item strings: "Name Qty: 1 × ₹99 = ₹99" */
+const parseItemString = (str) => {
+  if (!str) return null;
+  const m = str.trim().match(/^(.+?)\s*Qty:\s*(\d+)\s*[×x]\s*₹([\d.]+)\s*=\s*₹([\d.]+)$/);
+  if (m) return { name: m[1].trim(), quantity: parseInt(m[2]), price: parseFloat(m[3]), totalPrice: parseFloat(m[4]) };
+  const m2 = str.trim().match(/^(.+?)\s*x(\d+)\s*\(₹([\d.]+)\)$/);
+  if (m2) return { name: m2[1].trim(), quantity: parseInt(m2[2]), totalPrice: parseFloat(m2[3]), price: parseFloat(m2[3]) / parseInt(m2[2]) };
+  return { name: str.trim(), quantity: 1, price: 0, totalPrice: 0 };
 };
-
-// Skeleton Component
-const OrderSkeleton = () => (
-  <div className="bg-white rounded-2xl shadow-card overflow-hidden animate-pulse">
-    <div className="px-5 py-4 border-b border-dark-100">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-dark-100"></div>
-          <div>
-            <div className="h-4 w-24 bg-dark-100 rounded mb-1.5"></div>
-            <div className="h-3 w-16 bg-dark-100 rounded"></div>
-          </div>
-        </div>
-        <div className="h-6 w-20 bg-dark-100 rounded-lg"></div>
-      </div>
-      <div className="flex items-center gap-2.5">
-        <div className="w-8 h-8 bg-dark-100 rounded-full"></div>
-        <div>
-          <div className="h-4 w-20 bg-dark-100 rounded mb-1"></div>
-          <div className="h-3 w-24 bg-dark-100 rounded"></div>
-        </div>
-      </div>
-    </div>
-    <div className="p-5 space-y-4">
-      <div className="bg-dark-50 rounded-xl p-3">
-        <div className="flex items-center justify-between mb-2.5">
-          <div className="h-3 w-20 bg-dark-200 rounded"></div>
-          <div className="h-3 w-12 bg-dark-200 rounded"></div>
-        </div>
-        <div className="space-y-2">
-          <div className="bg-white rounded-lg px-3 py-2 flex items-center gap-2">
-            <div className="w-6 h-6 bg-dark-100 rounded-md"></div>
-            <div className="h-4 flex-1 bg-dark-100 rounded"></div>
-          </div>
-          <div className="bg-white rounded-lg px-3 py-2 flex items-center gap-2">
-            <div className="w-6 h-6 bg-dark-100 rounded-md"></div>
-            <div className="h-4 w-3/4 bg-dark-100 rounded"></div>
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center justify-between pt-2 border-t border-dark-100">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-dark-100 rounded"></div>
-          <div className="h-4 w-16 bg-dark-100 rounded"></div>
-        </div>
-        <div className="h-6 w-16 bg-dark-100 rounded"></div>
-      </div>
-    </div>
-  </div>
-);
 
 export default function Orders() {
+  /* ═══════════ STATE ═══════════ */
+  const [mainTab, setMainTab] = useState('live'); // 'live' | 'history'
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('');
+  const [serviceTypeTab, setServiceTypeTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [updatedIds, setUpdatedIds] = useState(new Set());
-  const [updatingId, setUpdatingId] = useState(null);
-  const [deliveryPartners, setDeliveryPartners] = useState([]);
-  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  const [loadingPartners, setLoadingPartners] = useState(false);
-  const ordersRef = useRef([]);
-  const hashRef = useRef('');
-  const initialLoadDone = useRef(false);
-  const isPollingRef = useRef(false);
-  
-  // New filters matching mobile app
-  const [serviceTypeTab, setServiceTypeTab] = useState('all'); // all, delivery, pickup
-  const [paymentFilter, setPaymentFilter] = useState('all'); // all, paid, pending, cod
-  const [sortBy, setSortBy] = useState('newest'); // newest, oldest, amount_high, amount_low
-  const [dateFilter, setDateFilter] = useState('all'); // all, today, week, month
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [paymentFilter, setPaymentFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('newest');
+  const [dateFilter, setDateFilter] = useState('all');
+  const [minAmount, setMinAmount] = useState('');
+  const [maxAmount, setMaxAmount] = useState('');
   const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [activeTab, setActiveTab] = useState('live'); // live, history
-  const [orderHistory, setOrderHistory] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historySearchTerm, setHistorySearchTerm] = useState('');
-  const [orderDetailModal, setOrderDetailModal] = useState(null);
 
-  // Fetch delivery partners
-  const fetchDeliveryPartners = useCallback(async () => {
-    setLoadingPartners(true);
+  // Order detail
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  // Delivery partner modal
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [deliveryPartners, setDeliveryPartners] = useState([]);
+  const [loadingPartners, setLoadingPartners] = useState(false);
+  const [assigningPartnerId, setAssigningPartnerId] = useState(null);
+
+  // Payment method modal (pickup completion)
+  const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
+
+  // Cancel confirm
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  // History
+  const [historyOrders, setHistoryOrders] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const [historyStatusFilter, setHistoryStatusFilter] = useState('all');
+  const [historyDisplayCount, setHistoryDisplayCount] = useState(15);
+  const [menuItems, setMenuItems] = useState([]);
+  const historyLoaded = useRef(false);
+
+  // SSE / polling
+  const sseRef = useRef(null);
+  const pollRef = useRef(null);
+  const POLL_INTERVAL = 15000;
+
+  /* ═══════════ LIVE ORDERS FETCH ═══════════ */
+  const fetchOrders = useCallback(async () => {
     try {
-      const res = await api.get('/delivery');
-      // Show all delivery partners, not just active ones
-      setDeliveryPartners(res.data || []);
-    } catch (err) {
-      console.error('Failed to fetch delivery partners:', err);
-    } finally {
-      setLoadingPartners(false);
-    }
+      const r = await api.get('/orders');
+      setOrders(r.data || []);
+    } catch { /* silent */ }
   }, []);
 
-  // Fetch full orders data
-  const fetchOrders = useCallback(async (isBackground = false) => {
+  /* ═══════════ SSE + POLLING ═══════════ */
+  const connectSSE = useCallback(() => {
     try {
-      if (!isBackground && !initialLoadDone.current) setLoading(true);
-      const res = await api.get(`/orders${filter ? `?status=${filter}` : ''}`);
-      const newOrders = res.data?.orders || [];
-      const newHash = res.data?.hash || '';
-      
-      // Only update if there are actual changes (background refresh)
-      if (isBackground && ordersRef.current.length > 0) {
-        const changedIds = getOrderChanges(ordersRef.current, newOrders);
-        if (changedIds.size > 0) {
-          setUpdatedIds(changedIds);
-          setTimeout(() => setUpdatedIds(new Set()), 2000);
-        }
-      }
-      
-      ordersRef.current = newOrders;
-      hashRef.current = newHash;
-      setOrders(newOrders);
-      initialLoadDone.current = true;
-    } catch {
-      if (!isBackground) setOrders([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [filter]);
+      const token = localStorage.getItem('token');
+      const baseURL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api').replace('/api', '');
+      const es = new EventSource(`${baseURL}/api/events?token=${token}`);
+      es.onmessage = (evt) => {
+        try {
+          const data = JSON.parse(evt.data);
+          if (data.type === 'new_order' || data.type === 'order_update' || data.type === 'order_status') {
+            fetchOrders();
+          }
+        } catch { /* ignore */ }
+      };
+      es.onerror = () => { es.close(); sseRef.current = null; startPolling(); };
+      sseRef.current = es;
+    } catch { startPolling(); }
+  }, [fetchOrders, startPolling]);
 
-  // Lightweight check for updates (minimal backend load)
-  const checkForUpdates = useCallback(async () => {
-    if (isPollingRef.current) return;
-    isPollingRef.current = true;
-    
-    try {
-      const params = new URLSearchParams();
-      if (filter) params.append('status', filter);
-      if (hashRef.current) params.append('lastHash', hashRef.current);
-      
-      const res = await api.get(`/orders/check-updates?${params}`);
-      
-      // Only fetch full data if there are changes
-      if (res.data?.hasChanges) {
-        await fetchOrders(true);
-      }
-    } catch {
-      // Silent fail for background checks
-    } finally {
-      isPollingRef.current = false;
-    }
-  }, [filter, fetchOrders]);
-
-  // Initial load
-  useEffect(() => { 
-    initialLoadDone.current = false;
-    hashRef.current = '';
-    fetchOrders(false); 
+  const startPolling = useCallback(() => {
+    if (pollRef.current) return;
+    pollRef.current = setInterval(fetchOrders, POLL_INTERVAL);
   }, [fetchOrders]);
 
-  // SSE for real-time updates (primary method)
-  useEffect(() => {
-    let eventSource = null;
-    let reconnectTimeout = null;
-    const connect = () => {
-      const baseUrl = api.defaults.baseURL?.replace('/api', '') || '';
-      const token = localStorage.getItem('token');
-      eventSource = new EventSource(`${baseUrl}/api/events${token ? '?token=' + token : ''}`);
-      
-      eventSource.onmessage = (event) => {
-        try {
-          const { type } = JSON.parse(event.data);
-          // Immediately fetch orders when SSE event received for instant updates
-          if (type === 'orders') fetchOrders(true);
-        } catch { /* ignored */ }
-      };
-      
-      eventSource.onerror = () => {
-        eventSource?.close();
-        reconnectTimeout = setTimeout(connect, 3000);
-      };
-    };
-    
-    connect();
-    
-    return () => {
-      eventSource?.close();
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checkForUpdates]);
-
-  // Fallback polling (only if SSE fails, checks every 30s)
-  useEffect(() => {
-    const pollInterval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        checkForUpdates();
-      }
-    }, 30000);
-    
-    // Also check when tab becomes visible
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        checkForUpdates();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    
-    return () => {
-      clearInterval(pollInterval);
-      document.removeEventListener('visibilitychange', handleVisibility);
-    };
-  }, [checkForUpdates]);
-
-  const updateStatus = async (id, status, deliveryBoyId = null) => {
-    if (updatingId === id) return;
-    setUpdatingId(id);
-    setOrders(prev => prev.map(o => o._id === id ? { ...o, status } : o));
-    ordersRef.current = ordersRef.current.map(o => o._id === id ? { ...o, status } : o);
-    setUpdatedIds(new Set([id]));
-    setTimeout(() => setUpdatedIds(new Set()), 1500);
-    try {
-      await api.put(`/orders/${id}/status`, { status });
-      // If delivery partner is selected, assign them
-      if (deliveryBoyId) {
-        await api.put(`/orders/${id}/assign-delivery`, { deliveryBoyId });
-      }
-    } catch {
-      alert('Failed to update status');
-      fetchOrders(false);
-    } finally {
-      setUpdatingId(null);
-      setShowDeliveryModal(false);
-      setSelectedOrder(null);
-    }
-  };
-
-  // Handle start preparing with delivery partner selection
-  const handleStartPreparing = async (order) => {
-    if (order.serviceType === 'delivery') {
-      setSelectedOrder(order);
-      await fetchDeliveryPartners();
-      setShowDeliveryModal(true);
-    } else {
-      // For non-delivery orders, just update status
-      updateStatus(order._id, 'preparing');
-    }
-  };
-
-  // Assign delivery partner and update status
-  const assignAndPrepare = (deliveryBoyId) => {
-    if (selectedOrder) {
-      updateStatus(selectedOrder._id, 'preparing', deliveryBoyId);
-    }
-  };
-
-  const processRefund = async (orderId) => {
-    if (updatingId) return;
-    if (!confirm(`Process refund for order ${orderId}?`)) return;
-    
-    const order = orders.find(o => o.orderId === orderId);
-    if (!order) return;
-    
-    setUpdatingId(order._id);
-    try {
-      await api.post(`/payment/process-refund/${orderId}`);
-      fetchOrders(false);
-    } catch (err) {
-      alert(err.response?.data?.error || 'Failed to process refund');
-      fetchOrders(false);
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.orderId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer?.phone?.includes(searchTerm) ||
-      order.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesServiceType = serviceTypeTab === 'all' || order.serviceType === serviceTypeTab;
-    const matchesPayment = paymentFilter === 'all' || 
-      (paymentFilter === 'paid' && order.paymentStatus === 'paid') ||
-      (paymentFilter === 'pending' && order.paymentStatus === 'pending') ||
-      (paymentFilter === 'cod' && order.paymentMethod === 'cod');
-    
-    // Date filter
-    let matchesDate = true;
-    if (dateFilter !== 'all') {
-      const orderDate = new Date(order.createdAt);
-      const now = new Date();
-      if (dateFilter === 'today') {
-        matchesDate = orderDate.toDateString() === now.toDateString();
-      } else if (dateFilter === 'week') {
-        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        matchesDate = orderDate >= weekAgo;
-      } else if (dateFilter === 'month') {
-        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        matchesDate = orderDate >= monthAgo;
-      }
-    }
-    
-    return matchesSearch && matchesServiceType && matchesPayment && matchesDate;
-  }).sort((a, b) => {
-    if (sortBy === 'newest') return new Date(b.createdAt) - new Date(a.createdAt);
-    if (sortBy === 'oldest') return new Date(a.createdAt) - new Date(b.createdAt);
-    if (sortBy === 'amount_high') return (b.totalAmount || 0) - (a.totalAmount || 0);
-    if (sortBy === 'amount_low') return (a.totalAmount || 0) - (b.totalAmount || 0);
-    return 0;
-  });
-
-  // Fetch order history (from Google Sheets)
-  const fetchOrderHistory = useCallback(async () => {
-    setHistoryLoading(true);
-    try {
-      const res = await api.get('/orders/history?limit=1000');
-      setOrderHistory(res.data?.orders || res.data || []);
-    } catch (err) {
-      console.error('Failed to fetch order history:', err);
-      setOrderHistory([]);
-    } finally {
-      setHistoryLoading(false);
-    }
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   }, []);
 
-  // Load history when tab changes
   useEffect(() => {
-    if (activeTab === 'history' && orderHistory.length === 0) {
-      fetchOrderHistory();
+    fetchOrders().finally(() => setLoading(false));
+    connectSSE();
+    return () => { sseRef.current?.close(); stopPolling(); };
+  }, [fetchOrders, connectSSE, stopPolling]);
+
+  /* ═══════════ HISTORY FETCH ═══════════ */
+  const fetchHistory = useCallback(async (force = false) => {
+    if (historyLoaded.current && !force) return;
+    setHistoryLoading(true);
+    try {
+      const [hRes, mRes] = await Promise.all([api.get('/orders/history?limit=1000'), api.get('/menu')]);
+      setHistoryOrders(hRes.data || []);
+      setMenuItems(mRes.data || []);
+      historyLoaded.current = true;
+    } catch { /* silent */ }
+    finally { setHistoryLoading(false); }
+  }, []);
+
+  useEffect(() => { if (mainTab === 'history') fetchHistory(); }, [mainTab, fetchHistory]);
+
+  /* ═══════════ FILTERED LIVE ORDERS ═══════════ */
+  const filteredOrders = useMemo(() => {
+    let f = orders;
+    if (serviceTypeTab !== 'all') f = f.filter(o => o.serviceType === serviceTypeTab);
+    if (searchTerm) {
+      const q = searchTerm.toLowerCase();
+      f = f.filter(o => o.orderId?.toLowerCase().includes(q) || o.customer?.name?.toLowerCase().includes(q) || o.customer?.phone?.includes(q) || o.items?.some(i => i.name?.toLowerCase().includes(q)));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, fetchOrderHistory]);
+    if (statusFilter !== 'all') f = f.filter(o => o.status === statusFilter);
+    if (paymentFilter !== 'all') f = f.filter(o => o.paymentStatus === paymentFilter);
+    if (dateFilter === 'today') f = f.filter(o => isToday(o.createdAt));
+    else if (dateFilter === 'yesterday') f = f.filter(o => isYesterday(o.createdAt));
+    else if (dateFilter === 'week') f = f.filter(o => isThisWeek(o.createdAt));
+    else if (dateFilter === 'month') f = f.filter(o => isThisMonth(o.createdAt));
+    if (minAmount) f = f.filter(o => (o.totalAmount || 0) >= parseFloat(minAmount));
+    if (maxAmount) f = f.filter(o => (o.totalAmount || 0) <= parseFloat(maxAmount));
+    f = [...f].sort((a, b) => {
+      if (sortBy === 'oldest') return new Date(a.createdAt) - new Date(b.createdAt);
+      if (sortBy === 'amount_high') return (b.totalAmount || 0) - (a.totalAmount || 0);
+      if (sortBy === 'amount_low') return (a.totalAmount || 0) - (b.totalAmount || 0);
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+    return f;
+  }, [orders, serviceTypeTab, searchTerm, statusFilter, paymentFilter, dateFilter, minAmount, maxAmount, sortBy]);
 
-  const filteredHistory = orderHistory.filter(order =>
-    (order.orderId || order['Order ID'] || '').toLowerCase().includes(historySearchTerm.toLowerCase()) ||
-    (order.customerPhone || order['Customer Phone'] || '').includes(historySearchTerm)
-  );
+  const filterCount = useMemo(() => {
+    let c = 0;
+    if (paymentFilter !== 'all') c++;
+    if (dateFilter !== 'all') c++;
+    if (minAmount || maxAmount) c++;
+    if (sortBy !== 'newest') c++;
+    return c;
+  }, [paymentFilter, dateFilter, minAmount, maxAmount, sortBy]);
 
-  const getActionButton = (order) => {
-    if (order.refundStatus === 'completed' || order.refundStatus === 'pending') return null;
-    const actions = {
-      confirmed: { label: 'Start Preparing', status: 'preparing', color: 'bg-orange-500 hover:bg-orange-600', useDeliveryModal: true },
-      preparing: { label: 'Mark Ready', status: 'ready', color: 'bg-purple-500 hover:bg-purple-600' },
-      ready: { label: 'Out for Delivery', status: 'out_for_delivery', color: 'bg-indigo-500 hover:bg-indigo-600' },
-      out_for_delivery: { label: 'Mark Delivered', status: 'delivered', color: 'bg-green-500 hover:bg-green-600' },
+  /* ═══════════ FILTERED HISTORY ═══════════ */
+  const filteredHistory = useMemo(() => {
+    let f = historyOrders;
+    if (historyStatusFilter !== 'all') f = f.filter(o => o.status === historyStatusFilter);
+    if (historySearchQuery.trim()) {
+      const q = historySearchQuery.toLowerCase().trim();
+      f = f.filter(o => o.orderId?.toLowerCase().includes(q) || o.customerName?.toLowerCase().includes(q) || o.phone?.includes(q) || o.items?.toLowerCase().includes(q));
+    }
+    return f;
+  }, [historyOrders, historyStatusFilter, historySearchQuery]);
+
+  const visibleHistory = useMemo(() => filteredHistory.slice(0, historyDisplayCount), [filteredHistory, historyDisplayCount]);
+  const hasMoreHistory = historyDisplayCount < filteredHistory.length;
+
+  /* ═══════════ ORDER DETAIL HELPERS ═══════════ */
+  const getNextStatus = useCallback((order) => {
+    if (!order) return null;
+    const flow = order.serviceType === 'pickup' ? PICKUP_STATUS_FLOW : DELIVERY_STATUS_FLOW;
+    const idx = flow.indexOf(order.status);
+    return idx >= 0 && idx < flow.length - 1 ? flow[idx + 1] : null;
+  }, []);
+
+  const getPaymentDisplay = useCallback((order) => {
+    if (!order) return { method: '', status: '', statusColor: '' };
+    const isPickup = order.serviceType === 'pickup';
+    const isCOD = order.paymentMethod === 'cod';
+    const isDone = order.status === 'delivered';
+    const isCancelled = order.status === 'cancelled';
+
+    const method = isCOD ? (isPickup ? 'Pay at Hotel' : 'COD') : 'UPI/App';
+    let status = '';
+    let statusColor = '';
+
+    if (isCancelled) { status = 'Cancelled'; statusColor = '#EF4444'; }
+    else if (isCOD) {
+      if (isDone) {
+        const apm = order.actualPaymentMethod;
+        if (apm === 'upi') { status = 'Paid (UPI)'; statusColor = '#22C55E'; }
+        else { status = 'Paid (Cash)'; statusColor = '#22C55E'; }
+      } else { status = 'Pending'; statusColor = '#F59E0B'; }
+    } else {
+      if (order.paymentStatus === 'paid') { status = 'Paid'; statusColor = '#22C55E'; }
+      else { status = 'Unpaid'; statusColor = '#EF4444'; }
+    }
+    return { method, status, statusColor };
+  }, []);
+
+  /* ═══════════ STATUS UPDATE ═══════════ */
+  const handleStatusAction = useCallback((order) => {
+    const nextStatus = getNextStatus(order);
+    if (!nextStatus) return;
+
+    // Delivery order + next is preparing → show partner picker
+    if (order.serviceType === 'delivery' && nextStatus === 'preparing') {
+      setLoadingPartners(true);
+      setShowDeliveryModal(true);
+      api.get('/delivery').then(r => setDeliveryPartners(r.data || [])).catch(() => {}).finally(() => setLoadingPartners(false));
+      return;
+    }
+
+    // Pickup + delivered + COD → ask payment method
+    if (order.serviceType === 'pickup' && nextStatus === 'delivered' && order.paymentMethod === 'cod') {
+      setShowPaymentMethodModal(true);
+      return;
+    }
+
+    // Regular status update
+    confirmStatusUpdate(order, nextStatus);
+  }, [getNextStatus, confirmStatusUpdate]);
+
+  const confirmStatusUpdate = useCallback(async (order, newStatus, deliveryBoyId = null, actualPaymentMethod = null) => {
+    setUpdatingStatus(true);
+    try {
+      const body = { status: newStatus };
+      if (actualPaymentMethod) body.actualPaymentMethod = actualPaymentMethod;
+      const res = await api.put(`/orders/${order._id}/status`, body);
+      if (deliveryBoyId) await api.put(`/orders/${order._id}/assign-delivery`, { deliveryBoyId });
+      setSelectedOrder(res.data || { ...order, status: newStatus });
+      setShowDeliveryModal(false);
+      setShowPaymentMethodModal(false);
+      await fetchOrders();
+    } catch (err) { alert(err.response?.data?.error || 'Failed to update status'); }
+    finally { setUpdatingStatus(false); setAssigningPartnerId(null); }
+  }, [fetchOrders]);
+
+  const handleAssignPartner = useCallback((partner) => {
+    if (!selectedOrder) return;
+    setAssigningPartnerId(partner._id);
+    confirmStatusUpdate(selectedOrder, 'preparing', partner._id);
+  }, [selectedOrder, confirmStatusUpdate]);
+
+  const handleSkipAssignment = useCallback(() => {
+    if (!selectedOrder) return;
+    confirmStatusUpdate(selectedOrder, 'preparing');
+  }, [selectedOrder, confirmStatusUpdate]);
+
+  const handlePaymentMethodSelect = useCallback((method) => {
+    if (!selectedOrder) return;
+    confirmStatusUpdate(selectedOrder, 'delivered', null, method);
+  }, [selectedOrder, confirmStatusUpdate]);
+
+  const handleCancelOrder = useCallback(async () => {
+    if (!selectedOrder) return;
+    setUpdatingStatus(true);
+    try {
+      const res = await api.put(`/orders/${selectedOrder._id}/status`, { status: 'cancelled' });
+      setSelectedOrder(res.data || { ...selectedOrder, status: 'cancelled' });
+      setShowCancelConfirm(false);
+      await fetchOrders();
+    } catch (err) { alert(err.response?.data?.error || 'Failed to cancel'); }
+    finally { setUpdatingStatus(false); }
+  }, [selectedOrder, fetchOrders]);
+
+  /* ═══════════ HISTORY CARD IMAGE LOOKUP ═══════════ */
+  const findItemImage = useCallback((itemName) => {
+    if (!itemName || menuItems.length === 0) return null;
+    const q = itemName.toLowerCase().trim();
+    for (const mi of menuItems) {
+      if (mi.variants) {
+        for (const v of mi.variants) {
+          if (v.label?.toLowerCase().trim() === q && v.image) return v.image;
+        }
+      }
+      if (mi.name?.toLowerCase().trim() === q) return mi.image || mi.variants?.[0]?.image;
+    }
+    return null;
+  }, [menuItems]);
+
+  /* Open history order in detail */
+  const openHistoryOrderDetail = useCallback((ho) => {
+    const mapped = {
+      ...ho,
+      _id: ho._id || ho.orderId,
+      customer: { name: ho.customerName || '', phone: ho.phone || '' },
+      deliveryAddress: { address: ho.address || '' },
+      serviceType: ho.sheetType === 'selfpick' ? 'pickup' : (ho.serviceType || 'delivery'),
+      items: typeof ho.items === 'string' ? ho.items.split(',').map(s => parseItemString(s)).filter(Boolean) : (ho.items || []),
+      createdAt: ho.time || ho.createdAt,
+      _fromHistory: true,
     };
-    const action = actions[order.status];
-    if (!action) return null;
-    
-    // For confirmed orders with delivery service type, show delivery partner modal
-    if (action.useDeliveryModal && order.serviceType === 'delivery') {
-      return (
-        <button onClick={() => handleStartPreparing(order)} disabled={updatingId === order._id}
-          className={`${action.color} text-white px-4 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2`}>
-          {updatingId === order._id && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-          {action.label}
-        </button>
-      );
-    }
-    
+    setSelectedOrder(mapped);
+  }, []);
+
+  /* ═══════════ LOADING ═══════════ */
+  if (loading) {
     return (
-      <button onClick={() => updateStatus(order._id, action.status)} disabled={updatingId === order._id}
-        className={`${action.color} text-white px-4 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2`}>
-        {updatingId === order._id && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-        {action.label}
-      </button>
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
+      </div>
     );
-  };
+  }
 
-  const showSkeleton = loading && orders.length === 0;
-
+  /* ═══════════ RENDER ═══════════ */
   return (
-    <div className="space-y-6">
-      {/* Tabs: Live Orders / Order History */}
-      <div className="flex items-center gap-1 bg-white rounded-xl p-1 shadow-card w-fit">
-        <button
-          onClick={() => setActiveTab('live')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'live' ? 'bg-primary-500 text-white shadow-md' : 'text-dark-600 hover:bg-dark-50'}`}
-        >
-          <Package className="w-4 h-4" /> Live Orders
-        </button>
-        <button
-          onClick={() => setActiveTab('history')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'history' ? 'bg-primary-500 text-white shadow-md' : 'text-dark-600 hover:bg-dark-50'}`}
-        >
-          <History className="w-4 h-4" /> Order History
+    <div className="space-y-4">
+      {/* ── HEADER ── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-dark-900">Orders</h1>
+          <p className="text-dark-500 mt-0.5">{orders.length} active &bull; Real-time</p>
+        </div>
+        <button onClick={() => fetchOrders()} className="p-2 bg-dark-100 rounded-lg hover:bg-dark-200 transition-colors">
+          <RefreshCw className="w-4 h-4 text-dark-600" />
         </button>
       </div>
 
-      {activeTab === 'live' ? (
+      {/* ── MAIN TABS ── */}
+      <div className="flex bg-dark-100 rounded-xl p-1">
+        {['live','history'].map(t => (
+          <button key={t} onClick={() => { setMainTab(t); setSelectedOrder(null); }}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all capitalize ${mainTab === t ? 'bg-white text-dark-900 shadow-sm' : 'text-dark-500 hover:text-dark-700'}`}>
+            {t === 'live' ? `Live Orders (${orders.length})` : 'History'}
+          </button>
+        ))}
+      </div>
+
+      {/* ═══════════ LIVE ORDERS TAB ═══════════ */}
+      {mainTab === 'live' && !selectedOrder && (
         <>
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-full">
-            <span className="w-2 h-2 bg-green-500 rounded-full live-indicator"></span>
-            <span className="text-xs font-medium text-green-700">Live</span>
-          </div>
-          <span className="text-dark-400 text-sm">{filteredOrders.length} orders</span>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
-            <input type="text" placeholder="Search orders..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2.5 bg-white border border-dark-200 rounded-xl w-full sm:w-64 focus:border-primary-500 transition-colors" />
-          </div>
-          <StatusDropdown 
-            value={filter} 
-            onChange={setFilter} 
-            options={filterOptions} 
-          />
-          <button
-            onClick={() => setShowFilterPanel(!showFilterPanel)}
-            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-colors ${showFilterPanel ? 'bg-primary-50 border-primary-300 text-primary-700' : 'bg-white border-dark-200 text-dark-600 hover:bg-dark-50'}`}
-          >
-            <Filter className="w-4 h-4" />
-            <span className="text-sm font-medium">Filters</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Service Type Tabs */}
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1 bg-white rounded-xl p-1 shadow-card">
-          {[
-            { value: 'all', label: 'All' },
-            { value: 'delivery', label: 'Delivery', icon: Truck },
-            { value: 'pickup', label: 'Pickup', icon: Package }
-          ].map(tab => (
-            <button
-              key={tab.value}
-              onClick={() => setServiceTypeTab(tab.value)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${serviceTypeTab === tab.value ? 'bg-dark-800 text-white' : 'text-dark-600 hover:bg-dark-50'}`}
-            >
-              {tab.icon && <tab.icon className="w-3.5 h-3.5" />}
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Advanced Filter Panel */}
-      {showFilterPanel && (
-        <div className="bg-white rounded-xl p-4 shadow-card flex flex-wrap gap-4 items-end">
-          {/* Payment Filter */}
-          <div>
-            <label className="block text-xs font-semibold text-dark-500 mb-1.5 uppercase tracking-wide">Payment</label>
-            <div className="flex items-center gap-1 bg-dark-50 rounded-lg p-0.5">
-              {['all', 'paid', 'pending', 'cod'].map(opt => (
-                <button key={opt} onClick={() => setPaymentFilter(opt)}
-                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all capitalize ${paymentFilter === opt ? 'bg-white text-dark-900 shadow-sm' : 'text-dark-500 hover:text-dark-700'}`}>
-                  {opt}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Date Filter */}
-          <div>
-            <label className="block text-xs font-semibold text-dark-500 mb-1.5 uppercase tracking-wide">Date</label>
-            <div className="flex items-center gap-1 bg-dark-50 rounded-lg p-0.5">
-              {[
-                { value: 'all', label: 'All' },
-                { value: 'today', label: 'Today' },
-                { value: 'week', label: 'This Week' },
-                { value: 'month', label: 'This Month' }
-              ].map(opt => (
-                <button key={opt.value} onClick={() => setDateFilter(opt.value)}
-                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${dateFilter === opt.value ? 'bg-white text-dark-900 shadow-sm' : 'text-dark-500 hover:text-dark-700'}`}>
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Sort */}
-          <div>
-            <label className="block text-xs font-semibold text-dark-500 mb-1.5 uppercase tracking-wide">Sort By</label>
-            <div className="flex items-center gap-1 bg-dark-50 rounded-lg p-0.5">
-              {[
-                { value: 'newest', label: 'Newest' },
-                { value: 'oldest', label: 'Oldest' },
-                { value: 'amount_high', label: '₹ High' },
-                { value: 'amount_low', label: '₹ Low' }
-              ].map(opt => (
-                <button key={opt.value} onClick={() => setSortBy(opt.value)}
-                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${sortBy === opt.value ? 'bg-white text-dark-900 shadow-sm' : 'text-dark-500 hover:text-dark-700'}`}>
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Reset Filters */}
-          <button onClick={() => { setPaymentFilter('all'); setDateFilter('all'); setSortBy('newest'); setServiceTypeTab('all'); setShowFilterPanel(false); }}
-            className="px-3 py-2 text-xs font-medium text-dark-500 hover:text-dark-700 hover:bg-dark-100 rounded-lg transition-colors">
-            Reset All
-          </button>
-        </div>
-      )}
-
-      {showSkeleton ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-          <OrderSkeleton />
-          <OrderSkeleton />
-          <OrderSkeleton />
-          <OrderSkeleton />
-          <OrderSkeleton />
-          <OrderSkeleton />
-        </div>
-      ) : filteredOrders.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-card p-12 text-center">
-          <div className="w-20 h-20 bg-dark-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Package className="w-10 h-10 text-dark-300" />
-          </div>
-          <h3 className="text-lg font-semibold text-dark-700">No orders found</h3>
-          <p className="text-dark-400 mt-1">{searchTerm || filter ? 'Try adjusting your filters' : 'Orders will appear here'}</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
-          {filteredOrders.map(order => {
-            const config = statusConfig[order.status] || statusConfig.pending;
-            const StatusIcon = config.icon;
-            const isUpdated = updatedIds.has(order._id);
-            const totalItems = order.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
-            return (
-              <div key={order._id} className={`bg-white rounded-2xl shadow-card overflow-hidden transition-all duration-300 hover:shadow-lg flex flex-col ${isUpdated ? 'ring-2 ring-primary-400 scale-[1.01]' : ''}`}>
-                {/* Header */}
-                <div className="px-5 py-4 border-b border-dark-100">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-lg ${config.bg} flex items-center justify-center`}>
-                        <StatusIcon className={`w-4 h-4 ${config.text}`} />
-                      </div>
-                      <div>
-                        <p className="font-bold text-dark-900 text-sm">{order.orderId}</p>
-                        <p className="text-xs text-dark-400 capitalize">{order.serviceType}</p>
-                      </div>
-                    </div>
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${config.bg} ${config.text}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`}></span>
-                      {config.label}
-                    </span>
-                  </div>
-                  {/* Customer Info */}
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 bg-gradient-to-br from-primary-100 to-primary-200 rounded-full flex items-center justify-center">
-                      <span className="text-xs font-bold text-primary-700">{(order.customer?.name || 'C')[0].toUpperCase()}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-dark-800 truncate">{order.customer?.name || 'Customer'}</p>
-                      <p className="text-xs text-dark-400">{order.customer?.phone}</p>
-                    </div>
-                  </div>
-                  {/* Delivery Partner */}
-                  {order.deliveryPartnerName && (
-                    <div className="flex items-center gap-2 mt-2 px-2 py-1.5 bg-indigo-50 rounded-lg">
-                      <Truck className="w-3.5 h-3.5 text-indigo-500" />
-                      <span className="text-xs font-medium text-indigo-700">{order.deliveryPartnerName}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Content */}
-                <div className="p-5 space-y-4 flex-1 flex flex-col">
-                  {/* Items Section */}
-                  <div className="bg-dark-50 rounded-xl p-3">
-                    <div className="flex items-center justify-between mb-2.5">
-                      <span className="text-xs font-semibold text-dark-500 uppercase tracking-wide">Order Items</span>
-                      <span className="text-xs text-dark-400">{totalItems} item{totalItems !== 1 ? 's' : ''}</span>
-                    </div>
-                    <ScrollableItemsList items={order.items} />
-                  </div>
-
-                  {/* Delivery Address */}
-                  {order.deliveryAddress?.address && (
-                    <div className="flex items-start gap-2.5">
-                      <div className="w-7 h-7 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <MapPin className="w-3.5 h-3.5 text-blue-500" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-dark-400 mb-0.5">Delivery to</p>
-                        <p className="text-sm text-dark-700 line-clamp-2">{order.deliveryAddress.address}</p>
-                        {order.deliveryAddress.latitude && order.deliveryAddress.longitude && (
-                          <a href={`https://www.google.com/maps?q=${order.deliveryAddress.latitude},${order.deliveryAddress.longitude}`}
-                            target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-1 font-medium">
-                            Open in Maps <ExternalLink className="w-3 h-3" />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Refund Status - only show for COD orders */}
-                  {order.refundStatus && order.refundStatus !== 'none' && order.paymentMethod === 'cod' && (
-                    <div className={`flex items-center justify-between gap-2 p-2.5 rounded-lg ${order.refundStatus === 'pending' ? 'bg-amber-50' : order.refundStatus === 'completed' ? 'bg-green-50' : 'bg-red-50'}`}>
-                      <div className="flex items-center gap-2">
-                        <RefreshCw className={`w-3.5 h-3.5 ${order.refundStatus === 'pending' ? 'text-amber-600' : order.refundStatus === 'completed' ? 'text-green-600' : 'text-red-600'}`} />
-                        <span className={`text-xs font-medium ${order.refundStatus === 'pending' ? 'text-amber-700' : order.refundStatus === 'completed' ? 'text-green-700' : 'text-red-700'}`}>
-                          Refund {order.refundStatus}{order.refundAmount ? ` • ₹${order.refundAmount}` : ''}
-                        </span>
-                      </div>
-                      {(order.refundStatus === 'pending' || order.refundStatus === 'failed') && (
-                        <button 
-                          onClick={() => processRefund(order.orderId)} 
-                          disabled={updatingId === order._id}
-                          className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-1"
-                        >
-                          {updatingId === order._id ? (
-                            <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          ) : (
-                            <RefreshCw className="w-3 h-3" />
-                          )}
-                          Process
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Payment & Total */}
-                  <div className="flex items-center justify-between pt-2 border-t border-dark-100 mt-auto">
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="w-4 h-4 text-dark-300" />
-                      <span className="text-sm text-dark-500">{order.paymentMethod?.toUpperCase()}</span>
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                        order.paymentStatus === 'paid' ? 'bg-green-50 text-green-700' : 
-                        order.paymentStatus === 'refunded' ? 'bg-red-100 text-red-700' : 
-                        order.paymentStatus === 'refund_processing' ? 'bg-pink-50 text-pink-700' :
-                        'bg-amber-50 text-amber-700'
-                      }`}>
-                        {order.paymentMethod === 'cod' && order.paymentStatus === 'pending' ? 'COD' : 
-                         order.paymentStatus === 'refund_processing' ? 'Refund Processing' : 
-                         order.paymentStatus}
-                      </span>
-                    </div>
-                    <span className="text-lg font-bold text-dark-900">₹{order.totalAmount}</span>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                {(getActionButton(order) || (!['delivered', 'cancelled', 'refunded'].includes(order.status) && order.refundStatus !== 'completed' && order.refundStatus !== 'pending' && order.paymentMethod === 'cod')) && (
-                  <div className="px-5 pb-5 flex items-center gap-2">
-                    {getActionButton(order)}
-                    {!['delivered', 'cancelled', 'refunded'].includes(order.status) && order.refundStatus !== 'completed' && order.refundStatus !== 'pending' && order.paymentMethod === 'cod' && (
-                      <button onClick={() => { if(confirm('Cancel this order?')) updateStatus(order._id, 'cancelled'); }} disabled={updatingId === order._id}
-                        className="px-4 py-2 bg-white border border-dark-200 text-dark-600 rounded-xl text-sm font-medium hover:bg-dark-50 hover:border-dark-300 transition-all disabled:opacity-50">
-                        Cancel
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Delivery Partner Selection Modal */}
-      {showDeliveryModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[80vh] overflow-hidden">
-            <div className="px-5 py-4 border-b border-dark-100 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-dark-900">Select Delivery Partner</h3>
-                <p className="text-sm text-dark-400">Order #{selectedOrder?.orderId}</p>
-              </div>
-              <button onClick={() => { setShowDeliveryModal(false); setSelectedOrder(null); }} 
-                className="w-8 h-8 rounded-lg bg-dark-100 flex items-center justify-center hover:bg-dark-200 transition-colors">
-                <X className="w-4 h-4 text-dark-500" />
+          {/* Service type tabs */}
+          <div className="flex gap-2">
+            {[{ key: 'all', label: 'All', icon: Package }, { key: 'delivery', label: 'Delivery', icon: Truck }, { key: 'pickup', label: 'Pickup', icon: ShoppingBag }].map(st => (
+              <button key={st.key} onClick={() => setServiceTypeTab(st.key)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all ${serviceTypeTab === st.key ? 'bg-primary-500 text-white' : 'bg-white text-dark-600 border border-dark-200'}`}>
+                <st.icon className="w-3.5 h-3.5" /> {st.label}
               </button>
+            ))}
+          </div>
+
+          {/* Search + filter */}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
+              <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search orders..."
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-dark-200 rounded-xl text-sm" />
             </div>
-            <div className="p-5 overflow-y-auto max-h-[60vh]">
-              {loadingPartners ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="w-8 h-8 border-3 border-primary-200 border-t-primary-500 rounded-full animate-spin" />
-                </div>
-              ) : deliveryPartners.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-dark-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <User className="w-8 h-8 text-dark-300" />
-                  </div>
-                  <p className="text-dark-500">No delivery partners found</p>
-                  <p className="text-dark-400 text-sm mt-1">Add delivery partners in the Delivery section</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {/* Sort: Online first, then by name */}
-                  {[...deliveryPartners]
-                    .sort((a, b) => {
-                      if (a.isOnline && !b.isOnline) return -1;
-                      if (!a.isOnline && b.isOnline) return 1;
-                      return a.name.localeCompare(b.name);
-                    })
-                    .map(partner => (
-                    <button
-                      key={partner._id}
-                      onClick={() => partner.isActive && assignAndPrepare(partner._id)}
-                      disabled={updatingId || !partner.isActive}
-                      className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors text-left ${
-                        !partner.isActive 
-                          ? 'bg-dark-100 opacity-60 cursor-not-allowed' 
-                          : 'bg-dark-50 hover:bg-primary-50'
-                      } disabled:opacity-50`}
-                    >
-                      <div className="relative">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 ${
-                          partner.isActive ? 'bg-gradient-to-br from-primary-100 to-primary-200' : 'bg-dark-200'
-                        }`}>
-                          {partner.photo ? (
-                            <img src={partner.photo} alt={partner.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <span className={`text-lg font-bold ${partner.isActive ? 'text-primary-700' : 'text-dark-400'}`}>
-                              {partner.name[0].toUpperCase()}
-                            </span>
-                          )}
-                        </div>
-                        {/* Online/Offline indicator dot */}
-                        <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white ${
-                          partner.isOnline ? 'bg-green-500' : 'bg-dark-300'
-                        }`}></span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-dark-900 truncate">{partner.name}</p>
-                          {!partner.isActive && (
-                            <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">Inactive</span>
-                          )}
-                        </div>
-                        <p className="text-sm text-dark-400">{partner.phone}</p>
-                        <div className="flex items-center gap-3 mt-1">
-                          <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
-                            partner.isOnline 
-                              ? 'bg-green-100 text-green-700' 
-                              : 'bg-dark-100 text-dark-500'
-                          }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${partner.isOnline ? 'bg-green-500' : 'bg-dark-400'}`}></span>
-                            {partner.isOnline ? 'Online' : 'Offline'}
-                          </span>
-                          {partner.avgRating > 0 && (
-                            <span className="text-xs text-amber-600 font-medium">⭐ {partner.avgRating.toFixed(1)}</span>
-                          )}
-                        </div>
-                      </div>
-                      <Truck className={`w-5 h-5 ${partner.isActive ? 'text-primary-400' : 'text-dark-300'}`} />
+            <button onClick={() => setShowFilterPanel(!showFilterPanel)}
+              className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium border transition-all relative ${showFilterPanel ? 'bg-primary-50 border-primary-300 text-primary-700' : 'bg-white border-dark-200 text-dark-600'}`}>
+              <Filter className="w-4 h-4" /> Filters
+              {filterCount > 0 && <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{filterCount}</span>}
+            </button>
+          </div>
+
+          {/* Status filter chips */}
+          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+            {['all', ...Object.keys(STATUS_CONFIG)].map(s => (
+              <button key={s} onClick={() => setStatusFilter(s)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all capitalize ${statusFilter === s ? 'text-white' : 'bg-white text-dark-600 border border-dark-200'}`}
+                style={statusFilter === s ? { backgroundColor: s === 'all' ? '#6366F1' : STATUS_CONFIG[s]?.color } : {}}>
+                {s === 'all' ? `All (${orders.length})` : STATUS_CONFIG[s]?.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Filter panel */}
+          {showFilterPanel && (
+            <div className="bg-white rounded-2xl border border-dark-200 p-4 space-y-4 shadow-lg">
+              <div>
+                <label className="block text-xs font-semibold text-dark-500 mb-1.5">Payment</label>
+                <div className="flex gap-1.5 flex-wrap">
+                  {['all','paid','pending','failed','refunded'].map(p => (
+                    <button key={p} onClick={() => setPaymentFilter(p)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium capitalize ${paymentFilter === p ? 'bg-primary-500 text-white' : 'bg-dark-100 text-dark-600'}`}>
+                      {p}
                     </button>
                   ))}
                 </div>
-              )}
-            </div>
-            <div className="px-5 py-4 border-t border-dark-100 bg-dark-50">
-              <button 
-                onClick={() => updateStatus(selectedOrder?._id, 'preparing')}
-                disabled={updatingId}
-                className="w-full py-2.5 text-sm font-medium text-dark-500 hover:text-dark-700 transition-colors disabled:opacity-50"
-              >
-                Skip - Assign Later
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-        </>
-      ) : (
-        /* Order History Tab */
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-dark-900">Order History</h2>
-              <p className="text-sm text-dark-400">{filteredHistory.length} archived orders</p>
-            </div>
-            <div className="flex gap-3 w-full sm:w-auto">
-              <div className="relative flex-1 sm:flex-initial">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
-                <input type="text" placeholder="Search history..." value={historySearchTerm} onChange={(e) => setHistorySearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2.5 bg-white border border-dark-200 rounded-xl w-full sm:w-64 focus:border-primary-500 transition-colors" />
               </div>
-              <button onClick={fetchOrderHistory}
-                disabled={historyLoading}
-                className="flex items-center gap-2 px-4 py-2.5 bg-dark-100 rounded-xl text-dark-700 hover:bg-dark-200 transition-colors disabled:opacity-50">
-                <RefreshCw className={`w-4 h-4 ${historyLoading ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
-          </div>
-
-          {historyLoading ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-              <OrderSkeleton /><OrderSkeleton /><OrderSkeleton />
-            </div>
-          ) : filteredHistory.length === 0 ? (
-            <div className="bg-white rounded-2xl shadow-card p-12 text-center">
-              <div className="w-20 h-20 bg-dark-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <History className="w-10 h-10 text-dark-300" />
-              </div>
-              <h3 className="text-lg font-semibold text-dark-700">No order history</h3>
-              <p className="text-dark-400 mt-1">Completed orders will appear here</p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl shadow-card overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-dark-50">
-                    <tr>
-                      <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">Order ID</th>
-                      <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">Customer</th>
-                      <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">Items</th>
-                      <th className="text-center px-4 py-3 text-sm font-medium text-dark-600">Status</th>
-                      <th className="text-center px-4 py-3 text-sm font-medium text-dark-600">Payment</th>
-                      <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Amount</th>
-                      <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Date</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-dark-100">
-                    {filteredHistory.map((order, idx) => {
-                      const orderId = order.orderId || order['Order ID'] || `#${idx + 1}`;
-                      const customerName = order.customer?.name || order['Customer Name'] || order.customerName || '-';
-                      const customerPhone = order.customer?.phone || order['Customer Phone'] || order.customerPhone || '';
-                      const items = order.items || [];
-                      const itemsSummary = typeof items === 'string' ? items : items.map(i => `${i.name} x${i.quantity}`).join(', ');
-                      const status = order.status || order['Status'] || 'delivered';
-                      const paymentMethod = order.paymentMethod || order['Payment Method'] || '-';
-                      const totalAmount = order.totalAmount || order['Total Amount'] || 0;
-                      const date = order.createdAt || order['Date'] || '';
-                      const config = statusConfig[status] || statusConfig.delivered;
-                      
-                      return (
-                        <tr key={idx} className="hover:bg-dark-50 cursor-pointer" onClick={() => setOrderDetailModal(order)}>
-                          <td className="px-4 py-3 text-sm font-mono font-bold text-dark-800">{orderId}</td>
-                          <td className="px-4 py-3">
-                            <p className="text-sm font-medium text-dark-800">{customerName}</p>
-                            <p className="text-xs text-dark-400">{customerPhone}</p>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-dark-600 max-w-[200px] truncate">{itemsSummary || '-'}</td>
-                          <td className="px-4 py-3 text-center">
-                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold ${config.bg} ${config.text}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`}></span>
-                              {config.label}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm text-dark-600 uppercase">{paymentMethod}</td>
-                          <td className="px-4 py-3 text-right text-sm font-bold text-dark-900">₹{totalAmount}</td>
-                          <td className="px-4 py-3 text-right text-xs text-dark-400">
-                            {date ? new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '-'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Order Detail Modal */}
-      {orderDetailModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setOrderDetailModal(null)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="px-5 py-4 border-b border-dark-100 flex items-center justify-between sticky top-0 bg-white z-10">
               <div>
-                <h3 className="text-lg font-semibold text-dark-900">Order Details</h3>
-                <p className="text-sm text-dark-400">{orderDetailModal.orderId || orderDetailModal['Order ID']}</p>
-              </div>
-              <button onClick={() => setOrderDetailModal(null)} className="w-8 h-8 rounded-lg bg-dark-100 flex items-center justify-center hover:bg-dark-200">
-                <X className="w-4 h-4 text-dark-500" />
-              </button>
-            </div>
-            <div className="p-5 space-y-4">
-              {/* Customer */}
-              <div className="flex items-center gap-3 p-3 bg-dark-50 rounded-xl">
-                <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-                  <User className="w-5 h-5 text-primary-600" />
-                </div>
-                <div>
-                  <p className="font-medium text-dark-800">{orderDetailModal.customer?.name || orderDetailModal.customerName || '-'}</p>
-                  <p className="text-sm text-dark-400">{orderDetailModal.customer?.phone || orderDetailModal.customerPhone || ''}</p>
-                </div>
-              </div>
-              {/* Items */}
-              <div>
-                <h4 className="text-xs font-bold text-dark-500 uppercase mb-2">Items</h4>
-                <div className="space-y-2">
-                  {(orderDetailModal.items || []).map((item, i) => (
-                    <div key={i} className="flex items-center justify-between p-2 bg-dark-50 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        {item.image && (
-                          <img src={item.image.startsWith('http') ? item.image : `${API_BASE_URL}${item.image}`} alt="" className="w-8 h-8 rounded object-cover" />
-                        )}
-                        <div>
-                          <p className="text-sm font-medium text-dark-800">{item.name}</p>
-                          <p className="text-xs text-dark-400">Qty: {item.quantity} x ₹{item.price}</p>
-                        </div>
-                      </div>
-                      <span className="text-sm font-bold text-dark-900">₹{item.price * item.quantity}</span>
-                    </div>
+                <label className="block text-xs font-semibold text-dark-500 mb-1.5">Date</label>
+                <div className="flex gap-1.5 flex-wrap">
+                  {['all','today','yesterday','week','month'].map(d => (
+                    <button key={d} onClick={() => setDateFilter(d)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium capitalize ${dateFilter === d ? 'bg-primary-500 text-white' : 'bg-dark-100 text-dark-600'}`}>
+                      {d}
+                    </button>
                   ))}
                 </div>
               </div>
-              {/* Summary */}
-              <div className="flex items-center justify-between p-3 bg-primary-50 rounded-xl">
-                <span className="font-medium text-dark-700">Total</span>
-                <span className="text-xl font-bold text-primary-600">₹{orderDetailModal.totalAmount || orderDetailModal['Total Amount'] || 0}</span>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-dark-500 mb-1">Min Amount</label>
+                  <input type="number" value={minAmount} onChange={e => setMinAmount(e.target.value)} placeholder="₹0"
+                    className="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-lg text-xs" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-dark-500 mb-1">Max Amount</label>
+                  <input type="number" value={maxAmount} onChange={e => setMaxAmount(e.target.value)} placeholder="₹∞"
+                    className="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-lg text-xs" />
+                </div>
               </div>
+              <div>
+                <label className="block text-xs font-semibold text-dark-500 mb-1.5">Sort By</label>
+                <div className="flex gap-1.5 flex-wrap">
+                  {SORT_OPTIONS.map(s => (
+                    <button key={s.value} onClick={() => setSortBy(s.value)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium ${sortBy === s.value ? 'bg-primary-500 text-white' : 'bg-dark-100 text-dark-600'}`}>
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button onClick={() => { setPaymentFilter('all'); setDateFilter('all'); setMinAmount(''); setMaxAmount(''); setSortBy('newest'); }}
+                className="w-full py-2 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50">
+                Clear All Filters
+              </button>
+            </div>
+          )}
+
+          {/* Order cards */}
+          {filteredOrders.length === 0 ? (
+            <div className="bg-white rounded-2xl p-12 text-center">
+              <Package className="w-16 h-16 text-dark-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-dark-900 mb-2">No Orders Found</h3>
+              <p className="text-dark-500">Try adjusting your filters.</p>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredOrders.map(order => {
+                const sc = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
+                const isPickup = order.serviceType === 'pickup';
+                const displayStatus = isPickup && order.status === 'delivered' ? 'Completed' : sc.label;
+                return (
+                  <button key={order._id} onClick={() => setSelectedOrder(order)}
+                    className="bg-white rounded-2xl p-4 shadow-card text-left hover:shadow-lg transition-all border border-transparent hover:border-primary-200 w-full">
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-dark-900">#{order.orderId}</span>
+                        {isPickup && <span className="px-1.5 py-0.5 text-[9px] font-bold bg-blue-100 text-blue-700 rounded">PICKUP</span>}
+                      </div>
+                      <span className="px-2 py-1 rounded-lg text-[10px] font-bold" style={{ backgroundColor: sc.bg, color: sc.color }}>
+                        {displayStatus}
+                      </span>
+                    </div>
+                    {/* Customer */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-dark-100 flex items-center justify-center flex-shrink-0">
+                        <User className="w-4 h-4 text-dark-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-dark-800 truncate">{order.customer?.name || 'Customer'}</p>
+                        <p className="text-[11px] text-dark-400">{order.customer?.phone}</p>
+                      </div>
+                    </div>
+                    {/* Items preview */}
+                    <div className="mb-2">
+                      <p className="text-xs text-dark-500 truncate">
+                        {order.items?.map(i => `${i.name} ×${i.quantity}`).join(', ') || 'No items'}
+                      </p>
+                    </div>
+                    {/* Footer */}
+                    <div className="flex items-center justify-between pt-2 border-t border-dark-100">
+                      <span className="text-sm font-bold text-dark-900">₹{order.totalAmount || 0}</span>
+                      <div className="flex items-center gap-2">
+                        {order.paymentMethod === 'cod' ?
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded">{isPickup ? 'Pay at Hotel' : 'COD'}</span> :
+                          order.paymentStatus === 'paid' ?
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-green-100 text-green-700 rounded">Paid</span> :
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-red-100 text-red-700 rounded">Unpaid</span>
+                        }
+                        <span className="text-[10px] text-dark-400">{fmtTime(order.createdAt)}</span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ═══════════ ORDER DETAIL VIEW ═══════════ */}
+      {selectedOrder && (
+        <div className="bg-white rounded-2xl shadow-card overflow-hidden">
+          {/* Detail header */}
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-dark-100">
+            <button onClick={() => setSelectedOrder(null)} className="p-2 hover:bg-dark-100 rounded-lg">
+              <ChevronLeft className="w-5 h-5 text-dark-600" />
+            </button>
+            <div className="flex-1">
+              <h2 className="font-bold text-lg text-dark-900">Order #{selectedOrder.orderId}</h2>
+              <p className="text-xs text-dark-400">{fmtDate(selectedOrder.createdAt)}</p>
+            </div>
+            {selectedOrder.serviceType === 'pickup' && <span className="px-2.5 py-1 text-xs font-bold bg-blue-100 text-blue-700 rounded-lg">PICKUP</span>}
+          </div>
+
+          <div className="p-5 space-y-5">
+            {/* Status card */}
+            {(() => {
+              const sc = STATUS_CONFIG[selectedOrder.status] || STATUS_CONFIG.pending;
+              const isPickup = selectedOrder.serviceType === 'pickup';
+              const displayLabel = isPickup && selectedOrder.status === 'delivered' ? 'Completed' : sc.label;
+              return (
+                <div className="rounded-xl p-4" style={{ backgroundColor: sc.bg }}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: sc.color + '22' }}>
+                      <CheckCircle className="w-5 h-5" style={{ color: sc.color }} />
+                    </div>
+                    <div>
+                      <p className="font-bold text-base" style={{ color: sc.color }}>{displayLabel}</p>
+                      <p className="text-xs text-dark-500">{isPickup ? 'Pickup Order' : 'Delivery Order'}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Status stepper */}
+            {(() => {
+              const flow = selectedOrder.serviceType === 'pickup' ? PICKUP_STATUS_FLOW : DELIVERY_STATUS_FLOW;
+              const currentIdx = flow.indexOf(selectedOrder.status);
+              if (selectedOrder.status === 'cancelled' || selectedOrder.status === 'refunded') return null;
+              return (
+                <div className="flex items-center gap-0">
+                  {flow.map((step, i) => {
+                    const sc = STATUS_CONFIG[step];
+                    const isDone = i <= currentIdx;
+                    const isCurrent = i === currentIdx;
+                    return (
+                      <div key={step} className="flex items-center flex-1 min-w-0">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold border-2 transition-all ${
+                          isDone ? 'text-white border-transparent' : 'border-dark-200 text-dark-400 bg-white'
+                        } ${isCurrent ? 'ring-2 ring-offset-1' : ''}`}
+                          style={isDone ? { backgroundColor: sc.color, ...(isCurrent ? { ringColor: sc.color } : {}) } : (isCurrent ? { ringColor: sc.color } : {})}>
+                          {isDone ? '✓' : i + 1}
+                        </div>
+                        {i < flow.length - 1 && <div className={`h-0.5 flex-1 mx-1 rounded ${i < currentIdx ? 'bg-green-400' : 'bg-dark-200'}`} />}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            {/* Customer details */}
+            <div className="rounded-xl bg-dark-50 p-4 space-y-3">
+              <p className="text-xs font-bold text-dark-500 uppercase tracking-wide">Customer</p>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
+                  <User className="w-5 h-5 text-primary-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm text-dark-900">{selectedOrder.customer?.name || selectedOrder.customerName || 'Customer'}</p>
+                  <p className="text-xs text-dark-500">{selectedOrder.customer?.phone || selectedOrder.phone || ''}</p>
+                </div>
+                {(selectedOrder.customer?.phone || selectedOrder.phone) && (
+                  <a href={`tel:${selectedOrder.customer?.phone || selectedOrder.phone}`}
+                    className="w-9 h-9 bg-green-100 text-green-600 rounded-full flex items-center justify-center hover:bg-green-200 transition-colors">
+                    <Phone className="w-4 h-4" />
+                  </a>
+                )}
+              </div>
+              {(selectedOrder.deliveryAddress?.address || selectedOrder.address) && (
+                <div className="flex items-start gap-2 pt-2 border-t border-dark-200/50">
+                  <MapPin className="w-4 h-4 text-dark-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-dark-600">{selectedOrder.deliveryAddress?.address || selectedOrder.address || selectedOrder.customer?.address || ''}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Order items */}
+            <div className="rounded-xl bg-dark-50 p-4 space-y-3">
+              <p className="text-xs font-bold text-dark-500 uppercase tracking-wide">Items</p>
+              <div className="space-y-2">
+                {(selectedOrder.items || []).map((item, i) => (
+                  <div key={i} className="flex items-center gap-3 py-1.5">
+                    <div className="w-10 h-10 rounded-lg bg-dark-100 overflow-hidden flex-shrink-0">
+                      {(item.image || item.variantImage || findItemImage(item.name)) ?
+                        <img src={item.image || item.variantImage || findItemImage(item.name)} alt="" className="w-full h-full object-cover" /> :
+                        <div className="w-full h-full flex items-center justify-center"><Image className="w-4 h-4 text-dark-300" /></div>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-dark-800 truncate">{item.name}</p>
+                      <p className="text-[11px] text-dark-400">×{item.quantity} &bull; ₹{item.price || item.totalPrice || 0}</p>
+                    </div>
+                    <span className="text-sm font-bold text-dark-900">₹{item.totalPrice || (item.price * item.quantity) || 0}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="border-t border-dark-200/50 pt-3 space-y-1.5">
+                <div className="flex justify-between text-xs text-dark-500">
+                  <span>Items Total</span>
+                  <span>₹{selectedOrder.items?.reduce((s, i) => s + (i.totalPrice || i.price * i.quantity || 0), 0) || selectedOrder.totalAmount || 0}</span>
+                </div>
+                {selectedOrder.serviceType === 'delivery' && (
+                  <div className="flex justify-between text-xs text-dark-500">
+                    <span>Delivery Charge</span>
+                    <span className={selectedOrder.deliveryCharge === 0 ? 'text-green-600 font-medium' : ''}>
+                      {selectedOrder.deliveryCharge === 0 || !selectedOrder.deliveryCharge ? 'FREE' : `₹${selectedOrder.deliveryCharge}`}
+                    </span>
+                  </div>
+                )}
+                {selectedOrder.distance && (
+                  <div className="flex justify-between text-xs text-dark-500">
+                    <span>Distance</span><span>{selectedOrder.distance} km</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm font-bold text-dark-900 pt-1.5 border-t border-dark-200/50">
+                  <span>Total</span><span>₹{selectedOrder.totalAmount || 0}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Payment info */}
+            {(() => {
+              const pd = getPaymentDisplay(selectedOrder);
+              return (
+                <div className="rounded-xl bg-dark-50 p-4 space-y-2">
+                  <p className="text-xs font-bold text-dark-500 uppercase tracking-wide">Payment</p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="w-4 h-4 text-dark-400" />
+                      <span className="text-sm font-medium text-dark-800">{pd.method}</span>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-lg text-xs font-bold" style={{ backgroundColor: pd.statusColor + '22', color: pd.statusColor }}>
+                      {pd.status}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Delivery partner */}
+            {selectedOrder.assignedTo && (
+              <div className="rounded-xl bg-dark-50 p-4 space-y-2">
+                <p className="text-xs font-bold text-dark-500 uppercase tracking-wide">Delivery Partner</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-cyan-100 flex items-center justify-center">
+                    <Truck className="w-5 h-5 text-cyan-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-sm text-dark-900">{selectedOrder.assignedTo?.name || 'Assigned'}</p>
+                    <p className="text-xs text-cyan-600">On the way</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            {!selectedOrder._fromHistory && !['delivered','cancelled','refunded'].includes(selectedOrder.status) && (
+              <div className="space-y-3 pt-2">
+                {(() => {
+                  const next = getNextStatus(selectedOrder);
+                  if (!next) return null;
+                  const nsc = STATUS_CONFIG[next];
+                  const isPickup = selectedOrder.serviceType === 'pickup';
+                  let label = '';
+                  if (next === 'preparing' && selectedOrder.serviceType === 'delivery') label = 'Start Preparing';
+                  else if (next === 'delivered' && isPickup) label = 'Complete Order';
+                  else label = `Mark as ${nsc?.label || next}`;
+                  return (
+                    <button onClick={() => handleStatusAction(selectedOrder)} disabled={updatingStatus}
+                      className="w-full py-3.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-all disabled:opacity-50"
+                      style={{ backgroundColor: nsc?.color || '#6366F1' }}>
+                      {updatingStatus ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+                      {label}
+                    </button>
+                  );
+                })()}
+                {selectedOrder.paymentMethod === 'cod' && (
+                  <button onClick={() => setShowCancelConfirm(true)} disabled={updatingStatus}
+                    className="w-full py-3 rounded-xl font-medium text-sm text-red-600 border border-red-200 hover:bg-red-50 transition-colors disabled:opacity-50">
+                    Cancel Order
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ HISTORY TAB ═══════════ */}
+      {mainTab === 'history' && !selectedOrder && (
+        <>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
+            <input type="text" value={historySearchQuery} onChange={e => { setHistorySearchQuery(e.target.value); setHistoryDisplayCount(15); }}
+              placeholder="Search by order ID, name, phone..."
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-dark-200 rounded-xl text-sm" />
+          </div>
+          <div className="flex gap-2">
+            {['all','delivered','cancelled'].map(s => (
+              <button key={s} onClick={() => { setHistoryStatusFilter(s); setHistoryDisplayCount(15); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all ${historyStatusFilter === s ? 'bg-primary-500 text-white' : 'bg-white text-dark-600 border border-dark-200'}`}>
+                {s === 'all' ? `All (${historyOrders.length})` : s}
+              </button>
+            ))}
+            <button onClick={() => fetchHistory(true)} disabled={historyLoading}
+              className="ml-auto px-3 py-1.5 rounded-lg text-xs font-medium bg-dark-100 text-dark-600 hover:bg-dark-200 disabled:opacity-50">
+              <RefreshCw className={`w-3.5 h-3.5 ${historyLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          {historyLoading && visibleHistory.length === 0 ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : visibleHistory.length === 0 ? (
+            <div className="bg-white rounded-2xl p-12 text-center">
+              <Clock className="w-16 h-16 text-dark-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-dark-900 mb-2">No History</h3>
+              <p className="text-dark-500">Completed orders will appear here.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {visibleHistory.map((ho, idx) => {
+                const isDelivered = ho.status === 'delivered';
+                const sc = isDelivered ? STATUS_CONFIG.delivered : STATUS_CONFIG.cancelled;
+                const isPickup = ho.sheetType === 'selfpick' || ho.serviceType === 'pickup';
+
+                // Parse items for display
+                const parsedItems = typeof ho.items === 'string'
+                  ? ho.items.split(',').map(s => parseItemString(s)).filter(Boolean)
+                  : (ho.items || []);
+
+                // Payment display
+                const payKey = (ho.paymentStatus || ho.paymentMethod || 'pending').toLowerCase();
+                const payConf = HISTORY_PAYMENT_STATUS[payKey] || HISTORY_PAYMENT_STATUS.pending;
+
+                return (
+                  <button key={ho._id || idx} onClick={() => openHistoryOrderDetail(ho)}
+                    className="w-full bg-white rounded-xl p-3.5 shadow-card text-left hover:shadow-md transition-all border border-transparent hover:border-dark-200">
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-dark-900">#{ho.orderId}</span>
+                        {isPickup && <span className="px-1.5 py-0.5 text-[9px] font-bold bg-blue-100 text-blue-700 rounded">PICKUP</span>}
+                      </div>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ backgroundColor: sc.bg, color: sc.color }}>
+                        {isDelivered ? (isPickup ? 'Completed' : 'Delivered') : 'Cancelled'}
+                      </span>
+                    </div>
+                    {/* Customer */}
+                    <div className="flex items-center gap-2 text-xs text-dark-600 mb-1.5">
+                      <User className="w-3 h-3 text-dark-400" />
+                      <span className="truncate">{ho.customerName || 'Customer'}</span>
+                      {ho.phone && <><span className="text-dark-300">|</span><span>{ho.phone}</span></>}
+                    </div>
+                    {/* Items */}
+                    <div className="flex gap-1.5 mb-2 overflow-hidden">
+                      {parsedItems.slice(0, 3).map((pi, i) => {
+                        const img = findItemImage(pi.name);
+                        return (
+                          <div key={i} className="flex items-center gap-1 px-1.5 py-0.5 bg-dark-50 rounded text-[10px] text-dark-600 flex-shrink-0">
+                            {img && <img src={img} alt="" className="w-4 h-4 rounded object-cover" />}
+                            <span className="truncate max-w-[80px]">{pi.name}</span>
+                            <span className="text-dark-400">×{pi.quantity}</span>
+                          </div>
+                        );
+                      })}
+                      {parsedItems.length > 3 && <span className="text-[10px] text-dark-400 self-center">+{parsedItems.length - 3}</span>}
+                    </div>
+                    {/* Footer */}
+                    <div className="flex items-center justify-between text-xs pt-1.5 border-t border-dark-50">
+                      <span className="font-bold text-dark-900">₹{ho.totalAmount || ho.total || 0}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold px-1.5 py-0.5 rounded text-[9px]" style={{ backgroundColor: payConf.color + '22', color: payConf.color }}>
+                          {payConf.label}
+                        </span>
+                        <span className="text-dark-400">{ho.time ? fmtTime(ho.time) : fmtTime(ho.createdAt)}</span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+
+              {/* Load more */}
+              {hasMoreHistory && (
+                <button onClick={() => setHistoryDisplayCount(c => c + 20)}
+                  className="w-full py-3 text-sm font-medium text-primary-600 bg-primary-50 rounded-xl hover:bg-primary-100 transition-colors">
+                  Load More ({filteredHistory.length - historyDisplayCount} remaining)
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ═══════════ DELIVERY PARTNER MODAL ═══════════ */}
+      {showDeliveryModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="border-b border-dark-100 px-6 py-4 flex items-center justify-between flex-shrink-0">
+              <h3 className="text-lg font-bold text-dark-900">Assign Delivery Partner</h3>
+              <button onClick={() => setShowDeliveryModal(false)} className="p-2 hover:bg-dark-100 rounded-lg"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1 space-y-2">
+              {loadingPartners ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="w-6 h-6 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : deliveryPartners.length === 0 ? (
+                <p className="text-center text-dark-500 py-8">No delivery partners found.</p>
+              ) : (
+                [...deliveryPartners].sort((a, b) => (b.isOnline ? 1 : 0) - (a.isOnline ? 1 : 0) || a.name.localeCompare(b.name)).map(p => (
+                  <button key={p._id} onClick={() => handleAssignPartner(p)} disabled={assigningPartnerId === p._id}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${p.isOnline ? 'border-green-200 hover:bg-green-50' : 'border-dark-200 hover:bg-dark-50 opacity-60'} ${assigningPartnerId === p._id ? 'opacity-50' : ''}`}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${p.isOnline ? 'bg-green-100' : 'bg-dark-100'}`}>
+                      <Truck className={`w-5 h-5 ${p.isOnline ? 'text-green-600' : 'text-dark-400'}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-dark-800">{p.name}</p>
+                      <p className="text-[11px] text-dark-500">{p.phone}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${p.isOnline ? 'bg-green-100 text-green-700' : 'bg-dark-100 text-dark-500'}`}>
+                        {p.isOnline ? 'Online' : 'Offline'}
+                      </span>
+                      {p.rating && <p className="text-[10px] text-dark-400 mt-0.5">⭐ {p.rating}</p>}
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+            <div className="border-t border-dark-100 p-4">
+              <button onClick={handleSkipAssignment} disabled={updatingStatus}
+                className="w-full py-2.5 border border-dark-200 rounded-xl text-sm font-medium text-dark-600 hover:bg-dark-50 disabled:opacity-50">
+                Skip — Assign Later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ PAYMENT METHOD MODAL (Pickup Completion) ═══════════ */}
+      {showPaymentMethodModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="text-lg font-bold text-dark-900">Complete Order</h3>
+            <p className="text-sm text-dark-500">How did the customer pay?</p>
+            <div className="space-y-2">
+              <button onClick={() => handlePaymentMethodSelect('cash')} disabled={updatingStatus}
+                className="w-full py-3 bg-green-50 text-green-700 rounded-xl font-medium hover:bg-green-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                💵 Cash
+              </button>
+              <button onClick={() => handlePaymentMethodSelect('upi')} disabled={updatingStatus}
+                className="w-full py-3 bg-blue-50 text-blue-700 rounded-xl font-medium hover:bg-blue-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                📱 UPI
+              </button>
+            </div>
+            <button onClick={() => setShowPaymentMethodModal(false)}
+              className="w-full py-2 text-dark-500 text-sm">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ CANCEL CONFIRM MODAL ═══════════ */}
+      {showCancelConfirm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="text-lg font-bold text-dark-900">Cancel Order?</h3>
+            <p className="text-sm text-dark-500">Are you sure you want to cancel this order? This action cannot be undone.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowCancelConfirm(false)} className="flex-1 py-2.5 border border-dark-200 rounded-xl font-medium text-dark-700">No</button>
+              <button onClick={handleCancelOrder} disabled={updatingStatus}
+                className="flex-1 py-2.5 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 disabled:opacity-50">
+                {updatingStatus ? 'Cancelling...' : 'Yes, Cancel'}
+              </button>
             </div>
           </div>
         </div>

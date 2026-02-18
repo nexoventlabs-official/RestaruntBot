@@ -1,642 +1,848 @@
-import { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, Eye, EyeOff, X, Upload, Tag, Send, RotateCw, Search, Edit, Check, Clock, Users, Percent, ShoppingBag, Image, AlertCircle, CheckCircle } from 'lucide-react';
+/* eslint-disable no-alert */
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Plus, Edit, Trash2, X, Image, Search, Send, Check, ChevronDown, ChevronUp, Upload, Users, Tag, Target } from 'lucide-react';
 import api from '../api';
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api').replace('/api', '');
+/* ─── helpers ─── */
+const foodDot = (ft) =>
+  ft === 'veg' ? 'bg-green-500' : ft === 'egg' ? 'bg-yellow-500' : ft === 'nonveg' || ft === 'non-veg' ? 'bg-red-500' : 'bg-gray-300';
+
+const fmtDate = (d) => { if (!d) return ''; return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+
+const TEMPLATE_STATUS_CONFIG = {
+  approved: { color: '#22C55E', bg: '#DCFCE7', label: '✅ Approved' },
+  pending:  { color: '#F59E0B', bg: '#FEF3C7', label: '⏳ Pending Review' },
+  rejected: { color: '#EF4444', bg: '#FEE2E2', label: '❌ Rejected' },
+  none:     { color: '#6B7280', bg: '#F3F4F6', label: '—  No Template' },
+};
+
+const TARGET_LABELS = {
+  all: 'All Customers',
+  top_percentage: 'Top Spenders %',
+  min_spent: 'Min Spent ₹',
+  min_orders: 'Min Orders',
+};
 
 export default function Offers() {
+  /* ═══════════ LIST STATE ═══════════ */
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState('');
   const [sendingOffer, setSendingOffer] = useState(null);
-  const [togglingOffer, setTogglingOffer] = useState(null);
   const [retryingTemplate, setRetryingTemplate] = useState(null);
-  const pollingRef = useRef(null);
+  const [togglingOffer, setTogglingOffer] = useState(null);
+  const [detailOffer, setDetailOffer] = useState(null);
+  const pollRef = useRef(null);
 
-  // Form state matching mobile app's OfferFormScreen
-  const [categories, setCategories] = useState([]);
+  /* ═══════════ FORM STATE ═══════════ */
+  const [showForm, setShowForm] = useState(false);
+  const [editingOffer, setEditingOffer] = useState(null);
+  const [offerType, setOfferType] = useState('');
+  const [percentage, setPercentage] = useState('');
+  const [image, setImage] = useState(null);
+  const [newImageFile, setNewImageFile] = useState(null);
+  const [newImagePreview, setNewImagePreview] = useState('');
+  const [validFrom, setValidFrom] = useState('');
+  const [validUntil, setValidUntil] = useState('');
+
+  // Targeting
+  const [targetType, setTargetType] = useState('all');
+  const [targetPercentage, setTargetPercentage] = useState('10');
+  const [targetMinSpent, setTargetMinSpent] = useState('1000');
+  const [targetMinOrders, setTargetMinOrders] = useState('3');
+  const [customerStats, setCustomerStats] = useState({ total: 0, selected: 0 });
+  const [loadingCustomerStats, setLoadingCustomerStats] = useState(false);
+  const statsDebounceRef = useRef(null);
+
+  // Items / Categories selection
+  const [_categories, setCategories] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
-  const [form, setForm] = useState({
-    offerType: 'percentage',
-    percentage: '',
-    selectedCategories: [],
-    selectedItems: [],
-    selectedVariants: [],
-    validFrom: '',
-    validUntil: '',
-    targetType: 'all',
-    targetPercentage: '10',
-    targetMinSpent: '500',
-    targetMinOrders: '3',
-    isActive: true,
-  });
-  const [customerStats, setCustomerStats] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [selectedVariants, setSelectedVariants] = useState([]);
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [showItemModal, setShowItemModal] = useState(false);
+  const [expandedItemId, setExpandedItemId] = useState(null);
+  const [itemSearch, setItemSearch] = useState('');
+  const [loadingData, setLoadingData] = useState(false);
 
-  useEffect(() => {
-    loadOffers();
+  const [saving, setSaving] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState(null);
+
+  /* ═══════════ FETCH OFFERS ═══════════ */
+  const fetchOffers = useCallback(async () => {
+    try { const r = await api.get('/offers'); setOffers(r.data || []); } catch { /* silent */ }
   }, []);
 
-  // Poll pending template statuses
-  useEffect(() => {
-    const pendingOffers = offers.filter(o => o.templateStatus === 'PENDING');
-    if (pendingOffers.length > 0) {
-      pollingRef.current = setInterval(async () => {
-        for (const offer of pendingOffers) {
-          try {
-            const res = await api.get(`/offers/${offer._id}/template-status`);
-            if (res.data.status !== 'PENDING') {
-              loadOffers();
-            }
-          } catch (e) { /* ignore */ }
-        }
-      }, 30000);
-    }
-    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
-  }, [offers]);
+  useEffect(() => { fetchOffers().finally(() => setLoading(false)); }, [fetchOffers]);
 
-  const loadOffers = async () => {
+  /* ═══════════ TEMPLATE STATUS POLLING ═══════════ */
+  const templateStatusKey = offers.map(o => `${o._id}:${o.templateStatus}`).join(',');
+  useEffect(() => {
+    const pending = offers.filter(o => o.templateStatus === 'pending');
+    if (pending.length === 0) { if (pollRef.current) clearInterval(pollRef.current); return; }
+
+    const poll = async () => {
+      let updated = false;
+      for (const offer of pending) {
+        try {
+          const r = await api.get(`/offers/${offer._id}/template-status`);
+          if (r.data.templateStatus && r.data.templateStatus !== offer.templateStatus) updated = true;
+        } catch { /* ignore */ }
+      }
+      if (updated) fetchOffers();
+    };
+
+    poll();
+    pollRef.current = setInterval(poll, 30000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [templateStatusKey, fetchOffers, offers]);
+
+  /* ═══════════ OFFER ACTIONS ═══════════ */
+  const toggleActive = async (offer) => {
+    setTogglingOffer(offer._id);
     try {
-      const res = await api.get('/offers');
-      setOffers(res.data);
-    } catch (err) {
-      console.error('Error loading offers:', err);
-    } finally {
-      setLoading(false);
-    }
+      await api.patch(`/offers/${offer._id}/toggle`);
+      setOffers(prev => prev.map(o => o._id === offer._id ? { ...o, isActive: !o.isActive } : o));
+    } catch { alert('Failed to toggle'); }
+    finally { setTogglingOffer(null); }
   };
 
-  const loadFormData = async () => {
+  const sendOffer = async (offer) => {
+    // Pre-check template status
+    if (offer.templateStatus === 'pending') return alert('Template is still waiting for Meta approval. Please wait.');
+    if (offer.templateStatus === 'rejected') return alert(`Template was rejected: ${offer.rejectionReason || 'Unknown reason'}. Please retry or edit the offer.`);
+    if (!offer.templateStatus || offer.templateStatus === 'none') return alert('No template exists. The system will attempt to create one.');
+
+    const targetLabel = offer.targetType && offer.targetType !== 'all'
+      ? `targeted customers (${TARGET_LABELS[offer.targetType] || offer.targetType})`
+      : 'ALL customers';
+
+    if (!confirm(`Send this offer to ${targetLabel}?\n\nRecent contacts will get an interactive message, others will get the approved template.`)) return;
+
+    setSendingOffer(offer._id);
     try {
-      const [catRes, menuRes] = await Promise.all([
-        api.get('/categories'),
-        api.get('/menu'),
-      ]);
+      const r = await api.post(`/offers/${offer._id}/send`);
+      const d = r.data;
+      alert(`Sent! ${d.sent || 0} delivered, ${d.failed || 0} failed.\nInteractive: ${d.sentViaInteractive || 0}, Template: ${d.sentViaTemplate || 0}`);
+      fetchOffers();
+    } catch (err) { alert(err.response?.data?.error || 'Failed to send'); }
+    finally { setSendingOffer(null); }
+  };
+
+  const retryTemplate = async (offer) => {
+    if (!confirm('Re-submit this template to Meta for review?')) return;
+    setRetryingTemplate(offer._id);
+    try {
+      await api.post(`/offers/${offer._id}/retry-template`);
+      alert('Template re-submitted for review.');
+      fetchOffers();
+    } catch { alert('Failed to retry'); }
+    finally { setRetryingTemplate(null); }
+  };
+
+  const deleteOffer = (offer) => {
+    setConfirmDialog({
+      title: 'Delete Offer?',
+      message: 'This will:\n• Remove the offer completely\n• Delete the Meta WhatsApp template\n• Remove offer prices from menu items',
+      onConfirm: async () => {
+        try {
+          await api.delete(`/offers/${offer._id}`);
+          setOffers(prev => prev.filter(o => o._id !== offer._id));
+          setDetailOffer(null);
+        } catch { alert('Failed to delete'); }
+        finally { setConfirmDialog(null); }
+      },
+    });
+  };
+
+  /* ═══════════ FORM HELPERS ═══════════ */
+  const openForm = async (offer = null) => {
+    setLoadingData(true);
+    try {
+      const [catRes, menuRes] = await Promise.all([api.get('/categories'), api.get('/menu')]);
       setCategories(catRes.data || []);
       setMenuItems(menuRes.data || []);
-    } catch (err) {
-      console.error('Failed to load form data:', err);
-    }
-  };
+    } catch { /* ignore */ }
+    finally { setLoadingData(false); }
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
-    }
-  };
-
-  const resetForm = () => {
-    setImageFile(null);
-    setImagePreview('');
-    setEditing(null);
-    setForm({
-      offerType: 'percentage',
-      percentage: '',
-      selectedCategories: [],
-      selectedItems: [],
-      selectedVariants: [],
-      validFrom: '',
-      validUntil: '',
-      targetType: 'all',
-      targetPercentage: '10',
-      targetMinSpent: '500',
-      targetMinOrders: '3',
-      isActive: true,
-    });
-    setCustomerStats(null);
-    setSearchQuery('');
-  };
-
-  const openModal = (offer = null) => {
-    loadFormData();
     if (offer) {
-      setEditing(offer);
-      setForm({
-        offerType: offer.offerType || 'percentage',
-        percentage: offer.percentage || '',
-        selectedCategories: offer.selectedCategories || [],
-        selectedItems: offer.selectedItems || [],
-        selectedVariants: offer.selectedVariants || [],
-        validFrom: offer.validFrom ? new Date(offer.validFrom).toISOString().slice(0, 16) : '',
-        validUntil: offer.validUntil ? new Date(offer.validUntil).toISOString().slice(0, 16) : '',
-        targetType: offer.targetType || 'all',
-        targetPercentage: offer.targetPercentage || '10',
-        targetMinSpent: offer.targetMinSpent || '500',
-        targetMinOrders: offer.targetMinOrders || '3',
-        isActive: offer.isActive !== false,
-      });
-      setImagePreview(offer.image || '');
+      setEditingOffer(offer);
+      setOfferType(offer.offerType || '');
+      setPercentage(offer.percentage !== null && offer.percentage !== undefined ? offer.percentage.toString() : '');
+      setImage(offer.imageMobile || offer.imageTablet || offer.imageDesktop || null);
+      setNewImageFile(null); setNewImagePreview('');
+      setSelectedCategories(offer.appliedCategories || []);
+      setSelectedItems(Array.isArray(offer.appliedItems) ? offer.appliedItems.map(i => typeof i === 'string' ? i : i._id) : []);
+      setSelectedVariants(offer.appliedVariants || []);
+      setValidFrom(offer.validFrom ? new Date(offer.validFrom).toISOString().slice(0, 16) : '');
+      setValidUntil(offer.validUntil ? new Date(offer.validUntil).toISOString().slice(0, 16) : '');
+      setTargetType(offer.targetType || 'all');
+      setTargetPercentage(offer.targetPercentage?.toString() || '10');
+      setTargetMinSpent(offer.targetMinSpent?.toString() || '1000');
+      setTargetMinOrders(offer.targetMinOrders?.toString() || '3');
     } else {
-      resetForm();
+      setEditingOffer(null);
+      setOfferType(''); setPercentage('');
+      setImage(null); setNewImageFile(null); setNewImagePreview('');
+      setSelectedCategories([]); setSelectedItems([]); setSelectedVariants([]);
+      setValidFrom(''); setValidUntil('');
+      setTargetType('all'); setTargetPercentage('10'); setTargetMinSpent('1000'); setTargetMinOrders('3');
     }
-    setShowModal(true);
+    setCustomerStats({ total: 0, selected: 0 });
+    setShowForm(true);
   };
 
-  const closeModal = () => {
-    setShowModal(false);
-    resetForm();
-  };
+  /* ═══════════ CUSTOMER STATS (debounced) ═══════════ */
+  useEffect(() => {
+    if (!showForm) return;
+    if (statsDebounceRef.current) clearTimeout(statsDebounceRef.current);
+    if (targetType === 'all') { setCustomerStats({ total: 0, selected: 0 }); return; }
 
-  // Preview customer targeting
-  const previewCustomers = async () => {
-    try {
-      let res;
-      if (form.targetType === 'top_percentage') {
-        res = await api.get(`/offers/customers/top/${form.targetPercentage}`);
-      } else if (form.targetType === 'min_spent') {
-        res = await api.get(`/offers/customers/min-spent/${form.targetMinSpent}`);
-      } else if (form.targetType === 'min_orders') {
-        res = await api.get(`/offers/customers/min-orders/${form.targetMinOrders}`);
+    setLoadingCustomerStats(true);
+    statsDebounceRef.current = setTimeout(async () => {
+      try {
+        let url = '';
+        if (targetType === 'top_percentage') url = `/offers/customers/top/${parseInt(targetPercentage) || 10}`;
+        else if (targetType === 'min_spent') url = `/offers/customers/min-spent/${parseFloat(targetMinSpent) || 1000}`;
+        else if (targetType === 'min_orders') url = `/offers/customers/min-orders/${parseInt(targetMinOrders) || 3}`;
+        const r = await api.get(url);
+        setCustomerStats({ total: r.data.totalCustomers || 0, selected: r.data.selectedCount || 0 });
+      } catch { setCustomerStats({ total: 0, selected: 0 }); }
+      finally { setLoadingCustomerStats(false); }
+    }, 800);
+    return () => { if (statsDebounceRef.current) clearTimeout(statsDebounceRef.current); };
+  }, [showForm, targetType, targetPercentage, targetMinSpent, targetMinOrders]);
+
+  /* ═══════════ ITEM SELECTION ═══════════ */
+  const filteredMenuItems = useMemo(() => {
+    if (!itemSearch.trim()) return menuItems;
+    const q = itemSearch.toLowerCase().trim();
+    return menuItems.filter(i => i.name.toLowerCase().includes(q) || i.variants?.some(v => v.label?.toLowerCase().includes(q)));
+  }, [menuItems, itemSearch]);
+
+  const isVariantSelected = useCallback((itemId, variantIndex) => {
+    return selectedItems.includes(itemId) || selectedVariants.includes(`${itemId}_${variantIndex}`);
+  }, [selectedItems, selectedVariants]);
+
+  const toggleItem = useCallback((itemId) => {
+    const item = menuItems.find(i => i._id === itemId);
+    if (!item) return;
+    const cats = Array.isArray(item.category) ? item.category : [item.category].filter(Boolean);
+
+    if (selectedItems.includes(itemId)) {
+      // Deselect item
+      const newItems = selectedItems.filter(id => id !== itemId);
+      const newVariants = selectedVariants.filter(v => !v.startsWith(`${itemId}_`));
+      setSelectedItems(newItems);
+      setSelectedVariants(newVariants);
+      // Auto-demote categories
+      cats.forEach(catName => {
+        const catItems = menuItems.filter(m => (Array.isArray(m.category) ? m.category : [m.category]).includes(catName));
+        const allSelected = catItems.every(m => m._id === itemId ? false : newItems.includes(m._id));
+        if (!allSelected) setSelectedCategories(prev => prev.filter(c => c !== catName));
+      });
+    } else {
+      // Select item (clears individual variant selections)
+      const newItems = [...selectedItems, itemId];
+      const newVariants = selectedVariants.filter(v => !v.startsWith(`${itemId}_`));
+      setSelectedItems(newItems);
+      setSelectedVariants(newVariants);
+      // Auto-promote categories
+      cats.forEach(catName => {
+        const catItems = menuItems.filter(m => (Array.isArray(m.category) ? m.category : [m.category]).includes(catName));
+        const allSelected = catItems.every(m => newItems.includes(m._id));
+        if (allSelected && !selectedCategories.includes(catName)) setSelectedCategories(prev => [...prev, catName]);
+      });
+    }
+  }, [menuItems, selectedItems, selectedVariants, selectedCategories]);
+
+  const toggleVariant = useCallback((itemId, variantIndex) => {
+    const item = menuItems.find(i => i._id === itemId);
+    if (!item) return;
+    const key = `${itemId}_${variantIndex}`;
+    const totalV = item.variants?.length || 0;
+
+    if (selectedItems.includes(itemId)) {
+      // Parent is fully selected → uncheck this variant, move others to selectedVariants
+      const newItems = selectedItems.filter(id => id !== itemId);
+      const otherKeys = [];
+      for (let i = 0; i < totalV; i++) { if (i !== variantIndex) otherKeys.push(`${itemId}_${i}`); }
+      setSelectedItems(newItems);
+      setSelectedVariants(prev => [...prev.filter(v => !v.startsWith(`${itemId}_`)), ...otherKeys]);
+    } else if (selectedVariants.includes(key)) {
+      // Deselect this variant
+      setSelectedVariants(prev => prev.filter(v => v !== key));
+    } else {
+      // Select this variant — check if all now selected → upgrade to parent
+      const newVariants = [...selectedVariants, key];
+      const selectedCount = newVariants.filter(v => v.startsWith(`${itemId}_`)).length;
+      if (selectedCount >= totalV) {
+        setSelectedItems(prev => [...prev, itemId]);
+        setSelectedVariants(prev => prev.filter(v => !v.startsWith(`${itemId}_`)));
+      } else {
+        setSelectedVariants(newVariants);
       }
-      if (res) setCustomerStats(res.data);
-    } catch (err) {
-      console.error('Failed to preview customers:', err);
     }
+  }, [menuItems, selectedItems, selectedVariants]);
+
+  const selectAll = useCallback(() => {
+    const ids = filteredMenuItems.map(i => i._id);
+    const allSelected = ids.every(id => selectedItems.includes(id));
+    if (allSelected) {
+      setSelectedItems(prev => prev.filter(id => !ids.includes(id)));
+      setSelectedVariants(prev => prev.filter(v => !ids.some(id => v.startsWith(`${id}_`))));
+      setSelectedCategories([]);
+    } else {
+      setSelectedItems(prev => [...new Set([...prev, ...ids])]);
+      setSelectedVariants(prev => prev.filter(v => !ids.some(id => v.startsWith(`${id}_`))));
+      // Add all categories
+      const allCats = new Set();
+      filteredMenuItems.forEach(i => (Array.isArray(i.category) ? i.category : [i.category]).forEach(c => allCats.add(c)));
+      setSelectedCategories(prev => [...new Set([...prev, ...allCats])]);
+    }
+  }, [filteredMenuItems, selectedItems]);
+
+  const totalSelected = useMemo(() => {
+    let count = 0;
+    selectedItems.forEach(id => {
+      const item = menuItems.find(i => i._id === id);
+      count += item?.variants?.length || 1;
+    });
+    count += selectedVariants.length;
+    return count;
+  }, [selectedItems, selectedVariants, menuItems]);
+
+  /* ═══════════ SCHEDULE QUICK BUTTONS ═══════════ */
+  const setNow = () => setValidFrom(new Date().toISOString().slice(0, 16));
+  const addDays = (days) => {
+    if (!validFrom) return;
+    const d = new Date(validFrom); d.setDate(d.getDate() + days);
+    setValidUntil(d.toISOString().slice(0, 16));
+  };
+  const addMonth = () => {
+    if (!validFrom) return;
+    const d = new Date(validFrom); d.setMonth(d.getMonth() + 1);
+    setValidUntil(d.toISOString().slice(0, 16));
   };
 
+  /* ═══════════ FORM SUBMIT ═══════════ */
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!imageFile && !editing) return alert('Please select an image');
+    if (!image && !newImageFile) return alert('Please add a banner image.');
+    if (!offerType.trim()) return alert('Please enter an offer type.');
+    if (percentage && (isNaN(percentage) || parseFloat(percentage) <= 0 || parseFloat(percentage) > 100))
+      return alert('Percentage must be between 1 and 100.');
 
-    setSubmitting(true);
+    setSaving(true);
     try {
-      const data = new FormData();
+      const fd = new FormData();
+      fd.append('isActive', 'true');
+      fd.append('offerType', offerType.trim());
+      if (percentage) fd.append('percentage', percentage);
+      if (validFrom) fd.append('validFrom', new Date(validFrom).toISOString());
+      if (validUntil) fd.append('validUntil', new Date(validUntil).toISOString());
+      if (selectedItems.length > 0) fd.append('appliedItems', JSON.stringify(selectedItems));
+      if (selectedVariants.length > 0) fd.append('appliedVariants', JSON.stringify(selectedVariants));
+      if (selectedCategories.length > 0) fd.append('appliedCategories', JSON.stringify(selectedCategories));
+      fd.append('targetType', targetType);
+      if (targetType === 'top_percentage') fd.append('targetPercentage', targetPercentage);
+      else if (targetType === 'min_spent') fd.append('targetMinSpent', targetMinSpent);
+      else if (targetType === 'min_orders') fd.append('targetMinOrders', targetMinOrders);
 
-      if (imageFile) {
-        data.append('imageMobile', imageFile);
-        data.append('imageTablet', imageFile);
-        data.append('imageDesktop', imageFile);
-        data.append('image', imageFile);
+      if (newImageFile) {
+        fd.append('imageMobile', newImageFile);
+        fd.append('imageTablet', newImageFile);
+        fd.append('imageDesktop', newImageFile);
       }
 
-      data.append('offerType', form.offerType);
-      data.append('percentage', form.percentage);
-      data.append('isActive', form.isActive);
-
-      if (form.selectedCategories.length > 0) data.append('selectedCategories', JSON.stringify(form.selectedCategories));
-      if (form.selectedItems.length > 0) data.append('selectedItems', JSON.stringify(form.selectedItems));
-      if (form.selectedVariants.length > 0) data.append('selectedVariants', JSON.stringify(form.selectedVariants));
-
-      if (form.validFrom) data.append('validFrom', new Date(form.validFrom).toISOString());
-      if (form.validUntil) data.append('validUntil', new Date(form.validUntil).toISOString());
-
-      data.append('targetType', form.targetType);
-      if (form.targetType === 'top_percentage') data.append('targetPercentage', form.targetPercentage);
-      if (form.targetType === 'min_spent') data.append('targetMinSpent', form.targetMinSpent);
-      if (form.targetType === 'min_orders') data.append('targetMinOrders', form.targetMinOrders);
-
-      if (editing) {
-        await api.put(`/offers/${editing._id}`, data, { timeout: 90000 });
+      let res;
+      if (editingOffer) {
+        res = await api.put(`/offers/${editingOffer._id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 90000 });
       } else {
-        await api.post('/offers', data, { timeout: 90000 });
+        res = await api.post('/offers', fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 90000 });
       }
 
-      loadOffers();
-      closeModal();
+      // Show template status
+      const ts = res.data?.templateStatus;
+      if (ts === 'pending') alert('Offer saved! Template submitted to Meta — waiting for approval.');
+      else if (ts === 'rejected') alert(`Offer saved but template was rejected: ${res.data?.rejectionReason || 'Unknown'}`);
+      else if (!ts || ts === 'none') alert('Offer saved! No template created (META_WABA_ID may not be configured).');
+      else alert('Offer saved successfully!');
+
+      setShowForm(false);
+      fetchOffers();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to save offer');
-    } finally {
-      setSubmitting(false);
+      if (err.code === 'ECONNABORTED') alert('Upload timed out. Check your internet connection and try again.');
+      else alert(err.response?.data?.error || 'Failed to save offer');
     }
+    finally { setSaving(false); }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Delete this offer? This will also remove the Meta template and catalog prices.')) return;
-    try {
-      await api.delete(`/offers/${id}`);
-      loadOffers();
-    } catch (err) {
-      alert('Failed to delete offer');
-    }
-  };
-
-  const handleToggle = async (id) => {
-    setTogglingOffer(id);
-    try {
-      await api.patch(`/offers/${id}/toggle`);
-      loadOffers();
-    } catch (err) {
-      alert('Failed to toggle status');
-    } finally {
-      setTogglingOffer(null);
-    }
-  };
-
-  const handleSend = async (id) => {
-    if (!confirm('Send this offer to customers via WhatsApp?')) return;
-    setSendingOffer(id);
-    try {
-      const res = await api.post(`/offers/${id}/send`);
-      alert(res.data?.message || 'Offer sent successfully!');
-    } catch (err) {
-      alert(err.response?.data?.error || 'Failed to send offer');
-    } finally {
-      setSendingOffer(null);
-    }
-  };
-
-  const handleRetryTemplate = async (id) => {
-    setRetryingTemplate(id);
-    try {
-      await api.post(`/offers/${id}/retry-template`);
-      alert('Template resubmitted to Meta for approval');
-      loadOffers();
-    } catch (err) {
-      alert(err.response?.data?.error || 'Failed to retry template');
-    } finally {
-      setRetryingTemplate(null);
-    }
-  };
-
-  const getTemplateStatusBadge = (offer) => {
-    if (!offer.templateStatus) return null;
-    const config = {
-      APPROVED: { bg: 'bg-green-100', text: 'text-green-700', label: 'Template Approved' },
-      PENDING: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Template Pending' },
-      REJECTED: { bg: 'bg-red-100', text: 'text-red-700', label: 'Template Rejected' },
-    };
-    const c = config[offer.templateStatus] || config.PENDING;
-    return (
-      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${c.bg} ${c.text}`}>
-        {offer.templateStatus === 'PENDING' && <Clock className="w-3 h-3 animate-pulse" />}
-        {offer.templateStatus === 'APPROVED' && <CheckCircle className="w-3 h-3" />}
-        {offer.templateStatus === 'REJECTED' && <AlertCircle className="w-3 h-3" />}
-        {c.label}
-      </span>
-    );
-  };
-
-  const filteredMenuItems = searchQuery
-    ? menuItems.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : menuItems;
-
+  /* ═══════════ LOADING ═══════════ */
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
+  /* ═══════════ RENDER ═══════════ */
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-4">
+      {/* ── HEADER ── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-dark-900">Offers & Promotions</h1>
-          <p className="text-dark-500 mt-1">{offers.length} offers &bull; Manage promotional deals</p>
+          <h1 className="text-2xl font-bold text-dark-900">Offers</h1>
+          <p className="text-dark-500 mt-0.5">{offers.length} offers</p>
         </div>
-        <button
-          onClick={() => openModal()}
-          className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2.5 rounded-xl font-medium hover:bg-primary-700 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          Create Offer
+        <button onClick={() => openForm()} className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white rounded-xl text-sm font-medium hover:bg-primary-700 transition-colors">
+          <Plus className="w-4 h-4" /> Create Offer
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-4 shadow-card">
-          <p className="text-dark-400 text-sm">Total Offers</p>
-          <p className="text-2xl font-bold text-dark-900 mt-1">{offers.length}</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 shadow-card">
-          <p className="text-dark-400 text-sm">Active</p>
-          <p className="text-2xl font-bold text-green-600 mt-1">{offers.filter(o => o.isActive).length}</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 shadow-card">
-          <p className="text-dark-400 text-sm">Pending Approval</p>
-          <p className="text-2xl font-bold text-yellow-600 mt-1">{offers.filter(o => o.templateStatus === 'PENDING').length}</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 shadow-card">
-          <p className="text-dark-400 text-sm">Rejected</p>
-          <p className="text-2xl font-bold text-red-600 mt-1">{offers.filter(o => o.templateStatus === 'REJECTED').length}</p>
-        </div>
+      {/* ── STATS ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Total', value: offers.length, color: 'text-dark-900' },
+          { label: 'Active', value: offers.filter(o => o.isActive).length, color: 'text-green-600' },
+          { label: 'Approved', value: offers.filter(o => o.templateStatus === 'approved').length, color: 'text-blue-600' },
+          { label: 'Pending', value: offers.filter(o => o.templateStatus === 'pending').length, color: 'text-yellow-600' },
+        ].map(s => (
+          <div key={s.label} className="bg-white rounded-xl p-3 shadow-card text-center">
+            <p className="text-dark-400 text-xs">{s.label}</p>
+            <p className={`text-xl font-bold mt-0.5 ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
       </div>
 
-      {/* Offers Grid */}
+      {/* ── OFFER CARDS ── */}
       {offers.length === 0 ? (
         <div className="bg-white rounded-2xl p-12 text-center">
           <Tag className="w-16 h-16 text-dark-300 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-dark-900 mb-2">No Offers</h3>
-          <p className="text-dark-500 mb-6">Create your first promotional offer</p>
-          <button
-            onClick={() => openModal()}
-            className="inline-flex items-center gap-2 bg-primary-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-primary-700 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            Create Offer
-          </button>
+          <h3 className="text-lg font-semibold text-dark-900 mb-2">No Offers Yet</h3>
+          <p className="text-dark-500">Create your first offer to attract customers.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {offers.map((offer) => (
-            <div
-              key={offer._id}
-              className={`bg-white rounded-2xl overflow-hidden shadow-card hover:shadow-card-hover transition-all ${
-                offer.isActive ? 'border border-green-200' : 'border border-dark-100 opacity-70'
-              }`}
-            >
-              {/* Image */}
-              <div className="relative aspect-[19/6] bg-dark-100 overflow-hidden">
-                {offer.image ? (
-                  <img src={offer.image.startsWith('http') ? offer.image : `${API_BASE_URL}${offer.image}`} alt="Offer" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Image className="w-12 h-12 text-dark-300" />
-                  </div>
-                )}
-                <div className="absolute top-2 left-2 flex gap-1.5">
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${offer.isActive ? 'bg-green-500 text-white' : 'bg-dark-500 text-white'}`}>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {offers.map(offer => {
+            const ts = TEMPLATE_STATUS_CONFIG[offer.templateStatus] || TEMPLATE_STATUS_CONFIG.none;
+            const imgUrl = offer.imageMobile || offer.imageTablet || offer.imageDesktop;
+            return (
+              <div key={offer._id} className="bg-white rounded-2xl overflow-hidden shadow-card hover:shadow-lg transition-all">
+                {/* Image */}
+                <div className="relative aspect-[19/6] bg-dark-100 cursor-pointer" onClick={() => setDetailOffer(offer)}>
+                  {imgUrl ? <img src={`${imgUrl}?t=${offer.updatedAt || ''}`} alt="" className="w-full h-full object-cover" /> :
+                    <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-dark-300" /></div>}
+                  {/* Badges */}
+                  <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[10px] font-bold ${offer.isActive ? 'bg-green-500 text-white' : 'bg-dark-500 text-white'}`}>
                     {offer.isActive ? 'Active' : 'Inactive'}
                   </span>
                   {offer.offerType && (
-                    <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-primary-500 text-white capitalize">
-                      {offer.offerType === 'percentage' ? `${offer.percentage}% off` : offer.offerType}
-                    </span>
+                    <span className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/60 text-white rounded text-[10px] font-medium">{offer.offerType}</span>
                   )}
                 </div>
-              </div>
 
-              {/* Info */}
-              <div className="p-4 space-y-3">
-                {getTemplateStatusBadge(offer)}
-
-                {offer.targetType && offer.targetType !== 'all' && (
-                  <div className="flex items-center gap-1.5 text-xs text-dark-500">
-                    <Users className="w-3.5 h-3.5" />
-                    <span>Targeted: {offer.targetType === 'top_percentage' ? `Top ${offer.targetPercentage}%` : offer.targetType === 'min_spent' ? `Min ₹${offer.targetMinSpent}` : `Min ${offer.targetMinOrders} orders`}</span>
-                  </div>
-                )}
-
-                {offer.selectedCategories?.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {offer.selectedCategories.map((cat, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-dark-50 rounded text-xs text-dark-600">{cat}</span>
-                    ))}
-                  </div>
-                )}
-
-                {(offer.validFrom || offer.validUntil) && (
-                  <div className="flex items-center gap-1.5 text-xs text-dark-400">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>
-                      {offer.validFrom ? new Date(offer.validFrom).toLocaleDateString() : 'Now'} — {offer.validUntil ? new Date(offer.validUntil).toLocaleDateString() : 'No end'}
-                    </span>
-                  </div>
-                )}
-
-                {/* Actions */}
-                <div className="flex items-center gap-2 pt-2 border-t border-dark-100">
-                  <button onClick={() => handleToggle(offer._id)} disabled={togglingOffer === offer._id}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium transition-colors ${
-                      offer.isActive ? 'bg-green-50 text-green-700 hover:bg-green-100' : 'bg-dark-50 text-dark-600 hover:bg-dark-100'
-                    } ${togglingOffer === offer._id ? 'opacity-50' : ''}`}>
-                    {offer.isActive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                    {togglingOffer === offer._id ? '...' : offer.isActive ? 'Active' : 'Inactive'}
-                  </button>
-
-                  <button onClick={() => openModal(offer)}
-                    className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors" title="Edit">
-                    <Edit className="w-4 h-4" />
-                  </button>
-
-                  <button onClick={() => handleSend(offer._id)} disabled={sendingOffer === offer._id}
-                    className={`p-2 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-colors ${sendingOffer === offer._id ? 'opacity-50' : ''}`} title="Send via WhatsApp">
-                    {sendingOffer === offer._id ? <RotateCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  </button>
-
-                  {offer.templateStatus === 'REJECTED' && (
-                    <button onClick={() => handleRetryTemplate(offer._id)} disabled={retryingTemplate === offer._id}
-                      className={`p-2 bg-yellow-50 text-yellow-600 rounded-xl hover:bg-yellow-100 transition-colors ${retryingTemplate === offer._id ? 'opacity-50' : ''}`} title="Retry Template">
-                      {retryingTemplate === offer._id ? <RotateCw className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4" />}
+                {/* Template status bar */}
+                <div className="flex items-center gap-2 px-3 py-2 text-xs font-medium" style={{ backgroundColor: ts.bg, color: ts.color }}>
+                  <span className="flex-1">{ts.label}</span>
+                  {offer.templateStatus === 'pending' && <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />}
+                  {offer.broadcastSentAt && <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[9px]">Sent</span>}
+                  {offer.templateStatus === 'rejected' && (
+                    <button onClick={(e) => { e.stopPropagation(); retryTemplate(offer); }} disabled={retryingTemplate === offer._id}
+                      className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-[10px] font-bold hover:bg-red-200 disabled:opacity-50">
+                      {retryingTemplate === offer._id ? '...' : 'Retry'}
                     </button>
                   )}
+                </div>
 
-                  <button onClick={() => handleDelete(offer._id)}
-                    className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors" title="Delete">
-                    <Trash2 className="w-4 h-4" />
+                {/* Actions */}
+                <div className="flex items-center gap-2 px-3 py-2.5 border-t border-dark-100">
+                  <button onClick={() => sendOffer(offer)} disabled={sendingOffer === offer._id}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-green-50 text-green-700 rounded-lg text-xs font-medium hover:bg-green-100 disabled:opacity-50">
+                    <Send className="w-3.5 h-3.5" />
+                    {sendingOffer === offer._id ? 'Sending...' : offer.targetType && offer.targetType !== 'all' ? '🎯 Send' : 'Send'}
                   </button>
+                  <button onClick={() => toggleActive(offer)} disabled={togglingOffer === offer._id}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${offer.isActive ? 'bg-green-100 text-green-700 hover:bg-red-100 hover:text-red-700' : 'bg-dark-100 text-dark-600 hover:bg-green-100 hover:text-green-700'} disabled:opacity-50`}>
+                    {togglingOffer === offer._id ? '...' : offer.isActive ? 'On' : 'Off'}
+                  </button>
+                  <button onClick={() => openForm(offer)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg"><Edit className="w-4 h-4" /></button>
+                  <button onClick={() => deleteOffer(offer)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {/* Create / Edit Offer Modal */}
-      {showModal && (
+      {/* ═══════════ OFFER DETAIL MODAL ═══════════ */}
+      {detailOffer && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-dark-100 flex-shrink-0">
+              <h3 className="text-lg font-bold text-dark-900">Offer Details</h3>
+              <button onClick={() => setDetailOffer(null)} className="p-2 hover:bg-dark-100 rounded-lg"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
+              {/* Image */}
+              {(detailOffer.imageMobile || detailOffer.imageTablet) && (
+                <div className="aspect-[19/6] rounded-xl overflow-hidden bg-dark-100">
+                  <img src={detailOffer.imageMobile || detailOffer.imageTablet || detailOffer.imageDesktop} alt="" className="w-full h-full object-cover" />
+                </div>
+              )}
+              {/* Status chips */}
+              <div className="flex gap-2 flex-wrap">
+                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${detailOffer.isActive ? 'bg-green-100 text-green-700' : 'bg-dark-100 text-dark-500'}`}>
+                  {detailOffer.isActive ? 'Active' : 'Inactive'}
+                </span>
+                {(() => { const ts = TEMPLATE_STATUS_CONFIG[detailOffer.templateStatus] || TEMPLATE_STATUS_CONFIG.none; return (
+                  <span className="px-2.5 py-1 rounded-lg text-xs font-bold" style={{ backgroundColor: ts.bg, color: ts.color }}>{ts.label}</span>
+                ); })()}
+              </div>
+              {/* Fields */}
+              <div className="space-y-3">
+                <div><p className="text-xs text-dark-400">Offer Type</p><p className="text-sm font-semibold text-dark-900">{detailOffer.offerType || '—'}</p></div>
+                {detailOffer.percentage && <div><p className="text-xs text-dark-400">Discount</p><p className="text-sm font-semibold text-dark-900">{detailOffer.percentage}%</p></div>}
+                {detailOffer.appliedCategories?.length > 0 && (
+                  <div>
+                    <p className="text-xs text-dark-400 mb-1">Categories</p>
+                    <div className="flex flex-wrap gap-1">{detailOffer.appliedCategories.map(c => <span key={c} className="px-2 py-0.5 bg-primary-50 text-primary-700 rounded text-xs font-medium">{c}</span>)}</div>
+                  </div>
+                )}
+                <div><p className="text-xs text-dark-400">Applied Items</p><p className="text-sm font-semibold text-dark-900">{detailOffer.appliedItems?.length || 0} items, {detailOffer.appliedVariants?.length || 0} variants</p></div>
+                <div><p className="text-xs text-dark-400">Target</p><p className="text-sm font-semibold text-dark-900">{TARGET_LABELS[detailOffer.targetType] || 'All'}{detailOffer.targetedCustomers ? ` (${detailOffer.targetedCustomers} customers)` : ''}</p></div>
+                {detailOffer.validFrom && <div><p className="text-xs text-dark-400">Valid From</p><p className="text-sm text-dark-700">{fmtDate(detailOffer.validFrom)}</p></div>}
+                {detailOffer.validUntil && <div><p className="text-xs text-dark-400">Valid Until</p><p className="text-sm text-dark-700">{fmtDate(detailOffer.validUntil)}</p></div>}
+                {detailOffer.createdAt && <div><p className="text-xs text-dark-400">Created</p><p className="text-sm text-dark-700">{fmtDate(detailOffer.createdAt)}</p></div>}
+                {detailOffer.broadcastSentAt && <div><p className="text-xs text-dark-400">Broadcast Sent</p><p className="text-sm text-dark-700">{fmtDate(detailOffer.broadcastSentAt)}</p></div>}
+                {detailOffer.rejectionReason && <div><p className="text-xs text-red-500">Rejection Reason</p><p className="text-sm text-red-700">{detailOffer.rejectionReason}</p></div>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ CREATE/EDIT FORM MODAL ═══════════ */}
+      {showForm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
             <div className="border-b border-dark-100 px-6 py-4 flex items-center justify-between flex-shrink-0">
-              <h2 className="text-xl font-bold text-dark-900">{editing ? 'Edit Offer' : 'Create New Offer'}</h2>
-              <button onClick={closeModal} className="p-2 hover:bg-dark-100 rounded-lg transition-colors">
-                <X className="w-5 h-5" />
-              </button>
+              <h2 className="text-xl font-bold text-dark-900">{editingOffer ? 'Edit Offer' : 'Create Offer'}</h2>
+              <button onClick={() => setShowForm(false)} className="p-2 hover:bg-dark-100 rounded-lg"><X className="w-5 h-5" /></button>
             </div>
-
             <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto flex-1">
-              {/* Image Upload */}
+              {/* Banner Image (19:6) */}
               <div>
-                <label className="block text-sm font-semibold text-dark-700 mb-2">Offer Banner Image</label>
-                <div className="border-2 border-dashed border-dark-200 rounded-xl overflow-hidden hover:border-primary-400 transition-colors">
-                  {imagePreview ? (
-                    <div className="relative">
-                      <img src={imagePreview} alt="Preview" className="w-full h-auto max-h-[200px] object-contain bg-dark-50" />
-                      <button type="button" onClick={() => { setImageFile(null); setImagePreview(''); }}
-                        className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-lg">
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
+                <label className="block text-sm font-semibold text-dark-700 mb-1">Banner Image <span className="text-red-500">*</span> <span className="text-xs text-dark-400">(19:6 ratio)</span></label>
+                <div className="aspect-[19/6] rounded-xl bg-dark-100 overflow-hidden relative group cursor-pointer">
+                  {(newImagePreview || image) ? (
+                    <>
+                      <img src={newImagePreview || image} alt="" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                        <label className="cursor-pointer px-3 py-2 bg-white/90 rounded-lg text-sm font-medium text-dark-700">
+                          Change <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files[0]; if (f) { setNewImageFile(f); setNewImagePreview(URL.createObjectURL(f)); }}} className="hidden" />
+                        </label>
+                        <button type="button" onClick={() => { setNewImageFile(null); setNewImagePreview(''); setImage(null); }}
+                          className="px-3 py-2 bg-red-500/90 text-white rounded-lg text-sm font-medium">Remove</button>
+                      </div>
+                    </>
                   ) : (
-                    <label className="cursor-pointer block py-10 text-center">
-                      <Upload className="w-10 h-10 text-dark-300 mx-auto mb-2" />
-                      <p className="text-dark-600 font-medium">Click to upload banner</p>
-                      <p className="text-dark-400 text-sm mt-1">Recommended: 19:6 aspect ratio</p>
-                      <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+                    <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer hover:bg-dark-200 transition-colors">
+                      <Upload className="w-8 h-8 text-dark-300 mb-2" />
+                      <span className="text-sm text-dark-500">Upload Banner</span>
+                      <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files[0]; if (f) { setNewImageFile(f); setNewImagePreview(URL.createObjectURL(f)); }}} className="hidden" />
                     </label>
                   )}
                 </div>
               </div>
 
-              {/* Offer Type & Discount */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-dark-700 mb-2">Offer Type</label>
-                  <div className="flex gap-2">
-                    {['percentage', 'flat', 'bogo'].map(type => (
-                      <button key={type} type="button" onClick={() => setForm({ ...form, offerType: type })}
-                        className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all border-2 capitalize ${
-                          form.offerType === type ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-dark-200 text-dark-600 hover:border-dark-300'
-                        }`}>
-                        {type === 'bogo' ? 'BOGO' : type}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-dark-700 mb-2">
-                    {form.offerType === 'percentage' ? 'Discount %' : form.offerType === 'flat' ? 'Flat Off (₹)' : 'Buy X Get Y'}
-                  </label>
-                  <input type="number" value={form.percentage} onChange={(e) => setForm({ ...form, percentage: e.target.value })}
-                    className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all"
-                    placeholder={form.offerType === 'percentage' ? 'e.g., 20' : form.offerType === 'flat' ? 'e.g., 50' : 'e.g., 1'}
-                  />
-                </div>
+              {/* Offer Type */}
+              <div>
+                <label className="block text-sm font-semibold text-dark-700 mb-1">Offer Type <span className="text-red-500">*</span></label>
+                <input type="text" value={offerType} onChange={e => setOfferType(e.target.value)}
+                  className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl text-sm" placeholder='e.g., "1+1 Offer", "Buy 2 Get 1", "50% Off"' />
               </div>
 
-              {/* Category Selection */}
+              {/* Discount % */}
               <div>
-                <label className="block text-sm font-semibold text-dark-700 mb-2">Apply to Categories (optional)</label>
-                <div className="flex flex-wrap gap-2">
-                  {categories.map(cat => (
-                    <button key={cat._id} type="button"
-                      onClick={() => {
-                        const selected = form.selectedCategories.includes(cat.name)
-                          ? form.selectedCategories.filter(c => c !== cat.name)
-                          : [...form.selectedCategories, cat.name];
-                        setForm({ ...form, selectedCategories: selected });
-                      }}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all border ${
-                        form.selectedCategories.includes(cat.name)
-                          ? 'border-primary-500 bg-primary-50 text-primary-700'
-                          : 'border-dark-200 text-dark-600 hover:border-dark-300'
-                      }`}>
-                      {cat.image && <img src={cat.image} alt="" className="w-5 h-5 rounded-full object-cover" />}
-                      {cat.name}
-                      {form.selectedCategories.includes(cat.name) && <Check className="w-3.5 h-3.5" />}
-                    </button>
-                  ))}
+                <label className="block text-sm font-semibold text-dark-700 mb-1">Discount % <span className="text-xs text-dark-400">(optional)</span></label>
+                <div className="relative">
+                  <input type="number" value={percentage} onChange={e => setPercentage(e.target.value)} min="1" max="100" step="1"
+                    className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl text-sm pr-10" placeholder="e.g., 20" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-400 font-bold">%</span>
                 </div>
               </div>
 
               {/* Item Selection */}
               <div>
-                <label className="block text-sm font-semibold text-dark-700 mb-2">Apply to Specific Items (optional)</label>
-                <div className="relative mb-2">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
-                  <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search menu items..." className="w-full pl-10 pr-4 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:border-primary-500" />
-                </div>
-                <div className="max-h-48 overflow-y-auto space-y-1 border border-dark-200 rounded-xl p-2">
-                  {filteredMenuItems.map(item => (
-                    <button key={item._id} type="button"
-                      onClick={() => {
-                        const selected = form.selectedItems.includes(item._id)
-                          ? form.selectedItems.filter(id => id !== item._id)
-                          : [...form.selectedItems, item._id];
-                        setForm({ ...form, selectedItems: selected });
-                      }}
-                      className={`w-full flex items-center gap-2 p-2 rounded-lg text-left text-sm transition-all ${
-                        form.selectedItems.includes(item._id) ? 'bg-primary-50 border border-primary-200' : 'hover:bg-dark-50'
-                      }`}>
-                      <div className="w-8 h-8 rounded-lg bg-dark-100 overflow-hidden flex-shrink-0">
-                        {item.image ? <img src={item.image} alt="" className="w-full h-full object-cover" /> :
-                          <div className="w-full h-full flex items-center justify-center"><ShoppingBag className="w-4 h-4 text-dark-300" /></div>}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-dark-800 truncate">{item.name}</p>
-                        <p className="text-xs text-dark-400">₹{item.price}{item.variants?.length > 0 ? ` • ${item.variants.length} variants` : ''}</p>
-                      </div>
-                      {form.selectedItems.includes(item._id) && <Check className="w-4 h-4 text-primary-500 flex-shrink-0" />}
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-dark-700">Items & Variants</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-dark-500">{totalSelected} selected</span>
+                    <button type="button" onClick={() => setShowItemModal(true)}
+                      className="px-3 py-1.5 bg-primary-50 text-primary-600 rounded-lg text-xs font-medium hover:bg-primary-100">
+                      Select Items
                     </button>
-                  ))}
+                  </div>
                 </div>
-                {form.selectedItems.length > 0 && (
-                  <p className="text-xs text-primary-600 mt-1">{form.selectedItems.length} items selected</p>
+                {selectedCategories.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {selectedCategories.map(c => <span key={c} className="px-2 py-0.5 bg-primary-100 text-primary-700 rounded text-xs font-medium">{c}</span>)}
+                  </div>
                 )}
-              </div>
-
-              {/* Schedule */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-dark-700 mb-2">Valid From (optional)</label>
-                  <input type="datetime-local" value={form.validFrom} onChange={(e) => setForm({ ...form, validFrom: e.target.value })}
-                    className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-dark-700 mb-2">Valid Until (optional)</label>
-                  <input type="datetime-local" value={form.validUntil} onChange={(e) => setForm({ ...form, validUntil: e.target.value })}
-                    className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" />
-                </div>
+                {selectedItems.length > 0 && (
+                  <p className="text-xs text-dark-500">{selectedItems.length} items fully selected{selectedVariants.length > 0 ? `, ${selectedVariants.length} individual variants` : ''}</p>
+                )}
               </div>
 
               {/* Customer Targeting */}
               <div>
-                <label className="block text-sm font-semibold text-dark-700 mb-2">Customer Targeting</label>
-                <div className="grid grid-cols-2 gap-2">
+                <label className="block text-sm font-semibold text-dark-700 mb-2">Target Audience</label>
+                <div className="space-y-2">
                   {[
-                    { value: 'all', label: 'All Customers', icon: Users },
-                    { value: 'top_percentage', label: 'Top Spenders %', icon: Percent },
-                    { value: 'min_spent', label: 'Min Amount Spent', icon: ShoppingBag },
-                    { value: 'min_orders', label: 'Min Orders Count', icon: Tag },
+                    { type: 'all', label: 'All Customers', icon: Users, desc: 'Send to everyone' },
+                    { type: 'top_percentage', label: 'Top Spenders %', icon: Target, desc: 'Top spending customers' },
+                    { type: 'min_spent', label: 'Min Spent ₹', icon: Target, desc: 'Customers who spent at least' },
+                    { type: 'min_orders', label: 'Min Orders', icon: Target, desc: 'Customers with minimum orders' },
                   ].map(opt => (
-                    <button key={opt.value} type="button" onClick={() => setForm({ ...form, targetType: opt.value })}
-                      className={`flex items-center gap-2 p-3 rounded-xl text-sm font-medium border-2 transition-all ${
-                        form.targetType === opt.value ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-dark-200 text-dark-600 hover:border-dark-300'
-                      }`}>
-                      <opt.icon className="w-4 h-4" />
-                      {opt.label}
-                    </button>
+                    <div key={opt.type}>
+                      <button type="button" onClick={() => setTargetType(opt.type)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${targetType === opt.type ? 'border-primary-500 bg-primary-50' : 'border-dark-200 hover:border-dark-300'}`}>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${targetType === opt.type ? 'border-primary-500' : 'border-dark-300'}`}>
+                          {targetType === opt.type && <div className="w-2.5 h-2.5 rounded-full bg-primary-500" />}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-dark-800">{opt.label}</p>
+                          <p className="text-[11px] text-dark-400">{opt.desc}</p>
+                        </div>
+                      </button>
+                      {/* Inline input for targeting params */}
+                      {targetType === opt.type && opt.type === 'top_percentage' && (
+                        <div className="ml-11 mt-2">
+                          <input type="number" value={targetPercentage} onChange={e => setTargetPercentage(e.target.value)} min="1" max="100"
+                            className="w-32 px-3 py-2 bg-dark-50 border border-dark-200 rounded-lg text-sm" placeholder="10" />
+                          <span className="text-xs text-dark-400 ml-2">%</span>
+                        </div>
+                      )}
+                      {targetType === opt.type && opt.type === 'min_spent' && (
+                        <div className="ml-11 mt-2">
+                          <span className="text-xs text-dark-400 mr-1">₹</span>
+                          <input type="number" value={targetMinSpent} onChange={e => setTargetMinSpent(e.target.value)} min="0"
+                            className="w-32 px-3 py-2 bg-dark-50 border border-dark-200 rounded-lg text-sm" placeholder="1000" />
+                        </div>
+                      )}
+                      {targetType === opt.type && opt.type === 'min_orders' && (
+                        <div className="ml-11 mt-2">
+                          <input type="number" value={targetMinOrders} onChange={e => setTargetMinOrders(e.target.value)} min="1"
+                            className="w-32 px-3 py-2 bg-dark-50 border border-dark-200 rounded-lg text-sm" placeholder="3" />
+                          <span className="text-xs text-dark-400 ml-2">orders</span>
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
+                {/* Stats */}
+                {targetType !== 'all' && (
+                  <div className="mt-3 px-3 py-2 bg-blue-50 rounded-lg">
+                    {loadingCustomerStats ? (
+                      <div className="flex items-center gap-2 text-xs text-blue-600">
+                        <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> Calculating...
+                      </div>
+                    ) : (
+                      <p className="text-xs text-blue-700 font-medium">
+                        {customerStats.selected} of {customerStats.total} customers will see this offer
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
 
-                {form.targetType === 'top_percentage' && (
-                  <div className="mt-3 flex items-center gap-3">
-                    <input type="number" value={form.targetPercentage} onChange={(e) => setForm({ ...form, targetPercentage: e.target.value })}
-                      className="w-24 px-3 py-2 border border-dark-200 rounded-lg text-sm" min="1" max="100" />
-                    <span className="text-sm text-dark-500">% of top spenders</span>
-                    <button type="button" onClick={previewCustomers} className="px-3 py-2 bg-dark-100 text-dark-700 rounded-lg text-xs font-medium hover:bg-dark-200">Preview</button>
+              {/* Schedule */}
+              <div>
+                <label className="block text-sm font-semibold text-dark-700 mb-2">Schedule</label>
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <label className="text-xs text-dark-500">Valid From</label>
+                      <button type="button" onClick={setNow} className="px-2 py-0.5 bg-primary-50 text-primary-600 rounded text-[10px] font-medium hover:bg-primary-100">Now</button>
+                    </div>
+                    <input type="datetime-local" value={validFrom} onChange={e => setValidFrom(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm" />
                   </div>
-                )}
-                {form.targetType === 'min_spent' && (
-                  <div className="mt-3 flex items-center gap-3">
-                    <span className="text-sm text-dark-500">₹</span>
-                    <input type="number" value={form.targetMinSpent} onChange={(e) => setForm({ ...form, targetMinSpent: e.target.value })}
-                      className="w-32 px-3 py-2 border border-dark-200 rounded-lg text-sm" />
-                    <span className="text-sm text-dark-500">minimum spent</span>
-                    <button type="button" onClick={previewCustomers} className="px-3 py-2 bg-dark-100 text-dark-700 rounded-lg text-xs font-medium hover:bg-dark-200">Preview</button>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <label className="text-xs text-dark-500">Valid Until</label>
+                      {validFrom && (
+                        <>
+                          <button type="button" onClick={() => addDays(1)} className="px-2 py-0.5 bg-dark-100 text-dark-600 rounded text-[10px] font-medium hover:bg-dark-200">+1d</button>
+                          <button type="button" onClick={() => addDays(7)} className="px-2 py-0.5 bg-dark-100 text-dark-600 rounded text-[10px] font-medium hover:bg-dark-200">+7d</button>
+                          <button type="button" onClick={addMonth} className="px-2 py-0.5 bg-dark-100 text-dark-600 rounded text-[10px] font-medium hover:bg-dark-200">+1m</button>
+                        </>
+                      )}
+                    </div>
+                    <input type="datetime-local" value={validUntil} onChange={e => setValidUntil(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm" />
                   </div>
-                )}
-                {form.targetType === 'min_orders' && (
-                  <div className="mt-3 flex items-center gap-3">
-                    <input type="number" value={form.targetMinOrders} onChange={(e) => setForm({ ...form, targetMinOrders: e.target.value })}
-                      className="w-24 px-3 py-2 border border-dark-200 rounded-lg text-sm" min="1" />
-                    <span className="text-sm text-dark-500">minimum orders</span>
-                    <button type="button" onClick={previewCustomers} className="px-3 py-2 bg-dark-100 text-dark-700 rounded-lg text-xs font-medium hover:bg-dark-200">Preview</button>
-                  </div>
-                )}
-
-                {customerStats && (
-                  <div className="mt-3 p-3 bg-blue-50 rounded-xl text-sm text-blue-700">
-                    <p className="font-medium">{customerStats.count || customerStats.customers?.length || 0} customers will receive this offer</p>
-                  </div>
-                )}
+                  {validFrom && validUntil && (
+                    <p className="text-xs text-dark-500 bg-dark-50 rounded-lg px-3 py-2">
+                      Active from <strong>{fmtDate(validFrom)}</strong> to <strong>{fmtDate(validUntil)}</strong>
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* Submit */}
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={closeModal}
-                  className="flex-1 px-4 py-3 border border-dark-200 rounded-xl font-medium text-dark-700 hover:bg-dark-50 transition-colors">
-                  Cancel
-                </button>
-                <button type="submit" disabled={submitting || (!imageFile && !editing)}
-                  className="flex-1 px-4 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                  {submitting ? (
-                    <><RotateCw className="w-4 h-4 animate-spin" />{editing ? 'Updating...' : 'Creating...'}</>
-                  ) : (
-                    editing ? 'Update Offer' : 'Create Offer'
-                  )}
+                <button type="button" onClick={() => setShowForm(false)}
+                  className="flex-1 px-4 py-3 border border-dark-200 rounded-xl font-medium text-dark-700 hover:bg-dark-50">Cancel</button>
+                <button type="submit" disabled={saving}
+                  className="flex-1 px-4 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {saving ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving...</> : editingOffer ? 'Update Offer' : 'Create Offer'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ ITEM SELECTION MODAL ═══════════ */}
+      {showItemModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-xl max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="border-b border-dark-100 px-5 py-4 flex items-center justify-between flex-shrink-0">
+              <h3 className="text-lg font-bold text-dark-900">Select Items ({totalSelected})</h3>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={selectAll} className="px-3 py-1.5 bg-primary-50 text-primary-600 rounded-lg text-xs font-medium hover:bg-primary-100">
+                  {filteredMenuItems.every(i => selectedItems.includes(i._id)) ? 'Deselect All' : 'Select All'}
+                </button>
+                <button onClick={() => setShowItemModal(false)} className="p-2 hover:bg-dark-100 rounded-lg"><X className="w-5 h-5" /></button>
+              </div>
+            </div>
+            {/* Search */}
+            <div className="px-5 py-3 border-b border-dark-100">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
+                <input type="text" value={itemSearch} onChange={e => setItemSearch(e.target.value)} placeholder="Search items..."
+                  className="w-full pl-10 pr-4 py-2 bg-dark-50 border border-dark-200 rounded-lg text-sm" />
+              </div>
+            </div>
+            {/* Items list */}
+            <div className="overflow-y-auto flex-1 px-5 py-3 space-y-2">
+              {loadingData ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="w-6 h-6 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : filteredMenuItems.length === 0 ? (
+                <p className="text-center text-dark-500 py-8">No items found.</p>
+              ) : (
+                filteredMenuItems.map(item => {
+                  const isFullySelected = selectedItems.includes(item._id);
+                  const hasVariants = item.variants && item.variants.length > 0;
+                  const isExpanded = expandedItemId === item._id;
+                  const anyVariantSelected = selectedVariants.some(v => v.startsWith(`${item._id}_`));
+
+                  return (
+                    <div key={item._id} className="border border-dark-200 rounded-xl overflow-hidden">
+                      {/* Item header */}
+                      <div className="flex items-center gap-3 px-3 py-2.5 hover:bg-dark-50 transition-colors">
+                        <button type="button" onClick={() => toggleItem(item._id)}
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                            isFullySelected ? 'bg-primary-500 border-primary-500' : anyVariantSelected ? 'bg-primary-200 border-primary-400' : 'border-dark-300 hover:border-dark-400'
+                          }`}>
+                          {isFullySelected && <Check className="w-3 h-3 text-white" />}
+                          {!isFullySelected && anyVariantSelected && <div className="w-2 h-2 bg-primary-500 rounded-sm" />}
+                        </button>
+                        <div className="w-9 h-9 rounded-lg bg-dark-100 overflow-hidden flex-shrink-0">
+                          {item.image ? <img src={item.image} alt="" className="w-full h-full object-cover" /> :
+                            <div className="w-full h-full flex items-center justify-center"><Image className="w-4 h-4 text-dark-300" /></div>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-dark-800 truncate">{item.name}</p>
+                          <p className="text-[10px] text-dark-400">{hasVariants ? `${item.variants.length} variants` : '1 item'}</p>
+                        </div>
+                        {hasVariants && (
+                          <button type="button" onClick={() => setExpandedItemId(isExpanded ? null : item._id)}
+                            className="p-1 hover:bg-dark-100 rounded">
+                            {isExpanded ? <ChevronUp className="w-4 h-4 text-dark-400" /> : <ChevronDown className="w-4 h-4 text-dark-400" />}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Variant rows */}
+                      {hasVariants && isExpanded && (
+                        <div className="border-t border-dark-100">
+                          {item.variants.map((v, vi) => {
+                            const vSelected = isVariantSelected(item._id, vi);
+                            const ft = v.foodType || item.foodType;
+                            const pctNum = parseFloat(percentage);
+                            const hasDiscount = !isNaN(pctNum) && pctNum > 0;
+                            return (
+                              <div key={vi} className="flex items-center gap-3 px-3 py-2 pl-10 border-b border-dark-50 last:border-0 hover:bg-dark-50/50">
+                                <button type="button" onClick={() => toggleVariant(item._id, vi)}
+                                  className={`w-4.5 h-4.5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                                    vSelected ? 'bg-primary-500 border-primary-500' : 'border-dark-300'
+                                  }`}>
+                                  {vSelected && <Check className="w-2.5 h-2.5 text-white" />}
+                                </button>
+                                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${foodDot(ft)}`} />
+                                <div className="w-7 h-7 rounded bg-dark-100 overflow-hidden flex-shrink-0">
+                                  {v.image ? <img src={v.image} alt="" className="w-full h-full object-cover" /> : null}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-dark-700 truncate">{v.label || `Variant ${vi + 1}`}</p>
+                                  {/* Price / discount preview */}
+                                  {v.quantities && v.quantities.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1 mt-0.5">
+                                      {v.quantities.map((q, qi) => {
+                                        const origPrice = parseFloat(q.price);
+                                        const offerPrice = hasDiscount ? Math.round(origPrice * (1 - pctNum / 100)) : null;
+                                        return (
+                                          <span key={qi} className="text-[9px] text-dark-500">
+                                            {q.quantity}{q.unit ? ` ${q.unit}` : ''} —{' '}
+                                            {offerPrice !== null ? (
+                                              <><span className="line-through text-dark-400">₹{q.price}</span> <span className="text-green-600 font-bold">₹{offerPrice}</span></>
+                                            ) : `₹${q.price}`}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : v.price ? (
+                                    <p className="text-[10px] text-dark-500">
+                                      {hasDiscount ? (
+                                        <><span className="line-through text-dark-400">₹{v.price}</span> <span className="text-green-600 font-bold">₹{Math.round(v.price * (1 - pctNum / 100))}</span> <span className="text-green-500 text-[9px]">-₹{Math.round(v.price * pctNum / 100)}</span></>
+                                      ) : `₹${v.price}`}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <div className="border-t border-dark-100 px-5 py-3 flex items-center justify-between flex-shrink-0">
+              <p className="text-sm text-dark-500">{totalSelected} variants selected</p>
+              <button type="button" onClick={() => setShowItemModal(false)}
+                className="px-4 py-2 bg-primary-600 text-white rounded-xl text-sm font-medium hover:bg-primary-700">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ CONFIRM DIALOG ═══════════ */}
+      {confirmDialog && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="text-lg font-bold text-dark-900">{confirmDialog.title}</h3>
+            <p className="text-sm text-dark-500 whitespace-pre-line">{confirmDialog.message}</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDialog(null)} className="flex-1 py-2.5 border border-dark-200 rounded-xl font-medium text-dark-700">Cancel</button>
+              <button onClick={confirmDialog.onConfirm} className="flex-1 py-2.5 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700">Delete</button>
+            </div>
           </div>
         </div>
       )}
