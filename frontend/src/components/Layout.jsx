@@ -52,7 +52,7 @@ export default function Layout() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto admin-scrollbar" data-lenis-prevent>
           {navItems.map(item => {
             const isActive = location.pathname === item.path;
             return (

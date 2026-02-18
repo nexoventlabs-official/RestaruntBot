@@ -101,7 +101,7 @@
   }
 }
 
-/* Hide scrollbar globally */
+/* Hide scrollbar globally (except admin scrollable areas) */
 * {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -109,6 +109,56 @@
 
 *::-webkit-scrollbar {
   display: none;
+}
+
+/* Thin scrollbar for admin panel dialogs, modals & sidebar */
+.admin-scrollbar,
+[data-lenis-prevent] .overflow-y-auto,
+[data-lenis-prevent] .overflow-auto,
+.fixed.inset-0 .overflow-y-auto,
+.fixed.inset-0 .overflow-auto,
+.fixed.inset-0 form {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+  -ms-overflow-style: auto;
+}
+
+.admin-scrollbar::-webkit-scrollbar,
+[data-lenis-prevent] .overflow-y-auto::-webkit-scrollbar,
+[data-lenis-prevent] .overflow-auto::-webkit-scrollbar,
+.fixed.inset-0 .overflow-y-auto::-webkit-scrollbar,
+.fixed.inset-0 .overflow-auto::-webkit-scrollbar,
+.fixed.inset-0 form::-webkit-scrollbar {
+  display: block;
+  width: 5px;
+}
+
+.admin-scrollbar::-webkit-scrollbar-track,
+[data-lenis-prevent] .overflow-y-auto::-webkit-scrollbar-track,
+[data-lenis-prevent] .overflow-auto::-webkit-scrollbar-track,
+.fixed.inset-0 .overflow-y-auto::-webkit-scrollbar-track,
+.fixed.inset-0 .overflow-auto::-webkit-scrollbar-track,
+.fixed.inset-0 form::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-scrollbar::-webkit-scrollbar-thumb,
+[data-lenis-prevent] .overflow-y-auto::-webkit-scrollbar-thumb,
+[data-lenis-prevent] .overflow-auto::-webkit-scrollbar-thumb,
+.fixed.inset-0 .overflow-y-auto::-webkit-scrollbar-thumb,
+.fixed.inset-0 .overflow-auto::-webkit-scrollbar-thumb,
+.fixed.inset-0 form::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.5);
+  border-radius: 9999px;
+}
+
+.admin-scrollbar::-webkit-scrollbar-thumb:hover,
+[data-lenis-prevent] .overflow-y-auto::-webkit-scrollbar-thumb:hover,
+[data-lenis-prevent] .overflow-auto::-webkit-scrollbar-thumb:hover,
+.fixed.inset-0 .overflow-y-auto::-webkit-scrollbar-thumb:hover,
+.fixed.inset-0 .overflow-auto::-webkit-scrollbar-thumb:hover,
+.fixed.inset-0 form::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(156, 163, 175, 0.8);
 }
 
 /* Smooth transitions */

@@ -39,14 +39,28 @@ export default function SmoothScrollProvider({ children }) {
       syncTouchLerp: 0.075, // Slower touch scrolling for smoother feel (reduced from 0.12)
       touchInertiaMultiplier: 25, // Reduced inertia for more controlled scrolling (reduced from 35)
       prevent: (node) => {
-        // Don't prevent on horizontal scroll containers - let them handle their own scroll
-        // Only prevent if explicitly marked and not a horizontal scroller
-        if (node.hasAttribute('data-lenis-prevent')) {
-          const hasHorizontalScroll = node.classList.contains('overflow-x-auto') || 
-                                      getComputedStyle(node).overflowX === 'auto' ||
-                                      getComputedStyle(node).overflowX === 'scroll';
-          // Don't prevent Lenis on horizontal scrollers - they need vertical scroll to work
-          return false;
+        // Walk up the DOM tree from the scroll target
+        let el = node;
+        while (el && el !== document.body && el !== document.documentElement) {
+          // Respect data-lenis-prevent attribute on any ancestor
+          if (el.hasAttribute && el.hasAttribute('data-lenis-prevent')) {
+            return true;
+          }
+          // Detect full-screen fixed overlays (modals/dialogs)
+          // These use "fixed inset-0" which sets top/right/bottom/left all to 0
+          try {
+            const style = window.getComputedStyle(el);
+            if (
+              style.position === 'fixed' &&
+              style.top === '0px' &&
+              style.right === '0px' &&
+              style.bottom === '0px' &&
+              style.left === '0px'
+            ) {
+              return true; // Inside a modal overlay — let browser handle scroll
+            }
+          } catch (e) { /* ignore */ }
+          el = el.parentElement;
         }
         return false;
       }
