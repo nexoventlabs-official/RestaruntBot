@@ -128,6 +128,7 @@ const corsOptions = {
   
   // Exposed response headers (accessible to client)
   exposedHeaders: [
+    'Content-Disposition',
     'X-RateLimit-Limit',
     'X-RateLimit-Remaining',
     'X-RateLimit-Reset',

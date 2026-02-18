@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView,
-  RefreshControl, TouchableOpacity, ActivityIndicator, Animated, Platform, StatusBar
+  RefreshControl, TouchableOpacity, ActivityIndicator, Animated, Platform, StatusBar, Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import api from '../../config/api';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import api, { API_BASE_URL } from '../../config/api';
 import { colors, spacing, radius, typography, shadows } from '../../theme';
 
 const REPORT_TYPES = [
@@ -55,10 +58,64 @@ export default function AdminReportsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [reportData, setReportData] = useState(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   }, []);
+
+  /* ═══ Send Email ═══ */
+  const handleSendEmail = useCallback(() => {
+    if (!reportData) return;
+    Alert.alert('Send Report', 'Send this report via email?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Send', onPress: async () => {
+        setSendingEmail(true);
+        try {
+          const res = await api.post('/analytics/report/send-email', { reportData, reportType });
+          Alert.alert('Sent!', res.data.message || 'Report emailed successfully');
+        } catch (err) {
+          Alert.alert('Failed', err.response?.data?.error || 'Failed to send email');
+        } finally { setSendingEmail(false); }
+      }},
+    ]);
+  }, [reportData, reportType]);
+
+  /* ═══ Download PDF ═══ */
+  const handleDownloadPdf = useCallback(async () => {
+    if (!reportData || generatingPdf) return;
+    setGeneratingPdf(true);
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      const resp = await fetch(`${API_BASE_URL}/api/analytics/report/download-pdf`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportData, reportType }),
+      });
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        throw new Error(errData.error || 'Server error');
+      }
+      const blob = await resp.blob();
+      const reader = new FileReader();
+      const base64 = await new Promise((resolve, reject) => {
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      const fileUri = FileSystem.documentDirectory + `FoodAdmin_${reportType}_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+      await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf', dialogTitle: 'Share Report PDF' });
+      } else {
+        Alert.alert('Downloaded', 'PDF saved successfully');
+      }
+    } catch (err) {
+      console.error('PDF download error:', err);
+      Alert.alert('Error', err.message || 'Failed to download PDF report');
+    } finally { setGeneratingPdf(false); }
+  }, [reportData, reportType, generatingPdf]);
 
   const fetchReport = useCallback(async (type) => {
     try {
@@ -91,8 +148,20 @@ export default function AdminReportsScreen() {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <LinearGradient colors={[colors.zomato.red, colors.zomato.darkRed]} style={styles.header}>
-        <Text style={styles.title}>Reports & Analytics</Text>
-        <Text style={styles.subtitle}>Track your business performance</Text>
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Reports & Analytics</Text>
+            <Text style={styles.subtitle}>Track your business performance</Text>
+          </View>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.headerActionBtn} onPress={handleDownloadPdf} disabled={!reportData || generatingPdf}>
+              {generatingPdf ? <ActivityIndicator size={16} color="#fff" /> : <Ionicons name="download-outline" size={20} color="#fff" />}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerActionBtn} onPress={handleSendEmail} disabled={!reportData || sendingEmail}>
+              {sendingEmail ? <ActivityIndicator size={16} color="#fff" /> : <Ionicons name="mail-outline" size={20} color="#fff" />}
+            </TouchableOpacity>
+          </View>
+        </View>
       </LinearGradient>
 
       <View style={styles.tabsContainer}>
@@ -189,6 +258,9 @@ export default function AdminReportsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.light.background },
   header: { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60, paddingBottom: spacing.lg, paddingHorizontal: spacing.screenHorizontal, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerActions: { flexDirection: 'row', gap: 8 },
+  headerActionBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
   title: { fontSize: typography.display.small.fontSize, fontWeight: '700', color: '#fff' },
   subtitle: { fontSize: typography.body.medium.fontSize, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   tabsContainer: { backgroundColor: colors.light.surface, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.light.borderLight },
