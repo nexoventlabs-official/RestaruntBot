@@ -455,6 +455,121 @@ export default function Menu() {
     }
   };
 
+  // ===== Variant form helper functions (matching mobile) =====
+  const [variantAiLoading, setVariantAiLoading] = useState({}); // { idx_desc: true, idx_tags: true }
+
+  const updateVariant = (index, field, value) => {
+    const updated = [...form.variants];
+    updated[index] = { ...updated[index], [field]: value };
+    setForm({ ...form, variants: updated });
+  };
+
+  const toggleVariantCollapse = (index) => {
+    const updated = [...form.variants];
+    updated[index] = { ...updated[index], _collapsed: !updated[index]._collapsed };
+    setForm({ ...form, variants: updated });
+  };
+
+  const addVariant = () => {
+    const newVariant = {
+      label: '',
+      variantType: 'size',
+      price: '',
+      image: '',
+      available: true,
+      description: '',
+      foodType: form.foodType || 'veg',
+      tags: '',
+      quantities: [],
+      _collapsed: false,
+    };
+    setForm({ ...form, variants: [...(form.variants || []), newVariant] });
+  };
+
+  const removeVariant = (index) => {
+    const updated = form.variants.filter((_, i) => i !== index);
+    setForm({ ...form, variants: updated });
+    const newFiles = { ...variantImageFiles };
+    delete newFiles[index];
+    setVariantImageFiles(newFiles);
+    const newPreviews = { ...variantImagePreviews };
+    delete newPreviews[index];
+    setVariantImagePreviews(newPreviews);
+  };
+
+  const handleVariantImageChange = (index, file) => {
+    if (file) {
+      setVariantImageFiles(prev => ({ ...prev, [index]: file }));
+      const reader = new FileReader();
+      reader.onloadend = () => setVariantImagePreviews(prev => ({ ...prev, [index]: reader.result }));
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeVariantImage = (index) => {
+    const updated = [...form.variants];
+    updated[index] = { ...updated[index], image: '' };
+    setForm({ ...form, variants: updated });
+    const nf = { ...variantImageFiles }; delete nf[index]; setVariantImageFiles(nf);
+    const np = { ...variantImagePreviews }; delete np[index]; setVariantImagePreviews(np);
+  };
+
+  const addQuantityOption = (variantIndex) => {
+    const updated = [...form.variants];
+    const qty = [...(updated[variantIndex].quantities || []), { quantity: '1', unit: 'piece', price: '', offerPrice: '' }];
+    updated[variantIndex] = { ...updated[variantIndex], quantities: qty };
+    setForm({ ...form, variants: updated });
+  };
+
+  const removeQuantityOption = (variantIndex, qtyIndex) => {
+    const updated = [...form.variants];
+    updated[variantIndex] = { ...updated[variantIndex], quantities: updated[variantIndex].quantities.filter((_, i) => i !== qtyIndex) };
+    setForm({ ...form, variants: updated });
+  };
+
+  const updateQuantityOption = (variantIndex, qtyIndex, field, value) => {
+    const updated = [...form.variants];
+    const quantities = [...updated[variantIndex].quantities];
+    quantities[qtyIndex] = { ...quantities[qtyIndex], [field]: value };
+    updated[variantIndex] = { ...updated[variantIndex], quantities };
+    setForm({ ...form, variants: updated });
+  };
+
+  const generateVariantDescription = async (index) => {
+    const variant = form.variants[index];
+    if (!variant.label && !form.name) return alert('Enter variant name or item name first');
+    setVariantAiLoading(prev => ({ ...prev, [`${index}_desc`]: true }));
+    try {
+      const res = await api.post('/ai/generate-description', { name: variant.label || form.name, category: form.category });
+      updateVariant(index, 'description', res.data.description);
+    } catch {
+      alert('Failed to generate description');
+    } finally {
+      setVariantAiLoading(prev => ({ ...prev, [`${index}_desc`]: false }));
+    }
+  };
+
+  const generateVariantTags = async (index) => {
+    const variant = form.variants[index];
+    if (!variant.label && !form.name) return alert('Enter variant name or item name first');
+    setVariantAiLoading(prev => ({ ...prev, [`${index}_tags`]: true }));
+    try {
+      const res = await api.post('/ai/generate-tags', {
+        name: variant.label || form.name,
+        category: form.category,
+        foodType: variant.foodType || form.foodType,
+        quantity: '1',
+        unit: 'piece'
+      });
+      const tags = Array.isArray(res.data.tags) ? res.data.tags.join(', ') : (res.data.tags || '');
+      updateVariant(index, 'tags', tags);
+    } catch {
+      alert('Failed to generate tags');
+    } finally {
+      setVariantAiLoading(prev => ({ ...prev, [`${index}_tags`]: false }));
+    }
+  };
+
   // Double tap handler for pause/resume category
   const handleCategoryDoubleTap = async (cat) => {
     const now = Date.now();
@@ -513,11 +628,39 @@ export default function Menu() {
     if (item) {
       setEditing(item);
       const categoryArray = Array.isArray(item.category) ? item.category : (item.category ? [item.category] : []);
-      setForm({ name: item.name, description: item.description || '', price: item.price, category: categoryArray, unit: item.unit || 'piece', quantity: item.quantity || 1, foodType: item.foodType || 'veg', available: item.available, preparationTime: item.preparationTime || 15, tags: item.tags?.join(', ') || '', image: item.image || '', variants: item.variants || [] });
+      setForm({
+        name: item.name,
+        description: item.description || '',
+        price: item.price,
+        category: categoryArray,
+        unit: item.unit || 'piece',
+        quantity: item.quantity || 1,
+        foodType: item.foodType || 'veg',
+        available: item.available,
+        preparationTime: item.preparationTime || 15,
+        tags: item.tags?.join(', ') || '',
+        image: item.image || '',
+        variants: (item.variants || []).map(v => ({
+          ...v,
+          price: v.price?.toString() || '',
+          quantity: v.quantity?.toString() || '1',
+          unit: v.unit || 'piece',
+          description: v.description || '',
+          foodType: v.foodType || item.foodType || 'veg',
+          tags: v.tags?.join?.(', ') || (typeof v.tags === 'string' ? v.tags : '') || '',
+          quantities: (v.quantities || []).map(q => ({
+            quantity: q.quantity?.toString() || '1',
+            unit: q.unit || 'piece',
+            price: q.price?.toString() || '',
+            offerPrice: q.offerPrice?.toString() || ''
+          })),
+          available: v.available !== false,
+          _collapsed: true,
+        }))
+      });
       setImagePreview(item.image || '');
       setImageFile(null);
       setVariantImageFiles({});
-      // Set variant image previews from existing variant images
       const vPreviews = {};
       (item.variants || []).forEach((v, idx) => { if (v.image) vPreviews[idx] = v.image; });
       setVariantImagePreviews(vPreviews);
@@ -547,16 +690,61 @@ export default function Menu() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (saving) return; // Prevent double submission
+    if (saving) return;
+    
+    const hasVariants = form.variants && form.variants.length > 0;
+    
+    // Validate variants like mobile
+    if (hasVariants) {
+      for (let i = 0; i < form.variants.length; i++) {
+        const v = form.variants[i];
+        if (!v.label || v.label.trim() === '') {
+          alert(`Variant ${i + 1}: Item name is required`);
+          return;
+        }
+        if (v.quantities && v.quantities.length > 0) {
+          const emptyQtyPrice = v.quantities.some(q => !q.price || q.price.toString().trim() === '' || parseFloat(q.price) <= 0);
+          if (emptyQtyPrice) {
+            alert(`Variant ${i + 1}: Every quantity option must have a valid price`);
+            return;
+          }
+        } else if (!v.price || v.price.toString().trim() === '' || parseFloat(v.price) <= 0) {
+          alert(`Variant ${i + 1}: Price is required`);
+          return;
+        }
+      }
+    }
+    
     setSaving(true);
     try {
       const formData = new FormData();
-      formData.append('name', form.name);
+      formData.append('name', form.name.trim());
       formData.append('description', form.description);
-      formData.append('price', form.price);
+      
+      // Auto-derive base price from variants like mobile
+      if (hasVariants) {
+        const lowestPrice = Math.min(...form.variants.map(v => {
+          if (v.quantities && v.quantities.length > 0) {
+            return Math.min(...v.quantities.map(q => parseFloat(q.price) || 0));
+          }
+          return parseFloat(v.price) || 0;
+        }));
+        formData.append('price', lowestPrice.toString());
+        // Derive quantity/unit from first variant
+        if (form.variants[0].quantities && form.variants[0].quantities.length > 0) {
+          formData.append('quantity', form.variants[0].quantities[0].quantity || '1');
+          formData.append('unit', form.variants[0].quantities[0].unit || 'piece');
+        } else {
+          formData.append('quantity', form.variants[0].quantity || '1');
+          formData.append('unit', form.variants[0].unit || 'piece');
+        }
+      } else {
+        formData.append('price', form.price);
+        formData.append('quantity', form.quantity);
+        formData.append('unit', form.unit);
+      }
+      
       formData.append('category', JSON.stringify(form.category));
-      formData.append('unit', form.unit);
-      formData.append('quantity', form.quantity);
       formData.append('foodType', form.foodType);
       formData.append('available', form.available);
       formData.append('preparationTime', form.preparationTime);
@@ -566,15 +754,32 @@ export default function Menu() {
       if (imageFile) {
         formData.append('image', imageFile);
       } else if (!imagePreview && editing?.image) {
-        // Image was removed
         formData.append('removeImage', 'true');
       }
 
-      // Handle variants
-      if (form.variants && form.variants.length > 0) {
-        // Send variants JSON (with existing image URLs preserved)
-        formData.append('variants', JSON.stringify(form.variants));
-        // Append variant image files with index mapping (like mobile app)
+      // Handle variants — send with full details like mobile
+      if (hasVariants) {
+        const variantsPayload = form.variants.map(v => ({
+          label: v.label?.trim() || '',
+          variantType: v.variantType || 'size',
+          price: v.quantities?.length > 0 ? Math.min(...v.quantities.map(q => parseFloat(q.price) || 0)).toString() : v.price,
+          quantity: v.quantity || '1',
+          unit: v.unit || 'piece',
+          available: v.available !== false,
+          description: v.description || '',
+          foodType: v.foodType || 'veg',
+          tags: v.tags || '',
+          quantities: (v.quantities || []).map(q => ({
+            quantity: q.quantity || '1',
+            unit: q.unit || 'piece',
+            price: q.price || '0',
+            offerPrice: q.offerPrice || ''
+          })),
+          image: variantImageFiles[form.variants.indexOf(v)] ? '' : (v.image || ''),
+        }));
+        formData.append('variants', JSON.stringify(variantsPayload));
+        
+        // Append variant image files with index tracking
         const variantImageIndices = [];
         form.variants.forEach((v, idx) => {
           if (variantImageFiles[idx]) {
@@ -604,7 +809,7 @@ export default function Menu() {
       setVariantImageFiles({});
       setVariantImagePreviews({});
       fetchItems();
-    } catch (err) {
+    } catch {
       alert('Failed to save item');
     } finally {
       setSaving(false);
@@ -1019,7 +1224,8 @@ export default function Menu() {
         </div>
       ) : (
         <div className="space-y-6">
-          {(selectedCategory !== 'all' ? [selectedCategory] : filteredCategories).map(cat => {
+          {/* When items have categories, group by category */}
+          {filteredCategories.length > 0 && (selectedCategory !== 'all' ? [selectedCategory] : filteredCategories).map(cat => {
             const sectionsInCat = sectionsByCategory.get(cat) || [];
             if (sectionsInCat.length === 0) return null;
             const catObj = categoryList.find(c => c.name === cat);
@@ -1224,7 +1430,173 @@ export default function Menu() {
             </div>
           );
           })}
-          {filteredCategories.length === 0 && (
+
+          {/* When items have NO categories, render sections directly */}
+          {filteredCategories.length === 0 && sectionData.length > 0 && (
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <h2 className="text-lg font-bold text-dark-900">Menu Items</h2>
+                <span className="px-2.5 py-1 bg-dark-100 rounded-full text-xs font-medium text-dark-500">
+                  {flattenedVariants.length} variant{flattenedVariants.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <div className="space-y-4">
+                {sectionData.map(section => {
+                  const parentItem = section.parentItem;
+                  const isPaused = isItemPaused(parentItem);
+                  return (
+                  <div key={parentItem._id} className={`bg-white rounded-2xl shadow-card overflow-hidden ${isPaused ? 'ring-2 ring-yellow-300' : ''}`}>
+                    {/* Parent item header */}
+                    <div className={`flex items-center gap-3 p-4 border-b border-dark-100 ${isPaused ? 'bg-yellow-50' : ''}`}>
+                      <div className={`w-14 h-14 rounded-xl overflow-hidden bg-dark-100 flex-shrink-0 ${isPaused ? 'grayscale opacity-60' : ''}`}>
+                        {parentItem.image ? (
+                          <img src={parentItem.image} alt={parentItem.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Image className="w-6 h-6 text-dark-300" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className={`font-semibold truncate ${isPaused ? 'text-gray-400' : 'text-dark-900'}`}>{parentItem.name}</h3>
+                          {parentItem.foodType && (
+                            <span className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${parentItem.foodType === 'veg' ? 'border-green-600 bg-white' : parentItem.foodType === 'egg' ? 'border-yellow-500 bg-white' : 'border-red-600 bg-white'}`}>
+                              <span className={`w-2 h-2 rounded-full ${parentItem.foodType === 'veg' ? 'bg-green-600' : parentItem.foodType === 'egg' ? 'bg-yellow-500' : 'bg-red-600'}`}></span>
+                            </span>
+                          )}
+                          {isPaused && (
+                            <span className="px-2 py-0.5 bg-yellow-400 text-yellow-900 rounded-full text-xs font-semibold flex items-center gap-1">
+                              <Pause className="w-2.5 h-2.5" /> Paused
+                            </span>
+                          )}
+                        </div>
+                        <p className={`text-xs ${isPaused ? 'text-gray-400' : 'text-dark-400'}`}>
+                          {section.data.length} variant{section.data.length !== 1 ? 's' : ''}
+                          {parentItem.preparationTime ? ` • ${parentItem.preparationTime} min` : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button onClick={() => openModal(parentItem)} className="p-2 bg-dark-50 text-dark-700 rounded-xl hover:bg-dark-100 transition-colors" title="Edit">
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => togglePauseItem(parentItem)} disabled={togglingId === parentItem._id}
+                          className={`p-2 rounded-xl transition-colors ${parentItem.isPaused ? 'bg-green-50 text-green-600 hover:bg-green-100' : 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'}`}
+                          title={parentItem.isPaused ? 'Resume' : 'Pause'}>
+                          {parentItem.isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+                        </button>
+                        <button onClick={() => setScheduleModal({ show: true, item: parentItem, type: 'item' })}
+                          className="p-2 bg-orange-50 text-orange-600 rounded-xl hover:bg-orange-100 transition-colors" title="Schedule sold out">
+                          <CalendarClock className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => deleteItem(parentItem._id, parentItem.name)}
+                          className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors" title="Delete">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    {parentItem.soldOutUntil && new Date(parentItem.soldOutUntil) > new Date() && (
+                      <div className="px-4 py-2 bg-orange-50 border-b border-orange-100 flex items-center gap-2">
+                        <CalendarClock className="w-3.5 h-3.5 text-orange-500" />
+                        <span className="text-xs font-medium text-orange-600">Sold out until {new Date(parentItem.soldOutUntil).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                      </div>
+                    )}
+                    {parentItem.variants?.length > 1 && (
+                      <div className="px-4 py-2 bg-dark-50 border-b border-dark-100 flex gap-2">
+                        <button onClick={() => markVariantsSoldOut(parentItem._id, true)}
+                          className="px-2.5 py-1 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-1">
+                          <Ban className="w-3 h-3" /> All Sold Out
+                        </button>
+                        <button onClick={() => markVariantsSoldOut(parentItem._id, false)}
+                          className="px-2.5 py-1 text-xs bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Restock All
+                        </button>
+                      </div>
+                    )}
+                    <div className="divide-y divide-dark-50">
+                      {section.data.map(vItem => {
+                        const isAvail = vItem.available;
+                        return (
+                        <div key={vItem._id} className={`flex items-center gap-3 p-3 hover:bg-dark-25 transition-colors ${!isAvail ? 'opacity-70 bg-gray-50' : ''}`}>
+                          <div className="w-12 h-12 rounded-lg overflow-hidden bg-dark-100 flex-shrink-0 relative">
+                            {vItem.image ? (
+                              <img src={vItem.image} alt={vItem.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Image className="w-5 h-5 text-dark-300" />
+                              </div>
+                            )}
+                            {vItem.foodType && vItem.foodType !== 'none' && (
+                              <div className="absolute top-0.5 left-0.5">
+                                <span className={`w-3 h-3 rounded border flex items-center justify-center ${vItem.foodType === 'veg' ? 'border-green-600 bg-white' : vItem.foodType === 'egg' ? 'border-yellow-500 bg-white' : 'border-red-600 bg-white'}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${vItem.foodType === 'veg' ? 'bg-green-600' : vItem.foodType === 'egg' ? 'bg-yellow-500' : 'bg-red-600'}`}></span>
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm text-dark-900 truncate">{vItem.name}</p>
+                            {vItem.variantIndex >= 0 && (
+                              <p className="text-xs text-dark-400 truncate">{vItem.parentName}</p>
+                            )}
+                            {vItem.quantities && vItem.quantities.length > 0 ? (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {vItem.quantities.map((q, qIdx) => (
+                                  <span key={qIdx} className="inline-flex items-center px-2 py-0.5 bg-dark-50 rounded text-xs text-dark-600">
+                                    {q.quantity} {q.unit} — ₹{q.price}
+                                    {q.offerPrice && q.offerPrice < q.price && (
+                                      <span className="ml-1 text-green-600 font-medium">₹{q.offerPrice}</span>
+                                    )}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 mt-0.5">
+                                {vItem.offerPrice && vItem.offerPrice < vItem.price ? (
+                                  <>
+                                    <span className="text-xs text-dark-400 line-through">₹{vItem.price}</span>
+                                    <span className="text-sm font-bold text-green-600">₹{vItem.offerPrice}</span>
+                                  </>
+                                ) : (
+                                  <span className="text-sm font-bold text-primary-600">
+                                    ₹{vItem.price}
+                                    {vItem.quantity && vItem.unit ? <span className="text-xs font-normal text-dark-400"> / {vItem.quantity} {vItem.unit}</span> : ''}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button
+                              onClick={() => toggleVariant(vItem.parentId, vItem.variantIndex)}
+                              disabled={togglingId === vItem._id}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${isAvail ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
+                            >
+                              {isAvail ? 'Active' : 'Off'}
+                            </button>
+                            {vItem.variantIndex >= 0 && (
+                              <button
+                                onClick={() => deleteVariant(vItem.parentId, vItem.variantIndex, vItem.name)}
+                                className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Delete variant"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* True empty state - no items at all */}
+          {filteredCategories.length === 0 && sectionData.length === 0 && (
             <div className="bg-white rounded-2xl shadow-card p-12 text-center">
               <Image className="w-16 h-16 text-dark-200 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-dark-700">No items found</h3>
@@ -1245,11 +1617,35 @@ export default function Menu() {
               </button>
             </div>
             <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+              {/* Name */}
               <div>
-                <label className="block text-sm font-semibold text-dark-700 mb-2">Name</label>
+                <label className="block text-sm font-semibold text-dark-700 mb-2">Title / Name</label>
                 <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" required />
+                  className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" required placeholder="Item title" />
               </div>
+
+              {/* Main Image */}
+              <div>
+                <label className="block text-sm font-semibold text-dark-700 mb-2">Main Image</label>
+                <div className="space-y-2">
+                  {(imagePreview || form.image) && (
+                    <div className="relative rounded-xl overflow-hidden border border-dark-200 h-36 bg-dark-100">
+                      <img src={imagePreview || form.image} alt="Preview" className="w-full h-full object-cover" onError={(e) => e.target.style.display = 'none'} />
+                      <button type="button" onClick={removeImage} className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                  <input type="file" accept="image/*" onChange={handleImageFileChange} ref={imageInputRef} className="hidden" />
+                  <button type="button" onClick={() => imageInputRef.current?.click()}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-dark-50 border border-dark-200 border-dashed rounded-xl hover:bg-dark-100 transition-colors text-dark-600 text-sm">
+                    <Upload className="w-4 h-4" />
+                    {imagePreview || form.image ? 'Change Image' : 'Upload Image'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Category */}
               <div>
                 <label className="block text-sm font-semibold text-dark-700 mb-2">Category</label>
                 <MultiSelectDropdown
@@ -1260,185 +1656,226 @@ export default function Menu() {
                   required
                 />
               </div>
+
+              {/* ===== VARIANTS SECTION (Mobile-style collapsible cards) ===== */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-bold text-dark-900">Variants</label>
+                  <button type="button" onClick={addVariant}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary-600 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors">
+                    <Plus className="w-3.5 h-3.5" /> Add Variant
+                  </button>
+                </div>
+
+                {(!form.variants || form.variants.length === 0) && (
+                  <div className="text-center py-6 bg-dark-50 rounded-xl border border-dark-200 border-dashed">
+                    <Package className="w-8 h-8 text-dark-300 mx-auto mb-2" />
+                    <p className="text-dark-400 text-sm">No variants added yet</p>
+                    <p className="text-dark-300 text-xs mt-1">Add variants for different sizes, quantities etc.</p>
+                    <button type="button" onClick={addVariant}
+                      className="mt-3 px-4 py-2 text-xs font-semibold text-primary-600 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors">
+                      <Plus className="w-3.5 h-3.5 inline mr-1" />Add First Variant
+                    </button>
+                  </div>
+                )}
+
+                {(form.variants || []).map((variant, idx) => (
+                  <div key={idx} className="border border-dark-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                    {/* Variant Header (always visible) */}
+                    <div
+                      className="flex items-center gap-3 px-4 py-3 bg-dark-50 cursor-pointer hover:bg-dark-100 transition-colors"
+                      onClick={() => toggleVariantCollapse(idx)}
+                    >
+                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary-500 text-white text-xs font-bold">{idx + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-dark-900 truncate">{variant.label || `Variant ${idx + 1}`}</p>
+                        <p className="text-xs text-dark-400">
+                          {variant.quantities && variant.quantities.length > 0
+                            ? `${variant.quantities.length} size${variant.quantities.length > 1 ? 's' : ''} — from ₹${Math.min(...variant.quantities.map(q => parseFloat(q.price) || 0))}`
+                            : variant.price ? `₹${variant.price}` : 'No price set'}
+                        </p>
+                      </div>
+                      <span className={`w-3 h-3 rounded-full ${variant.foodType === 'nonveg' ? 'bg-red-500' : variant.foodType === 'egg' ? 'bg-yellow-500' : 'bg-green-500'}`}></span>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); removeVariant(idx); }}
+                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <ChevronDown className={`w-4 h-4 text-dark-400 transition-transform ${!variant._collapsed ? 'rotate-180' : ''}`} />
+                    </div>
+
+                    {/* Variant Body (collapsible) */}
+                    {!variant._collapsed && (
+                      <div className="p-4 space-y-3 border-t border-dark-100">
+                        {/* Variant Image */}
+                        <div>
+                          <label className="text-xs font-medium text-dark-500 mb-1.5 block">Variant Image</label>
+                          <div className="flex items-center gap-3">
+                            {(variantImagePreviews[idx] || variant.image) ? (
+                              <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-dark-200 flex-shrink-0">
+                                <img src={variantImagePreviews[idx] || variant.image} alt="" className="w-full h-full object-cover" />
+                                <button type="button" onClick={() => removeVariantImage(idx)}
+                                  className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[9px]">✕</button>
+                              </div>
+                            ) : null}
+                            <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-xs bg-dark-50 border border-dark-200 border-dashed rounded-xl hover:bg-dark-100 cursor-pointer transition-colors text-dark-500">
+                              <Upload className="w-4 h-4" />
+                              {(variantImagePreviews[idx] || variant.image) ? 'Change' : 'Upload Image'}
+                              <input type="file" accept="image/*" className="hidden" onChange={(e) => handleVariantImageChange(idx, e.target.files[0])} />
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Item Name */}
+                        <div>
+                          <label className="text-xs font-medium text-dark-500 mb-1.5 block">Item Name *</label>
+                          <input type="text" value={variant.label} onChange={(e) => updateVariant(idx, 'label', e.target.value)}
+                            className="w-full px-3 py-2.5 text-sm bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 transition-all" placeholder="e.g., Large, 500g, Regular" required />
+                        </div>
+
+                        {/* Description + AI */}
+                        <div>
+                          <label className="text-xs font-medium text-dark-500 mb-1.5 block">Description</label>
+                          <div className="relative">
+                            <textarea value={variant.description || ''} onChange={(e) => updateVariant(idx, 'description', e.target.value)}
+                              className="w-full px-3 py-2.5 text-sm bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 transition-all pr-10" rows={2} placeholder="Describe this variant..." />
+                            <button type="button" onClick={() => generateVariantDescription(idx)} disabled={variantAiLoading[`${idx}_desc`]}
+                              className="absolute right-2 top-2 p-1.5 text-accent-500 hover:bg-accent-50 rounded-lg transition-colors" title="Generate with AI">
+                              <Sparkles className={`w-4 h-4 ${variantAiLoading[`${idx}_desc`] ? 'animate-spin' : ''}`} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Food Type */}
+                        <div>
+                          <label className="text-xs font-medium text-dark-500 mb-1.5 block">Food Type</label>
+                          <div className="flex gap-2">
+                            {[{ value: 'veg', label: 'Veg', color: 'green' }, { value: 'nonveg', label: 'Non-Veg', color: 'red' }, { value: 'egg', label: 'Egg', color: 'yellow' }].map(type => (
+                              <label key={type.value} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border cursor-pointer transition-all text-xs ${variant.foodType === type.value ? (type.color === 'green' ? 'border-green-500 bg-green-50' : type.color === 'red' ? 'border-red-500 bg-red-50' : 'border-yellow-500 bg-yellow-50') : 'border-dark-200 hover:border-dark-300'}`}>
+                                <input type="radio" name={`variantFoodType_${idx}`} value={type.value} checked={variant.foodType === type.value} onChange={(e) => updateVariant(idx, 'foodType', e.target.value)} className="hidden" />
+                                <span className={`w-3 h-3 rounded border ${type.color === 'green' ? 'border-green-600' : type.color === 'red' ? 'border-red-600' : 'border-yellow-500'}`}>
+                                  <span className={`block w-1.5 h-1.5 rounded-full m-[1.5px] ${type.color === 'green' ? 'bg-green-600' : type.color === 'red' ? 'bg-red-600' : 'bg-yellow-500'}`}></span>
+                                </span>
+                                <span className="font-medium">{type.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Tags + AI */}
+                        <div>
+                          <label className="text-xs font-medium text-dark-500 mb-1.5 block">Tags</label>
+                          <div className="relative">
+                            <input type="text" value={variant.tags || ''} onChange={(e) => updateVariant(idx, 'tags', e.target.value)}
+                              className="w-full px-3 py-2.5 text-sm bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 transition-all pr-10" placeholder="spicy, popular, bestseller" />
+                            <button type="button" onClick={() => generateVariantTags(idx)} disabled={variantAiLoading[`${idx}_tags`]}
+                              className="absolute right-2 top-2 p-1.5 text-accent-500 hover:bg-accent-50 rounded-lg transition-colors" title="Generate tags with AI">
+                              <Tag className={`w-4 h-4 ${variantAiLoading[`${idx}_tags`] ? 'animate-spin' : ''}`} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Pricing Section */}
+                        <div className="border border-dark-200 rounded-xl p-3 space-y-3 bg-dark-50/50">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-dark-700">Pricing & Sizes</label>
+                            <button type="button" onClick={() => addQuantityOption(idx)}
+                              className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold text-primary-600 bg-primary-50 rounded-md hover:bg-primary-100 transition-colors">
+                              <Plus className="w-3 h-3" /> Add Size
+                            </button>
+                          </div>
+
+                          {/* Base price when no quantity options */}
+                          {(!variant.quantities || variant.quantities.length === 0) && (
+                            <div>
+                              <label className="text-[10px] text-dark-400 mb-1 block">Price (₹) *</label>
+                              <input type="number" value={variant.price || ''} onChange={(e) => updateVariant(idx, 'price', e.target.value)}
+                                className="w-full px-3 py-2 text-sm bg-white border border-dark-200 rounded-lg focus:border-primary-500 transition-all" placeholder="0" required />
+                            </div>
+                          )}
+
+                          {/* Quantity Options (sizes) */}
+                          {(variant.quantities || []).map((qty, qIdx) => (
+                            <div key={qIdx} className="bg-white rounded-lg p-2.5 border border-dark-100 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-semibold text-dark-500">Size {qIdx + 1}</span>
+                                <button type="button" onClick={() => removeQuantityOption(idx, qIdx)}
+                                  className="p-1 text-red-400 hover:text-red-600 rounded transition-colors">
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-[10px] text-dark-400 mb-0.5 block">Quantity</label>
+                                  <input type="text" value={qty.quantity} onChange={(e) => updateQuantityOption(idx, qIdx, 'quantity', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 text-xs bg-dark-50 border border-dark-200 rounded-lg" placeholder="1" />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-dark-400 mb-0.5 block">Unit</label>
+                                  <select value={qty.unit} onChange={(e) => updateQuantityOption(idx, qIdx, 'unit', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 text-xs bg-dark-50 border border-dark-200 rounded-lg">
+                                    {units.map(u => <option key={u} value={u}>{u}</option>)}
+                                  </select>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-[10px] text-dark-400 mb-0.5 block">Price (₹) *</label>
+                                  <input type="number" value={qty.price} onChange={(e) => updateQuantityOption(idx, qIdx, 'price', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 text-xs bg-dark-50 border border-dark-200 rounded-lg" placeholder="0" required />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-dark-400 mb-0.5 block">Offer Price (₹)</label>
+                                  <input type="number" value={qty.offerPrice} onChange={(e) => updateQuantityOption(idx, qIdx, 'offerPrice', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 text-xs bg-dark-50 border border-dark-200 rounded-lg" placeholder="Optional" />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Available Toggle */}
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-xs font-medium text-dark-600">Available</span>
+                          <button type="button" onClick={() => updateVariant(idx, 'available', !variant.available)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${variant.available ? 'bg-green-500' : 'bg-dark-300'}`}>
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${variant.available ? 'translate-x-6' : 'translate-x-1'}`} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Add Another Variant button at bottom */}
+                {form.variants && form.variants.length > 0 && (
+                  <button type="button" onClick={addVariant}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-primary-600 bg-primary-50 border border-primary-200 border-dashed rounded-xl hover:bg-primary-100 transition-colors">
+                    <Plus className="w-4 h-4" /> Add Another Variant
+                  </button>
+                )}
+              </div>
+
+              {/* Description + AI (parent level) */}
               <div>
                 <label className="block text-sm font-semibold text-dark-700 mb-2">Description</label>
                 <div className="relative">
                   <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all pr-12" rows={3} />
+                    className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all pr-12" rows={3} placeholder="Describe this item..." />
                   <button type="button" onClick={generateDescription} disabled={aiLoading}
                     className="absolute right-3 top-3 p-2 text-accent-500 hover:bg-accent-50 rounded-lg transition-colors" title="Generate with AI">
                     <Sparkles className={`w-5 h-5 ${aiLoading ? 'animate-spin' : ''}`} />
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-dark-700 mb-2">Price (₹)</label>
-                  <input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })}
-                    className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-dark-700 mb-2">Prep Time (min)</label>
-                  <input type="number" value={form.preparationTime} onChange={(e) => setForm({ ...form, preparationTime: e.target.value })}
-                    className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-dark-700 mb-2">Quantity</label>
-                  <input type="number" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-                    className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" min="1" step="0.5" />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-dark-700 mb-2">Unit</label>
-                  <CustomDropdown
-                    value={form.unit}
-                    onChange={(val) => setForm({ ...form, unit: val })}
-                    options={units.map(u => ({ value: u, label: u }))}
-                    placeholder=""
-                  />
-                </div>
-              </div>
+
+              {/* Prep Time */}
               <div>
-                <label className="block text-sm font-semibold text-dark-700 mb-2">Image</label>
-                <div className="space-y-3">
-                  {/* Image Preview */}
-                  {(imagePreview || form.image) && (
-                    <div className="relative rounded-xl overflow-hidden border border-dark-200 h-40 bg-dark-100">
-                      <img src={imagePreview || form.image} alt="Preview" className="w-full h-full object-cover" onError={(e) => e.target.style.display = 'none'} />
-                      <button
-                        type="button"
-                        onClick={removeImage}
-                        className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                  {/* Upload Button */}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageFileChange}
-                    ref={imageInputRef}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => imageInputRef.current?.click()}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-dark-50 border border-dark-200 border-dashed rounded-xl hover:bg-dark-100 transition-colors text-dark-600"
-                  >
-                    <Upload className="w-5 h-5" />
-                    {imagePreview || form.image ? 'Change Image' : 'Upload Image'}
-                  </button>
-                  <p className="text-dark-400 text-xs">Images are automatically optimized for WhatsApp</p>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-dark-700 mb-2">Tags (comma separated)</label>
-                <div className="relative">
-                  <input type="text" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })}
-                    className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all pr-12" placeholder="spicy, popular, bestseller" />
-                  <button type="button" onClick={generateTags} disabled={aiTagsLoading}
-                    className="absolute right-3 top-3 p-2 text-accent-500 hover:bg-accent-50 rounded-lg transition-colors" title="Generate tags with AI">
-                    <Tag className={`w-5 h-5 ${aiTagsLoading ? 'animate-spin' : ''}`} />
-                  </button>
-                </div>
+                <label className="block text-sm font-semibold text-dark-700 mb-2">Preparation Time (min)</label>
+                <input type="number" value={form.preparationTime} onChange={(e) => setForm({ ...form, preparationTime: e.target.value })}
+                  className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" />
               </div>
 
-              {/* ===== VARIANTS SECTION ===== */}
-              <div className="border border-dark-200 rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="block text-sm font-semibold text-dark-700">Variants (Size / Color)</label>
-                  <button type="button" onClick={() => {
-                    const newVariants = [...(form.variants || []), { label: '', variantType: 'size', price: form.price || '', image: '', available: true }];
-                    setForm({ ...form, variants: newVariants });
-                  }} className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-primary-600 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors">
-                    <Plus className="w-3.5 h-3.5" /> Add Variant
-                  </button>
-                </div>
-                {(!form.variants || form.variants.length === 0) && (
-                  <p className="text-dark-400 text-xs">No variants. Add variants for different sizes (e.g., 100ml, 500ml) or colors.</p>
-                )}
-                {(form.variants || []).map((variant, idx) => (
-                  <div key={idx} className="bg-dark-50 rounded-xl p-3 space-y-2 relative">
-                    <button type="button" onClick={() => {
-                      const updated = form.variants.filter((_, i) => i !== idx);
-                      setForm({ ...form, variants: updated });
-                      const newFiles = { ...variantImageFiles };
-                      delete newFiles[idx];
-                      setVariantImageFiles(newFiles);
-                      const newPreviews = { ...variantImagePreviews };
-                      delete newPreviews[idx];
-                      setVariantImagePreviews(newPreviews);
-                    }} className="absolute top-2 right-2 p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="col-span-2">
-                        <label className="text-xs text-dark-500 mb-1 block">Label</label>
-                        <input type="text" value={variant.label} onChange={(e) => {
-                          const updated = [...form.variants];
-                          updated[idx] = { ...updated[idx], label: e.target.value };
-                          setForm({ ...form, variants: updated });
-                        }} className="w-full px-3 py-2 text-sm bg-white border border-dark-200 rounded-lg focus:border-primary-500 transition-all" placeholder="e.g., 500 grams" required />
-                      </div>
-                      <div>
-                        <label className="text-xs text-dark-500 mb-1 block">Type</label>
-                        <select value={variant.variantType} onChange={(e) => {
-                          const updated = [...form.variants];
-                          updated[idx] = { ...updated[idx], variantType: e.target.value };
-                          setForm({ ...form, variants: updated });
-                        }} className="w-full px-3 py-2 text-sm bg-white border border-dark-200 rounded-lg focus:border-primary-500 transition-all">
-                          <option value="size">Size</option>
-                          <option value="color">Color</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-xs text-dark-500 mb-1 block">Price (₹)</label>
-                        <input type="number" value={variant.price} onChange={(e) => {
-                          const updated = [...form.variants];
-                          updated[idx] = { ...updated[idx], price: e.target.value };
-                          setForm({ ...form, variants: updated });
-                        }} className="w-full px-3 py-2 text-sm bg-white border border-dark-200 rounded-lg focus:border-primary-500 transition-all" required />
-                      </div>
-                      <div>
-                        <label className="text-xs text-dark-500 mb-1 block">Image</label>
-                        <div className="flex items-center gap-2">
-                          {(variantImagePreviews[idx] || variant.image) ? (
-                            <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-dark-200 flex-shrink-0">
-                              <img src={variantImagePreviews[idx] || variant.image} alt="" className="w-full h-full object-cover" />
-                              <button type="button" onClick={() => {
-                                const updated = [...form.variants];
-                                updated[idx] = { ...updated[idx], image: '' };
-                                setForm({ ...form, variants: updated });
-                                const nf = { ...variantImageFiles }; delete nf[idx]; setVariantImageFiles(nf);
-                                const np = { ...variantImagePreviews }; delete np[idx]; setVariantImagePreviews(np);
-                              }} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[8px]">✕</button>
-                            </div>
-                          ) : null}
-                          <label className="flex-1 flex items-center justify-center gap-1 px-2 py-2 text-xs bg-white border border-dark-200 border-dashed rounded-lg hover:bg-dark-100 cursor-pointer transition-colors text-dark-500">
-                            <Upload className="w-3.5 h-3.5" />
-                            {(variantImagePreviews[idx] || variant.image) ? 'Change' : 'Upload'}
-                            <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-                              const file = e.target.files[0];
-                              if (file) {
-                                setVariantImageFiles(prev => ({ ...prev, [idx]: file }));
-                                const reader = new FileReader();
-                                reader.onloadend = () => setVariantImagePreviews(prev => ({ ...prev, [idx]: reader.result }));
-                                reader.readAsDataURL(file);
-                              }
-                            }} />
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
+              {/* Food Type (parent level) */}
               <div>
                 <label className="block text-sm font-semibold text-dark-700 mb-3">Food Type</label>
                 <div className="flex gap-3">
@@ -1453,6 +1890,21 @@ export default function Menu() {
                   ))}
                 </div>
               </div>
+
+              {/* Tags + AI (parent level) */}
+              <div>
+                <label className="block text-sm font-semibold text-dark-700 mb-2">Tags (comma separated)</label>
+                <div className="relative">
+                  <input type="text" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })}
+                    className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all pr-12" placeholder="spicy, popular, bestseller" />
+                  <button type="button" onClick={generateTags} disabled={aiTagsLoading}
+                    className="absolute right-3 top-3 p-2 text-accent-500 hover:bg-accent-50 rounded-lg transition-colors" title="Generate tags with AI">
+                    <Tag className={`w-5 h-5 ${aiTagsLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Availability */}
               <div>
                 <label className="block text-sm font-semibold text-dark-700 mb-3">Availability</label>
                 <div className="flex gap-4">
@@ -1468,6 +1920,8 @@ export default function Menu() {
                   </label>
                 </div>
               </div>
+
+              {/* Submit */}
               <button 
                 type="submit" 
                 disabled={saving}
