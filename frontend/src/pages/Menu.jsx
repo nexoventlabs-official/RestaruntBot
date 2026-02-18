@@ -745,10 +745,18 @@ export default function Menu() {
       }
       
       formData.append('category', JSON.stringify(form.category));
-      formData.append('foodType', form.foodType);
+      // Derive foodType, description, tags from first variant when variants exist
+      if (hasVariants) {
+        formData.append('foodType', form.variants[0].foodType || 'veg');
+        formData.append('description', form.variants[0].description || '');
+        formData.append('tags', form.variants[0].tags || '');
+      } else {
+        formData.append('foodType', form.foodType);
+        formData.append('description', form.description);
+        formData.append('tags', form.tags);
+      }
       formData.append('available', form.available);
       formData.append('preparationTime', form.preparationTime);
-      formData.append('tags', form.tags);
       
       // Handle image
       if (imageFile) {
@@ -1624,27 +1632,6 @@ export default function Menu() {
                   className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" required placeholder="Item title" />
               </div>
 
-              {/* Main Image */}
-              <div>
-                <label className="block text-sm font-semibold text-dark-700 mb-2">Main Image</label>
-                <div className="space-y-2">
-                  {(imagePreview || form.image) && (
-                    <div className="relative rounded-xl overflow-hidden border border-dark-200 h-36 bg-dark-100">
-                      <img src={imagePreview || form.image} alt="Preview" className="w-full h-full object-cover" onError={(e) => e.target.style.display = 'none'} />
-                      <button type="button" onClick={removeImage} className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors">
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                  <input type="file" accept="image/*" onChange={handleImageFileChange} ref={imageInputRef} className="hidden" />
-                  <button type="button" onClick={() => imageInputRef.current?.click()}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-dark-50 border border-dark-200 border-dashed rounded-xl hover:bg-dark-100 transition-colors text-dark-600 text-sm">
-                    <Upload className="w-4 h-4" />
-                    {imagePreview || form.image ? 'Change Image' : 'Upload Image'}
-                  </button>
-                </div>
-              </div>
-
               {/* Category */}
               <div>
                 <label className="block text-sm font-semibold text-dark-700 mb-2">Category</label>
@@ -1855,70 +1842,21 @@ export default function Menu() {
                 )}
               </div>
 
-              {/* Description + AI (parent level) */}
-              <div>
-                <label className="block text-sm font-semibold text-dark-700 mb-2">Description</label>
-                <div className="relative">
-                  <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all pr-12" rows={3} placeholder="Describe this item..." />
-                  <button type="button" onClick={generateDescription} disabled={aiLoading}
-                    className="absolute right-3 top-3 p-2 text-accent-500 hover:bg-accent-50 rounded-lg transition-colors" title="Generate with AI">
-                    <Sparkles className={`w-5 h-5 ${aiLoading ? 'animate-spin' : ''}`} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Prep Time */}
-              <div>
-                <label className="block text-sm font-semibold text-dark-700 mb-2">Preparation Time (min)</label>
-                <input type="number" value={form.preparationTime} onChange={(e) => setForm({ ...form, preparationTime: e.target.value })}
-                  className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" />
-              </div>
-
-              {/* Food Type (parent level) */}
-              <div>
-                <label className="block text-sm font-semibold text-dark-700 mb-3">Food Type</label>
-                <div className="flex gap-3">
-                  {[{ value: 'veg', label: 'Veg', color: 'green' }, { value: 'nonveg', label: 'Non-Veg', color: 'red' }, { value: 'egg', label: 'Egg', color: 'yellow' }].map(type => (
-                    <label key={type.value} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 cursor-pointer transition-all ${form.foodType === type.value ? (type.color === 'green' ? 'border-green-500 bg-green-50' : type.color === 'red' ? 'border-red-500 bg-red-50' : 'border-yellow-500 bg-yellow-50') : 'border-dark-200 hover:border-dark-300'}`}>
-                      <input type="radio" name="foodType" value={type.value} checked={form.foodType === type.value} onChange={(e) => setForm({ ...form, foodType: e.target.value })} className="hidden" />
-                      <span className={`w-4 h-4 rounded border-2 flex items-center justify-center ${type.color === 'green' ? 'border-green-600' : type.color === 'red' ? 'border-red-600' : 'border-yellow-500'}`}>
-                        <span className={`w-2 h-2 rounded-full ${type.color === 'green' ? 'bg-green-600' : type.color === 'red' ? 'bg-red-600' : 'bg-yellow-500'}`}></span>
-                      </span>
-                      <span className="font-medium text-sm">{type.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Tags + AI (parent level) */}
-              <div>
-                <label className="block text-sm font-semibold text-dark-700 mb-2">Tags (comma separated)</label>
-                <div className="relative">
-                  <input type="text" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })}
-                    className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all pr-12" placeholder="spicy, popular, bestseller" />
-                  <button type="button" onClick={generateTags} disabled={aiTagsLoading}
-                    className="absolute right-3 top-3 p-2 text-accent-500 hover:bg-accent-50 rounded-lg transition-colors" title="Generate tags with AI">
-                    <Tag className={`w-5 h-5 ${aiTagsLoading ? 'animate-spin' : ''}`} />
-                  </button>
-                </div>
-              </div>
-
               {/* Availability */}
-              <div>
-                <label className="block text-sm font-semibold text-dark-700 mb-3">Availability</label>
-                <div className="flex gap-4">
-                  <label className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 cursor-pointer transition-all ${form.available ? 'border-green-500 bg-green-50' : 'border-dark-200 hover:border-dark-300'}`}>
-                    <input type="radio" name="availability" checked={form.available === true} onChange={() => setForm({ ...form, available: true })} className="hidden" />
-                    <span className="w-3 h-3 rounded-full bg-green-500"></span>
-                    <span className="font-medium text-sm">Available</span>
-                  </label>
-                  <label className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 cursor-pointer transition-all ${!form.available ? 'border-red-500 bg-red-50' : 'border-dark-200 hover:border-dark-300'}`}>
-                    <input type="radio" name="availability" checked={form.available === false} onChange={() => setForm({ ...form, available: false })} className="hidden" />
-                    <span className="w-3 h-3 rounded-full bg-red-500"></span>
-                    <span className="font-medium text-sm">Unavailable</span>
-                  </label>
+              <div className="flex items-center justify-between p-4 bg-dark-50 rounded-xl border border-dark-200">
+                <div className="flex items-center gap-3">
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center ${form.available ? 'bg-green-100' : 'bg-dark-200'}`}>
+                    <span className={`w-2.5 h-2.5 rounded-full ${form.available ? 'bg-green-500' : 'bg-dark-400'}`}></span>
+                  </span>
+                  <div>
+                    <span className="text-sm font-semibold text-dark-700">Available for Order</span>
+                    <p className="text-xs text-dark-400">Item will be visible to customers</p>
+                  </div>
                 </div>
+                <button type="button" onClick={() => setForm({ ...form, available: !form.available })}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${form.available ? 'bg-green-500' : 'bg-dark-300'}`}>
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm ${form.available ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
               </div>
 
               {/* Submit */}
