@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { 
   Calendar, TrendingUp, TrendingDown, Minus, Package, DollarSign, 
-  ShoppingBag, BarChart3, RefreshCw, Mail, FileDown, X, CheckCircle, AlertCircle, Star
+  ShoppingBag, BarChart3, RefreshCw, Mail, FileDown, X, CheckCircle, AlertCircle, Star,
+  ArrowUp, ArrowDown
 } from 'lucide-react';
 import api from '../api';
 

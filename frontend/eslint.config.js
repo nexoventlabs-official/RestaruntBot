@@ -47,6 +47,7 @@ export default [
     },
     rules: {
       'react/react-in-jsx-scope': 'off', // Not needed with React 17+
+      'react/jsx-uses-vars': 'error',    // Prevent false "unused" warnings for JSX components
       'react/prop-types': 'warn',
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',

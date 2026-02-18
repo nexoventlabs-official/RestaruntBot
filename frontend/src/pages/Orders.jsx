@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   RefreshCw, X, Truck, ChefHat, CheckCircle, Package, Clock, 
-  Filter, Search, MapPin, CreditCard, ExternalLink, ChevronDown, ChevronUp, User
+  Filter, Search, MapPin, CreditCard, ExternalLink, ChevronDown, ChevronUp, User,
+  History
 } from 'lucide-react';
 import api from '../api';
 
@@ -163,7 +164,7 @@ const ScrollableItemsList = ({ items }) => {
       >
         {items?.map((item, i) => {
           // Resolve image: item.image > variant image from populated menuItem > menuItem.image
-          const variantImg = item.variantIndex != null && item.menuItem?.variants?.[item.variantIndex]?.image 
+          const variantImg = item.variantIndex !== null && item.menuItem?.variants?.[item.variantIndex]?.image 
             ? item.menuItem.variants[item.variantIndex].image 
             : null;
           const rawImg = item.image || variantImg || item.menuItem?.image;
@@ -285,6 +286,18 @@ export default function Orders() {
   const hashRef = useRef('');
   const initialLoadDone = useRef(false);
   const isPollingRef = useRef(false);
+  
+  // New filters matching mobile app
+  const [serviceTypeTab, setServiceTypeTab] = useState('all'); // all, delivery, pickup
+  const [paymentFilter, setPaymentFilter] = useState('all'); // all, paid, pending, cod
+  const [sortBy, setSortBy] = useState('newest'); // newest, oldest, amount_high, amount_low
+  const [dateFilter, setDateFilter] = useState('all'); // all, today, week, month
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [activeTab, setActiveTab] = useState('live'); // live, history
+  const [orderHistory, setOrderHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySearchTerm, setHistorySearchTerm] = useState('');
+  const [orderDetailModal, setOrderDetailModal] = useState(null);
 
   // Fetch delivery partners
   const fetchDeliveryPartners = useCallback(async () => {
@@ -321,7 +334,7 @@ export default function Orders() {
       hashRef.current = newHash;
       setOrders(newOrders);
       initialLoadDone.current = true;
-    } catch (err) {
+    } catch {
       if (!isBackground) setOrders([]);
     } finally {
       setLoading(false);
@@ -344,7 +357,7 @@ export default function Orders() {
       if (res.data?.hasChanges) {
         await fetchOrders(true);
       }
-    } catch (err) {
+    } catch {
       // Silent fail for background checks
     } finally {
       isPollingRef.current = false;
@@ -362,27 +375,20 @@ export default function Orders() {
   useEffect(() => {
     let eventSource = null;
     let reconnectTimeout = null;
-    let sseConnected = false;
-    
     const connect = () => {
       const baseUrl = api.defaults.baseURL?.replace('/api', '') || '';
       const token = localStorage.getItem('token');
       eventSource = new EventSource(`${baseUrl}/api/events${token ? '?token=' + token : ''}`);
-      
-      eventSource.onopen = () => {
-        sseConnected = true;
-      };
       
       eventSource.onmessage = (event) => {
         try {
           const { type } = JSON.parse(event.data);
           // Immediately fetch orders when SSE event received for instant updates
           if (type === 'orders') fetchOrders(true);
-        } catch (e) {}
+        } catch { /* ignored */ }
       };
       
       eventSource.onerror = () => {
-        sseConnected = false;
         eventSource?.close();
         reconnectTimeout = setTimeout(connect, 3000);
       };
@@ -394,6 +400,7 @@ export default function Orders() {
       eventSource?.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkForUpdates]);
 
   // Fallback polling (only if SSE fails, checks every 30s)
@@ -431,7 +438,7 @@ export default function Orders() {
       if (deliveryBoyId) {
         await api.put(`/orders/${id}/assign-delivery`, { deliveryBoyId });
       }
-    } catch (err) {
+    } catch {
       alert('Failed to update status');
       fetchOrders(false);
     } finally {
@@ -479,9 +486,66 @@ export default function Orders() {
     }
   };
 
-  const filteredOrders = orders.filter(order => 
-    order.orderId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.customer?.phone?.includes(searchTerm)
+  const filteredOrders = orders.filter(order => {
+    const matchesSearch = order.orderId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.customer?.phone?.includes(searchTerm) ||
+      order.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesServiceType = serviceTypeTab === 'all' || order.serviceType === serviceTypeTab;
+    const matchesPayment = paymentFilter === 'all' || 
+      (paymentFilter === 'paid' && order.paymentStatus === 'paid') ||
+      (paymentFilter === 'pending' && order.paymentStatus === 'pending') ||
+      (paymentFilter === 'cod' && order.paymentMethod === 'cod');
+    
+    // Date filter
+    let matchesDate = true;
+    if (dateFilter !== 'all') {
+      const orderDate = new Date(order.createdAt);
+      const now = new Date();
+      if (dateFilter === 'today') {
+        matchesDate = orderDate.toDateString() === now.toDateString();
+      } else if (dateFilter === 'week') {
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        matchesDate = orderDate >= weekAgo;
+      } else if (dateFilter === 'month') {
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        matchesDate = orderDate >= monthAgo;
+      }
+    }
+    
+    return matchesSearch && matchesServiceType && matchesPayment && matchesDate;
+  }).sort((a, b) => {
+    if (sortBy === 'newest') return new Date(b.createdAt) - new Date(a.createdAt);
+    if (sortBy === 'oldest') return new Date(a.createdAt) - new Date(b.createdAt);
+    if (sortBy === 'amount_high') return (b.totalAmount || 0) - (a.totalAmount || 0);
+    if (sortBy === 'amount_low') return (a.totalAmount || 0) - (b.totalAmount || 0);
+    return 0;
+  });
+
+  // Fetch order history (from Google Sheets)
+  const fetchOrderHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await api.get('/orders/history?limit=1000');
+      setOrderHistory(res.data?.orders || res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch order history:', err);
+      setOrderHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  // Load history when tab changes
+  useEffect(() => {
+    if (activeTab === 'history' && orderHistory.length === 0) {
+      fetchOrderHistory();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, fetchOrderHistory]);
+
+  const filteredHistory = orderHistory.filter(order =>
+    (order.orderId || order['Order ID'] || '').toLowerCase().includes(historySearchTerm.toLowerCase()) ||
+    (order.customerPhone || order['Customer Phone'] || '').includes(historySearchTerm)
   );
 
   const getActionButton = (order) => {
@@ -519,13 +583,31 @@ export default function Orders() {
 
   return (
     <div className="space-y-6">
+      {/* Tabs: Live Orders / Order History */}
+      <div className="flex items-center gap-1 bg-white rounded-xl p-1 shadow-card w-fit">
+        <button
+          onClick={() => setActiveTab('live')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'live' ? 'bg-primary-500 text-white shadow-md' : 'text-dark-600 hover:bg-dark-50'}`}
+        >
+          <Package className="w-4 h-4" /> Live Orders
+        </button>
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'history' ? 'bg-primary-500 text-white shadow-md' : 'text-dark-600 hover:bg-dark-50'}`}
+        >
+          <History className="w-4 h-4" /> Order History
+        </button>
+      </div>
+
+      {activeTab === 'live' ? (
+        <>
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-full">
             <span className="w-2 h-2 bg-green-500 rounded-full live-indicator"></span>
             <span className="text-xs font-medium text-green-700">Live</span>
           </div>
-          <span className="text-dark-400 text-sm">{orders.length} orders</span>
+          <span className="text-dark-400 text-sm">{filteredOrders.length} orders</span>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
           <div className="relative">
@@ -538,8 +620,95 @@ export default function Orders() {
             onChange={setFilter} 
             options={filterOptions} 
           />
+          <button
+            onClick={() => setShowFilterPanel(!showFilterPanel)}
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-colors ${showFilterPanel ? 'bg-primary-50 border-primary-300 text-primary-700' : 'bg-white border-dark-200 text-dark-600 hover:bg-dark-50'}`}
+          >
+            <Filter className="w-4 h-4" />
+            <span className="text-sm font-medium">Filters</span>
+          </button>
         </div>
       </div>
+
+      {/* Service Type Tabs */}
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 bg-white rounded-xl p-1 shadow-card">
+          {[
+            { value: 'all', label: 'All' },
+            { value: 'delivery', label: 'Delivery', icon: Truck },
+            { value: 'pickup', label: 'Pickup', icon: Package }
+          ].map(tab => (
+            <button
+              key={tab.value}
+              onClick={() => setServiceTypeTab(tab.value)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${serviceTypeTab === tab.value ? 'bg-dark-800 text-white' : 'text-dark-600 hover:bg-dark-50'}`}
+            >
+              {tab.icon && <tab.icon className="w-3.5 h-3.5" />}
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Advanced Filter Panel */}
+      {showFilterPanel && (
+        <div className="bg-white rounded-xl p-4 shadow-card flex flex-wrap gap-4 items-end">
+          {/* Payment Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-dark-500 mb-1.5 uppercase tracking-wide">Payment</label>
+            <div className="flex items-center gap-1 bg-dark-50 rounded-lg p-0.5">
+              {['all', 'paid', 'pending', 'cod'].map(opt => (
+                <button key={opt} onClick={() => setPaymentFilter(opt)}
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all capitalize ${paymentFilter === opt ? 'bg-white text-dark-900 shadow-sm' : 'text-dark-500 hover:text-dark-700'}`}>
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Date Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-dark-500 mb-1.5 uppercase tracking-wide">Date</label>
+            <div className="flex items-center gap-1 bg-dark-50 rounded-lg p-0.5">
+              {[
+                { value: 'all', label: 'All' },
+                { value: 'today', label: 'Today' },
+                { value: 'week', label: 'This Week' },
+                { value: 'month', label: 'This Month' }
+              ].map(opt => (
+                <button key={opt.value} onClick={() => setDateFilter(opt.value)}
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${dateFilter === opt.value ? 'bg-white text-dark-900 shadow-sm' : 'text-dark-500 hover:text-dark-700'}`}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Sort */}
+          <div>
+            <label className="block text-xs font-semibold text-dark-500 mb-1.5 uppercase tracking-wide">Sort By</label>
+            <div className="flex items-center gap-1 bg-dark-50 rounded-lg p-0.5">
+              {[
+                { value: 'newest', label: 'Newest' },
+                { value: 'oldest', label: 'Oldest' },
+                { value: 'amount_high', label: '₹ High' },
+                { value: 'amount_low', label: '₹ Low' }
+              ].map(opt => (
+                <button key={opt.value} onClick={() => setSortBy(opt.value)}
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${sortBy === opt.value ? 'bg-white text-dark-900 shadow-sm' : 'text-dark-500 hover:text-dark-700'}`}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Reset Filters */}
+          <button onClick={() => { setPaymentFilter('all'); setDateFilter('all'); setSortBy('newest'); setServiceTypeTab('all'); setShowFilterPanel(false); }}
+            className="px-3 py-2 text-xs font-medium text-dark-500 hover:text-dark-700 hover:bg-dark-100 rounded-lg transition-colors">
+            Reset All
+          </button>
+        </div>
+      )}
 
       {showSkeleton ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -797,6 +966,152 @@ export default function Orders() {
               >
                 Skip - Assign Later
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+        </>
+      ) : (
+        /* Order History Tab */
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-dark-900">Order History</h2>
+              <p className="text-sm text-dark-400">{filteredHistory.length} archived orders</p>
+            </div>
+            <div className="flex gap-3 w-full sm:w-auto">
+              <div className="relative flex-1 sm:flex-initial">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
+                <input type="text" placeholder="Search history..." value={historySearchTerm} onChange={(e) => setHistorySearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2.5 bg-white border border-dark-200 rounded-xl w-full sm:w-64 focus:border-primary-500 transition-colors" />
+              </div>
+              <button onClick={fetchOrderHistory}
+                disabled={historyLoading}
+                className="flex items-center gap-2 px-4 py-2.5 bg-dark-100 rounded-xl text-dark-700 hover:bg-dark-200 transition-colors disabled:opacity-50">
+                <RefreshCw className={`w-4 h-4 ${historyLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          {historyLoading ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+              <OrderSkeleton /><OrderSkeleton /><OrderSkeleton />
+            </div>
+          ) : filteredHistory.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-card p-12 text-center">
+              <div className="w-20 h-20 bg-dark-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <History className="w-10 h-10 text-dark-300" />
+              </div>
+              <h3 className="text-lg font-semibold text-dark-700">No order history</h3>
+              <p className="text-dark-400 mt-1">Completed orders will appear here</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-dark-50">
+                    <tr>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">Order ID</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">Customer</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-dark-600">Items</th>
+                      <th className="text-center px-4 py-3 text-sm font-medium text-dark-600">Status</th>
+                      <th className="text-center px-4 py-3 text-sm font-medium text-dark-600">Payment</th>
+                      <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Amount</th>
+                      <th className="text-right px-4 py-3 text-sm font-medium text-dark-600">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-dark-100">
+                    {filteredHistory.map((order, idx) => {
+                      const orderId = order.orderId || order['Order ID'] || `#${idx + 1}`;
+                      const customerName = order.customer?.name || order['Customer Name'] || order.customerName || '-';
+                      const customerPhone = order.customer?.phone || order['Customer Phone'] || order.customerPhone || '';
+                      const items = order.items || [];
+                      const itemsSummary = typeof items === 'string' ? items : items.map(i => `${i.name} x${i.quantity}`).join(', ');
+                      const status = order.status || order['Status'] || 'delivered';
+                      const paymentMethod = order.paymentMethod || order['Payment Method'] || '-';
+                      const totalAmount = order.totalAmount || order['Total Amount'] || 0;
+                      const date = order.createdAt || order['Date'] || '';
+                      const config = statusConfig[status] || statusConfig.delivered;
+                      
+                      return (
+                        <tr key={idx} className="hover:bg-dark-50 cursor-pointer" onClick={() => setOrderDetailModal(order)}>
+                          <td className="px-4 py-3 text-sm font-mono font-bold text-dark-800">{orderId}</td>
+                          <td className="px-4 py-3">
+                            <p className="text-sm font-medium text-dark-800">{customerName}</p>
+                            <p className="text-xs text-dark-400">{customerPhone}</p>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-dark-600 max-w-[200px] truncate">{itemsSummary || '-'}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold ${config.bg} ${config.text}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`}></span>
+                              {config.label}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center text-sm text-dark-600 uppercase">{paymentMethod}</td>
+                          <td className="px-4 py-3 text-right text-sm font-bold text-dark-900">₹{totalAmount}</td>
+                          <td className="px-4 py-3 text-right text-xs text-dark-400">
+                            {date ? new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Order Detail Modal */}
+      {orderDetailModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setOrderDetailModal(null)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-dark-100 flex items-center justify-between sticky top-0 bg-white z-10">
+              <div>
+                <h3 className="text-lg font-semibold text-dark-900">Order Details</h3>
+                <p className="text-sm text-dark-400">{orderDetailModal.orderId || orderDetailModal['Order ID']}</p>
+              </div>
+              <button onClick={() => setOrderDetailModal(null)} className="w-8 h-8 rounded-lg bg-dark-100 flex items-center justify-center hover:bg-dark-200">
+                <X className="w-4 h-4 text-dark-500" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* Customer */}
+              <div className="flex items-center gap-3 p-3 bg-dark-50 rounded-xl">
+                <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                  <User className="w-5 h-5 text-primary-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-dark-800">{orderDetailModal.customer?.name || orderDetailModal.customerName || '-'}</p>
+                  <p className="text-sm text-dark-400">{orderDetailModal.customer?.phone || orderDetailModal.customerPhone || ''}</p>
+                </div>
+              </div>
+              {/* Items */}
+              <div>
+                <h4 className="text-xs font-bold text-dark-500 uppercase mb-2">Items</h4>
+                <div className="space-y-2">
+                  {(orderDetailModal.items || []).map((item, i) => (
+                    <div key={i} className="flex items-center justify-between p-2 bg-dark-50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        {item.image && (
+                          <img src={item.image.startsWith('http') ? item.image : `${API_BASE_URL}${item.image}`} alt="" className="w-8 h-8 rounded object-cover" />
+                        )}
+                        <div>
+                          <p className="text-sm font-medium text-dark-800">{item.name}</p>
+                          <p className="text-xs text-dark-400">Qty: {item.quantity} x ₹{item.price}</p>
+                        </div>
+                      </div>
+                      <span className="text-sm font-bold text-dark-900">₹{item.price * item.quantity}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* Summary */}
+              <div className="flex items-center justify-between p-3 bg-primary-50 rounded-xl">
+                <span className="font-medium text-dark-700">Total</span>
+                <span className="text-xl font-bold text-primary-600">₹{orderDetailModal.totalAmount || orderDetailModal['Total Amount'] || 0}</span>
+              </div>
             </div>
           </div>
         </div>

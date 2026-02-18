@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Plus, Trash2, User, Mail, Phone, Calendar, Camera, X, Key, Star } from 'lucide-react';
+import { Plus, Trash2, User, Mail, Phone, Calendar, Camera, X, Key, Star, Edit } from 'lucide-react';
 import api from '../api';
 
 export default function DeliveryPersons() {
   const [deliveryBoys, setDeliveryBoys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '', dob: '' });
   const [photo, setPhoto] = useState(null);
@@ -83,26 +84,60 @@ export default function DeliveryPersons() {
     try {
       const formData = new FormData();
       formData.append('name', form.name);
-      formData.append('email', form.email);
       formData.append('phone', form.phone);
       formData.append('dob', form.dob);
       if (photo) formData.append('photo', photo);
-      
-      await api.post('/delivery', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      
-      setShowModal(false);
-      setForm({ name: '', email: '', phone: '', dob: '' });
-      setPhoto(null);
-      setPhotoPreview(null);
-      loadDeliveryBoys();
-      alert('Delivery person added! Password sent to their email.');
+
+      if (editing) {
+        // Edit mode — email is immutable
+        await api.put(`/delivery/${editing._id}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        setShowModal(false);
+        resetFormState();
+        loadDeliveryBoys();
+        alert('Delivery person updated!');
+      } else {
+        // Create mode
+        formData.append('email', form.email);
+        await api.post('/delivery', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        setShowModal(false);
+        resetFormState();
+        loadDeliveryBoys();
+        alert('Delivery person added! Password sent to their email.');
+      }
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to add delivery person');
+      alert(err.response?.data?.error || 'Failed to save delivery person');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const resetFormState = () => {
+    setForm({ name: '', email: '', phone: '', dob: '' });
+    setPhoto(null);
+    setPhotoPreview(null);
+    setEditing(null);
+  };
+
+  const openAddModal = () => {
+    resetFormState();
+    setShowModal(true);
+  };
+
+  const openEditModal = (boy) => {
+    setEditing(boy);
+    setForm({
+      name: boy.name || '',
+      email: boy.email || '',
+      phone: boy.phone || '',
+      dob: boy.dob ? new Date(boy.dob).toISOString().split('T')[0] : '',
+    });
+    setPhoto(null);
+    setPhotoPreview(boy.photo || null);
+    setShowModal(true);
   };
 
   const handleDelete = async (id, name) => {
@@ -153,7 +188,7 @@ export default function DeliveryPersons() {
           <p className="text-dark-500 text-sm">{deliveryBoys.length} delivery partners</p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={openAddModal}
           className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition"
         >
           <Plus className="w-5 h-5" />
@@ -234,6 +269,13 @@ export default function DeliveryPersons() {
                 {boy.isActive ? 'Deactivate' : 'Activate'}
               </button>
               <button
+                onClick={() => openEditModal(boy)}
+                className="p-2 rounded-lg bg-primary-50 text-primary-600 hover:bg-primary-100 transition"
+                title="Edit"
+              >
+                <Edit className="w-4 h-4" />
+              </button>
+              <button
                 onClick={() => handleResetPassword(boy._id, boy.name)}
                 className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
                 title="Reset Password"
@@ -264,8 +306,8 @@ export default function DeliveryPersons() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="p-4 border-b border-dark-100 flex items-center justify-between">
-              <h3 className="font-semibold text-lg">Add Delivery Person</h3>
-              <button onClick={() => setShowModal(false)} className="p-2 hover:bg-dark-100 rounded-lg">
+              <h3 className="font-semibold text-lg">{editing ? 'Edit Delivery Person' : 'Add Delivery Person'}</h3>
+              <button onClick={() => { setShowModal(false); resetFormState(); }} className="p-2 hover:bg-dark-100 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -307,10 +349,11 @@ export default function DeliveryPersons() {
                   type="email"
                   value={form.email}
                   onChange={e => setForm({ ...form, email: e.target.value })}
-                  className="w-full px-4 py-2 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className={`w-full px-4 py-2 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent ${editing ? 'bg-dark-100 text-dark-400 cursor-not-allowed' : ''}`}
                   required
+                  disabled={!!editing}
                 />
-                <p className="text-xs text-dark-400 mt-1">Password will be sent to this email</p>
+                <p className="text-xs text-dark-400 mt-1">{editing ? 'Email cannot be changed' : 'Password will be sent to this email'}</p>
               </div>
               
               {/* Phone */}
@@ -346,7 +389,7 @@ export default function DeliveryPersons() {
                 disabled={submitting}
                 className="w-full py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition disabled:opacity-50"
               >
-                {submitting ? 'Adding...' : 'Add & Send Password'}
+                {submitting ? (editing ? 'Updating...' : 'Adding...') : (editing ? 'Update Delivery Person' : 'Add & Send Password')}
               </button>
             </form>
           </div>
