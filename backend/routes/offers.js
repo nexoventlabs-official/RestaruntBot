@@ -150,7 +150,7 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     const { 
       title, description, offerType, code, discountType, discountValue, 
       minOrderAmount, validFrom, validUntil, isActive, showAsPopup,
-      buttonText, buttonLink, percentage, appliedItems, appliedCategories, appliedVariants,
+      buttonText, buttonLink, percentage, appliedItems, appliedCategories, appliedVariants, appliedQuantities,
       targetType, targetPercentage, targetMinSpent, targetMinOrders
     } = req.body;
     
@@ -199,6 +199,7 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     let parsedAppliedItems = [];
     let parsedAppliedCategories = [];
     let parsedAppliedVariants = [];
+    let parsedAppliedQuantities = [];
     
     if (appliedItems) {
       parsedAppliedItems = typeof appliedItems === 'string' ? JSON.parse(appliedItems) : appliedItems;
@@ -210,6 +211,10 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     
     if (appliedVariants) {
       parsedAppliedVariants = typeof appliedVariants === 'string' ? JSON.parse(appliedVariants) : appliedVariants;
+    }
+    
+    if (appliedQuantities) {
+      parsedAppliedQuantities = typeof appliedQuantities === 'string' ? JSON.parse(appliedQuantities) : appliedQuantities;
     }
 
     // Handle targeting - we'll fetch customers in background after saving offer
@@ -228,6 +233,7 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       percentage: percentage ? parseFloat(percentage) : null,
       appliedItems: parsedAppliedItems,
       appliedVariants: parsedAppliedVariants,
+      appliedQuantities: parsedAppliedQuantities,
       appliedCategories: parsedAppliedCategories,
       image: legacyImageUrl || imageDesktopUrl || imageTabletUrl || imageMobileUrl, // Legacy field
       imageMobile: imageMobileUrl,
@@ -293,16 +299,18 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       percentage,
       appliedItems: parsedAppliedItems,
       appliedVariants: parsedAppliedVariants,
+      appliedQuantities: parsedAppliedQuantities,
       appliedCategories: parsedAppliedCategories
     });
     
     // Apply offer to selected items and categories (if any items/categories are selected)
     // NOTE: For targeted offers, we DON'T apply offerPrice to items (discount is calculated at order time for eligible customers only)
     
-    // Collect item IDs from appliedVariants (extract the itemId part from "itemId_variantIndex")
+    // Collect item IDs from appliedVariants and appliedQuantities
     const variantItemIds = [...new Set(parsedAppliedVariants.map(v => v.split('_')[0]))];
+    const quantityItemIds = [...new Set(parsedAppliedQuantities.map(q => q.split('_')[0]))];
     let allItemIds = [];
-    if (parsedAppliedItems.length > 0 || parsedAppliedCategories.length > 0 || parsedAppliedVariants.length > 0) {
+    if (parsedAppliedItems.length > 0 || parsedAppliedCategories.length > 0 || parsedAppliedVariants.length > 0 || parsedAppliedQuantities.length > 0) {
       const MenuItem = require('../models/MenuItem');
       
       // Collect all item IDs (from both direct selection, categories, and variant selections)
@@ -324,7 +332,12 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
         allItemIds = [...new Set([...allItemIds, ...variantItemIds])];
       }
       
-      logger.info('Total items to apply offer', { count: allItemIds.length, variantSpecific: parsedAppliedVariants.length });
+      // Add items from quantity-level selections
+      if (quantityItemIds.length > 0) {
+        allItemIds = [...new Set([...allItemIds, ...quantityItemIds])];
+      }
+      
+      logger.info('Total items to apply offer', { count: allItemIds.length, variantSpecific: parsedAppliedVariants.length, quantitySpecific: parsedAppliedQuantities.length });
       logger.info('Is targeted offer', { isTargeted: isTargetedOffer, offerPriceApplied: !isTargetedOffer });
       
       // Apply offer to all collected items
@@ -371,15 +384,28 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
                 });
               }
             } else {
-              // Only specific variants selected — apply discount only to those variants
+              // Specific variants or quantities selected
               const selectedVariantIndices = parsedAppliedVariants
                 .filter(v => v.startsWith(itemId + '_'))
                 .map(v => parseInt(v.split('_')[1]));
+              
+              // Get per-quantity selections: { variantIndex: [quantityIndex1, quantityIndex2, ...] }
+              const selectedQuantityMap = {};
+              parsedAppliedQuantities
+                .filter(q => q.startsWith(itemId + '_'))
+                .forEach(q => {
+                  const parts = q.split('_');
+                  const vi = parseInt(parts[1]);
+                  const qi = parseInt(parts[2]);
+                  if (!selectedQuantityMap[vi]) selectedQuantityMap[vi] = [];
+                  selectedQuantityMap[vi].push(qi);
+                });
               
               if (item.variants && item.variants.length > 0) {
                 updateFields.variants = item.variants.map((v, idx) => {
                   const vObj = v.toObject ? v.toObject() : { ...v };
                   if (selectedVariantIndices.includes(idx)) {
+                    // Full variant selected — apply to variant and ALL its quantities
                     const vOfferPrice = Math.round(v.price * (1 - discountPercent / 100));
                     logger.info(`Applying to ${item.name} variant ${v.label}: ${v.price} -> ${vOfferPrice} (${discountPercent}% OFF)`);
                     vObj.offerPrice = vOfferPrice;
@@ -389,7 +415,20 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
                         offerPrice: Math.round(q.price * (1 - discountPercent / 100))
                       }));
                     }
-                    return vObj;
+                  } else if (selectedQuantityMap[idx]) {
+                    // Only specific quantities selected for this variant
+                    const selectedQIndices = selectedQuantityMap[idx];
+                    if (vObj.quantities && vObj.quantities.length > 0) {
+                      vObj.quantities = vObj.quantities.map((q, qIdx) => {
+                        const qObj = q.toObject ? q.toObject() : { ...q };
+                        if (selectedQIndices.includes(qIdx)) {
+                          const qOfferPrice = Math.round(q.price * (1 - discountPercent / 100));
+                          logger.info(`Applying to ${item.name} variant ${v.label} qty ${q.quantity}${q.unit}: ${q.price} -> ${qOfferPrice} (${discountPercent}% OFF)`);
+                          qObj.offerPrice = qOfferPrice;
+                        }
+                        return qObj;
+                      });
+                    }
                   }
                   return vObj; // Leave unselected variants unchanged
                 });
@@ -688,7 +727,7 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
     const { 
       title, description, offerType, code, discountType, discountValue, 
       minOrderAmount, validFrom, validUntil, isActive, showAsPopup,
-      buttonText, buttonLink, percentage, appliedItems, appliedCategories, appliedVariants,
+      buttonText, buttonLink, percentage, appliedItems, appliedCategories, appliedVariants, appliedQuantities,
       targetType, targetPercentage, targetMinSpent, targetMinOrders
     } = req.body;
     
@@ -700,6 +739,7 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
     let parsedAppliedItems = [];
     let parsedAppliedCategories = [];
     let parsedAppliedVariants = [];
+    let parsedAppliedQuantities = [];
     
     if (appliedItems) {
       parsedAppliedItems = typeof appliedItems === 'string' ? JSON.parse(appliedItems) : appliedItems;
@@ -711,6 +751,10 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
     
     if (appliedVariants) {
       parsedAppliedVariants = typeof appliedVariants === 'string' ? JSON.parse(appliedVariants) : appliedVariants;
+    }
+    
+    if (appliedQuantities) {
+      parsedAppliedQuantities = typeof appliedQuantities === 'string' ? JSON.parse(appliedQuantities) : appliedQuantities;
     }
     
     // Handle targeting - fetch customers in background after saving
@@ -729,6 +773,7 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
       percentage: percentage ? parseFloat(percentage) : null,
       appliedItems: parsedAppliedItems,
       appliedVariants: parsedAppliedVariants,
+      appliedQuantities: parsedAppliedQuantities,
       appliedCategories: parsedAppliedCategories,
       code,
       discountType: discountType || 'none',
@@ -805,10 +850,10 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
     const offer = await Offer.findByIdAndUpdate(req.params.id, updateData, { new: true });
     
     // Apply offer to selected items and categories (if any items/categories are selected)
-    if (parsedAppliedItems.length > 0 || parsedAppliedCategories.length > 0) {
+    if (parsedAppliedItems.length > 0 || parsedAppliedCategories.length > 0 || parsedAppliedVariants.length > 0 || parsedAppliedQuantities.length > 0) {
       const MenuItem = require('../models/MenuItem');
       
-      // Collect all item IDs (from both direct selection and categories)
+      // Collect all item IDs (from direct selection, categories, variants, and quantities)
       let allItemIds = [...parsedAppliedItems];
       
       // Add items from selected categories
@@ -818,6 +863,18 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
         });
         const categoryItemIds = categoryItems.map(item => item._id.toString());
         allItemIds = [...new Set([...allItemIds, ...categoryItemIds])];
+      }
+      
+      // Add items from variant-level selections
+      const variantItemIds = [...new Set(parsedAppliedVariants.map(v => v.split('_')[0]))];
+      if (variantItemIds.length > 0) {
+        allItemIds = [...new Set([...allItemIds, ...variantItemIds])];
+      }
+      
+      // Add items from quantity-level selections
+      const quantityItemIds = [...new Set(parsedAppliedQuantities.map(q => q.split('_')[0]))];
+      if (quantityItemIds.length > 0) {
+        allItemIds = [...new Set([...allItemIds, ...quantityItemIds])];
       }
       
       // First, remove this offer from items that are no longer selected
@@ -885,25 +942,78 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
           
           const updateFields = { offerType: offerTypes };
           
+          // Check if this item is fully selected or only specific variants/quantities
+          const isFullItemSelected = parsedAppliedItems.includes(itemId) || 
+            parsedAppliedCategories.some(cat => {
+              const itemCats = Array.isArray(item.category) ? item.category : [item.category];
+              return itemCats.includes(cat);
+            });
+          
           // If percentage is provided AND it's NOT a targeted offer, calculate and apply discount
           if (percentage && !isTargetedOffer) {
             const discountPercent = parseFloat(percentage);
-            const offerPrice = Math.round(item.price * (1 - discountPercent / 100));
-            updateFields.offerPrice = offerPrice;
             
-            // Also apply discount to variants if item has variants
-            if (item.variants && item.variants.length > 0) {
-              updateFields.variants = item.variants.map(v => {
-                const vObj = v.toObject ? v.toObject() : { ...v };
-                vObj.offerPrice = Math.round(v.price * (1 - discountPercent / 100));
-                if (vObj.quantities && vObj.quantities.length > 0) {
-                  vObj.quantities = vObj.quantities.map(q => ({
-                    ...(q.toObject ? q.toObject() : q),
-                    offerPrice: Math.round(q.price * (1 - discountPercent / 100))
-                  }));
-                }
-                return vObj;
-              });
+            if (isFullItemSelected) {
+              // Full item selected — apply to parent price and ALL variants
+              const offerPrice = Math.round(item.price * (1 - discountPercent / 100));
+              updateFields.offerPrice = offerPrice;
+              
+              if (item.variants && item.variants.length > 0) {
+                updateFields.variants = item.variants.map(v => {
+                  const vObj = v.toObject ? v.toObject() : { ...v };
+                  vObj.offerPrice = Math.round(v.price * (1 - discountPercent / 100));
+                  if (vObj.quantities && vObj.quantities.length > 0) {
+                    vObj.quantities = vObj.quantities.map(q => ({
+                      ...(q.toObject ? q.toObject() : q),
+                      offerPrice: Math.round(q.price * (1 - discountPercent / 100))
+                    }));
+                  }
+                  return vObj;
+                });
+              }
+            } else {
+              // Specific variants or quantities selected
+              const selectedVariantIndices = parsedAppliedVariants
+                .filter(v => v.startsWith(itemId + '_'))
+                .map(v => parseInt(v.split('_')[1]));
+              
+              const selectedQuantityMap = {};
+              parsedAppliedQuantities
+                .filter(q => q.startsWith(itemId + '_'))
+                .forEach(q => {
+                  const parts = q.split('_');
+                  const vi = parseInt(parts[1]);
+                  const qi = parseInt(parts[2]);
+                  if (!selectedQuantityMap[vi]) selectedQuantityMap[vi] = [];
+                  selectedQuantityMap[vi].push(qi);
+                });
+              
+              if (item.variants && item.variants.length > 0) {
+                updateFields.variants = item.variants.map((v, idx) => {
+                  const vObj = v.toObject ? v.toObject() : { ...v };
+                  if (selectedVariantIndices.includes(idx)) {
+                    vObj.offerPrice = Math.round(v.price * (1 - discountPercent / 100));
+                    if (vObj.quantities && vObj.quantities.length > 0) {
+                      vObj.quantities = vObj.quantities.map(q => ({
+                        ...(q.toObject ? q.toObject() : q),
+                        offerPrice: Math.round(q.price * (1 - discountPercent / 100))
+                      }));
+                    }
+                  } else if (selectedQuantityMap[idx]) {
+                    const selectedQIndices = selectedQuantityMap[idx];
+                    if (vObj.quantities && vObj.quantities.length > 0) {
+                      vObj.quantities = vObj.quantities.map((q, qIdx) => {
+                        const qObj = q.toObject ? q.toObject() : { ...q };
+                        if (selectedQIndices.includes(qIdx)) {
+                          qObj.offerPrice = Math.round(q.price * (1 - discountPercent / 100));
+                        }
+                        return qObj;
+                      });
+                    }
+                  }
+                  return vObj;
+                });
+              }
             }
           }
           
@@ -1274,44 +1384,93 @@ router.patch('/:id/toggle', auth, async (req, res) => {
     // If offer is being activated, apply it to items
     if (!wasActive && offer.isActive && offer.offerType && offer.percentage) {
       const MenuItem = require('../models/MenuItem');
-      const itemsWithOffer = await MenuItem.find({ offerType: offer.offerType });
       
-      for (const item of itemsWithOffer) {
-        const offerTypes = Array.isArray(item.offerType) ? item.offerType : [item.offerType];
+      // Collect all affected item IDs from appliedItems, appliedVariants, appliedQuantities, and appliedCategories
+      let allItemIds = [...(offer.appliedItems || []).map(id => id.toString())];
+      
+      if (offer.appliedCategories && offer.appliedCategories.length > 0) {
+        const catItems = await MenuItem.find({ category: { $in: offer.appliedCategories } });
+        allItemIds = [...new Set([...allItemIds, ...catItems.map(i => i._id.toString())])];
+      }
+      
+      const variantItemIds = [...new Set((offer.appliedVariants || []).map(v => v.split('_')[0]))];
+      const quantityItemIds = [...new Set((offer.appliedQuantities || []).map(q => q.split('_')[0]))];
+      allItemIds = [...new Set([...allItemIds, ...variantItemIds, ...quantityItemIds])];
+      
+      const discountPercent = offer.percentage;
+      
+      for (const itemId of allItemIds) {
+        const item = await MenuItem.findById(itemId);
+        if (!item) continue;
         
-        // Get all active offers for this item
-        const activeOffers = await Offer.find({ 
-          offerType: { $in: offerTypes },
-          isActive: true
-        });
+        const isFullItemSelected = (offer.appliedItems || []).map(id => id.toString()).includes(itemId) ||
+          (offer.appliedCategories || []).some(cat => {
+            const itemCats = Array.isArray(item.category) ? item.category : [item.category];
+            return itemCats.includes(cat);
+          });
         
-        // Find the best discount
-        let bestDiscount = 0;
-        for (const activeOffer of activeOffers) {
-          if (activeOffer.percentage && activeOffer.percentage > bestDiscount) {
-            bestDiscount = activeOffer.percentage;
-          }
-        }
+        const updateFields = {};
         
-        if (bestDiscount > 0) {
-          const updateFields = {
-            offerPrice: Math.round(item.price * (1 - bestDiscount / 100))
-          };
+        if (isFullItemSelected) {
+          updateFields.offerPrice = Math.round(item.price * (1 - discountPercent / 100));
           if (item.variants && item.variants.length > 0) {
             updateFields.variants = item.variants.map(v => {
               const vObj = v.toObject ? v.toObject() : { ...v };
-              vObj.offerPrice = Math.round(v.price * (1 - bestDiscount / 100));
+              vObj.offerPrice = Math.round(v.price * (1 - discountPercent / 100));
               if (vObj.quantities && vObj.quantities.length > 0) {
                 vObj.quantities = vObj.quantities.map(q => ({
                   ...(q.toObject ? q.toObject() : q),
-                  offerPrice: Math.round(q.price * (1 - bestDiscount / 100))
+                  offerPrice: Math.round(q.price * (1 - discountPercent / 100))
                 }));
               }
               return vObj;
             });
           }
-          await MenuItem.findByIdAndUpdate(item._id, updateFields);
+        } else {
+          const selectedVariantIndices = (offer.appliedVariants || [])
+            .filter(v => v.startsWith(itemId + '_'))
+            .map(v => parseInt(v.split('_')[1]));
+          
+          const selectedQuantityMap = {};
+          (offer.appliedQuantities || [])
+            .filter(q => q.startsWith(itemId + '_'))
+            .forEach(q => {
+              const parts = q.split('_');
+              const vi = parseInt(parts[1]);
+              const qi = parseInt(parts[2]);
+              if (!selectedQuantityMap[vi]) selectedQuantityMap[vi] = [];
+              selectedQuantityMap[vi].push(qi);
+            });
+          
+          if (item.variants && item.variants.length > 0) {
+            updateFields.variants = item.variants.map((v, idx) => {
+              const vObj = v.toObject ? v.toObject() : { ...v };
+              if (selectedVariantIndices.includes(idx)) {
+                vObj.offerPrice = Math.round(v.price * (1 - discountPercent / 100));
+                if (vObj.quantities && vObj.quantities.length > 0) {
+                  vObj.quantities = vObj.quantities.map(q => ({
+                    ...(q.toObject ? q.toObject() : q),
+                    offerPrice: Math.round(q.price * (1 - discountPercent / 100))
+                  }));
+                }
+              } else if (selectedQuantityMap[idx]) {
+                const selectedQIndices = selectedQuantityMap[idx];
+                if (vObj.quantities && vObj.quantities.length > 0) {
+                  vObj.quantities = vObj.quantities.map((q, qIdx) => {
+                    const qObj = q.toObject ? q.toObject() : { ...q };
+                    if (selectedQIndices.includes(qIdx)) {
+                      qObj.offerPrice = Math.round(q.price * (1 - discountPercent / 100));
+                    }
+                    return qObj;
+                  });
+                }
+              }
+              return vObj;
+            });
+          }
         }
+        
+        await MenuItem.findByIdAndUpdate(itemId, updateFields);
       }
       
       // Emit SSE event to notify clients

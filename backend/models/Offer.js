@@ -7,6 +7,7 @@ const offerSchema = new mongoose.Schema({
   percentage: { type: Number }, // Discount percentage (optional)
   appliedItems: [{ type: mongoose.Schema.Types.ObjectId, ref: 'MenuItem' }], // Items this offer applies to
   appliedVariants: [{ type: String }], // Specific variants e.g. ["itemId_0", "itemId_2"]
+  appliedQuantities: [{ type: String }], // Specific quantities e.g. ["itemId_0_1", "itemId_0_2"]
   appliedCategories: [{ type: String }], // Categories this offer applies to
   image: { type: String, required: true }, // Legacy field for backward compatibility
   imageMobile: { type: String }, // Mobile view image (800x160px recommended)

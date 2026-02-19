@@ -36,6 +36,7 @@ export default function OfferFormScreen({ route, navigation }) {
       : []
   );
   const [selectedVariants, setSelectedVariants] = useState(existingOffer?.appliedVariants || []);
+  const [selectedQuantities, setSelectedQuantities] = useState(existingOffer?.appliedQuantities || []);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState(null);
   const [expandedItemId, setExpandedItemId] = useState(null); // For variant drill-down
@@ -181,13 +182,15 @@ export default function OfferFormScreen({ route, navigation }) {
       }
       setSelectedItems(selectedItems.filter(id => id !== itemId));
       setSelectedVariants(prev => [...prev.filter(v => !v.startsWith(itemId + '_')), ...otherKeys]);
+      setSelectedQuantities(prev => prev.filter(q => !q.startsWith(itemId + '_')));
     } else if (selectedVariants.includes(key)) {
-      // Already individually selected — remove it
+      // Already individually selected — remove it and its quantities
       setSelectedVariants(prev => prev.filter(v => v !== key));
+      setSelectedQuantities(prev => prev.filter(q => !q.startsWith(key + '_')));
     } else {
-      // Add this variant
+      // Add this variant (all its quantities) — check if all now selected → upgrade to parent selection
       const newVariants = [...selectedVariants, key];
-      // Check if all variants are now selected → upgrade to parent selection
+      setSelectedQuantities(prev => prev.filter(q => !q.startsWith(key + '_')));
       const selectedForItem = newVariants.filter(v => v.startsWith(itemId + '_'));
       if (totalVariants > 0 && selectedForItem.length === totalVariants) {
         setSelectedItems(prev => [...prev, itemId]);
@@ -203,6 +206,64 @@ export default function OfferFormScreen({ route, navigation }) {
     return selectedVariants.includes(`${itemId}_${variantIndex}`);
   };
 
+  const isQuantitySelected = (itemId, variantIndex, quantityIndex) => {
+    if (selectedItems.includes(itemId)) return true;
+    if (selectedVariants.includes(`${itemId}_${variantIndex}`)) return true;
+    return selectedQuantities.includes(`${itemId}_${variantIndex}_${quantityIndex}`);
+  };
+
+  const toggleQuantity = (itemId, variantIndex, quantityIndex) => {
+    const item = menuItems.find(i => i._id === itemId);
+    if (!item) return;
+    const variant = item.variants?.[variantIndex];
+    if (!variant) return;
+    const vKey = `${itemId}_${variantIndex}`;
+    const qKey = `${itemId}_${variantIndex}_${quantityIndex}`;
+    const totalQ = variant.quantities?.length || 0;
+    const totalV = item.variants?.length || 0;
+
+    if (selectedItems.includes(itemId)) {
+      // Item fully selected → demote to individual variants, then demote this variant to individual quantities minus this one
+      const otherVariantKeys = [];
+      for (let i = 0; i < totalV; i++) { if (i !== variantIndex) otherVariantKeys.push(`${itemId}_${i}`); }
+      const otherQuantityKeys = [];
+      for (let i = 0; i < totalQ; i++) { if (i !== quantityIndex) otherQuantityKeys.push(`${itemId}_${variantIndex}_${i}`); }
+      setSelectedItems(prev => prev.filter(id => id !== itemId));
+      setSelectedVariants(prev => [...prev.filter(v => !v.startsWith(itemId + '_')), ...otherVariantKeys]);
+      setSelectedQuantities(prev => [...prev.filter(q => !q.startsWith(itemId + '_')), ...otherQuantityKeys]);
+    } else if (selectedVariants.includes(vKey)) {
+      // Variant fully selected → demote to individual quantities minus this one
+      const otherQuantityKeys = [];
+      for (let i = 0; i < totalQ; i++) { if (i !== quantityIndex) otherQuantityKeys.push(`${itemId}_${variantIndex}_${i}`); }
+      setSelectedVariants(prev => prev.filter(v => v !== vKey));
+      setSelectedQuantities(prev => [...prev.filter(q => !q.startsWith(vKey + '_')), ...otherQuantityKeys]);
+    } else if (selectedQuantities.includes(qKey)) {
+      // Deselect this quantity
+      setSelectedQuantities(prev => prev.filter(q => q !== qKey));
+    } else {
+      // Select this quantity — check for promotions
+      const newQuantities = [...selectedQuantities, qKey];
+      const selectedQCount = newQuantities.filter(q => q.startsWith(vKey + '_')).length;
+      if (selectedQCount >= totalQ) {
+        // All quantities selected → promote to variant level
+        const cleanedQuantities = newQuantities.filter(q => !q.startsWith(vKey + '_'));
+        const newVariants = [...selectedVariants, vKey];
+        const selectedVCount = newVariants.filter(v => v.startsWith(itemId + '_')).length;
+        if (selectedVCount >= totalV) {
+          // All variants selected → promote to item level
+          setSelectedItems(prev => [...prev, itemId]);
+          setSelectedVariants(prev => prev.filter(v => !v.startsWith(itemId + '_')));
+          setSelectedQuantities(cleanedQuantities.filter(q => !q.startsWith(itemId + '_')));
+        } else {
+          setSelectedVariants(newVariants);
+          setSelectedQuantities(cleanedQuantities);
+        }
+      } else {
+        setSelectedQuantities(newQuantities);
+      }
+    }
+  };
+
   const toggleItem = (itemId) => {
     const item = menuItems.find(i => i._id === itemId);
     if (!item) return;
@@ -214,8 +275,9 @@ export default function OfferFormScreen({ route, navigation }) {
       newSelectedItems = [...selectedItems, itemId];
     }
     setSelectedItems(newSelectedItems);
-    // Clear any individual variant selections for this item
+    // Clear any individual variant and quantity selections for this item
     setSelectedVariants(prev => prev.filter(v => !v.startsWith(itemId + '_')));
+    setSelectedQuantities(prev => prev.filter(q => !q.startsWith(itemId + '_')));
     
     // Check if all items in this item's categories are now selected/deselected
     const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
@@ -393,6 +455,10 @@ export default function OfferFormScreen({ route, navigation }) {
       
       if (selectedVariants.length > 0) {
         formData.append('appliedVariants', JSON.stringify(selectedVariants));
+      }
+      
+      if (selectedQuantities.length > 0) {
+        formData.append('appliedQuantities', JSON.stringify(selectedQuantities));
       }
       
       if (selectedCategories.length > 0) {
@@ -1108,11 +1174,14 @@ export default function OfferFormScreen({ route, navigation }) {
                                 const vDiscount = vPrice - vOfferPrice;
                                 const foodType = variant.foodType || item.foodType;
                                 const vSelected = isVariantSelected(item._id, vIdx);
+                                const hasAnyQtySelected = variant.quantities && variant.quantities.length > 0 && variant.quantities.some((_, qi) => isQuantitySelected(item._id, vIdx, qi));
                                 return (
                                   <View key={vIdx}>
                                   <TouchableOpacity style={styles.variantRow} activeOpacity={0.7} onPress={() => toggleVariant(item._id, vIdx)}>
-                                    <View style={[styles.checkbox, { width: 20, height: 20, borderRadius: 4, marginRight: 8 }, vSelected && styles.checkboxChecked]}>
+                                    <View style={[styles.checkbox, { width: 20, height: 20, borderRadius: 4, marginRight: 8 }, 
+                                      vSelected ? styles.checkboxChecked : hasAnyQtySelected ? { backgroundColor: '#a5b4fc', borderColor: '#a5b4fc' } : {}]}>
                                       {vSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
+                                      {!vSelected && hasAnyQtySelected && <View style={{ width: 8, height: 2, backgroundColor: '#fff', borderRadius: 1 }} />}
                                     </View>
                                     {variant.image ? (
                                       <Image source={{ uri: variant.image }} style={styles.variantImage} />
@@ -1161,15 +1230,16 @@ export default function OfferFormScreen({ route, navigation }) {
                                     <View style={{ backgroundColor: '#fafafa' }}>
                                       {variant.quantities.map((q, qIdx) => {
                                         const qOfferPrice = discountPercent > 0 ? Math.round(q.price * (1 - discountPercent / 100)) : q.price;
+                                        const qSelected = isQuantitySelected(item._id, vIdx, qIdx);
                                         return (
-                                          <TouchableOpacity key={qIdx} activeOpacity={0.7} onPress={() => toggleVariant(item._id, vIdx)}
+                                          <TouchableOpacity key={qIdx} activeOpacity={0.7} onPress={() => toggleQuantity(item._id, vIdx, qIdx)}
                                             style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingLeft: 56, paddingRight: 16, borderBottomWidth: qIdx < variant.quantities.length - 1 ? 0.5 : 0, borderColor: '#f0f0f0' }}>
                                             <View style={[{ width: 16, height: 16, borderRadius: 3, borderWidth: 2, marginRight: 10, alignItems: 'center', justifyContent: 'center' },
-                                              vSelected ? { backgroundColor: '#6366f1', borderColor: '#6366f1' } : { borderColor: '#d1d5db' }]}>
-                                              {vSelected && <Ionicons name="checkmark" size={11} color="#fff" />}
+                                              qSelected ? { backgroundColor: '#6366f1', borderColor: '#6366f1' } : { borderColor: '#d1d5db' }]}>
+                                              {qSelected && <Ionicons name="checkmark" size={11} color="#fff" />}
                                             </View>
                                             <Text style={{ fontSize: 12, fontWeight: '500', color: '#4b5563', flex: 1 }}>{q.quantity} {q.unit}</Text>
-                                            {discountPercent > 0 && vSelected ? (
+                                            {discountPercent > 0 && qSelected ? (
                                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                                 <Text style={{ fontSize: 10, color: '#9ca3af', textDecorationLine: 'line-through' }}>₹{q.price}</Text>
                                                 <Text style={{ fontSize: 11, fontWeight: '700', color: '#16a34a' }}>₹{qOfferPrice}</Text>

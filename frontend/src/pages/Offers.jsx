@@ -58,6 +58,7 @@ export default function Offers() {
   const [menuItems, setMenuItems] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
   const [selectedVariants, setSelectedVariants] = useState([]);
+  const [selectedQuantities, setSelectedQuantities] = useState([]);
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [showItemModal, setShowItemModal] = useState(false);
   const [expandedItemId, setExpandedItemId] = useState(null);
@@ -173,6 +174,7 @@ export default function Offers() {
       setSelectedCategories(offer.appliedCategories || []);
       setSelectedItems(Array.isArray(offer.appliedItems) ? offer.appliedItems.map(i => typeof i === 'string' ? i : i._id) : []);
       setSelectedVariants(offer.appliedVariants || []);
+      setSelectedQuantities(offer.appliedQuantities || []);
       setValidFrom(offer.validFrom ? new Date(offer.validFrom).toISOString().slice(0, 16) : '');
       setValidUntil(offer.validUntil ? new Date(offer.validUntil).toISOString().slice(0, 16) : '');
       setTargetType(offer.targetType || 'all');
@@ -183,7 +185,7 @@ export default function Offers() {
       setEditingOffer(null);
       setOfferType(''); setPercentage('');
       setImage(null); setNewImageFile(null); setNewImagePreview('');
-      setSelectedCategories([]); setSelectedItems([]); setSelectedVariants([]);
+      setSelectedCategories([]); setSelectedItems([]); setSelectedVariants([]); setSelectedQuantities([]);
       setValidFrom(''); setValidUntil('');
       setTargetType('all'); setTargetPercentage('10'); setTargetMinSpent('1000'); setTargetMinOrders('3');
     }
@@ -223,6 +225,12 @@ export default function Offers() {
     return selectedItems.includes(itemId) || selectedVariants.includes(`${itemId}_${variantIndex}`);
   }, [selectedItems, selectedVariants]);
 
+  const isQuantitySelected = useCallback((itemId, variantIndex, quantityIndex) => {
+    if (selectedItems.includes(itemId)) return true;
+    if (selectedVariants.includes(`${itemId}_${variantIndex}`)) return true;
+    return selectedQuantities.includes(`${itemId}_${variantIndex}_${quantityIndex}`);
+  }, [selectedItems, selectedVariants, selectedQuantities]);
+
   const toggleItem = useCallback((itemId) => {
     const item = menuItems.find(i => i._id === itemId);
     if (!item) return;
@@ -234,6 +242,7 @@ export default function Offers() {
       const newVariants = selectedVariants.filter(v => !v.startsWith(`${itemId}_`));
       setSelectedItems(newItems);
       setSelectedVariants(newVariants);
+      setSelectedQuantities(prev => prev.filter(q => !q.startsWith(`${itemId}_`)));
       // Auto-demote categories
       cats.forEach(catName => {
         const catItems = menuItems.filter(m => (Array.isArray(m.category) ? m.category : [m.category]).includes(catName));
@@ -246,6 +255,7 @@ export default function Offers() {
       const newVariants = selectedVariants.filter(v => !v.startsWith(`${itemId}_`));
       setSelectedItems(newItems);
       setSelectedVariants(newVariants);
+      setSelectedQuantities(prev => prev.filter(q => !q.startsWith(`${itemId}_`)));
       // Auto-promote categories
       cats.forEach(catName => {
         const catItems = menuItems.filter(m => (Array.isArray(m.category) ? m.category : [m.category]).includes(catName));
@@ -268,13 +278,18 @@ export default function Offers() {
       for (let i = 0; i < totalV; i++) { if (i !== variantIndex) otherKeys.push(`${itemId}_${i}`); }
       setSelectedItems(newItems);
       setSelectedVariants(prev => [...prev.filter(v => !v.startsWith(`${itemId}_`)), ...otherKeys]);
+      // Clear quantity selections for this item (others promoted to variant level)
+      setSelectedQuantities(prev => prev.filter(q => !q.startsWith(`${itemId}_`)));
     } else if (selectedVariants.includes(key)) {
-      // Deselect this variant
+      // Deselect this variant and its quantities
       setSelectedVariants(prev => prev.filter(v => v !== key));
+      setSelectedQuantities(prev => prev.filter(q => !q.startsWith(`${key}_`)));
     } else {
-      // Select this variant — check if all now selected → upgrade to parent
+      // Select this variant (all its quantities) — check if all now selected → upgrade to parent
       const newVariants = [...selectedVariants, key];
       const selectedCount = newVariants.filter(v => v.startsWith(`${itemId}_`)).length;
+      // Also clear any individual quantity selections for this variant (promoted to variant level)
+      setSelectedQuantities(prev => prev.filter(q => !q.startsWith(`${key}_`)));
       if (selectedCount >= totalV) {
         setSelectedItems(prev => [...prev, itemId]);
         setSelectedVariants(prev => prev.filter(v => !v.startsWith(`${itemId}_`)));
@@ -284,16 +299,72 @@ export default function Offers() {
     }
   }, [menuItems, selectedItems, selectedVariants]);
 
+  const toggleQuantity = useCallback((itemId, variantIndex, quantityIndex) => {
+    const item = menuItems.find(i => i._id === itemId);
+    if (!item) return;
+    const variant = item.variants?.[variantIndex];
+    if (!variant) return;
+    const vKey = `${itemId}_${variantIndex}`;
+    const qKey = `${itemId}_${variantIndex}_${quantityIndex}`;
+    const totalQ = variant.quantities?.length || 0;
+    const totalV = item.variants?.length || 0;
+
+    if (selectedItems.includes(itemId)) {
+      // Item fully selected → demote to individual variants, then demote this variant to individual quantities minus this one
+      const newItems = selectedItems.filter(id => id !== itemId);
+      const otherVariantKeys = [];
+      for (let i = 0; i < totalV; i++) { if (i !== variantIndex) otherVariantKeys.push(`${itemId}_${i}`); }
+      // For the affected variant, add all quantities except this one
+      const otherQuantityKeys = [];
+      for (let i = 0; i < totalQ; i++) { if (i !== quantityIndex) otherQuantityKeys.push(`${itemId}_${variantIndex}_${i}`); }
+      setSelectedItems(newItems);
+      setSelectedVariants(prev => [...prev.filter(v => !v.startsWith(`${itemId}_`)), ...otherVariantKeys]);
+      setSelectedQuantities(prev => [...prev.filter(q => !q.startsWith(`${itemId}_`)), ...otherQuantityKeys]);
+    } else if (selectedVariants.includes(vKey)) {
+      // Variant fully selected → demote to individual quantities minus this one
+      const otherQuantityKeys = [];
+      for (let i = 0; i < totalQ; i++) { if (i !== quantityIndex) otherQuantityKeys.push(`${itemId}_${variantIndex}_${i}`); }
+      setSelectedVariants(prev => prev.filter(v => v !== vKey));
+      setSelectedQuantities(prev => [...prev.filter(q => !q.startsWith(`${vKey}_`)), ...otherQuantityKeys]);
+    } else if (selectedQuantities.includes(qKey)) {
+      // Deselect this quantity
+      setSelectedQuantities(prev => prev.filter(q => q !== qKey));
+    } else {
+      // Select this quantity — check for promotions
+      const newQuantities = [...selectedQuantities, qKey];
+      const selectedQCount = newQuantities.filter(q => q.startsWith(`${vKey}_`)).length;
+      if (selectedQCount >= totalQ) {
+        // All quantities selected → promote to variant level
+        const cleanedQuantities = newQuantities.filter(q => !q.startsWith(`${vKey}_`));
+        const newVariants = [...selectedVariants, vKey];
+        const selectedVCount = newVariants.filter(v => v.startsWith(`${itemId}_`)).length;
+        if (selectedVCount >= totalV) {
+          // All variants selected → promote to item level
+          setSelectedItems(prev => [...prev, itemId]);
+          setSelectedVariants(prev => prev.filter(v => !v.startsWith(`${itemId}_`)));
+          setSelectedQuantities(cleanedQuantities.filter(q => !q.startsWith(`${itemId}_`)));
+        } else {
+          setSelectedVariants(newVariants);
+          setSelectedQuantities(cleanedQuantities);
+        }
+      } else {
+        setSelectedQuantities(newQuantities);
+      }
+    }
+  }, [menuItems, selectedItems, selectedVariants, selectedQuantities]);
+
   const selectAll = useCallback(() => {
     const ids = filteredMenuItems.map(i => i._id);
     const allSelected = ids.every(id => selectedItems.includes(id));
     if (allSelected) {
       setSelectedItems(prev => prev.filter(id => !ids.includes(id)));
       setSelectedVariants(prev => prev.filter(v => !ids.some(id => v.startsWith(`${id}_`))));
+      setSelectedQuantities(prev => prev.filter(q => !ids.some(id => q.startsWith(`${id}_`))));
       setSelectedCategories([]);
     } else {
       setSelectedItems(prev => [...new Set([...prev, ...ids])]);
       setSelectedVariants(prev => prev.filter(v => !ids.some(id => v.startsWith(`${id}_`))));
+      setSelectedQuantities(prev => prev.filter(q => !ids.some(id => q.startsWith(`${id}_`))));
       // Add all categories
       const allCats = new Set();
       filteredMenuItems.forEach(i => (Array.isArray(i.category) ? i.category : [i.category]).forEach(c => allCats.add(c)));
@@ -308,8 +379,10 @@ export default function Offers() {
       count += item?.variants?.length || 1;
     });
     count += selectedVariants.length;
+    // Count individual quantity selections (only those not already covered by variant/item)
+    count += selectedQuantities.length;
     return count;
-  }, [selectedItems, selectedVariants, menuItems]);
+  }, [selectedItems, selectedVariants, selectedQuantities, menuItems]);
 
   /* ═══════════ SCHEDULE QUICK BUTTONS ═══════════ */
   const setNow = () => setValidFrom(new Date().toISOString().slice(0, 16));
@@ -342,6 +415,7 @@ export default function Offers() {
       if (validUntil) fd.append('validUntil', new Date(validUntil).toISOString());
       if (selectedItems.length > 0) fd.append('appliedItems', JSON.stringify(selectedItems));
       if (selectedVariants.length > 0) fd.append('appliedVariants', JSON.stringify(selectedVariants));
+      if (selectedQuantities.length > 0) fd.append('appliedQuantities', JSON.stringify(selectedQuantities));
       if (selectedCategories.length > 0) fd.append('appliedCategories', JSON.stringify(selectedCategories));
       fd.append('targetType', targetType);
       if (targetType === 'top_percentage') fd.append('targetPercentage', targetPercentage);
@@ -793,14 +867,17 @@ export default function Offers() {
                             const pctNum = parseFloat(percentage);
                             const hasDiscount = !isNaN(pctNum) && pctNum > 0;
                             const hasQuantities = v.quantities && v.quantities.length > 0;
+                            // Check if variant has any quantity selected (even partially)
+                            const hasAnyQtySelected = hasQuantities && v.quantities.some((_, qi) => isQuantitySelected(item._id, vi, qi));
                             return (
                               <div key={vi}>
                                 <div className="flex items-center gap-3 px-3 py-2.5 pl-10 border-b border-dark-50 last:border-0 hover:bg-dark-50/50 cursor-pointer"
                                   onClick={() => toggleVariant(item._id, vi)}>
                                   <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                                      vSelected ? 'bg-primary-500 border-primary-500' : 'border-dark-300 hover:border-dark-400'
+                                      vSelected ? 'bg-primary-500 border-primary-500' : hasAnyQtySelected ? 'bg-primary-300 border-primary-300' : 'border-dark-300 hover:border-dark-400'
                                     }`}>
                                     {vSelected && <Check className="w-3 h-3 text-white" />}
+                                    {!vSelected && hasAnyQtySelected && <div className="w-2 h-0.5 bg-white rounded" />}
                                   </div>
                                   <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${foodDot(ft)}`} />
                                   <div className="w-8 h-8 rounded-lg bg-dark-100 overflow-hidden flex-shrink-0">
@@ -826,17 +903,18 @@ export default function Offers() {
                                     {v.quantities.map((q, qi) => {
                                       const origPrice = parseFloat(q.price);
                                       const offerPrice = hasDiscount ? Math.round(origPrice * (1 - pctNum / 100)) : null;
+                                      const qSelected = isQuantitySelected(item._id, vi, qi);
                                       return (
                                         <div key={qi} className="flex items-center gap-3 px-3 py-2 pl-16 border-b border-dark-50/50 last:border-0 hover:bg-dark-100/30 cursor-pointer"
-                                          onClick={() => toggleVariant(item._id, vi)}>
+                                          onClick={() => toggleQuantity(item._id, vi, qi)}>
                                           <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                                            vSelected ? 'bg-primary-500 border-primary-500' : 'border-dark-300'
+                                            qSelected ? 'bg-primary-500 border-primary-500' : 'border-dark-300'
                                           }`}>
-                                            {vSelected && <Check className="w-2.5 h-2.5 text-white" />}
+                                            {qSelected && <Check className="w-2.5 h-2.5 text-white" />}
                                           </div>
                                           <span className="text-[11px] font-medium text-dark-600 flex-1">{q.quantity} {q.unit}</span>
                                           <span className="text-[11px] text-dark-500">
-                                            {offerPrice !== null && vSelected ? (
+                                            {offerPrice !== null && qSelected ? (
                                               <><span className="line-through text-dark-400">₹{q.price}</span>{' '}<span className="text-green-600 font-bold">₹{offerPrice}</span></>
                                             ) : `₹${q.price}`}
                                           </span>
