@@ -170,10 +170,23 @@ export default function UserMenuPage() {
     // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      const matchesSearch = 
-        item.name.toLowerCase().includes(query) ||
-        item.description?.toLowerCase().includes(query) ||
-        item.tags?.some(tag => tag.toLowerCase().includes(query));
+      const queryWords = query.split(/\s+/).filter(w => w.length > 0);
+      const queryNoSpaces = query.replace(/\s+/g, '');
+      
+      const itemName = (item.name || '').toLowerCase();
+      const itemDesc = (item.description || '').toLowerCase();
+      const itemTags = (item.tags || []).join(' ').toLowerCase();
+      const variantLabels = (item.variants || []).map(v => (v.label || '').toLowerCase()).join(' ');
+      const variantDescs = (item.variants || []).map(v => (v.description || '').toLowerCase()).join(' ');
+      const variantTags = (item.variants || []).flatMap(v => v.tags || []).join(' ').toLowerCase();
+      
+      const searchableText = `${itemName} ${itemDesc} ${itemTags} ${variantLabels} ${variantDescs} ${variantTags}`;
+      const searchableNoSpaces = searchableText.replace(/\s+/g, '');
+      
+      const matchesSearch = searchableText.includes(query) ||
+        searchableNoSpaces.includes(queryNoSpaces) ||
+        queryWords.every(w => searchableText.includes(w));
+      
       return hasCategory && matchesSearch;
     }
     
@@ -1335,7 +1348,7 @@ export default function UserMenuPage() {
               {selectedItem.variants && selectedItem.variants.length > 0 && (
                 <div className="mb-4">
                   <p className="text-sm font-semibold text-gray-700 mb-2">
-                    {selectedItem.variants[0]?.variantType === 'color' ? 'Color' : 'Size'}
+                    {selectedItem.variants[0]?.variantType === 'color' ? 'Color' : 'Items'}
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {selectedItem.variants.map((v, idx) => {

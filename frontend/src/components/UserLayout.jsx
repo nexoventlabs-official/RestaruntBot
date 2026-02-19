@@ -37,6 +37,7 @@ export default function UserLayout() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedVariantIdx, setSelectedVariantIdx] = useState(null);
   const [dialogQuantity, setDialogQuantity] = useState(1);
   const [holidayMode, setHolidayMode] = useState(false);
   const searchInputRef = useRef(null);
@@ -208,7 +209,9 @@ export default function UserLayout() {
     // Split search term into individual words for flexible matching
     const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
     
-    const filtered = availableItems.filter(item => {
+    const results = [];
+    
+    availableItems.forEach(item => {
       // Combine all searchable text into one string (remove spaces for flexible matching)
       const itemName = (item.name || '').toLowerCase();
       const itemDescription = (item.description || '').toLowerCase();
@@ -217,37 +220,88 @@ export default function UserLayout() {
         : (item.category || '').toLowerCase();
       const itemTags = (item.tags || []).join(' ').toLowerCase();
       const itemFoodType = (item.foodType || '').toLowerCase();
-      // Include variant labels and variant tags in searchable text
-      const variantLabels = (item.variants || []).map(v => (v.label || '').toLowerCase()).join(' ');
-      const variantTags = (item.variants || []).flatMap(v => v.tags || []).join(' ').toLowerCase();
       
-      // Create searchable text with and without spaces
-      const searchableText = `${itemName} ${itemDescription} ${itemCategories} ${itemTags} ${itemFoodType} ${variantLabels} ${variantTags}`;
-      const searchableTextNoSpaces = searchableText.replace(/\s+/g, '');
+      // Base item searchable text (without variants)
+      const baseSearchableText = `${itemName} ${itemDescription} ${itemCategories} ${itemTags} ${itemFoodType}`;
+      const baseSearchableTextNoSpaces = baseSearchableText.replace(/\s+/g, '');
       const searchTermNoSpaces = searchTerm.replace(/\s+/g, '');
       
-      // Method 1: Direct match (handles "sambar idli" or "breakfast")
-      if (searchableText.includes(searchTerm)) {
-        return true;
-      }
+      const baseMatches = baseSearchableText.includes(searchTerm) ||
+        baseSearchableTextNoSpaces.includes(searchTermNoSpaces) ||
+        searchWords.every(word => baseSearchableText.includes(word));
       
-      // Method 2: Match without spaces (handles "break fast" -> "breakfast")
-      if (searchableTextNoSpaces.includes(searchTermNoSpaces)) {
-        return true;
+      // If item has variants, check each variant individually
+      if (item.variants && item.variants.length > 0) {
+        let anyVariantAdded = false;
+        item.variants.forEach((v, vIdx) => {
+          const vLabel = (v.label || '').toLowerCase();
+          const vDescription = (v.description || '').toLowerCase();
+          const vTags = (v.tags || []).join(' ').toLowerCase();
+          const variantText = `${vLabel} ${vDescription} ${vTags} ${itemCategories} ${itemFoodType}`;
+          const variantTextNoSpaces = variantText.replace(/\s+/g, '');
+          
+          const variantMatches = variantText.includes(searchTerm) ||
+            variantTextNoSpaces.includes(searchTermNoSpaces) ||
+            searchWords.every(word => variantText.includes(word));
+          
+          if (variantMatches || baseMatches) {
+            anyVariantAdded = true;
+            const variantPrice = v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price;
+            results.push({
+              _id: `${item._id}_v${vIdx}`,
+              parentItem: item,
+              variantIndex: vIdx,
+              name: v.label || item.name,
+              description: v.description || item.description,
+              image: v.image || item.image,
+              price: variantPrice,
+              originalPrice: v.offerPrice && v.offerPrice < v.price ? v.price : null,
+              avgRating: v.avgRating || item.avgRating,
+              isVariant: true,
+              parentName: item.name
+            });
+          }
+        });
+        // If no variant matched but base item matched, add all variants
+        if (!anyVariantAdded && baseMatches) {
+          item.variants.forEach((v, vIdx) => {
+            const variantPrice = v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price;
+            results.push({
+              _id: `${item._id}_v${vIdx}`,
+              parentItem: item,
+              variantIndex: vIdx,
+              name: v.label || item.name,
+              description: v.description || item.description,
+              image: v.image || item.image,
+              price: variantPrice,
+              originalPrice: v.offerPrice && v.offerPrice < v.price ? v.price : null,
+              avgRating: v.avgRating || item.avgRating,
+              isVariant: true,
+              parentName: item.name
+            });
+          });
+        }
+      } else {
+        // No variants - add base item if it matches
+        if (baseMatches) {
+          results.push({
+            _id: item._id,
+            parentItem: item,
+            variantIndex: null,
+            name: item.name,
+            description: item.description,
+            image: item.image,
+            price: item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price,
+            originalPrice: item.offerPrice && item.offerPrice < item.price ? item.price : null,
+            avgRating: item.avgRating,
+            isVariant: false,
+            parentName: null
+          });
+        }
       }
-      
-      // Method 3: All words present in any order (handles "idli sambar" vs "sambar idli")
-      const allWordsMatch = searchWords.every(word => 
-        searchableText.includes(word)
-      );
-      if (allWordsMatch) {
-        return true;
-      }
-      
-      return false;
     });
     
-    setSearchResults(filtered);
+    setSearchResults(results);
   };
 
   const openSearch = () => {
@@ -266,20 +320,24 @@ export default function UserLayout() {
     document.body.style.overflow = '';
   };
 
-  const openItemDetail = (item) => {
+  const openItemDetail = (item, variantIndex = null) => {
     setSelectedItem(item);
+    setSelectedVariantIdx(variantIndex);
     setDialogQuantity(1);
   };
 
   const closeItemDetail = () => {
     setSelectedItem(null);
+    setSelectedVariantIdx(null);
     setDialogQuantity(1);
   };
 
   const handleAddToCartFromDialog = () => {
     if (!selectedItem) return;
+    const sv = selectedVariantIdx !== null ? selectedItem.variants?.[selectedVariantIdx] : null;
+    const variantOpts = sv ? { variantIndex: selectedVariantIdx, label: sv.label, price: sv.price, offerPrice: sv.offerPrice, image: sv.image || selectedItem.image } : null;
     for (let i = 0; i < dialogQuantity; i++) {
-      addToCart(selectedItem);
+      addToCart(selectedItem, 1, null, variantOpts);
     }
     closeItemDetail();
     closeSearch();
@@ -288,14 +346,19 @@ export default function UserLayout() {
   const handleWhatsAppOrder = () => {
     if (!selectedItem) return;
     const item = selectedItem;
+    const sv = selectedVariantIdx !== null ? item.variants?.[selectedVariantIdx] : null;
+    const displayName = sv?.label || item.name;
+    const unitPrice = sv
+      ? (sv.offerPrice && sv.offerPrice < sv.price ? sv.offerPrice : sv.price)
+      : (item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price);
     const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : 
                           item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
                           item.foodType === 'egg' ? '🥚 Egg' : '';
     
     let msg = `Hi! I'd like to order:\n\n`;
-    msg += `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n`;
+    msg += `*${displayName}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n`;
     msg += `📦 *Quantity:* ${dialogQuantity}\n`;
-    msg += `💰 *Price:* Qty: ${dialogQuantity} × ₹${item.price} = ₹${item.price * dialogQuantity}\n`;
+    msg += `💰 *Price:* Qty: ${dialogQuantity} × ₹${unitPrice} = ₹${unitPrice * dialogQuantity}\n`;
     msg += `\nPlease confirm my order. Thank you!`;
     
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
@@ -513,54 +576,37 @@ export default function UserLayout() {
                   No items found for "{searchQuery}"
                 </div>
               )}
-              {searchResults.map(item => {
-                // Find matching variant labels for the current search query
-                const matchingVariants = searchQuery && item.variants?.length > 0
-                  ? item.variants.filter(v => {
-                      if (!v.label) return false;
-                      const qLower = searchQuery.toLowerCase();
-                      const qWords = qLower.split(/\s+/).filter(w => w.length > 0);
-                      const vLabel = v.label.toLowerCase();
-                      const vTags = (v.tags || []).join(' ').toLowerCase();
-                      const vText = `${vLabel} ${vTags}`;
-                      // Check if variant label/tags match the search query
-                      if (vText.includes(qLower)) return true;
-                      if (qWords.every(w => vText.includes(w))) return true;
-                      return false;
-                    }).map(v => v.label)
-                  : [];
-                
+              {searchResults.map(result => {
                 return (
                 <button
-                  key={item._id}
-                  onClick={() => openItemDetail(item)}
+                  key={result._id}
+                  onClick={() => openItemDetail(result.parentItem, result.variantIndex)}
                   className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors border-b border-gray-50"
                 >
                   <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
-                    {item.image ? (
-                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                    {result.image ? (
+                      <img src={result.image} alt={result.name} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-2xl">🍽️</div>
                     )}
                   </div>
                   <div className="flex-1 text-left">
-                    <h4 className="font-semibold text-gray-900">{item.name}</h4>
-                    <p className="text-sm text-gray-500 line-clamp-1">{item.description}</p>
-                    {matchingVariants.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {matchingVariants.map((vLabel, idx) => (
-                          <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
-                            🔖 {vLabel}
-                          </span>
-                        ))}
-                      </div>
+                    <h4 className="font-semibold text-gray-900">{result.name}</h4>
+                    {result.isVariant && result.parentName && result.parentName !== result.name && (
+                      <p className="text-xs text-orange-500 font-medium">{result.parentName}</p>
+                    )}
+                    {result.description && (
+                      <p className="text-sm text-gray-500 line-clamp-1">{result.description}</p>
                     )}
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-orange-500 font-bold">₹{item.price}</span>
-                      {item.avgRating > 0 && (
+                      <span className="text-orange-500 font-bold">₹{result.price}</span>
+                      {result.originalPrice && (
+                        <span className="text-xs text-gray-400 line-through">₹{result.originalPrice}</span>
+                      )}
+                      {result.avgRating > 0 && (
                         <span className="flex items-center gap-1 text-xs text-gray-500">
                           <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                          {item.avgRating.toFixed(1)}
+                          {result.avgRating.toFixed(1)}
                         </span>
                       )}
                     </div>
@@ -580,7 +626,21 @@ export default function UserLayout() {
       )}
 
       {/* Item Detail Dialog */}
-      {selectedItem && (
+      {selectedItem && (() => {
+        // Compute variant-aware display values
+        const sv = selectedVariantIdx !== null ? selectedItem.variants?.[selectedVariantIdx] : null;
+        const displayName = sv?.label || selectedItem.name;
+        const displayImage = sv?.image || selectedItem.image;
+        const displayDescription = sv?.description || selectedItem.description;
+        const displayPrice = sv
+          ? (sv.offerPrice && sv.offerPrice < sv.price ? sv.offerPrice : sv.price)
+          : (selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price ? selectedItem.offerPrice : selectedItem.price);
+        const displayOriginalPrice = sv
+          ? (sv.offerPrice && sv.offerPrice < sv.price ? sv.price : null)
+          : (selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price ? selectedItem.price : null);
+        const displayRating = sv?.avgRating || selectedItem.avgRating;
+        const displayTotalRatings = sv?.totalRatings || selectedItem.totalRatings;
+        return (
         <div 
           className="fixed inset-0 z-[70] flex items-center justify-center p-4"
           style={{ touchAction: 'none' }}
@@ -621,10 +681,10 @@ export default function UserLayout() {
 
             {/* Left Side - Image (PC) / Top (Mobile) */}
             <div className="relative h-48 sm:h-56 lg:h-auto lg:w-[45%] bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center flex-shrink-0">
-              {selectedItem.image ? (
+              {displayImage ? (
                 <img 
-                  src={selectedItem.image} 
-                  alt={selectedItem.name}
+                  src={displayImage} 
+                  alt={displayName}
                   className="max-h-full max-w-full object-contain p-6 lg:p-8"
                 />
               ) : (
@@ -677,9 +737,19 @@ export default function UserLayout() {
               `}</style>
               {/* Name & Price */}
               <div className="flex items-start justify-between gap-3 mb-3">
-                <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{selectedItem.name}</h2>
-                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-orange-500 whitespace-nowrap">
-                  ₹{selectedItem.price}
+                <div>
+                  <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{displayName}</h2>
+                  {sv && selectedItem.name !== displayName && (
+                    <p className="text-sm text-orange-500 font-medium mt-0.5">{selectedItem.name}</p>
+                  )}
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-orange-500 whitespace-nowrap">
+                    ₹{displayPrice}
+                  </div>
+                  {displayOriginalPrice && (
+                    <span className="text-sm text-gray-400 line-through">₹{displayOriginalPrice}</span>
+                  )}
                 </div>
               </div>
 
@@ -689,19 +759,46 @@ export default function UserLayout() {
                   {[1, 2, 3, 4, 5].map(i => (
                     <Star 
                       key={i} 
-                      className={`w-4 h-4 sm:w-5 sm:h-5 ${i <= Math.round(selectedItem.avgRating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} 
+                      className={`w-4 h-4 sm:w-5 sm:h-5 ${i <= Math.round(displayRating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} 
                     />
                   ))}
                 </div>
                 <span className="text-sm text-gray-500">
-                  {selectedItem.avgRating?.toFixed(1) || '0.0'} ({selectedItem.totalRatings || 0} reviews)
+                  {displayRating?.toFixed(1) || '0.0'} ({displayTotalRatings || 0} reviews)
                 </span>
               </div>
 
+              {/* Variant Selector */}
+              {selectedItem.variants && selectedItem.variants.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-sm font-semibold text-gray-700 mb-2">Items</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedItem.variants.map((v, idx) => {
+                      const isSelected = selectedVariantIdx === idx;
+                      const vPrice = v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price;
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => { setSelectedVariantIdx(idx); setDialogQuantity(1); }}
+                          className={`px-3 py-1.5 rounded-xl text-sm font-medium border-2 transition-all ${
+                            isSelected
+                              ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-sm'
+                              : 'border-gray-200 bg-white text-gray-700 hover:border-orange-300 hover:bg-orange-50'
+                          }`}
+                        >
+                          {v.label}
+                          <span className="ml-1.5 text-xs text-gray-400">₹{vPrice}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Description */}
-              {selectedItem.description && (
+              {displayDescription && (
                 <p className="text-gray-600 text-sm sm:text-base lg:text-base mb-4 leading-relaxed">
-                  {selectedItem.description}
+                  {displayDescription}
                 </p>
               )}
 
@@ -746,7 +843,7 @@ export default function UserLayout() {
               {/* Total Price */}
               <div className="flex items-center justify-between mb-5 pb-4 border-b border-gray-100">
                 <span className="text-gray-600">Total</span>
-                <span className="text-2xl font-bold text-gray-900">₹{selectedItem.price * dialogQuantity}</span>
+                <span className="text-2xl font-bold text-gray-900">₹{displayPrice * dialogQuantity}</span>
               </div>
 
               {/* Action Buttons */}
@@ -770,7 +867,8 @@ export default function UserLayout() {
             </div>
           </div>
         </div>
-      )}
+      );
+      })()}
 
       {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[60] bg-white border-t border-gray-200 shadow-lg safe-area-bottom">
