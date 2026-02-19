@@ -297,6 +297,8 @@ const catalogService = {
 
     const retailerIds = [];
     menuItem.variants.forEach((v, vIdx) => {
+      // Skip unavailable variants
+      if (v.available === false) return;
       // Check food type match
       const vFoodType = v.foodType || menuItem.foodType || 'none';
       const matches = foodType === 'both' ||
@@ -889,13 +891,15 @@ const catalogService = {
     const itemId = menuItem._id.toString();
     const hasVariants = menuItem.variants && menuItem.variants.length > 0;
 
-    // Ensure base mapping exists first
+    // Ensure base mapping exists first (syncs ALL variants to Meta including unavailable)
     await this.ensureCatalogMapping(menuItem);
 
     if (hasVariants) {
-      // Return all variant retailer IDs (including quantity combos)
+      // Return only AVAILABLE variant retailer IDs for product list display
+      // (unavailable variants are still in Meta catalog as "out of stock" from syncProductToMeta)
       const ids = [];
       menuItem.variants.forEach((v, vIdx) => {
+        if (v.available === false) return; // skip unavailable variants
         if (v.quantities && v.quantities.length > 0) {
           v.quantities.forEach((_, qIdx) => {
             ids.push(`${itemId}_v${vIdx}_q${qIdx}`);

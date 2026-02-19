@@ -25,28 +25,28 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/4334</span>
+                <span class='fraction'>0/4339</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/3479</span>
+                <span class='fraction'>0/3485</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/442</span>
+                <span class='fraction'>0/441</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/3960</span>
+                <span class='fraction'>0/3966</span>
             </div>
         
             
@@ -9525,7 +9525,13 @@
 <a name='L9460'></a><a href='#L9460'>9460</a>
 <a name='L9461'></a><a href='#L9461'>9461</a>
 <a name='L9462'></a><a href='#L9462'>9462</a>
-<a name='L9463'></a><a href='#L9463'>9463</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L9463'></a><a href='#L9463'>9463</a>
+<a name='L9464'></a><a href='#L9464'>9464</a>
+<a name='L9465'></a><a href='#L9465'>9465</a>
+<a name='L9466'></a><a href='#L9466'>9466</a>
+<a name='L9467'></a><a href='#L9467'>9467</a>
+<a name='L9468'></a><a href='#L9468'>9468</a>
+<a name='L9469'></a><a href='#L9469'>9469</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -16470,6 +16476,9 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -16481,6 +16490,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -25445,7 +25457,7 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
           
           const vi = <span class="cstat-no" title="statement not covered" >matchedVariants[itemId];</span>
 <span class="cstat-no" title="statement not covered" >          if (Array.isArray(vi)) {</span>
-            // Array of matched variant indices → include only those variants with all sizes
+            // Array of matched variant indices → include only available variants
 <span class="cstat-no" title="statement not covered" >            for (const vIdx of vi) {</span>
               const variant = <span class="cstat-no" title="statement not covered" >item.variants?.[vIdx];</span>
 <span class="cstat-no" title="statement not covered" >              if (!variant || variant.available === false) <span class="cstat-no" title="statement not covered" >continue;</span></span>
@@ -25647,7 +25659,7 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
           
           const vi = <span class="cstat-no" title="statement not covered" >matchedVariants[itemId];</span>
 <span class="cstat-no" title="statement not covered" >          if (Array.isArray(vi)) {</span>
-            // Array of matched variant indices → include only those variants with all sizes
+            // Array of matched variant indices → include only available variants
 <span class="cstat-no" title="statement not covered" >            for (const vIdx of vi) {</span>
               const variant = <span class="cstat-no" title="statement not covered" >item.variants?.[vIdx];</span>
 <span class="cstat-no" title="statement not covered" >              if (!variant || variant.available === false) <span class="cstat-no" title="statement not covered" >continue;</span></span>
@@ -25816,7 +25828,7 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
             }
           }
           
-          // === CASE 2: Array of matched variant indices → show only those variants ===
+          // === CASE 2: Array of matched variant indices → show only available variants ===
 <span class="cstat-no" title="statement not covered" >          if (isArrayMatch &amp;&amp; matchedVariantIndex.length &gt; 0) {</span>
             const retailerIds = <span class="cstat-no" title="statement not covered" >[];</span>
 <span class="cstat-no" title="statement not covered" >            for (const vi of matchedVariantIndex) {</span>
@@ -25922,39 +25934,45 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
 <span class="cstat-no" title="statement not covered" >        msg = `🔖 *Matched: ${mv.label}* (${mvPrice})\n\n${msg}`;</span>
       }
     } else <span class="cstat-no" title="statement not covered" >if (isArrayMatch &amp;&amp; matchedVariantIndex.length &gt; 1) {</span>
-      // Show only matched variants in fallback
+      // Show matched variants in fallback (show unavailable as locked)
       const variantLines = <span class="cstat-no" title="statement not covered" >[];</span>
 <span class="cstat-no" title="statement not covered" >      for (const vi of matchedVariantIndex) {</span>
         const v = <span class="cstat-no" title="statement not covered" >item.variants?.[vi];</span>
-<span class="cstat-no" title="statement not covered" >        if (!v || v.available === false) <span class="cstat-no" title="statement not covered" >continue;</span></span>
+<span class="cstat-no" title="statement not covered" >        if (!v) <span class="cstat-no" title="statement not covered" >continue;</span></span>
+        const isLocked = <span class="cstat-no" title="statement not covered" >v.available === false;</span>
+        const lockPrefix = <span class="cstat-no" title="statement not covered" >isLocked ? '🔒 ' : '';</span>
+        const lockSuffix = <span class="cstat-no" title="statement not covered" >isLocked ? ' • Out of stock' : '';</span>
 <span class="cstat-no" title="statement not covered" >        if (v.quantities &amp;&amp; v.quantities.length &gt; 0) {</span>
 <span class="cstat-no" title="statement not covered" >          v.quantities.forEach(<span class="fstat-no" title="function not covered" >(q</span>) =&gt; {</span>
             const qPrice = <span class="cstat-no" title="statement not covered" >q.offerPrice &amp;&amp; q.offerPrice &lt; q.price ? `~₹${q.price}~ ₹${q.offerPrice}` : `₹${q.price}`;</span>
             const label = <span class="cstat-no" title="statement not covered" >v.label ? `${v.label} - ${q.quantity || ''} ${q.unit || ''}`.trim() : `${q.quantity} ${q.unit || ''}`;</span>
-<span class="cstat-no" title="statement not covered" >            variantLines.push(`  ${variantLines.length + 1}. ${label.trim()} - ${qPrice}`);</span>
+<span class="cstat-no" title="statement not covered" >            variantLines.push(`  ${variantLines.length + 1}. ${lockPrefix}${label.trim()} - ${qPrice}${lockSuffix}`);</span>
           });
         } else <span class="cstat-no" title="statement not covered" >if (v.label) {</span>
           const vPrice = <span class="cstat-no" title="statement not covered" >v.offerPrice &amp;&amp; v.offerPrice &lt; v.price ? `~₹${v.price}~ ₹${v.offerPrice}` : `₹${v.price}`;</span>
-<span class="cstat-no" title="statement not covered" >          variantLines.push(`  ${variantLines.length + 1}. ${v.label} - ${vPrice}`);</span>
+<span class="cstat-no" title="statement not covered" >          variantLines.push(`  ${variantLines.length + 1}. ${lockPrefix}${v.label} - ${vPrice}${lockSuffix}`);</span>
         }
       }
 <span class="cstat-no" title="statement not covered" >      if (variantLines.length &gt; 0) {</span>
 <span class="cstat-no" title="statement not covered" >        msg = `🔖 *${variantLines.length} Matching Options:*\n${variantLines.join('\n')}\n\n${msg}`;</span>
       }
     } else <span class="cstat-no" title="statement not covered" >if (matchedVariantIndex === null &amp;&amp; item.variants &amp;&amp; item.variants.length &gt; 0) {</span>
-      // Show all variants/sizes in fallback text when no specific variant matched
+      // Show all variants/sizes in fallback text (show unavailable as locked)
       const variantLines = <span class="cstat-no" title="statement not covered" >[];</span>
-<span class="cstat-no" title="statement not covered" >      item.variants.filter(<span class="fstat-no" title="function not covered" >v </span>=&gt; <span class="cstat-no" title="statement not covered" >v.available !== false)</span>.forEach(<span class="fstat-no" title="function not covered" >(v</span>, vi) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >      item.variants.forEach(<span class="fstat-no" title="function not covered" >(v</span>, vi) =&gt; {</span>
+        const isLocked = <span class="cstat-no" title="statement not covered" >v.available === false;</span>
+        const lockPrefix = <span class="cstat-no" title="statement not covered" >isLocked ? '🔒 ' : '';</span>
+        const lockSuffix = <span class="cstat-no" title="statement not covered" >isLocked ? ' • Out of stock' : '';</span>
 <span class="cstat-no" title="statement not covered" >        if (v.quantities &amp;&amp; v.quantities.length &gt; 0) {</span>
-          // Show each quantity/size option
+          // Show each quantity/size option (all locked if variant is off)
 <span class="cstat-no" title="statement not covered" >          v.quantities.forEach(<span class="fstat-no" title="function not covered" >(q</span>, qi) =&gt; {</span>
             const qPrice = <span class="cstat-no" title="statement not covered" >q.offerPrice &amp;&amp; q.offerPrice &lt; q.price ? `~₹${q.price}~ ₹${q.offerPrice}` : `₹${q.price}`;</span>
             const label = <span class="cstat-no" title="statement not covered" >v.label ? `${v.label} - ${q.label || q.quantity + ' ' + (q.unit || '')}` : (q.label || `${q.quantity} ${q.unit || ''}`);</span>
-<span class="cstat-no" title="statement not covered" >            variantLines.push(`  ${variantLines.length + 1}. ${label.trim()} - ${qPrice}`);</span>
+<span class="cstat-no" title="statement not covered" >            variantLines.push(`  ${variantLines.length + 1}. ${lockPrefix}${label.trim()} - ${qPrice}${lockSuffix}`);</span>
           });
         } else <span class="cstat-no" title="statement not covered" >if (v.label) {</span>
           const vPrice = <span class="cstat-no" title="statement not covered" >v.offerPrice &amp;&amp; v.offerPrice &lt; v.price ? `~₹${v.price}~ ₹${v.offerPrice}` : `₹${v.price}`;</span>
-<span class="cstat-no" title="statement not covered" >          variantLines.push(`  ${variantLines.length + 1}. ${v.label} - ${vPrice}`);</span>
+<span class="cstat-no" title="statement not covered" >          variantLines.push(`  ${variantLines.length + 1}. ${lockPrefix}${v.label} - ${vPrice}${lockSuffix}`);</span>
         }
       });
 <span class="cstat-no" title="statement not covered" >      if (variantLines.length &gt; 1) {</span>
@@ -28456,7 +28474,7 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-19T04:37:18.965Z
+                at 2026-02-19T08:18:17.244Z
             </div>
         <script src="../prettify.js"></script>
         <script>

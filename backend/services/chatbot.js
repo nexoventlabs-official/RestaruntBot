@@ -6456,7 +6456,7 @@ const chatbot = {
           
           const vi = matchedVariants[itemId];
           if (Array.isArray(vi)) {
-            // Array of matched variant indices → include only those variants with all sizes
+            // Array of matched variant indices → include only available variants
             for (const vIdx of vi) {
               const variant = item.variants?.[vIdx];
               if (!variant || variant.available === false) continue;
@@ -6658,7 +6658,7 @@ const chatbot = {
           
           const vi = matchedVariants[itemId];
           if (Array.isArray(vi)) {
-            // Array of matched variant indices → include only those variants with all sizes
+            // Array of matched variant indices → include only available variants
             for (const vIdx of vi) {
               const variant = item.variants?.[vIdx];
               if (!variant || variant.available === false) continue;
@@ -6827,7 +6827,7 @@ const chatbot = {
             }
           }
           
-          // === CASE 2: Array of matched variant indices → show only those variants ===
+          // === CASE 2: Array of matched variant indices → show only available variants ===
           if (isArrayMatch && matchedVariantIndex.length > 0) {
             const retailerIds = [];
             for (const vi of matchedVariantIndex) {
@@ -6933,39 +6933,45 @@ const chatbot = {
         msg = `🔖 *Matched: ${mv.label}* (${mvPrice})\n\n${msg}`;
       }
     } else if (isArrayMatch && matchedVariantIndex.length > 1) {
-      // Show only matched variants in fallback
+      // Show matched variants in fallback (show unavailable as locked)
       const variantLines = [];
       for (const vi of matchedVariantIndex) {
         const v = item.variants?.[vi];
-        if (!v || v.available === false) continue;
+        if (!v) continue;
+        const isLocked = v.available === false;
+        const lockPrefix = isLocked ? '🔒 ' : '';
+        const lockSuffix = isLocked ? ' • Out of stock' : '';
         if (v.quantities && v.quantities.length > 0) {
           v.quantities.forEach((q) => {
             const qPrice = q.offerPrice && q.offerPrice < q.price ? `~₹${q.price}~ ₹${q.offerPrice}` : `₹${q.price}`;
             const label = v.label ? `${v.label} - ${q.quantity || ''} ${q.unit || ''}`.trim() : `${q.quantity} ${q.unit || ''}`;
-            variantLines.push(`  ${variantLines.length + 1}. ${label.trim()} - ${qPrice}`);
+            variantLines.push(`  ${variantLines.length + 1}. ${lockPrefix}${label.trim()} - ${qPrice}${lockSuffix}`);
           });
         } else if (v.label) {
           const vPrice = v.offerPrice && v.offerPrice < v.price ? `~₹${v.price}~ ₹${v.offerPrice}` : `₹${v.price}`;
-          variantLines.push(`  ${variantLines.length + 1}. ${v.label} - ${vPrice}`);
+          variantLines.push(`  ${variantLines.length + 1}. ${lockPrefix}${v.label} - ${vPrice}${lockSuffix}`);
         }
       }
       if (variantLines.length > 0) {
         msg = `🔖 *${variantLines.length} Matching Options:*\n${variantLines.join('\n')}\n\n${msg}`;
       }
     } else if (matchedVariantIndex === null && item.variants && item.variants.length > 0) {
-      // Show all variants/sizes in fallback text when no specific variant matched
+      // Show all variants/sizes in fallback text (show unavailable as locked)
       const variantLines = [];
-      item.variants.filter(v => v.available !== false).forEach((v, vi) => {
+      item.variants.forEach((v, vi) => {
+        const isLocked = v.available === false;
+        const lockPrefix = isLocked ? '🔒 ' : '';
+        const lockSuffix = isLocked ? ' • Out of stock' : '';
         if (v.quantities && v.quantities.length > 0) {
-          // Show each quantity/size option
+          // Show each quantity/size option (all locked if variant is off)
           v.quantities.forEach((q, qi) => {
             const qPrice = q.offerPrice && q.offerPrice < q.price ? `~₹${q.price}~ ₹${q.offerPrice}` : `₹${q.price}`;
             const label = v.label ? `${v.label} - ${q.label || q.quantity + ' ' + (q.unit || '')}` : (q.label || `${q.quantity} ${q.unit || ''}`);
-            variantLines.push(`  ${variantLines.length + 1}. ${label.trim()} - ${qPrice}`);
+            variantLines.push(`  ${variantLines.length + 1}. ${lockPrefix}${label.trim()} - ${qPrice}${lockSuffix}`);
           });
         } else if (v.label) {
           const vPrice = v.offerPrice && v.offerPrice < v.price ? `~₹${v.price}~ ₹${v.offerPrice}` : `₹${v.price}`;
-          variantLines.push(`  ${variantLines.length + 1}. ${v.label} - ${vPrice}`);
+          variantLines.push(`  ${variantLines.length + 1}. ${lockPrefix}${v.label} - ${vPrice}${lockSuffix}`);
         }
       });
       if (variantLines.length > 1) {
