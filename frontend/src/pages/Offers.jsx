@@ -573,25 +573,41 @@ export default function Offers() {
                 </div>
               </div>
 
-              {/* Item Selection */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-semibold text-dark-700">Items & Variants</label>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-dark-500">{totalSelected} selected</span>
-                    <button type="button" onClick={() => setShowItemModal(true)}
-                      className="px-3 py-1.5 bg-primary-50 text-primary-600 rounded-lg text-xs font-medium hover:bg-primary-100">
-                      Select Items
-                    </button>
-                  </div>
+              {/* Apply Offer To */}
+              <div className="bg-dark-50/50 border border-dark-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Tag className="w-5 h-5 text-primary-500" />
+                  <h4 className="text-sm font-bold text-dark-800">Apply Offer To</h4>
                 </div>
+                <p className="text-xs text-dark-400">
+                  {percentage && percentage.trim()
+                    ? `Select categories and items to apply ${percentage}% discount`
+                    : 'Select categories and items for this offer'}
+                </p>
+                <button type="button" onClick={() => setShowItemModal(true)}
+                  className="w-full flex items-center gap-3 px-4 py-3 bg-white border border-dark-200 rounded-xl hover:border-primary-300 transition-all">
+                  <Search className="w-4 h-4 text-primary-500" />
+                  <span className="flex-1 text-left text-sm text-dark-600">
+                    {(selectedItems.length > 0 || selectedVariants.length > 0)
+                      ? `${selectedItems.length} item(s), ${selectedVariants.length} variant(s) selected`
+                      : 'Select Items'}
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-dark-400" />
+                </button>
                 {selectedCategories.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-2">
+                  <div className="flex flex-wrap gap-1">
                     {selectedCategories.map(c => <span key={c} className="px-2 py-0.5 bg-primary-100 text-primary-700 rounded text-xs font-medium">{c}</span>)}
                   </div>
                 )}
-                {selectedItems.length > 0 && (
-                  <p className="text-xs text-dark-500">{selectedItems.length} items fully selected{selectedVariants.length > 0 ? `, ${selectedVariants.length} individual variants` : ''}</p>
+                {(selectedItems.length > 0 || selectedVariants.length > 0) && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <p className="text-xs text-green-700 font-medium">
+                      {percentage && percentage.trim()
+                        ? `${percentage}% discount will be applied to ${selectedItems.length} item(s) & ${selectedVariants.length} variant(s)`
+                        : `Offer will apply to ${selectedItems.length} item(s) & ${selectedVariants.length} variant(s)`}
+                    </p>
+                  </div>
                 )}
               </div>
 
