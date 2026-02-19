@@ -375,7 +375,8 @@ export default function UserMenuPage() {
           image: v.image || selectedItem.image,
           label: `${v.label} (${q.quantity} ${q.unit})`,
           available: v.available !== false,
-          quantityUnit: `${q.quantity} ${q.unit}`
+          quantityUnit: `${q.quantity} ${q.unit}`,
+          description: v.description || selectedItem.description
         };
       }
       return {
@@ -383,7 +384,8 @@ export default function UserMenuPage() {
         offerPrice: v.offerPrice && v.offerPrice < v.price ? v.offerPrice : null,
         image: v.image || selectedItem.image,
         label: v.label,
-        available: v.available !== false
+        available: v.available !== false,
+        description: v.description || selectedItem.description
       };
     }
     return {
@@ -391,7 +393,8 @@ export default function UserMenuPage() {
       offerPrice: selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price ? selectedItem.offerPrice : null,
       image: selectedItem.image,
       label: null,
-      available: true
+      available: true,
+      description: selectedItem.description
     };
   };
 
@@ -1404,11 +1407,14 @@ export default function UserMenuPage() {
               )}
 
               {/* Description */}
-              {selectedItem.description && (
-                <p className="text-gray-600 text-sm sm:text-base lg:text-base mb-4 leading-relaxed">
-                  {selectedItem.description}
-                </p>
-              )}
+              {(() => {
+                const desc = getDialogItemDetails().description || selectedItem.description;
+                return desc ? (
+                  <p className="text-gray-600 text-sm sm:text-base lg:text-base mb-4 leading-relaxed">
+                    {desc}
+                  </p>
+                ) : null;
+              })()}
 
               {/* Details Grid */}
               <div className="grid grid-cols-2 gap-3 mb-5">

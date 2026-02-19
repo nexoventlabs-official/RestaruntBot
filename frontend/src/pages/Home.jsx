@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import HeroCarousel from '../components/HeroCarousel';
 import AnimatedSection, { ParallaxSection, TextReveal } from '../components/AnimatedSection';
@@ -274,6 +274,8 @@ export default function Home() {
     </div>
   );
 
+  const navigate = useNavigate();
+
   const renderItemCard = (item) => {
     const inCart = isInCart ? isInCart(item._id) : false;
     const cartItem = cart?.find(c => c._id === item._id);
@@ -298,8 +300,8 @@ export default function Home() {
     return (
       <div 
         key={item._id} 
-        className={`group relative pt-16 sm:pt-20 md:pt-28 ${isAvailable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-        onClick={() => isAvailable && openItemDialog(item)}
+        className={`group relative pt-16 sm:pt-20 md:pt-28 cursor-pointer`}
+        onClick={() => navigate('/menu')}
       >
         {/* Floating Image */}
         <div className={`absolute -top-4 sm:-top-6 md:-top-8 left-1/2 -translate-x-1/2 z-10 w-32 h-32 sm:w-40 sm:h-40 md:w-56 md:h-56 flex items-center justify-center ${!isAvailable ? 'grayscale' : ''}`}>
@@ -348,15 +350,9 @@ export default function Home() {
 
         {/* Card */}
         <div className={`bg-white rounded-2xl sm:rounded-3xl pt-16 sm:pt-20 md:pt-24 px-3 sm:px-4 md:px-5 pb-3 sm:pb-4 md:pb-5 shadow-[0_2px_15px_rgba(0,0,0,0.08)] border border-gray-100 transition-shadow ${isAvailable ? 'hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)]' : 'opacity-75'}`}>
-          {/* Name & Wishlist */}
-          <div className="flex items-center justify-between gap-1 sm:gap-2 mb-1">
+          {/* Name */}
+          <div className="mb-1">
             <h3 className="font-bold text-gray-900 uppercase text-xs sm:text-sm tracking-wide line-clamp-1">{item.name}</h3>
-            <button 
-              onClick={(e) => handleToggleWishlist(item, e)} 
-              className="p-0.5 sm:p-1 hover:scale-110 transition-transform flex-shrink-0"
-            >
-              <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${isInWishlist && isInWishlist(item._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
-            </button>
           </div>
 
           {/* Rating */}
@@ -371,7 +367,7 @@ export default function Home() {
           )}
 
           {/* Price or Status */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {itemStatus === 'soldout' ? (
               <span className="bg-red-100 text-red-600 px-3 py-1 rounded-full text-xs sm:text-sm font-semibold">
                 Sold Out
@@ -387,19 +383,37 @@ export default function Home() {
               </span>
             ) : (
               <>
-                <div className="relative">
-                  <img src="/button.png" alt="" className="h-6 sm:h-7 md:h-8 w-auto" style={{ filter: 'brightness(0) saturate(100%) invert(19%) sepia(97%) saturate(7043%) hue-rotate(359deg) brightness(101%) contrast(117%)' }} />
-                  <span className="absolute inset-0 flex items-center justify-center text-white font-bold text-xs sm:text-sm">
-                    ₹{item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}
+                {(() => {
+                  // Calculate display price considering variants
+                  let displayPrice, originalPrice, hasOffer;
+                  if (item.variants && item.variants.length > 0) {
+                    const prices = item.variants.map(v => v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price);
+                    displayPrice = Math.min(...prices);
+                    hasOffer = item.variants.some(v => v.offerPrice && v.offerPrice < v.price);
+                    originalPrice = hasOffer ? Math.min(...item.variants.map(v => v.price)) : null;
+                  } else {
+                    displayPrice = item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price;
+                    hasOffer = item.offerPrice && item.offerPrice < item.price;
+                    originalPrice = hasOffer ? item.price : null;
+                  }
+                  return (
+                    <>
+                      <div className="relative">
+                        <img src="/button.png" alt="" className="h-6 sm:h-7 md:h-8 w-auto" style={{ filter: 'brightness(0) saturate(100%) invert(19%) sepia(97%) saturate(7043%) hue-rotate(359deg) brightness(101%) contrast(117%)' }} />
+                        <span className="absolute inset-0 flex items-center justify-center text-white font-bold text-xs sm:text-sm">
+                          ₹{displayPrice}
+                        </span>
+                      </div>
+                      {hasOffer && originalPrice && (
+                        <span className="text-[10px] sm:text-xs text-gray-400 line-through">₹{originalPrice}</span>
+                      )}
+                    </>
+                  );
+                })()}
+                {item.variants && item.variants.length > 0 && (
+                  <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold">
+                    {item.variants.length} variants
                   </span>
-                </div>
-                {item.offerPrice && item.offerPrice < item.price && (
-                  <>
-                    <span className="text-[10px] sm:text-xs text-gray-400 line-through">₹{item.price}</span>
-                    <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold shadow-md">
-                      {Math.round(((item.price - item.offerPrice) / item.price) * 100)}% OFF
-                    </span>
-                  </>
                 )}
               </>
             )}
