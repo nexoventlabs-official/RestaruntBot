@@ -728,16 +728,19 @@ router.post('/review/:phone/:orderId', async (req, res) => {
     
     res.json({ success: true, message: 'Thank you for your feedback!' });
 
-    // Real-time sync: Update product descriptions in Meta WhatsApp Catalog with new ratings
-    // Fire-and-forget — don't block the response
-    const ratedMenuItemIds = ratings
-      .filter(r => r.menuItemId && r.rating >= 1 && r.rating <= 5)
-      .map(r => r.menuItemId);
-    if (ratedMenuItemIds.length > 0) {
-      catalogService.syncRatingsToMeta(ratedMenuItemIds).catch(err => {
-        logger.error('Background rating sync to Meta catalog failed', { error: err.message });
-      });
-    }
+    // Rating sync to Meta catalog is DISABLED to prevent catalog disruption.
+    // When syncRatingsToMeta runs, Meta re-processes all products (method: CREATE/upsert)
+    // and temporarily marks them as unavailable ("product removed") for a few minutes.
+    // Ratings are stored in MongoDB and displayed in chatbot messages — catalog description
+    // ratings will update naturally when products are next synced via admin panel edits.
+    // const ratedMenuItemIds = ratings
+    //   .filter(r => r.menuItemId && r.rating >= 1 && r.rating <= 5)
+    //   .map(r => r.menuItemId);
+    // if (ratedMenuItemIds.length > 0) {
+    //   catalogService.syncRatingsToMeta(ratedMenuItemIds).catch(err => {
+    //     logger.error('Background rating sync to Meta catalog failed', { error: err.message });
+    //   });
+    // }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

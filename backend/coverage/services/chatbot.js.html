@@ -9537,10 +9537,7 @@
 <a name='L9472'></a><a href='#L9472'>9472</a>
 <a name='L9473'></a><a href='#L9473'>9473</a>
 <a name='L9474'></a><a href='#L9474'>9474</a>
-<a name='L9475'></a><a href='#L9475'>9475</a>
-<a name='L9476'></a><a href='#L9476'>9476</a>
-<a name='L9477'></a><a href='#L9477'>9477</a>
-<a name='L9478'></a><a href='#L9478'>9478</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L9475'></a><a href='#L9475'>9475</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -16329,7 +16326,6 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -16539,7 +16535,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -17850,7 +17845,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -25805,10 +25799,9 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
     const isArrayMatch = <span class="cstat-no" title="statement not covered" >Array.isArray(matchedVariantIndex);</span>
     const isSingleMatch = <span class="cstat-no" title="statement not covered" >typeof matchedVariantIndex === 'number';</span>
 &nbsp;
-    // Skip catalog product cards — show variant details directly via image+buttons
-    // to avoid "This product or service has been removed" WhatsApp errors
+    // Try WhatsApp Catalog product card (native catalog display with image, price, rating)
 <span class="cstat-no" title="statement not covered" >    try {</span>
-<span class="cstat-no" title="statement not covered" >      if (false /* catalogService.isEnabled() */) {</span>
+<span class="cstat-no" title="statement not covered" >      if (catalogService.isEnabled()) {</span>
         // Auto-ensure catalog mapping exists (creates on-the-fly if missing)
         const baseRetailerId = <span class="cstat-no" title="statement not covered" >await catalogService.ensureCatalogMapping(item);</span>
 <span class="cstat-no" title="statement not covered" >        if (baseRetailerId) {</span>
@@ -26015,10 +26008,9 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
 &nbsp;
   // Send item details for order flow (with Add to Cart focus)
 <span class="fstat-no" title="function not covered" >  as</span>ync sendItemDetailsForOrder(phone, item, variantIndex = <span class="branch-0 cbranch-no" title="branch not covered" >null,</span> quantityIndex = <span class="branch-0 cbranch-no" title="branch not covered" >null)</span> {
-    // Skip catalog product cards — show variant details directly via image+buttons
-    // to avoid "This product or service has been removed" WhatsApp errors
+    // Try WhatsApp Catalog single product card
 <span class="cstat-no" title="statement not covered" >    try {</span>
-<span class="cstat-no" title="statement not covered" >      if (false /* catalogService.isEnabled() */) {</span>
+<span class="cstat-no" title="statement not covered" >      if (catalogService.isEnabled()) {</span>
         // Ensure product is synced to Meta and get the correct retailer ID
         const baseRetailerId = <span class="cstat-no" title="statement not covered" >await catalogService.ensureCatalogMapping(item);</span>
 <span class="cstat-no" title="statement not covered" >        if (baseRetailerId) {</span>
@@ -27328,9 +27320,8 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
     
 <span class="cstat-no" title="statement not covered" >    cartMsg += `*Total: ₹${total}*`;</span>
 &nbsp;
-    // Skip catalog product list — show text cart directly via image+buttons
-    // to avoid "This product or service has been removed" WhatsApp errors
-<span class="cstat-no" title="statement not covered" >    if (false /* catalogService.isEnabled() */) {</span>
+    // Try showing cart items as WhatsApp Catalog product_list (native cart with images/prices/Place Order)
+<span class="cstat-no" title="statement not covered" >    if (catalogService.isEnabled()) {</span>
       const validCartItems = <span class="cstat-no" title="statement not covered" >freshCustomer.cart.filter(<span class="fstat-no" title="function not covered" >it</span>em =&gt; <span class="cstat-no" title="statement not covered" >item.menuItem)</span>;</span>
 &nbsp;
       // Build discount info for body text
@@ -28501,7 +28492,7 @@ const chatbot = <span class="cstat-no" title="statement not covered" >{</span>
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-19T10:56:58.938Z
+                at 2026-02-19T11:17:38.063Z
             </div>
         <script src="../prettify.js"></script>
         <script>

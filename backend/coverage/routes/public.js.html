@@ -25,28 +25,28 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/411</span>
+                <span class='fraction'>0/405</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/351</span>
+                <span class='fraction'>0/346</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/69</span>
+                <span class='fraction'>0/66</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/379</span>
+                <span class='fraction'>0/373</span>
             </div>
         
             
@@ -978,7 +978,10 @@
 <a name='L913'></a><a href='#L913'>913</a>
 <a name='L914'></a><a href='#L914'>914</a>
 <a name='L915'></a><a href='#L915'>915</a>
-<a name='L916'></a><a href='#L916'>916</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L916'></a><a href='#L916'>916</a>
+<a name='L917'></a><a href='#L917'>917</a>
+<a name='L918'></a><a href='#L918'>918</a>
+<a name='L919'></a><a href='#L919'>919</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1710,12 +1713,15 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -2623,16 +2629,19 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
     
 <span class="cstat-no" title="statement not covered" >    res.json({ success: true, message: 'Thank you for your feedback!' });</span>
 &nbsp;
-    // Real-time sync: Update product descriptions in Meta WhatsApp Catalog with new ratings
-    // Fire-and-forget — don't block the response
-    const ratedMenuItemIds = <span class="cstat-no" title="statement not covered" >ratings</span>
-      .filter(<span class="fstat-no" title="function not covered" >r </span>=&gt; <span class="cstat-no" title="statement not covered" >r.menuItemId &amp;&amp; r.rating &gt;= 1 &amp;&amp; r.rating &lt;= 5)</span>
-      .map(<span class="fstat-no" title="function not covered" >r </span>=&gt; <span class="cstat-no" title="statement not covered" >r.menuItemId)</span>;
-<span class="cstat-no" title="statement not covered" >    if (ratedMenuItemIds.length &gt; 0) {</span>
-<span class="cstat-no" title="statement not covered" >      catalogService.syncRatingsToMeta(ratedMenuItemIds).catch(<span class="fstat-no" title="function not covered" >er</span>r =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >        logger.error('Background rating sync to Meta catalog failed', { error: err.message });</span>
-      });
-    }
+    // Rating sync to Meta catalog is DISABLED to prevent catalog disruption.
+    // When syncRatingsToMeta runs, Meta re-processes all products (method: CREATE/upsert)
+    // and temporarily marks them as unavailable ("product removed") for a few minutes.
+    // Ratings are stored in MongoDB and displayed in chatbot messages — catalog description
+    // ratings will update naturally when products are next synced via admin panel edits.
+    // const ratedMenuItemIds = ratings
+    //   .filter(r =&gt; r.menuItemId &amp;&amp; r.rating &gt;= 1 &amp;&amp; r.rating &lt;= 5)
+    //   .map(r =&gt; r.menuItemId);
+    // if (ratedMenuItemIds.length &gt; 0) {
+    //   catalogService.syncRatingsToMeta(ratedMenuItemIds).catch(err =&gt; {
+    //     logger.error('Background rating sync to Meta catalog failed', { error: err.message });
+    //   });
+    // }
   } catch (error) {
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
@@ -2815,7 +2824,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-19T10:56:58.938Z
+                at 2026-02-19T11:17:38.063Z
             </div>
         <script src="../prettify.js"></script>
         <script>
