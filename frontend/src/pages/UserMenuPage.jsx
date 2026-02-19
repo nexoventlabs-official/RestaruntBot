@@ -572,6 +572,14 @@ export default function UserMenuPage() {
           variantsToShow = filteredVariants;
         }
       }
+      
+      // Filter variants by food type
+      if (foodType !== 'all') {
+        variantsToShow = variantsToShow.filter(v => (v.foodType || item.foodType) === foodType);
+      }
+      
+      // If no variants match the filter, don't render this item at all
+      if (variantsToShow.length === 0) return null;
 
       return (
         <div key={item._id} className="mb-8">
