@@ -645,29 +645,37 @@ export default function Menu() {
                 </div>
               </div>
 
-              {/* Variant rows */}
+              {/* Variant grid — 4 columns */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 p-4">
               {section.rows.map((row, ri) => {
                 const isOff = row._catUnavail || row.available === false || row._parentAvailable === false;
                 const toggleKey = row._isVariant ? `${row._parentId}_v${row._variantIndex}` : row._parentId;
                 return (
-                  <div key={ri} className={`flex items-center gap-3 px-4 py-2.5 border-b border-dark-50 last:border-0 transition-all ${isOff ? 'opacity-60 bg-dark-50/50' : 'hover:bg-dark-50/30'}`}>
+                  <div key={ri} className={`relative rounded-xl border transition-all ${isOff ? 'border-red-200 bg-red-50/40' : 'border-dark-100 bg-white hover:shadow-md'}`}>
                     {/* Image */}
-                    <div className="w-12 h-12 rounded-xl bg-dark-100 overflow-hidden flex-shrink-0 relative">
+                    <div className="w-full aspect-square rounded-t-xl bg-dark-100 overflow-hidden relative">
                       {(row.image || row._parentImage) ?
                         <img src={row.image || row._parentImage} alt="" className="w-full h-full object-cover" /> :
-                        <div className="w-full h-full flex items-center justify-center"><Image className="w-5 h-5 text-dark-300" /></div>}
+                        <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-dark-300" /></div>}
                       {row.foodType && row.foodType !== 'none' && (
-                        <span className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 rounded-full border border-white ${foodDot(row.foodType)}`} />
+                        <span className={`absolute top-1.5 left-1.5 w-3 h-3 rounded-full border-2 border-white ${foodDot(row.foodType)}`} />
                       )}
+                      {/* Toggle badge on image */}
+                      <button onClick={() => toggleVariant(row._parentId, row._variantIndex)} disabled={togglingId === toggleKey}
+                        className={`absolute top-1.5 right-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold shadow-sm ${
+                          isOff ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+                        } ${togglingId === toggleKey ? 'opacity-50 animate-pulse' : 'hover:opacity-90'}`}>
+                        {isOff ? 'Off' : 'Active'}
+                      </button>
                     </div>
 
                     {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm text-dark-800 truncate">{row.label || row.name}</p>
+                    <div className="p-2.5">
+                      <p className="font-semibold text-sm text-dark-800 truncate">{row.label || row.name}</p>
                       {row._isVariant && <p className="text-[10px] text-dark-400 truncate">{row._parentName}</p>}
                       {/* Quantities / Price */}
                       {row.quantities && row.quantities.length > 0 ? (
-                        <div className="flex flex-wrap gap-1 mt-0.5">
+                        <div className="flex flex-wrap gap-1 mt-1">
                           {row.quantities.map((q, qi) => (
                             <span key={qi} className="px-1.5 py-0.5 bg-dark-100 rounded text-[10px] text-dark-600 font-medium">
                               {q.quantity}{q.unit ? ` ${q.unit}` : ''} — ₹{q.price}
@@ -675,28 +683,21 @@ export default function Menu() {
                           ))}
                         </div>
                       ) : row.price ? (
-                        <p className="text-[11px] text-dark-500 mt-0.5">₹{row.price}</p>
+                        <p className="text-xs text-dark-500 font-medium mt-1">₹{row.price}</p>
                       ) : null}
                     </div>
-
-                    {/* Toggle */}
-                    <button onClick={() => toggleVariant(row._parentId, row._variantIndex)} disabled={togglingId === toggleKey}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex-shrink-0 ${
-                        isOff ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'
-                      } ${togglingId === toggleKey ? 'opacity-50 animate-pulse' : 'hover:opacity-80'}`}>
-                      {isOff ? 'Off' : 'Active'}
-                    </button>
 
                     {/* Delete variant */}
                     {row._isVariant && (
                       <button onClick={() => deleteVariant(row._parentId, row._variantIndex)}
-                        className="p-1 text-dark-300 hover:text-red-500 transition-colors flex-shrink-0">
+                        className="absolute bottom-2 right-2 p-1 text-dark-300 hover:text-red-500 transition-colors">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
                 );
               })}
+              </div>
             </div>
           ))}
         </div>

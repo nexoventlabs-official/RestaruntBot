@@ -401,6 +401,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
               let text = '';
               let messageType = 'text';
               let selectedId = null;
+              let isVoiceMessage = false;
 
               if (message.type === 'text') {
                 text = message.text?.body || '';
@@ -483,6 +484,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       
                       text = transcription;
                       messageType = 'text'; // Treat as text after transcription
+                      isVoiceMessage = true; // Flag for chatbot to use voice_error image on failures
                       logger.info('🎤 Voice transcribed:', rawTranscription);
                       logger.info('🎤 Normalized to:', text);
                     } else {
@@ -515,6 +517,21 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                     }
                     continue;
                   }
+                } else {
+                  // No audio ID - send voice error image
+                  logger.warn('🎤 Voice message received without audio ID', { phone });
+                  const voiceErrMsg3 = "🎤 Sorry, I couldn't process your voice message. Please try again or type your message.";
+                  const voiceErrBtns3 = [
+                      { id: 'home', text: 'Main Menu' },
+                      { id: 'help', text: 'Help' }
+                  ];
+                  const voiceErrImg3 = await chatbotImagesService.getImageUrl('voice_error');
+                  if (voiceErrImg3) {
+                    await whatsapp.sendImageWithButtons(phone, voiceErrImg3, voiceErrMsg3, voiceErrBtns3);
+                  } else {
+                    await whatsapp.sendButtons(phone, voiceErrMsg3, voiceErrBtns3);
+                  }
+                  continue;
                 }
               }
 
@@ -544,7 +561,8 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                   }
                 }
                 // Process message in the background
-                chatbot.handleMessage(phone, text, messageType, selectedId, senderName)
+                const handleOpts = isVoiceMessage ? { isVoiceMessage: true } : {};
+                chatbot.handleMessage(phone, text, messageType, selectedId, senderName, handleOpts)
                   .catch(err => logger.error('❌ Async Chatbot Error:', err));
               }
             }

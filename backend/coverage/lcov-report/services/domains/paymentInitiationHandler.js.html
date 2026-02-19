@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/318</span>
+                <span class='fraction'>0/323</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/236</span>
+                <span class='fraction'>0/238</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/304</span>
+                <span class='fraction'>0/309</span>
             </div>
         
             
@@ -792,7 +792,11 @@
 <a name='L727'></a><a href='#L727'>727</a>
 <a name='L728'></a><a href='#L728'>728</a>
 <a name='L729'></a><a href='#L729'>729</a>
-<a name='L730'></a><a href='#L730'>730</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L730'></a><a href='#L730'>730</a>
+<a name='L731'></a><a href='#L731'>731</a>
+<a name='L732'></a><a href='#L732'>732</a>
+<a name='L733'></a><a href='#L733'>733</a>
+<a name='L734'></a><a href='#L734'>734</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1231,11 +1235,15 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1699,13 +1707,13 @@ async function <span class="fstat-no" title="function not covered" >showPaymentO
   
   const buttons = <span class="cstat-no" title="statement not covered" >serviceType === 'pickup'</span>
     ? [
-        { id: 'pickup_pay_hotel', text: '💵 Pay at Hotel' },
-        { id: 'pickup_pay_upi', text: '💳 UPI/App' }
+        { id: 'pickup_pay_hotel', text: 'Pay at Hotel' },
+        { id: 'pickup_pay_upi', text: 'UPI/App' }
       ]
     : [
-        { id: 'pay_upi', text: '💳 UPI/APP' },
-        { id: 'pay_cod', text: '💵 COD' },
-        { id: 'clear_cart', text: '🗑️ Cancel' }
+        { id: 'pay_upi', text: 'UPI/APP' },
+        { id: 'pay_cod', text: 'COD' },
+        { id: 'clear_cart', text: 'Cancel' }
       ];
   
   const orderSummaryImageUrl = <span class="cstat-no" title="statement not covered" >await chatbotImagesService.getImageUrl('order_summary');</span>
@@ -1959,13 +1967,17 @@ async function <span class="fstat-no" title="function not covered" >initiateOnli
 <span class="cstat-no" title="statement not covered" >    return { success: true, orderId };</span>
   } catch (err) {
 <span class="cstat-no" title="statement not covered" >    logger.error('Payment page error', { error: err.message });</span>
-<span class="cstat-no" title="statement not covered" >    await whatsapp.sendButtons(phone,</span>
-      `✅ *Order Created!*\n\nOrder ID: ${orderId}\nTotal: ₹${total}\n\n⚠️ Payment link unavailable.\nPlease contact us.`,
-      [
-        { id: 'order_status', text: 'Check Status' },
-        { id: 'home', text: 'Main Menu' }
-      ]
-    );
+    const orderDetailsImg = <span class="cstat-no" title="statement not covered" >await chatbotImagesService.getImageUrl('order_details');</span>
+    const msg = <span class="cstat-no" title="statement not covered" >`\u2705 *Order Created!*\n\nOrder ID: ${orderId}\nTotal: \u20b9${total}\n\n\u26a0\ufe0f Payment link unavailable.\nPlease contact us.`;</span>
+    const btns = <span class="cstat-no" title="statement not covered" >[</span>
+      { id: 'order_status', text: 'Check Status' },
+      { id: 'home', text: 'Main Menu' }
+    ];
+<span class="cstat-no" title="statement not covered" >    if (orderDetailsImg) {</span>
+<span class="cstat-no" title="statement not covered" >      await whatsapp.sendImageWithButtons(phone, orderDetailsImg, msg, btns);</span>
+    } else {
+<span class="cstat-no" title="statement not covered" >      await whatsapp.sendButtons(phone, msg, btns);</span>
+    }
 <span class="cstat-no" title="statement not covered" >    return { success: true, orderId };</span>
   }
 }
@@ -2203,15 +2215,15 @@ async function <span class="fstat-no" title="function not covered" >processCODOr
   
 <span class="cstat-no" title="statement not covered" >  if (confirmedImageUrl) {</span>
 <span class="cstat-no" title="statement not covered" >    await whatsapp.sendImage(phone, confirmedImageUrl, confirmMsg, [</span>
-      { id: 'track_order', text: '📍 Track Order' },
-      { id: `cancel_${orderId}`, text: '❌ Cancel Order' },
-      { id: 'home', text: '🏠 Main Menu' }
+      { id: 'track_order', text: 'Track Order' },
+      { id: `cancel_${orderId}`, text: 'Cancel Order' },
+      { id: 'home', text: 'Main Menu' }
     ]);
   } else {
 <span class="cstat-no" title="statement not covered" >    await whatsapp.sendButtons(phone, confirmMsg, [</span>
-      { id: 'track_order', text: '📍 Track Order' },
-      { id: `cancel_${orderId}`, text: '❌ Cancel Order' },
-      { id: 'home', text: '🏠 Main Menu' }
+      { id: 'track_order', text: 'Track Order' },
+      { id: `cancel_${orderId}`, text: 'Cancel Order' },
+      { id: 'home', text: 'Main Menu' }
     ]);
   }
   
@@ -2257,7 +2269,7 @@ async function <span class="fstat-no" title="function not covered" >processPicku
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-14T13:31:41.551Z
+                at 2026-02-19T04:37:18.965Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

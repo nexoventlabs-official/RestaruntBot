@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/419</span>
+                <span class='fraction'>0/434</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/247</span>
+                <span class='fraction'>0/253</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/412</span>
+                <span class='fraction'>0/427</span>
             </div>
         
             
@@ -977,7 +977,19 @@
 <a name='L912'></a><a href='#L912'>912</a>
 <a name='L913'></a><a href='#L913'>913</a>
 <a name='L914'></a><a href='#L914'>914</a>
-<a name='L915'></a><a href='#L915'>915</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L915'></a><a href='#L915'>915</a>
+<a name='L916'></a><a href='#L916'>916</a>
+<a name='L917'></a><a href='#L917'>917</a>
+<a name='L918'></a><a href='#L918'>918</a>
+<a name='L919'></a><a href='#L919'>919</a>
+<a name='L920'></a><a href='#L920'>920</a>
+<a name='L921'></a><a href='#L921'>921</a>
+<a name='L922'></a><a href='#L922'>922</a>
+<a name='L923'></a><a href='#L923'>923</a>
+<a name='L924'></a><a href='#L924'>924</a>
+<a name='L925'></a><a href='#L925'>925</a>
+<a name='L926'></a><a href='#L926'>926</a>
+<a name='L927'></a><a href='#L927'>927</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1790,8 +1802,12 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1828,8 +1844,12 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1877,8 +1897,12 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1976,7 +2000,7 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
     const query = <span class="cstat-no" title="statement not covered" >{ isHidden: { $ne: true } };</span>
 <span class="cstat-no" title="statement not covered" >    if (status) <span class="cstat-no" title="statement not covered" >query.status = status;</span></span>
     const orders = <span class="cstat-no" title="statement not covered" >await Order.find(query)</span>
-      .populate('items.menuItem', 'image')
+      .populate('items.menuItem', 'image variants.image')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
@@ -2350,8 +2374,8 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
               confirmedImageUrl,
               msg,
               [
-                { id: 'track_order', text: '📍 Track Order' },
-                { id: 'home', text: '🏠 Main Menu' }
+                { id: 'track_order', text: 'Track Order' },
+                { id: 'home', text: 'Main Menu' }
               ]
             );
           }
@@ -2375,8 +2399,8 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
               readyImageUrl,
               msg,
               [
-                { id: 'track_order', text: '📍 View Order' },
-                { id: 'home', text: '🏠 Main Menu' }
+                { id: 'track_order', text: 'View Order' },
+                { id: 'home', text: 'Main Menu' }
               ]
             );
           }
@@ -2461,8 +2485,8 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
               cancelledByRestaurantImageUrl,
               cancelMsg,
               [
-                { id: 'view_menu', text: '📋 Menu' },
-                { id: 'help', text: '❓ Help' }
+                { id: 'view_menu', text: 'Menu' },
+                { id: 'help', text: 'Help' }
               ]
             );
           } else <span class="cstat-no" title="statement not covered" >if (!isPickupOrder &amp;&amp; order.paymentMethod === 'cod') {</span>
@@ -2475,8 +2499,8 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
               cancelledByRestaurantImageUrl,
               cancelMsg,
               [
-                { id: 'view_menu', text: '📋 Menu' },
-                { id: 'help', text: '❓ Help' }
+                { id: 'view_menu', text: 'Menu' },
+                { id: 'help', text: 'Help' }
               ]
             );
           } else {
@@ -2489,8 +2513,8 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
               cancelledImageUrl,
               msg,
               [
-                { id: 'view_menu', text: '📋 Menu' },
-                { id: 'help', text: '❓ Help' }
+                { id: 'view_menu', text: 'Menu' },
+                { id: 'help', text: 'Help' }
               ]
             );
           }
@@ -2703,10 +2727,14 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
         
         // Notify customer
 <span class="cstat-no" title="statement not covered" >        try {</span>
-<span class="cstat-no" title="statement not covered" >          await whatsapp.sendButtons(order.customer.phone,</span>
-            `✅ *Refund Successful!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.refundAmount || order.totalAmount}\nRefund ID: ${refund.id}\n\n💳 Amount will be credited to your account shortly.`,
-            [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
-          );
+          const upiRefundMsg = <span class="cstat-no" title="statement not covered" >`✅ *Refund Successful!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.refundAmount || order.totalAmount}\nRefund ID: ${refund.id}\n\n💳 Amount will be credited to your account shortly.`;</span>
+          const upiRefundBtns = <span class="cstat-no" title="statement not covered" >[{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }];</span>
+          const upiRefundImg = <span class="cstat-no" title="statement not covered" >await chatbotImagesService.getImageUrl('refund_processed');</span>
+<span class="cstat-no" title="statement not covered" >          if (upiRefundImg) {</span>
+<span class="cstat-no" title="statement not covered" >            await whatsapp.sendImageWithButtons(order.customer.phone, upiRefundImg, upiRefundMsg, upiRefundBtns);</span>
+          } else {
+<span class="cstat-no" title="statement not covered" >            await whatsapp.sendButtons(order.customer.phone, upiRefundMsg, upiRefundBtns);</span>
+          }
         } catch (e) {
 <span class="cstat-no" title="statement not covered" >          logger.error('WhatsApp notification failed', { error: e.message });</span>
         }
@@ -2741,10 +2769,14 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
       
       // Notify customer
 <span class="cstat-no" title="statement not covered" >      try {</span>
-<span class="cstat-no" title="statement not covered" >        await whatsapp.sendButtons(order.customer.phone,</span>
-          `✅ *Refund Approved!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.refundAmount || order.totalAmount}\n\n💵 Our team will contact you for the refund process.`,
-          [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
-        );
+        const codRefundMsg = <span class="cstat-no" title="statement not covered" >`✅ *Refund Approved!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.refundAmount || order.totalAmount}\n\n💵 Our team will contact you for the refund process.`;</span>
+        const codRefundBtns = <span class="cstat-no" title="statement not covered" >[{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }];</span>
+        const codRefundImg = <span class="cstat-no" title="statement not covered" >await chatbotImagesService.getImageUrl('refund_processed');</span>
+<span class="cstat-no" title="statement not covered" >        if (codRefundImg) {</span>
+<span class="cstat-no" title="statement not covered" >          await whatsapp.sendImageWithButtons(order.customer.phone, codRefundImg, codRefundMsg, codRefundBtns);</span>
+        } else {
+<span class="cstat-no" title="statement not covered" >          await whatsapp.sendButtons(order.customer.phone, codRefundMsg, codRefundBtns);</span>
+        }
       } catch (e) {
 <span class="cstat-no" title="statement not covered" >        logger.error('WhatsApp notification failed', { error: e.message });</span>
       }
@@ -2790,10 +2822,14 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
     
     // Notify customer
 <span class="cstat-no" title="statement not covered" >    try {</span>
-<span class="cstat-no" title="statement not covered" >      await whatsapp.sendButtons(order.customer.phone,</span>
-        `❌ *Refund Request Rejected*\n\nOrder: ${order.orderId}\n\nReason: ${reason || 'Your refund request has been reviewed and rejected.'}\n\nPlease contact support for more information.`,
-        [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }]
-      );
+      const rejectMsg = <span class="cstat-no" title="statement not covered" >`❌ *Refund Request Rejected*\n\nOrder: ${order.orderId}\n\nReason: ${reason || 'Your refund request has been reviewed and rejected.'}\n\nPlease contact support for more information.`;</span>
+      const rejectBtns = <span class="cstat-no" title="statement not covered" >[{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }];</span>
+      const rejectImg = <span class="cstat-no" title="statement not covered" >await chatbotImagesService.getImageUrl('refund_failed');</span>
+<span class="cstat-no" title="statement not covered" >      if (rejectImg) {</span>
+<span class="cstat-no" title="statement not covered" >        await whatsapp.sendImageWithButtons(order.customer.phone, rejectImg, rejectMsg, rejectBtns);</span>
+      } else {
+<span class="cstat-no" title="statement not covered" >        await whatsapp.sendButtons(order.customer.phone, rejectMsg, rejectBtns);</span>
+      }
     } catch (e) {
 <span class="cstat-no" title="statement not covered" >      logger.error('WhatsApp notification failed', { error: e.message });</span>
     }
@@ -2812,7 +2848,7 @@ const sendWithOptionalImage = <span class="cstat-no" title="statement not covere
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-14T13:31:42.037Z
+                at 2026-02-19T04:37:19.641Z
             </div>
         <script src="../prettify.js"></script>
         <script>

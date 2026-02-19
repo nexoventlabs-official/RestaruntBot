@@ -4153,7 +4153,7 @@ const chatbot = {
     }
   },
 
-  async handleMessage(phone, message, messageType = 'text', selectedId = null, senderName = null) {
+  async handleMessage(phone, message, messageType = 'text', selectedId = null, senderName = null, options = {}) {
     // Check if holiday mode is enabled
     const holidayMode = await Settings.getValue('holidayMode', false);
     if (holidayMode) {
@@ -5811,7 +5811,7 @@ const chatbot = {
           
           // If NOT an exact match, show "Item Not Available" message and browse menu options
           if (!isExactMatch) {
-            const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+            const itemNotAvailableImg = await chatbotImagesService.getImageUrl(options.isVoiceMessage ? 'voice_error' : 'item_not_available');
             const notFoundMessage = `❌ *Item Not Available*\n\nSorry, we couldn't find "${msg}" in our menu.\n\nWould you like to browse our menu?`;
             
             // Send "Browse Menu" message with image and buttons
@@ -5872,7 +5872,7 @@ const chatbot = {
           // If there's a specific search term that didn't match, show "not found" with browse option
           if (searchTerm.length >= 2) {
             // Send "Item not found" message with buttons
-            const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+            const itemNotAvailableImg = await chatbotImagesService.getImageUrl(options.isVoiceMessage ? 'voice_error' : 'item_not_available');
             const notFoundMessage = `❌ *Item Not Found*\n\nSorry, we couldn't find "${searchTerm}" in our menu.\n\nTry a different search or browse our menu.`;
             
             await sendWithOptionalImage(phone, itemNotAvailableImg, notFoundMessage, [
@@ -5942,7 +5942,7 @@ const chatbot = {
           // Already tried smartSearch above (including fuzzy matching), item not found
           
           // Send "Item not found" message with buttons to browse menu
-          const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
+          const itemNotAvailableImg = await chatbotImagesService.getImageUrl(options.isVoiceMessage ? 'voice_error' : 'item_not_available');
           const notFoundMessage = `❌ *Item Not Found*\n\nSorry, we couldn't find "${msg}" in our menu.\n\nTry a different search or browse our menu.`;
           
           await sendWithOptionalImage(phone, itemNotAvailableImg, notFoundMessage, [
@@ -5953,9 +5953,11 @@ const chatbot = {
         }
         // ========== FALLBACK ==========
         else {
-          const helpImg = await chatbotImagesService.getImageUrl('help_support');
-          await sendWithOptionalImage(phone, helpImg,
-            `🤔 I didn't understand that.\n\nPlease select an option:`,
+          const fallbackImg = await chatbotImagesService.getImageUrl(options.isVoiceMessage ? 'voice_error' : 'help_support');
+          await sendWithOptionalImage(phone, fallbackImg,
+            options.isVoiceMessage
+              ? `🎤 Sorry, I couldn't understand your voice message.\n\nPlease try again or select an option:`
+              : `🤔 I didn't understand that.\n\nPlease select an option:`,
             [
               { id: 'home', text: 'Main Menu' },
               { id: 'view_cart', text: 'View Cart' },

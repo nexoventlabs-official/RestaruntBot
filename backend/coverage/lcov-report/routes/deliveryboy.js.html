@@ -25,28 +25,28 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/568</span>
+                <span class='fraction'>0/573</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/256</span>
+                <span class='fraction'>0/260</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/46</span>
+                <span class='fraction'>0/47</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/549</span>
+                <span class='fraction'>0/554</span>
             </div>
         
             
@@ -1513,7 +1513,18 @@
 <a name='L1448'></a><a href='#L1448'>1448</a>
 <a name='L1449'></a><a href='#L1449'>1449</a>
 <a name='L1450'></a><a href='#L1450'>1450</a>
-<a name='L1451'></a><a href='#L1451'>1451</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L1451'></a><a href='#L1451'>1451</a>
+<a name='L1452'></a><a href='#L1452'>1452</a>
+<a name='L1453'></a><a href='#L1453'>1453</a>
+<a name='L1454'></a><a href='#L1454'>1454</a>
+<a name='L1455'></a><a href='#L1455'>1455</a>
+<a name='L1456'></a><a href='#L1456'>1456</a>
+<a name='L1457'></a><a href='#L1457'>1457</a>
+<a name='L1458'></a><a href='#L1458'>1458</a>
+<a name='L1459'></a><a href='#L1459'>1459</a>
+<a name='L1460'></a><a href='#L1460'>1460</a>
+<a name='L1461'></a><a href='#L1461'>1461</a>
+<a name='L1462'></a><a href='#L1462'>1462</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1534,7 +1545,13 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1881,6 +1898,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1890,6 +1909,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -2981,8 +3003,14 @@ const razorpayService = <span class="cstat-no" title="statement not covered" >re
 const multer = <span class="cstat-no" title="statement not covered" >require('multer');</span>
 const router = <span class="cstat-no" title="statement not covered" >express.Router();</span>
 &nbsp;
-// Apply admin rate limiting (most routes are admin)
-<span class="cstat-no" title="statement not covered" >router.use(adminRateLimiter);</span>
+// Apply admin rate limiting to most routes (login/verify/public routes are excluded below)
+<span class="cstat-no" title="statement not covered" >router.use(<span class="fstat-no" title="function not covered" >(r</span>eq, res, next) =&gt; {</span>
+  // Skip rate limiting for login and verify routes
+<span class="cstat-no" title="statement not covered" >  if (req.path === '/login' || req.path === '/verify') {</span>
+<span class="cstat-no" title="statement not covered" >    return next();</span>
+  }
+<span class="cstat-no" title="statement not covered" >  return adminRateLimiter(req, res, next);</span>
+});
 &nbsp;
 // Configure multer for memory storage
 const upload = <span class="cstat-no" title="statement not covered" >multer({</span>
@@ -3289,7 +3317,7 @@ const sendPasswordEmail = <span class="cstat-no" title="statement not covered" >
 // ============ DELIVERY BOY AUTH ROUTES (Public, rate limited) ============
 &nbsp;
 // Delivery boy login (supports email or phone)
-<span class="cstat-no" title="statement not covered" >router.post('/login', authRateLimiter, <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >router.post('/login', <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { email, password } = <span class="cstat-no" title="statement not covered" >req.body;</span>
     
@@ -3329,10 +3357,11 @@ const sendPasswordEmail = <span class="cstat-no" title="statement not covered" >
 <span class="cstat-no" title="statement not covered" >    deliveryBoy.isOnline = true;</span>
 <span class="cstat-no" title="statement not covered" >    await deliveryBoy.save();</span>
     
-    // Generate token with tokenVersion
+    // Generate access token with all required fields for delivery verification
     const token = <span class="cstat-no" title="statement not covered" >jwt.sign(</span>
       { 
         id: deliveryBoy._id, 
+        userId: deliveryBoy._id,
         email: deliveryBoy.email, 
         role: 'delivery',
         tokenVersion: deliveryBoy.tokenVersion
@@ -3341,10 +3370,14 @@ const sendPasswordEmail = <span class="cstat-no" title="statement not covered" >
       { expiresIn: '7d' }
     );
     
+    // Also generate a refresh token for token rotation
+    const { generateRefreshToken } = <span class="cstat-no" title="statement not covered" >require('../services/jwtRefresh');</span>
+    const refreshToken = <span class="cstat-no" title="statement not covered" >generateRefreshToken(deliveryBoy._id.toString(), 'delivery');</span>
+    
     const user = <span class="cstat-no" title="statement not covered" >deliveryBoy.toObject();</span>
 <span class="cstat-no" title="statement not covered" >    delete user.password;</span>
     
-<span class="cstat-no" title="statement not covered" >    res.json({ token, user });</span>
+<span class="cstat-no" title="statement not covered" >    res.json({ token, refreshToken, user });</span>
   } catch (error) {
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
   }
@@ -4420,7 +4453,7 @@ const sendPasswordEmail = <span class="cstat-no" title="statement not covered" >
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-14T13:31:41.551Z
+                at 2026-02-19T04:37:18.965Z
             </div>
         <script src="../prettify.js"></script>
         <script>

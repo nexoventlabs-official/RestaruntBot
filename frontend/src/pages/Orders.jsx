@@ -39,12 +39,12 @@ const HISTORY_PAYMENT_STATUS = {
 };
 
 /* helpers */
-const fmtDate = (d) => { if (!d) return ''; const dt = new Date(d); return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); };
-const fmtTime = (d) => { if (!d) return ''; return new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); };
-const isToday = (d) => { const dt = new Date(d); const now = new Date(); return dt.toDateString() === now.toDateString(); };
-const isYesterday = (d) => { const dt = new Date(d); const y = new Date(); y.setDate(y.getDate() - 1); return dt.toDateString() === y.toDateString(); };
-const isThisWeek = (d) => { const dt = new Date(d); const now = new Date(); const diff = now - dt; return diff < 7 * 86400000; };
-const isThisMonth = (d) => { const dt = new Date(d); const now = new Date(); return dt.getMonth() === now.getMonth() && dt.getFullYear() === now.getFullYear(); };
+const fmtDate = (d) => { if (!d) return ''; const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); };
+const fmtTime = (d) => { if (!d) return ''; const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); };
+const isToday = (d) => { if (!d) return false; const dt = new Date(d); if (isNaN(dt.getTime())) return false; const now = new Date(); return dt.toDateString() === now.toDateString(); };
+const isYesterday = (d) => { if (!d) return false; const dt = new Date(d); if (isNaN(dt.getTime())) return false; const y = new Date(); y.setDate(y.getDate() - 1); return dt.toDateString() === y.toDateString(); };
+const isThisWeek = (d) => { if (!d) return false; const dt = new Date(d); if (isNaN(dt.getTime())) return false; const now = new Date(); const diff = now - dt; return diff < 7 * 86400000; };
+const isThisMonth = (d) => { if (!d) return false; const dt = new Date(d); if (isNaN(dt.getTime())) return false; const now = new Date(); return dt.getMonth() === now.getMonth() && dt.getFullYear() === now.getFullYear(); };
 
 /* parse history item strings: "Name Qty: 1 × ₹99 = ₹99" */
 const parseItemString = (str) => {
@@ -324,6 +324,26 @@ export default function Orders() {
 
   /* Open history order in detail */
   const openHistoryOrderDetail = useCallback((ho) => {
+    // Build a proper createdAt from orderDate + time string
+    let createdAt = ho.createdAt || ho.orderDate || '';
+    if (ho.time && createdAt) {
+      try {
+        const base = new Date(createdAt);
+        if (!isNaN(base.getTime())) {
+          // Parse time like "6:30 AM" or "10:12 PM"
+          const tm = ho.time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+          if (tm) {
+            let h = parseInt(tm[1]);
+            const m = parseInt(tm[2]);
+            const ampm = (tm[3] || '').toUpperCase();
+            if (ampm === 'PM' && h < 12) h += 12;
+            if (ampm === 'AM' && h === 12) h = 0;
+            base.setHours(h, m, 0, 0);
+          }
+          createdAt = base.toISOString();
+        }
+      } catch { /* keep original */ }
+    }
     const mapped = {
       ...ho,
       _id: ho._id || ho.orderId,
@@ -331,7 +351,7 @@ export default function Orders() {
       deliveryAddress: { address: ho.address || '' },
       serviceType: ho.sheetType === 'selfpick' ? 'pickup' : (ho.serviceType || 'delivery'),
       items: typeof ho.items === 'string' ? ho.items.split(',').map(s => parseItemString(s)).filter(Boolean) : (ho.items || []),
-      createdAt: ho.time || ho.createdAt,
+      createdAt,
       _fromHistory: true,
     };
     setSelectedOrder(mapped);
@@ -814,7 +834,7 @@ export default function Orders() {
                         <span className="font-bold px-1.5 py-0.5 rounded text-[9px]" style={{ backgroundColor: payConf.color + '22', color: payConf.color }}>
                           {payConf.label}
                         </span>
-                        <span className="text-dark-400">{ho.time ? fmtTime(ho.time) : fmtTime(ho.createdAt)}</span>
+                        <span className="text-dark-400">{ho.time || fmtTime(ho.createdAt) || ''}</span>
                       </div>
                     </div>
                   </button>

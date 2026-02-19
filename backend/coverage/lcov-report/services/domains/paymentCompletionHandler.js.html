@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/258</span>
+                <span class='fraction'>0/266</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/62</span>
+                <span class='fraction'>0/66</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/258</span>
+                <span class='fraction'>0/266</span>
             </div>
         
             
@@ -789,7 +789,19 @@
 <a name='L724'></a><a href='#L724'>724</a>
 <a name='L725'></a><a href='#L725'>725</a>
 <a name='L726'></a><a href='#L726'>726</a>
-<a name='L727'></a><a href='#L727'>727</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L727'></a><a href='#L727'>727</a>
+<a name='L728'></a><a href='#L728'>728</a>
+<a name='L729'></a><a href='#L729'>729</a>
+<a name='L730'></a><a href='#L730'>730</a>
+<a name='L731'></a><a href='#L731'>731</a>
+<a name='L732'></a><a href='#L732'>732</a>
+<a name='L733'></a><a href='#L733'>733</a>
+<a name='L734'></a><a href='#L734'>734</a>
+<a name='L735'></a><a href='#L735'>735</a>
+<a name='L736'></a><a href='#L736'>736</a>
+<a name='L737'></a><a href='#L737'>737</a>
+<a name='L738'></a><a href='#L738'>738</a>
+<a name='L739'></a><a href='#L739'>739</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1121,9 +1133,15 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1321,8 +1339,14 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1814,13 +1838,13 @@ async function <span class="fstat-no" title="function not covered" >sendPaymentC
     
 <span class="cstat-no" title="statement not covered" >    if (confirmedImageUrl) {</span>
 <span class="cstat-no" title="statement not covered" >      await whatsapp.sendImage(phone, confirmedImageUrl, message, [</span>
-        { id: 'track_order', text: '📍 Track Order' },
-        { id: 'home', text: '🏠 Main Menu' }
+        { id: 'track_order', text: 'Track Order' },
+        { id: 'home', text: 'Main Menu' }
       ]);
     } else {
 <span class="cstat-no" title="statement not covered" >      await whatsapp.sendButtons(phone, message, [</span>
-        { id: 'track_order', text: '📍 Track Order' },
-        { id: 'home', text: '🏠 Main Menu' }
+        { id: 'track_order', text: 'Track Order' },
+        { id: 'home', text: 'Main Menu' }
       ]);
     }
     
@@ -1846,11 +1870,17 @@ async function <span class="fstat-no" title="function not covered" >sendPaymentF
 <span class="cstat-no" title="statement not covered" >    message += `Your payment could not be processed.\n\n`;</span>
 <span class="cstat-no" title="statement not covered" >    message += `Please try again or choose a different payment method.`;</span>
     
-<span class="cstat-no" title="statement not covered" >    await whatsapp.sendButtons(phone, message, [</span>
-      { id: 'retry_payment', text: '🔄 Retry Payment' },
-      { id: 'pay_cod', text: '💵 Pay COD' },
-      { id: 'home', text: '🏠 Main Menu' }
-    ]);
+    const payFailImg = <span class="cstat-no" title="statement not covered" >await chatbotImagesService.getImageUrl('payment_failed');</span>
+    const buttons = <span class="cstat-no" title="statement not covered" >[</span>
+      { id: 'retry_payment', text: 'Retry Payment' },
+      { id: 'pay_cod', text: 'Pay COD' },
+      { id: 'home', text: 'Main Menu' }
+    ];
+<span class="cstat-no" title="statement not covered" >    if (payFailImg) {</span>
+<span class="cstat-no" title="statement not covered" >      await whatsapp.sendImageWithButtons(phone, payFailImg, message, buttons);</span>
+    } else {
+<span class="cstat-no" title="statement not covered" >      await whatsapp.sendButtons(phone, message, buttons);</span>
+    }
     
 <span class="cstat-no" title="statement not covered" >    logger.info('Payment failure notification sent', { orderId: order.orderId });</span>
   } catch (error) {
@@ -2046,10 +2076,16 @@ async function <span class="fstat-no" title="function not covered" >sendRefundCo
 <span class="cstat-no" title="statement not covered" >    message += `It will be credited to your account within 5-7 business days.\n\n`;</span>
 <span class="cstat-no" title="statement not covered" >    message += `🙏 Thank you for your patience!`;</span>
     
-<span class="cstat-no" title="statement not covered" >    await whatsapp.sendButtons(phone, message, [</span>
-      { id: 'view_menu', text: '📋 Browse Menu' },
-      { id: 'home', text: '🏠 Main Menu' }
-    ]);
+    const refundImg = <span class="cstat-no" title="statement not covered" >await chatbotImagesService.getImageUrl('refund_processed');</span>
+    const buttons = <span class="cstat-no" title="statement not covered" >[</span>
+      { id: 'view_menu', text: 'Browse Menu' },
+      { id: 'home', text: 'Main Menu' }
+    ];
+<span class="cstat-no" title="statement not covered" >    if (refundImg) {</span>
+<span class="cstat-no" title="statement not covered" >      await whatsapp.sendImageWithButtons(phone, refundImg, message, buttons);</span>
+    } else {
+<span class="cstat-no" title="statement not covered" >      await whatsapp.sendButtons(phone, message, buttons);</span>
+    }
     
 <span class="cstat-no" title="statement not covered" >    logger.info('Refund confirmation sent', { orderId: order.orderId });</span>
   } catch (error) {
@@ -2248,7 +2284,7 @@ async function <span class="fstat-no" title="function not covered" >getPaymentSt
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-14T13:31:41.551Z
+                at 2026-02-19T04:37:18.965Z
             </div>
         <script src="../../prettify.js"></script>
         <script>
