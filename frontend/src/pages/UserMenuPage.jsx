@@ -77,7 +77,7 @@ export default function UserMenuPage() {
     };
   }, []);
   
-  useEffect(() => { loadItems(); }, [selectedCategory, foodType]);
+  useEffect(() => { loadItems(); }, [selectedCategory]);
 
   // Handle food type change with fade effect
   const handleFoodTypeChange = (type) => {
@@ -141,7 +141,7 @@ export default function UserMenuPage() {
       // Only send actual category names to API, not item_<id> format (those are filtered client-side)
       if (selectedCategory !== 'all' && !selectedCategory.startsWith('item_')) {
         params.append('category', selectedCategory);
-      }      if (foodType !== 'all') params.append('foodType', foodType);
+      }
       const res = await axios.get(`${API_URL}/menu?${params}`);
       setItems(res.data);
     } catch (err) { 
@@ -166,6 +166,18 @@ export default function UserMenuPage() {
     const itemCategories = Array.isArray(item.category) ? item.category.filter(Boolean) : [item.category].filter(Boolean);
     // Items with no categories assigned → always show
     const hasCategory = itemCategories.length === 0 || itemCategories.some(cat => allCategoryNames.includes(cat));
+    
+    // Apply food type filter - check both item-level and variant-level foodType
+    if (foodType !== 'all') {
+      if (item.variants && item.variants.length > 0) {
+        // Item has variants: keep if ANY variant matches the food type
+        const hasMatchingVariant = item.variants.some(v => (v.foodType || item.foodType) === foodType);
+        if (!hasMatchingVariant) return false;
+      } else {
+        // No variants: check item-level foodType
+        if (item.foodType !== foodType) return false;
+      }
+    }
     
     // Apply search filter
     if (searchQuery.trim()) {
