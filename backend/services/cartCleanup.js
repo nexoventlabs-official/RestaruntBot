@@ -80,9 +80,9 @@ const sendExpiryWarnings = async () => {
           const cartExpiryImageUrl = await chatbotImagesService.getImageUrl('cart_expiry_warning');
           
           const buttons = [
-            { id: 'review_pay', text: '🛒 Checkout Now' },
-            { id: 'view_cart', text: '👀 View Cart' },
-            { id: 'add_more', text: '➕ Add More' }
+            { id: 'review_pay', text: 'Checkout Now' },
+            { id: 'view_cart', text: 'View Cart' },
+            { id: 'add_more', text: 'Add More' }
           ];
           
           if (cartExpiryImageUrl) {
@@ -194,13 +194,13 @@ const cleanupExpiredCartItems = async () => {
             
             const buttons = customer.cart.length > 0 
               ? [
-                  { id: 'review_pay', text: '🛒 Checkout Now' },
-                  { id: 'view_cart', text: '👀 View Cart' },
-                  { id: 'add_more', text: '➕ Add More' }
+                  { id: 'review_pay', text: 'Checkout Now' },
+                  { id: 'view_cart', text: 'View Cart' },
+                  { id: 'add_more', text: 'Add More' }
                 ]
               : [
-                  { id: 'view_menu', text: '📋 View Menu' },
-                  { id: 'home', text: '🏠 Main Menu' }
+                  { id: 'view_menu', text: 'View Menu' },
+                  { id: 'home', text: 'Main Menu' }
                 ];
             
             if (cartRemovedImageUrl) {
