@@ -1186,6 +1186,9 @@ const metaCloud = {
 
           if (product.salePrice && product.salePrice < product.price) {
             data.sale_price = `${product.salePrice.toFixed(2)} ${currency}`;
+          } else {
+            // Explicitly clear sale_price so Meta removes any previously set strikethrough price
+            data.sale_price = '';
           }
 
           if (product.imageUrl) {

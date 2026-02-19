@@ -829,19 +829,26 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
           const updatedOfferTypes = offerTypes.filter(ot => ot !== offerType);
           
           if (updatedOfferTypes.length === 0) {
-            const clearFields = {
+            const clearUpdate = {
               $unset: { offerPrice: 1 },
-              offerType: []
+              $set: { offerType: [] }
             };
             // Clear variant offerPrices too
             if (item.variants && item.variants.length > 0) {
-              clearFields.variants = item.variants.map(v => {
+              clearUpdate.$set.variants = item.variants.map(v => {
                 const vObj = v.toObject ? v.toObject() : { ...v };
                 delete vObj.offerPrice;
+                if (vObj.quantities && vObj.quantities.length > 0) {
+                  vObj.quantities = vObj.quantities.map(q => {
+                    const qObj = q.toObject ? q.toObject() : { ...q };
+                    delete qObj.offerPrice;
+                    return qObj;
+                  });
+                }
                 return vObj;
               });
             }
-            await MenuItem.findByIdAndUpdate(itemId, clearFields);
+            await MenuItem.findByIdAndUpdate(itemId, clearUpdate);
           } else {
             await MenuItem.findByIdAndUpdate(itemId, {
               offerType: updatedOfferTypes
@@ -906,18 +913,25 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
           const updatedOfferTypes = offerTypes.filter(ot => ot !== offerType);
           
           if (updatedOfferTypes.length === 0) {
-            const clearFields = {
+            const clearUpdate = {
               $unset: { offerPrice: 1 },
-              offerType: []
+              $set: { offerType: [] }
             };
             if (item.variants && item.variants.length > 0) {
-              clearFields.variants = item.variants.map(v => {
+              clearUpdate.$set.variants = item.variants.map(v => {
                 const vObj = v.toObject ? v.toObject() : { ...v };
                 delete vObj.offerPrice;
+                if (vObj.quantities && vObj.quantities.length > 0) {
+                  vObj.quantities = vObj.quantities.map(q => {
+                    const qObj = q.toObject ? q.toObject() : { ...q };
+                    delete qObj.offerPrice;
+                    return qObj;
+                  });
+                }
                 return vObj;
               });
             }
-            await MenuItem.findByIdAndUpdate(itemId, clearFields);
+            await MenuItem.findByIdAndUpdate(itemId, clearUpdate);
           } else {
             await MenuItem.findByIdAndUpdate(itemId, {
               offerType: updatedOfferTypes
@@ -1204,15 +1218,23 @@ router.patch('/:id/toggle', auth, async (req, res) => {
           await MenuItem.findByIdAndUpdate(item._id, updateFields);
         } else {
           // No active percentage-based offers remain, remove offerPrice
-          const clearFields = { $unset: { offerPrice: 1 } };
+          const clearUpdate = { $unset: { offerPrice: 1 } };
           if (item.variants && item.variants.length > 0) {
-            clearFields.variants = item.variants.map(v => {
+            clearUpdate.$set = { variants: item.variants.map(v => {
               const vObj = v.toObject ? v.toObject() : { ...v };
               delete vObj.offerPrice;
+              // Also clear offerPrice from nested quantities
+              if (vObj.quantities && vObj.quantities.length > 0) {
+                vObj.quantities = vObj.quantities.map(q => {
+                  const qObj = q.toObject ? q.toObject() : { ...q };
+                  delete qObj.offerPrice;
+                  return qObj;
+                });
+              }
               return vObj;
-            });
+            })};
           }
-          await MenuItem.findByIdAndUpdate(item._id, clearFields);
+          await MenuItem.findByIdAndUpdate(item._id, clearUpdate);
         }
       }
       
