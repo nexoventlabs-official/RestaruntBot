@@ -552,11 +552,33 @@ export default function UserMenuPage() {
 
     // --- VARIANT CARDS as section under parent header ---
     if (item.variants && item.variants.length > 0) {
+      // Filter variants when search is active - only show matching variants
+      let variantsToShow = item.variants.map((v, idx) => ({ ...v, _origIdx: idx }));
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const queryWords = query.split(/\s+/).filter(w => w.length > 0);
+        const queryNoSpaces = query.replace(/\s+/g, '');
+        
+        const filteredVariants = variantsToShow.filter(v => {
+          const vLabel = (v.label || '').toLowerCase();
+          const vDesc = (v.description || '').toLowerCase();
+          const vTags = (v.tags || []).join(' ').toLowerCase();
+          const vText = `${vLabel} ${vDesc} ${vTags}`;
+          const vTextNoSpaces = vText.replace(/\s+/g, '');
+          return vText.includes(query) || vTextNoSpaces.includes(queryNoSpaces) || queryWords.every(w => vText.includes(w));
+        });
+        // If any variants matched directly, show only those; otherwise show all (parent matched)
+        if (filteredVariants.length > 0) {
+          variantsToShow = filteredVariants;
+        }
+      }
+
       return (
         <div key={item._id} className="mb-8">
           {/* Variant Cards Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {item.variants.map((v, vIdx) => {
+            {variantsToShow.map((v) => {
+              const vIdx = v._origIdx;
               const variantAvailable = available && v.available !== false;
               const variantFoodType = v.foodType || item.foodType;
               const variantImage = v.image || item.image;
@@ -603,7 +625,7 @@ export default function UserMenuPage() {
                           e.stopPropagation();
                           let msg = `I'd like to order *${item.name}* - ${v.label}`;
                           msg += `\n💰 ₹${variantPrice}`;
-                          msg += `\n#WEB_${item._id}_v${vIdx}_q1`;
+                          msg += `\n#WEB_${item._id}_v${vIdx}`;
                           window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
                         }}
                         className="absolute bottom-3 right-3 w-10 h-10 bg-green-500 text-white rounded-full flex items-center justify-center hover:bg-green-600 transition-all hover:scale-110 shadow-lg z-20"

@@ -38,6 +38,7 @@ export default function UserLayout() {
   const [searchResults, setSearchResults] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(null);
+  const [selectedQuantityIdx, setSelectedQuantityIdx] = useState(null);
   const [dialogQuantity, setDialogQuantity] = useState(1);
   const [holidayMode, setHolidayMode] = useState(false);
   const searchInputRef = useRef(null);
@@ -323,19 +324,26 @@ export default function UserLayout() {
   const openItemDetail = (item, variantIndex = null) => {
     setSelectedItem(item);
     setSelectedVariantIdx(variantIndex);
+    setSelectedQuantityIdx(variantIndex !== null && item.variants?.[variantIndex]?.quantities?.length > 0 ? 0 : null);
     setDialogQuantity(1);
   };
 
   const closeItemDetail = () => {
     setSelectedItem(null);
     setSelectedVariantIdx(null);
+    setSelectedQuantityIdx(null);
     setDialogQuantity(1);
   };
 
   const handleAddToCartFromDialog = () => {
     if (!selectedItem) return;
     const sv = selectedVariantIdx !== null ? selectedItem.variants?.[selectedVariantIdx] : null;
-    const variantOpts = sv ? { variantIndex: selectedVariantIdx, label: sv.label, price: sv.price, offerPrice: sv.offerPrice, image: sv.image || selectedItem.image } : null;
+    const sq = sv && selectedQuantityIdx !== null ? sv.quantities?.[selectedQuantityIdx] : null;
+    const variantOpts = sv ? { variantIndex: selectedVariantIdx, label: sv.label, price: sq ? sq.price : sv.price, offerPrice: sq ? sq.offerPrice : sv.offerPrice, image: sv.image || selectedItem.image } : null;
+    if (variantOpts && sq) {
+      variantOpts.quantityIndex = selectedQuantityIdx;
+      variantOpts.quantityLabel = `${sq.quantity} ${sq.unit}`;
+    }
     for (let i = 0; i < dialogQuantity; i++) {
       addToCart(selectedItem, 1, null, variantOpts);
     }
@@ -347,19 +355,24 @@ export default function UserLayout() {
     if (!selectedItem) return;
     const item = selectedItem;
     const sv = selectedVariantIdx !== null ? item.variants?.[selectedVariantIdx] : null;
-    const displayName = sv?.label || item.name;
-    const unitPrice = sv
-      ? (sv.offerPrice && sv.offerPrice < sv.price ? sv.offerPrice : sv.price)
-      : (item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price);
-    const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : 
-                          item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
-                          item.foodType === 'egg' ? '🥚 Egg' : '';
+    const sq = sv && selectedQuantityIdx !== null ? sv.quantities?.[selectedQuantityIdx] : null;
+    let unitPrice;
+    if (sq) {
+      unitPrice = sq.offerPrice && sq.offerPrice < sq.price ? sq.offerPrice : sq.price;
+    } else if (sv) {
+      unitPrice = sv.offerPrice && sv.offerPrice < sv.price ? sv.offerPrice : sv.price;
+    } else {
+      unitPrice = item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price;
+    }
     
-    let msg = `Hi! I'd like to order:\n\n`;
-    msg += `*${displayName}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n`;
-    msg += `📦 *Quantity:* ${dialogQuantity}\n`;
-    msg += `💰 *Price:* Qty: ${dialogQuantity} × ₹${unitPrice} = ₹${unitPrice * dialogQuantity}\n`;
-    msg += `\nPlease confirm my order. Thank you!`;
+    let msg = `I'd like to order *${item.name}*`;
+    if (sv) msg += ` - ${sv.label}`;
+    if (sq) msg += ` (${sq.quantity} ${sq.unit})`;
+    msg += ` x${dialogQuantity}`;
+    msg += `\n💰 ₹${unitPrice * dialogQuantity}`;
+    msg += `\n#WEB_${item._id}`;
+    if (selectedVariantIdx !== null) msg += `_v${selectedVariantIdx}`;
+    if (selectedQuantityIdx !== null) msg += `_q${selectedQuantityIdx}`;
     
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
     closeItemDetail();
@@ -629,17 +642,24 @@ export default function UserLayout() {
       {selectedItem && (() => {
         // Compute variant-aware display values
         const sv = selectedVariantIdx !== null ? selectedItem.variants?.[selectedVariantIdx] : null;
+        const sq = sv && selectedQuantityIdx !== null ? sv.quantities?.[selectedQuantityIdx] : null;
         const displayName = sv?.label || selectedItem.name;
         const displayImage = sv?.image || selectedItem.image;
         const displayDescription = sv?.description || selectedItem.description;
-        const displayPrice = sv
-          ? (sv.offerPrice && sv.offerPrice < sv.price ? sv.offerPrice : sv.price)
-          : (selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price ? selectedItem.offerPrice : selectedItem.price);
-        const displayOriginalPrice = sv
-          ? (sv.offerPrice && sv.offerPrice < sv.price ? sv.price : null)
-          : (selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price ? selectedItem.price : null);
+        let displayPrice, displayOriginalPrice;
+        if (sq) {
+          displayPrice = sq.offerPrice && sq.offerPrice < sq.price ? sq.offerPrice : sq.price;
+          displayOriginalPrice = sq.offerPrice && sq.offerPrice < sq.price ? sq.price : null;
+        } else if (sv) {
+          displayPrice = sv.offerPrice && sv.offerPrice < sv.price ? sv.offerPrice : sv.price;
+          displayOriginalPrice = sv.offerPrice && sv.offerPrice < sv.price ? sv.price : null;
+        } else {
+          displayPrice = selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price ? selectedItem.offerPrice : selectedItem.price;
+          displayOriginalPrice = selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price ? selectedItem.price : null;
+        }
         const displayRating = sv?.avgRating || selectedItem.avgRating;
         const displayTotalRatings = sv?.totalRatings || selectedItem.totalRatings;
+        const displayUnit = sq ? `${sq.quantity} ${sq.unit}` : sv ? `${sv.quantity || selectedItem.quantity || 1} ${sv.unit || selectedItem.unit || 'piece'}` : `${selectedItem.quantity || 1} ${selectedItem.unit || 'piece'}`;
         return (
         <div 
           className="fixed inset-0 z-[70] flex items-center justify-center p-4"
@@ -779,7 +799,7 @@ export default function UserLayout() {
                       return (
                         <button
                           key={idx}
-                          onClick={() => { setSelectedVariantIdx(idx); setDialogQuantity(1); }}
+                          onClick={() => { setSelectedVariantIdx(idx); setSelectedQuantityIdx(v.quantities?.length > 0 ? 0 : null); setDialogQuantity(1); }}
                           className={`px-3 py-1.5 rounded-xl text-sm font-medium border-2 transition-all ${
                             isSelected
                               ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-sm'
@@ -788,6 +808,33 @@ export default function UserLayout() {
                         >
                           {v.label}
                           <span className="ml-1.5 text-xs text-gray-400">₹{vPrice}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Quantity Option Selector (e.g., 1 liter, 750 ml) */}
+              {selectedVariantIdx !== null && selectedItem.variants?.[selectedVariantIdx]?.quantities?.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-sm font-semibold text-gray-700 mb-2">Choose Size</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedItem.variants[selectedVariantIdx].quantities.map((q, qIdx) => {
+                      const isSelected = selectedQuantityIdx === qIdx;
+                      const qPrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+                      return (
+                        <button
+                          key={qIdx}
+                          onClick={() => { setSelectedQuantityIdx(qIdx); setDialogQuantity(1); }}
+                          className={`px-3 py-1.5 rounded-xl text-sm font-medium border-2 transition-all ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm'
+                              : 'border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50'
+                          }`}
+                        >
+                          {q.quantity} {q.unit}
+                          <span className="ml-1.5 text-xs text-gray-400">₹{qPrice}</span>
                         </button>
                       );
                     })}
@@ -815,7 +862,7 @@ export default function UserLayout() {
                   <Package className="w-5 h-5 text-orange-500" />
                   <div>
                     <p className="text-xs text-gray-500">Unit</p>
-                    <p className="font-semibold text-gray-900">{selectedItem.quantity || 1} {selectedItem.unit || 'piece'}</p>
+                    <p className="font-semibold text-gray-900">{displayUnit}</p>
                   </div>
                 </div>
               </div>
