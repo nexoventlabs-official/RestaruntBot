@@ -393,7 +393,53 @@ const catalogService = {
     let metaPushed = 0;
     let metaFailed = 0;
 
-    // Step 0: Clean up stale mappings (menuItem was deleted)
+    // Step 0a: Clean up stale offerPrices (offer was deactivated but offerPrice wasn't cleared)
+    try {
+      const Offer = require('../models/Offer');
+      const itemsWithOfferPrice = await MenuItem.find({ offerPrice: { $exists: true } });
+      let offerPriceCleaned = 0;
+      for (const item of itemsWithOfferPrice) {
+        const offerTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
+        // Check if any active percentage-based offer exists for this item
+        const activeOffer = offerTypes.length > 0 ? await Offer.findOne({
+          offerType: { $in: offerTypes },
+          isActive: true,
+          percentage: { $gt: 0 }
+        }) : null;
+
+        if (!activeOffer) {
+          // No active offer — clear stale offerPrice from item and variants/quantities
+          const clearUpdate = { $unset: { offerPrice: 1 } };
+          if (item.variants && item.variants.length > 0) {
+            clearUpdate.$set = { variants: item.variants.map(v => {
+              const vObj = v.toObject ? v.toObject() : { ...v };
+              delete vObj.offerPrice;
+              if (vObj.quantities && vObj.quantities.length > 0) {
+                vObj.quantities = vObj.quantities.map(q => {
+                  const qObj = q.toObject ? q.toObject() : { ...q };
+                  delete qObj.offerPrice;
+                  return qObj;
+                });
+              }
+              return vObj;
+            })};
+          }
+          await MenuItem.findByIdAndUpdate(item._id, clearUpdate);
+          offerPriceCleaned++;
+        }
+      }
+      if (offerPriceCleaned > 0) {
+        logger.info('Cleaned stale offerPrices from menu items', { offerPriceCleaned });
+        // Re-fetch items after cleanup so autoSync uses clean data
+        const freshItems = await MenuItem.find({ available: true, isPaused: false }).lean();
+        items.length = 0;
+        freshItems.forEach(i => items.push(i));
+      }
+    } catch (err) {
+      logger.error('Failed to clean stale offerPrices', { error: err.message });
+    }
+
+    // Step 0b: Clean up stale mappings (menuItem was deleted)
     try {
       const allMappings = await CatalogProduct.find({}).lean();
       const activeItemIds = new Set(items.map(i => i._id.toString()));
