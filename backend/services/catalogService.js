@@ -644,12 +644,17 @@ const catalogService = {
   // ========== AUTO-SYNC: Menu Item → Meta Catalog ==========
 
   /**
-   * Build a rich product description including rating info for Meta catalog.
+   * Build a rich product description for Meta catalog.
+   * Ratings are excluded by default to prevent catalog disruption during sync.
+   * Only the scheduled 2 AM rating sync includes ratings.
    * @param {Object} menuItem - The MenuItem document
    * @param {Object} [variant] - Optional variant object for variant-specific description
-   * @returns {string} Description with ratings
+   * @param {Object} [quantityOption] - Optional quantity option
+   * @param {Object} [options] - Options: { includeRatings: false }
+   * @returns {string} Description text
    */
-  buildProductDescription(menuItem, variant = null, quantityOption = null) {
+  buildProductDescription(menuItem, variant = null, quantityOption = null, options = {}) {
+    const { includeRatings = false } = options;
     const parts = [];
 
     // ── Part 1: Quantity/unit — use specific quantity option if provided ──
@@ -671,16 +676,18 @@ const catalogService = {
       parts.push(`${menuItem.quantity} ${menuItem.unit}`);
     }
 
-    // ── Part 2: Star rating — prefer variant-level, fallback to item-level ──
-    const rating = (variant && variant.avgRating) ? variant.avgRating : (menuItem.avgRating || 0);
-    const totalRatings = (variant && variant.totalRatings) ? variant.totalRatings : (menuItem.totalRatings || 0);
-    const filledStars = Math.min(Math.floor(rating), 5);
-    const emptyStars = 5 - filledStars;
-    const starLine = '⭐'.repeat(filledStars) + '☆'.repeat(emptyStars);
-    if (totalRatings > 0) {
-      parts.push(`${starLine} ${rating}/5 (${totalRatings} reviews)`);
-    } else {
-      parts.push(`${starLine} No reviews yet`);
+    // ── Part 2: Star rating (only included during scheduled 2 AM sync) ──
+    if (includeRatings) {
+      const rating = (variant && variant.avgRating) ? variant.avgRating : (menuItem.avgRating || 0);
+      const totalRatings = (variant && variant.totalRatings) ? variant.totalRatings : (menuItem.totalRatings || 0);
+      const filledStars = Math.min(Math.floor(rating), 5);
+      const emptyStars = 5 - filledStars;
+      const starLine = '⭐'.repeat(filledStars) + '☆'.repeat(emptyStars);
+      if (totalRatings > 0) {
+        parts.push(`${starLine} ${rating}/5 (${totalRatings} reviews)`);
+      } else {
+        parts.push(`${starLine} No reviews yet`);
+      }
     }
 
     // ── Part 3: Food type icon + label (prefer variant-level, fallback to item-level) ──
@@ -1218,7 +1225,7 @@ const catalogService = {
 
       for (const item of items) {
         if (item.variants && item.variants.length > 0) {
-          // Re-sync all variants with updated description (includes new ratings)
+          // Re-sync all variants with updated description (includes ratings)
           // IMPORTANT: Must match syncProductToMeta format — NO itemGroupId/colorLabel/sizeLabel
           // Adding those fields changes the product type in Meta catalog and invalidates existing product links
           item.variants.forEach((v, vIdx) => {
@@ -1228,7 +1235,7 @@ const catalogService = {
                 variantProducts.push({
                   retailerId: `${item._id.toString()}_v${vIdx}_q${qIdx}`,
                   name: variantTitle,
-                  description: this.buildProductDescription(item, v, q),
+                  description: this.buildProductDescription(item, v, q, { includeRatings: true }),
                   price: q.price,
                   currency: 'INR',
                   imageUrl: v.image || item.image || null,
@@ -1242,7 +1249,7 @@ const catalogService = {
               variantProducts.push({
                 retailerId: `${item._id.toString()}_v${vIdx}`,
                 name: variantTitle,
-                description: this.buildProductDescription(item, v),
+                description: this.buildProductDescription(item, v, null, { includeRatings: true }),
                 price: v.price,
                 currency: 'INR',
                 imageUrl: v.image || item.image || null,
@@ -1256,7 +1263,7 @@ const catalogService = {
           singleProducts.push({
             retailerId: item._id.toString(),
             name: item.name,
-            description: this.buildProductDescription(item),
+            description: this.buildProductDescription(item, null, null, { includeRatings: true }),
             price: item.price,
             currency: 'INR',
             imageUrl: item.image || null,
