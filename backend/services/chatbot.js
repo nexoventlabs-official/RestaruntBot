@@ -6786,9 +6786,10 @@ const chatbot = {
     const isArrayMatch = Array.isArray(matchedVariantIndex);
     const isSingleMatch = typeof matchedVariantIndex === 'number';
 
-    // Try WhatsApp Catalog product card (native catalog display with image, price, rating)
+    // Skip catalog product cards — show variant details directly via image+buttons
+    // to avoid "This product or service has been removed" WhatsApp errors
     try {
-      if (catalogService.isEnabled()) {
+      if (false /* catalogService.isEnabled() */) {
         // Auto-ensure catalog mapping exists (creates on-the-fly if missing)
         const baseRetailerId = await catalogService.ensureCatalogMapping(item);
         if (baseRetailerId) {
@@ -6995,9 +6996,10 @@ const chatbot = {
 
   // Send item details for order flow (with Add to Cart focus)
   async sendItemDetailsForOrder(phone, item, variantIndex = null, quantityIndex = null) {
-    // Try WhatsApp Catalog single product card
+    // Skip catalog product cards — show variant details directly via image+buttons
+    // to avoid "This product or service has been removed" WhatsApp errors
     try {
-      if (catalogService.isEnabled()) {
+      if (false /* catalogService.isEnabled() */) {
         // Ensure product is synced to Meta and get the correct retailer ID
         const baseRetailerId = await catalogService.ensureCatalogMapping(item);
         if (baseRetailerId) {
@@ -8307,8 +8309,9 @@ const chatbot = {
     
     cartMsg += `*Total: ₹${total}*`;
 
-    // Try showing cart items as WhatsApp Catalog product_list (native cart with images/prices/Place Order)
-    if (catalogService.isEnabled()) {
+    // Skip catalog product list — show text cart directly via image+buttons
+    // to avoid "This product or service has been removed" WhatsApp errors
+    if (false /* catalogService.isEnabled() */) {
       const validCartItems = freshCustomer.cart.filter(item => item.menuItem);
 
       // Build discount info for body text
