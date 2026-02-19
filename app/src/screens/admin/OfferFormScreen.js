@@ -1109,7 +1109,8 @@ export default function OfferFormScreen({ route, navigation }) {
                                 const foodType = variant.foodType || item.foodType;
                                 const vSelected = isVariantSelected(item._id, vIdx);
                                 return (
-                                  <TouchableOpacity key={vIdx} style={styles.variantRow} activeOpacity={0.7} onPress={() => toggleVariant(item._id, vIdx)}>
+                                  <View key={vIdx}>
+                                  <TouchableOpacity style={styles.variantRow} activeOpacity={0.7} onPress={() => toggleVariant(item._id, vIdx)}>
                                     <View style={[styles.checkbox, { width: 20, height: 20, borderRadius: 4, marginRight: 8 }, vSelected && styles.checkboxChecked]}>
                                       {vSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
                                     </View>
@@ -1155,15 +1156,19 @@ export default function OfferFormScreen({ route, navigation }) {
                                       </View>
                                     )}
                                   </TouchableOpacity>
-                                  {/* Quantity/size sub-rows */}
+                                  {/* Quantity/size sub-rows with checkboxes */}
                                   {variant.quantities && variant.quantities.length > 0 && (
                                     <View style={{ backgroundColor: '#fafafa' }}>
                                       {variant.quantities.map((q, qIdx) => {
                                         const qOfferPrice = discountPercent > 0 ? Math.round(q.price * (1 - discountPercent / 100)) : q.price;
                                         return (
-                                          <View key={qIdx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 5, paddingLeft: 68, paddingRight: 16, borderBottomWidth: qIdx < variant.quantities.length - 1 ? 0.5 : 0, borderColor: '#f0f0f0' }}>
-                                            <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: '#d1d5db', marginRight: 10 }} />
-                                            <Text style={{ fontSize: 11, fontWeight: '500', color: '#4b5563', flex: 1 }}>{q.quantity} {q.unit}</Text>
+                                          <TouchableOpacity key={qIdx} activeOpacity={0.7} onPress={() => toggleVariant(item._id, vIdx)}
+                                            style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingLeft: 56, paddingRight: 16, borderBottomWidth: qIdx < variant.quantities.length - 1 ? 0.5 : 0, borderColor: '#f0f0f0' }}>
+                                            <View style={[{ width: 16, height: 16, borderRadius: 3, borderWidth: 2, marginRight: 10, alignItems: 'center', justifyContent: 'center' },
+                                              vSelected ? { backgroundColor: '#6366f1', borderColor: '#6366f1' } : { borderColor: '#d1d5db' }]}>
+                                              {vSelected && <Ionicons name="checkmark" size={11} color="#fff" />}
+                                            </View>
+                                            <Text style={{ fontSize: 12, fontWeight: '500', color: '#4b5563', flex: 1 }}>{q.quantity} {q.unit}</Text>
                                             {discountPercent > 0 && vSelected ? (
                                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                                 <Text style={{ fontSize: 10, color: '#9ca3af', textDecorationLine: 'line-through' }}>₹{q.price}</Text>
@@ -1172,11 +1177,12 @@ export default function OfferFormScreen({ route, navigation }) {
                                             ) : (
                                               <Text style={{ fontSize: 11, color: '#6b7280' }}>₹{q.price}</Text>
                                             )}
-                                          </View>
+                                          </TouchableOpacity>
                                         );
                                       })}
                                     </View>
                                   )}
+                                  </View>
                                 );
                               })}
                             </View>
