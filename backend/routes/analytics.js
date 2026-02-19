@@ -306,8 +306,11 @@ router.get('/report', authMiddleware, async (req, res) => {
             image: { 
               $first: { 
                 $ifNull: [
-                  { $arrayElemAt: ['$menuItemData.image', 0] },
-                  { $arrayElemAt: ['$menuItemByName.image', 0] }
+                  '$items.image',
+                  { $ifNull: [
+                    { $arrayElemAt: ['$menuItemData.image', 0] },
+                    { $arrayElemAt: ['$menuItemByName.image', 0] }
+                  ]}
                 ]
               }
             },
@@ -365,8 +368,8 @@ router.get('/report', authMiddleware, async (req, res) => {
       // Historical report data (from deleted orders)
       ReportHistory.find({ date: { $gte: startDateStr, $lte: endDateStr } }).lean(),
       
-      // Get ALL menu items (including unavailable ones) with ratings
-      MenuItem.find({}, { name: 1, image: 1, category: 1, price: 1, available: 1, avgRating: 1, totalRatings: 1 }).lean()
+      // Get ALL menu items (including unavailable ones) with ratings and variants
+      MenuItem.find({}, { name: 1, image: 1, category: 1, price: 1, available: 1, avgRating: 1, totalRatings: 1, variants: 1 }).lean()
     ]);
 
     // Combine current stats with historical data
@@ -432,27 +435,99 @@ router.get('/report', authMiddleware, async (req, res) => {
     
     // Add ALL menu items to allItemsSold (including those with 0 sales)
     // This ensures every menu item appears in the report
+    // For items with variants, add each variant as a separate entry with its own image
     for (const menuItem of allMenuItems) {
-      if (!combinedItemsMap[menuItem.name]) {
-        combinedItemsMap[menuItem.name] = {
-          name: menuItem.name,
-          image: menuItem.image,
-          category: Array.isArray(menuItem.category) ? menuItem.category[0] : menuItem.category,
-          quantity: 0,
-          revenue: 0,
-          avgRating: menuItem.avgRating || 0,
-          totalRatings: menuItem.totalRatings || 0
-        };
-      } else {
-        // Update image and rating if not set
-        if (!combinedItemsMap[menuItem.name].image && menuItem.image) {
+      if (menuItem.variants && menuItem.variants.length > 0) {
+        // Add each variant individually with variant-specific image
+        for (const variant of menuItem.variants) {
+          // Build variant name keys that match how orders store them
+          // Orders use: "ParentName - VariantLabel (qty unit)"
+          // We also check for just the parent name as a fallback
+          const variantImage = variant.image || menuItem.image;
+          const category = Array.isArray(menuItem.category) ? menuItem.category[0] : menuItem.category;
+          
+          // Check if any combinedItemsMap entry matches this variant
+          // Order names look like "Break Fast - Sambar Idli (2 piece)"
+          const variantPrefix = `${menuItem.name} - ${variant.label}`;
+          let found = false;
+          for (const key of Object.keys(combinedItemsMap)) {
+            if (key.startsWith(variantPrefix)) {
+              // Update the image for this sold variant entry
+              if (!combinedItemsMap[key].image || combinedItemsMap[key].image === menuItem.image) {
+                combinedItemsMap[key].image = variantImage;
+              }
+              if (!combinedItemsMap[key].avgRating && (variant.avgRating || menuItem.avgRating)) {
+                combinedItemsMap[key].avgRating = variant.avgRating || menuItem.avgRating || 0;
+              }
+              if (!combinedItemsMap[key].totalRatings && (variant.totalRatings || menuItem.totalRatings)) {
+                combinedItemsMap[key].totalRatings = variant.totalRatings || menuItem.totalRatings || 0;
+              }
+              found = true;
+            }
+          }
+          // If variant has quantities, each creates a separate order entry
+          if (variant.quantities && variant.quantities.length > 0) {
+            for (const q of variant.quantities) {
+              const qtyName = `${menuItem.name} - ${variant.label} (${q.quantity} ${q.unit})`;
+              if (!combinedItemsMap[qtyName]) {
+                combinedItemsMap[qtyName] = {
+                  name: qtyName,
+                  image: variantImage,
+                  category,
+                  quantity: 0,
+                  revenue: 0,
+                  avgRating: variant.avgRating || menuItem.avgRating || 0,
+                  totalRatings: variant.totalRatings || menuItem.totalRatings || 0
+                };
+              } else if (!combinedItemsMap[qtyName].image || combinedItemsMap[qtyName].image === menuItem.image) {
+                combinedItemsMap[qtyName].image = variantImage;
+              }
+            }
+          } else if (!found) {
+            // Variant without quantity options
+            const vName = `${menuItem.name} - ${variant.label} (${variant.quantity || 1} ${variant.unit || menuItem.unit || 'piece'})`;
+            if (!combinedItemsMap[vName]) {
+              combinedItemsMap[vName] = {
+                name: vName,
+                image: variantImage,
+                category,
+                quantity: 0,
+                revenue: 0,
+                avgRating: variant.avgRating || menuItem.avgRating || 0,
+                totalRatings: variant.totalRatings || menuItem.totalRatings || 0
+              };
+            } else if (!combinedItemsMap[vName].image || combinedItemsMap[vName].image === menuItem.image) {
+              combinedItemsMap[vName].image = variantImage;
+            }
+          }
+        }
+        // Also keep parent entry if it exists from orders (non-variant orders)
+        if (combinedItemsMap[menuItem.name] && !combinedItemsMap[menuItem.name].image && menuItem.image) {
           combinedItemsMap[menuItem.name].image = menuItem.image;
         }
-        if (!combinedItemsMap[menuItem.name].avgRating && menuItem.avgRating) {
-          combinedItemsMap[menuItem.name].avgRating = menuItem.avgRating;
-        }
-        if (!combinedItemsMap[menuItem.name].totalRatings && menuItem.totalRatings) {
-          combinedItemsMap[menuItem.name].totalRatings = menuItem.totalRatings;
+      } else {
+        // Non-variant item — add as before
+        if (!combinedItemsMap[menuItem.name]) {
+          combinedItemsMap[menuItem.name] = {
+            name: menuItem.name,
+            image: menuItem.image,
+            category: Array.isArray(menuItem.category) ? menuItem.category[0] : menuItem.category,
+            quantity: 0,
+            revenue: 0,
+            avgRating: menuItem.avgRating || 0,
+            totalRatings: menuItem.totalRatings || 0
+          };
+        } else {
+          // Update image and rating if not set
+          if (!combinedItemsMap[menuItem.name].image && menuItem.image) {
+            combinedItemsMap[menuItem.name].image = menuItem.image;
+          }
+          if (!combinedItemsMap[menuItem.name].avgRating && menuItem.avgRating) {
+            combinedItemsMap[menuItem.name].avgRating = menuItem.avgRating;
+          }
+          if (!combinedItemsMap[menuItem.name].totalRatings && menuItem.totalRatings) {
+            combinedItemsMap[menuItem.name].totalRatings = menuItem.totalRatings;
+          }
         }
       }
     }

@@ -7919,6 +7919,12 @@ const chatbot = {
       itemsTotal += subtotal;
       totalDiscount += itemDiscount;
       
+      // Use variant-specific image if available, else parent item image
+      let itemImage = item.menuItem.image;
+      if (item.variantIndex !== null && item.variantIndex !== undefined && item.menuItem.variants?.[item.variantIndex]?.image) {
+        itemImage = item.menuItem.variants[item.variantIndex].image;
+      }
+
       return {
         menuItem: item.menuItem._id,
         name: itemName,
@@ -7927,7 +7933,7 @@ const chatbot = {
         originalPrice,
         unit: itemUnit,
         unitQty: itemUnitQty,
-        image: item.menuItem.image,
+        image: itemImage,
         variantIndex: item.variantIndex ?? null,
         variantLabel: item.variantLabel || null,
         quantityIndex: item.quantityIndex ?? null,

@@ -402,7 +402,7 @@ export default function Reports() {
                         <td className="px-4 py-3 text-sm text-dark-400">{idx + 1}</td>
                         <td className="px-4 py-2">
                           {item.image ? (
-                            <img src={item.image} alt="" className="w-9 h-9 rounded-lg object-cover" />
+                            <img src={item.image.startsWith('http') ? item.image : `${import.meta.env.VITE_API_URL || ''}${item.image}`} alt="" className="w-9 h-9 rounded-lg object-cover" />
                           ) : (
                             <div className="w-9 h-9 rounded-lg bg-dark-100 flex items-center justify-center"><UtensilsCrossed className="w-4 h-4 text-dark-300" /></div>
                           )}
