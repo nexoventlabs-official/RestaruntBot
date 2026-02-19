@@ -358,10 +358,17 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
               logger.info(`Applying to ${item.name}: ${item.price} -> ${offerPrice} (${discountPercent}% OFF)`);
               
               if (item.variants && item.variants.length > 0) {
-                updateFields.variants = item.variants.map(v => ({
-                  ...v.toObject ? v.toObject() : v,
-                  offerPrice: Math.round(v.price * (1 - discountPercent / 100))
-                }));
+                updateFields.variants = item.variants.map(v => {
+                  const vObj = v.toObject ? v.toObject() : { ...v };
+                  vObj.offerPrice = Math.round(v.price * (1 - discountPercent / 100));
+                  if (vObj.quantities && vObj.quantities.length > 0) {
+                    vObj.quantities = vObj.quantities.map(q => ({
+                      ...(q.toObject ? q.toObject() : q),
+                      offerPrice: Math.round(q.price * (1 - discountPercent / 100))
+                    }));
+                  }
+                  return vObj;
+                });
               }
             } else {
               // Only specific variants selected — apply discount only to those variants
@@ -371,11 +378,18 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
               
               if (item.variants && item.variants.length > 0) {
                 updateFields.variants = item.variants.map((v, idx) => {
-                  const vObj = v.toObject ? v.toObject() : v;
+                  const vObj = v.toObject ? v.toObject() : { ...v };
                   if (selectedVariantIndices.includes(idx)) {
                     const vOfferPrice = Math.round(v.price * (1 - discountPercent / 100));
                     logger.info(`Applying to ${item.name} variant ${v.label}: ${v.price} -> ${vOfferPrice} (${discountPercent}% OFF)`);
-                    return { ...vObj, offerPrice: vOfferPrice };
+                    vObj.offerPrice = vOfferPrice;
+                    if (vObj.quantities && vObj.quantities.length > 0) {
+                      vObj.quantities = vObj.quantities.map(q => ({
+                        ...(q.toObject ? q.toObject() : q),
+                        offerPrice: Math.round(q.price * (1 - discountPercent / 100))
+                      }));
+                    }
+                    return vObj;
                   }
                   return vObj; // Leave unselected variants unchanged
                 });
@@ -879,10 +893,17 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
             
             // Also apply discount to variants if item has variants
             if (item.variants && item.variants.length > 0) {
-              updateFields.variants = item.variants.map(v => ({
-                ...v.toObject ? v.toObject() : v,
-                offerPrice: Math.round(v.price * (1 - discountPercent / 100))
-              }));
+              updateFields.variants = item.variants.map(v => {
+                const vObj = v.toObject ? v.toObject() : { ...v };
+                vObj.offerPrice = Math.round(v.price * (1 - discountPercent / 100));
+                if (vObj.quantities && vObj.quantities.length > 0) {
+                  vObj.quantities = vObj.quantities.map(q => ({
+                    ...(q.toObject ? q.toObject() : q),
+                    offerPrice: Math.round(q.price * (1 - discountPercent / 100))
+                  }));
+                }
+                return vObj;
+              });
             }
           }
           
@@ -1210,10 +1231,17 @@ router.patch('/:id/toggle', auth, async (req, res) => {
             offerPrice: Math.round(item.price * (1 - bestDiscount / 100))
           };
           if (item.variants && item.variants.length > 0) {
-            updateFields.variants = item.variants.map(v => ({
-              ...v.toObject ? v.toObject() : v,
-              offerPrice: Math.round(v.price * (1 - bestDiscount / 100))
-            }));
+            updateFields.variants = item.variants.map(v => {
+              const vObj = v.toObject ? v.toObject() : { ...v };
+              vObj.offerPrice = Math.round(v.price * (1 - bestDiscount / 100));
+              if (vObj.quantities && vObj.quantities.length > 0) {
+                vObj.quantities = vObj.quantities.map(q => ({
+                  ...(q.toObject ? q.toObject() : q),
+                  offerPrice: Math.round(q.price * (1 - bestDiscount / 100))
+                }));
+              }
+              return vObj;
+            });
           }
           await MenuItem.findByIdAndUpdate(item._id, updateFields);
         } else {
@@ -1270,10 +1298,17 @@ router.patch('/:id/toggle', auth, async (req, res) => {
             offerPrice: Math.round(item.price * (1 - bestDiscount / 100))
           };
           if (item.variants && item.variants.length > 0) {
-            updateFields.variants = item.variants.map(v => ({
-              ...v.toObject ? v.toObject() : v,
-              offerPrice: Math.round(v.price * (1 - bestDiscount / 100))
-            }));
+            updateFields.variants = item.variants.map(v => {
+              const vObj = v.toObject ? v.toObject() : { ...v };
+              vObj.offerPrice = Math.round(v.price * (1 - bestDiscount / 100));
+              if (vObj.quantities && vObj.quantities.length > 0) {
+                vObj.quantities = vObj.quantities.map(q => ({
+                  ...(q.toObject ? q.toObject() : q),
+                  offerPrice: Math.round(q.price * (1 - bestDiscount / 100))
+                }));
+              }
+              return vObj;
+            });
           }
           await MenuItem.findByIdAndUpdate(item._id, updateFields);
         }

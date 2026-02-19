@@ -776,44 +776,55 @@ export default function Offers() {
                             const ft = v.foodType || item.foodType;
                             const pctNum = parseFloat(percentage);
                             const hasDiscount = !isNaN(pctNum) && pctNum > 0;
+                            const hasQuantities = v.quantities && v.quantities.length > 0;
                             return (
-                              <div key={vi} className="flex items-center gap-3 px-3 py-2 pl-10 border-b border-dark-50 last:border-0 hover:bg-dark-50/50">
-                                <button type="button" onClick={() => toggleVariant(item._id, vi)}
-                                  className={`w-4.5 h-4.5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                                    vSelected ? 'bg-primary-500 border-primary-500' : 'border-dark-300'
-                                  }`}>
-                                  {vSelected && <Check className="w-2.5 h-2.5 text-white" />}
-                                </button>
-                                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${foodDot(ft)}`} />
-                                <div className="w-7 h-7 rounded bg-dark-100 overflow-hidden flex-shrink-0">
-                                  {v.image ? <img src={v.image} alt="" className="w-full h-full object-cover" /> : null}
+                              <div key={vi}>
+                                <div className="flex items-center gap-3 px-3 py-2 pl-10 border-b border-dark-50 last:border-0 hover:bg-dark-50/50">
+                                  <button type="button" onClick={() => toggleVariant(item._id, vi)}
+                                    className={`w-4.5 h-4.5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                                      vSelected ? 'bg-primary-500 border-primary-500' : 'border-dark-300'
+                                    }`}>
+                                    {vSelected && <Check className="w-2.5 h-2.5 text-white" />}
+                                  </button>
+                                  <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${foodDot(ft)}`} />
+                                  <div className="w-7 h-7 rounded bg-dark-100 overflow-hidden flex-shrink-0">
+                                    {v.image ? <img src={v.image} alt="" className="w-full h-full object-cover" /> : null}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium text-dark-700 truncate">{v.label || `Variant ${vi + 1}`}</p>
+                                    {/* Show single price for non-quantity variants */}
+                                    {!hasQuantities && v.price ? (
+                                      <p className="text-[10px] text-dark-500">
+                                        {hasDiscount ? (
+                                          <><span className="line-through text-dark-400">₹{v.price}</span> <span className="text-green-600 font-bold">₹{Math.round(v.price * (1 - pctNum / 100))}</span> <span className="text-green-500 text-[9px]">-₹{Math.round(v.price * pctNum / 100)}</span></>
+                                        ) : `₹${v.price}`}
+                                      </p>
+                                    ) : hasQuantities ? (
+                                      <p className="text-[10px] text-dark-400">{v.quantities.length} sizes</p>
+                                    ) : null}
+                                  </div>
+                                  {vSelected && <span className="px-2 py-0.5 bg-green-50 text-green-600 text-[9px] font-semibold rounded-full">Active</span>}
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-medium text-dark-700 truncate">{v.label || `Variant ${vi + 1}`}</p>
-                                  {/* Price / discount preview */}
-                                  {v.quantities && v.quantities.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1 mt-0.5">
-                                      {v.quantities.map((q, qi) => {
-                                        const origPrice = parseFloat(q.price);
-                                        const offerPrice = hasDiscount ? Math.round(origPrice * (1 - pctNum / 100)) : null;
-                                        return (
-                                          <span key={qi} className="text-[9px] text-dark-500">
-                                            {q.quantity}{q.unit ? ` ${q.unit}` : ''} —{' '}
-                                            {offerPrice !== null ? (
-                                              <><span className="line-through text-dark-400">₹{q.price}</span> <span className="text-green-600 font-bold">₹{offerPrice}</span></>
+                                {/* Quantity/size sub-rows */}
+                                {hasQuantities && (
+                                  <div className="bg-dark-50/30">
+                                    {v.quantities.map((q, qi) => {
+                                      const origPrice = parseFloat(q.price);
+                                      const offerPrice = hasDiscount ? Math.round(origPrice * (1 - pctNum / 100)) : null;
+                                      return (
+                                        <div key={qi} className="flex items-center gap-3 px-3 py-1.5 pl-[4.5rem] border-b border-dark-50/50 last:border-0">
+                                          <div className="w-1.5 h-1.5 rounded-full bg-dark-300 flex-shrink-0" />
+                                          <span className="text-[10px] font-medium text-dark-600">{q.quantity} {q.unit}</span>
+                                          <span className="text-[10px] text-dark-500 ml-auto">
+                                            {offerPrice !== null && vSelected ? (
+                                              <><span className="line-through text-dark-400">₹{q.price}</span>{' '}<span className="text-green-600 font-bold">₹{offerPrice}</span></>
                                             ) : `₹${q.price}`}
                                           </span>
-                                        );
-                                      })}
-                                    </div>
-                                  ) : v.price ? (
-                                    <p className="text-[10px] text-dark-500">
-                                      {hasDiscount ? (
-                                        <><span className="line-through text-dark-400">₹{v.price}</span> <span className="text-green-600 font-bold">₹{Math.round(v.price * (1 - pctNum / 100))}</span> <span className="text-green-500 text-[9px]">-₹{Math.round(v.price * pctNum / 100)}</span></>
-                                      ) : `₹${v.price}`}
-                                    </p>
-                                  ) : null}
-                                </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
