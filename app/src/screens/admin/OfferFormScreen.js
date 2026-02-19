@@ -1131,18 +1131,7 @@ export default function OfferFormScreen({ route, navigation }) {
                                     <View style={styles.variantInfo}>
                                       <Text style={styles.variantLabel}>{variant.label}</Text>
                                       {variant.quantities && variant.quantities.length > 0 ? (
-                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
-                                          {variant.quantities.map((q, qIdx) => {
-                                            const qOfferPrice = discountPercent > 0 ? Math.round(q.price * (1 - discountPercent / 100)) : q.price;
-                                            return (
-                                              <View key={qIdx} style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                                                <Text style={{ fontSize: 10, color: '#4b5563', fontWeight: '600' }}>
-                                                  {q.quantity} {q.unit} — {discountPercent > 0 ? `₹${qOfferPrice}` : `₹${q.price}`}
-                                                </Text>
-                                              </View>
-                                            );
-                                          })}
-                                        </View>
+                                        <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>{variant.quantities.length} sizes</Text>
                                       ) : (
                                         <View style={styles.priceContainer}>
                                           {discountPercent > 0 ? (
@@ -1160,18 +1149,34 @@ export default function OfferFormScreen({ route, navigation }) {
                                         </View>
                                       )}
                                     </View>
-                                    <View style={[
-                                      styles.variantAvailBadge,
-                                      { backgroundColor: variant.available !== false ? '#D1FAE5' : '#FEE2E2' }
-                                    ]}>
-                                      <Text style={[
-                                        styles.variantAvailText,
-                                        { color: variant.available !== false ? '#16A34A' : '#DC2626' }
-                                      ]}>
-                                        {variant.available !== false ? 'Active' : 'Off'}
-                                      </Text>
-                                    </View>
+                                    {vSelected && (
+                                      <View style={{ backgroundColor: '#D1FAE5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                                        <Text style={{ fontSize: 9, fontWeight: '700', color: '#16A34A' }}>Active</Text>
+                                      </View>
+                                    )}
                                   </TouchableOpacity>
+                                  {/* Quantity/size sub-rows */}
+                                  {variant.quantities && variant.quantities.length > 0 && (
+                                    <View style={{ backgroundColor: '#fafafa' }}>
+                                      {variant.quantities.map((q, qIdx) => {
+                                        const qOfferPrice = discountPercent > 0 ? Math.round(q.price * (1 - discountPercent / 100)) : q.price;
+                                        return (
+                                          <View key={qIdx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 5, paddingLeft: 68, paddingRight: 16, borderBottomWidth: qIdx < variant.quantities.length - 1 ? 0.5 : 0, borderColor: '#f0f0f0' }}>
+                                            <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: '#d1d5db', marginRight: 10 }} />
+                                            <Text style={{ fontSize: 11, fontWeight: '500', color: '#4b5563', flex: 1 }}>{q.quantity} {q.unit}</Text>
+                                            {discountPercent > 0 && vSelected ? (
+                                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                <Text style={{ fontSize: 10, color: '#9ca3af', textDecorationLine: 'line-through' }}>₹{q.price}</Text>
+                                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#16a34a' }}>₹{qOfferPrice}</Text>
+                                              </View>
+                                            ) : (
+                                              <Text style={{ fontSize: 11, color: '#6b7280' }}>₹{q.price}</Text>
+                                            )}
+                                          </View>
+                                        );
+                                      })}
+                                    </View>
+                                  )}
                                 );
                               })}
                             </View>
