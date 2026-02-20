@@ -841,7 +841,9 @@ export default function OffersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16 md:pt-20">
+    <div className="min-h-screen bg-gray-50">
+      {/* Navbar spacer with dark bg so navbar text is visible */}
+      <div className="h-16 md:h-20 bg-gray-900"></div>
       {loading ? (
         // Loading State
         <div className="min-h-screen flex items-center justify-center">
