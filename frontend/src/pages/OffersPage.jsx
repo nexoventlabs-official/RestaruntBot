@@ -29,6 +29,8 @@ export default function OffersPage() {
   const itemsGridRef = useRef(null);
   const [selectedItem, setSelectedItem] = useState(null);
   const [dialogQuantity, setDialogQuantity] = useState(1);
+  const [selectedVariantIndex, setSelectedVariantIndex] = useState(null);
+  const [selectedQuantityIndex, setSelectedQuantityIndex] = useState(null);
   const [customerPhone, setCustomerPhone] = useState(null);
   const [activeOffers, setActiveOffers] = useState([]);
   const [discountedPrices, setDiscountedPrices] = useState({});
@@ -554,42 +556,51 @@ export default function OffersPage() {
   const handleWhatsAppOrder = (item, e) => {
     e?.stopPropagation();
     
-    // Format food type
-    const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : 
-                          item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
-                          item.foodType === 'egg' ? '🥚 Egg' : '';
-    
-    // Rating display with gold stars
-    let ratingDisplay = '';
-    if (item.totalRatings > 0) {
-      const fullStars = Math.floor(item.avgRating || 0);
-      const emptyStars = 5 - fullStars;
-      const goldStars = '★'.repeat(fullStars) + '☆'.repeat(emptyStars);
-      ratingDisplay = `${goldStars} ${item.avgRating} (${item.totalRatings} reviews)`;
-    } else {
-      ratingDisplay = '☆☆☆☆☆ No ratings yet';
+    // If item has variants/sizes, open dialog for user to select
+    if (item.variants && item.variants.length > 0) {
+      openItemDialog(item);
+      return;
     }
     
-    // Build message like chatbot format
-    let msg = `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n\n`;
-    msg += `${ratingDisplay}\n\n`;
-    msg += `💰 *Price:* ₹${item.price}`;
-    if (item.originalPrice && item.originalPrice > item.price) {
-      const discount = Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100);
-      msg += ` (${discount}% OFF - Was ₹${item.originalPrice})`;
-    }
-    msg += ` / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
-    msg += `⏱️ *Prep Time:* ${item.preparationTime || 15} mins\n`;
-    if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
-    msg += `\n📝 ${item.description || 'Delicious dish prepared fresh!'}`;
+    // Simple item without variants - send WhatsApp directly
+    let msg = `I'd like to order *${item.name}*`;
+    msg += `\n💰 ₹${item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price}`;
+    msg += `\n#WEB_${item._id}`;
     
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   // Open item detail dialog
-  const openItemDialog = (item) => {
+  const openItemDialog = (item, preselectedVariantIndex = null) => {
     setSelectedItem(item);
     setDialogQuantity(cart?.find(c => c._id === item._id)?.quantity || 1);
+    // If a specific variant was pre-selected (e.g., from variant card click), use it
+    if (preselectedVariantIndex !== null) {
+      setSelectedVariantIndex(preselectedVariantIndex);
+      const variant = item.variants?.[preselectedVariantIndex];
+      if (variant?.quantities?.length > 0) {
+        setSelectedQuantityIndex(0);
+      } else {
+        setSelectedQuantityIndex(null);
+      }
+    } else if (item._isVariantCard) {
+      // Variant card clicked — pre-select its variant and quantity
+      setSelectedVariantIndex(item._variantIndex);
+      setSelectedQuantityIndex(item._quantityIndex ?? (item.variants?.[item._variantIndex]?.quantities?.length > 0 ? 0 : null));
+    } else if (item.variants && item.variants.length > 0) {
+      // Auto-select first available variant
+      const firstAvailable = item.variants.findIndex(v => v.available !== false);
+      const idx = firstAvailable >= 0 ? firstAvailable : 0;
+      setSelectedVariantIndex(idx);
+      if (item.variants[idx]?.quantities?.length > 0) {
+        setSelectedQuantityIndex(0);
+      } else {
+        setSelectedQuantityIndex(null);
+      }
+    } else {
+      setSelectedVariantIndex(null);
+      setSelectedQuantityIndex(null);
+    }
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
     if (window.lenis) window.lenis.stop();
@@ -599,14 +610,63 @@ export default function OffersPage() {
   const closeItemDialog = () => {
     setSelectedItem(null);
     setDialogQuantity(1);
+    setSelectedVariantIndex(null);
+    setSelectedQuantityIndex(null);
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
     if (window.lenis) window.lenis.start();
   };
 
+  // Helper: get effective price/image for selected variant or base item
+  const getDialogItemDetails = () => {
+    if (!selectedItem) return { price: 0, offerPrice: null, image: null };
+    if (selectedVariantIndex !== null && selectedItem.variants?.[selectedVariantIndex]) {
+      const v = selectedItem.variants[selectedVariantIndex];
+      // If quantity option is selected, use its price
+      if (selectedQuantityIndex !== null && v.quantities?.[selectedQuantityIndex]) {
+        const q = v.quantities[selectedQuantityIndex];
+        return {
+          price: q.price,
+          offerPrice: q.offerPrice && q.offerPrice < q.price ? q.offerPrice : null,
+          image: v.image || selectedItem.image,
+          label: `${v.label} (${q.quantity} ${q.unit})`,
+          available: v.available !== false,
+          quantityUnit: `${q.quantity} ${q.unit}`,
+          description: v.description || selectedItem.description
+        };
+      }
+      return {
+        price: v.price,
+        offerPrice: v.offerPrice && v.offerPrice < v.price ? v.offerPrice : null,
+        image: v.image || selectedItem.image,
+        label: v.label,
+        available: v.available !== false,
+        description: v.description || selectedItem.description
+      };
+    }
+    return {
+      price: selectedItem.price,
+      offerPrice: selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price ? selectedItem.offerPrice : null,
+      image: selectedItem.image,
+      label: null,
+      available: true,
+      description: selectedItem.description
+    };
+  };
+
   // Add to cart from dialog
   const handleDialogAddToCart = () => {
     if (!selectedItem || !addToCart) return;
+    const details = getDialogItemDetails();
+    const variant = selectedVariantIndex !== null ? selectedItem.variants?.[selectedVariantIndex] : null;
+    const cartVariantOpts = variant ? { variantIndex: selectedVariantIndex, label: variant.label, price: details.price, offerPrice: details.offerPrice, image: details.image } : null;
+    if (cartVariantOpts && selectedQuantityIndex !== null && variant?.quantities?.[selectedQuantityIndex]) {
+      cartVariantOpts.quantityIndex = selectedQuantityIndex;
+      const q = variant.quantities[selectedQuantityIndex];
+      cartVariantOpts.quantityLabel = `${q.quantity} ${q.unit}`;
+      cartVariantOpts.price = q.price;
+      cartVariantOpts.offerPrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : null;
+    }
     
     // If viewing a specific targeted offer, include offer info
     let offerInfo = null;
@@ -621,8 +681,7 @@ export default function OffersPage() {
       };
     }
     
-    // Add with quantity and offer info
-    addToCart(selectedItem, dialogQuantity, offerInfo);
+    addToCart(selectedItem, dialogQuantity, offerInfo, cartVariantOpts);
     closeItemDialog();
   };
 
@@ -630,16 +689,22 @@ export default function OffersPage() {
   const handleDialogWhatsApp = () => {
     if (!selectedItem) return;
     const item = selectedItem;
+    const details = getDialogItemDetails();
+    const variant = selectedVariantIndex !== null ? item.variants?.[selectedVariantIndex] : null;
+    const unitPrice = details.offerPrice || details.price;
     
-    const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : 
-                          item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
-                          item.foodType === 'egg' ? '🥚 Egg' : '';
-    
-    let msg = `Hi! I'd like to order:\n\n`;
-    msg += `*${item.name}*${foodTypeLabel ? ` ${foodTypeLabel}` : ''}\n`;
-    msg += `📦 *Quantity:* ${dialogQuantity}\n`;
-    msg += `💰 *Price:* Qty: ${dialogQuantity} × ₹${item.price} = ₹${item.price * dialogQuantity}\n`;
-    msg += `\nPlease confirm my order. Thank you!`;
+    // Message with item ID & variant for chatbot to send catalog product card
+    let msg = `I'd like to order *${item.name}*`;
+    if (variant) msg += ` - ${variant.label}`;
+    if (selectedQuantityIndex !== null && variant?.quantities?.[selectedQuantityIndex]) {
+      const q = variant.quantities[selectedQuantityIndex];
+      msg += ` (${q.quantity} ${q.unit})`;
+    }
+    msg += ` x${dialogQuantity}`;
+    msg += `\n💰 ₹${unitPrice * dialogQuantity}`;
+    msg += `\n#WEB_${item._id}`;
+    if (selectedVariantIndex !== null) msg += `_v${selectedVariantIndex}`;
+    if (selectedQuantityIndex !== null) msg += `_q${selectedQuantityIndex}`;
     
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
     closeItemDialog();
@@ -1125,15 +1190,19 @@ export default function OffersPage() {
 
             {/* Left Side - Image (PC) / Top (Mobile) */}
             <div className="relative h-40 sm:h-56 lg:h-auto lg:w-[45%] bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center flex-shrink-0">
-              {selectedItem.image ? (
-                <img 
-                  src={selectedItem.image} 
-                  alt={selectedItem.name}
-                  className="max-h-full max-w-full object-contain p-4 sm:p-6 lg:p-8"
-                />
-              ) : (
-                <span className="text-6xl sm:text-7xl lg:text-8xl">🍽️</span>
-              )}
+              {(() => {
+                const d = getDialogItemDetails();
+                const dialogImage = d.image || selectedItem.image;
+                return dialogImage ? (
+                  <img 
+                    src={dialogImage} 
+                    alt={selectedItem.name}
+                    className="max-h-full max-w-full object-contain p-4 sm:p-6 lg:p-8"
+                  />
+                ) : (
+                  <span className="text-6xl sm:text-7xl lg:text-8xl">🍽️</span>
+                );
+              })()}
               
               {/* Food Type Badge */}
               {selectedItem.foodType && selectedItem.foodType !== 'none' && (
@@ -1184,28 +1253,25 @@ export default function OffersPage() {
               </div>
 
               {/* Price */}
-              <div className="flex items-center gap-3 mb-3 flex-wrap">
-                {/* Current Price - Large and prominent */}
-                <div className="text-3xl sm:text-4xl lg:text-5xl font-bold text-orange-500">
-                  ₹{(() => {
-                    const dialogOfferPrice = getOfferPriceFromOffer(selectedItem);
-                    return dialogOfferPrice && dialogOfferPrice < selectedItem.price ? dialogOfferPrice : selectedItem.price;
-                  })()}
-                </div>
-                
-                {/* Original Price & Discount Badge - Only if there's a discount */}
-                {(() => {
-                  const dialogOfferPrice = getOfferPriceFromOffer(selectedItem);
-                  return dialogOfferPrice && dialogOfferPrice < selectedItem.price && (
-                    <>
-                      <span className="text-lg sm:text-xl text-gray-400 line-through">₹{selectedItem.price}</span>
-                      <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold">
-                        {Math.round(((selectedItem.price - dialogOfferPrice) / selectedItem.price) * 100)}% OFF
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
+              {(() => {
+                const d = getDialogItemDetails();
+                const displayPrice = d.offerPrice || d.price;
+                return (
+                  <div className="flex items-center gap-3 mb-3 flex-wrap">
+                    <div className="text-3xl sm:text-4xl lg:text-5xl font-bold text-orange-500">
+                      ₹{displayPrice}
+                    </div>
+                    {d.offerPrice && (
+                      <>
+                        <span className="text-lg sm:text-xl text-gray-400 line-through">₹{d.price}</span>
+                        <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold">
+                          {Math.round(((d.price - d.offerPrice) / d.price) * 100)}% OFF
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Offer Type Tags */}
               {selectedItem.offerType && (Array.isArray(selectedItem.offerType) ? selectedItem.offerType : [selectedItem.offerType]).length > 0 && (
@@ -1234,12 +1300,89 @@ export default function OffersPage() {
                 </span>
               </div>
 
-              {/* Description */}
-              {selectedItem.description && (
-                <p className="text-gray-600 text-sm sm:text-base lg:text-base mb-4 leading-relaxed">
-                  {selectedItem.description}
-                </p>
+              {/* Variant Selector */}
+              {selectedItem.variants && selectedItem.variants.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-sm font-semibold text-gray-700 mb-2">
+                    {selectedItem.variants[0]?.variantType === 'color' ? 'Color' : 'Items'}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedItem.variants.map((v, idx) => {
+                      const isSelected = selectedVariantIndex === idx;
+                      const isAvailable = v.available !== false;
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            if (!isAvailable) return;
+                            setSelectedVariantIndex(idx);
+                            if (v.quantities?.length > 0) {
+                              setSelectedQuantityIndex(0);
+                            } else {
+                              setSelectedQuantityIndex(null);
+                            }
+                          }}
+                          disabled={!isAvailable}
+                          className={`px-4 py-2 rounded-xl text-sm font-medium border-2 transition-all ${
+                            isSelected
+                              ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-sm'
+                              : isAvailable
+                                ? 'border-gray-200 bg-white text-gray-700 hover:border-orange-300 hover:bg-orange-50'
+                                : 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed line-through'
+                          }`}
+                        >
+                          {v.label}
+                          {isAvailable && !v.quantities?.length && (
+                            <span className="ml-1.5 text-xs text-gray-400">
+                              ₹{v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price}
+                            </span>
+                          )}
+                          {!isAvailable && (
+                            <span className="ml-1.5 text-xs">Sold Out</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
+
+              {/* Quantity Option Selector (e.g., 750 ml, 1 kg) */}
+              {selectedVariantIndex !== null && selectedItem.variants?.[selectedVariantIndex]?.quantities?.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-sm font-semibold text-gray-700 mb-2">Choose Size</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedItem.variants[selectedVariantIndex].quantities.map((q, qIdx) => {
+                      const isSelected = selectedQuantityIndex === qIdx;
+                      const qPrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+                      return (
+                        <button
+                          key={qIdx}
+                          onClick={() => setSelectedQuantityIndex(qIdx)}
+                          className={`px-4 py-2 rounded-xl text-sm font-medium border-2 transition-all ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm'
+                              : 'border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50'
+                          }`}
+                        >
+                          {q.quantity} {q.unit}
+                          <span className="ml-1.5 text-xs text-gray-400">₹{qPrice}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Description */}
+              {(() => {
+                const desc = getDialogItemDetails().description || selectedItem.description;
+                return desc ? (
+                  <p className="text-gray-600 text-sm sm:text-base lg:text-base mb-4 leading-relaxed">
+                    {desc}
+                  </p>
+                ) : null;
+              })()}
 
               {/* Details Grid */}
               <div className="grid grid-cols-2 gap-3 mb-5">
@@ -1257,7 +1400,17 @@ export default function OffersPage() {
                   <Package className="w-5 h-5 text-orange-500" />
                   <div>
                     <p className="text-xs text-gray-500">Unit</p>
-                    <p className="font-semibold text-gray-900">{selectedItem.quantity || 1} {selectedItem.unit || 'piece'}</p>
+                    <p className="font-semibold text-gray-900">
+                      {(() => {
+                        const d = getDialogItemDetails();
+                        if (d.quantityUnit) return d.quantityUnit;
+                        if (selectedVariantIndex !== null && selectedItem.variants?.[selectedVariantIndex]) {
+                          const v = selectedItem.variants[selectedVariantIndex];
+                          return `${v.quantity || selectedItem.quantity || 1} ${v.unit || selectedItem.unit || 'piece'}`;
+                        }
+                        return `${selectedItem.quantity || 1} ${selectedItem.unit || 'piece'}`;
+                      })()}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1285,7 +1438,11 @@ export default function OffersPage() {
               {/* Total Price */}
               <div className="flex items-center justify-between mb-5 pb-4 border-b border-gray-100">
                 <span className="text-gray-600">Total</span>
-                <span className="text-2xl font-bold text-gray-900">₹{selectedItem.price * dialogQuantity}</span>
+                {(() => {
+                  const d = getDialogItemDetails();
+                  const unitPrice = d.offerPrice || d.price;
+                  return <span className="text-2xl font-bold text-gray-900">₹{unitPrice * dialogQuantity}</span>;
+                })()}
               </div>
 
               {/* Action Buttons */}
