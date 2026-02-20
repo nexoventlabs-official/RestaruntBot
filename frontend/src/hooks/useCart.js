@@ -53,8 +53,16 @@ export function useCart() {
         // If cart item has a variant, sync from the specific variant data
         if (cartItem.variantIndex !== null && cartItem.variantIndex !== undefined && latestItem.variants?.[cartItem.variantIndex]) {
           const v = latestItem.variants[cartItem.variantIndex];
-          const variantPrice = v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price;
-          const variantOriginal = v.offerPrice && v.offerPrice < v.price ? v.price : undefined;
+          let variantPrice, variantOriginal;
+          // If quantity index is set, use quantity-level data
+          if (cartItem.quantityIndex !== null && cartItem.quantityIndex !== undefined && v.quantities?.[cartItem.quantityIndex]) {
+            const q = v.quantities[cartItem.quantityIndex];
+            variantPrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+            variantOriginal = q.offerPrice && q.offerPrice < q.price ? q.price : undefined;
+          } else {
+            variantPrice = v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price;
+            variantOriginal = v.offerPrice && v.offerPrice < v.price ? v.price : undefined;
+          }
           return {
             ...cartItem,
             name: latestItem.name,
@@ -139,6 +147,40 @@ export function useCart() {
     setWishlist(prev => prev.map(wishlistItem => {
       const latestItem = menuMap.get(wishlistItem._id);
       if (latestItem) {
+        // If wishlist item has a variant, sync from the specific variant data
+        if (wishlistItem.variantIndex !== null && wishlistItem.variantIndex !== undefined && latestItem.variants?.[wishlistItem.variantIndex]) {
+          const v = latestItem.variants[wishlistItem.variantIndex];
+          // If quantity index is set, use quantity-level data
+          let syncPrice, syncOriginal;
+          if (wishlistItem.quantityIndex !== null && wishlistItem.quantityIndex !== undefined && v.quantities?.[wishlistItem.quantityIndex]) {
+            const q = v.quantities[wishlistItem.quantityIndex];
+            syncPrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+            syncOriginal = q.offerPrice && q.offerPrice < q.price ? q.price : undefined;
+          } else {
+            syncPrice = v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price;
+            syncOriginal = v.offerPrice && v.offerPrice < v.price ? v.price : undefined;
+          }
+          // Build display name: parent name + variant label (if variantLabel is set)
+          const displayName = wishlistItem.variantLabel 
+            ? `${latestItem.name}` // variantLabel shown separately in sidebar
+            : (wishlistItem.name?.includes(' - ') ? `${latestItem.name} - ${v.label}` : latestItem.name);
+          return {
+            ...wishlistItem,
+            name: displayName,
+            price: syncPrice,
+            originalPrice: syncOriginal,
+            image: v.image || latestItem.image,
+            unit: latestItem.unit || 'piece',
+            unitQty: latestItem.quantity || 1,
+            variantLabel: wishlistItem.variantLabel || null,
+            offerInfo: syncOriginal ? {
+              offerType: Array.isArray(latestItem.offerType) ? latestItem.offerType.join(', ') : (latestItem.offerType || 'Special Offer'),
+              title: Array.isArray(latestItem.offerType) ? latestItem.offerType.join(', ') : (latestItem.offerType || 'Special Offer'),
+              isRegularOffer: true
+            } : wishlistItem.offerInfo
+          };
+        }
+        
         // Check if this is a regular offer item (not targeted)
         const isRegularOffer = wishlistItem.offerInfo?.isRegularOffer;
         const isTargetedOffer = wishlistItem.offerInfo && !wishlistItem.offerInfo.isRegularOffer;
