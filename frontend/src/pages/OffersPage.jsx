@@ -241,25 +241,22 @@ export default function OffersPage() {
     return Math.round(((item.price - offerPrice) / item.price) * 100);
   };
 
-  // Filter items that have at least one offer type OR are in specificOffer's appliedItems/appliedCategories
+  // Filter items that have at least one offer type OR are in specificOffer's appliedItems/appliedCategories/appliedVariants/appliedQuantities
   const itemsWithOfferTypes = items.filter(item => {
     // If we have a specific offer, check if item is in appliedItems or appliedCategories
     if (specificOffer) {
       const hasAppliedItems = specificOffer.appliedItems && specificOffer.appliedItems.length > 0;
       const hasAppliedCategories = specificOffer.appliedCategories && specificOffer.appliedCategories.length > 0;
+      const hasAppliedVariants = specificOffer.appliedVariants && specificOffer.appliedVariants.length > 0;
+      const hasAppliedQuantities = specificOffer.appliedQuantities && specificOffer.appliedQuantities.length > 0;
       
-      if (hasAppliedItems || hasAppliedCategories) {
-        // Check if item is in appliedItems
-        if (hasAppliedItems && specificOffer.appliedItems.includes(item._id)) {
-          return true;
-        }
-        // Check if item's category is in appliedCategories
-        if (hasAppliedCategories && specificOffer.appliedCategories.includes(item.category)) {
-          return true;
-        }
+      if (hasAppliedItems || hasAppliedCategories || hasAppliedVariants || hasAppliedQuantities) {
+        if (hasAppliedItems && specificOffer.appliedItems.includes(item._id)) return true;
+        if (hasAppliedCategories && specificOffer.appliedCategories.includes(item.category)) return true;
+        if (hasAppliedVariants && specificOffer.appliedVariants.some(v => v.startsWith(item._id + '_'))) return true;
+        if (hasAppliedQuantities && specificOffer.appliedQuantities.some(q => q.startsWith(item._id + '_'))) return true;
         return false;
       }
-      // If offer has no appliedItems/appliedCategories but has offerType, filter by offerType
       if (specificOffer.offerType) {
         const itemOfferTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
         return itemOfferTypes.includes(specificOffer.offerType);
@@ -271,28 +268,101 @@ export default function OffersPage() {
   });
 
   // Apply offer type filter and search filter
-  const filteredItems = (selectedOfferType 
+  const filteredParentItems = (selectedOfferType 
     ? itemsWithOfferTypes.filter(item => {
-        // If we have a specific offer, items are already filtered above
-        if (specificOffer) {
-          return true; // Already filtered by appliedItems/appliedCategories/offerType
-        }
-        // Otherwise filter by offerType
+        if (specificOffer) return true;
         const itemOfferTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
         return itemOfferTypes.includes(selectedOfferType);
       })
-    : itemsWithOfferTypes // Show all items with offer types when no specific offer selected
+    : itemsWithOfferTypes
   ).filter(item => {
-    // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       return (
         item.name.toLowerCase().includes(query) ||
         item.description?.toLowerCase().includes(query) ||
-        item.tags?.some(tag => tag.toLowerCase().includes(query))
+        item.tags?.some(tag => tag.toLowerCase().includes(query)) ||
+        item.variants?.some(v => v.label?.toLowerCase().includes(query))
       );
     }
     return true;
+  });
+
+  // Flatten parent items into individual variant/quantity cards
+  // Each variant or quantity with offerPrice gets its own card
+  const filteredItems = filteredParentItems.flatMap(item => {
+    if (!item.variants || item.variants.length === 0) {
+      // No variants — show as parent item card
+      return [item];
+    }
+    
+    // Check if any variant/quantity has an offerPrice
+    const hasAnyVariantOffer = item.variants.some(v => 
+      v.offerPrice || (v.quantities && v.quantities.some(q => q.offerPrice))
+    );
+    
+    // If parent item has offerPrice and ALL variants have offerPrice, show as single parent card
+    if (item.offerPrice && !hasAnyVariantOffer) {
+      return [item];
+    }
+    
+    // If no variant-level offers, show parent item card
+    if (!hasAnyVariantOffer && !item.offerPrice) {
+      return [item];
+    }
+    
+    // Expand into variant-level cards
+    const cards = [];
+    item.variants.forEach((v, vi) => {
+      const hasQuantities = v.quantities && v.quantities.length > 0;
+      
+      if (hasQuantities) {
+        // Check if any quantity has offerPrice
+        const anyQtyOffer = v.quantities.some(q => q.offerPrice);
+        
+        if (v.offerPrice || anyQtyOffer) {
+          // Show each quantity as its own card
+          v.quantities.forEach((q, qi) => {
+            if (q.offerPrice || v.offerPrice) {
+              cards.push({
+                ...item,
+                _id: item._id, // keep original ID for cart/wishlist
+                _variantKey: `${item._id}_v${vi}_q${qi}`, // unique key for rendering
+                _isVariantCard: true,
+                _variantIndex: vi,
+                _quantityIndex: qi,
+                name: `${item.name} - ${v.label}`,
+                image: v.image || item.image,
+                foodType: v.foodType || item.foodType,
+                price: q.price,
+                offerPrice: q.offerPrice || (v.offerPrice ? Math.round(q.price * (v.offerPrice / v.price)) : null),
+                quantity: q.quantity,
+                unit: q.unit,
+              });
+            }
+          });
+        }
+      } else if (v.offerPrice) {
+        // Variant without quantities but has offerPrice
+        cards.push({
+          ...item,
+          _id: item._id,
+          _variantKey: `${item._id}_v${vi}`,
+          _isVariantCard: true,
+          _variantIndex: vi,
+          name: `${item.name} - ${v.label}`,
+          image: v.image || item.image,
+          foodType: v.foodType || item.foodType,
+          price: v.price,
+          offerPrice: v.offerPrice,
+          quantity: item.quantity,
+          unit: item.unit,
+        });
+      }
+    });
+    
+    // If we generated variant cards, return them; otherwise fall back to parent
+    return cards.length > 0 ? cards : [item];
   });
 
   // Get unique offer types from offers
@@ -909,7 +979,7 @@ export default function OffersPage() {
 
               return (
                 <div 
-                  key={item._id} 
+                  key={item._variantKey || item._id} 
                   className="group relative bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 ease-out flex sm:flex-col cursor-pointer"
                   onClick={() => openItemDialog(item)}
                 >
