@@ -485,6 +485,33 @@ export default function OffersPage() {
     }
   };
 
+  // Look up the actual offer name/title for an item
+  const getOfferLabel = (item) => {
+    if (specificOffer) return specificOffer.title || specificOffer.offerType || 'Special Offer';
+    // Try to find matching offer from offers array
+    const match = offers.find(o => {
+      if (o.appliedItems?.includes(item._id)) return true;
+      if (o.appliedVariants?.some(v => v.startsWith(item._id + '_'))) return true;
+      if (o.appliedQuantities?.some(q => q.startsWith(item._id + '_'))) return true;
+      if (o.appliedCategories?.includes(item.category)) return true;
+      return false;
+    });
+    if (match) return match.title || match.offerType || 'Special Offer';
+    return Array.isArray(item.offerType) ? item.offerType.join(', ') : (item.offerType || 'Special Offer');
+  };
+
+  // Look up the matching offer object for an item
+  const getMatchingOffer = (item) => {
+    if (specificOffer) return specificOffer;
+    return offers.find(o => {
+      if (o.appliedItems?.includes(item._id)) return true;
+      if (o.appliedVariants?.some(v => v.startsWith(item._id + '_'))) return true;
+      if (o.appliedQuantities?.some(q => q.startsWith(item._id + '_'))) return true;
+      if (o.appliedCategories?.includes(item.category)) return true;
+      return false;
+    }) || null;
+  };
+
   // Build wishlistKey for an item (variant-aware)
   const getWishlistKey = (item) => {
     if (item._isVariantCard) {
@@ -517,6 +544,8 @@ export default function OffersPage() {
       const v = item.variants?.[item._variantIndex];
       const q = v?.quantities?.[item._quantityIndex];
       const hasOffer = item.offerPrice && item.offerPrice < item.price;
+      const offerLabel = getOfferLabel(item);
+      const matchOffer = getMatchingOffer(item);
       addToWishlist({
         ...item,
         wishlistKey: wishKey,
@@ -527,12 +556,12 @@ export default function OffersPage() {
         image: v?.image || item.image,
         price: hasOffer ? item.offerPrice : item.price,
         originalPrice: hasOffer ? item.price : null,
-        offerInfo: hasOffer ? {
-          offerType: Array.isArray(item.offerType) ? item.offerType.join(', ') : (item.offerType || 'Special Offer'),
-          title: Array.isArray(item.offerType) ? item.offerType.join(', ') : (item.offerType || 'Special Offer'),
-          isRegularOffer: true
-        } : null
-      });
+      }, hasOffer ? {
+        offerId: matchOffer?._id || null,
+        offerType: offerLabel,
+        title: offerLabel,
+        isRegularOffer: true
+      } : null);
     } else if (item.variants && item.variants.length > 0) {
       // Parent item with variants — wishlist first available variant
       const firstAvailIdx = item.variants.findIndex(v => v.available !== false);
@@ -546,6 +575,8 @@ export default function OffersPage() {
       const origPrice = q ? q.price : v.price;
       const offerP = q ? (q.offerPrice && q.offerPrice < q.price ? q.offerPrice : null) : (v.offerPrice && v.offerPrice < v.price ? v.offerPrice : null);
       const displayP = offerP || origPrice;
+      const offerLabel2 = getOfferLabel(item);
+      const matchOffer2 = getMatchingOffer(item);
       addToWishlist({
         ...item,
         wishlistKey: wKey,
@@ -556,12 +587,12 @@ export default function OffersPage() {
         image: v.image || item.image,
         price: displayP,
         originalPrice: offerP ? origPrice : null,
-        offerInfo: offerP ? {
-          offerType: Array.isArray(item.offerType) ? item.offerType.join(', ') : (item.offerType || 'Special Offer'),
-          title: Array.isArray(item.offerType) ? item.offerType.join(', ') : (item.offerType || 'Special Offer'),
-          isRegularOffer: true
-        } : null
-      });
+      }, offerP ? {
+        offerId: matchOffer2?._id || null,
+        offerType: offerLabel2,
+        title: offerLabel2,
+        isRegularOffer: true
+      } : null);
     } else {
       // Simple item without variants
       // Check if item has a customer-specific discounted price from activeOffers
@@ -713,16 +744,27 @@ export default function OffersPage() {
       cartVariantOpts.offerPrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : null;
     }
     
-    // If viewing a specific targeted offer, include offer info
+    // Include offer info for cart items
     let offerInfo = null;
-    if (specificOffer && specificOffer.isTargeted) {
+    if (specificOffer) {
       offerInfo = {
         offerId: specificOffer._id,
         offerType: specificOffer.offerType,
         title: specificOffer.title,
         discountType: specificOffer.discountType,
         discountValue: specificOffer.discountValue,
-        percentage: specificOffer.percentage
+        percentage: specificOffer.percentage,
+        isTargetedOffer: !!specificOffer.isTargeted
+      };
+    } else if (details.offerPrice && details.offerPrice < details.price) {
+      // Regular offer with variant-level offerPrice
+      const cartOfferLabel = getOfferLabel(selectedItem);
+      const cartMatchOffer = getMatchingOffer(selectedItem);
+      offerInfo = {
+        offerId: cartMatchOffer?._id || null,
+        offerType: cartOfferLabel,
+        title: cartOfferLabel,
+        isRegularOffer: true
       };
     }
     
