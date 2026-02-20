@@ -512,17 +512,26 @@ export default function OffersPage() {
       removeFromWishlist(wishKey);
     } else if (item._isVariantCard) {
       // Variant card — add with variant-specific info
+      // item.name already includes the variant label (e.g., "Milk shake - Oreo milk shake")
+      // so set variantLabel to null to avoid duplication in wishlist display
       const v = item.variants?.[item._variantIndex];
       const q = v?.quantities?.[item._quantityIndex];
+      const hasOffer = item.offerPrice && item.offerPrice < item.price;
       addToWishlist({
         ...item,
         wishlistKey: wishKey,
         variantIndex: item._variantIndex,
-        variantLabel: v?.label || null,
+        variantLabel: null, // name already includes variant label
         quantityIndex: item._quantityIndex ?? null,
         quantityLabel: q ? `${q.quantity} ${q.unit}` : null,
         image: v?.image || item.image,
-        price: item.offerPrice || item.price
+        price: hasOffer ? item.offerPrice : item.price,
+        originalPrice: hasOffer ? item.price : null,
+        offerInfo: hasOffer ? {
+          offerType: Array.isArray(item.offerType) ? item.offerType.join(', ') : (item.offerType || 'Special Offer'),
+          title: Array.isArray(item.offerType) ? item.offerType.join(', ') : (item.offerType || 'Special Offer'),
+          isRegularOffer: true
+        } : null
       });
     } else if (item.variants && item.variants.length > 0) {
       // Parent item with variants — wishlist first available variant
@@ -534,7 +543,9 @@ export default function OffersPage() {
       let qIdx = null;
       let q = null;
       if (hasQty) { qIdx = 0; q = v.quantities[0]; wKey += `_q${qIdx}`; }
-      const price = q ? (q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price) : (v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price);
+      const origPrice = q ? q.price : v.price;
+      const offerP = q ? (q.offerPrice && q.offerPrice < q.price ? q.offerPrice : null) : (v.offerPrice && v.offerPrice < v.price ? v.offerPrice : null);
+      const displayP = offerP || origPrice;
       addToWishlist({
         ...item,
         wishlistKey: wKey,
@@ -543,7 +554,13 @@ export default function OffersPage() {
         quantityIndex: qIdx,
         quantityLabel: q ? `${q.quantity} ${q.unit}` : null,
         image: v.image || item.image,
-        price
+        price: displayP,
+        originalPrice: offerP ? origPrice : null,
+        offerInfo: offerP ? {
+          offerType: Array.isArray(item.offerType) ? item.offerType.join(', ') : (item.offerType || 'Special Offer'),
+          title: Array.isArray(item.offerType) ? item.offerType.join(', ') : (item.offerType || 'Special Offer'),
+          isRegularOffer: true
+        } : null
       });
     } else {
       // Simple item without variants
