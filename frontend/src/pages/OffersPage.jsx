@@ -841,7 +841,7 @@ export default function OffersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pt-16 md:pt-20">
       {loading ? (
         // Loading State
         <div className="min-h-screen flex items-center justify-center">
