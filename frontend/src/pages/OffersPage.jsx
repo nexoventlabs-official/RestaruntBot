@@ -406,6 +406,12 @@ export default function OffersPage() {
   const handleAddToCart = (item) => {
     if (!addToCart) return;
     
+    // If item has variants, open the dialog so user can choose a variant
+    if (item.variants && item.variants.length > 0) {
+      openItemDialog(item);
+      return;
+    }
+    
     // Check if item has a customer-specific discounted price from activeOffers
     const targetedDiscount = discountedPrices[item._id];
     const regularOfferPrice = getOfferPriceFromOffer(item);
@@ -479,74 +485,96 @@ export default function OffersPage() {
     }
   };
 
+  // Build wishlistKey for an item (variant-aware)
+  const getWishlistKey = (item) => {
+    if (item._isVariantCard) {
+      let key = `${item._id}_v${item._variantIndex}`;
+      if (item._quantityIndex !== null && item._quantityIndex !== undefined) key += `_q${item._quantityIndex}`;
+      return key;
+    }
+    return item._id;
+  };
+
+  // Build cartKey for an item (variant-aware)
+  const getCartKey = (item) => {
+    if (item._isVariantCard) {
+      let key = `${item._id}_v${item._variantIndex}`;
+      if (item._quantityIndex !== null && item._quantityIndex !== undefined) key += `_q${item._quantityIndex}`;
+      return key;
+    }
+    return item._id;
+  };
+
   const handleToggleWishlist = (item) => {
     if (!addToWishlist || !removeFromWishlist || !isInWishlist) return;
-    if (isInWishlist(item._id)) {
-      removeFromWishlist(item._id);
+    const wishKey = getWishlistKey(item);
+    if (isInWishlist(wishKey)) {
+      removeFromWishlist(wishKey);
+    } else if (item._isVariantCard) {
+      // Variant card — add with variant-specific info
+      const v = item.variants?.[item._variantIndex];
+      const q = v?.quantities?.[item._quantityIndex];
+      addToWishlist({
+        ...item,
+        wishlistKey: wishKey,
+        variantIndex: item._variantIndex,
+        variantLabel: v?.label || null,
+        quantityIndex: item._quantityIndex ?? null,
+        quantityLabel: q ? `${q.quantity} ${q.unit}` : null,
+        image: v?.image || item.image,
+        price: item.offerPrice || item.price
+      });
+    } else if (item.variants && item.variants.length > 0) {
+      // Parent item with variants — wishlist first available variant
+      const firstAvailIdx = item.variants.findIndex(v => v.available !== false);
+      const vIdx = firstAvailIdx >= 0 ? firstAvailIdx : 0;
+      const v = item.variants[vIdx];
+      const hasQty = v.quantities?.length > 0;
+      let wKey = `${item._id}_v${vIdx}`;
+      let qIdx = null;
+      let q = null;
+      if (hasQty) { qIdx = 0; q = v.quantities[0]; wKey += `_q${qIdx}`; }
+      const price = q ? (q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price) : (v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price);
+      addToWishlist({
+        ...item,
+        wishlistKey: wKey,
+        variantIndex: vIdx,
+        variantLabel: v.label,
+        quantityIndex: qIdx,
+        quantityLabel: q ? `${q.quantity} ${q.unit}` : null,
+        image: v.image || item.image,
+        price
+      });
     } else {
+      // Simple item without variants
       // Check if item has a customer-specific discounted price from activeOffers
       const targetedDiscount = discountedPrices[item._id];
       const regularOfferPrice = getOfferPriceFromOffer(item);
       
-      // Determine the best price to use
       let useTargetedOffer = false;
       let useRegularOffer = false;
       
       if (targetedDiscount && regularOfferPrice) {
-        // Both offers exist, use the better one
-        if (targetedDiscount.discountedPrice <= regularOfferPrice) {
-          useTargetedOffer = true;
-        } else {
-          useRegularOffer = true;
-        }
-      } else if (targetedDiscount) {
-        useTargetedOffer = true;
-      } else if (regularOfferPrice && regularOfferPrice < item.price) {
-        useRegularOffer = true;
-      }
+        if (targetedDiscount.discountedPrice <= regularOfferPrice) { useTargetedOffer = true; }
+        else { useRegularOffer = true; }
+      } else if (targetedDiscount) { useTargetedOffer = true; }
+      else if (regularOfferPrice && regularOfferPrice < item.price) { useRegularOffer = true; }
       
       if (useTargetedOffer) {
-        // Create item with discounted price and offer info
-        const discountedItem = {
-          ...item,
-          originalPrice: targetedDiscount.originalPrice,
-          price: targetedDiscount.discountedPrice
-        };
-        const offerInfo = {
-          offerId: targetedDiscount.offerId,
-          offerType: targetedDiscount.offerTitle,
-          title: targetedDiscount.offerTitle,
-          discountPercent: targetedDiscount.discountPercent,
-          isTargetedOffer: true
-        };
-        addToWishlist(discountedItem, offerInfo);
+        addToWishlist({ ...item, originalPrice: targetedDiscount.originalPrice, price: targetedDiscount.discountedPrice }, {
+          offerId: targetedDiscount.offerId, offerType: targetedDiscount.offerTitle, title: targetedDiscount.offerTitle,
+          discountPercent: targetedDiscount.discountPercent, isTargetedOffer: true
+        });
       } else if (useRegularOffer && specificOffer) {
-        // Use regular offer price
-        const discountedItem = {
-          ...item,
-          originalPrice: item.price,
-          price: regularOfferPrice
-        };
-        const offerInfo = {
-          offerId: specificOffer._id,
-          offerType: specificOffer.offerType,
-          title: specificOffer.title,
-          discountType: specificOffer.discountType,
-          discountValue: specificOffer.discountValue,
-          percentage: specificOffer.percentage
-        };
-        addToWishlist(discountedItem, offerInfo);
+        addToWishlist({ ...item, originalPrice: item.price, price: regularOfferPrice }, {
+          offerId: specificOffer._id, offerType: specificOffer.offerType, title: specificOffer.title,
+          discountType: specificOffer.discountType, discountValue: specificOffer.discountValue, percentage: specificOffer.percentage
+        });
       } else if (specificOffer && specificOffer.isTargeted) {
-        // Fallback to specific offer if viewing targeted offer page
-        const offerInfo = {
-          offerId: specificOffer._id,
-          offerType: specificOffer.offerType,
-          title: specificOffer.title,
-          discountType: specificOffer.discountType,
-          discountValue: specificOffer.discountValue,
-          percentage: specificOffer.percentage
-        };
-        addToWishlist(item, offerInfo);
+        addToWishlist(item, {
+          offerId: specificOffer._id, offerType: specificOffer.offerType, title: specificOffer.title,
+          discountType: specificOffer.discountType, discountValue: specificOffer.discountValue, percentage: specificOffer.percentage
+        });
       } else {
         addToWishlist(item);
       }
@@ -1001,8 +1029,9 @@ export default function OffersPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" ref={itemsGridRef}>
             {filteredItems.map(item => {
-              const inCart = isInCart ? isInCart(item._id) : false;
-              const cartItem = cart?.find(c => c._id === item._id);
+              const cardCartKey = getCartKey(item);
+              const cartItem = cart?.find(c => (c.cartKey || c._id) === cardCartKey);
+              const inCart = !!cartItem;
               const itemOfferPrice = getOfferPriceFromOffer(item);
               
               // Check for targeted offer discount from customer's activeOffers
@@ -1096,7 +1125,7 @@ export default function OffersPage() {
                         onClick={(e) => { e.stopPropagation(); handleToggleWishlist(item); }} 
                         className="p-1.5 hover:scale-110 transition-transform flex-shrink-0 bg-gray-50 rounded-full"
                       >
-                        <Heart className={`w-5 h-5 ${isInWishlist && isInWishlist(item._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
+                        <Heart className={`w-5 h-5 ${isInWishlist && isInWishlist(getWishlistKey(item)) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
                       </button>
                     </div>
 
