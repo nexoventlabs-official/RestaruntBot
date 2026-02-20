@@ -154,8 +154,8 @@ export default function UserLayout() {
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'menu') loadAvailableItems();
-          // When offers change, validate cart/wishlist items
-          if (data.type === 'offers') validateCartOffers();
+          // When offers change, validate cart/wishlist items and re-sync menu data
+          if (data.type === 'offers') { loadAvailableItems(); validateCartOffers(); }
           // When a specific offer is deleted, immediately remove its items from cart/wishlist
           if (data.type === 'offer-deleted' && data.offerId) {
             if (removeItemsByOfferIdRef.current) {

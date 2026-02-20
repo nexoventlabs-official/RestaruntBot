@@ -71,7 +71,12 @@ export function useCart() {
             image: v.image || latestItem.image,
             unit: latestItem.unit || 'piece',
             unitQty: latestItem.quantity || 1,
-            variantLabel: v.label
+            variantLabel: v.label,
+            offerInfo: variantOriginal ? {
+              offerType: Array.isArray(latestItem.offerType) ? latestItem.offerType.join(', ') : (latestItem.offerType || 'Special Offer'),
+              title: Array.isArray(latestItem.offerType) ? latestItem.offerType.join(', ') : (latestItem.offerType || 'Special Offer'),
+              isRegularOffer: true
+            } : undefined
           };
         }
 
@@ -177,7 +182,7 @@ export function useCart() {
               offerType: Array.isArray(latestItem.offerType) ? latestItem.offerType.join(', ') : (latestItem.offerType || 'Special Offer'),
               title: Array.isArray(latestItem.offerType) ? latestItem.offerType.join(', ') : (latestItem.offerType || 'Special Offer'),
               isRegularOffer: true
-            } : wishlistItem.offerInfo
+            } : undefined
           };
         }
         
