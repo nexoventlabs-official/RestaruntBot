@@ -278,7 +278,7 @@ export default function OfferPopup() {
               }}
             >
               <img 
-                src={getResponsiveImage(currentOffer)} 
+                src={currentOffer?.imageWhatsApp || getResponsiveImage(currentOffer)} 
                 alt="Special Offer"
                 style={{ maxWidth: '90vw', maxHeight: '85vh', width: 'auto', height: 'auto' }}
                 className="block"

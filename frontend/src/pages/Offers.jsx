@@ -41,6 +41,9 @@ export default function Offers() {
   const [image, setImage] = useState(null);
   const [newImageFile, setNewImageFile] = useState(null);
   const [newImagePreview, setNewImagePreview] = useState('');
+  const [whatsAppImage, setWhatsAppImage] = useState(null);
+  const [newWhatsAppFile, setNewWhatsAppFile] = useState(null);
+  const [newWhatsAppPreview, setNewWhatsAppPreview] = useState('');
   const [validFrom, setValidFrom] = useState('');
   const [validUntil, setValidUntil] = useState('');
 
@@ -171,6 +174,8 @@ export default function Offers() {
       setPercentage(offer.percentage !== null && offer.percentage !== undefined ? offer.percentage.toString() : '');
       setImage(offer.imageMobile || offer.imageTablet || offer.imageDesktop || null);
       setNewImageFile(null); setNewImagePreview('');
+      setWhatsAppImage(offer.imageWhatsApp || null);
+      setNewWhatsAppFile(null); setNewWhatsAppPreview('');
       setSelectedCategories(offer.appliedCategories || []);
       setSelectedItems(Array.isArray(offer.appliedItems) ? offer.appliedItems.map(i => typeof i === 'string' ? i : i._id) : []);
       setSelectedVariants(offer.appliedVariants || []);
@@ -185,6 +190,7 @@ export default function Offers() {
       setEditingOffer(null);
       setOfferType(''); setPercentage('');
       setImage(null); setNewImageFile(null); setNewImagePreview('');
+      setWhatsAppImage(null); setNewWhatsAppFile(null); setNewWhatsAppPreview('');
       setSelectedCategories([]); setSelectedItems([]); setSelectedVariants([]); setSelectedQuantities([]);
       setValidFrom(''); setValidUntil('');
       setTargetType('all'); setTargetPercentage('10'); setTargetMinSpent('1000'); setTargetMinOrders('3');
@@ -428,6 +434,10 @@ export default function Offers() {
         fd.append('imageDesktop', newImageFile);
       }
 
+      if (newWhatsAppFile) {
+        fd.append('imageWhatsApp', newWhatsAppFile);
+      }
+
       let res;
       if (editingOffer) {
         res = await api.put(`/offers/${editingOffer._id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 90000 });
@@ -625,6 +635,31 @@ export default function Offers() {
                       <Upload className="w-8 h-8 text-dark-300 mb-2" />
                       <span className="text-sm text-dark-500">Upload Banner</span>
                       <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files[0]; if (f) { setNewImageFile(f); setNewImagePreview(URL.createObjectURL(f)); }}} className="hidden" />
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              {/* WhatsApp Image (1:1) */}
+              <div>
+                <label className="block text-sm font-semibold text-dark-700 mb-1">WhatsApp Image <span className="text-xs text-dark-400">(1:1 ratio, for WhatsApp & Popup)</span></label>
+                <div className="w-40 aspect-square rounded-xl bg-dark-100 overflow-hidden relative group cursor-pointer">
+                  {(newWhatsAppPreview || whatsAppImage) ? (
+                    <>
+                      <img src={newWhatsAppPreview || whatsAppImage} alt="" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <label className="cursor-pointer px-2 py-1.5 bg-white/90 rounded-lg text-xs font-medium text-dark-700">
+                          Change <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files[0]; if (f) { setNewWhatsAppFile(f); setNewWhatsAppPreview(URL.createObjectURL(f)); }}} className="hidden" />
+                        </label>
+                        <button type="button" onClick={() => { setNewWhatsAppFile(null); setNewWhatsAppPreview(''); setWhatsAppImage(null); }}
+                          className="px-2 py-1.5 bg-red-500/90 text-white rounded-lg text-xs font-medium">Remove</button>
+                      </div>
+                    </>
+                  ) : (
+                    <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer hover:bg-dark-200 transition-colors">
+                      <Upload className="w-6 h-6 text-dark-300 mb-1" />
+                      <span className="text-xs text-dark-500">Upload 1:1</span>
+                      <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files[0]; if (f) { setNewWhatsAppFile(f); setNewWhatsAppPreview(URL.createObjectURL(f)); }}} className="hidden" />
                     </label>
                   )}
                 </div>

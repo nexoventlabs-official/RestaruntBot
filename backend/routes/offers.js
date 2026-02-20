@@ -31,6 +31,7 @@ const uploadMultiple = upload.fields([
   { name: 'imageMobile', maxCount: 1 },
   { name: 'imageTablet', maxCount: 1 },
   { name: 'imageDesktop', maxCount: 1 },
+  { name: 'imageWhatsApp', maxCount: 1 }, // 1:1 ratio for WhatsApp template
   { name: 'image', maxCount: 1 } // Legacy support
 ]);
 
@@ -157,6 +158,7 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     let imageMobileUrl = '';
     let imageTabletUrl = '';
     let imageDesktopUrl = '';
+    let imageWhatsAppUrl = '';
     let legacyImageUrl = '';
 
     // Upload mobile image
@@ -178,6 +180,13 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       imageDesktopUrl = await cloudinary.uploadPreserveAspect(req.files.imageDesktop[0].buffer, 'offers/desktop');
     } else if (req.body.imageDesktop) {
       imageDesktopUrl = req.body.imageDesktop;
+    }
+
+    // Upload WhatsApp image (1:1 ratio)
+    if (req.files?.imageWhatsApp?.[0]) {
+      imageWhatsAppUrl = await cloudinary.uploadPreserveAspect(req.files.imageWhatsApp[0].buffer, 'offers/whatsapp');
+    } else if (req.body.imageWhatsApp) {
+      imageWhatsAppUrl = req.body.imageWhatsApp;
     }
 
     // Legacy image support (use desktop as fallback)
@@ -239,6 +248,7 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       imageMobile: imageMobileUrl,
       imageTablet: imageTabletUrl,
       imageDesktop: imageDesktopUrl,
+      imageWhatsApp: imageWhatsAppUrl,
       code,
       discountType: discountType || 'none',
       discountValue: parseFloat(discountValue) || 0,
@@ -479,7 +489,7 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     // The offer stays on HOLD (templateStatus: 'pending') until Meta approves it
     if (process.env.META_WABA_ID) {
       const tplName = `offer_${offer._id.toString()}`;
-      const headerImg = imageDesktopUrl || imageTabletUrl || imageMobileUrl || legacyImageUrl;
+      const headerImg = imageWhatsAppUrl || imageDesktopUrl || imageTabletUrl || imageMobileUrl || legacyImageUrl;
       const bodyText = `🎉 *{{1}}*\n\n{{2}}\n\nOrder now and enjoy this amazing deal! 🍽️`;
       const footerTxt = 'Tap below to order';
       const baseUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
@@ -606,7 +616,7 @@ router.post('/:id/retry-template', auth, async (req, res) => {
     }
 
     const tplName = `offer_${offer._id.toString()}`;
-    const headerImg = offer.imageDesktop || offer.imageTablet || offer.imageMobile || offer.image;
+    const headerImg = offer.imageWhatsApp || offer.imageDesktop || offer.imageTablet || offer.imageMobile || offer.image;
     const bodyText = `🎉 *{{1}}*\n\n{{2}}\n\nOrder now and enjoy this amazing deal! 🍽️`;
     const footerTxt = 'Tap below to order';
     const baseUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
@@ -657,7 +667,7 @@ router.post('/:id/send', auth, async (req, res) => {
       });
     }
 
-    const offerImageUrl = offer.imageDesktop || offer.imageTablet || offer.imageMobile || offer.image;
+    const offerImageUrl = offer.imageWhatsApp || offer.imageDesktop || offer.imageTablet || offer.imageMobile || offer.image;
 
     // Get targeting info
     let targetedCustomers = null;
@@ -830,6 +840,15 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
     } else if (req.body.imageDesktop && req.body.imageDesktop !== existingOffer.imageDesktop) {
       await deleteOldImage(existingOffer.imageDesktop);
       updateData.imageDesktop = req.body.imageDesktop;
+    }
+
+    // Handle WhatsApp image (1:1 ratio)
+    if (req.files?.imageWhatsApp?.[0]) {
+      await deleteOldImage(existingOffer.imageWhatsApp);
+      updateData.imageWhatsApp = await cloudinary.uploadPreserveAspect(req.files.imageWhatsApp[0].buffer, 'offers/whatsapp');
+    } else if (req.body.imageWhatsApp && req.body.imageWhatsApp !== existingOffer.imageWhatsApp) {
+      await deleteOldImage(existingOffer.imageWhatsApp);
+      updateData.imageWhatsApp = req.body.imageWhatsApp;
     }
 
     // Handle legacy image field

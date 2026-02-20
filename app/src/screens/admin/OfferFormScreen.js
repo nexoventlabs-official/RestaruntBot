@@ -25,6 +25,10 @@ export default function OfferFormScreen({ route, navigation }) {
   // Single universal image for all devices
   const [image, setImage] = useState(existingOffer?.imageMobile || existingOffer?.imageTablet || existingOffer?.imageDesktop || null);
   const [newImage, setNewImage] = useState(null);
+
+  // WhatsApp 1:1 image for template header & popup
+  const [whatsAppImage, setWhatsAppImage] = useState(existingOffer?.imageWhatsApp || null);
+  const [newWhatsAppImage, setNewWhatsAppImage] = useState(null);
   
   // Categories and Items
   const [categories, setCategories] = useState([]);
@@ -403,6 +407,38 @@ export default function OfferFormScreen({ route, navigation }) {
     }
   };
 
+  const pickWhatsAppImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your photo library to upload images.');
+        return;
+      }
+      
+      setPickingImage(true);
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        allowsMultipleSelection: false,
+        aspect: [1, 1], // 1:1 square for WhatsApp
+        quality: 0.6,
+        exif: false,
+      });
+      
+      if (!result.canceled) {
+        const imageData = result.assets[0];
+        setNewWhatsAppImage(imageData);
+        setWhatsAppImage(imageData.uri);
+      }
+    } catch (error) {
+      console.error('Error picking WhatsApp image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    } finally {
+      setPickingImage(false);
+    }
+  };
+
   const handleSubmit = async () => {
     // Image is required
     if (!image && !newImage) {
@@ -485,6 +521,14 @@ export default function OfferFormScreen({ route, navigation }) {
         formData.append('imageMobile', { uri: newImage.uri, name: filename, type });
         formData.append('imageTablet', { uri: newImage.uri, name: filename, type });
         formData.append('imageDesktop', { uri: newImage.uri, name: filename, type });
+      }
+
+      // Add WhatsApp 1:1 image
+      if (newWhatsAppImage) {
+        const waFilename = newWhatsAppImage.uri.split('/').pop();
+        const waMatch = /\.(\w+)$/.exec(waFilename);
+        const waType = waMatch ? `image/${waMatch[1]}` : 'image/jpeg';
+        formData.append('imageWhatsApp', { uri: newWhatsAppImage.uri, name: waFilename, type: waType });
       }
 
       if (isEditing) {
@@ -597,6 +641,62 @@ export default function OfferFormScreen({ route, navigation }) {
             </Text>
           </View>
         )}
+
+        {/* WhatsApp 1:1 Image */}
+        <View style={{ marginTop: 20 }}>
+          <View style={styles.imageSectionHeader}>
+            <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+            <Text style={styles.imageSectionTitle}>WhatsApp Image</Text>
+          </View>
+          <Text style={styles.imageSectionHint}>Square image for WhatsApp template header & website popup</Text>
+          <Text style={[styles.imageSectionRecommended, { color: '#25D366' }]}>Recommended: 1:1 (800×800px)</Text>
+
+          {whatsAppImage && (
+            <View style={[styles.imagePreviewContainer, { height: 200, aspectRatio: 1, alignSelf: 'center' }]}>
+              <Image 
+                source={{ uri: whatsAppImage }} 
+                style={styles.imagePreview} 
+                resizeMode="cover" 
+              />
+            </View>
+          )}
+
+          <TouchableOpacity 
+            style={[styles.uploadButton, whatsAppImage && styles.uploadButtonWithImage, whatsAppImage && { backgroundColor: '#25D366', borderColor: '#25D366' }]} 
+            onPress={pickWhatsAppImage} 
+            activeOpacity={0.8}
+            disabled={pickingImage}
+          >
+            {pickingImage ? (
+              <>
+                <ActivityIndicator size="small" color={whatsAppImage ? "#fff" : '#25D366'} />
+                <Text style={whatsAppImage ? styles.uploadButtonTextWhite : [styles.uploadButtonText, { color: '#25D366' }]}>
+                  Opening gallery...
+                </Text>
+              </>
+            ) : whatsAppImage ? (
+              <>
+                <Ionicons name="camera" size={22} color="#fff" />
+                <Text style={styles.uploadButtonTextWhite}>Change WhatsApp Image</Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name="cloud-upload-outline" size={24} color="#25D366" />
+                <Text style={[styles.uploadButtonText, { color: '#25D366' }]}>Upload WhatsApp Image</Text>
+                <Text style={styles.uploadButtonHint}>1:1 square ratio</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {whatsAppImage && !pickingImage && (
+            <View style={styles.previewInfo}>
+              <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
+              <Text style={styles.previewInfoTextSuccess}>
+                WhatsApp image uploaded • Used for template & popup
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
     );
   };

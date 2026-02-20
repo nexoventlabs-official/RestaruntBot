@@ -13,6 +13,7 @@ const offerSchema = new mongoose.Schema({
   imageMobile: { type: String }, // Mobile view image (800x160px recommended)
   imageTablet: { type: String }, // Tablet view image (1200x240px recommended)
   imageDesktop: { type: String }, // Desktop view image (1920x384px recommended)
+  imageWhatsApp: { type: String }, // WhatsApp template header image (1:1 ratio, 800x800px recommended)
   code: { type: String },
   discountType: { type: String, enum: ['percentage', 'fixed', 'none'], default: 'none' },
   discountValue: { type: Number, default: 0 },
