@@ -916,28 +916,18 @@ export default function OffersPage() {
               }
             }}
           >
-            {/* Full Image Display - Cover on desktop for landscape effect */}
+            {/* Full Image Display - 19:6 ratio, full width no crop no spaces */}
             {currentBannerOffer ? (
               <img 
                 src={getResponsiveImage(currentBannerOffer)}
                 alt={currentBannerOffer.offerType || 'Special Offer'}
-                className="w-full h-auto object-contain md:object-cover transition-opacity duration-1000"
-                style={{ 
-                  maxHeight: '600px', 
-                  minHeight: '250px',
-                  height: window.innerWidth >= 1024 ? '500px' : 'auto'
-                }}
+                className="w-full h-auto block transition-opacity duration-1000"
               />
             ) : (
               <img 
                 src="/banner-delicious-tacos.jpg"
                 alt="Special Offers"
-                className="w-full h-auto object-contain md:object-cover"
-                style={{ 
-                  maxHeight: '600px', 
-                  minHeight: '250px',
-                  height: window.innerWidth >= 1024 ? '500px' : 'auto'
-                }}
+                className="w-full h-auto block"
               />
             )}
         
