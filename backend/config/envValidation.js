@@ -123,6 +123,20 @@ const envSchema = {
     },
     error: 'GOOGLE_SHEETS_CREDENTIALS must be valid JSON service account credentials'
   },
+
+  GOOGLE_SERVICE_ACCOUNT_KEY: {
+    required: false,
+    validate: (value) => {
+      if (!value) return true;
+      try {
+        const parsed = JSON.parse(value);
+        return parsed.type === 'service_account';
+      } catch {
+        return false;
+      }
+    },
+    error: 'GOOGLE_SERVICE_ACCOUNT_KEY must be valid JSON service account credentials'
+  },
   
   // Groq AI (for voice transcription)
   GROQ_API_KEY: {
@@ -197,6 +211,11 @@ const envSchema = {
 function validateEnv(exitOnError = true) {
   const errors = [];
   const warnings = [];
+
+  const optionalAliases = {
+    WHATSAPP_PAYMENT_CONFIG: ['RAZORPAY_CONFIG_ID'],
+    GOOGLE_SHEETS_CREDENTIALS: ['GOOGLE_SERVICE_ACCOUNT_KEY']
+  };
   
   console.log('🔍 Validating environment variables...\n');
   
@@ -219,7 +238,15 @@ function validateEnv(exitOnError = true) {
     
     // Skip validation if optional and not set
     if (!rules.required && !value) {
-      warnings.push(`⚠️  ${key} is not set (optional)`);
+      const aliases = optionalAliases[key] || [];
+      const hasAliasConfigured = aliases.some(aliasKey => {
+        const aliasValue = process.env[aliasKey];
+        return aliasValue !== undefined && aliasValue !== null && String(aliasValue).trim() !== '';
+      });
+
+      if (!hasAliasConfigured) {
+        warnings.push(`⚠️  ${key} is not set (optional)`);
+      }
       continue;
     }
     

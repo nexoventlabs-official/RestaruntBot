@@ -49,8 +49,6 @@ catalogProductSchema.pre('save', function (next) {
 });
 
 // Indexes
-catalogProductSchema.index({ menuItem: 1 });
-catalogProductSchema.index({ retailerId: 1 });
 catalogProductSchema.index({ isActive: 1 });
 
 module.exports = mongoose.model('CatalogProduct', catalogProductSchema);
