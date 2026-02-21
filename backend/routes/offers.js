@@ -617,7 +617,11 @@ router.post('/:id/retry-template', auth, async (req, res) => {
 
     // Delete old template if exists
     if (offer.templateName) {
-      try { warn('Failed to delete old WhatsApp template': await whatsapp.deleteMessageTemplate(offer.templateName); } catch (e) { logger.warn('Failed to delete old WhatsApp template', { templateName: offer.templateName, error: e.message }); }
+      try {
+        await whatsapp.deleteMessageTemplate(offer.templateName);
+      } catch (e) {
+        logger.warn('Failed to delete old WhatsApp template', { templateName: offer.templateName, error: e.message });
+      }
     }
 
     const tplName = `offer_${offer._id.toString()}`;
