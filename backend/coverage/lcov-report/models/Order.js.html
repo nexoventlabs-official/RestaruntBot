@@ -149,16 +149,9 @@
 <a name='L84'></a><a href='#L84'>84</a>
 <a name='L85'></a><a href='#L85'>85</a>
 <a name='L86'></a><a href='#L86'>86</a>
-<a name='L87'></a><a href='#L87'>87</a>
-<a name='L88'></a><a href='#L88'>88</a>
-<a name='L89'></a><a href='#L89'>89</a>
-<a name='L90'></a><a href='#L90'>90</a>
-<a name='L91'></a><a href='#L91'>91</a>
-<a name='L92'></a><a href='#L92'>92</a>
-<a name='L93'></a><a href='#L93'>93</a>
-<a name='L94'></a><a href='#L94'>94</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<a name='L87'></a><a href='#L87'>87</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -225,30 +218,23 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const mongoose = require('mongoose');
 &nbsp;
 const orderSchema = new mongoose.Schema({
@@ -285,12 +271,12 @@ const orderSchema = new mongoose.Schema({
   totalAmount: { type: Number, required: true, min: [0, 'Total amount cannot be negative'] },
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled', 'refunded', 'refund_failed'],
+    enum: ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled'],
     default: 'pending'
   },
   serviceType: { type: String, enum: ['delivery', 'pickup', 'dine_in'], required: true },
   paymentMethod: { type: String, enum: ['upi', 'cod'], default: 'upi' },
-  paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded', 'cancelled', 'refund_processing', 'refund_failed'], default: 'pending' },
+  paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'cancelled'], default: 'pending' },
   // Actual payment method used at delivery (for COD orders - can be 'cash' or 'upi')
   actualPaymentMethod: { type: String, enum: ['cash', 'upi', null], default: null },
   paymentId: { type: String },
@@ -298,15 +284,7 @@ const orderSchema = new mongoose.Schema({
   razorpayPaymentId: { type: String },
   codPaymentLinkId: { type: String }, // For COD orders paid via QR
   codPaymentId: { type: String }, // Payment ID for COD UPI payments
-  refundId: { type: String },
-  refundAmount: { type: Number },
-  refundStatus: { type: String, enum: ['none', 'pending', 'scheduled', 'approved', 'completed', 'rejected', 'failed'], default: 'none' },
-  refundRequestedAt: { type: Date },
-  refundProcessedAt: { type: Date },
-  refundScheduledAt: { type: Date },
-  refundedAt: { type: Date },
-  refundInitiatedAt: { type: Date },
-  returnReason: { type: String },
+&nbsp;
   cancellationReason: { type: String },
   statusUpdatedAt: { type: Date }, // Track when status changed to delivered/cancelled for auto-cleanup
   isHidden: { type: Boolean, default: false }, // Hidden from admin dashboard but kept for user tracking/reviews
@@ -321,9 +299,10 @@ const orderSchema = new mongoose.Schema({
   }],
   estimatedDeliveryTime: { type: Date },
   deliveredAt: { type: Date },
+  whatsappConfirmationSent: { type: Boolean, default: false }, // Track if customer was notified
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
-});
+}, { optimisticConcurrency: true });
 &nbsp;
 orderSchema.pre('save', <span class="fstat-no" title="function not covered" >fu</span>nction(next) {
 <span class="cstat-no" title="statement not covered" >  this.updatedAt = Date.now();</span>
@@ -336,7 +315,7 @@ orderSchema.index({ paymentStatus: 1 });
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ updatedAt: -1 }); // For efficient change detection
 orderSchema.index({ 'customer.phone': 1 });
-orderSchema.index({ status: 1, paymentStatus: 1, refundStatus: 1 }); // Compound index for dashboard queries
+orderSchema.index({ status: 1, paymentStatus: 1 }); // Compound index for dashboard queries
 orderSchema.index({ status: 1, updatedAt: -1 }); // For filtered change detection
 orderSchema.index({ status: 1, statusUpdatedAt: 1 }); // For auto-cleanup of delivered/cancelled orders
 orderSchema.index({ isHidden: 1 }); // For filtering hidden orders
@@ -349,7 +328,7 @@ module.exports = mongoose.model('Order', orderSchema);
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-19T18:32:07.239Z
+                at 2026-02-21T10:10:14.953Z
             </div>
         <script src="../prettify.js"></script>
         <script>

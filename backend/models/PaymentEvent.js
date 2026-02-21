@@ -10,9 +10,11 @@ const mongoose = require('mongoose');
 const paymentEventSchema = new mongoose.Schema({
   eventId: { type: String, required: true, unique: true },
   eventType: { type: String, required: true },
+  status: { type: String, enum: ['processing', 'completed', 'failed'], default: 'processing' },
   orderId: { type: String },
   paymentId: { type: String },
   processedAt: { type: Date, default: Date.now },
+  completedAt: { type: Date },
   result: { type: String, enum: ['success', 'skipped', 'error'], default: 'success' }
 });
 

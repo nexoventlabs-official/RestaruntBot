@@ -13,6 +13,7 @@ const mongoose = require('mongoose');
 const { getMetrics } = require('../services/metrics');
 const redis = require('../services/redis'); // Phase 6.4
 const messageQueue = require('../services/messageQueue'); // Phase 6.4
+const logger = require('../services/logger');
 
 /**
  * GET /health
@@ -281,5 +282,95 @@ function formatUptime(seconds) {
   if (minutes > 0) return `${minutes}m ${secs}s`;
   return `${secs}s`;
 }
+
+/**
+ * PUT /health/log-level
+ * Runtime log level change — allows changing log verbosity without restart
+ * Requires admin authentication in production
+ */
+router.put('/log-level', (req, res) => {
+  try {
+    const { level } = req.body;
+    if (!level) {
+      return res.status(400).json({ error: 'Missing required field: level' });
+    }
+    const result = logger.setLogLevel(level);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /health/log-level
+ * Get current log level
+ */
+router.get('/log-level', (req, res) => {
+  res.json({ level: logger.logger.level });
+});
+
+/**
+ * GET /health/prometheus
+ * Prometheus-format metrics export
+ * Returns metrics in Prometheus exposition format for scraping
+ */
+router.get('/prometheus', async (req, res) => {
+  try {
+    const metrics = getMetrics();
+    const memUsage = process.memoryUsage();
+    const uptime = process.uptime();
+
+    const lines = [
+      '# HELP process_uptime_seconds Process uptime in seconds',
+      '# TYPE process_uptime_seconds gauge',
+      `process_uptime_seconds ${uptime.toFixed(2)}`,
+      '',
+      '# HELP process_memory_heap_bytes Process heap memory usage',
+      '# TYPE process_memory_heap_bytes gauge',
+      `process_memory_heap_bytes{type="used"} ${memUsage.heapUsed}`,
+      `process_memory_heap_bytes{type="total"} ${memUsage.heapTotal}`,
+      '',
+      '# HELP process_memory_rss_bytes Process resident set size',
+      '# TYPE process_memory_rss_bytes gauge',
+      `process_memory_rss_bytes ${memUsage.rss}`,
+      '',
+      '# HELP http_requests_total Total HTTP requests',
+      '# TYPE http_requests_total counter',
+      `http_requests_total ${metrics.totalRequests || 0}`,
+      '',
+      '# HELP http_requests_success_total Successful HTTP requests',
+      '# TYPE http_requests_success_total counter',
+      `http_requests_success_total ${metrics.successfulRequests || 0}`,
+      '',
+      '# HELP http_requests_failed_total Failed HTTP requests',
+      '# TYPE http_requests_failed_total counter',
+      `http_requests_failed_total ${metrics.failedRequests || 0}`,
+      '',
+      '# HELP http_request_duration_seconds HTTP request duration',
+      '# TYPE http_request_duration_seconds gauge',
+      `http_request_duration_seconds{quantile="avg"} ${((metrics.avgResponseTime || 0) / 1000).toFixed(4)}`,
+      '',
+      '# HELP mongodb_connection_state MongoDB connection state (1=connected)',
+      '# TYPE mongodb_connection_state gauge',
+      `mongodb_connection_state ${mongoose.connection.readyState === 1 ? 1 : 0}`,
+      ''
+    ];
+
+    // Add error counts by type if available
+    if (metrics.errors && typeof metrics.errors === 'object') {
+      lines.push('# HELP app_errors_total Application errors by type');
+      lines.push('# TYPE app_errors_total counter');
+      for (const [type, count] of Object.entries(metrics.errors)) {
+        lines.push(`app_errors_total{type="${type}"} ${count}`);
+      }
+      lines.push('');
+    }
+
+    res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+    res.send(lines.join('\n'));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 module.exports = router;

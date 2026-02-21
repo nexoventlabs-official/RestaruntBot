@@ -17,22 +17,18 @@ const ORDER_STATUS = {
   READY: 'ready',
   OUT_FOR_DELIVERY: 'out_for_delivery',
   DELIVERED: 'delivered',
-  CANCELLED: 'cancelled',
-  REFUNDED: 'refunded',
-  REFUND_FAILED: 'refund_failed'
+  CANCELLED: 'cancelled'
 };
 
 // Allowed transitions: { fromStatus: [allowedNextStatuses] }
 const ALLOWED_TRANSITIONS = {
   [ORDER_STATUS.PENDING]:          [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELLED],
-  [ORDER_STATUS.CONFIRMED]:        [ORDER_STATUS.PREPARING, ORDER_STATUS.READY, ORDER_STATUS.CANCELLED, ORDER_STATUS.REFUNDED, ORDER_STATUS.REFUND_FAILED],
-  [ORDER_STATUS.PREPARING]:        [ORDER_STATUS.READY, ORDER_STATUS.CANCELLED, ORDER_STATUS.REFUNDED, ORDER_STATUS.REFUND_FAILED],
-  [ORDER_STATUS.READY]:            [ORDER_STATUS.OUT_FOR_DELIVERY, ORDER_STATUS.DELIVERED, ORDER_STATUS.CANCELLED, ORDER_STATUS.REFUNDED, ORDER_STATUS.REFUND_FAILED],
-  [ORDER_STATUS.OUT_FOR_DELIVERY]: [ORDER_STATUS.DELIVERED, ORDER_STATUS.CANCELLED, ORDER_STATUS.REFUNDED, ORDER_STATUS.REFUND_FAILED],
-  [ORDER_STATUS.DELIVERED]:        [ORDER_STATUS.REFUNDED, ORDER_STATUS.REFUND_FAILED],
-  [ORDER_STATUS.CANCELLED]:        [ORDER_STATUS.REFUNDED, ORDER_STATUS.REFUND_FAILED],
-  [ORDER_STATUS.REFUNDED]:         [],  // Terminal state
-  [ORDER_STATUS.REFUND_FAILED]:    [ORDER_STATUS.REFUNDED, ORDER_STATUS.CANCELLED]
+  [ORDER_STATUS.CONFIRMED]:        [ORDER_STATUS.PREPARING, ORDER_STATUS.READY, ORDER_STATUS.CANCELLED],
+  [ORDER_STATUS.PREPARING]:        [ORDER_STATUS.READY, ORDER_STATUS.CANCELLED],
+  [ORDER_STATUS.READY]:            [ORDER_STATUS.OUT_FOR_DELIVERY, ORDER_STATUS.DELIVERED, ORDER_STATUS.CANCELLED],
+  [ORDER_STATUS.OUT_FOR_DELIVERY]: [ORDER_STATUS.DELIVERED, ORDER_STATUS.CANCELLED],
+  [ORDER_STATUS.DELIVERED]:        [],  // Terminal state
+  [ORDER_STATUS.CANCELLED]:        []   // Terminal state
 };
 
 /**
@@ -69,17 +65,19 @@ function validateTransition(currentStatus, newStatus) {
  * @param {Object} order - Mongoose order document
  * @param {string} newStatus - Target status
  * @param {string} [trackingMessage] - Optional tracking update message
+ * @param {string} [triggeredBy='system'] - Who triggered the transition (admin, customer, scheduler, webhook)
  * @returns {{ success: boolean, reason?: string }}
  */
-function transitionStatus(order, newStatus, trackingMessage) {
+function transitionStatus(order, newStatus, trackingMessage, triggeredBy = 'system') {
   const result = validateTransition(order.status, newStatus);
 
   if (!result.valid) {
-    logger.warn('⚠️ Invalid order status transition', {
+    logger.warn('Invalid order status transition', {
       orderId: order.orderId,
       from: order.status,
       to: newStatus,
-      reason: result.reason
+      reason: result.reason,
+      triggeredBy
     });
     return { success: false, reason: result.reason };
   }
@@ -99,7 +97,8 @@ function transitionStatus(order, newStatus, trackingMessage) {
   logger.info('Order status transitioned', {
     orderId: order.orderId,
     from: previousStatus,
-    to: newStatus
+    to: newStatus,
+    triggeredBy
   });
 
   return { success: true };

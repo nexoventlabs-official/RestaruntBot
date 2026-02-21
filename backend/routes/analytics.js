@@ -86,7 +86,7 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
           { updatedAt: { $gte: today }, status: { $in: ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'] } } // Active today
         ]
       }), // All orders active today
-      Order.aggregate([{ $match: { paymentStatus: 'paid', status: { $nin: ['cancelled', 'refunded'] }, refundStatus: { $nin: ['completed', 'pending'] } } }, { $group: { _id: null, total: { $sum: '$totalAmount' } } }]),
+      Order.aggregate([{ $match: { paymentStatus: 'paid', status: { $ne: 'cancelled' } } }, { $group: { _id: null, total: { $sum: '$totalAmount' } } }]),
       // Today's delivered + paid orders (still in DB)
       Order.aggregate([{ 
         $match: { 
@@ -137,7 +137,8 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
       weeklyHistory: stats.weeklyHistory || []
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -148,14 +149,15 @@ router.get('/sales', authMiddleware, async (req, res) => {
     startDate.setDate(startDate.getDate() - parseInt(days));
 
     const sales = await Order.aggregate([
-      { $match: { paymentStatus: 'paid', status: { $nin: ['cancelled', 'refunded'] }, refundStatus: { $nin: ['completed', 'pending'] }, createdAt: { $gte: startDate } } },
+      { $match: { paymentStatus: 'paid', status: { $ne: 'cancelled' }, createdAt: { $gte: startDate } } },
       { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, total: { $sum: '$totalAmount' }, count: { $sum: 1 } } },
       { $sort: { _id: 1 } }
     ]);
 
     res.json(sales);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -169,7 +171,8 @@ router.get('/top-items', authMiddleware, async (req, res) => {
     ]);
     res.json(topItems);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -184,7 +187,8 @@ router.post('/cleanup', authMiddleware, async (req, res) => {
       ...result 
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -264,7 +268,7 @@ router.get('/report', authMiddleware, async (req, res) => {
                   { 
                     $and: [
                       { $eq: ['$paymentStatus', 'paid'] }, 
-                      { $not: { $in: ['$status', ['cancelled', 'refunded']] } }
+                      { $ne: ['$status', 'cancelled'] }
                     ] 
                   },
                   '$totalAmount',
@@ -273,15 +277,14 @@ router.get('/report', authMiddleware, async (req, res) => {
               }
             },
             deliveredOrders: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
-            cancelledOrders: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } },
-            refundedOrders: { $sum: { $cond: [{ $eq: ['$status', 'refunded'] }, 1, 0] } }
+            cancelledOrders: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } }
           }
         }
       ]),
       
       // Item statistics from current orders (with image and rating lookup)
       Order.aggregate([
-        { $match: { ...dateFilter, status: { $nin: ['cancelled', 'refunded'] } } },
+        { $match: { ...dateFilter, status: { $ne: 'cancelled' } } },
         { $unwind: '$items' },
         {
           $lookup: {
@@ -340,7 +343,7 @@ router.get('/report', authMiddleware, async (req, res) => {
       
       // Category statistics from current orders
       Order.aggregate([
-        { $match: { ...dateFilter, status: { $nin: ['cancelled', 'refunded'] } } },
+        { $match: { ...dateFilter, status: { $ne: 'cancelled' } } },
         { $unwind: '$items' },
         { $unwind: { path: '$items.category', preserveNullAndEmptyArrays: true } },
         {
@@ -373,10 +376,10 @@ router.get('/report', authMiddleware, async (req, res) => {
     ]);
 
     // Combine current stats with historical data
-    const currentStats = orderStats[0] || { totalOrders: 0, totalRevenue: 0, deliveredOrders: 0, cancelledOrders: 0, refundedOrders: 0 };
+    const currentStats = orderStats[0] || { totalOrders: 0, totalRevenue: 0, deliveredOrders: 0, cancelledOrders: 0 };
     
     // Aggregate historical stats
-    let histRevenue = 0, histOrders = 0, histDelivered = 0, histCancelled = 0, histRefunded = 0;
+    let histRevenue = 0, histOrders = 0, histDelivered = 0, histCancelled = 0;
     let histCod = 0, histUpi = 0, histItemsSold = 0;
     const histItemsMap = {};
     const histCategoriesMap = {};
@@ -386,7 +389,6 @@ router.get('/report', authMiddleware, async (req, res) => {
       histOrders += report.orders || 0;
       histDelivered += report.deliveredOrders || 0;
       histCancelled += report.cancelledOrders || 0;
-      histRefunded += report.refundedOrders || 0;
       histCod += report.codOrders || 0;
       histUpi += report.upiOrders || 0;
       histItemsSold += report.itemsSold || 0;
@@ -417,7 +419,7 @@ router.get('/report', authMiddleware, async (req, res) => {
     const totalOrders = currentStats.totalOrders + histOrders;
     const deliveredOrders = currentStats.deliveredOrders + histDelivered;
     const cancelledOrders = currentStats.cancelledOrders + histCancelled;
-    const refundedOrders = currentStats.refundedOrders + histRefunded;
+    const refundedOrders = 0;
     
     // Combine items
     const combinedItemsMap = { ...histItemsMap };
@@ -573,7 +575,7 @@ router.get('/report', authMiddleware, async (req, res) => {
     
     // Add current orders to trend
     orders.forEach(order => {
-      if (order.status !== 'cancelled' && order.status !== 'refunded' && order.paymentStatus === 'paid') {
+      if (order.status !== 'cancelled' && order.paymentStatus === 'paid') {
         const dateKey = new Date(order.createdAt).toLocaleDateString('en-IN');
         if (!ordersByDate[dateKey]) {
           ordersByDate[dateKey] = { label: dateKey, revenue: 0, orders: 0 };
@@ -608,8 +610,7 @@ router.get('/report', authMiddleware, async (req, res) => {
       revenueTrend
     });
   } catch (error) {
-    logger.error('Report error:', error);
-    res.status(500).json({ error: error.message });
+    return logRouteError(res, 'Report error', error);
   }
 });
 
@@ -660,7 +661,8 @@ router.post('/sync-today-revenue', authMiddleware, async (req, res) => {
       todayOrders
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -678,8 +680,7 @@ router.post('/report/download-pdf', authMiddleware, async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(pdfBuffer);
   } catch (error) {
-    logger.error('PDF generation error:', error);
-    res.status(500).json({ error: error.message });
+    return logRouteError(res, 'PDF generation error', error);
   }
 });
 
@@ -718,8 +719,7 @@ router.post('/report/send-email', authMiddleware, async (req, res) => {
     
     res.json({ success: true, message: `Report sent to ${reportEmail}` });
   } catch (error) {
-    logger.error('Email send error:', error);
-    res.status(500).json({ error: error.message });
+    return logRouteError(res, 'Email send error', error);
   }
 });
 
@@ -748,7 +748,7 @@ router.get('/storage', authMiddleware, async (req, res) => {
           storageSize: stats.storageSize || 0
         });
       } catch (e) {
-        // Some system collections may not have stats
+        logger.warn('Failed to get stats for collection', { collection: col.name, error: e.message });
       }
     }
     
@@ -811,8 +811,7 @@ router.get('/storage', authMiddleware, async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Storage stats error:', error);
-    res.status(500).json({ error: error.message });
+    return logRouteError(res, 'Storage stats error', error);
   }
 });
 

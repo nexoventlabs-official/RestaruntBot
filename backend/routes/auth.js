@@ -1,10 +1,14 @@
 const express = require('express');
 const logger = require('../services/logger');
+const { logRouteError } = require('../services/logger');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { authRateLimiter, strictRateLimiter } = require('../middleware/rateLimiter');
 const { generateTokenPair, rotateRefreshToken, revokeRefreshToken } = require('../services/jwtRefresh');
 const { body, validationResult } = require('express-validator');
+const crypto = require('crypto');
+const DeliveryBoy = require('../models/DeliveryBoy');
+const pushNotification = require('../services/pushNotification');
 const router = express.Router();
 
 // Validation helper
@@ -32,12 +36,10 @@ router.post('/test-push', async (req, res) => {
       return res.status(400).json({ error: 'pushToken is required in request body' });
     }
     
-    const pushNotification = require('../services/pushNotification');
     const result = await pushNotification.sendTestNotification(pushToken);
     res.json({ message: 'Test notification sent', result });
   } catch (error) {
-    logger.error('Test push error:', error);
-    res.status(500).json({ error: error.message });
+    logRouteError(res, 'Test push error', error);
   }
 });
 
@@ -58,7 +60,7 @@ router.post('/login',
         // Create admin user in database (password won't be used since we check env first)
         adminUser = new User({ 
           username, 
-          password: require('crypto').randomBytes(32).toString('hex'),
+          password: crypto.randomBytes(32).toString('hex'),
           role: 'admin' 
         });
         await adminUser.save();
@@ -89,7 +91,8 @@ router.post('/login',
       user: { username: user.username, role: user.role }
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -100,7 +103,8 @@ router.get('/verify', (req, res) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     res.json({ valid: true, user: decoded });
-  } catch {
+  } catch (error) {
+    logger.warn('Token verification failed', { error: error.message });
     res.status(401).json({ error: 'Invalid token' });
   }
 });
@@ -109,7 +113,7 @@ router.get('/verify', (req, res) => {
 router.post('/refresh',
   body('refreshToken').notEmpty().withMessage('Refresh token is required'),
   handleValidation,
-  async (req, res) => {
+  (req, res) => {
     try {
       const { refreshToken } = req.body;
       const tokens = rotateRefreshToken(refreshToken);
@@ -129,7 +133,7 @@ router.post('/refresh',
 router.post('/revoke',
   body('refreshToken').notEmpty().withMessage('Refresh token is required'),
   handleValidation,
-  async (req, res) => {
+  (req, res) => {
     try {
       const { refreshToken } = req.body;
       revokeRefreshToken(refreshToken);
@@ -156,7 +160,7 @@ router.post('/push-token', async (req, res) => {
     // If user has an ID (database user), update their push token
     if (decoded.id) {
       await User.findByIdAndUpdate(decoded.id, { pushToken });
-      logger.info(`📱 Admin push token saved for ${decoded.username}: ${pushToken.substring(0, 30)}...`);
+      logger.info('Admin push token saved for : ...', { username: decoded.username, detail: pushToken.substring(0, 30) });
     } else {
       // Try to find user by username and update (for legacy tokens without ID)
       const user = await User.findOneAndUpdate(
@@ -165,9 +169,9 @@ router.post('/push-token', async (req, res) => {
         { new: true }
       );
       if (user) {
-        logger.info(`📱 Admin push token saved (by username) for ${decoded.username}: ${pushToken.substring(0, 30)}...`);
+        logger.info('Admin push token saved (by username) for : ...', { username: decoded.username, detail: pushToken.substring(0, 30) });
       } else {
-        logger.warn(`⚠️ No database user found for ${decoded.username} - push token not saved!`);
+        logger.warn('No database user found for - push token not saved!', { username : decoded.username });
       }
     }
     
@@ -188,13 +192,13 @@ router.delete('/push-token', async (req, res) => {
     
     if (decoded.id) {
       await User.findByIdAndUpdate(decoded.id, { pushToken: null });
-      logger.info(`📱 Admin push token cleared for ${decoded.username}`);
+      logger.info('Admin push token cleared for', { username : decoded.username });
     } else {
       await User.findOneAndUpdate(
         { username: decoded.username },
         { pushToken: null }
       );
-      logger.info(`📱 Admin push token cleared (by username) for ${decoded.username}`);
+      logger.info('Admin push token cleared (by username) for', { username : decoded.username });
     }
     
     res.json({ message: 'Push token cleared' });
@@ -209,7 +213,6 @@ router.delete('/push-token', async (req, res) => {
 // push token from any User or DeliveryBoy document that has it.
 // Safe because push tokens are opaque device identifiers with no
 // security value — clearing them only stops notifications.
-const DeliveryBoy = require('../models/DeliveryBoy');
 
 router.post('/clear-push-token', strictRateLimiter, async (req, res) => {
   try {
@@ -225,12 +228,11 @@ router.post('/clear-push-token', strictRateLimiter, async (req, res) => {
     ]);
 
     const cleared = (adminResult.modifiedCount || 0) + (deliveryResult.modifiedCount || 0);
-    logger.info(`📱 Push token cleared via fallback endpoint (${cleared} doc(s) updated)`);
+    logger.info('Push token cleared via fallback endpoint ( doc(s) updated)', { cleared });
 
     res.json({ message: 'Push token cleared', cleared });
   } catch (error) {
-    logger.error('Clear push token (fallback) error:', error);
-    res.status(500).json({ error: 'Failed to clear push token' });
+    logRouteError(res, 'Clear push token error', error);
   }
 });
 
@@ -246,7 +248,6 @@ router.post('/reset-badge', async (req, res) => {
     if (decoded.id) {
       const user = await User.findById(decoded.id);
       if (user && user.pushToken) {
-        const pushNotification = require('../services/pushNotification');
         pushNotification.resetBadgeCount(user.pushToken);
       }
     }
@@ -269,7 +270,6 @@ router.post('/test-notification', async (req, res) => {
     if (decoded.id) {
       const user = await User.findById(decoded.id);
       if (user && user.pushToken) {
-        const pushNotification = require('../services/pushNotification');
         const result = await pushNotification.sendTestNotification(user.pushToken);
         res.json({ message: 'Test notification sent', result, pushToken: user.pushToken });
       } else {
@@ -279,8 +279,7 @@ router.post('/test-notification', async (req, res) => {
       res.status(400).json({ error: 'User ID not found' });
     }
   } catch (error) {
-    logger.error('Test notification error:', error);
-    res.status(500).json({ error: error.message });
+    logRouteError(res, 'Test notification error', error);
   }
 });
 

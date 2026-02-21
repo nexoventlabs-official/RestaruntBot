@@ -183,10 +183,6 @@ describe('Validation Helpers', () => {
       expect(validationHelpers.isOrderCompleted({ status: 'cancelled' })).toBe(true);
     });
     
-    it('should return true for refunded status', () => {
-      expect(validationHelpers.isOrderCompleted({ status: 'refunded' })).toBe(true);
-    });
-    
     it('should return false for pending status', () => {
       expect(validationHelpers.isOrderCompleted({ status: 'pending' })).toBe(false);
     });

@@ -176,29 +176,13 @@ async function main() {
     if (result) success++;
   } catch (e) { console.log(`         ❌ ERROR: ${e.message}`); }
   
-  await sleep(DELAY_MS);
-
-  // ── Notification 8: Refund Requested ──────────────────────────
-  count++;
-  console.log(`  [${count}/8] 💰 Refund Requested...`);
-  try {
-    const result = await pushNotification.sendNotification(
-      token,
-      '💰 Refund Requested',
-      `Order #${orderId}-UPI - ₹650\nCustomer requested a refund`,
-      { type: 'refund_requested', orderId: orderId + '-UPI', screen: 'Orders' },
-      'order-updates'
-    );
-    console.log(`         ${result ? '✅ SENT' : '❌ FAILED'}`);
-    if (result) success++;
-  } catch (e) { console.log(`         ❌ ERROR: ${e.message}`); }
 
   // ── Summary ───────────────────────────────────────────────────
   console.log('\n───────────────────────────────────────────────');
   console.log(`\n  📊 Results: ${success}/${count} notifications sent successfully\n`);
   console.log('═══════════════════════════════════════════════');
   console.log('  CHECK YOUR PHONE NOTIFICATION TRAY!');
-  console.log('  You should see these 8 notifications:');
+  console.log('  You should see these 7 notifications:');
   console.log('');
   console.log('  1. 🎉 New Order Received! (COD delivery)');
   console.log('  2. 🎉 New Order Received! (Pickup)');
@@ -207,7 +191,6 @@ async function main() {
   console.log('  5. 👨‍🍳 Order Preparing');
   console.log('  6. ❌ Order Cancelled by Customer');
   console.log('  7. ⏰ Order Auto-Cancelled');
-  console.log('  8. 💰 Refund Requested');
   console.log('═══════════════════════════════════════════════\n');
 
   await mongoose.disconnect();

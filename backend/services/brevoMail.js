@@ -1,5 +1,6 @@
 const SibApiV3Sdk = require('sib-api-v3-sdk');
 const logger = require('./logger');
+const { startTimer } = require('./logger');
 
 const defaultClient = SibApiV3Sdk.ApiClient.instance;
 const apiKey = defaultClient.authentications['api-key'];
@@ -24,10 +25,13 @@ const brevoMail = {
     sendSmtpEmail.sender = { name: process.env.BREVO_FROM_NAME, email: process.env.BREVO_FROM_EMAIL };
     sendSmtpEmail.to = [{ email }];
 
+    const endTimer = startTimer('brevo.sendOrderConfirmation');
     try {
       await apiInstance.sendTransacEmail(sendSmtpEmail);
+      endTimer({ success: true });
       return true;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Brevo email error:', error.message);
       return false;
     }
@@ -97,11 +101,14 @@ const brevoMail = {
     sendSmtpEmail.sender = { name: process.env.BREVO_FROM_NAME || 'FoodAdmin', email: process.env.BREVO_FROM_EMAIL };
     sendSmtpEmail.to = [{ email }];
 
+    const endTimer = startTimer('brevo.sendDeliveryPartnerNotification');
     try {
       await apiInstance.sendTransacEmail(sendSmtpEmail);
-      logger.info(`📧 Delivery notification email sent to ${email}`);
+      logger.info('Delivery notification email sent', { email });
+      endTimer({ success: true });
       return true;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Brevo delivery notification email error:', error.message);
       return false;
     }
@@ -119,10 +126,13 @@ const brevoMail = {
     sendSmtpEmail.sender = { name: process.env.BREVO_FROM_NAME, email: process.env.BREVO_FROM_EMAIL };
     sendSmtpEmail.to = [{ email }];
 
+    const endTimer = startTimer('brevo.sendStatusUpdate');
     try {
       await apiInstance.sendTransacEmail(sendSmtpEmail);
+      endTimer({ success: true });
       return true;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Brevo email error:', error.message);
       return false;
     }
@@ -179,8 +189,7 @@ const brevoMail = {
             <h3 style="color: #1c1d21; margin-top: 0;">Order Status</h3>
             <p>✅ Delivered: <strong>${reportData.deliveredOrders || 0}</strong></p>
             <p>❌ Cancelled: <strong>${reportData.cancelledOrders || 0}</strong></p>
-            <p>🔄 Refunded: <strong>${reportData.refundedOrders || 0}</strong></p>
-            <p>💵 COD: <strong>${reportData.codOrders || 0}</strong> | 💳 UPI: <strong>${reportData.upiOrders || 0}</strong></p>
+            <p> COD: <strong>${reportData.codOrders || 0}</strong> | 💳 UPI: <strong>${reportData.upiOrders || 0}</strong></p>
           </div>
         </div>
         
@@ -197,13 +206,55 @@ const brevoMail = {
       name: `FoodAdmin_${reportType}_Report_${new Date().toISOString().split('T')[0]}.pdf`
     }];
 
+    const endTimer = startTimer('brevo.sendReportEmail');
     try {
       await apiInstance.sendTransacEmail(sendSmtpEmail);
-      logger.info(`📧 Report email sent to ${email}`);
+      logger.info('Report email sent to', { email });
+      endTimer({ success: true });
       return true;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Brevo report email error:', error.message);
       throw error;
+    }
+  },
+
+  async sendDeliveryPartnerCredentials(email, name, password) {
+    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
+    sendSmtpEmail.subject = 'Welcome to FoodAdmin - Your Login Credentials';
+    sendSmtpEmail.htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #e63946, #ff6b6b); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0;">🚴 Welcome to FoodAdmin!</h1>
+        </div>
+        <div style="padding: 30px; background: #f8f9fb;">
+          <h2 style="color: #1c1d21;">Hello ${name}!</h2>
+          <p style="color: #61636b; font-size: 16px;">You have been added as a Delivery Partner. Here are your login credentials:</p>
+          <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #e63946;">
+            <p style="margin: 10px 0;"><strong>Email:</strong> ${email}</p>
+            <p style="margin: 10px 0;"><strong>Password:</strong> <code style="background: #f0f0f0; padding: 5px 10px; border-radius: 5px; font-size: 18px;">${password}</code></p>
+          </div>
+          <p style="color: #e63946; font-weight: bold;">⚠️ Please change your password after first login!</p>
+          <p style="color: #61636b;">Login at: <a href="https://restarunt-bot.vercel.app/delivery/login" style="color: #e63946;">Delivery Portal</a></p>
+        </div>
+        <div style="padding: 20px; text-align: center; color: #61636b; font-size: 12px;">
+          <p>This is an automated message from FoodAdmin.</p>
+        </div>
+      </div>
+    `;
+    sendSmtpEmail.sender = { name: process.env.BREVO_FROM_NAME || 'FoodAdmin', email: process.env.BREVO_FROM_EMAIL };
+    sendSmtpEmail.to = [{ email, name }];
+
+    const endTimer = startTimer('brevo.sendDeliveryPartnerCredentials');
+    try {
+      await apiInstance.sendTransacEmail(sendSmtpEmail);
+      logger.info('Password email sent to', { email });
+      endTimer({ success: true });
+      return true;
+    } catch (error) {
+      endTimer({ success: false, error: error.message });
+      logger.error('Brevo email error:', error.message);
+      return false;
     }
   }
 };

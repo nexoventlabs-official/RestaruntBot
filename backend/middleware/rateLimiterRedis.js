@@ -80,7 +80,7 @@ function createRateLimiterMiddleware(rateLimiter, message = 'Too many requests')
       res.setHeader('X-RateLimit-Reset', new Date(Date.now() + rateLimiterRes.msBeforeNext).toISOString());
       res.setHeader('Retry-After', retryAfter);
       
-      logger.warn(`⚠️ [RateLimit] Limit exceeded: ${key} (${rateLimiter.keyPrefix})`);
+      logger.warn('[RateLimit] Limit exceeded', { key, consumedPoints: rateLimiterRes?.consumedPoints });
       
       return res.status(429).json({
         error: message,
@@ -195,13 +195,13 @@ async function clearRateLimit(ip, prefix = null) {
     if (prefix) {
       const key = `${prefix}:${ip}`;
       await redisClient.del(key);
-      logger.info(`✅ [RateLimit] Cleared rate limit for ${key}`);
+      logger.info('[RateLimit] Cleared rate limit for', { key });
     } else {
       // Clear all prefixes for this IP
       const keys = await redisClient.keys(`rl:*:${ip}`);
       if (keys.length > 0) {
         await redisClient.del(...keys);
-        logger.info(`✅ [RateLimit] Cleared ${keys.length} rate limits for ${ip}`);
+        logger.info('[RateLimit] Cleared rate limits for', { count: keys.length, ip });
       }
     }
     return true;

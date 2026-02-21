@@ -16,6 +16,9 @@ const crypto = require('crypto');
 
 const asyncLocalStorage = new AsyncLocalStorage();
 
+// Register with Winston so ALL logger calls auto-get correlation context
+winstonLogger.setCorrelationProvider(() => asyncLocalStorage.getStore());
+
 /**
  * Generate unique correlation ID
  */

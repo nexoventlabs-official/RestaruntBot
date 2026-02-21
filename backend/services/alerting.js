@@ -25,9 +25,18 @@ const ALERT_EMAIL = process.env.ALERT_EMAIL || process.env.BREVO_FROM_EMAIL;
 const ENABLE_SLACK = !!SLACK_WEBHOOK_URL;
 const ENABLE_EMAIL = !!ALERT_EMAIL;
 
-// Rate limiting for alerts (prevent spam)
+// Rate limiting for alerts (prevent spam) — configurable via env
 const alertCache = new Map();
-const ALERT_COOLDOWN = 5 * 60 * 1000; // 5 minutes
+const ALERT_COOLDOWN = parseInt(process.env.ALERT_COOLDOWN_MS, 10) || 5 * 60 * 1000; // default 5 minutes
+const MAX_ALERT_CACHE_SIZE = parseInt(process.env.ALERT_CACHE_SIZE, 10) || 500;
+
+// Configurable alert thresholds
+const ALERT_THRESHOLDS = {
+  errorRatePercent: parseFloat(process.env.ALERT_ERROR_RATE_THRESHOLD) || 5.0,
+  apiFailureCount: parseInt(process.env.ALERT_API_FAILURE_THRESHOLD, 10) || 10,
+  queueBacklogSize: parseInt(process.env.ALERT_QUEUE_BACKLOG_THRESHOLD, 10) || 100,
+  memoryUsagePercent: parseFloat(process.env.ALERT_MEMORY_THRESHOLD) || 90.0,
+};
 
 /**
  * Check if alert should be sent (rate limiting)
@@ -41,6 +50,16 @@ function shouldSendAlert(alertKey) {
   }
   
   alertCache.set(alertKey, now);
+
+  // Evict expired entries if cache exceeds cap
+  if (alertCache.size > MAX_ALERT_CACHE_SIZE) {
+    for (const [key, ts] of alertCache) {
+      if (now - ts > ALERT_COOLDOWN) {
+        alertCache.delete(key);
+      }
+    }
+  }
+
   return true;
 }
 
@@ -170,10 +189,10 @@ function sendConsoleAlert(title, message, severity = 'error', metadata = {}) {
     info: 'ℹ️'
   }[severity] || '❌';
   
-  logger.error(`\n${emoji} [ALERT] ${title}`);
-  logger.error(`Severity: ${severity.toUpperCase()}`);
-  logger.error(`Message: ${message}`);
-  logger.error(`Timestamp: ${new Date().toISOString()}`);
+  logger.error('\n [ALERT]', { emoji, title });
+  logger.error('[ALERT] Details', { message, timestamp: new Date().toISOString() });
+  // (merged into structured alert above);
+  // (merged into structured alert above);
   
   if (Object.keys(metadata).length > 0) {
     logger.error('Details:', JSON.stringify(metadata, null, 2));
@@ -190,11 +209,11 @@ async function sendAlert(title, message, severity = 'error', metadata = {}) {
   
   // Check rate limiting
   if (!shouldSendAlert(alertKey)) {
-    logger.info(`⏭️ [Alerting] Skipping alert (cooldown): ${title}`);
+    logger.info('[Alerting] Skipping alert (cooldown)', { title });
     return;
   }
   
-  logger.info(`📢 [Alerting] Sending alert: ${title}`);
+  logger.info('[Alerting] Sending alert', { title });
   
   // Send through all channels
   const results = await Promise.allSettled([
@@ -358,5 +377,6 @@ module.exports = {
   alertDatabaseIssue,
   alertRedisIssue,
   sendTestAlert,
-  getAlertingStatus
+  getAlertingStatus,
+  ALERT_THRESHOLDS
 };

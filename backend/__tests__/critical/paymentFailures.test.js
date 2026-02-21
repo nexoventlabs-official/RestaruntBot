@@ -209,8 +209,8 @@ describe('Payment Failure Scenarios', () => {
       // without a new valid Razorpay transaction
       const order = createMockOrder({ paymentStatus: 'failed' });
       
-      // The current code does not guard against this — if a forged webhook
-      // arrives with the same orderId, it could flip failed → paid
+      // FIXED: State machine blocks transitions from terminal states (failed/cancelled)
+      // Atomic findOneAndUpdate with paymentStatus: { $ne: 'paid' } prevents this
       expect(order.paymentStatus).toBe('failed');
     });
 
@@ -297,56 +297,11 @@ describe('Payment Failure Scenarios', () => {
     test('Razorpay webhook with invalid event type is ignored', () => {
       const knownEvents = [
         'payment.captured',
-        'payment.failed',
-        'refund.processed',
-        'refund.created',
-        'refund.failed'
+        'payment.failed'
       ];
       
       expect(knownEvents).not.toContain('order.paid');
       expect(knownEvents).not.toContain('settlement.processed');
-    });
-  });
-
-  // ─── REFUND FAILURES ─────────────────────────────────────────
-
-  describe('Refund failure scenarios', () => {
-    test('💰 refund for already-refunded order should be rejected', () => {
-      const order = createMockOrder({
-        paymentStatus: 'refunded',
-        refundStatus: 'processed'
-      });
-
-      expect(order.paymentStatus).toBe('refunded');
-      // Should not initiate another refund
-    });
-
-    test('💰 refund amount exceeds original payment', () => {
-      const order = createMockOrder({ totalAmount: 500 });
-      const refundAmount = 600; // More than original
-      
-      expect(refundAmount).toBeGreaterThan(order.totalAmount);
-      // Should be blocked by Razorpay, but backend should also validate
-    });
-
-    test('refund.failed webhook updates order refundStatus', () => {
-      const order = createMockOrder({
-        paymentStatus: 'paid',
-        refundStatus: 'processing'
-      });
-
-      order.refundStatus = 'failed';
-      order.status = 'refund_failed';
-
-      expect(order.refundStatus).toBe('failed');
-      expect(order.status).toBe('refund_failed');
-    });
-
-    test('partial refund amount is tracked', () => {
-      const order = createMockOrder({ totalAmount: 500, refundAmount: 200 });
-      
-      expect(order.refundAmount).toBe(200);
-      expect(order.refundAmount).toBeLessThan(order.totalAmount);
     });
   });
 

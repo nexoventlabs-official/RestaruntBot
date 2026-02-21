@@ -53,6 +53,8 @@ const customerSchema = new mongoose.Schema({
   totalSpent: { type: Number, default: 0, min: 0 },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
+}, {
+  optimisticConcurrency: true
 });
 
 customerSchema.pre('save', function(next) {

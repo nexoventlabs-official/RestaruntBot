@@ -74,7 +74,7 @@ function authenticate(req, res, next) {
       };
       
       // Log authentication (for audit)
-      logger.info(`🔐 Authenticated: ${req.user.role} (${req.user.id}) - ${req.method} ${req.originalUrl}`);
+      logger.info('Authenticated user', { role: req.user.role, userId: req.user.id });
       
       next();
       

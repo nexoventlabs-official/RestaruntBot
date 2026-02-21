@@ -1,5 +1,6 @@
 const Razorpay = require('razorpay');
 const logger = require('./logger');
+const { startTimer, logApiCall } = require('./logger');
 
 let razorpay = null;
 let lastKeyId = null;
@@ -12,13 +13,14 @@ const getRazorpay = () => {
       key_secret: process.env.RAZORPAY_KEY_SECRET
     });
     lastKeyId = process.env.RAZORPAY_KEY_ID;
-    logger.info('🔑 Razorpay instance created/refreshed');
+    logger.info('Razorpay instance created/refreshed');
   }
   return razorpay;
 };
 
 const razorpayService = {
   async createOrder(amount, orderId) {
+    const endTimer = startTimer('razorpay.createOrder');
     try {
       const options = {
         amount: amount * 100,
@@ -27,14 +29,17 @@ const razorpayService = {
         notes: { orderId }
       };
       const order = await getRazorpay().orders.create(options);
+      endTimer({ orderId, success: true });
       return order;
     } catch (error) {
-      logger.error('Razorpay create order error:', error.message);
+      endTimer({ orderId, success: false });
+      logger.error('Razorpay create order error', { error: error.message, orderId });
       throw error;
     }
   },
 
   async createPaymentLink(amount, orderId, customerPhone, customerName) {
+    const endTimer = startTimer('razorpay.createPaymentLink');
     try {
       // Clean phone number - remove all non-digits and ensure proper format
       let cleanPhone = customerPhone.replace(/\D/g, '');
@@ -44,14 +49,13 @@ const razorpayService = {
       }
       // Ensure it's 10 digits
       if (cleanPhone.length !== 10) {
-        logger.error('Invalid phone number length:', cleanPhone.length, 'Phone:', customerPhone);
+      logger.error('Invalid phone number length', { length: cleanPhone.length, phone: customerPhone });
       }
       const formattedPhone = '+91' + cleanPhone;
       
-      logger.info('Creating Razorpay payment link:', { 
+      logger.info('Creating Razorpay payment link', { 
         amount, 
         orderId, 
-        originalPhone: customerPhone,
         formattedPhone,
         customerName 
       });
@@ -72,13 +76,15 @@ const razorpayService = {
         callback_method: 'get'
       };
       
-      logger.info('Payment link options:', JSON.stringify(paymentLinkOptions, null, 2));
+      logger.info('Payment link options', { paymentLinkOptions });
       
       const paymentLink = await getRazorpay().paymentLink.create(paymentLinkOptions);
-      logger.info('✅ Payment link created:', paymentLink.short_url, 'ID:', paymentLink.id);
+      endTimer({ orderId, success: true });
+      logger.info('Payment link created', { shortUrl: paymentLink.short_url, linkId: paymentLink.id, orderId });
       return paymentLink;
     } catch (error) {
-      logger.error('❌ Razorpay payment link error:', {
+      endTimer({ orderId, success: false });
+      logger.error('Razorpay payment link error', {
         message: error.message,
         code: error.error?.code,
         description: error.error?.description,
@@ -92,104 +98,15 @@ const razorpayService = {
     }
   },
 
-  async refund(paymentId, amount, retryCount = 0) {
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY_MS = 5000; // 5 seconds between retries
-    
-    try {
-      logger.info('💰 Attempting refund:', { paymentId, amountInRupees: amount, attempt: retryCount + 1 });
-      
-      // First fetch payment details to verify it's refundable
-      const payment = await getRazorpay().payments.fetch(paymentId);
-      const paymentAmountInRupees = payment.amount / 100;
-      
-      logger.info('💰 Payment details:', { 
-        status: payment.status, 
-        amountInPaise: payment.amount,
-        amountInRupees: paymentAmountInRupees,
-        captured: payment.captured,
-        refund_status: payment.refund_status,
-        amount_refunded: payment.amount_refunded,
-        created_at: new Date(payment.created_at * 1000).toISOString()
-      });
-      
-      // Check if payment is captured and not already refunded
-      if (payment.status !== 'captured') {
-        throw new Error(`Payment not captured. Status: ${payment.status}`);
-      }
-      
-      if (payment.refund_status === 'full') {
-        throw new Error('Payment already fully refunded');
-      }
-      
-      // Check if payment is too recent (less than 5 minutes old)
-      // Razorpay sometimes needs time to fully process payments before allowing refunds
-      const paymentAge = Date.now() - (payment.created_at * 1000);
-      const MIN_PAYMENT_AGE_MS = 5 * 60 * 1000; // 5 minutes
-      
-      if (paymentAge < MIN_PAYMENT_AGE_MS) {
-        const waitTime = Math.min(MIN_PAYMENT_AGE_MS - paymentAge, 30000); // Wait up to 30 seconds
-        logger.info(`⏳ Payment is ${Math.round(paymentAge / 1000)}s old, waiting ${Math.round(waitTime / 1000)}s before refund...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-      }
-      
-      // Calculate refund amount in paise
-      const refundAmountInPaise = Math.round(amount * 100);
-      const availableForRefund = payment.amount - (payment.amount_refunded || 0);
-      
-      logger.info('💰 Refund calculation:', {
-        requestedRefundInPaise: refundAmountInPaise,
-        availableForRefundInPaise: availableForRefund
-      });
-      
-      // Validate refund amount doesn't exceed available amount
-      const finalRefundAmount = refundAmountInPaise > availableForRefund ? availableForRefund : refundAmountInPaise;
-      
-      if (finalRefundAmount <= 0) {
-        throw new Error('No amount available for refund');
-      }
-      
-      // Process refund using payments.refund (Razorpay SDK v2.x method)
-      logger.info('💰 Calling Razorpay refund API:', { paymentId, amountInPaise: finalRefundAmount });
-      
-      // SDK v2.x: payments.refund(paymentId, options)
-      const refund = await getRazorpay().payments.refund(paymentId, {
-        amount: finalRefundAmount
-      });
-      
-      logger.info('✅ Refund successful:', refund.id, 'Amount:', finalRefundAmount / 100);
-      return refund;
-    } catch (error) {
-      const errorCode = error.error?.code || error.code;
-      const errorDesc = error.error?.description || error.message;
-      
-      logger.error('❌ Razorpay refund error:', {
-        message: error.message,
-        code: errorCode,
-        description: errorDesc,
-        paymentId,
-        amount,
-        attempt: retryCount + 1
-      });
-      
-      // Retry on SERVER_ERROR, GATEWAY_ERROR, or BAD_REQUEST_ERROR (timing issues)
-      if ((errorCode === 'SERVER_ERROR' || errorCode === 'GATEWAY_ERROR' || 
-           (errorCode === 'BAD_REQUEST_ERROR' && errorDesc === 'invalid request sent')) && retryCount < MAX_RETRIES) {
-        const retryDelay = errorCode === 'BAD_REQUEST_ERROR' ? 30000 : RETRY_DELAY_MS; // 30s for timing issues
-        logger.info(`🔄 Retrying refund in ${retryDelay / 1000} seconds... (attempt ${retryCount + 2}/${MAX_RETRIES + 1})`);
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-        return this.refund(paymentId, amount, retryCount + 1);
-      }
-      
-      throw error;
-    }
-  },
-
   async getPaymentDetails(paymentId) {
+    const endTimer = startTimer('razorpay.getPaymentDetails');
     try {
-      return await getRazorpay().payments.fetch(paymentId);
+      const result = await getRazorpay().payments.fetch(paymentId);
+      endTimer({ paymentId, success: true });
+      return result;
     } catch (error) {
-      logger.error('Razorpay fetch payment error:', error.message);
+      endTimer({ paymentId, success: false });
+      logger.error('Razorpay fetch payment error', { error: error.message, paymentId });
       throw error;
     }
   }

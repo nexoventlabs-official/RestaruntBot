@@ -27,7 +27,8 @@ router.get('/', auth, async (req, res) => {
     const heroes = await HeroSection.find().sort({ order: 1, createdAt: -1 });
     res.json(heroes);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    return logRouteError(res, 'Internal server error', err);
   }
 });
 
@@ -61,7 +62,8 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
     await hero.save();
     res.status(201).json(hero);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    return logRouteError(res, 'Internal server error', err);
   }
 });
 
@@ -91,7 +93,8 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
     
     res.json(hero);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    return logRouteError(res, 'Internal server error', err);
   }
 });
 
@@ -102,7 +105,8 @@ router.delete('/:id', auth, async (req, res) => {
     if (!hero) return res.status(404).json({ error: 'Hero section not found' });
     res.json({ message: 'Hero section deleted' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    return logRouteError(res, 'Internal server error', err);
   }
 });
 
@@ -116,7 +120,8 @@ router.patch('/:id/toggle', auth, async (req, res) => {
     await hero.save();
     res.json(hero);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    return logRouteError(res, 'Internal server error', err);
   }
 });
 

@@ -31,7 +31,8 @@ router.get('/', async (req, res) => {
     const categories = await Category.find({ isActive: true }).sort({ sortOrder: 1, name: 1 });
     res.json(categories);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -67,7 +68,8 @@ router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
     
     res.status(201).json(category);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -124,7 +126,8 @@ router.put('/:id', authMiddleware, upload.single('image'), async (req, res) => {
     
     res.json(category);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -143,7 +146,8 @@ router.patch('/:id/toggle-pause', authMiddleware, async (req, res) => {
     
     res.json(category);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -152,7 +156,7 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
   try {
     const { enabled, type, startTime, endTime, days, customDays } = req.body;
     
-    logger.info(`[Schedule API] Updating schedule for category ${req.params.id}`);
+    logger.info('[Schedule API] Updating schedule', { categoryId: req.params.id });
     logger.info('[Schedule API] Data', { enabled, type, startTime, endTime, days, customDays });
     
     const category = await Category.findById(req.params.id);
@@ -160,7 +164,7 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Category not found' });
     }
 
-    logger.info(`[Schedule API] Category: ${category.name}, Current isPaused: ${category.isPaused}`);
+    logger.info('[Schedule API] Operation');
 
     // Update schedule
     category.schedule = {
@@ -190,7 +194,7 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
       
       // Fetch fresh data after scheduler update
       const updatedCategory = await Category.findById(category._id);
-      logger.info(`[Schedule API] After scheduler: isPaused = ${updatedCategory.isPaused}`);
+      logger.info('[Schedule API] Operation');
       logger.info('[Schedule API] Returning updated category to client');
       
       // Emit event for real-time updates
@@ -200,11 +204,11 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
     } else {
       // Schedule disabled - unpause category and make all items available
       logger.info('[Schedule API] Schedule disabled - unpausing category and making items available');
-      logger.info(`[Schedule API] Category ${category.name} was isPaused: ${category.isPaused}, isSoldOut: ${category.isSoldOut}`);
+      logger.info('[Schedule API] Operation');
       
       category.isPaused = false;
       await category.save();
-      logger.info(`[Schedule API] Category ${category.name} isPaused set to: false`);
+      logger.info('[Schedule API] Operation');
       
       // Make all items in this category available
       const MenuItem = require('../models/MenuItem');
@@ -214,14 +218,14 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
       );
       
       if (updateResult.modifiedCount > 0) {
-        logger.info(`[Schedule API] Made ${updateResult.modifiedCount} item(s) available in ${category.name}`);
+        logger.info('[Schedule API] Operation');
       } else {
-        logger.info(`[Schedule API] No items needed availability update in ${category.name}`);
+        logger.info('[Schedule API] Operation');
       }
       
       // Fetch fresh data
       const updatedCategory = await Category.findById(category._id);
-      logger.info(`[Schedule API] Returning category with isPaused: ${updatedCategory.isPaused}`);
+      logger.info('[Schedule API] Operation');
       
       // Emit event for real-time updates
       dataEvents.emit('menu');
@@ -229,8 +233,7 @@ router.patch('/:id/schedule', authMiddleware, async (req, res) => {
       return res.json(updatedCategory);
     }
   } catch (error) {
-    logger.error('[Schedule API] Error', { error: error.message });
-    res.status(500).json({ error: error.message });
+    return logRouteError(res, '[Schedule API] Error', error);
   }
 });
 
@@ -261,14 +264,14 @@ router.patch('/:id/toggle-soldout', authMiddleware, async (req, res) => {
         { category: category.name },
         { $set: { available: false } }
       );
-      logger.info(`[Category] "${category.name}" marked SOLD OUT - ${result.modifiedCount} item(s) marked out of stock`);
+      logger.info('[Category] "" marked SOLD OUT - item(s) marked out of stock', { name: category.name, modifiedCount: result.modifiedCount });
     } else {
       // Mark all items in this category as available
       const result = await MenuItem.updateMany(
         { category: category.name },
         { $set: { available: true } }
       );
-      logger.info(`[Category] "${category.name}" RESUMED - ${result.modifiedCount} item(s) marked available`);
+      logger.info('[Category] "" RESUMED - item(s) marked available', { name: category.name, modifiedCount: result.modifiedCount });
     }
     
     // Emit event for real-time updates
@@ -276,7 +279,8 @@ router.patch('/:id/toggle-soldout', authMiddleware, async (req, res) => {
     
     res.json(category);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -287,7 +291,7 @@ router.patch('/:id/schedule-soldout', authMiddleware, async (req, res) => {
   try {
     const { enabled, endTime } = req.body;
     
-    logger.info(`[SoldOut Schedule API] Updating sold out schedule for category ${req.params.id}`);
+    logger.info('[SoldOut Schedule API] Updating sold out schedule for category', { id : req.params.id });
     logger.info('[SoldOut Schedule API] Data', { enabled, endTime });
     
     const category = await Category.findById(req.params.id);
@@ -311,7 +315,7 @@ router.patch('/:id/schedule-soldout', authMiddleware, async (req, res) => {
         { category: category.name },
         { $set: { available: false } }
       );
-      logger.info(`[Category] "${category.name}" scheduled SOLD OUT until ${endTime} - ${result.modifiedCount} item(s) marked out of stock`);
+      logger.info('[Category] "" scheduled SOLD OUT until - item(s) marked out of stock', { name: category.name, endTime, modifiedCount: result.modifiedCount });
     }
     
     await category.save();
@@ -321,8 +325,7 @@ router.patch('/:id/schedule-soldout', authMiddleware, async (req, res) => {
     
     res.json(category);
   } catch (error) {
-    logger.error('[SoldOut Schedule API] Error', { error: error.message });
-    res.status(500).json({ error: error.message });
+    return logRouteError(res, '[SoldOut Schedule API] Error', error);
   }
 });
 
@@ -389,7 +392,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
       updatedItems: updatedItemsCount,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 

@@ -35,7 +35,7 @@ const chatbotImagesService = {
 
       return imageCache[key] || null;
     } catch (error) {
-      logger.error(`Error fetching chatbot image ${key}:`, error.message);
+      logger.error('Error fetching chatbot image', error.message);
       return null;
     }
   },

@@ -174,7 +174,7 @@ function cleanupExpiredTokens() {
     }
   }
   
-  logger.info(`🧹 Cleaned up ${cleanedCount} expired refresh tokens`);
+  logger.info('Cleaned up expired refresh tokens', { cleanedCount });
   return cleanedCount;
 }
 

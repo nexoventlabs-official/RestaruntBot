@@ -4,7 +4,7 @@
  * Tests the PaymentEvent-based idempotency guard that protects against
  * Razorpay delivering the same webhook event multiple times.
  *
- * 💰 FINANCIAL RISK: Failed dedup can cause double-crediting, double-refunding,
+ * 💰 FINANCIAL RISK: Failed dedup can cause double-crediting,
  * or the dedup-before-commit bug where payment is deduplicated before the
  * DB write completes — a crash between create(PaymentEvent) and order.save()
  * causes PERMANENT payment loss.
@@ -69,13 +69,6 @@ function makeWebhookPayload(eventId, eventType, paymentId, orderId) {
           order_id: orderId,
           amount: 50000, // 500.00 INR in paise
           notes: { orderId: 'ORD_TEST1' }
-        }
-      },
-      refund: {
-        entity: {
-          id: 'rfnd_test123',
-          payment_id: paymentId,
-          amount: 50000
         }
       }
     }
@@ -313,37 +306,6 @@ describe('Webhook Deduplication', () => {
     });
   });
 
-  describe('Refund webhook deduplication', () => {
-    test('refund.processed event is deduplicated by eventId', async () => {
-      mockPaymentEventCreate.mockResolvedValue({ eventId: 'evt_refund_001' });
-
-      const result = await simulateWebhookDedup('evt_refund_001', 'refund.processed');
-      expect(result.processed).toBe(true);
-      expect(mockPaymentEventCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ eventType: 'refund.processed' })
-      );
-    });
-
-    test('refund.failed event is deduplicated by eventId', async () => {
-      mockPaymentEventCreate.mockResolvedValue({ eventId: 'evt_refund_fail' });
-
-      const result = await simulateWebhookDedup('evt_refund_fail', 'refund.failed');
-      expect(result.processed).toBe(true);
-    });
-
-    test('💰 same payment, different event types are NOT deduped against each other', async () => {
-      // payment.captured and refund.processed have different event IDs
-      // so they correctly process independently
-      mockPaymentEventCreate.mockResolvedValue({});
-
-      const capturedResult = await simulateWebhookDedup('evt_cap_001', 'payment.captured');
-      const refundResult = await simulateWebhookDedup('evt_ref_001', 'refund.processed');
-      
-      expect(capturedResult.processed).toBe(true);
-      expect(refundResult.processed).toBe(true);
-      expect(mockPaymentEventCreate).toHaveBeenCalledTimes(2);
-    });
-  });
 });
 
 // ── Simulation helpers (mirror actual webhook handler logic) ─────

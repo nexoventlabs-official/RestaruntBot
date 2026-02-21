@@ -13,7 +13,8 @@ router.post('/generate-description', authMiddleware, async (req, res) => {
     const description = await groqAi.generateDescription(name, category);
     res.json({ description });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -23,7 +24,8 @@ router.post('/generate-tags', authMiddleware, async (req, res) => {
     const tags = await groqAi.generateTags(name, category, foodType, quantity, unit);
     res.json({ tags });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 

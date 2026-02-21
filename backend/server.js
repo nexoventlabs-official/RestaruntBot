@@ -33,13 +33,16 @@ const settingsRoutes = require('./routes/settings');
 const healthRoutes = require('./routes/health');
 const catalogRoutes = require('./routes/catalog');
 const orderScheduler = require('./services/orderScheduler');
-const refundScheduler = require('./services/refundScheduler');
 const dailyCleanup = require('./services/dailyCleanup');
 const categoryScheduler = require('./services/categoryScheduler');
 const orderCleanup = require('./services/orderCleanup');
 const cartCleanup = require('./services/cartCleanup');
 const catalogReviewPoller = require('./services/catalogReviewPoller');
 const catalogRatingSync = require('./services/catalogRatingSync');
+const orderReconciliation = require('./services/orderReconciliation');
+const outboundRetryWorker = require('./services/outboundRetryWorker');
+const dashboardStatsSync = require('./services/dashboardStatsSync');
+const pushTokenCleanup = require('./services/pushTokenCleanup');
 const googleSheets = require('./services/googleSheets');
 
 // Validate environment variables at startup (always strict for critical vars)
@@ -85,13 +88,24 @@ app.use(correlationMiddleware);
 // Static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Request logging with structured logger
+// Request + response logging with duration tracking
 app.use('/api', (req, res, next) => {
-  logger.info(`${req.method} ${req.originalUrl}`, {
-    method: req.method,
-    path: req.originalUrl,
-    ip: req.ip,
-    type: 'request'
+  const start = Date.now();
+  const { method, originalUrl, ip } = req;
+
+  // Log on response finish
+  res.on('finish', () => {
+    const durationMs = Date.now() - start;
+    const level = res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info';
+    logger[level]('HTTP request completed', {
+      method,
+      path: originalUrl,
+      statusCode: res.statusCode,
+      durationMs,
+      contentLength: res.get('content-length') || 0,
+      ip,
+      type: 'http'
+    });
   });
   next();
 });
@@ -109,6 +123,9 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // MongoDB connection with reconnection handling
+let mongoRetryCount = 0;
+const MONGO_MAX_RETRIES = 20;
+const MONGO_BASE_DELAY = 5000;
 const connectMongoDB = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI, {
@@ -116,16 +133,29 @@ const connectMongoDB = async () => {
       heartbeatFrequencyMS: 10000,
     });
     logger.info('MongoDB connected successfully');
+    mongoRetryCount = 0;
     
     // Start schedulers after DB connection
     orderScheduler.start();
-    refundScheduler.start();
     dailyCleanup.start();
     categoryScheduler.start();
     orderCleanup.start();
     cartCleanup.startCartCleanupScheduler();
     catalogReviewPoller.start();
     catalogRatingSync.start();
+    orderReconciliation.start();
+    outboundRetryWorker.start();
+    dashboardStatsSync.start();
+    pushTokenCleanup.start();
+    
+    // Run one-time startup reconciliation to catch orders missed during downtime
+    orderReconciliation.reconcileOrders().then(result => {
+      if (result.reconciled > 0) {
+        logger.info('[Startup] Reconciled orders missed during downtime', { reconciled: result.reconciled });
+      }
+    }).catch(err => {
+      logger.warn('[Startup] Reconciliation check failed', { error: err.message });
+    });
     
     // Initialize Google Sheets - auto-create missing sheets, then initialize headers
     logger.info('Initializing Google Sheets...');
@@ -149,10 +179,25 @@ const connectMongoDB = async () => {
       logger.warn('WhatsApp Category Flow setup skipped', { error: flowErr.message });
     }
   } catch (err) {
-    logger.error('MongoDB connection error', { error: err.message, stack: err.stack });
-    // Retry after 5 seconds
-    logger.info('Retrying MongoDB connection in 5 seconds...');
-    setTimeout(connectMongoDB, 5000);
+    mongoRetryCount++;
+    const delayMs = Math.min(MONGO_BASE_DELAY * Math.pow(2, Math.min(mongoRetryCount - 1, 5)), 160000);
+    logger.error('MongoDB connection error', {
+      error: err.message,
+      stack: err.stack,
+      attempt: mongoRetryCount,
+      maxRetries: MONGO_MAX_RETRIES,
+      nextRetryDelayMs: delayMs,
+      backoffStrategy: 'exponential'
+    });
+    if (mongoRetryCount >= MONGO_MAX_RETRIES) {
+      logger.error('MongoDB max retries exhausted, stopping reconnection', {
+        attempt: mongoRetryCount,
+        maxRetries: MONGO_MAX_RETRIES
+      });
+      return;
+    }
+    logger.info('Retrying MongoDB connection', { attempt: mongoRetryCount, maxRetries: MONGO_MAX_RETRIES, delayMs });
+    setTimeout(connectMongoDB, delayMs);
   }
 };
 
@@ -203,6 +248,7 @@ app.get('/', (req, res) => res.json({
 
 // SSE endpoint for real-time updates (authenticated)
 const sseClients = new Set();
+const { initContext, runWithContext } = require('./services/correlationContext');
 
 app.get('/api/events', (req, res) => {
   // Require valid JWT for SSE connection
@@ -210,23 +256,30 @@ app.get('/api/events', (req, res) => {
   if (!token) {
     return res.status(401).json({ error: 'Authentication required' });
   }
+  let decoded;
   try {
-    require('jsonwebtoken').verify(token, process.env.JWT_SECRET);
+    decoded = require('jsonwebtoken').verify(token, process.env.JWT_SECRET);
   } catch (err) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders();
+  const ctx = initContext(null, { source: 'sse', userId: decoded.id || 'unknown' });
+  runWithContext(ctx, () => {
+    logger.info('SSE connection established', { userId: decoded.id });
 
-  sseClients.add(res);
-  const keepAlive = setInterval(() => res.write(': ping\n\n'), 30000);
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
 
-  req.on('close', () => {
-    clearInterval(keepAlive);
-    sseClients.delete(res);
+    sseClients.add(res);
+    const keepAlive = setInterval(() => res.write(': ping\n\n'), 30000);
+
+    req.on('close', () => {
+      clearInterval(keepAlive);
+      sseClients.delete(res);
+      logger.info('SSE connection closed', { userId: decoded.id });
+    });
   });
 });
 
@@ -278,15 +331,6 @@ app.get('/api/admin/sync-cancelled', authMiddleware, async (req, res) => {
   }
 });
 
-app.get('/api/admin/sync-pending-refunds', authMiddleware, async (req, res) => {
-  try {
-    const result = await googleSheets.syncPendingRefunds();
-    res.json({ success: result });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // Global error handler (must be LAST middleware)
 app.use(errorHandler);
 
@@ -294,18 +338,20 @@ const PORT = process.env.PORT || 5000;
 let server;
 if (process.env.NODE_ENV !== 'test') {
   server = app.listen(PORT, () => {
-    logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+    logger.info('Server started', { port: PORT, env: process.env.NODE_ENV || 'development' });
   });
 }
 
 // ============ GRACEFUL SHUTDOWN ============
 const SHUTDOWN_TIMEOUT = 15000; // 15 seconds max
 let isShuttingDown = false;
+const shutdownState = require('./services/shutdownState');
 
 const gracefulShutdown = async (signal) => {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  logger.info(`${signal} received. Starting graceful shutdown...`);
+  shutdownState.setShuttingDown();
+  logger.info('Graceful shutdown initiated', { signal });
 
   // Stop accepting new connections
   if (server) {
@@ -329,6 +375,10 @@ const gracefulShutdown = async (signal) => {
     if (orderCleanup.stop) orderCleanup.stop();
     if (cartCleanup.stopCartCleanupScheduler) cartCleanup.stopCartCleanupScheduler();
     if (catalogRatingSync.stop) catalogRatingSync.stop();
+    if (orderReconciliation.stop) orderReconciliation.stop();
+    if (outboundRetryWorker.stop) outboundRetryWorker.stop();
+    if (dashboardStatsSync.stop) dashboardStatsSync.stop();
+    if (pushTokenCleanup.stop) pushTokenCleanup.stop();
     logger.info('Schedulers stopped');
   } catch (err) {
     logger.error('Error stopping schedulers', { error: err.message });
@@ -345,11 +395,20 @@ const gracefulShutdown = async (signal) => {
   // Close Redis connection
   try {
     const redis = require('./services/redis');
-    if (redis.quit) await redis.quit();
+    if (redis.shutdown) await redis.shutdown();
     logger.info('Redis connection closed');
   } catch (err) {
     // Redis might not be initialized
     logger.warn('Redis close skipped', { error: err.message });
+  }
+
+  // Close message queue
+  try {
+    const messageQueue = require('./services/messageQueue');
+    if (messageQueue.shutdown) await messageQueue.shutdown();
+    logger.info('Message queue closed');
+  } catch (err) {
+    logger.warn('Message queue close skipped', { error: err.message });
   }
 
   logger.info('Graceful shutdown complete');
@@ -359,7 +418,7 @@ const gracefulShutdown = async (signal) => {
 // Force exit after timeout
 const forceShutdown = (signal) => {
   setTimeout(() => {
-    logger.error(`Forced shutdown after ${SHUTDOWN_TIMEOUT}ms timeout`);
+    logger.error('Forced shutdown after ms timeout', { SHUTDOWN_TIMEOUT });
     process.exit(1);
   }, SHUTDOWN_TIMEOUT).unref();
   gracefulShutdown(signal);
@@ -376,6 +435,7 @@ process.on('uncaughtException', (err) => {
 
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled Rejection', { reason: reason?.message || reason, stack: reason?.stack });
+  forceShutdown('unhandledRejection');
 });
 
 module.exports = { app, server };

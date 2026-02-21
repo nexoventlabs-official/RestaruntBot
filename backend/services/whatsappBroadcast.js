@@ -58,7 +58,7 @@ const whatsappBroadcast = {
       await customer.save();
       return true;
     } catch (error) {
-      logger.error(`[WhatsApp Broadcast] Error applying offer to ${phone}`, { error: error.message, stack: error.stack });
+      logger.error('[WhatsApp Broadcast] Error applying offer to', { error: error.message, stack: error.stack });
       return false;
     }
   },

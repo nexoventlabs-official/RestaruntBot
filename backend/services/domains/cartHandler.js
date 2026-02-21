@@ -24,6 +24,7 @@
  */
 
 const MenuItem = require('../../models/MenuItem');
+const Customer = require('../../models/Customer');
 const conversationState = require('../conversationState');
 const whatsapp = require('../whatsapp');
 const chatbotImagesService = require('../chatbotImages');
@@ -44,6 +45,12 @@ const CART_INTENTS = {
  */
 async function addToCart(customer, phone, params) {
   const { itemId, quantity = 1 } = params;
+
+  // Validate quantity
+  if (!Number.isFinite(quantity) || quantity < 1) {
+    await whatsapp.sendMessage(phone, '❌ Invalid quantity. Please specify a valid number greater than 0.');
+    return;
+  }
   
   // Idempotency check - prevent duplicate adds
   const idempotencyCheck = idempotencyService.checkCartOperation(
@@ -120,9 +127,13 @@ async function addToCart(customer, phone, params) {
       await whatsapp.sendButtons(phone, message, buttons);
     }
     
+    // Update conversation state atomically (outside transaction is acceptable for non-critical state)
     conversationState.clearSelectedItem(customer);
     conversationState.transitionTo(customer, 'item_added');
-    await customer.save();
+    await Customer.findOneAndUpdate(
+      { _id: customer._id },
+      { $set: { conversationState: customer.conversationState } }
+    );
     
   } catch (error) {
     logger.error('Failed to add item to cart', {
@@ -312,8 +323,12 @@ async function clearCart(customer, phone) {
       ]);
     }
     
+    // Update conversation state atomically
     conversationState.transitionTo(customer, 'main_menu');
-    await customer.save();
+    await Customer.findOneAndUpdate(
+      { _id: customer._id },
+      { $set: { conversationState: customer.conversationState } }
+    );
     
   } catch (error) {
     logger.error('Failed to clear cart', {
@@ -395,8 +410,25 @@ async function checkCartAvailability(customer, phone) {
 async function updateQuantity(customer, phone, params) {
   const { itemId, quantity } = params;
   
-  if (!quantity || quantity < 1) {
-    await whatsapp.sendMessage(phone, '❌ Invalid quantity. Please specify a number greater than 0.');
+  if (!quantity || quantity < 1 || !Number.isFinite(quantity)) {
+    await whatsapp.sendMessage(phone, '❌ Invalid quantity. Please specify a valid number greater than 0.');
+    return;
+  }
+  
+  // Idempotency check - prevent duplicate quantity updates
+  const idempotencyCheck = idempotencyService.checkCartOperation(
+    customer._id.toString(),
+    'updateQty',
+    itemId,
+    quantity
+  );
+  
+  if (idempotencyCheck.isDuplicate) {
+    logger.info('Duplicate cart quantity update prevented', {
+      customerId: customer._id,
+      itemId,
+      quantity
+    });
     return;
   }
   
@@ -415,6 +447,9 @@ async function updateQuantity(customer, phone, params) {
       customer.cart[index].addedAt = new Date();
       await customer.save({ session });
     });
+    
+    // Mark operation as processed
+    idempotencyCheck.mark();
     
     logger.info('Cart quantity updated', {
       customerId: customer._id,

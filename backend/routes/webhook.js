@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const logger = require('../services/logger');
 const chatbot = require('../services/chatbot');
 const whatsapp = require('../services/whatsapp');
@@ -12,6 +13,13 @@ const { webhookRateLimiter } = require('../middleware/rateLimiter');
 const { verifyWebhookSignature } = require('../middleware/webhookVerification');
 const { validateMetaWebhook, sanitizeWebhookPayload } = require('../middleware/webhookValidation');
 const { transitionStatus } = require('../services/orderStateMachine');
+const Customer = require('../models/Customer');
+const Offer = require('../models/Offer');
+const Order = require('../models/Order');
+const User = require('../models/User');
+const OutboundMessage = require('../models/OutboundMessage');
+const InboundMessage = require('../models/InboundMessage');
+const dataEvents = require('../services/eventEmitter');
 const router = express.Router();
 
 // ============================================================
@@ -39,8 +47,7 @@ router.get('/test-sheets', authMiddleware, async (req, res) => {
     const result = await googleSheets.addOrder(testOrder);
     res.json({ success: result, message: result ? 'Test order added to Google Sheet!' : 'Failed to add order' });
   } catch (error) {
-    logger.error('Google Sheets test error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    return logRouteError(res, 'Google Sheets test error', error);
   }
 });
 
@@ -54,8 +61,7 @@ router.get('/test/:phone', authMiddleware, async (req, res) => {
     await whatsapp.sendMessage(phone, '✅ Test message from your Restaurant Bot!');
     res.json({ success: true, message: 'Test message sent to ' + phone });
   } catch (error) {
-    logger.error('Test error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    return logRouteError(res, 'Test error', error);
   }
 });
 
@@ -69,8 +75,7 @@ router.get('/test-menu/:phone', authMiddleware, async (req, res) => {
     await chatbot.handleMessage(phone, 'hi', 'text', null);
     res.json({ success: true, message: 'Welcome menu sent to ' + phone });
   } catch (error) {
-    logger.error('Test menu error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    return logRouteError(res, 'Test menu error', error);
   }
 });
 
@@ -85,8 +90,7 @@ router.post('/simulate', authMiddleware, async (req, res) => {
     await chatbot.handleMessage(phone, message || '', messageType, selectedId || null);
     res.json({ success: true, message: 'Simulated message processed' });
   } catch (error) {
-    logger.error('Simulate error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    return logRouteError(res, 'Simulate error', error);
   }
 });
 
@@ -96,7 +100,6 @@ router.get('/debug/:phone', authMiddleware, async (req, res) => {
     return res.status(403).json({ error: 'Debug endpoints disabled in production' });
   }
   try {
-    const Customer = require('../models/Customer');
     const customer = await Customer.findOne({ phone: req.params.phone }).populate('cart.menuItem');
     if (!customer) {
       return res.json({ error: 'Customer not found' });
@@ -107,7 +110,8 @@ router.get('/debug/:phone', authMiddleware, async (req, res) => {
       conversationState: customer.conversationState
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -125,20 +129,20 @@ router.get('/meta', (req, res) => {
   // Verify token MUST come from env - no insecure fallback
   const verifyToken = process.env.META_VERIFY_TOKEN;
   if (!verifyToken) {
-    logger.error('❌ META_VERIFY_TOKEN not configured');
+    logger.error('META_VERIFY_TOKEN not configured');
     return res.sendStatus(500);
   }
 
-  logger.info('🔐 Webhook verification attempt:', { mode, token, expectedToken: verifyToken, challenge: challenge ? 'present' : 'missing' });
+  logger.info('Webhook verification attempt:', { mode, token, expectedToken: verifyToken, challenge: challenge ? 'present' : 'missing' });
 
   if (mode === 'subscribe' && token === verifyToken) {
-    logger.info('✅ Meta webhook verified');
+    logger.info('Meta webhook verified');
     res.status(200).send(challenge);
   } else if (!mode && !token) {
     // Simple health check (no verification params)
     res.json({ status: 'Webhook endpoint active', timestamp: new Date().toISOString() });
   } else {
-    logger.info('❌ Meta webhook verification failed - token mismatch');
+    logger.info('Meta webhook verification failed - token mismatch');
     res.sendStatus(403);
   }
 });
@@ -146,7 +150,7 @@ router.get('/meta', (req, res) => {
 // Meta WhatsApp Cloud API webhook endpoint (signature verified, validated, rate limited)
 router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWebhook, sanitizeWebhookPayload, async (req, res) => {
   if (process.env.NODE_ENV !== 'production') {
-    logger.info('📥 Webhook POST received');
+    logger.info('Webhook POST received');
   }
   
   // 1. Respond to Meta IMMEDIATELY to avoid timeouts (prevents 'single tick' issue)
@@ -170,7 +174,6 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
 
             if (tplName) {
               try {
-                const Offer = require('../models/Offer');
                 const statusMap = { 'APPROVED': 'approved', 'REJECTED': 'rejected', 'PENDING': 'pending' };
                 const mappedStatus = statusMap[event] || 'pending';
 
@@ -187,12 +190,10 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                 if (updated) {
                   logger.info('Offer template status updated via webhook', { offerId: updated._id, tplName, status: mappedStatus });
                   // Emit SSE event so frontend can refresh
-                  const eventEmitter = require('../services/eventEmitter');
-                  eventEmitter.emit('dataUpdate', { type: 'offers', templateUpdate: { offerId: updated._id, status: mappedStatus } });
+                  dataEvents.emit('dataUpdate', { type: 'offers', templateUpdate: { offerId: updated._id, status: mappedStatus } });
 
                   // Send push notification to all admin users
                   try {
-                    const User = require('../models/User');
                     const admins = await User.find({ role: 'admin', pushToken: { $ne: null } }).select('pushToken');
                     for (const admin of admins) {
                       await pushNotification.sendOfferTemplateNotification(admin.pushToken, {
@@ -234,7 +235,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                     const amount = txn.amount;
                     const recipientPhone = status.recipient_id;
 
-                    logger.info('💳 WhatsApp payment status received', {
+                    logger.info('WhatsApp payment status received', {
                       referenceId,
                       paymentStatus,
                       paymentMethod,
@@ -243,12 +244,13 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                     });
 
                     try {
-                      const Order = require('../models/Order');
                       const order = await Order.findOne({ orderId: referenceId });
 
                       if (order) {
                         if (paymentStatus === 'success' || paymentStatus === 'completed') {
+                          const previousPaymentStatus = order.paymentStatus;
                           order.paymentStatus = 'paid';
+                          logger.info('Payment status changed', { orderId: referenceId, from: previousPaymentStatus, to: 'paid', via: 'whatsapp-upi' });
                           order.paymentMethod = 'whatsapp_upi';
                           const txResult = transitionStatus(order, 'confirmed', `Payment received via WhatsApp UPI${paymentMethod ? ' (' + paymentMethod + ')' : ''}`);
                           if (!txResult.success) {
@@ -258,7 +260,6 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           await order.save();
 
                           // Send order_status confirmation to customer
-                          const metaCloud = require('../services/metaCloud');
                           await metaCloud.sendOrderStatusUpdate(
                             recipientPhone,
                             referenceId,
@@ -268,8 +269,6 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
 
                           // Send push notification to admin
                           try {
-                            const User = require('../models/User');
-                            const pushNotification = require('../services/pushNotification');
                             const admins = await User.find({ pushToken: { $ne: null } });
                             for (const admin of admins) {
                               if (admin.pushToken) {
@@ -282,22 +281,22 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                               }
                             }
                           } catch (pushErr) {
-                            logger.error('Admin push error on payment', { error: pushErr.message });
+                          logger.error('Admin push error on payment', { error: pushErr.message, orderId: referenceId });
                           }
 
                           // Sync to Google Sheets
-                          const googleSheets = require('../services/googleSheets');
                           googleSheets.addOrder(order).catch(err => logger.error('GSheets sync error', { error: err.message }));
                           googleSheets.syncTodayDailyReport().catch(err => logger.error('Daily report sync error', { error: err.message }));
 
                           // Emit real-time events
-                          const dataEvents = require('../services/eventEmitter');
                           dataEvents.emit('orders');
                           dataEvents.emit('dashboard');
 
-                          logger.info('✅ WhatsApp payment confirmed, order updated', { orderId: referenceId });
+                          logger.info('WhatsApp payment confirmed, order updated', { orderId: referenceId });
                         } else if (paymentStatus === 'failed' || paymentStatus === 'canceled') {
-                          order.paymentStatus = paymentStatus === 'canceled' ? 'cancelled' : 'failed';
+                          const newPayStatus = paymentStatus === 'canceled' ? 'cancelled' : 'failed';
+                          logger.info('Payment status changed', { orderId: referenceId, from: order.paymentStatus, to: newPayStatus, via: 'whatsapp-upi' });
+                          order.paymentStatus = newPayStatus;
                           order.trackingUpdates.push({
                             status: 'payment_failed',
                             message: `Payment ${paymentStatus} via WhatsApp UPI`,
@@ -306,8 +305,6 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           await order.save();
 
                           // Notify customer
-                          const chatbot = require('../services/chatbot');
-                          const whatsapp = require('../services/whatsapp');
                           const payFailMsg = `❌ *Payment ${paymentStatus === 'canceled' ? 'Cancelled' : 'Failed'}*\n\nOrder #${referenceId}\n\nPlease try again or choose a different payment method.`;
                           const payFailBtns = [
                               { id: 'pay_upi', text: 'Retry UPI' },
@@ -321,7 +318,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                             await whatsapp.sendButtons(recipientPhone, payFailMsg, payFailBtns);
                           }
 
-                          logger.warn('❌ WhatsApp payment failed/canceled', { orderId: referenceId, paymentStatus });
+                          logger.warn('WhatsApp payment failed/canceled', { orderId: referenceId, paymentStatus });
                         }
                         // 'pending' — no action needed, wait for final status
                       } else {
@@ -336,7 +333,6 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                     continue; // Skip normal status processing for payment statuses
                   }
 
-                  const OutboundMessage = require('../models/OutboundMessage');
                   const metaMessageId = status.id;
                   const statusValue = status.status; // sent, delivered, read, failed
                   const statusTimestamp = status.timestamp 
@@ -363,6 +359,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                   // 'sent' status = Meta accepted, we already track that
 
                   if (Object.keys(updateFields).length > 0) {
+                    logger.info('state_transition', { entity: 'outbound_message', from: 'sent', to: statusValue, metaMessageId, trigger: 'webhook' });
                     // Fire-and-forget — don't block webhook response processing
                     OutboundMessage.findOneAndUpdate(
                       { metaMessageId },
@@ -422,7 +419,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       ? JSON.parse(nfmReply.response_json)
                       : nfmReply.response_json || {};
 
-                    logger.info('📋 Flow response received', {
+                    logger.info('Flow response received', {
                       phone,
                       flowName: nfmReply.name,
                       flowToken: responseData.flow_token,
@@ -436,7 +433,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       selectedId = `${prefix}${responseData.selected_category}`;
                       text = responseData.selected_category;
                       messageType = 'button'; // Treat as button press for chatbot routing
-                      logger.info('📋 Flow category selected', { category: responseData.selected_category, selectedId, isOrderFlow });
+                      logger.info('Flow category selected', { category: responseData.selected_category, selectedId, isOrderFlow });
                     } else {
                       // Generic flow response — pass as text
                       messageType = 'flow_reply';
@@ -452,7 +449,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                 // WhatsApp Catalog cart submission — user tapped "Send" on their cart
                 messageType = 'order';
                 text = message.order || {};
-                logger.info('📦 Catalog order received', {
+                logger.info('Catalog order received', {
                   phone,
                   catalogId: message.order?.catalog_id,
                   itemCount: message.order?.product_items?.length || 0
@@ -469,7 +466,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                 // Handle voice message
                 messageType = 'voice';
                 const audioId = message.audio?.id;
-                logger.info('🎤 Voice message received, audio ID:', audioId);
+                logger.info('Voice message received', { phone, audioId });
                 
                 if (audioId) {
                   try {
@@ -485,8 +482,8 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       text = transcription;
                       messageType = 'text'; // Treat as text after transcription
                       isVoiceMessage = true; // Flag for chatbot to use voice_error image on failures
-                      logger.info('🎤 Voice transcribed:', rawTranscription);
-                      logger.info('🎤 Normalized to:', text);
+                      logger.info('Voice transcribed', { rawTranscription, phone });
+                      logger.info('Voice normalized', { text, phone });
                     } else {
                       // Transcription failed, send error message
                       const voiceErrMsg1 = "🎤 Sorry, I couldn't understand your voice message. Please try again or type your message.";
@@ -503,7 +500,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       continue;
                     }
                   } catch (err) {
-                    logger.error('❌ Voice processing error:', err.message);
+                    logger.error('Voice processing error', { error: err.message, phone });
                     const voiceErrMsg2 = "🎤 Sorry, I couldn't process your voice message. Please type your message instead.";
                     const voiceErrBtns2 = [
                         { id: 'home', text: 'Main Menu' },
@@ -519,7 +516,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                   }
                 } else {
                   // No audio ID - send voice error image
-                  logger.warn('🎤 Voice message received without audio ID', { phone });
+                  logger.warn('Voice message received without audio ID', { phone });
                   const voiceErrMsg3 = "🎤 Sorry, I couldn't process your voice message. Please try again or type your message.";
                   const voiceErrBtns3 = [
                       { id: 'home', text: 'Main Menu' },
@@ -537,33 +534,71 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
 
               const hasContent = text || selectedId || messageType === 'location' || messageType === 'order';
               if (phone && hasContent) {
-                const messageId = message.id || null;
-                // Deduplicate using InboundMessage unique index
-                if (messageId) {
-                  try {
-                    const InboundMessage = require('../models/InboundMessage');
-                    const inbound = new InboundMessage({
-                      messageId,
-                      phone,
-                      messageType,
-                      content: typeof text === 'string' ? text.substring(0, 500) : JSON.stringify(text).substring(0, 500),
-                      status: 'processing',
-                      receivedAt: new Date()
-                    });
-                    await inbound.save();
-                  } catch (dedupErr) {
-                    if (dedupErr.code === 11000) {
-                      logger.info('Duplicate message skipped', { messageId, phone });
-                      continue; // Skip duplicate
-                    }
-                    // Non-dedup error, log and continue processing
-                    logger.warn('InboundMessage save warning', { error: dedupErr.message });
-                  }
+                // Generate synthetic messageId if Meta didn't provide one
+                let messageId = message.id || null;
+                if (!messageId) {
+                  const contentStr = typeof text === 'string' ? text : JSON.stringify(text || '');
+                  messageId = 'synthetic_' + crypto.createHash('sha256')
+                    .update(phone + messageType + contentStr + Math.floor(Date.now() / 1000))
+                    .digest('hex').substring(0, 24);
+                  logger.warn('Message missing id, generated synthetic messageId', { messageId, phone });
                 }
-                // Process message in the background
+                // Deduplicate using InboundMessage unique index
+                let inboundRecord = null;
+                try {
+                  inboundRecord = new InboundMessage({
+                    messageId,
+                    phone,
+                    messageType,
+                    content: typeof text === 'string' ? text.substring(0, 500) : JSON.stringify(text).substring(0, 500),
+                    status: 'processing',
+                    receivedAt: new Date()
+                  });
+                  await inboundRecord.save();
+                } catch (dedupErr) {
+                  if (dedupErr.code === 11000) {
+                    logger.info('Duplicate message skipped', { messageId, phone });
+                    continue; // Skip duplicate
+                  }
+                  // Non-dedup error, log and continue processing
+                  logger.warn('InboundMessage save warning', { error: dedupErr.message });
+                  inboundRecord = null;
+                }
+                // Process message and update status
                 const handleOpts = isVoiceMessage ? { isVoiceMessage: true } : {};
                 chatbot.handleMessage(phone, text, messageType, selectedId, senderName, handleOpts)
-                  .catch(err => logger.error('❌ Async Chatbot Error:', err));
+                  .then(async () => {
+                    if (inboundRecord) {
+                      try {
+                        await InboundMessage.updateOne(
+                          { _id: inboundRecord._id },
+                          { $set: { status: 'processed', processedAt: new Date() } }
+                        );
+                      } catch (updateErr) {
+                        logger.warn('Failed to mark message as processed', { messageId, error: updateErr.message });
+                      }
+                    }
+                  })
+                  .catch(async (err) => {
+                    logger.error('Async Chatbot Error', { error: err.message, stack: err.stack, phone });
+                    if (inboundRecord) {
+                      try {
+                        await InboundMessage.updateOne(
+                          { _id: inboundRecord._id },
+                          { $set: {
+                            status: 'failed',
+                            error: {
+                              message: err.message,
+                              code: err.code || 'CHATBOT_ERROR',
+                              isRetryable: true
+                            }
+                          }}
+                        );
+                      } catch (updateErr) {
+                        logger.warn('Failed to mark message as failed', { messageId, error: updateErr.message });
+                      }
+                    }
+                  });
               }
             }
           }
@@ -571,7 +606,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
       }
     }
   } catch (error) {
-    logger.error('❌ Meta webhook async processing error:', error);
+    logger.error('Meta webhook async processing error', { error: error.message, stack: error.stack });
   }
 });
 

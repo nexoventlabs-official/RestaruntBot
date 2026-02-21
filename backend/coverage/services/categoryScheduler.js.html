@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/150</span>
+                <span class='fraction'>0/155</span>
             </div>
         
             
@@ -39,14 +39,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/11</span>
+                <span class='fraction'>0/13</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/146</span>
+                <span class='fraction'>0/149</span>
             </div>
         
             
@@ -367,10 +367,14 @@
 <a name='L302'></a><a href='#L302'>302</a>
 <a name='L303'></a><a href='#L303'>303</a>
 <a name='L304'></a><a href='#L304'>304</a>
-<a name='L305'></a><a href='#L305'>305</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L305'></a><a href='#L305'>305</a>
+<a name='L306'></a><a href='#L306'>306</a>
+<a name='L307'></a><a href='#L307'>307</a>
+<a name='L308'></a><a href='#L308'>308</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -650,8 +654,10 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -675,6 +681,7 @@
 const MenuItem = <span class="cstat-no" title="statement not covered" >require('../models/MenuItem');</span>
 const cron = <span class="cstat-no" title="statement not covered" >require('node-cron');</span>
 const logger = <span class="cstat-no" title="statement not covered" >require('./logger');</span>
+const { initContext, runWithContext } = <span class="cstat-no" title="statement not covered" >require('./correlationContext');</span>
 &nbsp;
 class CategoryScheduler {
 <span class="fstat-no" title="function not covered" >  co</span>nstructor() {
@@ -796,7 +803,7 @@ class CategoryScheduler {
 <span class="cstat-no" title="statement not covered" >        return;</span>
       }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >      logger.info(`[Category Scheduler] Checking ${category.name}`, { type: category.schedule.type });</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('[Category Scheduler] Checking', { type: category.schedule.type });</span>
 <span class="cstat-no" title="statement not covered" >      if (category.schedule.type === 'custom' &amp;&amp; category.schedule.customDays?.length &gt; 0) {</span>
 <span class="cstat-no" title="statement not covered" >        logger.info('[Category Scheduler] Custom Days', { customDays: category.schedule.customDays });</span>
       } else <span class="cstat-no" title="statement not covered" >if (category.schedule.type === 'custom') {</span>
@@ -824,7 +831,7 @@ class CategoryScheduler {
 <span class="cstat-no" title="statement not covered" >        await category.save();</span>
         
 <span class="cstat-no" title="statement not covered" >        logger.info('[Category Scheduler] STATUS CHANGED', { name: category.name, from: oldStatus, to: newStatus });</span>
-<span class="cstat-no" title="statement not covered" >        logger.info(`[Category Scheduler] ${category.name}: ${shouldBePaused ? 'LOCKED (outside schedule)' : 'RESUMED (within schedule)'}`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('[Category Scheduler]', { name: category.name, detail: shouldBePaused ? 'LOCKED (outside schedule)' : 'RESUMED (within schedule)' });</span>
         
         // When category RESUMES (becomes active), make all items in this category available
 <span class="cstat-no" title="statement not covered" >        if (!shouldBePaused) {</span>
@@ -842,7 +849,7 @@ class CategoryScheduler {
 <span class="cstat-no" title="statement not covered" >        logger.info('[Category Scheduler] No change needed', { status: category.isPaused ? 'paused' : 'active' });</span>
       }
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      logger.error(`[Category Scheduler] Error updating category ${categoryId}`, { error: error.message });</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('[Category Scheduler] Error updating status', { error: error.message });</span>
     }
   }
 &nbsp;
@@ -880,7 +887,7 @@ class CategoryScheduler {
 <span class="cstat-no" title="statement not covered" >        return;</span>
       }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >      logger.info(`[Category Scheduler] Checking Sold Out for ${category.name}`, { endTime: category.soldOutSchedule.endTime });</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('[Category Scheduler] Checking Sold Out for', { endTime: category.soldOutSchedule.endTime });</span>
 &nbsp;
       const isExpired = <span class="cstat-no" title="statement not covered" >this.isSoldOutExpired(category.soldOutSchedule);</span>
       
@@ -898,7 +905,7 @@ class CategoryScheduler {
           { $set: { available: true } }
         );
         
-<span class="cstat-no" title="statement not covered" >        logger.info(`[Category Scheduler] ${category.name}: RESUMED (sold out expired)`);</span>
+<span class="cstat-no" title="statement not covered" >        logger.info('[Category Scheduler] : RESUMED (sold out expired)', { name : category.name });</span>
 <span class="cstat-no" title="statement not covered" >        if (updateResult.modifiedCount &gt; 0) {</span>
 <span class="cstat-no" title="statement not covered" >          logger.info('[Category Scheduler] Made items available after sold out', { count: updateResult.modifiedCount, category: category.name });</span>
         } else {
@@ -908,7 +915,7 @@ class CategoryScheduler {
 <span class="cstat-no" title="statement not covered" >        logger.info('[Category Scheduler] Still sold out', { endTime: category.soldOutSchedule.endTime });</span>
       }
     } catch (error) {
-<span class="cstat-no" title="statement not covered" >      logger.error(`[Category Scheduler] Error updating sold out status ${categoryId}`, { error: error.message });</span>
+<span class="cstat-no" title="statement not covered" >      logger.error('[Category Scheduler] Error updating status', { error: error.message });</span>
     }
   }
 &nbsp;
@@ -953,11 +960,13 @@ class CategoryScheduler {
   // Start the scheduler (runs every minute)
 <span class="fstat-no" title="function not covered" >  st</span>art() {
     // Run immediately on start
-<span class="cstat-no" title="statement not covered" >    this.checkAllSchedules();</span>
+    const ctx = <span class="cstat-no" title="statement not covered" >initContext(null, { source: 'scheduler', job: 'categoryScheduler' });</span>
+<span class="cstat-no" title="statement not covered" >    runWithContext(ctx, <span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >this.checkAllSchedules())</span>;</span>
 &nbsp;
     // Schedule to run every minute
 <span class="cstat-no" title="statement not covered" >    this.job = cron.schedule('* * * * *', <span class="fstat-no" title="function not covered" >()</span> =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >      this.checkAllSchedules();</span>
+      const ctx = <span class="cstat-no" title="statement not covered" >initContext(null, { source: 'scheduler', job: 'categoryScheduler' });</span>
+<span class="cstat-no" title="statement not covered" >      runWithContext(ctx, <span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >this.checkAllSchedules())</span>;</span>
     });
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    logger.info('[Category Scheduler] Started - checking schedules every minute');</span>
@@ -982,7 +991,7 @@ const categoryScheduler = <span class="cstat-no" title="statement not covered" >
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-19T18:32:07.806Z
+                at 2026-02-21T10:10:15.546Z
             </div>
         <script src="../prettify.js"></script>
         <script>

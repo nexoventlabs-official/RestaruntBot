@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const Customer = require('../models/Customer');
 const MenuItem = require('../models/MenuItem');
 const Category = require('../models/Category');
@@ -10,8 +11,13 @@ const groqAi = require('./groqAi');
 const chatbotImagesService = require('./chatbotImages');
 const whatsappBroadcast = require('./whatsappBroadcast');
 const catalogService = require('./catalogService');
+const { transitionStatus } = require('./orderStateMachine');
+const transactionManager = require('./transactionManager');
+const idempotencyService = require('./idempotencyService');
 const axios = require('axios');
 const logger = require('./logger');
+const { startTimer } = require('./logger');
+const { setMetadata } = require('./correlationContext');
 
 // Helper: Count items including variants for accurate WhatsApp display
 // If an item has variants, count each variant as a separate item (matches Meta catalog)
@@ -79,7 +85,8 @@ const TRANSLATION_CACHE_MAX = 200;
 
 const generateOrderId = (serviceType = 'delivery') => {
   const prefix = serviceType === 'pickup' ? 'S' : 'O';
-  return prefix + 'RD' + Date.now().toString(36).toUpperCase();
+  const random = crypto.randomBytes(4).toString('hex').toUpperCase();
+  return prefix + 'RD' + Date.now().toString(36).toUpperCase() + random;
 };
 
 // Haversine formula to calculate straight-line distance between two coordinates in KM
@@ -101,11 +108,12 @@ const calculateStraightLineDistance = (lat1, lon1, lat2, lon2) => {
 
 // Calculate road distance using OSRM (OpenStreetMap Routing) - FREE API
 const calculateOSRMDistance = async (lat1, lon1, lat2, lon2) => {
+  const endTimer = startTimer('geo.osrm');
   try {
     // OSRM public API - Note: format is longitude,latitude (NOT lat,lon!)
     const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=false`;
     
-    logger.info(`OSRM URL: ${url}`);
+    logger.info('OSRM request', { url });
     
     const response = await axios.get(url, { 
       timeout: 10000,
@@ -114,20 +122,23 @@ const calculateOSRMDistance = async (lat1, lon1, lat2, lon2) => {
       }
     });
     
-    logger.info(`OSRM Response code: ${response.data.code}`);
+    logger.info('OSRM response', { code: response.data.code, httpStatus: response.status });
     
     if (response.data.code === 'Ok' && response.data.routes?.[0]) {
       const distanceInMeters = response.data.routes[0].distance;
       const durationInSeconds = response.data.routes[0].duration;
       const distanceInKm = distanceInMeters / 1000;
       const durationInMins = Math.round(durationInSeconds / 60);
-      logger.info(`OSRM road distance: ${distanceInKm.toFixed(2)} KM (approx ${durationInMins} mins drive)`);
+      logger.info('OSRM road distance', { distanceKm: distanceInKm.toFixed(2), durationMins: durationInMins });
+      endTimer({ success: true, distanceKm: distanceInKm });
       return Math.round(distanceInKm * 100) / 100;
     }
     
     logger.info('OSRM API returned no valid route', { data: response.data });
+    endTimer({ success: false, reason: 'no_valid_route' });
     return null;
   } catch (error) {
+    endTimer({ success: false, reason: error.message });
     logger.error('OSRM API error', { error: error.message });
     return null;
   }
@@ -135,6 +146,7 @@ const calculateOSRMDistance = async (lat1, lon1, lat2, lon2) => {
 
 // Alternative: OpenRouteService API (free tier available)
 const calculateOpenRouteServiceDistance = async (lat1, lon1, lat2, lon2) => {
+  const endTimer = startTimer('geo.openRouteService');
   try {
     // OpenRouteService - coordinates are [lon, lat]
     const url = `https://api.openrouteservice.org/v2/directions/driving-car?start=${lon1},${lat1}&end=${lon2},${lat2}`;
@@ -149,12 +161,15 @@ const calculateOpenRouteServiceDistance = async (lat1, lon1, lat2, lon2) => {
     if (response.data.features?.[0]?.properties?.segments?.[0]) {
       const distanceInMeters = response.data.features[0].properties.segments[0].distance;
       const distanceInKm = distanceInMeters / 1000;
-      logger.info(`OpenRouteService road distance: ${distanceInKm.toFixed(2)} KM`);
+      logger.info('OpenRouteService road distance', { distanceKm: distanceInKm.toFixed(2) });
+      endTimer({ success: true, distanceKm: distanceInKm });
       return Math.round(distanceInKm * 100) / 100;
     }
     
+    endTimer({ success: false, reason: 'no_route' });
     return null;
   } catch (error) {
+    endTimer({ success: false, reason: error.message });
     logger.error('OpenRouteService error', { error: error.message });
     return null;
   }
@@ -173,25 +188,25 @@ const calculateDistance = async (lat1, lon1, lat2, lon2) => {
   lat2 = parseFloat(lat2);
   lon2 = parseFloat(lon2);
   
-  logger.info(`========== DISTANCE CALCULATION`);
-  logger.info(`Restaurant: ${lat1}, ${lon1}`);
-  logger.info(`Customer: ${lat2}, ${lon2}`);
+  logger.info('Distance calculation started');
+  logger.info('Distance calculation params', { restaurantLat: lat1, restaurantLon: lon1 });
+  logger.info('Distance calculation params', { customerLat: lat2, customerLon: lon2 });
   
   // Calculate straight-line first for reference
   const straightLineDistance = calculateStraightLineDistance(lat1, lon1, lat2, lon2);
-  logger.info(`Straight-line distance: ${straightLineDistance} KM`);
+  logger.info('Straight-line distance', { distanceKm: straightLineDistance });
   
   // Try OSRM API first (free, uses OpenStreetMap data)
   const osrmDistance = await calculateOSRMDistance(lat1, lon1, lat2, lon2);
   if (osrmDistance !== null && osrmDistance > 0) {
-    logger.info('');
+    // (removed decoration log)
     return osrmDistance;
   }
   
   // Try OpenRouteService as backup
   const orsDistance = await calculateOpenRouteServiceDistance(lat1, lon1, lat2, lon2);
   if (orsDistance !== null && orsDistance > 0) {
-    logger.info('');
+    // (removed decoration log)
     return orsDistance;
   }
   
@@ -200,8 +215,8 @@ const calculateDistance = async (lat1, lon1, lat2, lon2) => {
   if (straightLineDistance === null) return null;
   
   const approximateRoadDistance = straightLineDistance * 1.6;
-  logger.info(`FALLBACK: Using straight-line × 1.6 = ${approximateRoadDistance.toFixed(2)} KM`);
-  logger.info('');
+  logger.info('Distance fallback to straight-line', { distanceKm: approximateRoadDistance.toFixed(2), multiplier: 1.6 });
+  // (removed decoration log)
   
   return Math.round(approximateRoadDistance * 100) / 100;
 };
@@ -233,18 +248,18 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
       customerLon
     );
     
-    logger.info(`========== RADIUS CHECK`);
-    logger.info(`Restaurant: ${restaurantLocation.latitude}, ${restaurantLocation.longitude}`);
-    logger.info(`Customer: ${customerLat}, ${customerLon}`);
-    logger.info(`Radius distance: ${distance} KM (straight-line)`);
-    logger.info('');
+    logger.info('Radius check started');
+    logger.info('Radius check params', { restaurantLat: restaurantLocation.latitude, restaurantLon: restaurantLocation.longitude });
+    logger.info('Radius check params', { customerLat, customerLon });
+    logger.info('Radius distance calculated (straight-line)', { distanceKm: distance });
+    // (removed decoration log)
     
     if (distance === null) {
       logger.info('Could not calculate distance - no delivery charge');
       return { charge: 0, distance: null, withinFreeRadius: true, message: null };
     }
     
-    logger.info(`Distance from restaurant: ${distance} KM`);
+    logger.info('Distance from restaurant', { distanceKm: distance });
     
     const noFreeDelivery = deliverySettings.noFreeDelivery || false;
     const baseDeliveryCharge = deliverySettings.baseDeliveryCharge || 0;
@@ -255,7 +270,7 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
     
     // Check if beyond max delivery radius first
     if (maxRadius && distance > maxRadius) {
-      logger.info(`Beyond max delivery radius (${maxRadius} KM)`);
+      logger.info('Beyond max delivery radius', { distanceKm: distance, maxRadiusKm: maxRadius });
       return { 
         charge: null, 
         distance, 
@@ -268,11 +283,11 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
     
     // If restaurant charges for ALL deliveries (no free delivery)
     if (noFreeDelivery) {
-      logger.info(`No free delivery - base charge: ₹${baseDeliveryCharge}`);
+      logger.info('No free delivery zone', { baseDeliveryCharge });
       // If outside free radius AND extra charge enabled, add extra on top of base
       if (distance > freeRadius && extraChargeEnabled && extraCharge > 0) {
         const totalCharge = baseDeliveryCharge + extraCharge;
-        logger.info(`Beyond ${freeRadius} KM - total charge: ₹${totalCharge}`);
+        logger.info('Delivery charge calculated', { freeRadiusKm: freeRadius, totalCharge });
         return { 
           charge: totalCharge, 
           distance, 
@@ -290,7 +305,7 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
     
     // Check if within free delivery radius
     if (distance <= freeRadius) {
-      logger.info(`Within free delivery radius (${freeRadius} KM)`);
+      logger.info('Within free delivery radius', { freeRadiusKm: freeRadius });
       return { 
         charge: 0, 
         distance, 
@@ -301,7 +316,7 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
     
     // Outside free radius - check if extra charge is enabled
     if (extraChargeEnabled && extraCharge > 0) {
-      logger.info(`Outside free radius - adding delivery charge: ₹${extraCharge}`);
+      logger.info('Extra delivery charge added', { extraCharge });
       return { 
         charge: extraCharge, 
         distance, 
@@ -311,7 +326,7 @@ const calculateDeliveryCharge = async (customerLat, customerLon) => {
     }
     
     // Extra charge NOT enabled AND customer is outside free radius - REJECT ORDER
-    logger.info(`Outside free radius (${freeRadius} KM) - delivery not available`);
+    logger.info('Outside free radius - delivery not available', { freeRadiusKm: freeRadius });
     return { 
       charge: null, 
       distance, 
@@ -623,36 +638,6 @@ const chatbot = {
     return cancelPatterns.some(pattern => pattern.test(lowerText));
   },
 
-  // Helper to detect refund intent from text/voice
-  isRefundIntent(text) {
-    if (!text) return false;
-    const lowerText = ' ' + text.toLowerCase() + ' ';
-    const refundPatterns = [
-      // English
-      /\brefund\b/, /\brefund please\b/, /\bget refund\b/, /\bmoney back\b/,
-      /\breturn money\b/, /\bwant refund\b/, /\bgive refund\b/,
-      // Hindi
-      /\brefund karo\b/, /\bpaisa wapas\b/, /\bpaise wapas\b/, /\brefund chahiye\b/,
-      /\bपैसा वापस\b/, /\bरिफंड\b/, /\bपैसे वापस करो\b/, /\bरिफंड चाहिए\b/,
-      // Telugu
-      /\brefund kavali\b/, /\bpaisa wapas\b/, /\bరీఫండ్\b/, /\bడబ్బు వాపస్\b/,
-      /\bరీఫండ్ కావాలి\b/, /\bడబ్బు తిరిగి ఇవ్వండి\b/,
-      // Tamil
-      /\brefund venum\b/, /\bpanam thirumba\b/, /\bரீஃபண்ட்\b/, /\bபணம் திரும்ப\b/,
-      // Kannada
-      /\brefund beku\b/, /\bರೀಫಂಡ್\b/, /\bಹಣ ವಾಪಸ್\b/,
-      // Malayalam
-      /\brefund venam\b/, /\bറീഫണ്ട്\b/, /\bപണം തിരികെ\b/,
-      // Bengali
-      /\brefund chai\b/, /\bটাকা ফেরত\b/, /\bরিফান্ড\b/,
-      // Marathi
-      /\brefund pahije\b/, /\bरिफंड पाहिजे\b/, /\bपैसे परत\b/,
-      // Gujarati
-      /\brefund joiye\b/, /\bરીફંડ\b/, /\bપૈસા પાછા\b/
-    ];
-    return refundPatterns.some(pattern => pattern.test(lowerText));
-  },
-
   // Helper to detect cart intent from text/voice
   // Handles voice recognition mistakes like "card", "cut", "kart", "cot", "caught", "cat", "court" instead of "cart"
   // Also handles "items" variations in all languages
@@ -660,8 +645,8 @@ const chatbot = {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     
-    // IMPORTANT: First check if this is a cancel/refund intent - those take priority
-    if (this.isCancelIntent(text) || this.isRefundIntent(text)) {
+    // IMPORTANT: First check if this is a cancel intent - those take priority
+    if (this.isCancelIntent(text)) {
       return false;
     }
     
@@ -1590,8 +1575,8 @@ const chatbot = {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     
-    // First check if it's actually a cancel/refund/track intent - those take priority
-    if (this.isCancelIntent(text) || this.isRefundIntent(text) || this.isTrackIntent(text)) {
+    // First check if it's actually a cancel/track intent - those take priority
+    if (this.isCancelIntent(text) || this.isTrackIntent(text)) {
       return false;
     }
     
@@ -1702,7 +1687,7 @@ const chatbot = {
     }
     
     if (bestMatch) {
-      logger.info(`Category fuzzy match: "${text}" → "${bestMatch}" (${Math.round(bestScore * 100)}%)`);
+      logger.info('Category fuzzy match', { text, bestMatch, score: Math.round(bestScore * 100) });
     }
     
     return bestMatch;
@@ -2075,7 +2060,7 @@ const chatbot = {
       for (const target of targets) {
         // Check if any search word exactly matches a target, or target contains the word
         if (target === word || target.includes(word) || word.includes(target)) {
-          logger.info(`Search term "${word}" already matches "${target}" - skipping typo correction`);
+          logger.info('Search term already matches', { term: word });
           return null; // Don't correct, the term is valid
         }
       }
@@ -2104,7 +2089,7 @@ const chatbot = {
     
     // If we found a match better than the original, return it
     if (bestMatch && bestMatch !== searchLower && bestScore >= threshold) {
-      logger.info(`Dynamic typo match: "${searchTerm}" → "${bestMatch}" (${Math.round(bestScore * 100)}%)`);
+      logger.info('Dynamic typo match', { searchTerm, bestMatch });
       return bestMatch;
     }
     
@@ -2174,7 +2159,7 @@ const chatbot = {
     
     // Skip fuzzy search for gibberish queries
     if (this.isGibberishSearch(searchTerm)) {
-      logger.info(`Gibberish search detected: "${searchTerm}" - skipping fuzzy search`);
+      logger.info('Gibberish search detected', { searchTerm });
       return [];
     }
     
@@ -2531,7 +2516,7 @@ const chatbot = {
       });
       
       if (andMatches.length > 0) {
-        logger.info(`Multi-keyword AND match: "${text}" → ${andMatches.length} items`);
+        logger.info('Multi-keyword AND match', { text, matchCount: andMatches.length });
         return andMatches;
       }
     }
@@ -2546,14 +2531,14 @@ const chatbot = {
     });
     
     if (matchingItems.length > 0) {
-      logger.info(`Multi-keyword OR match: "${text}" → ${matchingItems.length} items (keywords: ${keywords.join(', ')})`);
+      logger.info('Multi-keyword OR match', { text, matchCount: matchingItems.length });
       return matchingItems;
     }
     
     // Also check full text as single term (for multi-word item names like "ice cream")
     const fullTextMatch = menuItems.filter(item => itemMatchesKeyword(item, lowerText));
     if (fullTextMatch.length > 0) {
-      logger.info(`Full text match: "${text}" → ${fullTextMatch.length} items`);
+      logger.info('Full text match', { text, matchCount: fullTextMatch.length });
       return fullTextMatch;
     }
     
@@ -3039,7 +3024,7 @@ const chatbot = {
           // Remove duplicates and non-English
           const cleanVariations = [...new Set(allVariations)].filter(v => !/[^\x00-\x7F]/.test(v));
           
-          logger.info(`Word-by-word translation: "${text}" → [${cleanVariations.join(', ')}]`);
+          logger.info('Word-by-word translation', { text });
           return _cacheAndReturn({ primary: combinedTranslation, variations: cleanVariations });
         }
         
@@ -3077,20 +3062,20 @@ const chatbot = {
   // Example: "veg curry" → finds items with tags containing "veg" AND "curry"
   // Example: "5 piece" → finds items with quantity/unit tag "5 piece"
   async smartSearch(text, menuItems) {
-    logger.info(`${'='.repeat(60)}`);
-    logger.info(`SMART SEARCH CALLED: "${text}"`);
-    logger.info(`${'='.repeat(60)}`);
+    // (removed decoration log);
+    logger.info('Smart search called', { text });
+    // (removed decoration log);
     
     // Early return for gibberish searches
     if (this.isGibberishSearch(text)) {
-      logger.info(`Gibberish search detected: "${text}" - returning no results`);
+      logger.info('Gibberish search detected', { text });
       return null;
     }
     
     // ========== DETECT FOOD TYPE FIRST ==========
     const originalText = text.toLowerCase().trim();
     const originalFoodType = this.detectFoodTypeFromMessage(originalText);
-    logger.info(`ORIGINAL food type detection: "${originalText}" → ${originalFoodType ? JSON.stringify(originalFoodType) : 'NONE'}`);
+    logger.info('Food type detection', { text });
     
     // ========== NO TYPO CORRECTION - USE ORIGINAL TEXT DIRECTLY ==========
     // Typo correction was causing issues like "liver" → "liter", "bread" → "cream"
@@ -3112,12 +3097,12 @@ const chatbot = {
     
     // Use the original food type detection
     const detected = originalFoodType || this.detectFoodTypeFromMessage(primaryText);
-    logger.info(`SMART SEARCH: text="${text}", primaryText="${primaryText}", detected`, { searchTerm: detected });
+    logger.info('Smart search details', { text, primaryText, detected });
     
     // Remove food type keywords to get clean search terms
     // Use ORIGINAL text for removing keywords to preserve user intent
     const primarySearchTerm = this.removeFoodTypeKeywords(originalText);
-    logger.info(`After removing food type keywords from ORIGINAL: "${primarySearchTerm}"`);
+    logger.info('Food type keywords removed', { text });
     
     // Get all search variations (cleaned of food type keywords)
     const searchVariations = allVariations.map(v => this.removeFoodTypeKeywords(v.toLowerCase())).filter(v => v.length >= 2);
@@ -3168,14 +3153,14 @@ const chatbot = {
         const aiMatchedTags = await groqAi.matchSearchToTags(text, allAvailableTags);
         if (aiMatchedTags && aiMatchedTags.length > 0) {
           uniqueSearchTerms = [...new Set([...uniqueSearchTerms, ...aiMatchedTags])];
-          logger.info(`AI added tags: [${aiMatchedTags.join(', ')}]`);
+          logger.info('AI tags added', { tags: aiMatchedTags });
         }
       } catch (error) {
         logger.error('AI tag matching failed', { error: error.message });
       }
     }
     
-    logger.info(`Search terms with synonyms: [${uniqueSearchTerms.join(', ')}]`);
+    logger.info('Search terms with synonyms', { text });
     
     // If search term is too short after removing keywords, search by ingredient/type only
     const hasSearchTerm = primarySearchTerm.length >= 2;
@@ -3185,14 +3170,14 @@ const chatbot = {
     let searchableItems = menuItems;
     let foodTypeLabel = null;
     
-    logger.info(`Total menu items: ${menuItems.length}`);
+    logger.info('Menu items count', { count: menuItems.length });
     
     if (detected) {
       if (detected.type === 'veg') {
         searchableItems = menuItems.filter(item => item.foodType === 'veg');
         foodTypeLabel = '🌿 Veg';
-        logger.info(`FILTERED TO VEG ITEMS: ${searchableItems.length} items out of ${menuItems.length}`);
-        logger.info(`VEG item names: ${searchableItems.slice(0, 5).map(i => i.name).join(', ')}...`);
+        logger.info('Filtered to veg items', { count: menuItems.length });
+        logger.info('Veg items listed');
       } else if (detected.type === 'egg') {
         // Include items with foodType 'egg' AND items whose name/tags/variants mention 'egg'
         searchableItems = menuItems.filter(item => {
@@ -3207,11 +3192,11 @@ const chatbot = {
           return false;
         });
         foodTypeLabel = '🥚 Egg';
-        logger.info(`FILTERED TO EGG ITEMS: ${searchableItems.length} items out of ${menuItems.length}`);
+        logger.info('Filtered to egg items', { count: menuItems.length });
       } else if (detected.type === 'nonveg') {
         searchableItems = menuItems.filter(item => item.foodType === 'nonveg' || item.foodType === 'egg');
         foodTypeLabel = '🍗 Non-Veg';
-        logger.info(`FILTERED TO NON-VEG ITEMS: ${searchableItems.length} items out of ${menuItems.length}`);
+        logger.info('Filtered to non-veg items', { count: menuItems.length });
       } else if (detected.type === 'specific') {
         // For specific ingredients like "chicken", "mutton"
         const ingredient = detected.ingredient;
@@ -3227,10 +3212,10 @@ const chatbot = {
           return inName || inTags || inVariants;
         });
         foodTypeLabel = `🍗 ${ingredient.charAt(0).toUpperCase() + ingredient.slice(1)}`;
-        logger.info(`FILTERED BY INGREDIENT "${ingredient}": ${searchableItems.length} items out of ${menuItems.length}`);
+        logger.info('Filtered by ingredient', { ingredient, count: menuItems.length });
       }
     } else {
-      logger.info(`NO FOOD TYPE DETECTED - searching all items`);
+      logger.info('No food type detected, searching all items');
     }
     
     // Helper to normalize text for comparison (removes spaces for flexible matching)
@@ -3430,11 +3415,11 @@ const chatbot = {
             return bMax - aMax;
           });
           
-          logger.info(`VARIANT MATCH: ${resultItems.length} item(s), allKeyword=${allKeywordItems.length}, partialOnly=${partialOnlyItems.length}`);
+          logger.info('Variant match results', { count: resultItems.length });
           for (const { itemId, item, matches } of selectedItems) {
             const mode = matchedVariants[itemId] === null ? 'ALL VARIANTS' : Array.isArray(matchedVariants[itemId]) ? `array[${matchedVariants[itemId]}]` : `specific[${matchedVariants[itemId]}]`;
-            logger.info(`  → ${item.name}: ${matches.length} variant(s) matched, mode=${mode}`);
-            matches.forEach(m => logger.info(`    variant[${m.vi}] "${m.label}" (${m.matchCount}/${originalWords.length} keywords, allMatch=${m.allMatch}, variantSpecific=${m.variantSpecific})`));
+            logger.info('Variant match detail', { item: item.name, variantCount: matches.length });
+            // Variant detail logging moved to debug level;
           }
           
           return {
@@ -3485,7 +3470,7 @@ const chatbot = {
         });
         
         if (exactMatches.length > 0) {
-          logger.info(`Exact name match found: "${searchTerm}" → ${exactMatches.length} item(s)`);
+          logger.info('Exact name match found', { searchTerm });
           return { 
             items: exactMatches, 
             foodType: detected, 
@@ -3550,7 +3535,7 @@ const chatbot = {
       });
       
       if (allKeywordsTagMatches.length > 0) {
-        logger.info(`All keywords tag/category match: "${primarySearchTerm}" → ${allKeywordsTagMatches.length} item(s)`);
+        logger.info('All keywords tag/category match', { text });
         return { 
           items: allKeywordsTagMatches, 
           foodType: detected, 
@@ -3594,7 +3579,7 @@ const chatbot = {
           : sortedMatches;
         
         if (filteredMatches.length > 0) {
-          logger.info(`Any keyword tag match: "${primarySearchTerm}" → ${filteredMatches.length} item(s) (filtered from ${sortedMatches.length})`);
+          logger.info('Any keyword tag match', { text });
           return { 
             items: filteredMatches, 
             foodType: detected, 
@@ -3713,7 +3698,7 @@ const chatbot = {
       }
       const uniqueKeywords = [...new Set(allKeywords)];
       
-      logger.info(`Tag search - Primary keywords: [${searchKeywords.join(', ')}], All keywords: [${uniqueKeywords.join(', ')}], foodType: ${detected?.type || 'all'}`);
+      logger.info('Tag search started', { text });
       
       // Helper to check if item tags OR name OR category match a keyword
       // Uses smartIncludes to prevent "ice" matching "rice"
@@ -3763,7 +3748,7 @@ const chatbot = {
       });
       
       if (allKeywordsMatch.length > 0) {
-        logger.info(`PRIORITY 1 - ALL keywords match: "${searchKeywords.join(' ')}" → ${allKeywordsMatch.length} item(s): [${allKeywordsMatch.map(i => i.name).slice(0, 5).join(', ')}]`);
+        logger.info('Priority 1 all keywords match', { text });
         return { 
           items: allKeywordsMatch, 
           foodType: detected, 
@@ -3815,7 +3800,7 @@ const chatbot = {
           const matchCounts = Array.from(partialTagMatches.values())
             .filter(m => filteredMatches.includes(m.item))
             .map(m => `${m.item.name}(${m.matchCount})`);
-          logger.info(`PRIORITY 2 - Partial tag matches (sorted by count): ${filteredMatches.length} item(s) - [${matchCounts.slice(0, 5).join(', ')}...]`);
+          logger.info('Priority 2 partial tag matches', { text });
           
           return { 
             items: filteredMatches, 
@@ -3969,13 +3954,13 @@ const chatbot = {
     
     if (hasSearchTerm) {
       // Search using ALL translation variations - use searchableItems (filtered by food type)
-      logger.info(`Searching with variations: [${uniqueSearchTerms.join(', ')}]`);
+      logger.info('Searching with variations', { text });
       matchingItems = searchByMultipleTerms(searchableItems, uniqueSearchTerms);
       
       // IMPORTANT: If user explicitly specified food type (e.g., "veg curry"), do NOT fall back to all items
       // Only try all items if no food type was detected (generic search like "curry")
       if (matchingItems.length === 0 && !detected && searchableItems.length < menuItems.length) {
-        logger.info(`No food type detected, falling back to all items...`);
+        logger.info('No food type, falling back to keyword search');
         matchingItems = searchByMultipleTerms(menuItems, uniqueSearchTerms);
       }
       
@@ -3983,12 +3968,12 @@ const chatbot = {
       if (matchingItems.length === 0) {
         const allKeywords = uniqueSearchTerms.flatMap(term => term.split(/\s+/).filter(k => k.length >= 2));
         if (allKeywords.length > 0) {
-          logger.info(`Fallback: finding items matching ANY keyword: [${allKeywords.join(', ')}]`);
+          logger.info('Fallback to any keyword match');
           // Search keywords only in searchableItems (respects food type filter)
           matchingItems = searchByMultipleTerms(searchableItems, allKeywords);
           // Only fall back to all items if NO food type was specified
           if (matchingItems.length === 0 && !detected) {
-            logger.info(`No food type detected, trying all items for keywords...`);
+            logger.info('No food type, trying all items');
             matchingItems = searchByMultipleTerms(menuItems, allKeywords);
           }
         }
@@ -4003,7 +3988,7 @@ const chatbot = {
       // Instead of calling multiple AI services, just return no results
       // This is more honest to the user and reduces API costs
       
-      logger.info(`No matching items found for "${text}" after tag-based and fuzzy search`);
+      logger.info('No matching items found', { text });
       
     } else if (detected?.type === 'specific' && searchableItems.length > 0) {
       // For specific ingredient searches (e.g., "chicken"), return filtered items
@@ -4011,15 +3996,20 @@ const chatbot = {
     }
     
     // FINAL DEBUG LOG - what are we returning?
-    logger.info(`${'='.repeat(60)}`);
-    logger.info(`SMART SEARCH RESULT for "${text}":`);
-    logger.info(`Detected food type: ${detected ? JSON.stringify(detected) : 'NONE'}`);
-    logger.info(`searchableItems count: ${searchableItems?.length || 0}`);
-    logger.info(`matchingItems count: ${matchingItems?.length || 0}`);
+    // (removed decoration log);
+    logger.info('Smart search result', { text });
+    logger.info('Smart search debug', {
+      detectedFoodType: detected || 'NONE',
+      searchableCount: searchableItems?.length || 0,
+      matchingCount: matchingItems?.length || 0
+    });
     if (matchingItems?.length > 0) {
-      logger.info(`Returning items: ${matchingItems.slice(0, 5).map(i => `${i.name}(${i.foodType})`).join(', ')}`);
+      logger.info('Smart search returning items', {
+        count: matchingItems.length,
+        sample: matchingItems.slice(0, 5).map(i => i.name)
+      });
     }
-    logger.info(`${'='.repeat(60)}\n`);
+    // (removed decoration log)
     
     return matchingItems.length > 0 
       ? { items: matchingItems, foodType: detected, searchTerm: primarySearchTerm, label: foodTypeLabel, exactMatch: true }
@@ -4061,12 +4051,13 @@ const chatbot = {
   // Reverse geocode coordinates to get readable address
   async reverseGeocode(latitude, longitude) {
     try {
-      logger.info(`Reverse geocoding coordinates: ${latitude}, ${longitude}`);
+      logger.info('Reverse geocoding coordinates', { latitude, longitude });
       
       // Only use OpenCage API (most reliable for production)
       if (process.env.OPENCAGE_API_KEY) {
+        const endTimer = startTimer('geo.openCage');
         try {
-          logger.info('Using OpenCage API for geocoding...');
+          logger.info('Using OpenCage API for geocoding');
           const opencageResponse = await axios.get(
             `https://api.opencagedata.com/geocode/v1/json`,
             {
@@ -4119,18 +4110,21 @@ const chatbot = {
               
               if (parts.length >= 3) {
                 const address = parts.join(', ');
-                logger.info(`OpenCage custom address: ${address.substring(0, 150)}`);
+                logger.info('OpenCage custom address', { address: address.substring(0, 150) });
+                endTimer({ success: true, source: 'components' });
                 return address;
               }
             }
             
             // Use formatted address as fallback
             if (result.formatted) {
-              logger.info(`OpenCage formatted address: ${result.formatted.substring(0, 150)}`);
+              logger.info('OpenCage formatted address', { address: result.formatted.substring(0, 150) });
+              endTimer({ success: true, source: 'formatted' });
               return result.formatted;
             }
           }
         } catch (opencageError) {
+          endTimer({ success: false, reason: opencageError.message });
           logger.error('OpenCage geocoding failed', { 
             error: opencageError.message,
             code: opencageError.code,
@@ -4157,7 +4151,7 @@ const chatbot = {
     // Check if holiday mode is enabled
     const holidayMode = await Settings.getValue('holidayMode', false);
     if (holidayMode) {
-      logger.info(`Holiday mode is ON - sending holiday message to ${phone}`);
+      logger.info('Holiday mode active', { phone });
       await whatsapp.sendMessage(phone, 
         `🏖️ *Holiday Notice*\n\n` +
         `Dear Customer,\n\n` +
@@ -4188,7 +4182,7 @@ const chatbot = {
     const _primeOffersPromise = (customer.activeOffers?.length > 0)
       ? filterActiveOffers(customer.activeOffers).then(filtered => {
           _activeOffersCache.set(phone, { data: filtered, timestamp: Date.now() });
-        }).catch(() => {})
+        }).catch(err => logger.warn('Failed to prime active offers cache', { phone, error: err.message }))
       : Promise.resolve(_activeOffersCache.set(phone, { data: [], timestamp: Date.now() }));
 
     // Save WhatsApp contact for broadcast (non-blocking)
@@ -4250,15 +4244,15 @@ const chatbot = {
       });
     
     // Debug log
-    logger.info(`Scheduled ACTIVE: [${scheduledActiveCategories.join(', ') || 'none'}]`);
-    logger.info(`Scheduled LOCKED: [${scheduledLockedCategories.join(', ') || 'none'}]`);
-    logger.info(`⏸ Manually LOCKED: [${manuallyLockedCategories.join(', ') || 'none'}]`);
-    logger.info(`Items: ${allMenuItems.length} total → ${menuItems.length} available (${allMenuItems.length - menuItems.length} filtered out)`);
+    logger.info('Scheduled categories active');
+    logger.info('Scheduled categories locked');
+    logger.info('Manually locked categories');
+    logger.info('Menu items filtered', { total: allMenuItems.length });
     
     // Log filtered out items for debugging
     const filteredOutItems = allMenuItems.filter(item => !menuItems.includes(item));
     if (filteredOutItems.length > 0) {
-      logger.info(`Filtered out: [${filteredOutItems.map(i => i.name).join(', ')}]`);
+      logger.info('Categories filtered out');
     }
     
     const state = customer.conversationState || { currentStep: 'welcome' };
@@ -4480,14 +4474,14 @@ const chatbot = {
             try {
               const offer = await Offer.findById(offerId);
               if (!offer) {
-                logger.info(`Offer not found: ${offerId}`);
+                logger.info('Offer not found', { offerId });
                 continue;
               }
               
               // Check if offer is still active
               const now = new Date();
               if (!offer.isActive || (offer.validUntil && new Date(offer.validUntil) < now)) {
-                logger.info(`Offer expired/inactive: ${offerId}`);
+                logger.info('Offer expired or inactive', { offerId });
                 ineligibleOffers.push({ offer, reason: 'expired' });
                 continue;
               }
@@ -4502,7 +4496,7 @@ const chatbot = {
                 });
                 
                 if (!isEligible) {
-                  logger.info(`Customer not eligible for offer: ${offerId}`);
+                  logger.info('Customer not eligible for offer', { offerId });
                   let reason = 'not_eligible';
                   if (offer.targetType === 'min_spent') {
                     reason = `Requires ₹${offer.targetMinSpent}+ total spending`;
@@ -4517,11 +4511,11 @@ const chatbot = {
               }
               
               // Customer is eligible for this offer
-              logger.info(`Customer eligible for offer: ${offer.title || offer.offerType}`);
+              logger.info('Customer eligible for offer', { offerId });
               eligibleOffers.push(offer);
               
             } catch (err) {
-              logger.error(`Error checking offer ${offerId}`, { error: err.message });
+              logger.error('Error checking offer', { offerId }, { error: err.message });
             }
           }
         }
@@ -4597,7 +4591,7 @@ const chatbot = {
                   }
                   
                   totalDiscount += offerDiscount;
-                  logger.info(`Applied offer ${offer.title} to ${menuItem.name}: -₹${offerDiscount}`);
+                  logger.info('Offer applied', { offerTitle: offer.title, menuItem: menuItem.name });
                   break;
                 }
               }
@@ -4654,10 +4648,10 @@ const chatbot = {
               customer.cart.push(cartEntry);
             }
             addedCount++;
-            logger.info(`Added to cart: ${menuItem.name} x${cartItem.quantity}${appliedOffer ? ` (offer: -₹${offerDiscount})` : ''}`);
+            logger.info('Added to cart', { item: menuItem.name, quantity: cartItem.quantity, offerDiscount: appliedOffer ? offerDiscount : undefined });
           } else {
             notFoundItems.push(cartItem.name);
-            logger.info(`Item not found: ${cartItem.name}`);
+            logger.info('Cart item not found', { item: cartItem.name });
           }
         }
         
@@ -5052,15 +5046,11 @@ const chatbot = {
         await this.sendFoodTypeSelection(phone);
         state.currentStep = 'select_food_type_order';
       }
-      // Check cancel/refund/track BEFORE order status (they're more specific)
+      // Check cancel/track BEFORE order status (they're more specific)
       // Only check text-based intents when there's no selectedId (button click)
       else if (selection === 'cancel_order' || (!selectedId && this.isCancelIntent(msg))) {
         await this.sendCancelOptions(phone);
         state.currentStep = 'select_cancel';
-      }
-      else if (selection === 'request_refund' || (!selectedId && this.isRefundIntent(msg))) {
-        await this.sendRefundOptions(phone);
-        state.currentStep = 'select_refund';
       }
       else if (selection === 'track_order' || (!selectedId && (msg === 'track' || this.isTrackIntent(msg)))) {
         await this.sendTrackingOptions(phone);
@@ -5164,7 +5154,7 @@ const chatbot = {
               customer.cart.push({ menuItem: item._id, quantity: 1, addedAt: new Date() });
             }
             await customer.save();
-            logger.info(`Added ${item.name} to cart before checkout`);
+            logger.info('Item added to cart before checkout', { item: item.name });
           }
         }
         // Clear selectedItem to prevent duplicate additions on subsequent review_pay clicks
@@ -5714,13 +5704,6 @@ const chatbot = {
       else if (selection.startsWith('cancel_')) {
         const orderId = selection.replace('cancel_', '');
         await this.processCancellation(phone, orderId);
-        state.currentStep = 'main_menu';
-      }
-
-      // ========== REFUND ==========
-      else if (selection.startsWith('refund_')) {
-        const orderId = selection.replace('refund_', '');
-        await this.processRefund(phone, orderId);
         state.currentStep = 'main_menu';
       }
 
@@ -6799,7 +6782,7 @@ const chatbot = {
             return sum + (v.quantities && v.quantities.length > 0 ? v.quantities.length : 1);
           }, 0);
           
-          logger.info(`sendItemDetails: item="${item.name}", matchedVariantIndex=${JSON.stringify(matchedVariantIndex)}, variantsCount=${variantsArr.length}, totalCatalogProducts=${totalCatalogProducts}`);
+          logger.info('sendItemDetails', { item: item.name });
           
           // === CASE 1: Specific single variant matched AND has multiple sizes/quantities ===
           if (isSingleMatch && item.variants?.[matchedVariantIndex]) {
@@ -6809,7 +6792,7 @@ const chatbot = {
               const variantRetailerIds = matchedVariant.quantities.map((_, qIdx) => 
                 `${itemId}_v${matchedVariantIndex}_q${qIdx}`
               );
-              logger.info(`  Single variant with ${matchedVariant.quantities.length} sizes, showing product list`);
+              logger.info('Single variant with sizes', { sizeCount: matchedVariant.quantities.length });
               const variantLabel = matchedVariant.label || item.name;
               const sections = [{
                 title: variantLabel.trim().substring(0, 24),
@@ -6842,7 +6825,7 @@ const chatbot = {
               }
             }
             if (retailerIds.length > 1) {
-              logger.info(`  Array match: ${matchedVariantIndex.length} variants, ${retailerIds.length} catalog products`);
+              logger.info('Array match variants', { count: matchedVariantIndex.length });
               const sections = [{
                 title: item.name.substring(0, 24),
                 productRetailerIds: retailerIds.slice(0, 30)
@@ -7853,6 +7836,16 @@ const chatbot = {
   },
 
   async processCODOrder(phone, customer, state) {
+    // Order creation dedup — prevent double-tap creating duplicate orders
+    const orderDedup = idempotencyService.checkOrderOperation(
+      phone, 'cod_checkout', { serviceType: state.serviceType || state.selectedService || 'delivery' }
+    );
+    if (orderDedup.isDuplicate) {
+      logger.warn('Duplicate COD order creation prevented', { phone });
+      await whatsapp.sendMessage(phone, '⏳ Your order is already being processed. Please wait.');
+      return { success: false };
+    }
+
     // Refresh customer from database to ensure we have latest cart data
     const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
@@ -7867,6 +7860,9 @@ const chatbot = {
 
     const serviceType = state.serviceType || state.selectedService || 'delivery';
     const orderId = generateOrderId(serviceType);
+    setMetadata('orderId', orderId);
+    setMetadata('phone', phone);
+    logger.info('Order created', { orderId, serviceType, phone, via: 'COD' });
     let itemsTotal = 0;
     let totalDiscount = 0;
     let appliedOfferIds = new Set();
@@ -7915,7 +7911,7 @@ const chatbot = {
         }
       }
       
-      const subtotal = effectivePrice * item.quantity;
+      const subtotal = Math.round(effectivePrice * item.quantity * 100) / 100;
       itemsTotal += subtotal;
       totalDiscount += itemDiscount;
       
@@ -7958,11 +7954,12 @@ const chatbot = {
         freshCustomer.deliveryAddress.latitude,
         freshCustomer.deliveryAddress.longitude
       );
-      deliveryCharge = deliveryResult.charge || 0;
+      deliveryCharge = Math.max(0, deliveryResult.charge || 0);
       deliveryDistance = deliveryResult.distance;
     }
     
-    const total = itemsTotal + deliveryCharge;
+    itemsTotal = Math.round(itemsTotal * 100) / 100;
+    const total = Math.round((itemsTotal + deliveryCharge) * 100) / 100;
 
     const order = new Order({
       orderId,
@@ -7984,23 +7981,38 @@ const chatbot = {
       status: 'confirmed',
       trackingUpdates: [{ status: 'confirmed', message: 'Order confirmed - Cash on Delivery' }]
     });
-    await order.save();
-    
-    // Remove applied offers from customer's activeOffers (one-time use)
+    // Transaction-based checkout: order.save() + cart clear are atomic
+    // Falls back to sequential if transactions not supported (standalone MongoDB)
+    const codCartUpdate = { 
+      $set: { cart: [], 'conversationState.currentStep': 'order_placed' },
+      $push: { orderHistory: order._id }
+    };
     if (appliedOfferIds.size > 0) {
-      freshCustomer.activeOffers = (freshCustomer.activeOffers || []).filter(
-        offer => !appliedOfferIds.has(offer.offerId?.toString())
-      );
+      codCartUpdate.$pull = { activeOffers: { offerId: { $in: Array.from(appliedOfferIds) } } };
     }
+    if (!freshCustomer.hasOrdered) {
+      codCartUpdate.$set.hasOrdered = true;
+    }
+    try {
+      await transactionManager.execute(async (session) => {
+        await order.save({ session });
+        await Customer.findOneAndUpdate({ phone }, codCartUpdate, { session });
+      });
+    } catch (txErr) {
+      if (txErr.message?.includes('transaction') || txErr.code === 263 || txErr.message?.includes('replica set')) {
+        logger.warn('Transactions not supported, falling back to sequential', { error: txErr.message });
+        await order.save();
+        await Customer.findOneAndUpdate({ phone }, codCartUpdate);
+      } else {
+        throw txErr;
+      }
+    }
+
+    // Mark order creation as processed (dedup)
+    orderDedup.mark();
 
     // Add to WhatsApp broadcast contacts
-    const whatsappBroadcast = require('./whatsappBroadcast');
     await whatsappBroadcast.addContact(freshCustomer.phone, freshCustomer.name, new Date());
-
-    // Mark customer as having ordered (for accurate customer count)
-    if (!freshCustomer.hasOrdered) {
-      freshCustomer.hasOrdered = true;
-    }
 
     // Track today's orders count
     try {
@@ -8017,7 +8029,7 @@ const chatbot = {
         { upsert: true }
       );
     } catch (statsErr) {
-      logger.error('Error tracking today orders', { error: statsErr.message });
+      logger.error('Error tracking today orders', { error: statsErr.message, stack: statsErr.stack });
     }
 
     // Emit event for real-time updates
@@ -8047,16 +8059,15 @@ const chatbot = {
           });
         }
       }
-      if (admins.length > 0) logger.info(`Admin push sent for COD order ${orderId}`);
+      if (admins.length > 0) logger.info('Admin push sent for COD order', { orderId });
     } catch (pushErr) {
       logger.error('Admin push error', { error: pushErr.message });
     }
 
-    // Clear cart on the fresh customer and save
+    // Update in-memory customer object for state consistency
     freshCustomer.cart = [];
     freshCustomer.orderHistory = freshCustomer.orderHistory || [];
     freshCustomer.orderHistory.push(order._id);
-    await freshCustomer.save();
     
     // Also update the original customer object for state consistency
     customer.cart = [];
@@ -8088,6 +8099,10 @@ const chatbot = {
       { id: `cancel_${orderId}`, text: 'Cancel Order' },
       { id: 'home', text: 'Main Menu' }
     ]);
+
+    // Mark WhatsApp confirmation sent for reconciliation
+    order.whatsappConfirmationSent = true;
+    await order.save();
 
     return { success: true };
   },
@@ -8384,6 +8399,16 @@ const chatbot = {
   },
 
   async processCheckout(phone, customer, state) {
+    // Order creation dedup — prevent double-tap creating duplicate orders
+    const orderDedup = idempotencyService.checkOrderOperation(
+      phone, 'upi_checkout', { serviceType: state.serviceType || state.selectedService || 'delivery' }
+    );
+    if (orderDedup.isDuplicate) {
+      logger.warn('Duplicate UPI order creation prevented', { phone });
+      await whatsapp.sendMessage(phone, '⏳ Your order is already being processed. Please wait.');
+      return { success: false };
+    }
+
     // Refresh customer from database to ensure we have latest cart data
     const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     
@@ -8398,6 +8423,9 @@ const chatbot = {
 
     const serviceType = state.serviceType || state.selectedService || 'delivery';
     const orderId = generateOrderId(serviceType);
+    setMetadata('orderId', orderId);
+    setMetadata('phone', phone);
+    logger.info('Order created', { orderId, serviceType, phone, via: 'UPI' });
     let itemsTotal = 0;
     let totalDiscount = 0;
     let appliedOfferIds = new Set();
@@ -8448,7 +8476,7 @@ const chatbot = {
         }
       }
       
-      const subtotal = effectivePrice * item.quantity;
+      const subtotal = Math.round(effectivePrice * item.quantity * 100) / 100;
       itemsTotal += subtotal;
       totalDiscount += itemDiscount;
       
@@ -8491,11 +8519,12 @@ const chatbot = {
         freshCustomer.deliveryAddress.latitude,
         freshCustomer.deliveryAddress.longitude
       );
-      deliveryCharge = deliveryResult.charge || 0;
+      deliveryCharge = Math.max(0, deliveryResult.charge || 0);
       deliveryDistance = deliveryResult.distance;
     }
     
-    const total = itemsTotal + deliveryCharge;
+    itemsTotal = Math.round(itemsTotal * 100) / 100;
+    const total = Math.round((itemsTotal + deliveryCharge) * 100) / 100;
 
     const order = new Order({
       orderId,
@@ -8514,26 +8543,41 @@ const chatbot = {
         latitude: freshCustomer.deliveryAddress.latitude,
         longitude: freshCustomer.deliveryAddress.longitude
       } : null,
+      paymentMethod: 'online',
       trackingUpdates: [{ status: 'pending', message: 'Order created, awaiting payment' }]
     });
-    await order.save();
-    
-    // Remove applied offers from customer's activeOffers (one-time use)
+    // Transaction-based checkout: order.save() + cart clear are atomic
+    const upiCartUpdate = { 
+      $set: { cart: [] },
+      $push: { orderHistory: order._id }
+    };
     if (appliedOfferIds.size > 0) {
-      freshCustomer.activeOffers = (freshCustomer.activeOffers || []).filter(
-        offer => !appliedOfferIds.has(offer.offerId?.toString())
-      );
-      await freshCustomer.save();
+      upiCartUpdate.$pull = { activeOffers: { offerId: { $in: Array.from(appliedOfferIds) } } };
     }
+    if (!freshCustomer.hasOrdered) {
+      if (!upiCartUpdate.$set) upiCartUpdate.$set = {};
+      upiCartUpdate.$set.hasOrdered = true;
+    }
+    try {
+      await transactionManager.execute(async (session) => {
+        await order.save({ session });
+        await Customer.findOneAndUpdate({ phone }, upiCartUpdate, { session });
+      });
+    } catch (txErr) {
+      if (txErr.message?.includes('transaction') || txErr.code === 263 || txErr.message?.includes('replica set')) {
+        logger.warn('Transactions not supported, falling back to sequential', { error: txErr.message });
+        await order.save();
+        await Customer.findOneAndUpdate({ phone }, upiCartUpdate);
+      } else {
+        throw txErr;
+      }
+    }
+
+    // Mark order creation as processed (dedup)
+    orderDedup.mark();
 
     // Add to WhatsApp broadcast contacts
-    const whatsappBroadcast = require('./whatsappBroadcast');
     await whatsappBroadcast.addContact(freshCustomer.phone, freshCustomer.name, new Date());
-
-    // Mark customer as having ordered (for accurate customer count)
-    if (!freshCustomer.hasOrdered) {
-      freshCustomer.hasOrdered = true;
-    }
 
     // Track today's orders count
     try {
@@ -8550,7 +8594,7 @@ const chatbot = {
         { upsert: true }
       );
     } catch (statsErr) {
-      logger.error('Error tracking today orders', { error: statsErr.message });
+      logger.error('Error tracking today orders', { error: statsErr.message, stack: statsErr.stack });
     }
 
     // Emit event for real-time updates
@@ -8582,17 +8626,16 @@ const chatbot = {
             });
           }
         }
-        if (admins.length > 0) logger.info(`Admin push sent for UPI order ${orderId}`);
+        if (admins.length > 0) logger.info('Admin push sent for UPI order', { orderId });
       } catch (pushErr) {
         logger.error('Admin push error', { error: pushErr.message });
       }
     };
 
-    // Clear cart on the fresh customer and save
+    // Update in-memory customer objects for state consistency (DB already updated atomically above)
     freshCustomer.cart = [];
     freshCustomer.orderHistory = freshCustomer.orderHistory || [];
     freshCustomer.orderHistory.push(order._id);
-    await freshCustomer.save();
     
     // Also update the original customer object for state consistency
     customer.cart = [];
@@ -8685,7 +8728,7 @@ const chatbot = {
 
     const statusEmoji = {
       pending: '⏳', confirmed: '✅', preparing: '👨‍🍳', ready: '📦',
-      out_for_delivery: '🛵', delivered: '✅', cancelled: '❌', refunded: '💰'
+      out_for_delivery: '🛵', delivered: '✅', cancelled: '❌'
     };
 
     let msg = '📋 *Your Orders*\n\n';
@@ -8702,7 +8745,7 @@ const chatbot = {
       } else {
         const statusLabels = {
           pending: 'Pending', confirmed: 'Confirmed', preparing: 'Preparing', ready: 'Ready',
-          out_for_delivery: 'On the Way', delivered: 'Delivered', cancelled: 'Cancelled', refunded: 'Refunded'
+          out_for_delivery: 'On the Way', delivered: 'Delivered', cancelled: 'Cancelled'
         };
         statusText = statusLabels[o.status] || o.status.replace('_', ' ');
       }
@@ -8724,7 +8767,7 @@ const chatbot = {
   async sendTrackingOptions(phone) {
     const orders = await Order.find({
       'customer.phone': phone,
-      status: { $nin: ['delivered', 'cancelled', 'refunded'] }
+      status: { $nin: ['delivered', 'cancelled'] }
     }).sort({ createdAt: -1 }).limit(5);
 
     if (!orders.length) {
@@ -8745,7 +8788,7 @@ const chatbot = {
     // Multiple orders - show list to choose
     const statusLabel = {
       pending: 'Pending', confirmed: 'Confirmed', preparing: 'Preparing', ready: 'Ready',
-      out_for_delivery: 'On the Way', delivered: 'Delivered', cancelled: 'Cancelled', refunded: 'Refunded'
+      out_for_delivery: 'On the Way', delivered: 'Delivered', cancelled: 'Cancelled'
     };
     const rows = orders.map(o => ({
       rowId: `track_${o.orderId}`,
@@ -8774,12 +8817,12 @@ const chatbot = {
 
     const statusEmoji = {
       pending: '⏳', confirmed: '✅', preparing: '👨‍🍳', ready: '📦',
-      out_for_delivery: '🛵', delivered: '✅', cancelled: '❌', refunded: '💰'
+      out_for_delivery: '🛵', delivered: '✅', cancelled: '❌'
     };
     const statusLabel = {
       pending: 'Pending', confirmed: 'Confirmed', preparing: 'Preparing', ready: 'Ready',
       out_for_delivery: 'On the Way', delivered: isPickup ? 'Completed' : 'Delivered', 
-      cancelled: 'Cancelled', refunded: 'Refunded'
+      cancelled: 'Cancelled'
     };
 
     // Different messages for pickup vs delivery
@@ -8818,7 +8861,7 @@ const chatbot = {
   },
 
   async sendCancelOptions(phone) {
-    // Can cancel only COD orders that are not delivered, cancelled, or refunded
+    // Can cancel only COD orders that are not delivered or cancelled
     // UPI/app payment orders cannot be cancelled by customer
     // Pickup orders can only be cancelled if status is 'pending' (before confirmation)
     const orders = await Order.find({
@@ -8877,8 +8920,8 @@ const chatbot = {
       return;
     }
 
-    // Cannot cancel delivered, cancelled, or refunded orders
-    if (['delivered', 'cancelled', 'refunded'].includes(order.status)) {
+    // Cannot cancel delivered or already cancelled orders
+    if (['delivered', 'cancelled'].includes(order.status)) {
       const orderCancelledImg = await chatbotImagesService.getImageUrl('order_cancelled');
       await sendWithOptionalImage(phone, orderCancelledImg,
         `❌ *Cannot Cancel*\n\nOrder is already ${order.status.replace('_', ' ')}.`,
@@ -8897,10 +8940,11 @@ const chatbot = {
       return;
     }
 
-    order.status = 'cancelled';
-    order.statusUpdatedAt = new Date(); // For auto-cleanup
+    const txResult = transitionStatus(order, 'cancelled', 'Order cancelled by customer');
+    if (!txResult.success) {
+      logger.warn('Order cancellation transition blocked', { orderId, reason: txResult.reason });
+    }
     order.cancellationReason = 'Customer requested';
-    order.trackingUpdates.push({ status: 'cancelled', message: 'Order cancelled by customer', timestamp: new Date() });
     
     // Update payment status for COD orders
     if (order.paymentMethod === 'cod' && order.paymentStatus === 'pending') {
@@ -8911,30 +8955,6 @@ const chatbot = {
     let msg = isPickup 
       ? `✅ *Pickup Order Cancelled*\n\nOrder ${orderId} has been cancelled.`
       : `✅ *Order Cancelled*\n\nOrder ${orderId} has been cancelled.`;
-    
-    // Mark refund as pending if already paid via UPI/online (wait for Razorpay webhook)
-    if (order.paymentStatus === 'paid' && order.razorpayPaymentId) {
-      logger.info('Marking refund as pending for order', { orderId, paymentId: order.razorpayPaymentId });
-      
-      order.refundStatus = 'pending';
-      order.refundAmount = order.totalAmount;
-      order.refundRequestedAt = new Date();
-      order.paymentStatus = 'refund_processing';
-      order.trackingUpdates.push({ 
-        status: 'refund_processing', 
-        message: `Refund of ₹${order.totalAmount} is being processed`, 
-        timestamp: new Date() 
-      });
-      
-      msg += `\n\n💰 *Refund Processing*\nAmount: ₹${order.totalAmount}\n\n⏱️ Your refund will be processed within 5-7 business days.`;
-      logger.info('⏳ Refund pending for order', { order: orderId });
-    } else if (order.paymentStatus === 'paid' && !order.razorpayPaymentId) {
-      // Paid but no payment ID (edge case)
-      order.refundStatus = 'pending';
-      order.refundAmount = order.totalAmount;
-      order.paymentStatus = 'refund_processing';
-      msg += `\n\n💰 *Refund Processing*\nYour refund of ₹${order.totalAmount} is being processed. Our team will contact you shortly.`;
-    }
     
     await order.save();
     
@@ -8977,7 +8997,7 @@ const chatbot = {
             orderId: order.orderId,
             totalAmount: order.totalAmount
           });
-          logger.info(`Delivery partner ${deliveryBoy.name} notified of cancellation`);
+          logger.info('Delivery partner notified of cancellation', { deliveryPartner: deliveryBoy.name });
         }
       } catch (pushErr) {
         logger.error('Delivery push error (customer cancel chatbot)', { error: pushErr.message });
@@ -9000,110 +9020,6 @@ const chatbot = {
     ]);
   },
 
-  async sendRefundOptions(phone) {
-    // Show paid orders that are not delivered and not already refunded
-    const orders = await Order.find({
-      'customer.phone': phone,
-      paymentStatus: 'paid',
-      status: { $nin: ['delivered', 'refunded'] },
-      refundStatus: { $ne: 'completed' }
-    }).sort({ createdAt: -1 }).limit(5);
-
-    if (!orders.length) {
-      const refundFailedImg = await chatbotImagesService.getImageUrl('refund_failed');
-      await sendWithOptionalImage(phone, refundFailedImg,
-        '💰 *No Refundable Orders*\n\nNo paid orders available for refund.\n\nNote: Delivered orders cannot be refunded.',
-        [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
-      );
-      return;
-    }
-
-    // If only 1 order, directly process refund
-    if (orders.length === 1) {
-      await this.processRefund(phone, orders[0].orderId);
-      return;
-    }
-
-    // Multiple orders - show list to choose
-    const rows = orders.map(o => ({
-      rowId: `refund_${o.orderId}`,
-      title: o.orderId,
-      description: `₹${o.totalAmount} - ${o.status}${o.refundStatus === 'pending' ? ' (Refund Pending)' : ''}`
-    }));
-
-    await whatsapp.sendList(phone,
-      'Request Refund',
-      `You have ${orders.length} paid orders. Select which one to refund.`,
-      'Select Order',
-      [{ title: 'Paid Orders', rows }]
-    );
-  },
-
-  async processRefund(phone, orderId) {
-    const order = await Order.findOne({ orderId, 'customer.phone': phone });
-    
-    if (!order) {
-      const noOrdersImg = await chatbotImagesService.getImageUrl('no_orders_found');
-      await sendWithOptionalImage(phone, noOrdersImg, '❌ Order not found.', [{ id: 'home', text: 'Main Menu' }]);
-      return;
-    }
-
-    if (order.paymentStatus !== 'paid' && order.paymentStatus !== 'refund_processing') {
-      const refundFailedImg = await chatbotImagesService.getImageUrl('refund_failed');
-      await sendWithOptionalImage(phone, refundFailedImg, '❌ No payment found for this order.', [{ id: 'home', text: 'Main Menu' }]);
-      return;
-    }
-
-    // Cannot refund delivered orders
-    if (order.status === 'delivered') {
-      const refundFailedImg = await chatbotImagesService.getImageUrl('refund_failed');
-      await sendWithOptionalImage(phone, refundFailedImg, '❌ Delivered orders cannot be refunded.', [{ id: 'home', text: 'Main Menu' }]);
-      return;
-    }
-
-    if (order.refundStatus === 'completed' || order.paymentStatus === 'refunded') {
-      const refundProcessedImg = await chatbotImagesService.getImageUrl('refund_processed');
-      await sendWithOptionalImage(phone, refundProcessedImg, '❌ This order is already refunded.', [{ id: 'home', text: 'Main Menu' }]);
-      return;
-    }
-
-    if (order.refundStatus === 'pending' || order.refundStatus === 'scheduled') {
-      const refundProcessedImg = await chatbotImagesService.getImageUrl('refund_processed');
-      await sendWithOptionalImage(phone, refundProcessedImg,
-        `⏳ *Refund Already Processing*\n\nYour refund of ₹${order.totalAmount} is being processed.\n\n⏱️ You'll receive a confirmation within 5-7 business days.`,
-        [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
-      );
-      return;
-    }
-
-    // Mark refund as pending (wait for Razorpay to process)
-    order.refundStatus = 'pending';
-    order.refundAmount = order.totalAmount;
-    order.status = 'cancelled';
-    order.paymentStatus = 'refund_processing';
-    order.statusUpdatedAt = new Date();
-    order.refundRequestedAt = new Date();
-    order.trackingUpdates.push({ status: 'refund_processing', message: `Refund of ₹${order.totalAmount} requested`, timestamp: new Date() });
-    
-    await order.save();
-    
-    // Emit event for real-time updates
-    const dataEvents = require('./eventEmitter');
-    dataEvents.emit('orders');
-    dataEvents.emit('dashboard');
-    
-    // Sync to Google Sheets
-    googleSheets.updateOrderStatus(order.orderId, 'cancelled', 'refund_processing').catch(err => 
-      logger.error('Google Sheets sync error', { error: err.message })
-    );
-
-    const refundProcessedImg = await chatbotImagesService.getImageUrl('refund_processed');
-    await sendWithOptionalImage(phone, refundProcessedImg,
-      `✅ *Refund Requested!*\n\nOrder: ${orderId}\nAmount: ₹${order.totalAmount}\n\n⏱️ Your refund will be processed within 5-7 business days.`,
-      [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
-    );
-  },
-
   // ============ HELP ============
   async sendHelp(phone) {
     const msg = `❓ *Help & Support*\n\n` +
@@ -9113,8 +9029,7 @@ const chatbot = {
       `• Easy payment options available\n\n` +
       `📦 *Order Management*\n` +
       `• Track your order status in real-time\n` +
-      `• Cancel orders before preparation starts\n` +
-      `• Request refunds for paid orders\n\n` +
+      `• Cancel orders before preparation starts\n\n` +
       `💬 *Quick Commands*\n` +
       `• "hi" - Return to main menu\n` +
       `• "menu" - Browse our menu\n` +
@@ -9254,6 +9169,16 @@ const chatbot = {
 
   // ============ PROCESS PICKUP CHECKOUT ============
   async processPickupCheckout(phone, customer, state) {
+    // Order creation dedup — prevent double-tap creating duplicate orders
+    const orderDedup = idempotencyService.checkOrderOperation(
+      phone, 'pickup_checkout', { serviceType: 'pickup' }
+    );
+    if (orderDedup.isDuplicate) {
+      logger.warn('Duplicate pickup order creation prevented', { phone });
+      await whatsapp.sendMessage(phone, '⏳ Your order is already being processed. Please wait.');
+      return { success: false };
+    }
+
     try {
       // Refresh customer from database
       const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
@@ -9266,7 +9191,7 @@ const chatbot = {
       }
 
       // Calculate total and prepare items
-      let total = 0;
+      let itemsTotal = 0;
       let totalDiscount = 0;
       let appliedOfferIds = new Set();
       const items = [];
@@ -9318,8 +9243,8 @@ const chatbot = {
           }
         }
         
-        const itemTotal = effectivePrice * cartItem.quantity;
-        total += itemTotal;
+        const itemTotal = Math.round(effectivePrice * cartItem.quantity * 100) / 100;
+        itemsTotal += itemTotal;
         totalDiscount += itemDiscount;
         
         // Use variant-specific image if available, else parent item image
@@ -9346,6 +9271,9 @@ const chatbot = {
 
       // Create order
       const orderId = generateOrderId('pickup');
+      setMetadata('orderId', orderId);
+      setMetadata('phone', freshCustomer.phone);
+      logger.info('Order created', { orderId, serviceType: 'pickup', phone: freshCustomer.phone, via: 'pickup' });
       const order = new Order({
         orderId,
         customer: {
@@ -9357,35 +9285,76 @@ const chatbot = {
           address: 'Self-Pickup at Restaurant'
         },
         items,
-        totalAmount: total,
+        itemsTotal,
+        deliveryCharge: 0,
+        deliveryDistance: null,
+        totalAmount: Math.round(itemsTotal * 100) / 100,
         discountAmount: totalDiscount,
         appliedOfferIds: Array.from(appliedOfferIds),
         serviceType: 'pickup',
         paymentMethod: state.paymentMethod || 'cod',
         paymentStatus: 'pending',
-        status: 'pending'
+        status: 'pending',
+        trackingUpdates: [{ status: 'pending', message: 'Pickup order created, awaiting confirmation' }]
       });
 
-      await order.save();
-      logger.info(`Pickup order created: ${orderId}`);
-
-      // Remove applied offers from customer's activeOffers (one-time use)
+      // Transaction-based checkout: order.save() + cart clear are atomic
+      const pickupUpdate = { 
+        $set: { cart: [], 'conversationState.currentStep': 'order_placed' },
+        $push: { orderHistory: order._id }
+      };
       if (appliedOfferIds.size > 0) {
-        freshCustomer.activeOffers = (freshCustomer.activeOffers || []).filter(
-          offer => !appliedOfferIds.has(offer.offerId?.toString())
-        );
+        pickupUpdate.$pull = { activeOffers: { offerId: { $in: Array.from(appliedOfferIds) } } };
+      }
+      if (!freshCustomer.hasOrdered) {
+        pickupUpdate.$set.hasOrdered = true;
+      }
+      try {
+        await transactionManager.execute(async (session) => {
+          await order.save({ session });
+          await Customer.findOneAndUpdate({ phone }, pickupUpdate, { session });
+        });
+      } catch (txErr) {
+        if (txErr.message?.includes('transaction') || txErr.code === 263 || txErr.message?.includes('replica set')) {
+          logger.warn('Transactions not supported, falling back to sequential', { error: txErr.message });
+          await order.save();
+          await Customer.findOneAndUpdate({ phone }, pickupUpdate);
+        } else {
+          throw txErr;
+        }
       }
 
-      // Clear cart
+      // Mark order creation as processed (dedup)
+      orderDedup.mark();
+
+      logger.info('Pickup order created', { orderId });
+
+      // Add to WhatsApp broadcast contacts
+      await whatsappBroadcast.addContact(freshCustomer.phone, freshCustomer.name, new Date());
+
+      // Track today's orders count
+      try {
+        const DashboardStats = require('../models/DashboardStats');
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        await DashboardStats.findOneAndUpdate(
+          {},
+          { $inc: { todayOrders: 1 }, $set: { todayDate: todayStr, lastUpdated: new Date() } },
+          { upsert: true }
+        );
+      } catch (statsErr) {
+        logger.error('Error tracking today orders', { error: statsErr.message, stack: statsErr.stack });
+      }
+
+      // In-memory update for state consistency (DB already updated atomically above)
       freshCustomer.cart = [];
       freshCustomer.conversationState = { currentStep: 'order_placed' };
-      await freshCustomer.save();
 
       // Send confirmation message
       let msg = '✅ *Order Request Successful!*\n\n';
       msg += `📦 Order ID: *${orderId}*\n`;
       msg += `🏪 Service: *Self-Pickup*\n`;
-      msg += `💰 Total: *₹${total}*\n`;
+      msg += `💰 Total: *₹${itemsTotal}*\n`;
       msg += `💳 Payment: *${state.paymentMethod === 'cod' ? 'Pay at Hotel' : 'UPI/App'}*\n\n`;
       
       // Add order items details
@@ -9417,6 +9386,10 @@ const chatbot = {
         { id: 'home', text: 'Main Menu' }
       ]);
 
+      // Mark WhatsApp confirmation sent for reconciliation
+      order.whatsappConfirmationSent = true;
+      await order.save();
+
       // Emit event for real-time updates (SSE)
       const dataEvents = require('./eventEmitter');
       dataEvents.emit('orders');
@@ -9446,7 +9419,7 @@ const chatbot = {
             });
           }
         }
-        if (admins.length > 0) logger.info(`Admin push sent for pickup order ${orderId}`);
+        if (admins.length > 0) logger.info('Admin push sent for pickup order', { orderId });
       } catch (pushErr) {
         logger.error('Admin push error', { error: pushErr.message });
       }

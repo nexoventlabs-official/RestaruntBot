@@ -1,5 +1,6 @@
 const express = require('express');
 const logger = require('../services/logger');
+const { logRouteError } = require('../services/logger');
 const jwt = require('jsonwebtoken');
 const DeliveryBoy = require('../models/DeliveryBoy');
 const Order = require('../models/Order');
@@ -13,6 +14,7 @@ const whatsapp = require('../services/whatsapp');
 const chatbotImagesService = require('../services/chatbotImages');
 const dataEvents = require('../services/eventEmitter');
 const razorpayService = require('../services/razorpay');
+const { validateTransition } = require('../services/orderStateMachine');
 const multer = require('multer');
 const router = express.Router();
 
@@ -48,51 +50,9 @@ const generatePassword = () => {
   return password;
 };
 
-// Send password email to delivery boy
-const sendPasswordEmail = async (email, name, password) => {
-  const SibApiV3Sdk = require('sib-api-v3-sdk');
-  const defaultClient = SibApiV3Sdk.ApiClient.instance;
-  const apiKey = defaultClient.authentications['api-key'];
-  apiKey.apiKey = process.env.BREVO_API_KEY;
-  
-  const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-  const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
-  
-  sendSmtpEmail.subject = 'Welcome to FoodAdmin - Your Login Credentials';
-  sendSmtpEmail.htmlContent = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <div style="background: linear-gradient(135deg, #e63946, #ff6b6b); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-        <h1 style="color: white; margin: 0;">🚴 Welcome to FoodAdmin!</h1>
-      </div>
-      <div style="padding: 30px; background: #f8f9fb;">
-        <h2 style="color: #1c1d21;">Hello ${name}!</h2>
-        <p style="color: #61636b; font-size: 16px;">You have been added as a Delivery Partner. Here are your login credentials:</p>
-        
-        <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #e63946;">
-          <p style="margin: 10px 0;"><strong>Email:</strong> ${email}</p>
-          <p style="margin: 10px 0;"><strong>Password:</strong> <code style="background: #f0f0f0; padding: 5px 10px; border-radius: 5px; font-size: 18px;">${password}</code></p>
-        </div>
-        
-        <p style="color: #e63946; font-weight: bold;">⚠️ Please change your password after first login!</p>
-        
-        <p style="color: #61636b;">Login at: <a href="https://restarunt-bot.vercel.app/delivery/login" style="color: #e63946;">Delivery Portal</a></p>
-      </div>
-      <div style="padding: 20px; text-align: center; color: #61636b; font-size: 12px;">
-        <p>This is an automated message from FoodAdmin.</p>
-      </div>
-    </div>
-  `;
-  sendSmtpEmail.sender = { name: process.env.BREVO_FROM_NAME || 'FoodAdmin', email: process.env.BREVO_FROM_EMAIL };
-  sendSmtpEmail.to = [{ email, name }];
-
-  try {
-    await apiInstance.sendTransacEmail(sendSmtpEmail);
-    logger.info(`📧 Password email sent to ${email}`);
-    return true;
-  } catch (error) {
-    logger.error('Brevo email error:', error.message);
-    return false;
-  }
+// Send password email to delivery boy (delegated to brevoMail service)
+const sendPasswordEmail = (email, name, password) => {
+  return brevoMail.sendDeliveryPartnerCredentials(email, name, password);
 };
 
 // ============ ADMIN ROUTES (Protected) ============
@@ -124,7 +84,8 @@ router.get('/', adminRateLimiter, auth, async (req, res) => {
     
     res.json(deliveryBoysWithStatus);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -204,8 +165,7 @@ router.post('/', adminRateLimiter, auth, upload.single('photo'), async (req, res
     
     res.status(201).json(result);
   } catch (error) {
-    logger.error('Add delivery boy error:', error);
-    res.status(500).json({ error: error.message });
+    logRouteError(res, 'Add delivery boy error', error);
   }
 });
 
@@ -228,7 +188,7 @@ router.put('/:id', adminRateLimiter, auth, upload.single('photo'), async (req, r
       // If deactivating, increment tokenVersion to invalidate all existing sessions
       if (deliveryBoy.isActive && !newIsActive) {
         deliveryBoy.tokenVersion = (deliveryBoy.tokenVersion || 0) + 1;
-        logger.info(`🔒 Deactivated delivery partner ${deliveryBoy.name}, invalidating sessions`);
+        logger.info('Deactivated delivery partner , invalidating sessions', { name : deliveryBoy.name });
       }
       deliveryBoy.isActive = newIsActive;
     }
@@ -273,7 +233,8 @@ router.put('/:id', adminRateLimiter, auth, upload.single('photo'), async (req, r
     
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -299,7 +260,8 @@ router.delete('/:id', adminRateLimiter, auth, async (req, res) => {
     
     res.json({ message: 'Delivery boy deleted successfully' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -323,7 +285,8 @@ router.post('/:id/reset-password', adminRateLimiter, auth, async (req, res) => {
     
     res.json({ message: 'New password sent to email' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -392,7 +355,8 @@ router.post('/login', async (req, res) => {
     
     res.json({ token, refreshToken, user });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -468,7 +432,8 @@ router.post('/change-password', async (req, res) => {
     
     res.json({ message: 'Password changed successfully' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -499,7 +464,8 @@ router.post('/status', async (req, res) => {
     
     res.json({ message: 'Status updated' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -523,7 +489,8 @@ router.post('/heartbeat', async (req, res) => {
     
     res.json({ message: 'Heartbeat received' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -547,11 +514,12 @@ router.post('/push-token', async (req, res) => {
     
     await DeliveryBoy.findByIdAndUpdate(decoded.id, { pushToken });
     
-    logger.info(`📱 Push token updated for delivery partner ${decoded.id}`);
+    logger.info('Push token updated for delivery partner', { id : decoded.id });
     
     res.json({ message: 'Push token updated' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -568,12 +536,11 @@ router.delete('/push-token', async (req, res) => {
     }
     
     await DeliveryBoy.findByIdAndUpdate(decoded.id, { pushToken: null });
-    logger.info(`📱 Push token cleared for delivery partner ${decoded.id}`);
+    logger.info('Push token cleared for delivery partner', { id : decoded.id });
     
     res.json({ message: 'Push token cleared' });
   } catch (error) {
-    logger.error('Clear push token error:', error);
-    res.status(500).json({ error: error.message });
+    logRouteError(res, 'Clear push token error', error);
   }
 });
 
@@ -598,7 +565,8 @@ router.post('/reset-badge', async (req, res) => {
     
     res.json({ message: 'Badge count reset' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -624,8 +592,7 @@ router.post('/test-notification', async (req, res) => {
       res.status(400).json({ error: 'No push token registered for this user' });
     }
   } catch (error) {
-    logger.error('Test notification error:', error);
-    res.status(500).json({ error: error.message });
+    logRouteError(res, 'Test notification error', error);
   }
 });
 
@@ -642,7 +609,8 @@ router.get('/orders/available', authenticateDeliveryBoy, async (req, res) => {
     
     res.json(orders);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -665,7 +633,8 @@ router.get('/orders/my', authenticateDeliveryBoy, async (req, res) => {
     
     res.json(orders);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -679,7 +648,8 @@ router.get('/orders/history', authenticateDeliveryBoy, async (req, res) => {
     
     res.json(orders);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -764,8 +734,7 @@ router.get('/orders/history/sheets', authenticateDeliveryBoy, async (req, res) =
       source: sheetOrders.length > 0 ? 'sheets' : 'mongodb'
     });
   } catch (error) {
-    logger.error('Error in history/sheets endpoint:', error);
-    res.status(500).json({ error: error.message });
+    logRouteError(res, 'Error in history/sheets endpoint', error);
   }
 });
 
@@ -797,7 +766,8 @@ router.get('/orders/stats', authenticateDeliveryBoy, async (req, res) => {
       activeOrders
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -815,7 +785,8 @@ router.get('/profile/stats', authenticateDeliveryBoy, async (req, res) => {
       totalRatings: deliveryBoy.totalRatings || 0
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -933,8 +904,7 @@ router.get('/orders/history/filtered', authenticateDeliveryBoy, async (req, res)
       source: 'sheets'
     });
   } catch (error) {
-    logger.error('Error in history/filtered endpoint:', error);
-    res.status(500).json({ error: error.message });
+    logRouteError(res, 'Error in history/filtered endpoint', error);
   }
 });
 
@@ -955,7 +925,8 @@ router.get('/orders/:orderId', authenticateDeliveryBoy, async (req, res) => {
     
     res.json(order);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -1023,8 +994,7 @@ router.post('/orders/:orderId/claim', authenticateDeliveryBoy, async (req, res) 
     
     res.json({ message: 'Order claimed successfully', order });
   } catch (error) {
-    logger.error('Claim order error:', error);
-    res.status(500).json({ error: error.message });
+    logRouteError(res, 'Claim order error', error);
   }
 });
 
@@ -1033,6 +1003,12 @@ router.post('/orders/:orderId/mark-ready', authenticateDeliveryBoy, async (req, 
   try {
     const { orderId } = req.params;
     
+    // Validate transition before atomic update
+    const transitionCheck = validateTransition('preparing', 'ready');
+    if (!transitionCheck.valid) {
+      return res.status(400).json({ error: transitionCheck.reason });
+    }
+
     const order = await Order.findOneAndUpdate(
       {
         orderId,
@@ -1041,7 +1017,7 @@ router.post('/orders/:orderId/mark-ready', authenticateDeliveryBoy, async (req, 
         serviceType: 'delivery'
       },
       {
-        $set: { status: 'ready' },
+        $set: { status: 'ready', statusUpdatedAt: new Date() },
         $push: {
           trackingUpdates: {
             status: 'ready',
@@ -1056,6 +1032,8 @@ router.post('/orders/:orderId/mark-ready', authenticateDeliveryBoy, async (req, 
     if (!order) {
       return res.status(400).json({ error: 'Order not found or not assigned to you' });
     }
+
+    logger.info('Order status transitioned', { orderId, from: 'preparing', to: 'ready', triggeredBy: 'delivery_boy' });
     
     // Update Google Sheets
     await googleSheets.updateOrderStatus(orderId, 'ready');
@@ -1085,8 +1063,7 @@ router.post('/orders/:orderId/mark-ready', authenticateDeliveryBoy, async (req, 
     
     res.json({ message: 'Order marked as ready', order });
   } catch (error) {
-    logger.error('Mark ready error:', error);
-    res.status(500).json({ error: error.message });
+    logRouteError(res, 'Mark ready error', error);
   }
 });
 
@@ -1095,6 +1072,12 @@ router.post('/orders/:orderId/out-for-delivery', authenticateDeliveryBoy, async 
   try {
     const { orderId } = req.params;
     
+    // Validate transition before atomic update
+    const transitionCheck = validateTransition('ready', 'out_for_delivery');
+    if (!transitionCheck.valid) {
+      return res.status(400).json({ error: transitionCheck.reason });
+    }
+
     const order = await Order.findOneAndUpdate(
       {
         orderId,
@@ -1102,7 +1085,7 @@ router.post('/orders/:orderId/out-for-delivery', authenticateDeliveryBoy, async 
         assignedTo: req.deliveryBoy._id
       },
       {
-        $set: { status: 'out_for_delivery' },
+        $set: { status: 'out_for_delivery', statusUpdatedAt: new Date() },
         $push: {
           trackingUpdates: {
             status: 'out_for_delivery',
@@ -1117,6 +1100,8 @@ router.post('/orders/:orderId/out-for-delivery', authenticateDeliveryBoy, async 
     if (!order) {
       return res.status(400).json({ error: 'Order not found or not assigned to you' });
     }
+
+    logger.info('Order status transitioned', { orderId, from: 'ready', to: 'out_for_delivery', triggeredBy: 'delivery_boy' });
     
     // Update Google Sheets
     await googleSheets.updateOrderStatus(orderId, 'out_for_delivery');
@@ -1144,7 +1129,8 @@ router.post('/orders/:orderId/out-for-delivery', authenticateDeliveryBoy, async 
     
     res.json({ message: 'Order marked as out for delivery', order });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -1187,6 +1173,12 @@ router.post('/orders/:orderId/delivered', authenticateDeliveryBoy, async (req, r
       actualPaymentMethod = collectionMethod; // 'cash' or 'upi'
     }
     
+    // Validate transition before atomic update
+    const transitionCheck = validateTransition(existingOrder.status, 'delivered');
+    if (!transitionCheck.valid) {
+      return res.status(400).json({ error: transitionCheck.reason });
+    }
+
     const order = await Order.findOneAndUpdate(
       {
         orderId,
@@ -1211,6 +1203,12 @@ router.post('/orders/:orderId/delivered', authenticateDeliveryBoy, async (req, r
       },
       { new: true }
     );
+
+    if (!order) {
+      return res.status(409).json({ error: 'Order status changed concurrently or not assigned to you' });
+    }
+
+    logger.info('Order status transitioned', { orderId, from: 'out_for_delivery', to: 'delivered', triggeredBy: 'delivery_boy' });
     
     // Determine payment method label for Google Sheets
     let paymentMethodLabel = existingOrder.paymentMethod.toUpperCase();
@@ -1269,7 +1267,7 @@ router.post('/orders/:orderId/delivered', authenticateDeliveryBoy, async (req, r
           { orderId: order.orderId },
           { $set: { isHidden: true } }
         );
-        logger.info(`🧹 Order ${order.orderId} hidden from dashboard (delivered by delivery partner)`);
+        logger.info('Order hidden from dashboard (delivered by delivery partner)', { orderId : order.orderId });
         dataEvents.emit('orders');
       } catch (cleanupErr) {
         logger.error('Instant cleanup error:', cleanupErr.message);
@@ -1278,7 +1276,8 @@ router.post('/orders/:orderId/delivered', authenticateDeliveryBoy, async (req, r
     
     res.json({ message: 'Order marked as delivered', order });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -1347,8 +1346,7 @@ router.post('/orders/:orderId/generate-qr', authenticateDeliveryBoy, async (req,
       merchantVpa: merchantVpa || null
     });
   } catch (error) {
-    logger.error('Generate QR error:', error);
-    res.status(500).json({ error: error.message });
+    logRouteError(res, 'Generate QR error', error);
   }
 });
 
@@ -1379,6 +1377,12 @@ router.get('/orders/:orderId/check-payment', authenticateDeliveryBoy, async (req
       const paymentLinkDetails = await razorpay.paymentLink.fetch(paymentLinkId || order.codPaymentLinkId);
       
       if (paymentLinkDetails.status === 'paid') {
+        // Validate transition before atomic update
+        const transitionCheck = validateTransition(order.status, 'delivered');
+        if (!transitionCheck.valid) {
+          return res.status(400).json({ error: transitionCheck.reason });
+        }
+
         // Payment successful - auto mark as delivered
         const updatedOrder = await Order.findOneAndUpdate(
           {
@@ -1407,6 +1411,7 @@ router.get('/orders/:orderId/check-payment', authenticateDeliveryBoy, async (req
         );
         
         if (updatedOrder) {
+          logger.info('Order status transitioned', { orderId, from: 'out_for_delivery', to: 'delivered', triggeredBy: 'delivery_boy_qr' });
           // Update Google Sheets
           await googleSheets.updateOrderStatus(orderId, 'delivered', 'paid');
           await googleSheets.updatePaymentMethod(orderId, 'COD/UPI');
@@ -1453,8 +1458,7 @@ router.get('/orders/:orderId/check-payment', authenticateDeliveryBoy, async (req
       res.json({ status: 'pending', message: 'Checking payment status...' });
     }
   } catch (error) {
-    logger.error('Check payment error:', error);
-    res.status(500).json({ error: error.message });
+    logRouteError(res, 'Check payment error', error);
   }
 });
 

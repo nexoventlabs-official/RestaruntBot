@@ -18,8 +18,7 @@ router.get('/', authMiddleware, async (req, res) => {
     });
     res.json(settingsObj);
   } catch (error) {
-    logger.error('Error fetching settings:', error);
-    res.status(500).json({ error: error.message });
+    return logRouteError(res, 'Error fetching settings', error);
   }
 });
 
@@ -29,8 +28,7 @@ router.get('/:key', authMiddleware, async (req, res) => {
     const value = await Settings.getValue(req.params.key);
     res.json({ key: req.params.key, value });
   } catch (error) {
-    logger.error('Error fetching setting:', error);
-    res.status(500).json({ error: error.message });
+    return logRouteError(res, 'Error fetching setting', error);
   }
 });
 
@@ -39,11 +37,10 @@ router.put('/:key', authMiddleware, async (req, res) => {
   try {
     const { value } = req.body;
     const setting = await Settings.setValue(req.params.key, value, req.user?.username);
-    logger.info(`[Settings] Updated ${req.params.key} to ${JSON.stringify(value)} by ${req.user?.username}`);
+    logger.info('[Settings] Updated to by', { key: req.params.key, detail: JSON.stringify(value), username: req.user?.username });
     res.json(setting);
   } catch (error) {
-    logger.error('Error updating setting:', error);
-    res.status(500).json({ error: error.message });
+    return logRouteError(res, 'Error updating setting', error);
   }
 });
 
@@ -53,11 +50,10 @@ router.post('/holiday/toggle', authMiddleware, async (req, res) => {
     const currentValue = await Settings.getValue('holidayMode', false);
     const newValue = !currentValue;
     const setting = await Settings.setValue('holidayMode', newValue, req.user?.username);
-    logger.info(`[Settings] Holiday mode ${newValue ? 'ENABLED' : 'DISABLED'} by ${req.user?.username}`);
+    logger.info('[Settings] Holiday mode by', { detail: newValue ? 'ENABLED' : 'DISABLED', username: req.user?.username });
     res.json({ holidayMode: newValue });
   } catch (error) {
-    logger.error('Error toggling holiday mode:', error);
-    res.status(500).json({ error: error.message });
+    return logRouteError(res, 'Error toggling holiday mode', error);
   }
 });
 
@@ -67,8 +63,7 @@ router.get('/holiday/status', async (req, res) => {
     const holidayMode = await Settings.getValue('holidayMode', false);
     res.json({ holidayMode });
   } catch (error) {
-    logger.error('Error fetching holiday status:', error);
-    res.status(500).json({ error: error.message });
+    return logRouteError(res, 'Error fetching holiday status', error);
   }
 });
 

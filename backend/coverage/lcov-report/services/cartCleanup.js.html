@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/135</span>
+                <span class='fraction'>0/140</span>
             </div>
         
             
@@ -39,14 +39,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/13</span>
+                <span class='fraction'>0/15</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/127</span>
+                <span class='fraction'>0/130</span>
             </div>
         
             
@@ -314,12 +314,16 @@
 <a name='L249'></a><a href='#L249'>249</a>
 <a name='L250'></a><a href='#L250'>250</a>
 <a name='L251'></a><a href='#L251'>251</a>
-<a name='L252'></a><a href='#L252'>252</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a>
+<a name='L254'></a><a href='#L254'>254</a>
+<a name='L255'></a><a href='#L255'>255</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -550,9 +554,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -571,6 +577,7 @@ const MenuItem = <span class="cstat-no" title="statement not covered" >require('
 const cron = <span class="cstat-no" title="statement not covered" >require('node-cron');</span>
 const whatsapp = <span class="cstat-no" title="statement not covered" >require('./whatsapp');</span>
 const chatbotImagesService = <span class="cstat-no" title="statement not covered" >require('./chatbotImages');</span>
+const { initContext, runWithContext } = <span class="cstat-no" title="statement not covered" >require('./correlationContext');</span>
 &nbsp;
 // Track which customers have been warned (to avoid duplicate warnings)
 const warnedCustomers = <span class="cstat-no" title="statement not covered" >new Set();</span>
@@ -659,9 +666,9 @@ const sendExpiryWarnings = <span class="cstat-no" title="statement not covered" 
           }
           
 <span class="cstat-no" title="statement not covered" >          warnedCustomers.add(warningKey);</span>
-<span class="cstat-no" title="statement not covered" >          logger.info(`[Cart Warning] Sent expiry warning to ${customer.phone} for ${expiringItems.length} items`);</span>
+<span class="cstat-no" title="statement not covered" >          logger.info('[Cart Warning] Sent expiry warning to for items', { phone: customer.phone, count: expiringItems.length });</span>
         } catch (error) {
-<span class="cstat-no" title="statement not covered" >          logger.error(`[Cart Warning] Failed to send warning to ${customer.phone}:`, error.message);</span>
+<span class="cstat-no" title="statement not covered" >          logger.error('[Cart Warning] Failed to send warning to', error.message);</span>
         }
       }
     }
@@ -776,20 +783,20 @@ const cleanupExpiredCartItems = <span class="cstat-no" title="statement not cove
 <span class="cstat-no" title="statement not covered" >              await whatsapp.sendButtons(customer.phone, message, buttons);</span>
             }
             
-<span class="cstat-no" title="statement not covered" >            logger.info(`[Cart Cleanup] Notified ${customer.phone} about ${itemsToRemove.length} removed items`);</span>
+<span class="cstat-no" title="statement not covered" >            logger.info('[Cart Cleanup] Notified about removed items', { phone: customer.phone, count: itemsToRemove.length });</span>
             
             // Remove from warned set since items are now cleared
             const warningKeys = <span class="cstat-no" title="statement not covered" >Array.from(warnedCustomers).filter(<span class="fstat-no" title="function not covered" >ke</span>y =&gt; <span class="cstat-no" title="statement not covered" >key.startsWith(customer.phone))</span>;</span>
 <span class="cstat-no" title="statement not covered" >            warningKeys.forEach(<span class="fstat-no" title="function not covered" >ke</span>y =&gt; <span class="cstat-no" title="statement not covered" >warnedCustomers.delete(key))</span>;</span>
           } catch (error) {
-<span class="cstat-no" title="statement not covered" >            logger.error(`[Cart Cleanup] Failed to notify ${customer.phone}:`, error.message);</span>
+<span class="cstat-no" title="statement not covered" >            logger.error('[Cart Cleanup] Failed to notify', error.message);</span>
           }
         }
       }
     }
     
 <span class="cstat-no" title="statement not covered" >    if (totalItemsRemoved &gt; 0) {</span>
-<span class="cstat-no" title="statement not covered" >      logger.info(`[Cart Cleanup] Removed ${totalItemsRemoved} expired items from ${customersAffected} customer carts`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('[Cart Cleanup] Expired items removed', { totalItemsRemoved, customersAffected: customersWithExpiredItems.length });</span>
     }
   } catch (error) {
 <span class="cstat-no" title="statement not covered" >    logger.error('[Cart Cleanup] Error cleaning up expired cart items:', error);</span>
@@ -800,12 +807,14 @@ const cleanupExpiredCartItems = <span class="cstat-no" title="statement not cove
 const startCartCleanupScheduler = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >()</span> =&gt; {</span>
   // Send warnings every 5 minutes (for items that will expire in 10 minutes)
 <span class="cstat-no" title="statement not covered" >  cron.schedule('*/5 * * * *', <span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >    await sendExpiryWarnings();</span>
+    const ctx = <span class="cstat-no" title="statement not covered" >initContext(null, { source: 'scheduler', job: 'cartCleanup.warnings' });</span>
+<span class="cstat-no" title="statement not covered" >    await runWithContext(ctx, <span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >sendExpiryWarnings())</span>;</span>
   });
   
   // Run cleanup every 5 minutes (to remove expired items)
 <span class="cstat-no" title="statement not covered" >  cron.schedule('*/5 * * * *', <span class="fstat-no" title="function not covered" >as</span>ync () =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >    await cleanupExpiredCartItems();</span>
+    const ctx = <span class="cstat-no" title="statement not covered" >initContext(null, { source: 'scheduler', job: 'cartCleanup.cleanup' });</span>
+<span class="cstat-no" title="statement not covered" >    await runWithContext(ctx, <span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >cleanupExpiredCartItems())</span>;</span>
   });
   
 <span class="cstat-no" title="statement not covered" >  logger.info('[Cart Cleanup] Scheduler started - warnings and cleanup running every 5 minutes');</span>
@@ -823,7 +832,7 @@ const startCartCleanupScheduler = <span class="cstat-no" title="statement not co
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-19T18:32:07.239Z
+                at 2026-02-21T10:10:14.953Z
             </div>
         <script src="../prettify.js"></script>
         <script>

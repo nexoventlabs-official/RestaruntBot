@@ -86,7 +86,7 @@ async function recordSuccess() {
   try {
     await Promise.all([
       redis.incr(`${METRICS_PREFIX}requests:success`),
-      redis.incr(`${METRICS_PREFIX}requests:success:daily:${dateKey}`)
+      redis.incr(`${METRICS_PREFIX}requests: daily:${dateKey}`)
     ]);
   } catch (error) {
     logger.error('❌ [Metrics] Failed to record success:', error.message);
@@ -103,7 +103,7 @@ async function recordFailure() {
   try {
     await Promise.all([
       redis.incr(`${METRICS_PREFIX}requests:failure`),
-      redis.incr(`${METRICS_PREFIX}requests:failure:daily:${dateKey}`)
+      redis.incr(`${METRICS_PREFIX}requests: daily:${dateKey}`)
     ]);
   } catch (error) {
     logger.error('❌ [Metrics] Failed to record failure:', error.message);
@@ -201,7 +201,7 @@ async function recordError(errorType, errorMessage) {
   try {
     await Promise.all([
       redis.incr(`${METRICS_PREFIX}errors:total`),
-      redis.incr(`${METRICS_PREFIX}errors:daily:${dateKey}`),
+      redis.incr(`${METRICS_PREFIX}errors:date:${dateKey}`),
       redis.incr(`${METRICS_PREFIX}errors:type:${errorType}`),
       redis.zadd(`${METRICS_PREFIX}errors:recent`, timestamp, JSON.stringify({
         type: errorType,
@@ -244,7 +244,7 @@ async function getMetrics() {
       redis.get(`${METRICS_PREFIX}requests:success`),
       redis.get(`${METRICS_PREFIX}requests:failure`),
       redis.get(`${METRICS_PREFIX}errors:total`),
-      redis.get(`${METRICS_PREFIX}errors:daily:${dateKey}`),
+      redis.get(`${METRICS_PREFIX}errors:date:${dateKey}`),
       scanKeys(redis, `${METRICS_PREFIX}requests:type:*`),
       scanKeys(redis, `${METRICS_PREFIX}requests:route:*`),
       scanKeys(redis, `${METRICS_PREFIX}domain:*`),
@@ -393,7 +393,7 @@ async function resetMetrics() {
     if (keys.length > 0) {
       await redis.del(...keys);
     }
-    logger.info(`✅ [Metrics] Reset ${keys.length} metric keys`);
+    logger.info('[Metrics] Reset metric keys', { length : keys.length });
   } catch (error) {
     logger.error('❌ [Metrics] Failed to reset metrics:', error.message);
   }

@@ -44,7 +44,7 @@ const logger = require('../services/logger');
     
     // Check if user's role is in allowed roles
     if (!allowedRoles.includes(userRole)) {
-      logger.warn(`⚠️ Authorization failed: ${userRole} tried to access ${req.method} ${req.originalUrl}`);
+      logger.warn('Authorization failed', { userRole, requiredRoles: allowedRoles, path: req.path });
       return res.status(403).json({ 
         error: 'Insufficient permissions',
         code: 'FORBIDDEN',
@@ -54,7 +54,7 @@ const logger = require('../services/logger');
     }
     
     // Log authorization (for audit)
-    logger.info(`✅ Authorized: ${userRole} - ${req.method} ${req.originalUrl}`);
+    logger.info('Authorized:', { userRole, method: req.method, path: req.originalUrl });
     
     next();
   };
@@ -106,7 +106,7 @@ function authorizeOwner(getResourceOwnerId) {
     
     // Check ownership
     if (resourceOwnerId !== userId && resourceOwnerId !== userId.toString()) {
-      logger.warn(`⚠️ Ownership check failed: User ${userId} tried to access resource owned by ${resourceOwnerId}`);
+      logger.warn('Ownership check failed', { userId: req.user.id, resourceOwner: resourceOwnerId });
       return res.status(403).json({ 
         error: 'You can only access your own resources',
         code: 'NOT_OWNER'

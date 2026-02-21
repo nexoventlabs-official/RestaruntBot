@@ -250,7 +250,7 @@ async function calculateDeliveryCharge(customerLat, customerLon) {
     };
     
   } catch (error) {
-    console.error('Error calculating delivery charge:', error);
+    logger.error('Error calculating delivery charge', { error: error.message, stack: error.stack });
     return { charge: 0, distance: null, withinFreeRadius: true, message: null };
   }
 }

@@ -2,6 +2,7 @@ const Category = require('../models/Category');
 const MenuItem = require('../models/MenuItem');
 const cron = require('node-cron');
 const logger = require('./logger');
+const { initContext, runWithContext } = require('./correlationContext');
 
 class CategoryScheduler {
   constructor() {
@@ -123,7 +124,7 @@ class CategoryScheduler {
         return;
       }
 
-      logger.info(`[Category Scheduler] Checking ${category.name}`, { type: category.schedule.type });
+      logger.info('[Category Scheduler] Checking', { type: category.schedule.type });
       if (category.schedule.type === 'custom' && category.schedule.customDays?.length > 0) {
         logger.info('[Category Scheduler] Custom Days', { customDays: category.schedule.customDays });
       } else if (category.schedule.type === 'custom') {
@@ -151,7 +152,7 @@ class CategoryScheduler {
         await category.save();
         
         logger.info('[Category Scheduler] STATUS CHANGED', { name: category.name, from: oldStatus, to: newStatus });
-        logger.info(`[Category Scheduler] ${category.name}: ${shouldBePaused ? 'LOCKED (outside schedule)' : 'RESUMED (within schedule)'}`);
+        logger.info('[Category Scheduler]', { name: category.name, detail: shouldBePaused ? 'LOCKED (outside schedule)' : 'RESUMED (within schedule)' });
         
         // When category RESUMES (becomes active), make all items in this category available
         if (!shouldBePaused) {
@@ -169,7 +170,7 @@ class CategoryScheduler {
         logger.info('[Category Scheduler] No change needed', { status: category.isPaused ? 'paused' : 'active' });
       }
     } catch (error) {
-      logger.error(`[Category Scheduler] Error updating category ${categoryId}`, { error: error.message });
+      logger.error('[Category Scheduler] Error updating status', { error: error.message });
     }
   }
 
@@ -207,7 +208,7 @@ class CategoryScheduler {
         return;
       }
 
-      logger.info(`[Category Scheduler] Checking Sold Out for ${category.name}`, { endTime: category.soldOutSchedule.endTime });
+      logger.info('[Category Scheduler] Checking Sold Out for', { endTime: category.soldOutSchedule.endTime });
 
       const isExpired = this.isSoldOutExpired(category.soldOutSchedule);
       
@@ -225,7 +226,7 @@ class CategoryScheduler {
           { $set: { available: true } }
         );
         
-        logger.info(`[Category Scheduler] ${category.name}: RESUMED (sold out expired)`);
+        logger.info('[Category Scheduler] : RESUMED (sold out expired)', { name : category.name });
         if (updateResult.modifiedCount > 0) {
           logger.info('[Category Scheduler] Made items available after sold out', { count: updateResult.modifiedCount, category: category.name });
         } else {
@@ -235,7 +236,7 @@ class CategoryScheduler {
         logger.info('[Category Scheduler] Still sold out', { endTime: category.soldOutSchedule.endTime });
       }
     } catch (error) {
-      logger.error(`[Category Scheduler] Error updating sold out status ${categoryId}`, { error: error.message });
+      logger.error('[Category Scheduler] Error updating status', { error: error.message });
     }
   }
 
@@ -280,11 +281,13 @@ class CategoryScheduler {
   // Start the scheduler (runs every minute)
   start() {
     // Run immediately on start
-    this.checkAllSchedules();
+    const ctx = initContext(null, { source: 'scheduler', job: 'categoryScheduler' });
+    runWithContext(ctx, () => this.checkAllSchedules());
 
     // Schedule to run every minute
     this.job = cron.schedule('* * * * *', () => {
-      this.checkAllSchedules();
+      const ctx = initContext(null, { source: 'scheduler', job: 'categoryScheduler' });
+      runWithContext(ctx, () => this.checkAllSchedules());
     });
 
     logger.info('[Category Scheduler] Started - checking schedules every minute');

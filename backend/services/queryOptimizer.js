@@ -38,12 +38,12 @@ async function explainQuery(model, query, options = {}) {
     
     // Alert if slow query
     if (stats.executionTimeMs > SLOW_QUERY_THRESHOLD) {
-      logger.warn(`⚠️ [Query Optimizer] Slow query detected: ${stats.executionTimeMs}ms`);
+      logger.warn('[Query Optimizer] Slow query detected: ms', { executionTimeMs : stats.executionTimeMs });
     }
     
     // Alert if collection scan
     if (stats.needsIndex) {
-      logger.warn(`⚠️ [Query Optimizer] Collection scan detected, consider adding index`);
+      logger.warn('[Query Optimizer] Collection scan detected, consider adding index');
     }
     
     return stats;
@@ -226,7 +226,7 @@ async function monitorQuery(model, query, operation = 'find') {
     const executionTime = Date.now() - startTime;
     
     if (executionTime > SLOW_QUERY_THRESHOLD) {
-      logger.warn(`⚠️ [Query Monitor] Slow ${operation} on ${model.modelName}: ${executionTime}ms`);
+      logger.warn('[Query Monitor] Slow on : ms', { operation, modelName: model.modelName, executionTime });
       
       // Alert if very slow
       if (executionTime > 1000) {
@@ -242,7 +242,7 @@ async function monitorQuery(model, query, operation = 'find') {
     return result;
   } catch (error) {
     const executionTime = Date.now() - startTime;
-    logger.error(`❌ [Query Monitor] ${operation} error on ${model.modelName}: ${error.message} (${executionTime}ms)`);
+    logger.error('[Query Monitor] error on : (ms)', { operation, modelName: model.modelName, message: error.message, executionTime });
     throw error;
   }
 }
@@ -259,7 +259,7 @@ async function batchInsert(model, documents, batchSize = 1000) {
       const inserted = await model.insertMany(batch, { ordered: false });
       results.push(...inserted);
       
-      logger.info(`✅ [Query Optimizer] Batch inserted ${inserted.length} documents`);
+      logger.info('[Query Optimizer] Batch inserted documents', { length : inserted.length });
     }
     
     return results;
@@ -285,7 +285,7 @@ async function optimizedAggregate(model, pipeline, options = {}) {
     const executionTime = Date.now() - startTime;
     
     if (executionTime > SLOW_QUERY_THRESHOLD) {
-      logger.warn(`⚠️ [Query Optimizer] Slow aggregation on ${model.modelName}: ${executionTime}ms`);
+      logger.warn('[Query Optimizer] Slow aggregation on : ms', { modelName: model.modelName, executionTime });
     }
     
     return result;

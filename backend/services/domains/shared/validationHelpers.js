@@ -28,6 +28,11 @@ async function checkCartAvailability(cart) {
   const unavailableItems = [];
   const allCategories = await Category.find({ isActive: true });
   
+  // Batch-fetch all menu items for cart in a single query
+  const menuItemIds = cart.map(c => c.menuItem);
+  const menuItems = await MenuItem.find({ _id: { $in: menuItemIds } });
+  const menuItemMap = new Map(menuItems.map(item => [item._id.toString(), item]));
+  
   // Get scheduled categories that are currently ACTIVE
   const scheduledActiveCategories = allCategories
     .filter(c => c.schedule?.enabled && !c.isPaused && !c.isSoldOut)
@@ -39,7 +44,7 @@ async function checkCartAvailability(cart) {
     .map(c => c.name);
   
   for (const cartItem of cart) {
-    const menuItem = await MenuItem.findById(cartItem.menuItem);
+    const menuItem = menuItemMap.get(cartItem.menuItem.toString());
     
     if (!menuItem) {
       unavailableItems.push({ 
@@ -125,7 +130,7 @@ async function checkItemAvailability(itemId) {
  * Validate order can be cancelled
  */
 async function validateOrderCancellation(orderId, customerId) {
-  const order = await Order.findOne({ orderId, customer: customerId });
+  const order = await Order.findOne({ orderId, 'customer.phone': customerId });
   
   if (!order) {
     return { valid: false, reason: 'not_found', message: '❌ Order not found.' };
@@ -136,43 +141,6 @@ async function validateOrderCancellation(orderId, customerId) {
       valid: false, 
       reason: 'invalid_status', 
       message: `❌ Cannot cancel order. Current status: ${order.status}\n\nPlease contact support for assistance.`
-    };
-  }
-  
-  return { valid: true, order };
-}
-
-/**
- * Validate order can be refunded
- */
-async function validateOrderRefund(orderId, customerId) {
-  const order = await Order.findOne({ orderId, customer: customerId });
-  
-  if (!order) {
-    return { valid: false, reason: 'not_found', message: '❌ Order not found.' };
-  }
-  
-  if (order.refundStatus === 'completed') {
-    return { 
-      valid: false, 
-      reason: 'already_refunded', 
-      message: `✅ Order ${order.orderId} has already been refunded.\n\nRefund amount: ₹${order.refundAmount || order.totalAmount}`
-    };
-  }
-  
-  if (order.refundStatus === 'requested' || order.refundStatus === 'processing') {
-    return { 
-      valid: false, 
-      reason: 'refund_pending', 
-      message: `⏳ Refund for order ${order.orderId} is already ${order.refundStatus}.\n\nPlease wait for admin approval.`
-    };
-  }
-  
-  if (order.status !== 'cancelled' && order.status !== 'delivered') {
-    return { 
-      valid: false, 
-      reason: 'invalid_status', 
-      message: `❌ Refund not available for orders with status: ${order.status}`
     };
   }
   
@@ -258,7 +226,7 @@ function isOrderInProgress(order) {
  * Check if order is completed
  */
 function isOrderCompleted(order) {
-  const completedStatuses = ['delivered', 'cancelled', 'refunded'];
+  const completedStatuses = ['delivered', 'cancelled'];
   return completedStatuses.includes(order.status);
 }
 
@@ -266,7 +234,6 @@ module.exports = {
   checkCartAvailability,
   checkItemAvailability,
   validateOrderCancellation,
-  validateOrderRefund,
   validateQuantity,
   validateLocation,
   validatePhoneNumber,

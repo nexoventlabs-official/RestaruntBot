@@ -130,7 +130,8 @@ messageQueue.process(async (job) => {
     
     logger.info('Message processed successfully from queue', {
       messageId,
-      duration: Date.now() - job.timestamp
+      duration: Date.now() - timestamp
+    : job.timestamp
     });
     
     return { success: true, messageId };
@@ -397,10 +398,6 @@ async function shutdown() {
     logger.error('Message queue shutdown error', { error: error.message });
   }
 }
-
-// Handle process termination
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
 
 module.exports = {
   addMessage,

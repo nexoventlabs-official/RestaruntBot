@@ -25,8 +25,11 @@ describe('Rate Limiter Middleware', () => {
   });
 
   describe('createRateLimiter', () => {
+    // Use unique keyPrefixes per run to avoid shared in-memory store collisions
+    const uid = Date.now();
+
     it('should return a rate-limiter-flexible instance with consume method', () => {
-      const limiter = createRateLimiter({ points: 10, duration: 60, keyPrefix: 'test-obj' });
+      const limiter = createRateLimiter({ points: 10, duration: 60, keyPrefix: `test-obj-${uid}` });
       expect(limiter).toBeDefined();
       expect(typeof limiter.consume).toBe('function');
     });
@@ -35,7 +38,7 @@ describe('Rate Limiter Middleware', () => {
       const limiter = createRateLimiter({
         points: 5,
         duration: 60,
-        keyPrefix: 'test-consume-ok'
+        keyPrefix: `test-consume-ok-${uid}`
       });
 
       const result = await limiter.consume('test-ip');
@@ -46,7 +49,7 @@ describe('Rate Limiter Middleware', () => {
       const limiter = createRateLimiter({
         points: 2,
         duration: 60,
-        keyPrefix: 'test-consume-exceed'
+        keyPrefix: `test-consume-exceed-${uid}`
       });
 
       await limiter.consume('exceed-ip');
@@ -57,8 +60,8 @@ describe('Rate Limiter Middleware', () => {
     });
 
     it('should separate limits by keyPrefix', async () => {
-      const limiter1 = createRateLimiter({ points: 1, duration: 60, keyPrefix: 'prefix-a' });
-      const limiter2 = createRateLimiter({ points: 1, duration: 60, keyPrefix: 'prefix-b' });
+      const limiter1 = createRateLimiter({ points: 1, duration: 60, keyPrefix: `prefix-a-${uid}` });
+      const limiter2 = createRateLimiter({ points: 1, duration: 60, keyPrefix: `prefix-b-${uid}` });
 
       await limiter1.consume('same-ip');
       // Different prefix — should still be allowed

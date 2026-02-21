@@ -71,8 +71,8 @@ describe('Edge-Case Input Validation', () => {
       const qty = Infinity;
       expect(qty < 1).toBe(false);
       expect(isFinite(qty)).toBe(false);
-      // BUG: Current guard (!quantity || quantity < 1) does NOT catch Infinity
-      // Infinity * price = Infinity → invalid total
+      // FIXED: Guard now includes Number.isFinite() check
+      // (!quantity || quantity < 1 || !Number.isFinite(quantity)) catches Infinity
     });
 
     test('quantity as undefined', () => {

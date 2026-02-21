@@ -49,7 +49,7 @@ function createRateLimiterInstance(options) {
         insuranceLimiter: new RateLimiterMemory({ points, duration, blockDuration })
       });
     } catch (err) {
-      logger.warn(`⚠️ Redis rate limiter creation failed for ${keyPrefix}, using memory`, { error: err.message });
+      logger.warn('Redis rate limiter creation failed for , using memory', { error: err.message });
     }
   }
 
@@ -85,7 +85,7 @@ function createMiddleware(limiter, message = 'Too many requests') {
       res.setHeader('X-RateLimit-Reset', new Date(Date.now() + rateLimiterRes.msBeforeNext).toISOString());
       res.setHeader('Retry-After', retryAfter);
 
-      logger.warn(`⚠️ Rate limit exceeded: ${key} (${limiter.keyPrefix || 'unknown'})`);
+      logger.warn('Rate limit exceeded', { key, consumedPoints: rateLimiterRes?.consumedPoints });
 
       return res.status(429).json({
         error: message,

@@ -19,8 +19,7 @@ router.get('/stats', authMiddleware, async (req, res) => {
     const stats = await catalogService.getStats();
     res.json(stats);
   } catch (error) {
-    logger.error('Catalog stats error', { error: error.message });
-    res.status(500).json({ error: 'Failed to get catalog stats' });
+    return logRouteError(res, 'Catalog stats error', error);
   }
 });
 
@@ -30,8 +29,7 @@ router.get('/mappings', authMiddleware, async (req, res) => {
     const mappings = await catalogService.getAllMappings();
     res.json(mappings);
   } catch (error) {
-    logger.error('Catalog mappings error', { error: error.message });
-    res.status(500).json({ error: 'Failed to get catalog mappings' });
+    return logRouteError(res, 'Catalog mappings error', error);
   }
 });
 
@@ -47,8 +45,7 @@ router.post('/auto-sync', authMiddleware, async (req, res) => {
       ...result
     });
   } catch (error) {
-    logger.error('Catalog auto-sync error', { error: error.message });
-    res.status(500).json({ error: 'Failed to auto-sync catalog' });
+    return logRouteError(res, 'Catalog auto-sync error', error);
   }
 });
 
@@ -66,8 +63,7 @@ router.put('/mapping/:menuItemId', authMiddleware, async (req, res) => {
     const mapping = await catalogService.setMapping(menuItemId, retailerId);
     res.json({ success: true, mapping });
   } catch (error) {
-    logger.error('Catalog set mapping error', { error: error.message });
-    res.status(500).json({ error: 'Failed to set catalog mapping' });
+    return logRouteError(res, 'Catalog set mapping error', error);
   }
 });
 
@@ -78,8 +74,7 @@ router.delete('/mapping/:menuItemId', authMiddleware, async (req, res) => {
     await catalogService.removeMapping(menuItemId);
     res.json({ success: true, message: 'Mapping removed' });
   } catch (error) {
-    logger.error('Catalog remove mapping error', { error: error.message });
-    res.status(500).json({ error: 'Failed to remove catalog mapping' });
+    return logRouteError(res, 'Catalog remove mapping error', error);
   }
 });
 
@@ -93,8 +88,7 @@ router.post('/sync-collections', authMiddleware, async (req, res) => {
       ...result
     });
   } catch (error) {
-    logger.error('Catalog collections sync error', { error: error.message });
-    res.status(500).json({ error: 'Failed to sync collections' });
+    return logRouteError(res, 'Catalog collections sync error', error);
   }
 });
 
@@ -104,8 +98,7 @@ router.get('/collections', authMiddleware, async (req, res) => {
     const collections = await catalogService.getCollections();
     res.json(collections);
   } catch (error) {
-    logger.error('Catalog get collections error', { error: error.message });
-    res.status(500).json({ error: 'Failed to get collections' });
+    return logRouteError(res, 'Catalog get collections error', error);
   }
 });
 
@@ -123,8 +116,7 @@ router.post('/setup-flow', authMiddleware, async (req, res) => {
       ...result
     });
   } catch (error) {
-    logger.error('Setup Flow error', { error: error.message });
-    res.status(500).json({ error: 'Failed to setup category Flow', details: error.message });
+    return logRouteError(res, 'Setup Flow error', error);
   }
 });
 
@@ -135,8 +127,7 @@ router.get('/flows', authMiddleware, async (req, res) => {
     const flows = await metaCloud.getFlows();
     res.json(flows);
   } catch (error) {
-    logger.error('Get Flows error', { error: error.message });
-    res.status(500).json({ error: 'Failed to get Flows' });
+    return logRouteError(res, 'Get Flows error', error);
   }
 });
 
@@ -162,8 +153,7 @@ router.get('/flow/:flowId', authMiddleware, async (req, res) => {
     const details = await metaCloud.getFlowDetails(req.params.flowId);
     res.json(details);
   } catch (error) {
-    logger.error('Get Flow details error', { error: error.message });
-    res.status(500).json({ error: 'Failed to get Flow details' });
+    return logRouteError(res, 'Get Flow details error', error);
   }
 });
 
@@ -174,8 +164,7 @@ router.delete('/flow/:flowId', authMiddleware, async (req, res) => {
     await metaCloud.deleteFlow(req.params.flowId);
     res.json({ success: true, message: 'Flow deleted' });
   } catch (error) {
-    logger.error('Delete Flow error', { error: error.message });
-    res.status(500).json({ error: 'Failed to delete Flow (only DRAFT flows can be deleted)' });
+    return logRouteError(res, 'Delete Flow error', error);
   }
 });
 
@@ -200,8 +189,7 @@ router.get('/products-review', authMiddleware, async (req, res) => {
     );
     res.json(response.data?.data || []);
   } catch (error) {
-    logger.error('Products review check error', { error: error.response?.data?.error?.message || error.message });
-    res.status(500).json({ error: error.response?.data?.error?.message || error.message });
+    return logRouteError(res, 'Products review check error', error);
   }
 });
 

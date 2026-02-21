@@ -2,6 +2,7 @@ const axios = require('axios');
 const https = require('https');
 const cloudinaryService = require('./cloudinary');
 const logger = require('./logger');
+const { startTimer } = require('./logger');
 
 // Persistent HTTPS agent — reuses TCP+TLS connections across requests
 // Eliminates ~100-300ms handshake overhead per Meta API call
@@ -52,6 +53,7 @@ const getSquareImageUrl = (imageUrl) => {
 const metaCloud = {
   // Download media file from WhatsApp (for voice messages, images, etc.)
   async downloadMedia(mediaId) {
+    const endTimer = startTimer('meta.downloadMedia');
     try {
       const { accessToken } = getConfig();
       
@@ -70,14 +72,18 @@ const metaCloud = {
       });
       
       logger.info('Media downloaded', { size: fileResponse.data.length });
+      endTimer({ mediaId, success: true });
       return Buffer.from(fileResponse.data);
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Media download error', { error: error.response?.data || error.message });
+      endTimer({ mediaId, success: false });
       throw error;
     }
   },
 
   async sendMessage(phone, message) {
+    const endTimer = startTimer('meta.sendMessage');
     try {
       const { baseUrl, accessToken, phoneNumberId } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -93,8 +99,10 @@ const metaCloud = {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendMessage success', { messageId: response.data?.messages?.[0]?.id || 'sent' });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       const errorData = error.response?.data?.error;
       logger.error('Meta Cloud send error', {
         code: errorData?.code,
@@ -107,6 +115,8 @@ const metaCloud = {
   },
 
   async sendButtons(phone, message, buttons, footer = '') {
+    const endTimer = startTimer('meta.sendButtons');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -137,8 +147,10 @@ const metaCloud = {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendButtons success');
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       const errorData = error.response?.data?.error;
       logger.error('Meta buttons error', { error: errorData?.message || error.message });
       return this.sendMessage(phone, message + '\n\n' + buttons.map((b, i) => `${i + 1}. ${b.text || b}`).join('\n'));
@@ -146,6 +158,8 @@ const metaCloud = {
   },
 
   async sendList(phone, title, description, buttonText, sections, footer = '') {
+    const endTimer = startTimer('meta.sendList');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -178,8 +192,10 @@ const metaCloud = {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta list success');
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       const errorData = error.response?.data?.error;
       logger.error('Meta list error', { error: errorData?.message || error.message });
       let fallback = `*${title}*\n\n${description}\n`;
@@ -192,6 +208,8 @@ const metaCloud = {
   },
 
   async sendTemplateButtons(phone, message, buttons, footer = '') {
+    const endTimer = startTimer('meta.sendTemplateButtons');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -206,17 +224,22 @@ const metaCloud = {
           if (btn.url) msg += `🔗 *${btn.text}:* ${btn.url}\n`;
           else msg += `• ${btn.text}\n`;
         });
+        endTimer({ success: true });
         return this.sendMessage(phone, msg);
       } else {
+        endTimer({ success: true });
         return this.sendButtons(phone, message, buttons, footer);
       }
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta Cloud template error', { error: error.message });
       throw error;
     }
   },
 
   async sendOrder(phone, order, items, paymentUrl, imageUrl = null) {
+    const endTimer = startTimer('meta.sendOrder');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -274,8 +297,10 @@ const metaCloud = {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Order sent', { data: response.data });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta Cloud order error', { error: error.response?.data || error.message });
       
       // Fallback: simple text message with link
@@ -299,6 +324,8 @@ const metaCloud = {
   },
 
   async sendImage(phone, imageUrl, caption = '') {
+    const endTimer = startTimer('meta.sendImage');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -314,8 +341,10 @@ const metaCloud = {
       }, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta Cloud image error', { error: error.response?.data || error.message });
       // Fallback to text message
       return this.sendMessage(phone, caption);
@@ -323,6 +352,8 @@ const metaCloud = {
   },
 
   async sendImageWithButtons(phone, imageUrl, message, buttons, footer = '') {
+    const endTimer = startTimer('meta.sendImageWithButtons');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -360,8 +391,10 @@ const metaCloud = {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendImageWithButtons response', { data: response.data });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta Cloud image buttons error', { error: error.response?.data || error.message });
       // Fallback to regular buttons
       return this.sendButtons(phone, message, buttons, footer);
@@ -370,6 +403,8 @@ const metaCloud = {
 
   // Send location request - opens WhatsApp location picker directly
   async sendLocationRequest(phone, message) {
+    const endTimer = startTimer('meta.sendLocationRequest');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -396,8 +431,10 @@ const metaCloud = {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta location request response', { data: response.data });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta Cloud location request error', { error: error.response?.data || error.message });
       // Fallback to buttons if location_request_message not supported
       return this.sendButtons(phone, message, [
@@ -410,6 +447,8 @@ const metaCloud = {
 
   // Send image with CTA URL button - for external links with image header
   async sendImageWithCtaUrl(phone, imageUrl, message, buttonText, url, footer = '') {
+    const endTimer = startTimer('meta.sendImageWithCtaUrl');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -447,8 +486,10 @@ const metaCloud = {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendImageWithCtaUrl success');
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta Cloud image CTA URL error', { error: error.response?.data || error.message });
       // Fallback to CTA URL without image
       return this.sendCtaUrl(phone, message, buttonText, url, footer);
@@ -457,6 +498,8 @@ const metaCloud = {
 
   // Send image with CTA URL button in original ratio - for offers/promotions
   async sendImageWithCtaUrlOriginal(phone, imageUrl, message, buttonText, url, footer = '') {
+    const endTimer = startTimer('meta.sendImageWithCtaUrlOriginal');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -492,8 +535,10 @@ const metaCloud = {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendImageWithCtaUrlOriginal success');
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta Cloud image CTA URL original error', { error: error.response?.data || error.message });
       // Fallback to CTA URL without image
       return this.sendCtaUrl(phone, message, buttonText, url, footer);
@@ -502,6 +547,8 @@ const metaCloud = {
 
   // Send CTA URL button - for external links like Google Review
   async sendCtaUrl(phone, message, buttonText, url, footer = '') {
+    const endTimer = startTimer('meta.sendCtaUrl');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -532,8 +579,10 @@ const metaCloud = {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendCtaUrl success');
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta Cloud CTA URL error', { error: error.response?.data || error.message });
       // Fallback to text message with link
       return this.sendMessage(phone, `${message}\n\n🔗 ${buttonText}: ${url}`);
@@ -542,6 +591,8 @@ const metaCloud = {
 
   // Send CTA phone call button - for customer support
   async sendCtaPhone(phone, message, buttonText, phoneNumber, footer = '') {
+    const endTimer = startTimer('meta.sendCtaPhone');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -572,8 +623,10 @@ const metaCloud = {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendCtaPhone success');
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta Cloud CTA Phone error', { error: error.response?.data || error.message });
       // Fallback to text message with phone number
       return this.sendMessage(phone, `${message}\n\n📞 ${buttonText}: ${phoneNumber}`);
@@ -582,6 +635,8 @@ const metaCloud = {
 
   // Send image with CTA phone call button
   async sendImageWithCtaPhone(phone, imageUrl, message, buttonText, phoneNumber, footer = '') {
+    const endTimer = startTimer('meta.sendImageWithCtaPhone');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -618,8 +673,10 @@ const metaCloud = {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendImageWithCtaPhone success');
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta Cloud image CTA Phone error', { error: error.response?.data || error.message });
       // Fallback to CTA Phone without image
       return this.sendCtaPhone(phone, message, buttonText, phoneNumber, footer);
@@ -630,6 +687,8 @@ const metaCloud = {
   // This requires a pre-approved template in your WhatsApp Business Manager
   // Template name: "offer_broadcast" with header image, body text, and CTA button
   async sendMarketingTemplate(phone, templateName, imageUrl, bodyParams = [], buttonUrl = null) {
+    const endTimer = startTimer('meta.sendMarketingTemplate');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -691,8 +750,10 @@ const metaCloud = {
       const messageId = response.data?.messages?.[0]?.id || null;
       const messageStatus = response.data?.messages?.[0]?.message_status || null;
       logger.info('Meta sendMarketingTemplate success', { to, messageId, messageStatus });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta Cloud marketing template error', { error: error.response?.data || error.message });
       throw error;
     }
@@ -700,6 +761,8 @@ const metaCloud = {
 
   // Send a simple text-only template (hello_world style - works outside 24-hour window)
   async sendSimpleTemplate(phone, templateName = 'hello_world', languageCode = 'en_US') {
+    const endTimer = startTimer('meta.sendSimpleTemplate');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -720,8 +783,10 @@ const metaCloud = {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendSimpleTemplate success');
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta Cloud simple template error', { error: error.response?.data || error.message });
       throw error;
     }
@@ -738,12 +803,15 @@ const metaCloud = {
    * @returns {string|null} The file handle (e.g. "4:aW1h..."), or null on failure
    */
   async uploadMediaForTemplate(imageUrl) {
+    const endTimer = startTimer('meta.uploadMediaForTemplate');
+
     try {
       const { accessToken } = getConfig();
       const appId = process.env.META_APP_ID;
 
       if (!appId) {
         logger.warn('META_APP_ID not set — cannot upload image for template header');
+        endTimer({ success: true });
         return null;
       }
 
@@ -772,6 +840,7 @@ const metaCloud = {
       const uploadSessionId = sessionResponse.data.id;
       if (!uploadSessionId) {
         logger.error('No upload session ID returned from Meta');
+        endTimer({ success: true });
         return null;
       }
 
@@ -793,12 +862,15 @@ const metaCloud = {
       const fileHandle = uploadResponse.data.h;
       if (!fileHandle) {
         logger.error('No file handle returned from Meta upload', { data: uploadResponse.data });
+        endTimer({ success: true });
         return null;
       }
 
-      logger.info('Image uploaded to Meta successfully', { handle: fileHandle.substring(0, 30) + '...' });
+      logger.info('Image uploaded to Meta successfully', { handle: fileHandle.substring(0, 30) });
+      endTimer({ success: true });
       return fileHandle;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       const errData = error.response?.data?.error || error.response?.data || error.message;
       logger.error('Meta image upload error (will create template without image)', { error: errData });
       return null; // Graceful fallback — template will be created without image
@@ -823,6 +895,8 @@ const metaCloud = {
    * @returns {Object} Meta API response with template id / status
    */
   async createMessageTemplate(templateName, headerImageUrl, bodyText, footerText, ctaUrl, ctaLabel) {
+    const endTimer = startTimer('meta.createMessageTemplate');
+
     try {
       const { accessToken } = getConfig();
       const wabaId = process.env.META_WABA_ID;
@@ -899,8 +973,10 @@ const metaCloud = {
       );
 
       logger.info('Meta createMessageTemplate success', { id: response.data.id, status: response.data.status });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       const errData = error.response?.data?.error || error.response?.data || error.message;
       logger.error('Meta createMessageTemplate error', { error: errData });
       throw error;
@@ -911,6 +987,8 @@ const metaCloud = {
    * Get the status of a message template by name.
    */
   async getTemplateStatus(templateName) {
+    const endTimer = startTimer('meta.getTemplateStatus');
+
     try {
       const { accessToken } = getConfig();
       const wabaId = process.env.META_WABA_ID;
@@ -929,10 +1007,12 @@ const metaCloud = {
 
       const templates = response.data?.data || [];
       if (templates.length === 0) {
+        endTimer({ success: true });
         return { status: 'NOT_FOUND', templateName };
       }
 
       const tpl = templates[0];
+      endTimer({ success: true });
       return {
         id: tpl.id,
         name: tpl.name,
@@ -941,6 +1021,7 @@ const metaCloud = {
         rejectedReason: tpl.rejected_reason || null
       };
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta getTemplateStatus error', { error: error.response?.data || error.message });
       throw error;
     }
@@ -958,6 +1039,8 @@ const metaCloud = {
    * @param {string} thumbnailRetailerId - Optional product retailer_id for thumbnail
    */
   async sendCatalogMessage(phone, bodyText, footerText = '', thumbnailRetailerId = '') {
+    const endTimer = startTimer('meta.sendCatalogMessage');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -992,8 +1075,10 @@ const metaCloud = {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendCatalogMessage success');
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       const errorData = error.response?.data?.error;
       logger.error('Meta sendCatalogMessage error', {
         error: errorData?.message || error.message,
@@ -1014,6 +1099,8 @@ const metaCloud = {
    * @param {string} footerText - Optional footer text
    */
   async sendProduct(phone, catalogId, retailerId, bodyText = '', footerText = '') {
+    const endTimer = startTimer('meta.sendProduct');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -1043,8 +1130,10 @@ const metaCloud = {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendProduct success', { retailerId });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       const errorData = error.response?.data?.error;
       logger.error('Meta sendProduct error', {
         error: errorData?.message || error.message,
@@ -1067,6 +1156,8 @@ const metaCloud = {
    * @param {string} footerText - Optional footer
    */
   async sendProductList(phone, catalogId, headerText, bodyText, sections, footerText = '') {
+    const endTimer = startTimer('meta.sendProductList');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -1105,8 +1196,10 @@ const metaCloud = {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('Meta sendProductList success', { sectionCount: sections.length });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       const errorData = error.response?.data?.error;
       logger.error('Meta sendProductList error', {
         error: errorData?.message || error.message,
@@ -1134,7 +1227,15 @@ const metaCloud = {
    * @param {string} product.availability - 'in stock' or 'out of stock'
    */
   async createOrUpdateCatalogProduct(catalogId, product) {
-    return this.batchCreateOrUpdateProducts(catalogId, [product]);
+    const endTimer = startTimer('meta.createOrUpdateCatalogProduct');
+    try {
+      const result = await this.batchCreateOrUpdateProducts(catalogId, [product]);
+      endTimer({ success: true });
+      return result;
+    } catch (error) {
+      endTimer({ success: false, error: error.message });
+      throw error;
+    }
   },
 
   /**
@@ -1146,6 +1247,8 @@ const metaCloud = {
    * @param {Array} products - Array of product objects (max 20)
    */
   async batchCreateOrUpdateProducts(catalogId, products) {
+    const endTimer = startTimer('meta.batchCreateOrUpdateProducts');
+
     try {
       const { accessToken } = getConfig();
 
@@ -1195,6 +1298,7 @@ const metaCloud = {
             data.image_link = product.imageUrl;
           }
 
+          endTimer({ success: true });
           return { method: 'CREATE', data };
         });
 
@@ -1213,9 +1317,11 @@ const metaCloud = {
           validation: batchResponse.data?.validation_status
         });
 
+        endTimer({ success: true });
         return batchResponse.data;
       }
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       const errorData = error.response?.data?.error || error.response?.data;
       logger.error('Meta batchCreateOrUpdateProducts error', {
         error: errorData?.message || error.message,
@@ -1232,6 +1338,8 @@ const metaCloud = {
    * @param {string} retailerId - The retailer_id of the product to delete
    */
   async deleteCatalogProduct(catalogId, retailerId) {
+    const endTimer = startTimer('meta.deleteCatalogProduct');
+
     try {
       const { accessToken } = getConfig();
 
@@ -1256,8 +1364,10 @@ const metaCloud = {
       );
 
       logger.info('Meta deleteCatalogProduct success', { retailerId });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       const errorData = error.response?.data?.error || error.response?.data;
       logger.error('Meta deleteCatalogProduct error', {
         error: errorData?.message || error.message,
@@ -1282,6 +1392,8 @@ const metaCloud = {
    * @returns {Object} Meta API response
    */
   async sendOrderDetails(phone, referenceId, items, totalAmount, { tax = 0, shipping = 0, discount = 0 } = {}) {
+    const endTimer = startTimer('meta.sendOrderDetails');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -1311,11 +1423,13 @@ const metaCloud = {
             offset: 100
           };
         }
+        endTimer({ success: true });
         return obj;
       });
 
       const subtotal = items.reduce((sum, i) => {
         const price = i.saleAmount != null ? i.saleAmount : i.priceAmount;
+        endTimer({ success: true });
         return sum + price * i.quantity;
       }, 0);
 
@@ -1387,8 +1501,10 @@ const metaCloud = {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('order_details sent', { data: response.data });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta sendOrderDetails error', {
         error: error.response?.data || error.message,
         referenceId
@@ -1407,6 +1523,8 @@ const metaCloud = {
    * @param {string} [description] - Status description text
    */
   async sendOrderStatusUpdate(phone, referenceId, status, description = '') {
+    const endTimer = startTimer('meta.sendOrderStatusUpdate');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -1440,8 +1558,10 @@ const metaCloud = {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       logger.info('order_status sent', { data: response.data });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta sendOrderStatusUpdate error', {
         error: error.response?.data || error.message,
         referenceId,
@@ -1455,6 +1575,8 @@ const metaCloud = {
    * Delete a message template by name.
    */
   async deleteMessageTemplate(templateName) {
+    const endTimer = startTimer('meta.deleteMessageTemplate');
+
     try {
       const { accessToken } = getConfig();
       const wabaId = process.env.META_WABA_ID;
@@ -1472,8 +1594,10 @@ const metaCloud = {
       );
 
       logger.info('Meta deleteMessageTemplate success', { templateName });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta deleteMessageTemplate error', { error: error.response?.data || error.message });
       throw error;
     }
@@ -1495,6 +1619,8 @@ const metaCloud = {
    * @returns {Object} { id } of created/updated product set
    */
   async createOrUpdateCollection(catalogId, collection) {
+    const endTimer = startTimer('meta.createOrUpdateCollection');
+
     try {
       const { accessToken } = getConfig();
 
@@ -1541,8 +1667,10 @@ const metaCloud = {
         logger.info('Meta collection created', { name: collection.name, id: response.data?.id });
       }
 
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       const errorData = error.response?.data?.error || error.response?.data;
       logger.error('Meta createOrUpdateCollection error', {
         name: collection.name,
@@ -1559,6 +1687,8 @@ const metaCloud = {
    * @returns {Array} List of product sets with id, name, metadata
    */
   async getCollections(catalogId) {
+    const endTimer = startTimer('meta.getCollections');
+
     try {
       const { accessToken } = getConfig();
 
@@ -1574,8 +1704,10 @@ const metaCloud = {
         }
       );
 
+      endTimer({ success: true });
       return response.data?.data || [];
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta getCollections error', { error: error.response?.data?.error?.message || error.message });
       throw error;
     }
@@ -1587,6 +1719,8 @@ const metaCloud = {
    * @param {string} productSetId - The product set ID to delete
    */
   async deleteCollection(productSetId) {
+    const endTimer = startTimer('meta.deleteCollection');
+
     try {
       const { accessToken } = getConfig();
 
@@ -1596,8 +1730,10 @@ const metaCloud = {
       );
 
       logger.info('Meta collection deleted', { id: productSetId });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Meta deleteCollection error', { id: productSetId, error: error.response?.data?.error?.message || error.message });
       throw error;
     }
@@ -1613,6 +1749,8 @@ const metaCloud = {
    * @returns {{ id: string, success: boolean, validation_errors: Array }}
    */
   async createFlow(name, categories = ['OTHER'], flowJson = null) {
+    const endTimer = startTimer('meta.createFlow');
+
     try {
       const { accessToken, wabaId } = getConfig();
       const data = { name, categories };
@@ -1627,8 +1765,10 @@ const metaCloud = {
       );
 
       logger.info('WhatsApp Flow created', { id: response.data?.id, name });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('createFlow error', {
         error: error.response?.data?.error?.message || error.message,
         details: error.response?.data
@@ -1643,6 +1783,8 @@ const metaCloud = {
    * @param {object} flowJsonObj - The Flow JSON object
    */
   async updateFlowJSON(flowId, flowJsonObj) {
+    const endTimer = startTimer('meta.updateFlowJSON');
+
     try {
       const { accessToken } = getConfig();
       const FormData = require('form-data');
@@ -1670,8 +1812,10 @@ const metaCloud = {
       );
 
       logger.info('WhatsApp Flow JSON updated', { flowId, errors: response.data?.validation_errors?.length || 0 });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('updateFlowJSON error', {
         flowId,
         error: error.response?.data?.error?.message || error.message,
@@ -1686,6 +1830,8 @@ const metaCloud = {
    * @param {string} flowId - The Flow ID
    */
   async publishFlow(flowId) {
+    const endTimer = startTimer('meta.publishFlow');
+
     try {
       const { accessToken } = getConfig();
       const response = await metaApi.post(
@@ -1695,8 +1841,10 @@ const metaCloud = {
       );
 
       logger.info('WhatsApp Flow published', { flowId });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('publishFlow error', {
         flowId,
         error: error.response?.data?.error?.message || error.message
@@ -1709,6 +1857,8 @@ const metaCloud = {
    * Get list of Flows under the WABA.
    */
   async getFlows() {
+    const endTimer = startTimer('meta.getFlows');
+
     try {
       const { accessToken, wabaId } = getConfig();
       const response = await metaApi.get(
@@ -1716,8 +1866,10 @@ const metaCloud = {
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
 
+      endTimer({ success: true });
       return response.data?.data || [];
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('getFlows error', { error: error.response?.data?.error?.message || error.message });
       throw error;
     }
@@ -1728,6 +1880,8 @@ const metaCloud = {
    * @param {string} flowId
    */
   async getFlowDetails(flowId) {
+    const endTimer = startTimer('meta.getFlowDetails');
+
     try {
       const { accessToken } = getConfig();
       const response = await metaApi.get(
@@ -1740,8 +1894,10 @@ const metaCloud = {
         }
       );
 
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('getFlowDetails error', { flowId, error: error.response?.data?.error?.message || error.message });
       throw error;
     }
@@ -1752,6 +1908,8 @@ const metaCloud = {
    * @param {string} flowId
    */
   async deleteFlow(flowId) {
+    const endTimer = startTimer('meta.deleteFlow');
+
     try {
       const { accessToken } = getConfig();
       const response = await metaApi.delete(
@@ -1760,8 +1918,10 @@ const metaCloud = {
       );
 
       logger.info('WhatsApp Flow deleted', { flowId });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('deleteFlow error', { flowId, error: error.response?.data?.error?.message || error.message });
       throw error;
     }
@@ -1783,6 +1943,8 @@ const metaCloud = {
    * @param {string} [options.mode] - 'published' (default) or 'draft'
    */
   async sendFlowMessage(phone, options) {
+    const endTimer = startTimer('meta.sendFlowMessage');
+
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
@@ -1840,8 +2002,10 @@ const metaCloud = {
       });
 
       logger.info('WhatsApp Flow message sent', { messageId: response.data?.messages?.[0]?.id });
+      endTimer({ success: true });
       return response.data;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       const errorData = error.response?.data?.error;
       logger.error('sendFlowMessage error', {
         code: errorData?.code,

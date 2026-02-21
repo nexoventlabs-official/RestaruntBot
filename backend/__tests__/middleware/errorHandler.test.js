@@ -16,7 +16,13 @@ jest.mock('../../services/logger', () => ({
   error: jest.fn(),
   warn: jest.fn(),
   debug: jest.fn(),
-  logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }
+  classifyError: jest.fn().mockReturnValue({ category: 'unknown', retryable: true }),
+  logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
+  setCorrelationProvider: jest.fn()
+}));
+
+jest.mock('../../services/correlationContext', () => ({
+  getCorrelationId: jest.fn().mockReturnValue('test-correlation-id')
 }));
 
 const errorHandler = require('../../middleware/errorHandler');
@@ -39,6 +45,9 @@ describe('Error Handler Middleware', () => {
     };
     next = jest.fn();
     jest.clearAllMocks();
+    // Re-apply classifyError mock return value after clearAllMocks
+    const logger = require('../../services/logger');
+    logger.classifyError.mockReturnValue({ category: 'unknown', retryable: true });
   });
 
   it('should return 500 for generic errors', async () => {

@@ -1,5 +1,6 @@
 const Groq = require('groq-sdk');
 const logger = require('./logger');
+const { startTimer } = require('./logger');
 
 let groq = null;
 const getGroq = () => {
@@ -13,6 +14,8 @@ const groqAi = {
   // Transcribe audio using Groq's Whisper model
   // Optimized for Indian food ordering context
   async transcribeAudio(audioBuffer, mimeType = 'audio/ogg') {
+    const endTimer = startTimer('groq.transcribeAudio');
+
     try {
       const client = getGroq();
       
@@ -29,8 +32,10 @@ const groqAi = {
       });
       
       logger.info('Transcription result', { data: transcription });
+      endTimer({ success: true });
       return transcription || '';
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Groq transcription error', { error: error.message });
       return null;
     }
@@ -112,12 +117,15 @@ const groqAi = {
   // Translate local language text to English for search
   // Returns multiple possible translations for better search matching
   async translateToEnglish(text) {
+    const endTimer = startTimer('groq.translateToEnglish');
+
     try {
       // Check if text contains non-English characters (Indian languages)
       const hasNonEnglish = /[^\x00-\x7F]/.test(text);
       if (!hasNonEnglish) {
         // For English text, normalize and return
         const normalized = this.normalizeTranscription(text);
+        endTimer({ success: true });
         return { primary: normalized || text, variations: [normalized || text] };
       }
 
@@ -170,6 +178,7 @@ EXAMPLES:
       
       // If no valid variations, return original
       if (variations.length === 0) {
+        endTimer({ success: true });
         return { primary: text, variations: [text] };
       }
       
@@ -177,8 +186,10 @@ EXAMPLES:
       variations = [...new Set(variations)];
       
       logger.info('Translated text', { original: text, variations });
+      endTimer({ success: true });
       return { primary: variations[0], variations };
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Groq translation error', { error: error.message });
       return { primary: text, variations: [text] };
     }
@@ -186,6 +197,8 @@ EXAMPLES:
 
   // Translate romanized Indian food names to standard English/searchable terms
   async translateRomanizedFood(text) {
+    const endTimer = startTimer('groq.translateRomanizedFood');
+
     try {
       const client = getGroq();
       const completion = await client.chat.completions.create({
@@ -243,18 +256,23 @@ If already standard or you're unsure, return as is.`
       
       // If response is too long or contains explanation, return original
       if (translated.length > 50 || translated.includes('\n')) {
+        endTimer({ success: true });
         return text;
       }
       
       logger.info('Romanized translation', { original: text, translated });
+      endTimer({ success: true });
       return translated;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Groq romanized translation error', { error: error.message });
       return text;
     }
   },
 
   async generateDescription(itemName, category) {
+    const endTimer = startTimer('groq.generateDescription');
+
     try {
       const client = getGroq();
       const completion = await client.chat.completions.create({
@@ -266,8 +284,10 @@ If already standard or you're unsure, return as is.`
         max_tokens: 150,
         temperature: 0.7
       });
+      endTimer({ success: true });
       return completion.choices[0]?.message?.content?.trim() || '';
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Groq AI error', { error: error.message, stack: error.stack });
       throw new Error('Failed to generate description: ' + error.message);
     }
@@ -343,6 +363,8 @@ If already standard or you're unsure, return as is.`
   },
 
   async generateTags(itemName, category, foodType, quantity = '1', unit = 'piece') {
+    const endTimer = startTimer('groq.generateTags');
+
     try {
       const client = getGroq();
       const categories = Array.isArray(category) ? category : [category];
@@ -433,8 +455,10 @@ If already standard or you're unsure, return as is.`
       const finalTags = [...uniqueBaseTags, ...uniqueVariations];
       
       // Limit to 8-10 unique tags maximum
+      endTimer({ success: true });
       return [...new Set(finalTags)].slice(0, 10).join(', ');
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Groq AI tags error', { error: error.message, stack: error.stack });
       // Fallback: generate basic tags without AI
       const categories = Array.isArray(category) ? category : [category];
@@ -467,10 +491,13 @@ If already standard or you're unsure, return as is.`
   // AI-powered tag matching for search queries
   // Helps match native language or variations to actual tags
   async matchSearchToTags(searchQuery, availableTags) {
+    const endTimer = startTimer('groq.matchSearchToTags');
+
     try {
       // Check for gibberish search - don't waste AI call
       if (this.isGibberishSearch(searchQuery)) {
         logger.info('Gibberish search detected, skipping tag matching', { query: searchQuery });
+        endTimer({ success: true });
         return [];
       }
       
@@ -519,6 +546,7 @@ Return ONLY comma-separated matching tags from the available list. No explanatio
       // Check if no match found
       if (matchedTagsText.toUpperCase() === 'NONE' || matchedTagsText.toLowerCase().includes('no match')) {
         logger.info('AI tag match: No matches found', { query: searchQuery });
+        endTimer({ success: true });
         return [];
       }
       
@@ -530,8 +558,10 @@ Return ONLY comma-separated matching tags from the available list. No explanatio
         .filter(tag => tag.length > 0 && tag.length < 30 && uniqueTags.includes(tag));
       
       logger.info('AI tag match', { query: searchQuery, matchedTags });
+      endTimer({ success: true });
       return matchedTags;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Groq AI tag matching error', { error: error.message });
       return [];
     }
@@ -540,10 +570,13 @@ Return ONLY comma-separated matching tags from the available list. No explanatio
   // AI-powered spell correction for search queries
   // Uses Groq to find closest matching tags when customer has spelling mistakes
   async findClosestTagMatch(misspelledQuery, availableTags) {
+    const endTimer = startTimer('groq.findClosestTagMatch');
+
     try {
       // Skip gibberish
       if (this.isGibberishSearch(misspelledQuery)) {
         logger.info('Gibberish search, skipping spell check', { query: misspelledQuery });
+        endTimer({ success: true });
         return { correctedQuery: null, matchedTags: [] };
       }
       
@@ -593,6 +626,7 @@ Find closest matching tags for this misspelled search.`
       // Check for NONE
       if (response.toUpperCase().includes('NONE')) {
         logger.info('No close match found', { query: misspelledQuery });
+        endTimer({ success: true });
         return { correctedQuery: null, matchedTags: [] };
       }
       
@@ -613,8 +647,10 @@ Find closest matching tags for this misspelled search.`
       }
       
       logger.info('Spell correction', { original: misspelledQuery, corrected: correctedQuery, matchedTags });
+      endTimer({ success: true });
       return { correctedQuery, matchedTags };
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Groq spell correction error', { error: error.message });
       return { correctedQuery: null, matchedTags: [] };
     }
@@ -656,10 +692,13 @@ Find closest matching tags for this misspelled search.`
   // Smart semantic search - matches search query to menu item names using AI
   // Handles related items like "pulka" → "chapathi", "rotta" → "roti"
   async findRelatedMenuItems(searchQuery, menuItemNames) {
+    const endTimer = startTimer('groq.findRelatedMenuItems');
+
     try {
       // Check for gibberish search - don't waste AI call
       if (this.isGibberishSearch(searchQuery)) {
         logger.info('Gibberish search detected, skipping AI', { query: searchQuery });
+        endTimer({ success: true });
         return [];
       }
       
@@ -723,7 +762,8 @@ Return ONLY comma-separated item names from the menu that match or are related t
       
       // Check if no match
       if (responseText.toUpperCase() === 'NONE' || responseText.toLowerCase().includes('no match') || responseText.toLowerCase().includes('not found')) {
-        logger.info(`AI semantic search: "${searchQuery}" → No matches found`);
+        logger.info('AI semantic search: "" → No matches found', { searchQuery });
+        endTimer({ success: true });
         return [];
       }
       
@@ -735,6 +775,7 @@ Return ONLY comma-separated item names from the menu that match or are related t
         .filter(item => {
           if (!item || item.length < 2 || item.length > 50) return false;
           // Check if this item exists in menu (case-insensitive)
+          endTimer({ success: true });
           return menuItemNames.some(menuItem => 
             menuItem.toLowerCase() === item.toLowerCase() ||
             menuItem.toLowerCase().includes(item.toLowerCase()) ||
@@ -742,9 +783,11 @@ Return ONLY comma-separated item names from the menu that match or are related t
           );
         });
       
-      logger.info(`AI semantic search: "${searchQuery}" → [${matchedItems.join(', ')}]`);
+      logger.info('AI semantic search: "" → []', { searchQuery, detail: matchedItems.join(', ') });
+      endTimer({ success: true });
       return matchedItems;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Groq AI semantic search error', { error: error.message });
       return [];
     }
@@ -753,10 +796,13 @@ Return ONLY comma-separated item names from the menu that match or are related t
   // AI-powered typo correction for food search
   // Handles misspellings like "thaiyr" → "thayir", "brekfast" → "breakfast"
   async correctFoodTypo(searchQuery, availableTags = [], menuItemNames = []) {
+    const endTimer = startTimer('groq.correctFoodTypo');
+
     try {
       // Check for gibberish search - return as-is (will fail matching anyway)
       if (this.isGibberishSearch(searchQuery)) {
-        logger.info(`Gibberish search detected: "${searchQuery}" - skipping typo correction`);
+        logger.info('Gibberish search detected: "" - skipping typo correction', { searchQuery });
+        endTimer({ success: true });
         return searchQuery;
       }
       
@@ -828,13 +874,16 @@ Return ONLY the corrected search term. If it's gibberish or no correction needed
       
       if (cleanCorrected && cleanCorrected.length > 0 && cleanCorrected.length < 50) {
         if (cleanCorrected.toLowerCase() !== searchQuery.toLowerCase()) {
-          logger.info(`AI typo correction: "${searchQuery}" → "${cleanCorrected}"`);
+          logger.info('AI typo correction: "" → ""', { searchQuery, cleanCorrected });
         }
+        endTimer({ success: true });
         return cleanCorrected;
       }
       
+      endTimer({ success: true });
       return searchQuery;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Groq AI typo correction error', { error: error.message });
       return searchQuery;
     }
@@ -842,10 +891,13 @@ Return ONLY the corrected search term. If it's gibberish or no correction needed
 
   // Enhanced fuzzy search using AI - finds similar items even with bad typos
   async fuzzySearchWithAI(searchQuery, menuItemNames, tags = []) {
+    const endTimer = startTimer('groq.fuzzySearchWithAI');
+
     try {
       // Check for gibberish search - don't waste AI call
       if (this.isGibberishSearch(searchQuery)) {
-        logger.info(`Gibberish search detected: "${searchQuery}" - skipping AI fuzzy search`);
+        logger.info('Gibberish search detected: "" - skipping AI fuzzy search', { searchQuery });
+        endTimer({ success: true });
         return [];
       }
       
@@ -868,8 +920,7 @@ SPELLING MISTAKE PATTERNS TO HANDLE:
 - Phonetic spelling: "beak fasr" = "breakfast"
 - Regional variations: "thayir sadam" = "curd rice"
 
-REGIONAL FOOD KNOWLEDGE:
-Tamil: thayir=curd, sadam/saadam=rice, dosai=dosa, idly=idli
+REGIONAL FOOD KNOWLEDGE: thayir=curd, sadam/saadam=rice, dosai=dosa, idly=idli
 Telugu: perugu=curd, annam=rice, dosa=dosa, idli=idli
 Kannada: mosaru=curd, anna=rice
 Hindi: dahi=curd, chawal=rice
@@ -899,6 +950,7 @@ Find ALL menu items that match this search (consider spelling mistakes). Return 
       const responseText = completion.choices[0]?.message?.content?.trim() || '';
       
       if (responseText.toUpperCase() === 'NONE' || responseText.toLowerCase().includes('no match')) {
+        endTimer({ success: true });
         return [];
       }
       
@@ -908,6 +960,7 @@ Find ALL menu items that match this search (consider spelling mistakes). Return 
         .map(item => item.trim())
         .filter(item => {
           if (!item || item.length < 2 || item.length > 50) return false;
+          endTimer({ success: true });
           return menuItemNames.some(menuItem => 
             menuItem.toLowerCase() === item.toLowerCase() ||
             menuItem.toLowerCase().includes(item.toLowerCase()) ||
@@ -915,22 +968,25 @@ Find ALL menu items that match this search (consider spelling mistakes). Return 
           );
         });
       
-      logger.info(`AI fuzzy search: "${searchQuery}" → [${matchedItems.join(', ')}]`);
+      logger.info('AI fuzzy search: "" → []', { searchQuery, detail: matchedItems.join(', ') });
+      endTimer({ success: true });
       return matchedItems;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Groq AI fuzzy search error', { error: error.message });
       return [];
     }
   },
 
   async processCustomerMessage(message, context, menuItems) {
+    const endTimer = startTimer('groq.processCustomerMessage');
+
     try {
       const menuList = menuItems.map(m => `${m.name} (₹${m.price}) - ${m.category}`).join('\n');
       const systemPrompt = `You are a helpful restaurant AI assistant. Help customers with:
 - Viewing menu and ordering food
 - Checking order status
 - Cancelling orders
-- Requesting refunds
 - Tracking deliveries
 - Answering questions about menu items
 
@@ -941,7 +997,7 @@ Customer context: ${JSON.stringify(context)}
 
 Respond naturally and helpfully. If they want to order, guide them through the process.
 For actions, include JSON at the end: {"action": "action_name", "data": {...}}
-Actions: view_menu, add_to_cart, view_cart, checkout, check_status, cancel_order, request_refund, track_order`;
+Actions: view_menu, add_to_cart, view_cart, checkout, check_status, cancel_order, track_order`;
 
       const client = getGroq();
       const completion = await client.chat.completions.create({
@@ -952,8 +1008,10 @@ Actions: view_menu, add_to_cart, view_cart, checkout, check_status, cancel_order
         model: 'llama-3.1-8b-instant',
         max_tokens: 500
       });
+      endTimer({ success: true });
       return completion.choices[0]?.message?.content || "I'm sorry, I couldn't understand that. Please try again.";
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('Groq AI chat error', { error: error.message });
       return "I'm having trouble processing your request. Please try again.";
     }

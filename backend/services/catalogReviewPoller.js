@@ -10,9 +10,11 @@ const axios = require('axios');
 const logger = require('./logger');
 const pushNotification = require('./pushNotification');
 const User = require('../models/User');
+const { initContext, runWithContext } = require('./correlationContext');
 
 // In-memory cache of last-known review status per retailer_id
 const _reviewStatusCache = new Map();
+const MAX_REVIEW_CACHE_SIZE = 5000; // cap to prevent unbounded growth
 
 // Poll interval: 5 minutes
 const POLL_INTERVAL_MS = 5 * 60 * 1000;
@@ -98,6 +100,12 @@ const catalogReviewPoller = {
         // Update cache
         _reviewStatusCache.set(product.retailer_id, currentStatus);
 
+        // Evict oldest entries if cache exceeds cap
+        if (_reviewStatusCache.size > MAX_REVIEW_CACHE_SIZE) {
+          const firstKey = _reviewStatusCache.keys().next().value;
+          _reviewStatusCache.delete(firstKey);
+        }
+
         // Skip if this is the first poll (seed the cache, don't spam)
         if (prevStatus === undefined) continue;
 
@@ -150,14 +158,16 @@ const catalogReviewPoller = {
       return;
     }
 
-    logger.info('📋 Catalog review poller started - checking every 5 minutes');
+    logger.info('Catalog review poller started', { intervalMs: POLL_INTERVAL_MS });
 
     // Seed the cache on first run (no notifications for initial state)
-    this.checkAndNotify();
+    const ctx = initContext(null, { source: 'scheduler', job: 'catalogReviewPoller' });
+    runWithContext(ctx, () => this.checkAndNotify());
 
     // Then poll every 5 minutes
     setInterval(() => {
-      this.checkAndNotify();
+      const ctx = initContext(null, { source: 'scheduler', job: 'catalogReviewPoller' });
+      runWithContext(ctx, () => this.checkAndNotify());
     }, POLL_INTERVAL_MS);
   }
 };

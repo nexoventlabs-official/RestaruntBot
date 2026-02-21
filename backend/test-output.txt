@@ -1,0 +1,1112 @@
+PASS __tests__/critical/concurrentCheckout.test.js
+  Concurrent Checkout
+    generateOrderId collision risk
+      ΓêÜ same millisecond produces identical IDs (collision) (13 ms)
+      ΓêÜ different milliseconds produce unique IDs (2 ms)
+      ΓêÜ ≡ƒÆ░ collision under load: 100 rapid IDs in same ms (6 ms)
+      ΓêÜ FIX: orderId with random suffix avoids collision (2 ms)
+      ΓêÜ orderId format is consistent (5 ms)
+    Non-atomic order creation and cart clear
+      ΓêÜ SCENARIO: crash after order.save, before cart.clear (3 ms)
+      ΓêÜ FIX VERIFICATION: order + cart clear should use transaction (2 ms)
+    Double-click checkout protection
+      ΓêÜ ≡ƒÆ░ two identical checkout requests within 1 second
+      ΓêÜ different customers can checkout simultaneously
+    Concurrent payment verification
+      ΓêÜ ≡ƒÆ░ RACE: verify-upi + webhook arrive within 10ms (1 ms)
+      ΓêÜ FIX: atomic update with paymentStatus guard (1 ms)
+    Transaction manager scenarios
+      ΓêÜ transaction retries on TransientTransactionError (1 ms)
+      ΓêÜ transaction retries on WriteConflict (code 112) (1 ms)
+      ΓêÜ transaction does NOT retry on validation errors
+      ΓêÜ optimistic lock retries on version mismatch (1 ms)
+      ΓêÜ saga compensation runs on failure
+
+PASS __tests__/observability-10-maturity.test.js
+  D1: Correlation context for background workers
+    ΓêÜ orderScheduler.js imports correlationContext (15 ms)
+    ΓêÜ orderScheduler.js uses initContext or runWithContext (1 ms)
+    ΓêÜ outboundRetryWorker.js imports correlationContext (1 ms)
+    ΓêÜ outboundRetryWorker.js uses initContext or runWithContext (2 ms)
+    ΓêÜ dailyCleanup.js imports correlationContext (6 ms)
+    ΓêÜ dailyCleanup.js uses initContext or runWithContext (1 ms)
+    ΓêÜ categoryScheduler.js imports correlationContext
+    ΓêÜ categoryScheduler.js uses initContext or runWithContext
+    ΓêÜ orderCleanup.js imports correlationContext (10 ms)
+    ΓêÜ orderCleanup.js uses initContext or runWithContext (1 ms)
+    ΓêÜ catalogRatingSync.js imports correlationContext (1 ms)
+    ΓêÜ catalogRatingSync.js uses initContext or runWithContext (1 ms)
+    ΓêÜ orderReconciliation.js imports correlationContext (9 ms)
+    ΓêÜ orderReconciliation.js uses initContext or runWithContext (1 ms)
+    ΓêÜ dashboardStatsSync.js imports correlationContext (1 ms)
+    ΓêÜ dashboardStatsSync.js uses initContext or runWithContext (1 ms)
+    ΓêÜ pushTokenCleanup.js imports correlationContext (2 ms)
+    ΓêÜ pushTokenCleanup.js uses initContext or runWithContext
+    ΓêÜ catalogReviewPoller.js imports correlationContext (2 ms)
+    ΓêÜ catalogReviewPoller.js uses initContext or runWithContext (1 ms)
+    ΓêÜ server.js SSE endpoint has correlation context (3 ms)
+  D2: Structured logging ΓÇö zero template literals
+    ΓêÜ no template literal logger calls in any source file (33 ms)
+  D3: State transition logging
+    ΓêÜ order.js uses transitionStatus for state transitions (1 ms)
+    ΓêÜ order.js state transitions are gated by state machine (1 ms)
+    ΓêÜ whatsapp.js logs state_transition for outbound message sent (2 ms)
+    ΓêÜ whatsapp.js logs state_transition for outbound message failure (1 ms)
+    ΓêÜ webhook.js logs state_transition for delivery status updates (1 ms)
+  D4: Error classification completeness
+    ΓêÜ classifyError handles Redis errors (1 ms)
+    ΓêÜ classifyError handles Meta/WhatsApp API errors (1 ms)
+    ΓêÜ classifyError handles payment/Razorpay errors
+    ΓêÜ classifyError handles media upload/Cloudinary errors
+    ΓêÜ classifyError covers 10+ distinct categories (1 ms)
+    ΓêÜ classifyError functional: Redis error ΓåÆ redis category (376 ms)
+    ΓêÜ classifyError functional: Cloudinary error ΓåÆ media_upload
+    ΓêÜ classifyError functional: Razorpay error ΓåÆ payment (1 ms)
+  D4: logRouteError adoption
+    ΓêÜ majority of route files import logRouteError (9 ms)
+    ΓêÜ raw res.status(500).json count is below 15 across all routes (5 ms)
+    ΓêÜ errorHandler.js includes requestId in error responses (1 ms)
+  D5: External API timers
+    ΓêÜ metaCloud.js has startTimer for ALL async functions (2 ms)
+    ΓêÜ brevoMail.js has startTimer for ALL async functions
+    ΓêÜ cloudinary.js has startTimer for async functions (1 ms)
+    ΓêÜ groqAi.js has startTimer for ALL async functions (1 ms)
+    ΓêÜ ALL API timer functions have endTimer on error path (3 ms)
+    ΓêÜ ALL API timer functions have endTimer on success path (4 ms)
+  D6: Retry and backoff logging
+    ΓêÜ outboundRetryWorker logs backoffStrategy on retry scheduling
+    ΓêÜ outboundRetryWorker logs state_transition on retry success (1 ms)
+    ΓêÜ outboundRetryWorker logs state_transition on retry exhaustion (1 ms)
+    ΓêÜ pushNotification.js logs backoffStrategy in FCM retries (1 ms)
+    ΓêÜ pushNotification.js logs attempt and maxRetries in FCM retries (1 ms)
+    ΓêÜ server.js MongoDB has finite max retries (1 ms)
+    ΓêÜ server.js MongoDB logs exponential backoff details
+  D7: Log aggregation infrastructure
+    ΓêÜ logger.js exports setLogLevel function
+    ΓêÜ setLogLevel validates input and changes level (7 ms)
+    ΓêÜ setLogLevel rejects invalid levels (38 ms)
+    ΓêÜ log rotation is configurable via env vars (1 ms)
+    ΓêÜ health routes have PUT /log-level endpoint (1 ms)
+    ΓêÜ health routes have GET /log-level endpoint (1 ms)
+    ΓêÜ health routes have Prometheus metrics endpoint (1 ms)
+    ΓêÜ alerting.js has configurable thresholds via env vars (1 ms)
+    ΓêÜ alerting.js exports ALERT_THRESHOLDS (1 ms)
+    ΓêÜ errorHandler.js includes requestId from correlation context (1 ms)
+  Cross-cutting: Overall observability maturity
+    ΓêÜ ALL service files use logger (not console) (39 ms)
+    ΓêÜ logger.js version reflects 10/10 maturity (2 ms)
+
+PASS __tests__/observability-fixes.test.js
+  O1: Correlation ID auto-injection via Winston format
+    ΓêÜ logger.js exports setCorrelationProvider function (9 ms)
+    ΓêÜ logger.js exports classifyError function (1 ms)
+    ΓêÜ correlationContext.js calls setCorrelationProvider on import (2 ms)
+    ΓêÜ correlationFormat is in both dev and prod Winston format chains (3 ms)
+    ΓêÜ correlationFormat reads from _getCorrelationContext provider (1 ms)
+  O2: googleSheets.js consoleΓåÆlogger migration
+    ΓêÜ imports logger module (1 ms)
+    ΓêÜ has zero console.log calls (1 ms)
+    ΓêÜ has zero console.error calls (1 ms)
+    ΓêÜ uses logger.info for info-level messages (7 ms)
+    ΓêÜ uses logger.error for error-level messages (1 ms)
+  O3: orderId in correlation context at order creation
+    ΓêÜ imports setMetadata from correlationContext (1 ms)
+    ΓêÜ sets orderId in context after generating it (COD path) (1 ms)
+    ΓêÜ sets orderId in context after generating it (UPI path) (2 ms)
+    ΓêÜ sets orderId in context after generating it (pickup path) (1 ms)
+    ΓêÜ logs Order created with structured fields at each checkout (2 ms)
+  O4: Payment status transition logging
+    ΓêÜ payment.js logs Payment status changed before each paymentStatus assignment (1 ms)
+    ΓêÜ payment.js payment status logs include from/to/via fields (2 ms)
+    ΓêÜ webhook.js logs Payment status changed for WhatsApp payments (1 ms)
+    ΓêÜ all paymentStatus updates have a log near them (3 ms)
+  O5: err.stack enabled in production errorHandler
+    ΓêÜ errorHandler always logs err.stack (no NODE_ENV gate) (1 ms)
+    ΓêÜ errorHandler logs err.code and err.name (1 ms)
+    ΓêÜ errorHandler classifies errors with category and retryable (1 ms)
+  O5b: classifyError classification logic
+    ΓêÜ classifies MongoNetworkError as database/retryable (2 ms)
+    ΓêÜ classifies duplicate key as database_duplicate/not retryable (2 ms)
+    ΓêÜ classifies ValidationError as validation/not retryable (1 ms)
+    ΓêÜ classifies ECONNRESET as network/retryable (1 ms)
+    ΓêÜ classifies ETIMEDOUT as network/retryable (1 ms)
+    ΓêÜ classifies rate limit as rate_limit/retryable (1 ms)
+    ΓêÜ classifies 401 as auth/not retryable (1 ms)
+    ΓêÜ classifies 400 as business_logic/not retryable (1 ms)
+    ΓêÜ classifies unknown errors as unknown/retryable (1 ms)
+  O6: External API duration tracking with startTimer
+    ΓêÜ razorpay.js uses startTimer for createOrder (1 ms)
+    ΓêÜ razorpay.js uses startTimer for createPaymentLink (1 ms)
+    ΓêÜ razorpay.js uses startTimer for getPaymentDetails
+    ΓêÜ metaCloud.js uses startTimer for sendMessage (1 ms)
+    ΓêÜ metaCloud.js uses startTimer for downloadMedia (1 ms)
+    ΓêÜ pushNotification.js uses startTimer for sendNotification (7 ms)
+    ΓêÜ startTimer is exported and callable from logger.js (1 ms)
+  O7: Template literals ΓåÆ structured objects
+    ΓêÜ payment.js has zero template literal logger calls (1 ms)
+    ΓêÜ payment.js includes orderId in all error logs where it is in scope (1 ms)
+    ΓêÜ webhook.js error logs use structured format (no colon+object pattern) (1 ms)
+    ΓêÜ razorpay.js has zero template literal logger calls (1 ms)
+    ΓêÜ razorpay.js has zero colon-separated error patterns (2 ms)
+  O8: Emoji cleanup from log messages
+    ΓêÜ googleSheets.js logger calls have no emoji prefixes (2 ms)
+    ΓêÜ webhook.js logger calls have no emoji prefixes (1 ms)
+    ΓêÜ pushNotification.js logger calls have no emoji prefixes
+  M1: Response logging with duration tracking
+    ΓêÜ server.js logs on response finish with statusCode and durationMs (1 ms)
+    ΓêÜ server.js uses level escalation for errors (4xxΓåÆwarn, 5xxΓåÆerror) (1 ms)
+    ΓêÜ server.js has no template literal in request logging
+  M2: MongoDB retry counter
+    ΓêÜ server.js declares mongoRetryCount variable (1 ms)
+    ΓêÜ server.js increments retry count on failure (1 ms)
+    ΓêÜ server.js logs attempt number in retry message
+    ΓêÜ server.js resets retry count on successful connect (1 ms)
+  M3: orderStateMachine triggeredBy parameter
+    ΓêÜ transitionStatus accepts triggeredBy parameter (1 ms)
+    ΓêÜ transitionStatus defaults triggeredBy to system
+    ΓêÜ transitionStatus logs triggeredBy in success transitions (1 ms)
+    ΓêÜ transitionStatus logs triggeredBy in invalid transitions (1 ms)
+  M3b: orderScheduler uses state machine
+    ΓêÜ orderScheduler imports transitionStatus
+    ΓêÜ orderScheduler calls transitionStatus with scheduler trigger
+    ΓêÜ orderScheduler does NOT directly set order.status = cancelled (1 ms)
+    ΓêÜ orderScheduler has zero emoji prefixes in logger calls (1 ms)
+    ΓêÜ orderScheduler uses structured logging (no template literals)
+  M4: OutboundRetryWorker logging improvements
+    ΓêÜ logs attempt number and maxRetries on success
+    ΓêÜ logs attempt and maxRetries on exhaustion (1 ms)
+    ΓêÜ logs delayMs for scheduled retries (1 ms)
+    ΓêÜ cycle summary uses structured logging (1 ms)
+    ΓêÜ has zero template literal logger calls
+  M5: Google Sheets duration tracking
+    ΓêÜ imports startTimer from logger
+    ΓêÜ addOrder has startTimer wrapper (1 ms)
+    ΓêÜ updateOrderStatus has startTimer wrapper
+    ΓêÜ getOrderHistory has startTimer wrapper (1 ms)
+    ΓêÜ addOrUpdateCustomer has startTimer wrapper
+  M6: Chatbot.js external API duration tracking
+    ΓêÜ imports startTimer from logger
+    ΓêÜ OSRM API call has startTimer wrapper (1 ms)
+    ΓêÜ OpenRouteService API call has startTimer wrapper
+    ΓêÜ OpenCage geocoding has startTimer wrapper (1 ms)
+    ΓêÜ OSRM logs HTTP status code
+  M7: logRouteError helper and route adoption
+    ΓêÜ logger.js exports logRouteError function
+    ΓêÜ logRouteError calls classifyError internally (1 ms)
+    ΓêÜ order.js imports logRouteError (1 ms)
+    ΓêÜ auth.js imports logRouteError (1 ms)
+    ΓêÜ deliveryboy.js imports logRouteError (1 ms)
+    ΓêÜ deliveryboy.js uses logRouteError in at least 5 catch blocks (1 ms)
+  M8: Chatbot.js template literal elimination
+    ΓêÜ chatbot.js has zero template literal logger calls (1 ms)
+    ΓêÜ chatbot.js has no decoration logs (= repeated lines) (1 ms)
+    ΓêÜ OSRM uses structured logging (1 ms)
+    ΓêÜ distance calculation uses structured logging (1 ms)
+    ΓêÜ smart search uses structured logging
+    ΓêÜ cart operations use structured logging
+
+PASS __tests__/critical/paymentFailures.test.js
+  Payment Failure Scenarios
+    Signature verification
+      ΓêÜ valid signature passes verification (2 ms)
+      ΓêÜ forged signature is rejected (1 ms)
+      ΓêÜ empty signature is rejected (3 ms)
+      ΓêÜ signature with different order_id is rejected (1 ms)
+      ΓêÜ signature with different payment_id is rejected (6 ms)
+      ΓêÜ ≡ƒÆ░ signature with swapped order_id and payment_id is rejected (1 ms)
+    Missing payment fields
+      ΓêÜ verify-upi with missing razorpay_order_id should fail (1 ms)
+      ΓêÜ verify-upi with missing razorpay_payment_id should fail
+      ΓêÜ verify-upi with missing orderId cannot find order (1 ms)
+      ΓêÜ verify-upi for non-existent order returns error (1 ms)
+    Payment status transitions
+      ΓêÜ pending ΓåÆ paid on successful verification (1 ms)
+      ΓêÜ pending ΓåÆ failed on failed verification
+      ΓêÜ ≡ƒÆ░ paid ΓåÆ paid is idempotent (no double-processing)
+      ΓêÜ ≡ƒÆ░ failed ΓåÆ paid should NOT be allowed without new payment (1 ms)
+      ΓêÜ ≡ƒÆ░ cancelled ΓåÆ paid should not resurrect cancelled order (1 ms)
+    Amount verification
+      ΓêÜ ≡ƒÆ░ order amount matches Razorpay amount (in paise) (1 ms)
+      ΓêÜ ≡ƒÆ░ underpayment should be rejected (1 ms)
+      ΓêÜ ≡ƒÆ░ overpayment should be flagged (1 ms)
+      ΓêÜ ≡ƒÆ░ zero amount order should be rejected
+      ΓêÜ ≡ƒÆ░ negative amount should be rejected
+      ΓêÜ ≡ƒÆ░ floating point amount rounds correctly (paise conversion) (1 ms)
+    Razorpay API failures
+      ΓêÜ Razorpay timeout during order creation should not leave partial state
+      ΓêÜ Razorpay returns error during payment capture (24 ms)
+      ΓêÜ Razorpay webhook with invalid event type is ignored (1 ms)
+    Webhook payload edge cases
+      ΓêÜ empty payload body returns 400
+      ΓêÜ malformed JSON payload returns 400 (5 ms)
+      ΓêÜ payload missing payment.entity is handled
+      ΓêÜ payload with null notes.orderId is handled (1 ms)
+
+PASS __tests__/critical/concurrencyIdempotency.test.js
+  Concurrency & Idempotency Fixes
+    Fix #1: orderId collision prevention
+      ΓêÜ chatbot.js generateOrderId uses crypto.randomBytes (14 ms)
+      ΓêÜ paymentInitiationHandler.js generateOrderId uses crypto.randomBytes (3 ms)
+      ΓêÜ 100 IDs generated in same millisecond are all unique (6 ms)
+      ΓêÜ crypto.randomBytes(4) produces 8-character hex string (3 ms)
+    Fix #2: Order creation dedup guards
+      ΓêÜ chatbot.js processCODOrder has checkOrderOperation (5 ms)
+      ΓêÜ chatbot.js processCheckout has checkOrderOperation (4 ms)
+      ΓêÜ chatbot.js processPickupCheckout has checkOrderOperation (6 ms)
+      ΓêÜ paymentInitiationHandler.js initiateOnlinePayment has checkOrderOperation (2 ms)
+      ΓêÜ paymentInitiationHandler.js processCODOrder has checkOrderOperation (1 ms)
+      ΓêÜ paymentInitiationHandler uses transactionManager for order creation (1 ms)
+    Fix #3: Atomic payment status updates
+      ΓêÜ verify-upi uses atomic findOneAndUpdate with paymentStatus guard (1 ms)
+      ΓêÜ webhook uses atomic findOneAndUpdate with paymentStatus guard (1 ms)
+      ΓêÜ callback uses atomic findOneAndUpdate with paymentStatus guard (1 ms)
+      ΓêÜ paymentCompletionHandler handlePaymentSuccess uses atomic update (4 ms)
+      ΓêÜ paymentCompletionHandler handleWebhookPaymentCaptured uses atomic update (1 ms)
+      ΓêÜ all payment paths use updatedOrder for side effects (not stale order) (1 ms)
+      ΓêÜ atomic update prevents double-notification via race
+    Fix #4: Cart atomic operations
+      ΓêÜ updateQuantity has idempotency guard (1 ms)
+      ΓêÜ addToCart uses atomic Customer.findOneAndUpdate for conversation state (1 ms)
+      ΓêÜ clearCart uses atomic Customer.findOneAndUpdate for conversation state (1 ms)
+      ΓêÜ cartHandler imports Customer model
+      ΓêÜ all cart mutation operations have idempotency (1 ms)
+      ΓêÜ all cart mutations use transactionManager (2 ms)
+    Fix #5: Customer optimistic concurrency
+      ΓêÜ Customer schema has optimisticConcurrency enabled (1 ms)
+      ΓêÜ Order schema also has optimisticConcurrency (from prior session) (1 ms)
+    Fix #6: Idempotency service MongoDB backing
+      ΓêÜ IdempotencyKey model exists with unique key index (4 ms)
+      ΓêÜ idempotencyService imports IdempotencyKey model (1 ms)
+      ΓêÜ idempotencyService has atomicCheckAndMark function (3 ms)
+      ΓêÜ atomicCheckAndMark handles E11000 duplicate key error
+      ΓêÜ checkOrderOperation provides checkAsync for atomic dedup
+      ΓêÜ service checks MongoDB connection state (1 ms)
+      ΓêÜ service exports atomicCheckAndMark (1 ms)
+      ΓêÜ service still has in-memory fallback (1 ms)
+      ΓêÜ getStats includes mongoConnected status (1 ms)
+      ΓêÜ idempotencyService unit: generateKey produces consistent hashes (1073 ms)
+      ΓêÜ idempotencyService unit: in-memory isDuplicate with TTL (1 ms)
+      ΓêÜ idempotencyService unit: checkCartOperation returns dedup interface (2 ms)
+      ΓêÜ idempotencyService unit: checkOrderOperation returns dedup interface (1 ms)
+      ΓêÜ idempotencyService unit: getStats returns expected shape (1 ms)
+    Fix #7: Notification dedup
+      ΓêÜ payment.js: all push notifications use updatedOrder (not stale order) (1 ms)
+      ΓêÜ paymentCompletionHandler: side effects reference updatedOrder (2 ms)
+      ΓêÜ webhook else branch logs already-processed (no side effects) (2 ms)
+    Cross-cutting: Atomic customer stats
+      ΓêÜ payment.js verify-upi uses $inc for customer stats (2 ms)
+      ΓêÜ payment.js callback uses $inc for customer stats (1 ms)
+      ΓêÜ paymentCompletionHandler uses atomic customer update (1 ms)
+
+PASS __tests__/critical/edgeCaseInput.test.js
+  Edge-Case Input Validation
+    Quantity validation
+      ΓêÜ ≡ƒÆ░ quantity = 0 should be rejected (4 ms)
+      ΓêÜ ≡ƒÆ░ negative quantity should be rejected (1 ms)
+      ΓêÜ ≡ƒÆ░ fractional quantity (0.5 items) (1 ms)
+      ΓêÜ ≡ƒÆ░ extremely large quantity (integer overflow risk) (1 ms)
+      ΓêÜ ≡ƒÆ░ quantity as string "2" should be parsed correctly (1 ms)
+      ΓêÜ ≡ƒÆ░ quantity as NaN
+      ΓêÜ ≡ƒÆ░ quantity as Infinity (1 ms)
+      ΓêÜ quantity as undefined
+      ΓêÜ quantity as null (1 ms)
+    Price calculation edge cases
+      ΓêÜ ≡ƒÆ░ item price = 0 (free item)
+      ΓêÜ ≡ƒÆ░ negative price (data corruption) (1 ms)
+      ΓêÜ ≡ƒÆ░ floating point precision: Γé╣10.10 ├ù 3
+      ΓêÜ ≡ƒÆ░ sum of item totals matches order total (1 ms)
+      ΓêÜ ≡ƒÆ░ very small price: Γé╣0.01 ├ù 1
+    Empty cart checkout
+      ΓêÜ ≡ƒÆ░ checkout with empty cart should be blocked (1 ms)
+      ΓêÜ ≡ƒÆ░ checkout with null cart should be blocked
+      ΓêÜ ≡ƒÆ░ checkout with cart containing only unavailable items (1 ms)
+      ΓêÜ cart item with null menuItem reference
+    Order field validation
+      ΓêÜ orderId must not be empty
+      ΓêÜ orderId must not exceed reasonable length
+      ΓêÜ ≡ƒÆ░ customer.phone with non-numeric characters (1 ms)
+      ΓêÜ customer.phone too short or too long
+      ΓêÜ customer name with special characters (1 ms)
+      ΓêÜ ≡ƒÆ░ missing paymentMethod field (3 ms)
+      ΓêÜ ≡ƒÆ░ invalid paymentMethod value (1 ms)
+    WhatsApp message edge cases
+      ΓêÜ null messageId in inbound message
+      ΓêÜ empty message body (1 ms)
+      ΓêÜ message body with only whitespace
+      ΓêÜ extremely long message body (>4096 chars) (1 ms)
+      ΓêÜ message with unicode emojis
+    Delivery details edge cases
+      ΓêÜ ≡ƒÆ░ delivery charge = negative
+      ΓêÜ ≡ƒÆ░ delivery address is empty string (1 ms)
+      ΓêÜ delivery address with SQL injection attempt
+      ΓêÜ delivery address with NoSQL injection (1 ms)
+      ΓêÜ delivery location coordinates out of valid range
+    Stale data edge cases
+      ΓêÜ ≡ƒÆ░ menu item price changed between cart add and checkout (1 ms)
+      ΓêÜ ≡ƒÆ░ menu item deleted between cart add and checkout
+      ΓêÜ ≡ƒÆ░ restaurant closed between cart add and checkout (1 ms)
+
+PASS __tests__/critical/webhookDedup.test.js
+  Webhook Deduplication
+    PaymentEvent dedup guard
+      ΓêÜ first webhook event creates PaymentEvent and processes (12 ms)
+      ΓêÜ duplicate webhook event (E11000) returns early without processing (1 ms)
+      ΓêÜ non-dedup error from PaymentEvent.create propagates (21 ms)
+      ΓêÜ webhook without event_id bypasses dedup (processes normally)
+    ≡ƒÆ░ Dedup-before-commit bug
+      ΓêÜ SCENARIO: crash after PaymentEvent.create, before order.save (1 ms)
+      ΓêÜ FIX VERIFICATION: PaymentEvent should be created AFTER order.save (1 ms)
+    Cross-endpoint race conditions
+      ΓêÜ verify-upi and webhook arrive simultaneously for same order (1 ms)
+      ΓêÜ verify-upi idempotency guard: already-paid returns early
+    HMAC signature verification
+      ΓêÜ valid webhook signature is accepted (1 ms)
+      ΓêÜ invalid webhook signature is rejected (1 ms)
+      ΓêÜ tampered body produces different signature
+      ΓêÜ ≡ƒÆ░ verify-upi uses non-timing-safe comparison (CVE risk) (1 ms)
+
+PASS __tests__/critical/cartIdempotency.test.js
+  Idempotency Service
+    generateKey()
+      ΓêÜ same inputs produce deterministic key (23 ms)
+      ΓêÜ different inputs produce different keys (1 ms)
+      ΓêÜ key contains namespace prefix and hex hash (2 ms)
+      ΓêÜ order of params matters (4 ms)
+      ΓêÜ empty params produce valid key with namespace (1 ms)
+    isDuplicate() and markProcessed()
+      ΓêÜ new key is not a duplicate (6 ms)
+      ΓêÜ marked key becomes a duplicate (1 ms)
+      ΓêÜ expired key is no longer a duplicate (109 ms)
+    checkCartOperation()
+      ΓêÜ first add returns isDuplicate: false (1 ms)
+      ΓêÜ marking then re-checking shows isDuplicate: true (1 ms)
+      ΓêÜ different operations for same customer are independent
+      ΓêÜ same operation, different items are independent (1 ms)
+      ΓêÜ same operation, different quantities are independent (1 ms)
+    ≡ƒÆ░ TOCTOU gap (Time-of-Check-to-Time-of-Use)
+      ΓêÜ concurrent isDuplicate checks both return false (TOCTOU) (1 ms)
+      ΓêÜ FIX: atomic check-and-set would prevent TOCTOU (1 ms)
+    checkOrderOperation()
+      ΓêÜ first checkout returns isDuplicate: false
+      ΓêÜ marked checkout returns isDuplicate: true
+    checkOutboundMessage()
+      ΓêÜ first message returns isDuplicate: false
+      ΓêÜ duplicate message returns isDuplicate: true (1 ms)
+    ≡ƒÆ░ updateQuantity has NO idempotency guard
+      ΓêÜ addToCart uses idempotency guard
+      ΓêÜ removeFromCart uses idempotency guard
+      ΓêÜ clearCart uses idempotency guard
+      ΓêÜ updateQuantity does NOT use idempotency guard (BUG)
+    cleanExpired()
+      ΓêÜ removes expired entries (114 ms)
+      ΓêÜ retains non-expired entries (1 ms)
+      ΓêÜ getStats returns cache statistics (2 ms)
+
+PASS __tests__/domains/menuHandler.test.js
+  menuHandler
+    showMainMenu
+      ΓêÜ should send welcome with buttons (no image) (7 ms)
+      ΓêÜ should send image with buttons when welcome image exists (1 ms)
+    browseMenu
+      ΓêÜ should show categories with list when items available (2 ms)
+      ΓêÜ should filter items by veg food type (1 ms)
+      ΓêÜ should show no items message when category empty (1 ms)
+    showCategory
+      ΓêÜ should show items in a category (2 ms)
+      ΓêÜ should show no items message when category is empty (1 ms)
+    showItemDetails
+      ΓêÜ should show item details with buttons (2 ms)
+      ΓêÜ should show not available when item missing (1 ms)
+      ΓêÜ should send image when item has image url (1 ms)
+    filterByFoodType
+      ΓêÜ should return all items when foodType is all (1 ms)
+      ΓêÜ should filter veg items only (1 ms)
+      ΓêÜ should filter nonveg items only
+      ΓêÜ should return all when no foodType provided
+    FOOD_TYPES constant
+      ΓêÜ should export correct food type constants (1 ms)
+
+PASS __tests__/order-lifecycle.test.js
+  Order Lifecycle ΓÇö State Machine Coverage
+    State Machine Module
+      ΓêÜ exports ORDER_STATUS with all 7 states (3 ms)
+      ΓêÜ delivered and cancelled are terminal states with no outgoing transitions (3 ms)
+      ΓêÜ validates allowed transitions (2 ms)
+      ΓêÜ blocks illegal transitions (1 ms)
+      ΓêÜ allows same-status for idempotency
+      ΓêÜ transitionStatus mutates order and pushes trackingUpdate (6 ms)
+      ΓêÜ transitionStatus rejects invalid transition without mutating (1 ms)
+    Bypass Elimination ΓÇö orderHandler.js
+      ΓêÜ does NOT force-set order.status as fallback after state machine rejection
+      ΓêÜ uses transitionStatus with triggeredBy = customer
+      ΓêÜ handles VersionError on save (1 ms)
+      ΓêÜ returns early (with WhatsApp message) when state machine blocks cancellation (1 ms)
+    Bypass Elimination ΓÇö paymentCompletionHandler.js
+      ΓêÜ checks transitionStatus return value for verify payment path
+      ΓêÜ checks transitionStatus return value for webhook payment path (1 ms)
+      ΓêÜ passes triggeredBy for both paths (1 ms)
+      ΓêÜ uses atomic findOneAndUpdate (no VersionError needed)
+    Bypass Elimination ΓÇö routes/order.js (admin)
+      ΓêÜ uses transitionStatus instead of manual order.status assignment (1 ms)
+      ΓêÜ does NOT have manual order.status = status in admin update path (1 ms)
+      ΓêÜ handles VersionError with 409 response
+    Bypass Elimination ΓÇö routes/deliveryboy.js
+      ΓêÜ imports validateTransition from orderStateMachine (1 ms)
+      ΓêÜ validates transition before mark-ready findOneAndUpdate (1 ms)
+      ΓêÜ validates transition before out-for-delivery findOneAndUpdate (1 ms)
+      ΓêÜ validates transition before direct delivery findOneAndUpdate (1 ms)
+      ΓêÜ validates transition before QR payment delivery findOneAndUpdate
+      ΓêÜ all 4 delivery paths have validateTransition calls
+      ΓêÜ logs transition for mark-ready and out-for-delivery (1 ms)
+      ΓêÜ logs transition for deliver path (1 ms)
+      ΓêÜ returns 409 if findOneAndUpdate returns null (concurrent modification) (1 ms)
+  Order Lifecycle ΓÇö Optimistic Concurrency Control
+    ΓêÜ Order model has optimisticConcurrency enabled (1 ms)
+    ΓêÜ classifyError handles VersionError as concurrency_conflict (2 ms)
+  Order Lifecycle ΓÇö State Machine Coverage Audit
+    ΓêÜ all status mutation paths use state machine or atomic precondition (1 ms)
+    ΓêÜ orderScheduler uses transitionStatus (1 ms)
+    ΓêÜ chatbot cancel uses transitionStatus (3 ms)
+    ΓêÜ state machine gated: all 11 mutable paths across 8 files (9 ms)
+
+PASS __tests__/services/orderStateMachine.test.js
+  Order State Machine
+    Valid transitions
+      ΓêÜ pending ΓåÆ confirmed should be valid (3 ms)
+      ΓêÜ pending ΓåÆ cancelled should be valid (1 ms)
+      ΓêÜ confirmed ΓåÆ preparing should be valid (1 ms)
+      ΓêÜ confirmed ΓåÆ ready should be valid (1 ms)
+      ΓêÜ confirmed ΓåÆ cancelled should be valid
+      ΓêÜ preparing ΓåÆ ready should be valid
+      ΓêÜ preparing ΓåÆ cancelled should be valid (1 ms)
+      ΓêÜ ready ΓåÆ out_for_delivery should be valid (1 ms)
+      ΓêÜ ready ΓåÆ delivered should be valid
+      ΓêÜ ready ΓåÆ cancelled should be valid
+      ΓêÜ out_for_delivery ΓåÆ delivered should be valid (1 ms)
+      ΓêÜ out_for_delivery ΓåÆ cancelled should be valid (1 ms)
+    Invalid transitions
+      ΓêÜ pending ΓåÆ preparing should be invalid (Must go through confirmed first) (1 ms)
+      ΓêÜ pending ΓåÆ ready should be invalid (Must go through confirmedΓåÆpreparing) (1 ms)
+      ΓêÜ pending ΓåÆ delivered should be invalid (Cannot deliver unpaid order)
+      ΓêÜ pending ΓåÆ out_for_delivery should be invalid (Not confirmed yet)
+      ΓêÜ confirmed ΓåÆ pending should be invalid (Cannot revert to pending) (1 ms)
+      ΓêÜ confirmed ΓåÆ out_for_delivery should be invalid (Must go through preparingΓåÆready) (1 ms)
+      ΓêÜ confirmed ΓåÆ delivered should be invalid (Must go through preparingΓåÆreadyΓåÆdelivery) (1 ms)
+      ΓêÜ preparing ΓåÆ pending should be invalid (Cannot revert to pending) (1 ms)
+      ΓêÜ preparing ΓåÆ confirmed should be invalid (Cannot revert to confirmed)
+      ΓêÜ preparing ΓåÆ out_for_delivery should be invalid (Must go through ready)
+      ΓêÜ ready ΓåÆ pending should be invalid (Cannot revert) (1 ms)
+      ΓêÜ ready ΓåÆ confirmed should be invalid (Cannot revert) (5 ms)
+      ΓêÜ ready ΓåÆ preparing should be invalid (Cannot revert)
+      ΓêÜ out_for_delivery ΓåÆ pending should be invalid (Cannot revert) (1 ms)
+      ΓêÜ out_for_delivery ΓåÆ confirmed should be invalid (Cannot revert) (1 ms)
+      ΓêÜ out_for_delivery ΓåÆ preparing should be invalid (Cannot revert)
+      ΓêÜ out_for_delivery ΓåÆ ready should be invalid (Cannot revert)
+      ΓêÜ delivered ΓåÆ pending should be invalid (Cannot revert delivered) (1 ms)
+      ΓêÜ delivered ΓåÆ confirmed should be invalid (Cannot revert delivered) (1 ms)
+      ΓêÜ delivered ΓåÆ cancelled should be invalid (Cannot cancel after delivery) (1 ms)
+    Same-status transition (idempotency)
+      ΓêÜ pending ΓåÆ %s should be valid (no-op) (1 ms)
+      ΓêÜ confirmed ΓåÆ %s should be valid (no-op)
+      ΓêÜ preparing ΓåÆ %s should be valid (no-op) (1 ms)
+      ΓêÜ ready ΓåÆ %s should be valid (no-op)
+      ΓêÜ out_for_delivery ΓåÆ %s should be valid (no-op) (1 ms)
+      ΓêÜ delivered ΓåÆ %s should be valid (no-op) (1 ms)
+      ΓêÜ cancelled ΓåÆ %s should be valid (no-op)
+    transitionStatus()
+      ΓêÜ valid transition mutates order status (2 ms)
+      ΓêÜ valid transition adds tracking update when message provided (3 ms)
+      ΓêÜ valid transition without message does not add tracking update (1 ms)
+      ΓêÜ invalid transition does NOT mutate order (1 ms)
+      ΓêÜ invalid transition logs warning with orderId and reason (2 ms)
+      ΓêÜ valid transition logs info with from/to (1 ms)
+      ΓêÜ invalid target status is rejected (1 ms)
+      ΓêÜ unknown current status is rejected
+    Full lifecycle paths
+      ΓêÜ happy path: delivery order (1 ms)
+      ΓêÜ happy path: pickup order (skips out_for_delivery) (2 ms)
+      ΓêÜ cancellation path: cancel mid-preparation (1 ms)
+      ΓêÜ COD order: confirmed immediately (no pendingΓåÆconfirmed for COD)
+    Financial risk transitions
+      ΓêÜ RISK: delivered ΓåÆ cancelled is blocked (would lose paid revenue) (1 ms)
+      ΓêÜ RISK: cancelled ΓåÆ confirmed is blocked (zombie order) (1 ms)
+      ΓêÜ RISK: cancelled ΓåÆ delivered is blocked (fulfilling cancelled order)
+
+PASS __tests__/production-readiness.test.js
+  #1 Redis-backed Rate Limiters
+    ΓêÜ rateLimiter.js should use rate-limiter-flexible (not plain Map) (3 ms)
+    ΓêÜ should export all required middleware names (2 ms)
+  #2 Upload Size and Type Limits
+    ΓêÜ offers should have fileSize limit on multer (2 ms)
+    ΓêÜ offers should have fileFilter for images only (2 ms)
+    ΓêÜ heroSection should have fileSize limit on multer
+    ΓêÜ heroSection should have fileFilter for images only (1 ms)
+  #3 SSE Endpoint Authentication
+    ΓêÜ SSE endpoint should require JWT verification (1 ms)
+  #4 Swagger Hidden in Production
+    ΓêÜ api-docs.json should NOT be exposed unconditionally (1 ms)
+  #5 Log Sensitive Data Redaction
+    ΓêÜ logger.js should define sensitive field list and redaction (1 ms)
+    ΓêÜ redaction format should be wired into both dev and prod formats (1 ms)
+  #6 Docker Compose Hardening
+    ΓêÜ Redis should require a password
+    ΓêÜ MongoDB port should be bound to localhost (1 ms)
+    ΓêÜ Redis port should be bound to localhost
+  #7 JWT Refresh Token Flow
+    ΓêÜ auth.js should import jwtRefresh service (1 ms)
+    ΓêÜ login should return refreshToken alongside token (1 ms)
+    ΓêÜ should have /refresh endpoint (1 ms)
+    ΓêÜ should have /revoke endpoint for logout (3 ms)
+    ΓêÜ access token should include id field for compatibility
+    jwtRefresh service logic
+      ΓêÜ generateTokenPair should return accessToken and refreshToken (9 ms)
+      ΓêÜ rotateRefreshToken should return new token pair and invalidate old (3 ms)
+      ΓêÜ reusing an old refresh token should throw (replay detection) (29 ms)
+      ΓêÜ revokeRefreshToken should invalidate the token (2 ms)
+  #8 Login Brute Force Protection (via Redis rate limiter)
+    ΓêÜ auth.js login route should use strictRateLimiter
+    ΓêÜ strictRateLimiter should use Redis-backed store (1 ms)
+
+(node:19976) [MONGOOSE] Warning: Duplicate schema index on {"menuItem":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19976) [MONGOOSE] Warning: Duplicate schema index on {"retailerId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+PASS __tests__/fault-tolerance-fixes.test.js
+  FT1: Two-phase webhook dedup
+    ΓêÜ PaymentEvent schema should have status field with processing/completed/failed (29 ms)
+    ΓêÜ PaymentEvent schema should have completedAt field
+    ΓêÜ webhook route should create PaymentEvent with status=processing (1 ms)
+    ΓêÜ webhook route should only skip if existing event status is completed (1 ms)
+    ΓêÜ webhook route should allow retry of incomplete events (delete + re-create) (1 ms)
+    ΓêÜ webhook route should mark PaymentEvent as completed after order.save() (2 ms)
+  FT2: Order reconciliation cron
+    ΓêÜ should export start, stop, and reconcileOrders functions (1 ms)
+    ΓêÜ should be wired in server.js startup (1 ms)
+    ΓêÜ should be stopped in server.js graceful shutdown (1 ms)
+    ΓêÜ Order schema should have whatsappConfirmationSent field (1 ms)
+    ΓêÜ verify-upi should mark whatsappConfirmationSent=true after send (1 ms)
+    ΓêÜ callback should mark whatsappConfirmationSent=true after send (2 ms)
+    ΓêÜ chatbot COD and pickup paths should mark whatsappConfirmationSent=true (4 ms)
+  FT3: Atomic order+cart clear
+    ΓêÜ COD checkout should use Customer.findOneAndUpdate for cart clear (5 ms)
+    ΓêÜ UPI checkout should use Customer.findOneAndUpdate for cart clear (4 ms)
+    ΓêÜ Pickup checkout should use Customer.findOneAndUpdate for cart clear (4 ms)
+    ΓêÜ all checkout paths should push orderHistory atomically with cart clear (4 ms)
+  FT4: Outbound message retry worker
+    ΓêÜ should export start, stop, and processRetries functions (2 ms)
+    ΓêÜ should be wired in server.js startup (1 ms)
+    ΓêÜ should be stopped in server.js graceful shutdown (1 ms)
+    ΓêÜ should query OutboundMessage with correct retry criteria (2 ms)
+    ΓêÜ should handle text, buttons, image, and cta_url message types (2 ms)
+    ΓêÜ should mark messages with exhausted retries as non-retryable (1 ms)
+  FT5: isShuttingDown guard in payment routes
+    ΓêÜ shutdownState module should export isShuttingDown and setShuttingDown (14 ms)
+    ΓêÜ server.js should call shutdownState.setShuttingDown() during shutdown
+    ΓêÜ payment.js should import shutdownState (1 ms)
+    ΓêÜ razorpay-webhook should return 503 when shutting down (1 ms)
+    ΓêÜ callback should return 503 when shutting down (2 ms)
+  FT6: Callback WhatsApp wrapped in try/catch
+    ΓêÜ callback WhatsApp send should be wrapped in try/catch (1 ms)
+    ΓêÜ callback should catch WhatsApp errors without crashing (1 ms)
+  Fault-tolerance infrastructure files
+    ΓêÜ orderReconciliation.js should exist
+    ΓêÜ outboundRetryWorker.js should exist (1 ms)
+    ΓêÜ shutdownState.js should exist (1 ms)
+    ΓêÜ orderReconciliation should use node-cron for scheduling (1 ms)
+    ΓêÜ outboundRetryWorker should use node-cron for scheduling (1 ms)
+    ΓêÜ reconciliation should query for unnotified confirmed/paid orders (1 ms)
+  FT7: Session-based checkout transactions
+    ΓêÜ chatbot.js should import transactionManager (3 ms)
+    ΓêÜ COD checkout should use transactionManager.execute with session (34 ms)
+    ΓêÜ UPI checkout should use transactionManager.execute with session (31 ms)
+    ΓêÜ Pickup checkout should use transactionManager.execute with session (13 ms)
+    ΓêÜ all checkout paths should fall back to sequential on non-replica-set (4 ms)
+  FT8: Startup reconciliation on boot
+    ΓêÜ server.js should call reconcileOrders() after MongoDB connects (1 ms)
+    ΓêÜ startup reconciliation should be fire-and-forget (.then/.catch) (2 ms)
+  FT9: Dashboard stats daily sync cron
+    ΓêÜ should export start, stop, and syncStats functions (1 ms)
+    ΓêÜ should be wired in server.js startup (1 ms)
+    ΓêÜ should be stopped in server.js graceful shutdown (1 ms)
+    ΓêÜ should run daily at 3 AM (1 ms)
+    ΓêÜ should recalculate stats from actual Order/Customer counts (1 ms)
+    ΓêÜ should also sync to Google Sheets (1 ms)
+  FT10: Push token DB cleanup cron
+    ΓêÜ should export start, stop, cleanStaleTokens, and isValidTokenFormat (1 ms)
+    ΓêÜ isValidTokenFormat should reject invalid tokens (1 ms)
+    ΓêÜ isValidTokenFormat should accept valid FCM-length tokens
+    ΓêÜ should be wired in server.js startup (1 ms)
+    ΓêÜ should be stopped in server.js graceful shutdown
+    ΓêÜ should run every 6 hours (1 ms)
+    ΓêÜ should clean tokens from both User and DeliveryBoy models (5 ms)
+    ΓêÜ should validate Expo tokens via SDK (1 ms)
+    ΓêÜ dashboardStatsSync.js should exist (1 ms)
+    ΓêÜ pushTokenCleanup.js should exist (1 ms)
+
+PASS __tests__/services/metricsRedis.test.js
+  metricsRedis
+    scanKeys (via getMetrics)
+      ΓêÜ should use SCAN instead of KEYS for production safety (5 ms)
+      ΓêÜ should iterate cursor until 0 is returned (2 ms)
+    recordRequest
+      ΓêÜ should increment total and daily counters (3 ms)
+    recordSuccess / recordFailure
+      ΓêÜ should increment success counter (1 ms)
+      ΓêÜ should increment failure counter (2 ms)
+    recordDomainAction
+      ΓêÜ should track domain action with hash (1 ms)
+      ΓêÜ should track failures (2 ms)
+    recordError
+      ΓêÜ should increment error counters and add to recent errors (1 ms)
+    resetMetrics
+      ΓêÜ should delete all metric keys using SCAN (1 ms)
+      ΓêÜ should handle empty metrics gracefully (1 ms)
+    recordResponseTime
+      ΓêÜ should store response time in sorted set (1 ms)
+      ΓêÜ should support detail parameter (1 ms)
+    getResponseTimeStats
+      ΓêÜ should return zero stats when no data (1 ms)
+      ΓêÜ should calculate percentiles correctly (2 ms)
+
+PASS services/domains/shared/__tests__/formatHelpers.test.js
+  Format Helpers
+    formatPriceWithOffer
+      ΓêÜ should format price with offer discount (2 ms)
+      ΓêÜ should format price without offer (1 ms)
+      ΓêÜ should not show offer if offerPrice is same as price (1 ms)
+    formatOfferTypes
+      ΓêÜ should format array of offer types (1 ms)
+      ΓêÜ should format single offer type string (1 ms)
+      ΓêÜ should return empty string for no offers (1 ms)
+      ΓêÜ should return empty string for empty array
+    formatOrderStatus
+      ΓêÜ should format pending status (1 ms)
+      ΓêÜ should format confirmed status (1 ms)
+      ΓêÜ should format out_for_delivery status (1 ms)
+    formatCurrency
+      ΓêÜ should format positive amount (47 ms)
+      ΓêÜ should format zero (1 ms)
+      ΓêÜ should handle null
+      ΓêÜ should handle undefined (1 ms)
+      ΓêÜ should format large amounts
+    formatDistance
+      ΓêÜ should format distance less than 1 KM in meters
+      ΓêÜ should format distance in KM (1 ms)
+      ΓêÜ should handle null
+      ΓêÜ should handle zero (1 ms)
+    getFoodTypeLabel
+      ΓêÜ should return vegetarian label (1 ms)
+      ΓêÜ should return non-vegetarian label (1 ms)
+      ΓêÜ should return egg label (1 ms)
+      ΓêÜ should return all items label for unknown type (1 ms)
+    getFoodTypeEmoji
+      ΓêÜ should return correct emojis (1 ms)
+    truncateText
+      ΓêÜ should truncate long text (1 ms)
+      ΓêÜ should not truncate short text (1 ms)
+      ΓêÜ should handle null
+    formatPhoneNumber
+      ΓêÜ should format 10-digit number
+      ΓêÜ should format number with country code (1 ms)
+      ΓêÜ should handle null (1 ms)
+      ΓêÜ should handle invalid length
+    formatDate
+      ΓêÜ should format valid date (11 ms)
+      ΓêÜ should handle null (2 ms)
+
+PASS __tests__/middleware/authenticate.test.js
+  authenticate
+    ΓêÜ should reject requests without Authorization header (3 ms)
+    ΓêÜ should reject non-Bearer format (2 ms)
+    ΓêÜ should reject empty token (1 ms)
+    ΓêÜ should reject expired token (8 ms)
+    ΓêÜ should reject invalid token (2 ms)
+    ΓêÜ should accept valid token and set req.user (2 ms)
+    ΓêÜ should handle missing JWT_SECRET gracefully (2 ms)
+  optionalAuthenticate
+    ΓêÜ should set req.user to null when no token (1 ms)
+    ΓêÜ should authenticate when valid token provided (2 ms)
+    ΓêÜ should reject invalid token even in optional mode (1 ms)
+  authenticateDeliveryBoy
+    ΓêÜ should reject non-delivery role tokens (89 ms)
+    ΓêÜ should reject if delivery boy not found in DB (86 ms)
+    ΓêÜ should reject deactivated delivery boy (53 ms)
+    ΓêÜ should reject expired token version (66 ms)
+    ΓêÜ should authenticate valid delivery boy and set req.deliveryBoy (69 ms)
+
+PASS __tests__/services/catalogService.test.js
+  catalogService.ensureCatalogMapping
+    ΓêÜ returns null when catalog is not enabled (no META_CATALOG_ID) (2 ms)
+    ΓêÜ returns existing retailerId immediately when mapping already exists (cache hit) (2 ms)
+    ΓêÜ auto-creates mapping and pushes to Meta when no mapping exists (real-time sync) (6 ms)
+    ΓêÜ returns null gracefully when Meta push fails (2 ms)
+    ΓêÜ second call uses cached mapping (no duplicate Meta push) (1 ms)
+    ΓêÜ handles paused/unavailable items with out of stock status (1 ms)
+  catalogService.buildCartSections
+    ΓêÜ returns null when catalog is not enabled
+    ΓêÜ returns null for empty cart (1 ms)
+    ΓêÜ auto-maps all cart items and returns sections (both items already mapped) (2 ms)
+    ΓêÜ auto-creates missing mappings for unmapped cart items (1 ms)
+    ΓêÜ skips cart items with null menuItem (1 ms)
+
+PASS services/domains/shared/__tests__/messageHelpers.test.js
+  Message Helpers
+    sendEmptyCartMessage
+      ΓêÜ should send message with menu button when includeMenuButton is true (4 ms)
+      ΓêÜ should send simple message when includeMenuButton is false (1 ms)
+    sendWithOptionalImage
+      ΓêÜ should send image with buttons when imageUrl is provided (3 ms)
+      ΓêÜ should send buttons without image when imageUrl is null (1 ms)
+    sendItemNotAvailableMessage
+      ΓêÜ should send item not available message with item name (1 ms)
+      ΓêÜ should send generic message when item name is not provided (1 ms)
+    sendSuccessMessage
+      ΓêÜ should send success message with default buttons (1 ms)
+      ΓêÜ should send success message with custom buttons
+    sendErrorMessage
+      ΓêÜ should send error message with default buttons (1 ms)
+    sendConfirmationMessage
+      ΓêÜ should send confirmation with yes/no buttons (1 ms)
+    sendProcessingMessage
+      ΓêÜ should send processing message (1 ms)
+
+PASS services/domains/shared/__tests__/validationHelpers.test.js
+  Validation Helpers
+    validateQuantity
+      ΓêÜ should validate positive quantity (4 ms)
+      ΓêÜ should reject negative quantity
+      ΓêÜ should reject zero quantity (1 ms)
+      ΓêÜ should reject quantity over 50 (2 ms)
+      ΓêÜ should reject non-numeric quantity
+      ΓêÜ should accept string numbers (1 ms)
+    validateLocation
+      ΓêÜ should validate coordinates in India (2 ms)
+      ΓêÜ should reject coordinates outside India
+      ΓêÜ should reject invalid latitude
+      ΓêÜ should reject invalid longitude (1 ms)
+      ΓêÜ should accept string coordinates (1 ms)
+    validatePhoneNumber
+      ΓêÜ should validate 10-digit Indian mobile (1 ms)
+      ΓêÜ should validate number with +91 (1 ms)
+      ΓêÜ should validate number with 91 prefix (1 ms)
+      ΓêÜ should reject invalid number
+      ΓêÜ should reject number starting with invalid digit
+      ΓêÜ should handle spaces and dashes (1 ms)
+    isCartEmpty
+      ΓêÜ should return true for empty array (1 ms)
+      ΓêÜ should return true for null (1 ms)
+      ΓêÜ should return true for undefined
+      ΓêÜ should return false for non-empty array (1 ms)
+    isOrderInProgress
+      ΓêÜ should return true for pending status (1 ms)
+      ΓêÜ should return true for confirmed status
+      ΓêÜ should return true for preparing status (1 ms)
+      ΓêÜ should return true for ready status
+      ΓêÜ should return true for out_for_delivery status (1 ms)
+      ΓêÜ should return false for delivered status
+      ΓêÜ should return false for cancelled status (1 ms)
+    isOrderCompleted
+      ΓêÜ should return true for delivered status
+      ΓêÜ should return true for cancelled status (1 ms)
+      ΓêÜ should return false for pending status
+      ΓêÜ should return false for preparing status (1 ms)
+
+PASS __tests__/middleware/errorHandler.test.js
+  Error Handler Middleware
+    ΓêÜ should return 500 for generic errors (13 ms)
+    ΓêÜ should use error statusCode if provided (1 ms)
+    ΓêÜ should use error status if statusCode not provided (1 ms)
+    ΓêÜ should record error in metrics (1 ms)
+    ΓêÜ should not expose stack trace in production (1 ms)
+    ΓêÜ should expose error message in development (2 ms)
+    ΓêÜ should send alert for 500 errors in production (2 ms)
+    ΓêÜ should not send alert for non-500 errors (2 ms)
+    ΓêÜ should handle metrics recording failure gracefully (2 ms)
+
+PASS __tests__/server/server.test.js
+  Server Configuration
+    ΓêÜ should validate environment at startup (466 ms)
+    ΓêÜ should export app and server (2 ms)
+
+PASS __tests__/middleware/rateLimiter.test.js
+  Rate Limiter Middleware
+    createRateLimiter
+      ΓêÜ should return a rate-limiter-flexible instance with consume method (3 ms)
+      ΓêÜ should allow consumption within limit (52 ms)
+      ΓêÜ should reject consumption exceeding limit (3 ms)
+      ΓêÜ should separate limits by keyPrefix (2 ms)
+    Pre-configured limiters
+      ΓêÜ should export adminRateLimiter as a function
+      ΓêÜ should export publicRateLimiter as a function (1 ms)
+      ΓêÜ should export authRateLimiter as a function (1 ms)
+      ΓêÜ should export strictRateLimiter as a function
+      ΓêÜ should export webhookRateLimiter as a function
+      ΓêÜ adminRateLimiter should call next for a valid request (2 ms)
+      ΓêÜ publicRateLimiter should call next for a valid request (2 ms)
+
+PASS __tests__/middleware/inputValidation.test.js
+  Input Validation Middleware
+    handleValidationErrors
+      ΓêÜ should be a function (2 ms)
+    sanitizeInputs
+      ΓêÜ should be a function (1 ms)
+      ΓêÜ should call next for normal input (1 ms)
+      ΓêÜ should trim string values in body
+      ΓêÜ should trim query parameters
+      ΓêÜ should preserve non-string values
+      ΓêÜ should not modify nested objects (only top-level strings) (1 ms)
+      ΓêÜ should handle empty body gracefully (1 ms)
+      ΓêÜ should handle undefined body gracefully (1 ms)
+
+PASS __tests__/middleware/auth.test.js
+  Auth Middleware
+    ΓêÜ should return 401 if no authorization header is provided (2 ms)
+    ΓêÜ should return 401 if authorization header has no token
+    ΓêÜ should return 401 for an invalid token (1 ms)
+    ΓêÜ should return 401 for an expired token (9 ms)
+    ΓêÜ should call next and set req.user for a valid token (3 ms)
+    ΓêÜ should return 401 for a token signed with wrong secret (2 ms)
+
+PASS __tests__/api/health.test.js
+  Health Routes
+    GET /health
+      ΓêÜ should return basic health status (36 ms)
+    GET /health/live
+      ΓêÜ should return liveness check (8 ms)
+    GET /health/ready
+      ΓêÜ should return readiness with dependency checks (6 ms)
+    GET /health/metrics
+      ΓêÜ should return metrics data (6 ms)
+
+PASS __tests__/api/auth.test.js
+  Auth Unit Tests
+    JWT token generation
+      ΓêÜ should generate a valid JWT token (11 ms)
+      ΓêÜ should reject token signed with wrong secret (32 ms)
+      ΓêÜ should reject expired token (11 ms)
+      ΓêÜ should include expiration in token (2 ms)
+      ΓêÜ should encode role in token for RBAC (3 ms)
+    Password hashing
+      ΓêÜ should hash password with salt rounds (160 ms)
+      ΓêÜ should verify correct password (411 ms)
+      ΓêÜ should reject wrong password (398 ms)
+      ΓêÜ should generate different hashes for same password (561 ms)
+    Auth input validation
+      ΓêÜ should detect invalid email format
+      ΓêÜ should validate password strength (1 ms)
+      ΓêÜ should validate phone number format
+
+PASS __tests__/services/logger.test.js
+  Logger Service
+    ΓêÜ should export a logger object
+    ΓêÜ should have info method
+    ΓêÜ should have error method
+    ΓêÜ should have warn method (1 ms)
+    ΓêÜ should have debug method
+    ΓêÜ should have createChildLogger method
+    ΓêÜ should have withCorrelation method (1 ms)
+    ΓêÜ should have startTimer method
+    ΓêÜ should have logError method
+    ΓêÜ should have logEvent method
+    ΓêÜ should have logPerformance method
+    ΓêÜ should not throw when logging info (1 ms)
+    ΓêÜ should not throw when logging error
+    ΓêÜ should not throw when logging with metadata
+    ΓêÜ should create a child logger with context (1 ms)
+    ΓêÜ should create correlation logger
+    ΓêÜ should return timer function from startTimer (1 ms)
+    ΓêÜ should have getMetadata function
+
+PASS __tests__/config/envValidation.test.js
+  Environment Validation
+    ΓêÜ should be a function (2 ms)
+    ΓêÜ should not throw for valid environment in non-strict mode (2 ms)
+    ΓêÜ should validate required variables exist (1 ms)
+    ΓêÜ should validate MONGODB_URI format (1 ms)
+    ΓêÜ should validate JWT_SECRET minimum length (2 ms)
+    ΓêÜ should accept valid mongodb+srv URI (1 ms)
+
+PASS __tests__/config/corsConfig.test.js
+  CORS Configuration
+    ΓêÜ should export corsOptions object (13 ms)
+    ΓêÜ should have credentials enabled (1 ms)
+    ΓêÜ should have optionsSuccessStatus set (1 ms)
+    ΓêÜ should have allowed methods (1 ms)
+    ΓêÜ should have allowed headers (13 ms)
+    ΓêÜ should have origin as a function
+    ΓêÜ should allow requests with no origin (server-to-server) (1 ms)
+
+PASS __tests__/middleware/webhookValidation.test.js
+  Webhook Validation
+    ΓêÜ should export a middleware object or function (22 ms)
+    ΓêÜ should validate HMAC signatures correctly (1 ms)
+
+PASS __tests__/architecture-fixes.test.js (7.945 s)
+  C1: messageProcessor imports chatbotRouter
+    ΓêÜ should import chatbotRouter at the top (5 ms)
+    ΓêÜ should NOT call chatbot.handleMessage in code (undefined variable) (1 ms)
+    ΓêÜ should call chatbotRouter.handleMessage (1 ms)
+  C2: conversationState has no unreachable code
+    ΓêÜ should have only one logger require (at module scope)
+  C3: processCheckout sets paymentMethod
+    ΓêÜ should have paymentMethod: "online" in processCheckout order creation (2 ms)
+  C4: processPickupCheckout has all required fields
+    ΓêÜ should include itemsTotal field (2 ms)
+    ΓêÜ should include deliveryCharge: 0 (2 ms)
+    ΓêÜ should include trackingUpdates (2 ms)
+    ΓêÜ should include whatsappBroadcast.addContact (2 ms)
+    ΓêÜ should include DashboardStats todayOrders tracking (2 ms)
+  C4: orderFactory module
+    ΓêÜ should export buildOrderData function
+    ΓêÜ should build complete order data with defaults (1 ms)
+    ΓêÜ should convert Set to Array for appliedOfferIds (1 ms)
+    ΓêÜ should include optional status fields when provided
+  C5: chatbot.js wires orderStateMachine
+    ΓêÜ should import orderStateMachine (2 ms)
+    ΓêÜ should NOT use raw order.status = "cancelled" assignment (3 ms)
+    ΓêÜ should use transitionStatus for cancellation (2 ms)
+  C6: customer.js batch aggregation
+    ΓêÜ should NOT have per-customer Order.find() inside Promise.all/map (1 ms)
+    ΓêÜ should use Order.aggregate for batch queries
+    ΓêÜ should aggregate orderCounts and totalSpent in parallel (1 ms)
+  M1: orderService scaffold
+    ΓêÜ should export getOrders
+    ΓêÜ should export updateStatus
+    ΓêÜ should export assignDeliveryPartner
+    ΓêÜ should export notifyDeliveryPartner
+  M2: consolidated cleanup services
+    ΓêÜ should NOT have saveOrderStats in dailyCleanup (1 ms)
+    ΓêÜ should have saveOrderStats in orderCleanup
+    ΓêÜ should have Google Sheets sync in orderCleanup.saveOrderStats (1 ms)
+  M3: sendImageWithCtaPhone tracking
+    ΓêÜ should wrap sendImageWithCtaPhone with trackOutbound (1 ms)
+  M4: no circular dependency
+    ΓêÜ chatbot.js should NOT require orchestrator or chatbotRouter (2 ms)
+  M5: generateAutoTags shared module
+    ΓêÜ should export a function
+    ΓêÜ should generate tags from item name (1 ms)
+    ΓêÜ should include food type tag
+    ΓêÜ should include unit tag
+    ΓêÜ should include category names as tags (1 ms)
+    ΓêÜ menu.js should import from shared module
+    ΓêÜ menu.js should NOT have inline generateAutoTags function (1 ms)
+  M6: Maps have eviction
+    ΓêÜ pushNotification.js should have MAX_BADGE_ENTRIES cap
+    ΓêÜ pushNotification.js should have MAX_STALE_ENTRIES cap (1 ms)
+    ΓêÜ pushNotification.js should have periodic sweep interval
+    ΓêÜ catalogReviewPoller.js should have MAX_REVIEW_CACHE_SIZE
+    ΓêÜ googleSheetsReliable.js should have MAX_SYNC_ERRORS + eviction
+    ΓêÜ metrics.js should have MAX_METRIC_KEYS cap (1 ms)
+    ΓêÜ alerting.js should have MAX_ALERT_CACHE_SIZE + eviction
+  M7: unhandledRejection shuts down
+    ΓêÜ should call forceShutdown on unhandledRejection (1 ms)
+  R1: auth.js no unnecessary async
+    ΓêÜ /refresh handler should not be async
+    ΓêÜ /revoke handler should not be async (1 ms)
+  R2: no silent error catches
+    ΓêÜ analytics.js should log collection stats errors (1 ms)
+    ΓêÜ menu.js should not have /* ignore */ catches
+    ΓêÜ offers.js should not have /* ignore */ catches (1 ms)
+    ΓêÜ reportPdf.js should log image fetch failures
+    ΓêÜ auth.js /verify should capture error variable (1 ms)
+    ΓêÜ chatbot.js should log statsErr with stack trace (2 ms)
+    ΓêÜ chatbot.js should not have empty .catch(() => {}) (2 ms)
+  R3: no inline requires in routes
+    ΓêÜ auth.js should not have indented requires (1 ms)
+    ΓêÜ order.js should not have indented requires (1 ms)
+    ΓêÜ webhook.js should not have indented requires
+    ΓêÜ payment.js should not have indented requires (1 ms)
+  R4: no lazy require shadows in chatbot.js
+    ΓêÜ should have exactly one whatsappBroadcast require (2 ms)
+  R5: defaultChatbotImages config
+    ΓêÜ should export an array
+    ΓêÜ should have 45 image slot definitions
+    ΓêÜ each entry should have key and name properties (6 ms)
+    ΓêÜ all keys should be unique
+    ΓêÜ chatbotImages.js should import from config file (1 ms)
+  R6: email template in brevoMail
+    ΓêÜ brevoMail should export sendDeliveryPartnerCredentials
+    ΓêÜ deliveryboy.js should NOT create its own SibApiV3Sdk instance (1 ms)
+    ΓêÜ deliveryboy.js sendPasswordEmail should delegate to brevoMail
+  R7: centralised signal handlers
+    ΓêÜ redis.js should NOT have process.on SIGTERM/SIGINT
+    ΓêÜ messageQueue.js should NOT have process.on SIGTERM/SIGINT (1 ms)
+    ΓêÜ server.js should shut down messageQueue in gracefulShutdown
+  Regression guards
+    ΓêÜ messageProcessor must never define a "chatbot" variable (1 ms)
+    ΓêÜ processCODOrder should have paymentMethod: cod (3 ms)
+    ΓêÜ orderFactory defaults: deliveryDistance should be null not 0
+    ΓêÜ chatbot.js must not have order.status = cancelled anywhere (7 ms)
+    ΓêÜ customer.js must not have Order.find inside a loop (1 ms)
+    ΓêÜ whatsapp.js sendImageWithCtaPhone must not call metaCloud directly (1 ms)
+    ΓêÜ server.js must call forceShutdown for both uncaughtException and unhandledRejection
+    ΓêÜ chatbot.js should have exactly one require for each critical service (3 ms)
+    ΓêÜ no service file (except server.js) should register SIGTERM/SIGINT (15 ms)
+  M5: generateAutoTags edge cases
+    ΓêÜ should handle empty item name
+    ΓêÜ should handle null categories gracefully
+    ΓêÜ should handle nonveg food type (1 ms)
+    ΓêÜ should handle egg food type
+    ΓêÜ should produce plural unit for quantity > 1 (1 ms)
+    ΓêÜ should filter out short words from item name
+  C4: orderFactory edge cases
+    ΓêÜ should default customer name to "Customer" when missing (1 ms)
+    ΓêÜ should preserve email when provided
+    ΓêÜ should default serviceType to delivery
+    ΓêÜ should not include status when not provided (1 ms)
+    ΓêÜ should handle empty Set for appliedOfferIds
+  D1: googleSheets column mapping
+    ΓêÜ should write payment method to column I (not K=OrderStatus) (1 ms)
+  D2: googleSheets aggregation uses serviceType
+    ΓêÜ should use $serviceType for pickup detection (not $deliveryType) (1 ms)
+  D3: paymentCompletionHandler uses updateOrderStatus
+    ΓêÜ should call googleSheets.updateOrderStatus (not updateOrder) (1 ms)
+  D4: paymentCompletionHandler uses transitionStatus
+    ΓêÜ should import transitionStatus from orderStateMachine (1 ms)
+    ΓêÜ should NOT directly assign order.status = ORDER_STATUS.CONFIRMED (1 ms)
+    ΓêÜ should have RAZORPAY_KEY_SECRET validation in verifyPaymentSignature (12 ms)
+  D5: orderHandler uses transitionStatus
+    ΓêÜ should import transitionStatus from orderStateMachine (1 ms)
+    ΓêÜ should call transitionStatus for cancellation (1 ms)
+  D6: No inline requires in domain handlers
+    ΓêÜ orderHandler should have all requires at top level
+    ΓêÜ paymentCompletionHandler should have all requires at top level (1 ms)
+    ΓêÜ orderHandler cancelOrder should NOT have inline requires
+  D7: locationHandler uses logger instead of console.error
+    ΓêÜ should NOT use console.error anywhere (1 ms)
+    ΓêÜ should use logger.error for delivery charge errors
+  D8: domains/index.js endTimer on redirect
+    ΓêÜ should call endTimer before returning on redirect (1 ms)
+  D9: getDeliveryPartnerHistory uses 13-column layout
+    ΓêÜ should fetch A:M (13 columns) not A:L (1 ms)
+    ΓêÜ should use row[12] for delivery partner (not row[10]) (1 ms)
+  D10: validationHelpers batch query
+    ΓêÜ should batch-fetch menu items with $in instead of N+1
+    ΓêÜ should NOT have MenuItem.findById inside the for loop (1 ms)
+  D11: validateOrderCancellation uses correct query
+    ΓêÜ should query by customer.phone not customer ObjectId
+  Domain handlers regression: no console.* usage
+    ΓêÜ cartHandler.js should not use console.log/error/warn (2 ms)
+    ΓêÜ errorHandler.js should not use console.log/error/warn (1 ms)
+    ΓêÜ locationHandler.js should not use console.log/error/warn (2 ms)
+    ΓêÜ menuHandler.js should not use console.log/error/warn (1 ms)
+    ΓêÜ orderHandler.js should not use console.log/error/warn (1 ms)
+    ΓêÜ paymentCompletionHandler.js should not use console.log/error/warn (1 ms)
+    ΓêÜ paymentInitiationHandler.js should not use console.log/error/warn (1 ms)
+  C4: processPickupCheckout itemsTotal variable
+    ΓêÜ should declare let itemsTotal (not let total) (1 ms)
+    ΓêÜ should accumulate itemsTotal += itemTotal
+    ΓêÜ should use itemsTotal in Order constructor (1 ms)
+    ΓêÜ should use itemsTotal in confirmation message
+
+PASS __tests__/services/googleSheets.test.js
+  googleSheets module structure
+    ΓêÜ should export all methods from index.js (backward compatible) (2596 ms)
+    ΓêÜ should export domain-specific facades (184 ms)
+    ΓêÜ should maintain method binding in facades
+
+A worker process has failed to exit gracefully and has been force exited. This is likely caused by tests leaking due to improper teardown. Try running with --detectOpenHandles to find leaks. Active timers can also cause this, ensure that .unref() was called on them.
+Test Suites: 32 passed, 32 total
+Tests:       826 passed, 826 total
+Snapshots:   0 total
+Time:        9.689 s
+Ran all test suites.

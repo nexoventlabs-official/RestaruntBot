@@ -71,6 +71,7 @@ async function execute(domain, action, customer, phone, params = {}) {
         from: `${domain}.${action}`,
         to: `${result.redirect}.${result.action}`
       });
+      endTimer({ success: true });
       recordDomainAction(domain, action, true);
       return result;
     }

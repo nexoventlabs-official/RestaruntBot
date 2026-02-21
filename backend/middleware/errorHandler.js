@@ -9,15 +9,22 @@
 const alerting = require('../services/alerting');
 const logger = require('../services/logger'); // Phase 6.5
 const metricsRedis = require('../services/metricsRedis'); // Phase 6.5
+const { getCorrelationId } = require('../services/correlationContext');
 
 const errorHandler = async (err, req, res, next) => {
-  // Log error details for debugging (in production, use proper logging service)
-  logger.error('Error occurred:', {
+  // Classify error for alerting and dashboarding
+  const { category, retryable } = logger.classifyError(err);
+
+  // Log error details — always include stack, code, and name in production
+  logger.error('Error occurred', {
     message: err.message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    stack: err.stack,
+    code: err.code,
+    name: err.name,
+    category,
+    retryable,
     path: req.path,
-    method: req.method,
-    timestamp: new Date().toISOString()
+    method: req.method
   });
 
   // Determine status code
@@ -48,11 +55,14 @@ const errorHandler = async (err, req, res, next) => {
   }
 
   // Production vs Development response
+  const requestId = typeof getCorrelationId === 'function' ? getCorrelationId() : undefined;
+
   if (process.env.NODE_ENV === 'production') {
     // Production: Generic error message, no stack traces
     return res.status(statusCode).json({
       success: false,
       error: statusCode === 500 ? 'Internal Server Error' : err.message,
+      ...(requestId && { requestId }),
       timestamp: new Date().toISOString()
     });
   }
@@ -62,6 +72,9 @@ const errorHandler = async (err, req, res, next) => {
     success: false,
     error: err.message,
     stack: err.stack,
+    category,
+    retryable,
+    ...(requestId && { requestId }),
     details: err.details || undefined,
     timestamp: new Date().toISOString()
   });

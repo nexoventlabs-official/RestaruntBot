@@ -7,7 +7,6 @@
  * - Cancel orders with validation
  * - Track orders and show status
  * - View order history
- * - Request refunds
  * - Order status formatting
  * - Intent detection for order operations
  * 
@@ -22,18 +21,22 @@
  */
 
 const Order = require('../../models/Order');
+const User = require('../../models/User');
+const DeliveryBoy = require('../../models/DeliveryBoy');
 const conversationState = require('../conversationState');
 const whatsapp = require('../whatsapp');
 const chatbotImagesService = require('../chatbotImages');
 const { logger } = require('../correlationContext');
+const pushNotification = require('../pushNotification');
+const dataEvents = require('../eventEmitter');
+const { transitionStatus } = require('../orderStateMachine');
 
 // Order intent patterns
 const ORDER_INTENTS = {
   MY_ORDERS: /(my|view|show|check).*(order|orders)/i,
   TRACK_ORDER: /(track|status|where).*(order|delivery)/i,
   CANCEL_ORDER: /(cancel|stop).*(order)/i,
-  ORDER_HISTORY: /(history|past|previous).*(order)/i,
-  REFUND: /(refund|money back|return)/i
+  ORDER_HISTORY: /(history|past|previous).*(order)/i
 };
 
 // Order status mappings
@@ -44,8 +47,7 @@ const ORDER_STATUS = {
   READY: 'ready',
   OUT_FOR_DELIVERY: 'out_for_delivery',
   DELIVERED: 'delivered',
-  CANCELLED: 'cancelled',
-  REFUNDED: 'refunded'
+  CANCELLED: 'cancelled'
 };
 
 const STATUS_EMOJI = {
@@ -55,8 +57,7 @@ const STATUS_EMOJI = {
   ready: '📦',
   out_for_delivery: '🚚',
   delivered: '✅',
-  cancelled: '❌',
-  refunded: '💰'
+  cancelled: '❌'
 };
 
 /**
@@ -134,20 +135,32 @@ async function cancelOrder(customer, phone) {
     return;
   }
   
-  order.status = 'cancelled';
   order.cancellationReason = 'Cancelled by customer via WhatsApp';
-  await order.save();
+  const transition = transitionStatus(order, 'cancelled', 'Cancelled by customer via WhatsApp', 'customer');
+  if (!transition.success) {
+    logger.warn('Order cancellation blocked by state machine', { orderId: order.orderId, currentStatus: order.status, reason: transition.reason });
+    await whatsapp.sendMessage(phone, 
+      `❌ Cannot cancel order. Current status: ${order.status}\n\nPlease contact support for assistance.`
+    );
+    return;
+  }
+  try {
+    await order.save();
+  } catch (saveErr) {
+    if (saveErr.name === 'VersionError') {
+      logger.warn('Concurrent order modification during cancel', { orderId: order.orderId });
+      await whatsapp.sendMessage(phone, '❌ Could not cancel — order was updated at the same time. Please try again.');
+      return;
+    }
+    throw saveErr;
+  }
   
   // Emit event for real-time updates (SSE)
-  const dataEvents = require('../eventEmitter');
   dataEvents.emit('orders');
   dataEvents.emit('dashboard');
 
   // Send push notification to admin — customer cancelled
   try {
-    const User = require('../../models/User');
-    const pushNotification = require('../pushNotification');
-    
     const admins = await User.find({ pushToken: { $ne: null } });
     for (const admin of admins) {
       if (admin.pushToken) {
@@ -167,16 +180,13 @@ async function cancelOrder(customer, phone) {
   // Notify assigned delivery partner if order was assigned
   if (order.assignedTo) {
     try {
-      const DeliveryBoy = require('../../models/DeliveryBoy');
-      const pushNotification = require('../pushNotification');
-      
       const deliveryBoy = await DeliveryBoy.findById(order.assignedTo);
       if (deliveryBoy && deliveryBoy.pushToken) {
         await pushNotification.sendOrderCancelledNotification(deliveryBoy.pushToken, {
           orderId: order.orderId,
           totalAmount: order.totalAmount
         });
-        logger.info(`Delivery partner ${deliveryBoy.name} notified of cancellation`);
+        logger.info('Delivery partner notified of cancellation', { name : deliveryBoy.name });
       }
     } catch (pushErr) {
       logger.error('Delivery push error (customer cancel)', { error: pushErr.message });
@@ -185,7 +195,7 @@ async function cancelOrder(customer, phone) {
 
   await whatsapp.sendMessage(phone, 
     `✅ Order ${order.orderId} has been cancelled.\n\n` +
-    `If you paid online, refund will be processed within 5-7 business days.`
+    `Please contact support for any further assistance.`
   );
   
   conversationState.clearPendingOrder(customer);
@@ -325,91 +335,6 @@ async function viewOrderHistory(customer, phone, params = {}) {
 }
 
 /**
- * Request refund
- */
-async function requestRefund(customer, phone, params = {}) {
-  const { orderId } = params;
-  
-  let order;
-  
-  if (orderId) {
-    order = await Order.findOne({ orderId });
-  } else {
-    // Find most recent delivered/cancelled order
-    order = await Order.findOne({
-      'customer.phone': customer.phone,
-      status: { $in: ['delivered', 'cancelled'] },
-      paymentStatus: 'paid'
-    }).sort({ createdAt: -1 });
-  }
-  
-  if (!order) {
-    await whatsapp.sendMessage(phone, '❌ No eligible orders found for refund.');
-    return;
-  }
-  
-  // Check if already refunded
-  if (order.refundStatus === 'completed') {
-    await whatsapp.sendMessage(phone, 
-      `✅ Order ${order.orderId} has already been refunded.\n\n` +
-      `Refund amount: ₹${order.refundAmount || order.totalAmount}`
-    );
-    return;
-  }
-  
-  // Check if refund already requested
-  if (order.refundStatus === 'requested' || order.refundStatus === 'processing') {
-    await whatsapp.sendMessage(phone,
-      `⏳ Refund for order ${order.orderId} is already ${order.refundStatus}.\n\n` +
-      `Please wait for admin approval.`
-    );
-    return;
-  }
-  
-  // Request refund
-  order.refundStatus = 'requested';
-  order.refundRequestedAt = new Date();
-  await order.save();
-  
-  // Send push notification to admin — refund requested
-  try {
-    const User = require('../../models/User');
-    const pushNotification = require('../pushNotification');
-    
-    const admins = await User.find({ pushToken: { $ne: null } });
-    for (const admin of admins) {
-      if (admin.pushToken) {
-        await pushNotification.sendNotification(
-          admin.pushToken,
-          '💰 Refund Requested',
-          `Order #${order.orderId} - ₹${order.totalAmount}\nCustomer requested a refund`,
-          { type: 'refund_requested', orderId: order.orderId, screen: 'Orders' },
-          'order-updates'
-        );
-      }
-    }
-  } catch (pushErr) {
-    logger.error('Admin push error (refund request)', { error: pushErr.message });
-  }
-
-  await whatsapp.sendMessage(phone,
-    `✅ Refund requested for order ${order.orderId}\n\n` +
-    `Amount: ₹${order.totalAmount}\n` +
-    `Status: Under Review\n\n` +
-    `Our team will review your request and process the refund within 5-7 business days.`
-  );
-  
-  logger.info('Refund requested', {
-    customerId: customer._id,
-    orderId: order.orderId,
-    amount: order.totalAmount
-  });
-  
-  conversationState.transitionTo(customer, 'main_menu');
-  await customer.save();
-}
-
-/**
  * Get order by ID
  */
 async function getOrderById(orderId) {
@@ -438,16 +363,6 @@ async function getCustomerOrders(phone, params = {}) {
 function canCancelOrder(order) {
   const cancellableStatuses = ['pending', 'confirmed'];
   return cancellableStatuses.includes(order.status);
-}
-
-/**
- * Check if order is eligible for refund
- */
-function isRefundEligible(order) {
-  const eligibleStatuses = ['delivered', 'cancelled'];
-  return eligibleStatuses.includes(order.status) && 
-         order.paymentStatus === 'paid' &&
-         order.refundStatus !== 'completed';
 }
 
 /**
@@ -490,8 +405,7 @@ function getOrderStatusLabel(status) {
     ready: 'Ready for Pickup',
     out_for_delivery: 'Out for Delivery',
     delivered: 'Delivered',
-    cancelled: 'Cancelled',
-    refunded: 'Refunded'
+    cancelled: 'Cancelled'
   };
   
   return labels[status] || status;
@@ -522,10 +436,6 @@ function detectOrderIntent(message) {
   
   if (ORDER_INTENTS.ORDER_HISTORY.test(message)) {
     return 'order_history';
-  }
-  
-  if (ORDER_INTENTS.REFUND.test(message)) {
-    return 'refund';
   }
   
   return null;
@@ -580,7 +490,6 @@ module.exports = {
   cancelOrder,
   trackOrder,
   viewOrderHistory,
-  requestRefund,
   
   // Order queries
   getOrderById,
@@ -588,7 +497,6 @@ module.exports = {
   
   // Order validation
   canCancelOrder,
-  isRefundEligible,
   
   // Formatting helpers
   formatOrderDetails,

@@ -13,6 +13,7 @@
 
 const cron = require('node-cron');
 const mongoose = require('mongoose');
+const { initContext, runWithContext } = require('./correlationContext');
 const logger = require('./logger');
 
 let schedulerTask = null;
@@ -41,10 +42,10 @@ async function syncAllRatingsToMeta() {
     }
 
     const menuItemIds = allItems.map(item => item._id.toString());
-    logger.info(`[CatalogRatingSync] Starting daily rating sync for ${menuItemIds.length} items`);
+    logger.info('[CatalogRatingSync] Starting daily rating sync', { itemCount: menuItemIds.length });
 
     const result = await catalogService.syncRatingsToMeta(menuItemIds);
-    logger.info(`[CatalogRatingSync] Daily sync complete`, {
+    logger.info('[CatalogRatingSync] Daily sync complete', {
       synced: result.synced,
       failed: result.failed,
       totalItems: menuItemIds.length
@@ -66,8 +67,11 @@ function start() {
 
   // Run at 2:00 AM IST daily using Asia/Kolkata timezone
   schedulerTask = cron.schedule('0 2 * * *', async () => {
-    logger.info('[CatalogRatingSync] Daily 2 AM IST rating sync triggered');
-    await syncAllRatingsToMeta();
+    const ctx = initContext(null, { source: 'scheduler', job: 'catalogRatingSync' });
+    await runWithContext(ctx, async () => {
+      logger.info('[CatalogRatingSync] Daily 2 AM IST rating sync triggered');
+      await syncAllRatingsToMeta();
+    });
   }, {
     timezone: 'Asia/Kolkata'
   });

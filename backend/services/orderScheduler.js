@@ -3,6 +3,8 @@ const logger = require('./logger');
 const whatsapp = require('./whatsapp');
 const googleSheets = require('./googleSheets');
 const chatbotImagesService = require('./chatbotImages');
+const { transitionStatus } = require('./orderStateMachine');
+const { initContext, runWithContext } = require('./correlationContext');
 
 const PENDING_TIMEOUT_MINUTES = 15;
 
@@ -24,7 +26,10 @@ const orderScheduler = {
         ]
       });
       
-      logger.info(`🔍 Found ${expiredOrders.length} expired pending orders (excluding pickup COD orders)`);
+      logger.info('Found expired pending orders', {
+        count: expiredOrders.length,
+        cutoffTime: cutoffTime.toISOString()
+      });
       
       for (const order of expiredOrders) {
         await this.cancelOrder(order);
@@ -32,7 +37,7 @@ const orderScheduler = {
       
       return expiredOrders.length;
     } catch (error) {
-      logger.error('❌ Error checking expired orders:', error.message);
+      logger.error('Error checking expired orders', { error: error.message, stack: error.stack });
       return 0;
     }
   },
@@ -40,17 +45,19 @@ const orderScheduler = {
   // Cancel a single order and notify customer
   async cancelOrder(order) {
     try {
-      logger.info(`⏰ Auto-cancelling order ${order.orderId} (pending for >15 mins)`);
-      
-      // Update order status
-      order.status = 'cancelled';
-      order.cancellationReason = 'Auto-cancelled: Payment not received within 15 minutes';
-      order.statusUpdatedAt = new Date(); // Track for auto-cleanup after 1 hour
-      order.trackingUpdates.push({
-        status: 'cancelled',
-        message: 'Order auto-cancelled due to payment timeout',
-        timestamp: new Date()
+      logger.info('Auto-cancelling expired order', {
+        orderId: order.orderId,
+        pendingMinutes: PENDING_TIMEOUT_MINUTES,
+        triggeredBy: 'scheduler'
       });
+      
+      // Update order status via state machine
+      const result = transitionStatus(order, 'cancelled', 'Order auto-cancelled due to payment timeout', 'scheduler');
+      if (!result.success) {
+        logger.warn('Failed to transition expired order', { orderId: order.orderId, reason: result.reason });
+        return false;
+      }
+      order.cancellationReason = 'Auto-cancelled: Payment not received within 15 minutes';
       await order.save();
       
       // Update Google Sheets
@@ -118,7 +125,7 @@ const orderScheduler = {
           }
         }
       } catch (pushErr) {
-        logger.error('Admin push error (auto-cancel)', pushErr.message);
+        logger.error('Admin push error (auto-cancel)', { error: pushErr.message, orderId: order.orderId });
       }
       // Notify assigned delivery partner if order was assigned
       if (order.assignedTo) {
@@ -132,30 +139,35 @@ const orderScheduler = {
               orderId: order.orderId,
               totalAmount: order.totalAmount
             });
-            logger.info(`Delivery partner ${deliveryBoy.name} notified of auto-cancellation`);
+        logger.info('Delivery partner notified of auto-cancellation', {
+          deliveryPartner: deliveryBoy.name,
+          orderId: order.orderId
+        });
           }
         } catch (pushErr) {
-          logger.error('Delivery push error (auto-cancel)', pushErr.message);
+        logger.error('Delivery push error (auto-cancel)', { error: pushErr.message, orderId: order.orderId });
         }
       }
-      logger.info(`✅ Order ${order.orderId} cancelled and customer notified`);
+      logger.info('Order cancelled and customer notified', { orderId: order.orderId });
       return true;
     } catch (error) {
-      logger.error(`❌ Error cancelling order ${order.orderId}:`, error.message);
+      logger.error('Error cancelling order', { orderId: order.orderId, error: error.message, stack: error.stack });
       return false;
     }
   },
 
   // Start the scheduler (runs every minute)
   start() {
-    logger.info('⏰ Order scheduler started - checking for expired orders every minute');
+    logger.info('Order scheduler started', { checkIntervalSec: 60 });
     
     // Run immediately on start
-    this.cancelExpiredOrders();
+    const ctx = initContext(null, { source: 'scheduler', job: 'orderScheduler' });
+    runWithContext(ctx, () => this.cancelExpiredOrders());
     
     // Then run every minute
     setInterval(() => {
-      this.cancelExpiredOrders();
+      const ctx = initContext(null, { source: 'scheduler', job: 'orderScheduler' });
+      runWithContext(ctx, () => this.cancelExpiredOrders());
     }, 60 * 1000); // Every 1 minute
   }
 };

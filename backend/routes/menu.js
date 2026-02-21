@@ -5,6 +5,7 @@ const authMiddleware = require('../middleware/auth');
 const cloudinaryService = require('../services/cloudinary');
 const dataEvents = require('../services/eventEmitter');
 const catalogService = require('../services/catalogService');
+const generateAutoTags = require('../services/generateAutoTags');
 const multer = require('multer');
 const { publicRateLimiter } = require('../middleware/rateLimiter');
 const { validators } = require('../middleware/inputValidation');
@@ -37,7 +38,8 @@ router.get('/', async (req, res) => {
     const items = await MenuItem.find().sort({ category: 1, name: 1 });
     res.json(items);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -46,7 +48,8 @@ router.get('/categories', async (req, res) => {
     const categories = await MenuItem.distinct('category');
     res.json(categories);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -76,39 +79,6 @@ router.post('/', authMiddleware, menuUpload, async (req, res) => {
         try { return JSON.parse(o); } catch { return o ? [o] : []; }
       }
       return [];
-    };
-    
-    // Auto-generate tags from item properties
-    const generateAutoTags = (itemName, itemFoodType, itemUnit, itemQuantity, itemCategories) => {
-      const autoTags = [];
-      
-      // Add food type tag
-      if (itemFoodType === 'veg') {
-        autoTags.push('veg', 'vegetarian');
-      } else if (itemFoodType === 'nonveg') {
-        autoTags.push('nonveg', 'non-veg', 'non veg');
-      } else if (itemFoodType === 'egg') {
-        autoTags.push('egg', 'eggetarian');
-      }
-      
-      // Add quantity and unit tag (e.g., "5 piece", "250 gram")
-      if (itemQuantity && itemUnit) {
-        autoTags.push(`${itemQuantity} ${itemUnit}`);
-        if (itemQuantity > 1) {
-          autoTags.push(`${itemQuantity} ${itemUnit}s`);
-        }
-      }
-      
-      // Add category tags
-      if (itemCategories && itemCategories.length > 0) {
-        autoTags.push(...itemCategories.map(c => c.toLowerCase()));
-      }
-      
-      // Extract words from item name as tags (split by space, filter short words)
-      const nameWords = itemName.toLowerCase().split(/\s+/).filter(w => w.length >= 3);
-      autoTags.push(...nameWords);
-      
-      return autoTags;
     };
     
     let imageUrl = image || null;
@@ -204,7 +174,8 @@ router.post('/', authMiddleware, menuUpload, async (req, res) => {
     
     res.status(201).json(item);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -230,39 +201,6 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
         try { return JSON.parse(o); } catch { return o ? [o] : []; }
       }
       return [];
-    };
-    
-    // Auto-generate tags from item properties
-    const generateAutoTags = (itemName, itemFoodType, itemUnit, itemQuantity, itemCategories) => {
-      const autoTags = [];
-      
-      // Add food type tag
-      if (itemFoodType === 'veg') {
-        autoTags.push('veg', 'vegetarian');
-      } else if (itemFoodType === 'nonveg') {
-        autoTags.push('nonveg', 'non-veg', 'non veg');
-      } else if (itemFoodType === 'egg') {
-        autoTags.push('egg', 'eggetarian');
-      }
-      
-      // Add quantity and unit tag (e.g., "5 piece", "250 gram")
-      if (itemQuantity && itemUnit) {
-        autoTags.push(`${itemQuantity} ${itemUnit}`);
-        if (itemQuantity > 1) {
-          autoTags.push(`${itemQuantity} ${itemUnit}s`);
-        }
-      }
-      
-      // Add category tags
-      if (itemCategories && itemCategories.length > 0) {
-        autoTags.push(...itemCategories.map(c => c.toLowerCase()));
-      }
-      
-      // Extract words from item name as tags (split by space, filter short words)
-      const nameWords = itemName.toLowerCase().split(/\s+/).filter(w => w.length >= 3);
-      autoTags.push(...nameWords);
-      
-      return autoTags;
     };
     
     // Get existing item to check for old image
@@ -345,7 +283,7 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
               const pid = cloudinaryService.extractPublicId(oldImg);
               if (pid) await cloudinaryService.deleteImage(pid);
               logger.info('Deleted removed variant image from Cloudinary', { variantIndex: i, publicId: pid });
-            } catch (e) { /* ignore */ }
+            } catch (e) { warn('Failed to delete variant image from Cloudinary': logger.warn('Failed to delete variant image from Cloudinary', { variantIndex: i, error: e.message }); }
           }
         }
 
@@ -373,7 +311,7 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
               try {
                 const pid = cloudinaryService.extractPublicId(oldImage);
                 if (pid) await cloudinaryService.deleteImage(pid);
-              } catch (e) { /* ignore */ }
+              } catch (e) { warn('Failed to delete old variant image from Cloudinary': logger.warn('Failed to delete old variant image from Cloudinary', { variantIndex: idx, error: e.message }); }
             }
             variantImage = await cloudinaryService.uploadFromBuffer(imageFileMap[idx].buffer, 'restaurant-bot/menu-variants');
           }
@@ -409,7 +347,7 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
           try {
             const pid = cloudinaryService.extractPublicId(oldV.image);
             if (pid) await cloudinaryService.deleteImage(pid);
-          } catch (e) { /* ignore */ }
+          } catch (e) { warn('Failed to delete variant image during cleanup': logger.warn('Failed to delete variant image during cleanup', { error: e.message }); }
         }
       }
       // Delete all variant products from Meta catalog (non-blocking)
@@ -433,7 +371,8 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
     
     res.json(item);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -475,7 +414,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -499,7 +439,8 @@ router.patch('/:id/toggle-pause', authMiddleware, async (req, res) => {
     
     res.json(item);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -528,7 +469,8 @@ router.patch('/bulk-pause', authMiddleware, async (req, res) => {
     
     res.json({ success: true, modifiedCount: result.modifiedCount });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -579,7 +521,8 @@ router.delete('/:id/variant/:variantIndex', authMiddleware, async (req, res) => 
 
     res.json(item);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -603,7 +546,8 @@ router.patch('/:id/variant/:variantIndex/toggle', authMiddleware, async (req, re
     dataEvents.emit('menu');
     res.json(item);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -629,7 +573,8 @@ router.patch('/:id/variants-soldout', authMiddleware, async (req, res) => {
     dataEvents.emit('menu');
     res.json(item);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -658,7 +603,8 @@ router.patch('/:id/schedule-soldout', authMiddleware, async (req, res) => {
     dataEvents.emit('menu');
     res.json(item);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -667,39 +613,6 @@ router.post('/regenerate-tags', authMiddleware, async (req, res) => {
   try {
     const items = await MenuItem.find();
     let updatedCount = 0;
-    
-    // Auto-generate tags from item properties
-    const generateAutoTags = (itemName, itemFoodType, itemUnit, itemQuantity, itemCategories) => {
-      const autoTags = [];
-      
-      // Add food type tag
-      if (itemFoodType === 'veg') {
-        autoTags.push('veg', 'vegetarian');
-      } else if (itemFoodType === 'nonveg') {
-        autoTags.push('nonveg', 'non-veg', 'non veg');
-      } else if (itemFoodType === 'egg') {
-        autoTags.push('egg', 'eggetarian');
-      }
-      
-      // Add quantity and unit tag (e.g., "5 piece", "250 gram")
-      if (itemQuantity && itemUnit) {
-        autoTags.push(`${itemQuantity} ${itemUnit}`);
-        if (itemQuantity > 1) {
-          autoTags.push(`${itemQuantity} ${itemUnit}s`);
-        }
-      }
-      
-      // Add category tags
-      if (itemCategories && itemCategories.length > 0) {
-        autoTags.push(...itemCategories.map(c => c.toLowerCase()));
-      }
-      
-      // Extract words from item name as tags (split by space, filter short words)
-      const nameWords = itemName.toLowerCase().split(/\s+/).filter(w => w.length >= 3);
-      autoTags.push(...nameWords);
-      
-      return autoTags;
-    };
     
     for (const item of items) {
       const categories = Array.isArray(item.category) ? item.category : [item.category];
@@ -719,7 +632,8 @@ router.post('/regenerate-tags', authMiddleware, async (req, res) => {
     
     res.json({ success: true, message: `Regenerated tags for ${updatedCount} items` });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -759,7 +673,8 @@ router.post('/sync-catalog', authMiddleware, async (req, res) => {
     logger.info('Bulk catalog sync completed', results);
     res.json({ success: true, ...results });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -855,7 +770,8 @@ router.get('/catalog-connection', authMiddleware, async (req, res) => {
       catalogInfo
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 

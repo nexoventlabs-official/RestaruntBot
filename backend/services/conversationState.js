@@ -36,7 +36,6 @@ function getState(customer) {
     lastInteraction: new Date(),
     context: {}
   };
-const logger = require('./logger');
 }
 
 /**
@@ -85,7 +84,7 @@ function transitionTo(customer, newStep, additionalUpdates = {}) {
   ];
   
   if (!validSteps.includes(newStep)) {
-    logger.warn(`⚠️ Invalid step transition rejected: ${newStep}`);
+    logger.warn('Invalid step transition rejected', { newStep });
     return getState(customer); // Return current state unchanged
   }
   
@@ -279,7 +278,7 @@ function isStale(customer, maxAgeMinutes = 30) {
  */
 function resetIfStale(customer, maxAgeMinutes = 30) {
   if (isStale(customer, maxAgeMinutes)) {
-    logger.info(`🔄 Resetting stale conversation for ${customer.phone}`);
+    logger.info('Resetting stale conversation for', { phone : customer.phone });
     return clearTransientState(customer);
   }
   return getState(customer);

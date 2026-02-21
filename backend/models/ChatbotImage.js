@@ -47,8 +47,6 @@ const chatbotImageSchema = new mongoose.Schema({
       'delivery_location',
       'out_of_delivery_range',
       'payment_failed',
-      'refund_processed',
-      'refund_failed',
       'voice_error',
       'food_type_selection',
       'checkout',

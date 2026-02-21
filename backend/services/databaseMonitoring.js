@@ -39,7 +39,7 @@ async function enableProfiling() {
       slowms: SLOW_QUERY_THRESHOLD
     });
     
-    logger.info(`✅ [DB Monitor] Profiling enabled (threshold: ${SLOW_QUERY_THRESHOLD}ms)`);
+    logger.info('[DB Monitor] Profiling enabled (threshold: ms)', { SLOW_QUERY_THRESHOLD });
     return true;
   } catch (error) {
     logger.error('❌ [DB Monitor] Failed to enable profiling:', error.message);
@@ -139,7 +139,7 @@ async function analyzeIndexUsage(collectionName) {
       since: stat.accesses.since
     }));
   } catch (error) {
-    logger.error(`❌ [DB Monitor] Failed to analyze indexes for ${collectionName}:`, error.message);
+    logger.error('[DB Monitor] Failed to analyze indexes for', error.message);
     return [];
   }
 }
@@ -256,7 +256,7 @@ function startMonitoring() {
   // Schedule periodic health checks
   monitoringInterval = setInterval(monitorHealth, MONITORING_INTERVAL);
   
-  logger.info(`✅ [DB Monitor] Monitoring started (interval: ${MONITORING_INTERVAL / 1000}s)`);
+  logger.info('[DB Monitor] Monitoring started (interval: s)', { MONITORING_INTERVAL___1000: MONITORING_INTERVAL / 1000 });
 }
 
 /**

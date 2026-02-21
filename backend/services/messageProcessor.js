@@ -208,7 +208,7 @@ async function processInboundMessage(messageId, phone, message, messageType, sel
       try {
         await inboundMessage.save();
       } catch (saveError) {
-        logger.error(`❌ [MessageProcessor] Failed to save error state:`, saveError.message);
+        logger.error('[MessageProcessor] Failed to save error state', saveError.message);
       }
     }
     
@@ -232,7 +232,7 @@ async function processInboundMessage(messageId, phone, message, messageType, sel
       await whatsapp.sendMessage(phone, userMessage);
       
     } catch (notifyError) {
-      logger.error(`❌ [MessageProcessor] Failed to send error notification:`, notifyError.message);
+      logger.error('[MessageProcessor] Failed to send error notification', notifyError.message);
     }
     
     return {
@@ -255,7 +255,7 @@ async function processInboundMessage(messageId, phone, message, messageType, sel
  * @param {number} batchSize - Number of messages to retry in one batch
  */
 async function retryFailedMessages(maxRetries = 3, batchSize = 10) {
-  logger.info(`🔄 [MessageProcessor] Starting retry job (max retries: ${maxRetries}, batch: ${batchSize})`);
+  logger.info('[MessageProcessor] Starting retry job (max retries: , batch: )', { maxRetries, batchSize });
   
   try {
     // Find failed messages that are retryable and haven't exceeded max retries
@@ -270,18 +270,18 @@ async function retryFailedMessages(maxRetries = 3, batchSize = 10) {
     .limit(batchSize);
     
     if (failedMessages.length === 0) {
-      logger.info(`✅ [MessageProcessor] No failed messages to retry`);
+      logger.info('[MessageProcessor] No failed messages to retry');
       return { retried: 0, succeeded: 0, failed: 0 };
     }
     
-    logger.info(`🔄 [MessageProcessor] Found ${failedMessages.length} messages to retry`);
+    logger.info('[MessageProcessor] Found messages to retry', { length : failedMessages.length });
     
     let succeeded = 0;
     let failed = 0;
     
     for (const msg of failedMessages) {
       try {
-        logger.info(`🔄 [MessageProcessor] Retrying message ${msg.messageId} (attempt ${msg.retryCount + 1})`);
+        logger.info('[MessageProcessor] Retrying message (attempt )', { messageId: msg.messageId, detail: msg.retryCount + 1 });
         
         // Reset status to received for reprocessing
         msg.status = 'received';
@@ -291,7 +291,7 @@ async function retryFailedMessages(maxRetries = 3, batchSize = 10) {
         
         // Reprocess the message
         const messageContent = msg.content?.text || msg.content;
-        await chatbot.handleMessage(
+        await chatbotRouter.handleMessage(
           msg.phone,
           messageContent,
           msg.messageType,
@@ -305,7 +305,7 @@ async function retryFailedMessages(maxRetries = 3, batchSize = 10) {
         await msg.save();
         
         succeeded++;
-        logger.info(`✅ [MessageProcessor] Retry succeeded for message ${msg.messageId}`);
+        logger.info('[MessageProcessor] Retry succeeded for message', { messageId : msg.messageId });
         
       } catch (retryError) {
         failed++;
@@ -320,11 +320,11 @@ async function retryFailedMessages(maxRetries = 3, batchSize = 10) {
         };
         await msg.save();
         
-        logger.error(`❌ [MessageProcessor] Retry failed for message ${msg.messageId}:`, retryError.message);
+        logger.error('[MessageProcessor] Retry failed for message', retryError.message);
       }
     }
     
-    logger.info(`✅ [MessageProcessor] Retry job complete: ${succeeded} succeeded, ${failed} failed`);
+    logger.info('[MessageProcessor] Retry job complete: succeeded, failed', { succeeded, failed });
     
     return {
       retried: failedMessages.length,
@@ -333,7 +333,7 @@ async function retryFailedMessages(maxRetries = 3, batchSize = 10) {
     };
     
   } catch (error) {
-    logger.error(`❌ [MessageProcessor] Retry job error:`, error.message);
+    logger.error('[MessageProcessor] Retry job error', error.message);
     throw error;
   }
 }

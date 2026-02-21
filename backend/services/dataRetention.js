@@ -43,7 +43,7 @@ async function cleanCompletedOrders() {
       updatedAt: { $lt: cutoffDate }
     });
     
-    logger.info(`✅ [Data Retention] Cleaned ${result.deletedCount} completed orders`);
+    logger.info('[Data Retention] Cleaned old records', { deletedCount: result.deletedCount, collection: collName });
     
     await metricsRedis.recordEvent('data_retention.orders_cleaned');
     
@@ -67,7 +67,7 @@ async function cleanCancelledOrders() {
       updatedAt: { $lt: cutoffDate }
     });
     
-    logger.info(`✅ [Data Retention] Cleaned ${result.deletedCount} cancelled orders`);
+    logger.info('[Data Retention] Cleaned old records', { deletedCount: result.deletedCount, collection: collName });
     
     await metricsRedis.recordEvent('data_retention.cancelled_orders_cleaned');
     
@@ -91,7 +91,7 @@ async function cleanFailedPayments() {
       updatedAt: { $lt: cutoffDate }
     });
     
-    logger.info(`✅ [Data Retention] Cleaned ${result.deletedCount} failed payments`);
+    logger.info('[Data Retention] Cleaned old records', { deletedCount: result.deletedCount, collection: collName });
     
     await metricsRedis.recordEvent('data_retention.failed_payments_cleaned');
     
@@ -115,7 +115,7 @@ async function cleanInboundMessages() {
       processedAt: { $lt: cutoffDate }
     });
     
-    logger.info(`✅ [Data Retention] Cleaned ${result.deletedCount} inbound messages`);
+    logger.info('[Data Retention] Cleaned old records', { deletedCount: result.deletedCount, collection: collName });
     
     await metricsRedis.recordEvent('data_retention.inbound_messages_cleaned');
     
@@ -139,7 +139,7 @@ async function cleanOutboundMessages() {
       sentAt: { $lt: cutoffDate }
     });
     
-    logger.info(`✅ [Data Retention] Cleaned ${result.deletedCount} outbound messages`);
+    logger.info('[Data Retention] Cleaned old records', { deletedCount: result.deletedCount, collection: collName });
     
     await metricsRedis.recordEvent('data_retention.outbound_messages_cleaned');
     
@@ -161,7 +161,7 @@ async function archiveData(collection, query, archivePath) {
     // 2. Export to data warehouse
     // 3. Create compressed backups
     
-    logger.info(`📦 [Data Retention] Archiving ${collection} data...`);
+    logger.info('[Data Retention] Archiving data...', { collection });
     
     // TODO: Implement actual archiving logic
     
@@ -192,7 +192,7 @@ async function runRetentionPolicies() {
     const totalCleaned = results.reduce((sum, count) => sum + count, 0);
     const duration = Date.now() - startTime;
     
-    logger.info(`✅ [Data Retention] Cleaned ${totalCleaned} records in ${duration}ms`);
+    logger.info('[Data Retention] Cleaned records in ms', { totalCleaned, duration });
     
     // Alert if significant data was cleaned
     if (totalCleaned > 1000) {

@@ -360,7 +360,7 @@ describe('Concurrent Checkout', () => {
         },
         {
           execute: () => { /* Step 2: debit payment */ },
-          compensate: () => { compensations.push('refund_payment'); }
+          compensate: () => { compensations.push('reverse_payment'); }
         },
         {
           execute: () => { throw new Error('Step 3 failed'); },
@@ -387,7 +387,7 @@ describe('Concurrent Checkout', () => {
       }
 
       // Step 3 failed → compensate step 2, then step 1
-      expect(compensations).toEqual(['refund_payment', 'delete_order']);
+      expect(compensations).toEqual(['reverse_payment', 'delete_order']);
     });
   });
 });

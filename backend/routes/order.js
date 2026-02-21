@@ -12,6 +12,12 @@ const { adminRateLimiter } = require('../middleware/rateLimiter');
 const { validators } = require('../middleware/inputValidation');
 const { validateTransition, transitionStatus } = require('../services/orderStateMachine');
 const logger = require('../services/logger');
+const { logRouteError } = require('../services/logger');
+const DeliveryBoy = require('../models/DeliveryBoy');
+const DashboardStats = require('../models/DashboardStats');
+const User = require('../models/User');
+const pushNotification = require('../services/pushNotification');
+const dataEvents = require('../services/eventEmitter');
 const router = express.Router();
 
 // Apply admin rate limiting to all order routes
@@ -73,7 +79,8 @@ router.get('/check-updates', authMiddleware, async (req, res) => {
     
     res.json({ hasChanges: true, hash: currentHash });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -95,7 +102,8 @@ router.get('/', authMiddleware, async (req, res) => {
     
     res.json({ orders, total, pages: Math.ceil(total / limit), hash });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -126,42 +134,7 @@ router.get('/history', authMiddleware, async (req, res) => {
       page: parseInt(page),
     });
   } catch (error) {
-    logger.error('Error fetching order history', { error: error.message });
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Get refunds with filter - MUST be before /:id route
-router.get('/refunds', authMiddleware, async (req, res) => {
-  try {
-    const { status } = req.query;
-    let query = { refundStatus: { $ne: 'none' } };
-    
-    if (status === 'pending') {
-      query.refundStatus = { $in: ['pending', 'scheduled'] };
-    } else if (status === 'completed') {
-      query.refundStatus = 'completed';
-    } else if (status === 'rejected') {
-      query.refundStatus = 'rejected';
-    } else if (status === 'failed') {
-      query.refundStatus = 'failed';
-    }
-    // 'all' returns all non-none refund statuses
-    
-    const orders = await Order.find(query).sort({ createdAt: -1 });
-    res.json({ orders });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get pending refund requests - MUST be before /:id route
-router.get('/refunds/pending', authMiddleware, async (req, res) => {
-  try {
-    const orders = await Order.find({ refundStatus: 'pending' }).sort({ createdAt: -1 });
-    res.json(orders);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+    logRouteError(res, 'Error fetching order history', error);
   }
 });
 
@@ -187,7 +160,8 @@ router.get('/:id', authMiddleware, async (req, res) => {
     
     res.json(order);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -199,21 +173,15 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     if (!order) return res.status(404).json({ error: 'Order not found' });
     logger.info('Found order', { orderId: order.orderId, currentStatus: order.status, newStatus: status });
 
-    // Validate state transition
-    const transition = validateTransition(order.status, status);
-    if (!transition.valid) {
-      logger.warn('Invalid order status transition rejected', { orderId: order.orderId, from: order.status, to: status, reason: transition.reason });
-      return res.status(400).json({ error: transition.reason });
-    }
-
     const statusLabels = {
       pending: 'Pending', confirmed: 'Confirmed', preparing: 'Preparing', ready: 'Ready',
-      out_for_delivery: 'On the Way', delivered: 'Delivered', cancelled: 'Cancelled', refunded: 'Refunded'
+      out_for_delivery: 'On the Way', delivered: 'Delivered', cancelled: 'Cancelled'
     };
 
-    order.status = status;
-    order.statusUpdatedAt = new Date();
-    order.trackingUpdates.push({ status, message: message || `Status updated to ${statusLabels[status] || status}`, timestamp: new Date() });
+    const result = transitionStatus(order, status, message || `Status updated to ${statusLabels[status] || status}`, 'admin');
+    if (!result.success) {
+      return res.status(400).json({ error: result.reason });
+    }
     
     // Handle actual payment method for pickup orders (Pay at Hotel)
     if (actualPaymentMethod && order.serviceType === 'pickup') {
@@ -223,17 +191,17 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
         status: 'paid', 
         message: `Payment collected via ${actualPaymentMethod === 'cash' ? 'Cash' : 'UPI'} at hotel` 
       });
-      logger.info(`Pickup order payment: ${actualPaymentMethod}`);
+      logger.info('Pickup order payment', { actualPaymentMethod });
     }
     
     // Handle actual payment method for delivery COD orders
     if (actualPaymentMethod && order.serviceType === 'delivery' && order.paymentMethod === 'cod') {
       order.actualPaymentMethod = actualPaymentMethod;
-      logger.info(`Delivery COD payment: ${actualPaymentMethod}`);
+      logger.info('Delivery COD payment', { actualPaymentMethod });
     }
     
-    // Track when status changed to delivered/cancelled/refunded for auto-cleanup
-    if (status === 'delivered' || status === 'cancelled' || status === 'refunded') {
+    // Track when status changed to delivered/cancelled for auto-cleanup
+    if (status === 'delivered' || status === 'cancelled') {
       order.statusUpdatedAt = new Date();
     }
     
@@ -248,7 +216,6 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
       // Track today's revenue for delivered + paid orders
       if (order.paymentStatus === 'paid') {
         try {
-          const DashboardStats = require('../models/DashboardStats');
           const getTodayString = () => {
             const now = new Date();
             return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
@@ -273,7 +240,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             $set: { lastUpdated: new Date() }
           });
           
-          logger.info(`Today's revenue updated: +₹${order.totalAmount} (Total: ₹${stats.todayRevenue})`);
+          logger.info('Today\'s revenue updated', { added: order.totalAmount, totalRevenue: stats.todayRevenue });
           
           // Also update Google Sheets dashboard in real-time
           try {
@@ -303,53 +270,37 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     if (status === 'delivered' || status === 'cancelled') {
       try {
         await googleSheets.syncTodayDailyReport();
-        logger.info(`Google Sheets daily report updated for ${status} order`);
+        logger.info('Google Sheets daily report updated for order', { status });
       } catch (sheetsErr) {
-        logger.error(`Google Sheets update error for ${status} order`, { error: sheetsErr.message });
+        logger.error('Google Sheets update error for order', { error: sheetsErr.message });
       }
     }
     
     // Send push notification to delivery partner if order is cancelled and was assigned
     if (status === 'cancelled' && order.assignedTo) {
       try {
-        const DeliveryBoy = require('../models/DeliveryBoy');
-        const pushNotification = require('../services/pushNotification');
-        
         const deliveryBoy = await DeliveryBoy.findById(order.assignedTo);
         if (deliveryBoy && deliveryBoy.pushToken) {
           await pushNotification.sendOrderCancelledNotification(deliveryBoy.pushToken, {
             orderId: order.orderId,
             totalAmount: order.totalAmount
           });
-          logger.info(`Cancelled notification sent to ${deliveryBoy.name}`);
+          logger.info('Cancelled notification sent to', { name : deliveryBoy.name });
         }
       } catch (pushErr) {
         logger.error('Push notification error for cancelled order', { error: pushErr.message });
       }
     }
     
-    // For paid UPI orders that are cancelled, mark refund as pending (wait for Razorpay)
-    if (status === 'cancelled' && order.paymentStatus === 'paid' && order.razorpayPaymentId) {
-      logger.info('Marking refund as pending for order', { orderId: order.orderId });
-      
-      order.refundStatus = 'pending';
-      order.refundAmount = order.totalAmount;
-      order.refundRequestedAt = new Date();
-      order.paymentStatus = 'refund_processing';
-      order.trackingUpdates.push({ 
-        status: 'refund_processing', 
-        message: `Refund of ₹${order.totalAmount} is being processed`, 
-        timestamp: new Date() 
-      });
-      logger.info('Refund pending for order', { orderId: order.orderId });
-    }
-    
     try {
       await order.save();
       logger.info('Order saved to DB', { orderId: order.orderId, status: order.status, paymentStatus: order.paymentStatus });
     } catch (saveErr) {
-      logger.error('Order save error', { error: saveErr.message });
-      return res.status(500).json({ error: 'Failed to save order: ' + saveErr.message });
+      if (saveErr.name === 'VersionError') {
+        logger.warn('Concurrent order modification detected', { orderId: order.orderId });
+        return res.status(409).json({ error: 'Order was modified by another request. Please refresh and try again.' });
+      }
+      return logRouteError(res, 'Order save error', saveErr);
     }
 
     // Sync status update to Google Sheets
@@ -505,7 +456,6 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           // Send call delivery partner button if delivery partner is assigned
           if (order.assignedTo && order.deliveryPartnerName) {
             try {
-              const DeliveryBoy = require('../models/DeliveryBoy');
               const deliveryBoy = await DeliveryBoy.findById(order.assignedTo);
               if (deliveryBoy && deliveryBoy.phone) {
                 const callMsg = `📞 *Contact Delivery Partner*\n\n👤 ${order.deliveryPartnerName}\n\nTap below to call your delivery partner if needed.`;
@@ -550,13 +500,6 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             'Tap to track your order'
           );
         } else if (status === 'cancelled') {
-          // Add refund info if order was cancelled with pending refund
-          if (order.refundStatus === 'pending' && order.paymentStatus === 'refund_processing') {
-            msg += `\n\n💰 *Refund Processing*\nAmount: ₹${order.totalAmount}\n\n⏱️ Your refund will be processed within 5-7 business days.`;
-          } else if (order.refundStatus === 'failed') {
-            msg += `\n\n⚠️ *Refund Issue*\nWe couldn't process your refund automatically.\nAmount: ₹${order.totalAmount}\n\nOur team will contact you within 24 hours to resolve this.`;
-          }
-          
           // Use pickup-specific cancelled by restaurant image for pay-at-hotel pickup orders
           if (isPickupOrder && order.paymentMethod === 'cod') {
             // Pickup order cancelled by restaurant (pay at hotel)
@@ -620,19 +563,15 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     }
 
     // Emit event for real-time updates
-    const dataEvents = require('../services/eventEmitter');
     dataEvents.emit('orders');
     dataEvents.emit('dashboard');
 
     // Send push notification to all admins for order status changes
     // This ensures admins get notified even when the app is closed/killed
     try {
-      const User = require('../models/User');
-      const pushNotification = require('../services/pushNotification');
-      
       const statusEmoji = {
         confirmed: '✅', preparing: '👨‍🍳', ready: '📦',
-        out_for_delivery: '🛵', delivered: '✅', cancelled: '❌', refunded: '💰'
+        out_for_delivery: '🛵', delivered: '✅', cancelled: '❌'
       };
       const emoji = statusEmoji[status] || '📋';
       const label = statusLabels[status] || status;
@@ -668,7 +607,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             { _id: order._id },
             { $set: { isHidden: true } }
           );
-          logger.info(`Order ${order.orderId} hidden from dashboard (status: ${status})`);
+          logger.info('Order hidden from dashboard (status: )', { orderId: order.orderId, status });
           dataEvents.emit('orders');
         }, 3000); // 3 second delay to ensure sheets sync
       } catch (cleanupErr) {
@@ -678,7 +617,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
 
     res.json(order);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -686,9 +626,6 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
 router.put('/:id/assign-delivery', authMiddleware, async (req, res) => {
   try {
     const { deliveryBoyId } = req.body;
-    const DeliveryBoy = require('../models/DeliveryBoy');
-    const pushNotification = require('../services/pushNotification');
-    
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ error: 'Order not found' });
     
@@ -724,7 +661,7 @@ router.put('/:id/assign-delivery', authMiddleware, async (req, res) => {
     if (deliveryBoy.pushToken) {
       try {
         await pushNotification.sendNewOrderNotification(deliveryBoy.pushToken, orderDetails);
-        logger.info(`Push notification sent to ${deliveryBoy.name}`);
+        logger.info('Push notification sent to', { name : deliveryBoy.name });
       } catch (pushErr) {
         logger.error('Push notification error', { error: pushErr.message });
       }
@@ -738,7 +675,7 @@ router.put('/:id/assign-delivery', authMiddleware, async (req, res) => {
           deliveryBoy.name,
           orderDetails
         );
-        logger.info(`Email notification sent to ${deliveryBoy.email}`);
+        logger.info('Email notification sent to', { email : deliveryBoy.email });
       } catch (emailErr) {
         logger.error('Email notification error', { error: emailErr.message });
       }
@@ -752,12 +689,12 @@ router.put('/:id/assign-delivery', authMiddleware, async (req, res) => {
     }
     
     // Emit event for real-time updates
-    const dataEvents = require('../services/eventEmitter');
     dataEvents.emit('orders');
     
     res.json(order);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -779,147 +716,8 @@ router.put('/:id/delivery-time', authMiddleware, async (req, res) => {
     
     res.json(order);
   } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
 
-// Approve refund by orderId
-router.post('/:orderId/refund/approve', authMiddleware, async (req, res) => {
-  try {
-    const order = await Order.findOne({ orderId: req.params.orderId });
-    if (!order) return res.status(404).json({ error: 'Order not found' });
-    
-    if (!['pending', 'scheduled', 'failed'].includes(order.refundStatus)) {
-      return res.status(400).json({ error: 'No pending refund request for this order' });
-    }
-
-    const razorpayService = require('../services/razorpay');
-    const paymentId = order.razorpayPaymentId || order.paymentId;
-    
-    // Process refund via Razorpay if UPI payment with payment ID
-    if (order.paymentMethod === 'upi' && paymentId) {
-      try {
-        const refund = await razorpayService.refund(paymentId, order.refundAmount || order.totalAmount);
-        order.refundId = refund.id;
-        order.refundStatus = 'completed';
-        order.paymentStatus = 'refunded';
-        order.status = 'refunded';
-        order.statusUpdatedAt = new Date();
-        order.refundProcessedAt = new Date();
-        order.trackingUpdates.push({ status: 'refunded', message: `Refund of ₹${order.refundAmount || order.totalAmount} processed. Refund ID: ${refund.id}` });
-        
-        // Notify customer
-        try {
-          const upiRefundMsg = `✅ *Refund Successful!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.refundAmount || order.totalAmount}\nRefund ID: ${refund.id}\n\n💳 Amount will be credited to your account shortly.`;
-          const upiRefundBtns = [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }];
-          const upiRefundImg = await chatbotImagesService.getImageUrl('refund_processed');
-          if (upiRefundImg) {
-            await whatsapp.sendImageWithButtons(order.customer.phone, upiRefundImg, upiRefundMsg, upiRefundBtns);
-          } else {
-            await whatsapp.sendButtons(order.customer.phone, upiRefundMsg, upiRefundBtns);
-          }
-        } catch (e) {
-          logger.error('WhatsApp notification failed', { error: e.message });
-        }
-      } catch (refundError) {
-        logger.error('Razorpay refund error', { error: refundError.message });
-        order.refundStatus = 'failed';
-        order.status = 'refund_failed';
-        order.paymentStatus = 'refund_failed';
-        order.trackingUpdates.push({ status: 'refund_failed', message: refundError.message });
-        await order.save();
-        
-        // Sync to Google Sheets with failed status
-        googleSheets.updateOrderStatus(order.orderId, 'refund_failed', 'refund_failed').catch(err => 
-          logger.error('Google Sheets sync error', { error: err.message })
-        );
-        
-        // Emit event for real-time updates
-        const dataEvents = require('../services/eventEmitter');
-        dataEvents.emit('orders');
-        dataEvents.emit('dashboard');
-        
-        return res.status(500).json({ error: 'Refund processing failed: ' + refundError.message });
-      }
-    } else {
-      // COD refund - manual process
-      order.refundStatus = 'completed';
-      order.paymentStatus = 'refunded';
-      order.status = 'refunded';
-      order.statusUpdatedAt = new Date();
-      order.refundProcessedAt = new Date();
-      order.trackingUpdates.push({ status: 'refunded', message: `COD refund of ₹${order.refundAmount || order.totalAmount} approved` });
-      
-      // Notify customer
-      try {
-        const codRefundMsg = `✅ *Refund Approved!*\n\nOrder: ${order.orderId}\nAmount: ₹${order.refundAmount || order.totalAmount}\n\n💵 Our team will contact you for the refund process.`;
-        const codRefundBtns = [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }];
-        const codRefundImg = await chatbotImagesService.getImageUrl('refund_processed');
-        if (codRefundImg) {
-          await whatsapp.sendImageWithButtons(order.customer.phone, codRefundImg, codRefundMsg, codRefundBtns);
-        } else {
-          await whatsapp.sendButtons(order.customer.phone, codRefundMsg, codRefundBtns);
-        }
-      } catch (e) {
-        logger.error('WhatsApp notification failed', { error: e.message });
-      }
-    }
-    
-    await order.save();
-    
-    // Emit event for real-time updates
-    const dataEvents = require('../services/eventEmitter');
-    dataEvents.emit('orders');
-    dataEvents.emit('dashboard');
-    
-    // Sync to Google Sheets
-    googleSheets.updateOrderStatus(order.orderId, order.status, order.paymentStatus).catch(err => 
-      logger.error('Google Sheets sync error', { error: err.message })
-    );
-    
-    res.json({ success: true, order });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Reject refund by orderId
-router.post('/:orderId/refund/reject', authMiddleware, async (req, res) => {
-  try {
-    const { reason } = req.body;
-    const order = await Order.findOne({ orderId: req.params.orderId });
-    if (!order) return res.status(404).json({ error: 'Order not found' });
-    
-    if (!['pending', 'scheduled'].includes(order.refundStatus)) {
-      return res.status(400).json({ error: 'No pending refund request for this order' });
-    }
-
-    order.refundStatus = 'rejected';
-    order.trackingUpdates.push({ status: 'refund_rejected', message: reason || 'Refund request rejected by admin' });
-    await order.save();
-    
-    // Emit event for real-time updates
-    const dataEvents = require('../services/eventEmitter');
-    dataEvents.emit('orders');
-    dataEvents.emit('dashboard');
-    
-    // Notify customer
-    try {
-      const rejectMsg = `❌ *Refund Request Rejected*\n\nOrder: ${order.orderId}\n\nReason: ${reason || 'Your refund request has been reviewed and rejected.'}\n\nPlease contact support for more information.`;
-      const rejectBtns = [{ id: 'place_order', text: 'New Order' }, { id: 'home', text: 'Main Menu' }];
-      const rejectImg = await chatbotImagesService.getImageUrl('refund_failed');
-      if (rejectImg) {
-        await whatsapp.sendImageWithButtons(order.customer.phone, rejectImg, rejectMsg, rejectBtns);
-      } else {
-        await whatsapp.sendButtons(order.customer.phone, rejectMsg, rejectBtns);
-      }
-    } catch (e) {
-      logger.error('WhatsApp notification failed', { error: e.message });
-    }
-    
-    res.json({ success: true, order });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 

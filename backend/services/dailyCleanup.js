@@ -4,6 +4,7 @@ const DashboardStats = require('../models/DashboardStats');
 const dataEvents = require('./eventEmitter');
 const googleSheets = require('./googleSheets');
 const logger = require('./logger');
+const { initContext, runWithContext } = require('./correlationContext');
 
 const RETENTION_DAYS = 15; // Delete hidden orders after 15 days
 
@@ -60,7 +61,7 @@ const dailyCleanup = {
         
         const deliveredOrders = yesterdayOrders.filter(o => o.status === 'delivered').length;
         const cancelledOrders = yesterdayOrders.filter(o => o.status === 'cancelled').length;
-        const refundedOrders = yesterdayOrders.filter(o => o.status === 'refunded').length;
+        const refundedOrders = 0;
         const codOrders = yesterdayOrders.filter(o => o.paymentMethod === 'cod').length;
         const upiOrders = yesterdayOrders.filter(o => o.paymentMethod === 'upi').length;
         const itemsSold = yesterdayOrders.reduce((sum, o) => sum + (o.items?.length || 0), 0);
@@ -129,32 +130,6 @@ const dailyCleanup = {
       }
     } catch (error) {
       logger.error('Error resetting today stats', { error: error.message });
-    }
-  },
-
-  // Save stats before deleting orders
-  async saveOrderStats(orders) {
-    try {
-      const stats = await this.getStats();
-      
-      const paidOrders = orders.filter(o => o.paymentStatus === 'paid' && o.status !== 'cancelled');
-      const revenue = paidOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-      
-      // Add to cumulative totals
-      stats.totalOrders += orders.length;
-      stats.totalRevenue += revenue;
-      stats.lastUpdated = new Date();
-      
-      await stats.save();
-      
-      // Also sync to Google Sheets (cost-saving backup)
-      await googleSheets.updateDashboardStat('Total Orders', stats.totalOrders);
-      await googleSheets.updateDashboardStat('Total Revenue', stats.totalRevenue);
-      
-      logger.info('Saved stats', { orders: orders.length, revenue });
-      return stats;
-    } catch (error) {
-      logger.error('Error saving order stats', { error: error.message });
     }
   },
 
@@ -269,8 +244,11 @@ const dailyCleanup = {
     setInterval(async () => {
       // Reset today's stats at midnight
       if (this.isMidnight()) {
-        logger.info('12:00 AM - Resetting today stats...');
-        await this.resetTodayStats();
+        const ctx = initContext(null, { source: 'scheduler', job: 'dailyCleanup.resetStats' });
+        await runWithContext(ctx, async () => {
+          logger.info('Midnight stats reset triggered');
+          await this.resetTodayStats();
+        });
       }
     }, 60 * 1000); // Check every minute
     
@@ -278,12 +256,15 @@ const dailyCleanup = {
     setInterval(async () => {
       const now = new Date();
       if (now.getHours() === 2 && now.getMinutes() === 0) {
-        logger.info('2:00 AM - Running data cleanup...');
-        try {
-          await this.runCleanup();
-        } catch (error) {
-          logger.error('Daily cleanup failed', { error: error.message, stack: error.stack });
-        }
+        const ctx = initContext(null, { source: 'scheduler', job: 'dailyCleanup.runCleanup' });
+        await runWithContext(ctx, async () => {
+          logger.info('Daily cleanup triggered at 2 AM');
+          try {
+            await this.runCleanup();
+          } catch (error) {
+            logger.error('Daily cleanup failed', { error: error.message, stack: error.stack });
+          }
+        });
       }
     }, 60 * 1000);
     

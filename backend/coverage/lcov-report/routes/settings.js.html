@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/46</span>
+                <span class='fraction'>0/41</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/46</span>
+                <span class='fraction'>0/41</span>
             </div>
         
             
@@ -133,12 +133,7 @@
 <a name='L68'></a><a href='#L68'>68</a>
 <a name='L69'></a><a href='#L69'>69</a>
 <a name='L70'></a><a href='#L70'>70</a>
-<a name='L71'></a><a href='#L71'>71</a>
-<a name='L72'></a><a href='#L72'>72</a>
-<a name='L73'></a><a href='#L73'>73</a>
-<a name='L74'></a><a href='#L74'>74</a>
-<a name='L75'></a><a href='#L75'>75</a>
-<a name='L76'></a><a href='#L76'>76</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L71'></a><a href='#L71'>71</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -159,7 +154,6 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -169,7 +163,6 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -182,7 +175,6 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -197,7 +189,6 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -207,7 +198,6 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -233,8 +223,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
     });
 <span class="cstat-no" title="statement not covered" >    res.json(settingsObj);</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    logger.error('Error fetching settings:', error);</span>
-<span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
+<span class="cstat-no" title="statement not covered" >    return logRouteError(res, 'Error fetching settings', error);</span>
   }
 });
 &nbsp;
@@ -244,8 +233,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
     const value = <span class="cstat-no" title="statement not covered" >await Settings.getValue(req.params.key);</span>
 <span class="cstat-no" title="statement not covered" >    res.json({ key: req.params.key, value });</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    logger.error('Error fetching setting:', error);</span>
-<span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
+<span class="cstat-no" title="statement not covered" >    return logRouteError(res, 'Error fetching setting', error);</span>
   }
 });
 &nbsp;
@@ -254,11 +242,10 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { value } = <span class="cstat-no" title="statement not covered" >req.body;</span>
     const setting = <span class="cstat-no" title="statement not covered" >await Settings.setValue(req.params.key, value, req.user?.username);</span>
-<span class="cstat-no" title="statement not covered" >    logger.info(`[Settings] Updated ${req.params.key} to ${JSON.stringify(value)} by ${req.user?.username}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('[Settings] Updated to by', { key: req.params.key, detail: JSON.stringify(value), username: req.user?.username });</span>
 <span class="cstat-no" title="statement not covered" >    res.json(setting);</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    logger.error('Error updating setting:', error);</span>
-<span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
+<span class="cstat-no" title="statement not covered" >    return logRouteError(res, 'Error updating setting', error);</span>
   }
 });
 &nbsp;
@@ -268,11 +255,10 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
     const currentValue = <span class="cstat-no" title="statement not covered" >await Settings.getValue('holidayMode', false);</span>
     const newValue = <span class="cstat-no" title="statement not covered" >!currentValue;</span>
     const setting = <span class="cstat-no" title="statement not covered" >await Settings.setValue('holidayMode', newValue, req.user?.username);</span>
-<span class="cstat-no" title="statement not covered" >    logger.info(`[Settings] Holiday mode ${newValue ? 'ENABLED' : 'DISABLED'} by ${req.user?.username}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('[Settings] Holiday mode by', { detail: newValue ? 'ENABLED' : 'DISABLED', username: req.user?.username });</span>
 <span class="cstat-no" title="statement not covered" >    res.json({ holidayMode: newValue });</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    logger.error('Error toggling holiday mode:', error);</span>
-<span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
+<span class="cstat-no" title="statement not covered" >    return logRouteError(res, 'Error toggling holiday mode', error);</span>
   }
 });
 &nbsp;
@@ -282,8 +268,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
     const holidayMode = <span class="cstat-no" title="statement not covered" >await Settings.getValue('holidayMode', false);</span>
 <span class="cstat-no" title="statement not covered" >    res.json({ holidayMode });</span>
   } catch (error) {
-<span class="cstat-no" title="statement not covered" >    logger.error('Error fetching holiday status:', error);</span>
-<span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: error.message });</span>
+<span class="cstat-no" title="statement not covered" >    return logRouteError(res, 'Error fetching holiday status', error);</span>
   }
 });
 &nbsp;
@@ -295,7 +280,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-19T18:32:07.239Z
+                at 2026-02-21T10:10:14.953Z
             </div>
         <script src="../prettify.js"></script>
         <script>

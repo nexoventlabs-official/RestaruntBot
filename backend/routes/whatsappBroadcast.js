@@ -1,5 +1,6 @@
 const express = require('express');
 const logger = require('../services/logger');
+const { logRouteError } = require('../services/logger');
 const router = express.Router();
 const whatsappBroadcast = require('../services/whatsappBroadcast');
 const authMiddleware = require('../middleware/auth');
@@ -14,7 +15,7 @@ router.get('/contacts', authMiddleware, async (req, res) => {
     const contacts = await whatsappBroadcast.getAllContacts();
     res.json({ success: true, contacts });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    return logRouteError(res, 'Get WhatsApp contacts error', error);
   }
 });
 
@@ -24,7 +25,7 @@ router.get('/stats', authMiddleware, async (req, res) => {
     const stats = await whatsappBroadcast.getStats();
     res.json({ success: true, stats });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    return logRouteError(res, 'Get WhatsApp stats error', error);
   }
 });
 
@@ -34,7 +35,7 @@ router.post('/sync', authMiddleware, async (req, res) => {
     const result = await whatsappBroadcast.syncExistingCustomers();
     res.json(result);
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    return logRouteError(res, 'Sync WhatsApp contacts error', error);
   }
 });
 
@@ -50,10 +51,10 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
       });
     }
 
-    logger.info(`[WhatsApp Broadcast] Starting offer broadcast...`);
-    logger.info(`[WhatsApp Broadcast] Offer: ${offerTitle || 'No title'}`);
-    logger.info(`[WhatsApp Broadcast] Type: ${offerType || 'No type'}`);
-    logger.info(`[WhatsApp Broadcast] Offer ID: ${offerId || 'None (all customers)'}`);
+    logger.info('[WhatsApp Broadcast] Starting offer broadcast');
+    logger.info('[WhatsApp Broadcast] Offer', { detail: offerTitle || 'No title' });
+    logger.info('[WhatsApp Broadcast] Type', { detail: offerType || 'No type' });
+    logger.info('[WhatsApp Broadcast] Offer ID', { detail: offerId || 'None (all customers)' });
 
     // Get targeting info if offerId is provided
     let targetedCustomers = null;
@@ -69,7 +70,7 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
         const isTargeted = ['top_percentage', 'min_spent', 'min_orders'].includes(targetType);
         if (isTargeted && offer.targetedCustomers && offer.targetedCustomers.length > 0) {
           targetedCustomers = offer.targetedCustomers;
-          logger.info(`[WhatsApp Broadcast] Targeting ${targetedCustomers.length} specific customers (${targetType})`);
+          logger.info('[WhatsApp Broadcast] Targeting specific customers ()', { targetedCustomerCount: targetedCustomers.length, targetType });
           
           // Store full offer data for applying to customers
           offerData = {
@@ -85,7 +86,7 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
           };
         } else if (isTargeted && (!offer.targetedCustomers || offer.targetedCustomers.length === 0)) {
           // Targeted offer but no eligible customers
-          logger.info(`[WhatsApp Broadcast] No eligible customers for ${targetType} targeting`);
+          logger.info('[WhatsApp Broadcast] No eligible customers for targeting', { targetType });
           return res.json({
             success: false,
             message: 'No eligible customers found for this targeting criteria. Please adjust your targeting settings.',
@@ -174,8 +175,7 @@ router.post('/send-offer', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('[WhatsApp Broadcast] Error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    return logRouteError(res, '[WhatsApp Broadcast] Error', error);
   }
 });
 
@@ -191,15 +191,14 @@ router.post('/test-send', authMiddleware, async (req, res) => {
       });
     }
 
-    logger.info(`[WhatsApp Broadcast] Testing offer send to ${phone}...`);
+    logger.info('[WhatsApp Broadcast] Testing offer send to ...', { phone });
 
     const result = await whatsappBroadcast.sendOfferToSingle(phone, offerImageUrl, offerTitle, offerDescription, offerType);
     
     res.json(result);
 
   } catch (error) {
-    logger.error('[WhatsApp Broadcast] Test send error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    return logRouteError(res, '[WhatsApp Broadcast] Test send error', error);
   }
 });
 

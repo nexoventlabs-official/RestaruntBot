@@ -22,6 +22,15 @@ const MAX_DELAY = 10000; // 10 seconds
 
 // Track sync errors
 const syncErrors = new Map();
+const MAX_SYNC_ERRORS = 500; // cap to prevent unbounded growth
+
+/** Evict oldest sync error entries when map exceeds cap */
+function _evictOldestSyncErrors() {
+  while (syncErrors.size > MAX_SYNC_ERRORS) {
+    const oldestKey = syncErrors.keys().next().value;
+    syncErrors.delete(oldestKey);
+  }
+}
 
 /**
  * Retry with exponential backoff
@@ -34,7 +43,7 @@ async function retryWithBackoff(fn, retries = MAX_RETRIES, delay = INITIAL_DELAY
       throw error;
     }
     
-    logger.info(`⚠️ [Sheets Retry] Attempt failed, retrying in ${delay}ms... (${retries} retries left)`);
+    logger.info('[Sheets Retry] Attempt failed, retrying in ms... ( retries left)', { delay, retries });
     
     await new Promise(resolve => setTimeout(resolve, delay));
     
@@ -73,6 +82,7 @@ async function addOrderReliable(order) {
       timestamp: new Date(),
       retries: MAX_RETRIES
     });
+    _evictOldestSyncErrors();
     
     // Alert if too many errors
     if (syncErrors.size >= 5) {
@@ -119,6 +129,7 @@ async function updateOrderReliable(orderId, updates) {
       timestamp: new Date(),
       retries: MAX_RETRIES
     });
+    _evictOldestSyncErrors();
     
     await metricsRedis.recordEvent('sheets.update.failure');
     
@@ -158,7 +169,7 @@ async function retryFailedSyncs() {
     return { retried: 0, succeeded: 0, failed: 0 };
   }
   
-  logger.info(`🔄 [Sheets] Retrying ${syncErrors.size} failed syncs...`);
+  logger.info('[Sheets] Retrying failed syncs...', { size : syncErrors.size });
   
   let succeeded = 0;
   let failed = 0;
@@ -168,10 +179,10 @@ async function retryFailedSyncs() {
       // Retry based on operation type
       if (errorInfo.operation === 'addOrder') {
         // Would need to fetch order from database
-        logger.info(`⏭️ [Sheets] Skipping retry for ${errorInfo.orderId} (needs manual intervention)`);
+        logger.info('[Sheets] Skipping retry for (needs manual intervention)', { orderId : errorInfo.orderId });
         failed++;
       } else if (errorInfo.operation === 'updateOrder') {
-        logger.info(`⏭️ [Sheets] Skipping retry for ${errorInfo.orderId} (needs manual intervention)`);
+        logger.info('[Sheets] Skipping retry for (needs manual intervention)', { orderId : errorInfo.orderId });
         failed++;
       }
       
@@ -179,7 +190,7 @@ async function retryFailedSyncs() {
       // syncErrors.delete(key);
       // succeeded++;
     } catch (error) {
-      logger.error(`❌ [Sheets] Retry failed for ${errorInfo.orderId}:`, error.message);
+      logger.error('[Sheets] Retry failed for', error.message);
       failed++;
     }
   }
@@ -213,7 +224,7 @@ function getSyncStatus() {
 function clearSyncErrors() {
   const count = syncErrors.size;
   syncErrors.clear();
-  logger.info(`✅ [Sheets] Cleared ${count} sync errors`);
+  logger.info('[Sheets] Cleared sync errors', { count });
   return count;
 }
 

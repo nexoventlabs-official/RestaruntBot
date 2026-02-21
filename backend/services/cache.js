@@ -63,12 +63,12 @@ async function get(namespace, identifier) {
     
     if (data) {
       await metricsRedis.recordEvent('cache.hit');
-      logger.info(`[Cache] Hit: ${key}`);
+      logger.info('[Cache] Hit', { key });
       return JSON.parse(data);
     }
     
     await metricsRedis.recordEvent('cache.miss');
-    logger.info(`[Cache] Miss: ${key}`);
+    logger.info('[Cache] Miss', { key });
     return null;
   } catch (error) {
     logger.error('[Cache] Get error', { error: error.message });
@@ -94,7 +94,7 @@ async function set(namespace, identifier, data, customTTL = null) {
     await client.setex(key, ttl, JSON.stringify(data));
     
     await metricsRedis.recordEvent('cache.set');
-    logger.info(`[Cache] Set: ${key} (TTL: ${ttl}s)`);
+    logger.info('[Cache] Set', { key, ttl });
     return true;
   } catch (error) {
     logger.error('[Cache] Set error', { error: error.message });
@@ -117,7 +117,7 @@ async function del(namespace, identifier) {
     await client.del(key);
     
     await metricsRedis.recordEvent('cache.delete');
-    logger.info(`[Cache] Deleted: ${key}`);
+    logger.info('[Cache] Deleted', { key });
     return true;
   } catch (error) {
     logger.error('[Cache] Delete error', { error: error.message });
@@ -140,7 +140,7 @@ async function delNamespace(namespace) {
     
     if (keys.length > 0) {
       await client.del(...keys);
-      logger.info(`[Cache] Deleted ${keys.length} keys from namespace: ${namespace}`);
+      logger.info('[Cache] Deleted keys from namespace', { count: keys.length, namespace });
     }
     
     await metricsRedis.recordEvent('cache.namespace_delete');
@@ -193,12 +193,12 @@ async function warmCache() {
     // Cache all menu items
     const menuItems = await MenuItem.find({ isAvailable: true }).lean();
     await set('menu', 'all', menuItems);
-    logger.info(`[Cache] Warmed menu items: ${menuItems.length}`);
+    logger.info('[Cache] Warmed menu items', { length : menuItems.length });
     
     // Cache all categories
     const categories = await Category.find({ isActive: true }).lean();
     await set('categories', 'all', categories);
-    logger.info(`[Cache] Warmed categories: ${categories.length}`);
+    logger.info('[Cache] Warmed categories', { length : categories.length });
     
     // Cache active offers
     const offers = await Offer.find({ 
@@ -207,7 +207,7 @@ async function warmCache() {
       validUntil: { $gte: new Date() }
     }).lean();
     await set('offers', 'active', offers);
-    logger.info(`[Cache] Warmed offers: ${offers.length}`);
+    logger.info('[Cache] Warmed offers', { length : offers.length });
     
     // Cache settings
     const settings = await Settings.findOne().lean();

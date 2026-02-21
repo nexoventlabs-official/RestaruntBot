@@ -3,7 +3,9 @@ const logger = require('./logger');
 const Customer = require('../models/Customer');
 const DashboardStats = require('../models/DashboardStats');
 const ReportHistory = require('../models/ReportHistory');
+const googleSheets = require('./googleSheets');
 const dataEvents = require('./eventEmitter');
+const { initContext, runWithContext } = require('./correlationContext');
 
 // COST-SAVING: Orders are now hidden INSTANTLY after delivered/cancelled (in routes)
 // This cleanup is just a fallback for any orders that might have been missed
@@ -56,12 +58,10 @@ const orderCleanup = {
           const isPaid = order.paymentStatus === 'paid';
           const isDelivered = order.status === 'delivered';
           const isCancelled = order.status === 'cancelled';
-          const isRefunded = order.status === 'refunded';
 
           report.orders += 1;
           if (isDelivered) report.deliveredOrders += 1;
           if (isCancelled) report.cancelledOrders += 1;
-          if (isRefunded) report.refundedOrders += 1;
           if (order.paymentMethod === 'cod') report.codOrders += 1;
           if (order.paymentMethod === 'upi') report.upiOrders += 1;
 
@@ -70,8 +70,8 @@ const orderCleanup = {
             report.revenue += order.totalAmount || 0;
           }
 
-          // Track items sold (only for non-cancelled/refunded orders)
-          if (!isCancelled && !isRefunded && order.items) {
+          // Track items sold (only for non-cancelled orders)
+          if (!isCancelled && order.items) {
             for (const item of order.items) {
               report.itemsSold += item.quantity || 0;
 
@@ -108,7 +108,7 @@ const orderCleanup = {
 
         report.updatedAt = new Date();
         await report.save();
-        logger.info(`📊 Report history saved for ${dateStr}: ${dateOrders.length} orders`);
+        logger.info('[OrderCleanup] Report history saved', { date: dateStr });
       }
     } catch (error) {
       logger.error('❌ Error saving report history:', error.message);
@@ -132,8 +132,16 @@ const orderCleanup = {
       
       // Also save to report history
       await this.saveReportHistory(orders);
+
+      // Sync cumulative totals to Google Sheets
+      googleSheets.updateDashboardStat('Total Orders', stats.totalOrders).catch(err =>
+        logger.warn('Google Sheets total orders sync failed', { error: err.message })
+      );
+      googleSheets.updateDashboardStat('Total Revenue', stats.totalRevenue).catch(err =>
+        logger.warn('Google Sheets total revenue sync failed', { error: err.message })
+      );
       
-      logger.info(`📊 Cleanup stats saved: ${orders.length} orders, ₹${revenue} revenue`);
+      logger.info('Cleanup stats saved: orders, ₹ revenue', { orderCount: orders.length, revenue });
       return stats;
     } catch (error) {
       logger.error('❌ Error saving cleanup stats:', error.message);
@@ -155,7 +163,7 @@ const orderCleanup = {
           // Customer never placed an order, safe to delete
           const result = await Customer.deleteOne({ phone });
           if (result.deletedCount > 0) {
-            logger.info(`👤 Deleted customer: ${phone} (never placed an order)`);
+            logger.info('Deleted customer: (never placed an order)', { phone });
             return true;
           }
         }
@@ -163,19 +171,19 @@ const orderCleanup = {
       }
       return false;
     } catch (error) {
-      logger.error(`❌ Error deleting customer ${phone}:`, error.message);
+      logger.error('Error deleting customer', error.message);
       return false;
     }
   },
 
-  // Hide delivered, cancelled, and refunded orders older than 5 minutes from status update (fallback)
+  // Hide delivered and cancelled orders older than 5 minutes from status update (fallback)
   async cleanupCompletedOrders() {
     try {
       const cutoffTime = new Date(Date.now() - CLEANUP_DELAY_MINUTES * 60 * 1000);
       
-      // Find delivered/cancelled/refunded orders where statusUpdatedAt is older than 1 hour and not already hidden
+      // Find delivered/cancelled orders where statusUpdatedAt is older than 1 hour and not already hidden
       const ordersToHide = await Order.find({
-        status: { $in: ['delivered', 'cancelled', 'refunded'] },
+        status: { $in: ['delivered', 'cancelled'] },
         statusUpdatedAt: { $lt: cutoffTime, $exists: true },
         isHidden: { $ne: true }
       });
@@ -184,7 +192,7 @@ const orderCleanup = {
         return 0;
       }
       
-      logger.info(`🧹 Found ${ordersToHide.length} completed orders to hide (status updated >1 hour ago)`);
+      logger.info('Found completed orders to hide (status updated >1 hour ago)', { length : ordersToHide.length });
       
       // Save cumulative stats before hiding (for total revenue/orders tracking)
       await this.saveOrderStats(ordersToHide);
@@ -196,7 +204,7 @@ const orderCleanup = {
         { $set: { isHidden: true } }
       );
       
-      logger.info(`✅ Hidden ${result.modifiedCount} delivered/cancelled/refunded orders from admin dashboard`);
+      logger.info('Hidden delivered/cancelled orders from admin dashboard', { modifiedCount : result.modifiedCount });
       
       // Emit event to update frontend
       dataEvents.emit('orders');
@@ -211,14 +219,19 @@ const orderCleanup = {
 
   // Start the scheduler (runs every 2 minutes for quick fallback cleanup)
   start() {
-    logger.info(`🧹 Order cleanup scheduler started - fallback cleanup for delivered/cancelled/refunded orders after ${CLEANUP_DELAY_MINUTES} minute(s)`);
+    logger.info('Order cleanup scheduler started', {
+      delayMinutes: CLEANUP_DELAY_MINUTES,
+      intervalSec: 120
+    });
     
     // Run immediately on start
-    this.cleanupCompletedOrders();
+    const ctx = initContext(null, { source: 'scheduler', job: 'orderCleanup' });
+    runWithContext(ctx, () => this.cleanupCompletedOrders());
     
     // Then run every 2 minutes (faster than before for quick fallback)
     setInterval(() => {
-      this.cleanupCompletedOrders();
+      const ctx = initContext(null, { source: 'scheduler', job: 'orderCleanup' });
+      runWithContext(ctx, () => this.cleanupCompletedOrders());
     }, 2 * 60 * 1000); // Every 2 minutes
   }
 };

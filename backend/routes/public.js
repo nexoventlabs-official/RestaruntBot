@@ -20,7 +20,8 @@ router.get('/hero-sections', async (req, res) => {
     const heroes = await HeroSection.find({ isActive: true }).sort({ order: 1, createdAt: -1 });
     res.json(heroes);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -51,7 +52,8 @@ router.get('/offers', async (req, res) => {
     
     res.json(filteredOffers);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -83,7 +85,8 @@ router.get('/popup-offers', async (req, res) => {
     
     res.json(offers[0] || null);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -122,7 +125,8 @@ router.get('/offers/:offerId', async (req, res) => {
     
     res.json(offerData);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -222,7 +226,7 @@ router.get('/offers/:offerId/check-eligibility', async (req, res) => {
     
     res.json({ success: true, eligible: true });
   } catch (error) {
-    res.status(500).json({ success: false, eligible: false, error: error.message });
+    return logRouteError(res, 'Eligibility check error', error);
   }
 });
 
@@ -346,8 +350,7 @@ router.post('/customer/active-offers', async (req, res) => {
       discountedPrices 
     });
   } catch (error) {
-    logger.error('Error fetching customer active offers:', error);
-    res.status(500).json({ success: false, error: error.message });
+    return logRouteError(res, 'Error fetching customer active offers', error);
   }
 });
 
@@ -404,7 +407,8 @@ router.get('/categories', async (req, res) => {
     
     res.json(categoriesWithStatus);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -557,7 +561,8 @@ router.get('/menu', async (req, res) => {
     
     res.json(allItems);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -637,7 +642,8 @@ router.get('/review/:phone/:orderId', async (req, res) => {
       deliveryPartner
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -742,7 +748,8 @@ router.post('/review/:phone/:orderId', async (req, res) => {
     //   });
     // }
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -764,7 +771,8 @@ router.get('/orders/:phone', async (req, res) => {
       itemCount: o.items.length
     })));
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -811,7 +819,8 @@ router.get('/track/:orderId', async (req, res) => {
       updatedAt: order.updatedAt
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -848,7 +857,8 @@ router.get('/order/:orderId', async (req, res) => {
       createdAt: order.createdAt
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -910,8 +920,7 @@ router.post('/whatsapp-item/:itemId', async (req, res) => {
     
     res.json({ success: true, message: 'Item details sent to WhatsApp' });
   } catch (error) {
-    logger.error('Error sending item to WhatsApp:', error);
-    res.status(500).json({ error: error.message });
+    return logRouteError(res, 'Error sending item to WhatsApp', error);
   }
 });
 

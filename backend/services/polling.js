@@ -98,7 +98,7 @@ const polling = {
     this.clearWebhook().then(() => {
       // Start polling loop
       pollInterval = setInterval(() => this.poll(), intervalMs);
-      logger.info(`✅ Polling active (every ${intervalMs}ms)`);
+      logger.info('Polling active', { intervalMs });
     });
   },
 

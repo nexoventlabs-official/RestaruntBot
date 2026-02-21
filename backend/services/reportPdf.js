@@ -1,6 +1,7 @@
 const PDFDocument = require('pdfkit');
 const https = require('https');
 const http = require('http');
+const logger = require('./logger');
 
 const REPORT_TYPE_LABELS = {
   today: "Today's Report",
@@ -117,7 +118,7 @@ const prefetchImages = async (items) => {
           imageMap[item.name] = buffer;
         }
       } catch (e) {
-        // Silently fail for individual images
+        logger.warn('Failed to fetch image for PDF report', { itemName: item.name, error: e.message });
       }
     }
   });
@@ -254,7 +255,6 @@ const generateReportPdf = async (reportData, reportType) => {
       const statusData = [
         { label: 'Delivered', value: reportData.deliveredOrders || 0, color: '#22c55e' },
         { label: 'Cancelled', value: reportData.cancelledOrders || 0, color: '#ef4444' },
-        { label: 'Refunded', value: reportData.refundedOrders || 0, color: '#f97316' },
         { label: 'COD Orders', value: reportData.codOrders || 0, color: '#3b82f6' },
         { label: 'UPI Orders', value: reportData.upiOrders || 0, color: '#8b5cf6' }
       ];

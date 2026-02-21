@@ -201,7 +201,7 @@ function rateLimitByPhone(req, res, next) {
       
       // Check if exceeded
       if (limit.count > MAX_MESSAGES_PER_WINDOW) {
-        logger.warn(`⚠️ Rate limit exceeded for phone ${phone}: ${limit.count} messages in window`);
+        logger.warn('Webhook rate limit exceeded', { phone });
         
         return res.status(429).json({
           error: 'Rate limit exceeded',

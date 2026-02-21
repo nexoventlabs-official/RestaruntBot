@@ -154,14 +154,6 @@ function createResilientRazorpay(razorpay) {
         () => razorpay.fetchPayment(paymentId),
         []
       );
-    },
-    
-    async createRefund(paymentId, amount, notes) {
-      return executeWithCircuitBreaker(
-        'razorpay',
-        () => razorpay.createRefund(paymentId, amount, notes),
-        []
-      );
     }
   };
 }

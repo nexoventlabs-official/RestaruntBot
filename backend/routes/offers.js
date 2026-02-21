@@ -41,7 +41,8 @@ router.get('/', auth, async (req, res) => {
     const offers = await Offer.find().sort({ createdAt: -1 });
     res.json(offers);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    return logRouteError(res, 'Internal server error', err);
   }
 });
 
@@ -60,7 +61,8 @@ router.get('/customers', auth, async (req, res) => {
       total: customers.length 
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    return logRouteError(res, 'Internal server error', err);
   }
 });
 
@@ -87,7 +89,8 @@ router.get('/customers/top/:percentage', auth, async (req, res) => {
       percentage
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    return logRouteError(res, 'Internal server error', err);
   }
 });
 
@@ -114,7 +117,8 @@ router.get('/customers/min-spent/:amount', auth, async (req, res) => {
       minAmount
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    return logRouteError(res, 'Internal server error', err);
   }
 });
 
@@ -141,7 +145,8 @@ router.get('/customers/min-orders/:count', auth, async (req, res) => {
       minOrders
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    return logRouteError(res, 'Internal server error', err);
   }
 });
 
@@ -270,7 +275,7 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     
     // Fetch targeted customers in background (don't block response)
     if (isTargetedOffer) {
-      logger.info(`Fetching targeted customers in background for offer ${offer._id}...`);
+      logger.info('Fetching targeted customers in background for offer ...', { _id : offer._id });
       (async () => {
         try {
           let targetedCustomerPhones = [];
@@ -279,27 +284,27 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
             const result = await googleSheets.getTopCustomersBySpent(finalTargetPercentage);
             if (result.customers && result.customers.length > 0) {
               targetedCustomerPhones = result.customers.map(c => c.phone);
-              logger.info(`Found top ${finalTargetPercentage}% customers: ${targetedCustomerPhones.length} customers`);
+              logger.info('Found top % customers: customers', { finalTargetPercentage, length : targetedCustomerPhones.length });
             }
           } else if (finalTargetType === 'min_spent' && finalTargetMinSpent > 0) {
             const result = await googleSheets.getCustomersByMinSpent(finalTargetMinSpent);
             if (result.customers && result.customers.length > 0) {
               targetedCustomerPhones = result.customers.map(c => c.phone);
-              logger.info(`Found customers with min spent ₹${finalTargetMinSpent}: ${targetedCustomerPhones.length} customers`);
+              logger.info('Found customers with min spent ₹: customers', { finalTargetMinSpent, length : targetedCustomerPhones.length });
             }
           } else if (finalTargetType === 'min_orders' && finalTargetMinOrders > 0) {
             const result = await googleSheets.getCustomersByMinOrders(finalTargetMinOrders);
             if (result.customers && result.customers.length > 0) {
               targetedCustomerPhones = result.customers.map(c => c.phone);
-              logger.info(`Found customers with min ${finalTargetMinOrders} orders: ${targetedCustomerPhones.length} customers`);
+              logger.info('Found customers with min orders: customers', { finalTargetMinOrders, length : targetedCustomerPhones.length });
             }
           }
           
           // Update offer with targeted customers
           await Offer.findByIdAndUpdate(offer._id, { targetedCustomers: targetedCustomerPhones });
-          logger.info(`Updated offer ${offer._id} with ${targetedCustomerPhones.length} targeted customers`);
+          logger.info('Updated offer with targeted customers', { _id: offer._id, count: targetedCustomerPhones.length });
         } catch (bgError) {
-          logger.error(`Background customer fetch failed for offer ${offer._id}`, { error: bgError.message });
+          logger.error('Background customer fetch failed for offer', { error: bgError.message });
         }
       })();
     }
@@ -378,7 +383,7 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
               // Full item selected — apply to parent price and ALL variants
               const offerPrice = Math.round(item.price * (1 - discountPercent / 100));
               updateFields.offerPrice = offerPrice;
-              logger.info(`Applying to ${item.name}: ${item.price} -> ${offerPrice} (${discountPercent}% OFF)`);
+              logger.info('Applying to : -> (% OFF)', { name: item.name, price: item.price, offerPrice, discountPercent });
               
               if (item.variants && item.variants.length > 0) {
                 updateFields.variants = item.variants.map(v => {
@@ -417,7 +422,7 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
                   if (selectedVariantIndices.includes(idx)) {
                     // Full variant selected — apply to variant and ALL its quantities
                     const vOfferPrice = Math.round(v.price * (1 - discountPercent / 100));
-                    logger.info(`Applying to ${item.name} variant ${v.label}: ${v.price} -> ${vOfferPrice} (${discountPercent}% OFF)`);
+                    logger.info('Applying to variant : -> (% OFF)', { name: item.name, label: v.label, price: v.price, vOfferPrice, discountPercent });
                     vObj.offerPrice = vOfferPrice;
                     if (vObj.quantities && vObj.quantities.length > 0) {
                       vObj.quantities = vObj.quantities.map(q => ({
@@ -433,7 +438,7 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
                         const qObj = q.toObject ? q.toObject() : { ...q };
                         if (selectedQIndices.includes(qIdx)) {
                           const qOfferPrice = Math.round(q.price * (1 - discountPercent / 100));
-                          logger.info(`Applying to ${item.name} variant ${v.label} qty ${q.quantity}${q.unit}: ${q.price} -> ${qOfferPrice} (${discountPercent}% OFF)`);
+                          logger.info('Applying to variant qty : -> (% OFF)', { name: item.name, label: v.label, quantity: q.quantity, unit: q.unit, price: q.price, qOfferPrice, discountPercent });
                           qObj.offerPrice = qOfferPrice;
                         }
                         return qObj;
@@ -445,9 +450,9 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
               }
             }
           } else if (percentage && isTargetedOffer) {
-            logger.info(`Targeted offer - NOT applying offerPrice to ${item.name} (${percentage}% discount for eligible customers only)`);
+            logger.info('Targeted offer - NOT applying offerPrice to (% discount for eligible customers only)', { name: item.name, percentage });
           } else {
-            logger.info(`Adding offer type to ${item.name}: ${offerType}`);
+            logger.info('Adding offer type to', { name: item.name, offerType });
           }
           
           // Update item
@@ -533,8 +538,7 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     
     res.status(201).json(offer);
   } catch (err) {
-    logger.error('Error creating offer', { error: err.message });
-    res.status(500).json({ error: err.message });
+    return logRouteError(res, 'Error creating offer', err);
   }
 });
 
@@ -592,7 +596,8 @@ router.get('/:id/template-status', auth, async (req, res) => {
       });
     }
   } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    return logRouteError(res, 'Internal server error', err);
   }
 });
 
@@ -612,7 +617,7 @@ router.post('/:id/retry-template', auth, async (req, res) => {
 
     // Delete old template if exists
     if (offer.templateName) {
-      try { await whatsapp.deleteMessageTemplate(offer.templateName); } catch (e) { /* ignore */ }
+      try { warn('Failed to delete old WhatsApp template': await whatsapp.deleteMessageTemplate(offer.templateName); } catch (e) { logger.warn('Failed to delete old WhatsApp template', { templateName: offer.templateName, error: e.message }); }
     }
 
     const tplName = `offer_${offer._id.toString()}`;
@@ -643,8 +648,7 @@ router.post('/:id/retry-template', auth, async (req, res) => {
     });
   } catch (err) {
     const errMsg = err.response?.data?.error?.message || err.message;
-    logger.error('Retry template failed', { error: errMsg });
-    res.status(500).json({ error: errMsg });
+    return logRouteError(res, 'Retry template failed', error);
   }
 });
 
@@ -726,8 +730,7 @@ router.post('/:id/send', auth, async (req, res) => {
       templateUsed: offer.templateName
     });
   } catch (err) {
-    logger.error('Send offer broadcast failed', { error: err.message });
-    res.status(500).json({ error: err.message });
+    return logRouteError(res, 'Send offer broadcast failed', err);
   }
 });
 
@@ -1131,7 +1134,7 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
     
     // Fetch targeted customers in background (don't block response)
     if (isTargetedOffer) {
-      logger.info(`Fetching targeted customers in background for offer ${offer._id}...`);
+      logger.info('Fetching targeted customers in background for offer ...', { _id : offer._id });
       (async () => {
         try {
           let targetedCustomerPhones = [];
@@ -1140,34 +1143,35 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
             const result = await googleSheets.getTopCustomersBySpent(finalTargetPercentage);
             if (result.customers && result.customers.length > 0) {
               targetedCustomerPhones = result.customers.map(c => c.phone);
-              logger.info(`Found top ${finalTargetPercentage}% customers: ${targetedCustomerPhones.length} customers`);
+              logger.info('Found top % customers: customers', { finalTargetPercentage, length : targetedCustomerPhones.length });
             }
           } else if (finalTargetType === 'min_spent' && finalTargetMinSpent > 0) {
             const result = await googleSheets.getCustomersByMinSpent(finalTargetMinSpent);
             if (result.customers && result.customers.length > 0) {
               targetedCustomerPhones = result.customers.map(c => c.phone);
-              logger.info(`Found customers with min spent ₹${finalTargetMinSpent}: ${targetedCustomerPhones.length} customers`);
+              logger.info('Found customers with min spent ₹: customers', { finalTargetMinSpent, length : targetedCustomerPhones.length });
             }
           } else if (finalTargetType === 'min_orders' && finalTargetMinOrders > 0) {
             const result = await googleSheets.getCustomersByMinOrders(finalTargetMinOrders);
             if (result.customers && result.customers.length > 0) {
               targetedCustomerPhones = result.customers.map(c => c.phone);
-              logger.info(`Found customers with min ${finalTargetMinOrders} orders: ${targetedCustomerPhones.length} customers`);
+              logger.info('Found customers with min orders: customers', { finalTargetMinOrders, length : targetedCustomerPhones.length });
             }
           }
           
           // Update offer with targeted customers
           await Offer.findByIdAndUpdate(offer._id, { targetedCustomers: targetedCustomerPhones });
-          logger.info(`Updated offer ${offer._id} with ${targetedCustomerPhones.length} targeted customers`);
+          logger.info('Updated offer with targeted customers', { _id: offer._id, count: targetedCustomerPhones.length });
         } catch (bgError) {
-          logger.error(`Background customer fetch failed for offer ${offer._id}`, { error: bgError.message });
+          logger.error('Background customer fetch failed for offer', { error: bgError.message });
         }
       })();
     }
     
     res.json(offer);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    return logRouteError(res, 'Internal server error', err);
   }
 });
 
@@ -1318,7 +1322,8 @@ router.delete('/:id', auth, async (req, res) => {
     
     res.json({ message: 'Offer deleted and removed from all items' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    return logRouteError(res, 'Internal server error', err);
   }
 });
 
@@ -1528,7 +1533,8 @@ router.patch('/:id/toggle', auth, async (req, res) => {
     
     res.json(offer);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    return logRouteError(res, 'Internal server error', err);
   }
 });
 
@@ -1542,7 +1548,8 @@ router.patch('/:id/toggle-popup', auth, async (req, res) => {
     await offer.save();
     res.json(offer);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    return logRouteError(res, 'Internal server error', err);
   }
 });
 

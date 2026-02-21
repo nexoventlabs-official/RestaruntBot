@@ -13,6 +13,8 @@
  */
 
 // In-memory metrics store
+const MAX_METRIC_KEYS = 100; // cap on distinct keys per category
+
 const metrics = {
   // Request metrics
   requests: {
@@ -66,8 +68,12 @@ const metrics = {
  */
 function recordRequest(messageType, route = 'unknown') {
   metrics.requests.total++;
-  metrics.requests.byMessageType[messageType] = (metrics.requests.byMessageType[messageType] || 0) + 1;
-  metrics.requests.byRoute[route] = (metrics.requests.byRoute[route] || 0) + 1;
+  if (Object.keys(metrics.requests.byMessageType).length < MAX_METRIC_KEYS) {
+    metrics.requests.byMessageType[messageType] = (metrics.requests.byMessageType[messageType] || 0) + 1;
+  }
+  if (Object.keys(metrics.requests.byRoute).length < MAX_METRIC_KEYS) {
+    metrics.requests.byRoute[route] = (metrics.requests.byRoute[route] || 0) + 1;
+  }
 }
 
 /**
@@ -98,12 +104,14 @@ function recordResponseTime(component, durationMs, detail = null) {
       metrics.responseTimes.orchestrator.shift();
     }
   } else if (component === 'domain' && detail) {
-    if (!metrics.responseTimes.domains[detail]) {
-      metrics.responseTimes.domains[detail] = [];
-    }
-    metrics.responseTimes.domains[detail].push(durationMs);
-    if (metrics.responseTimes.domains[detail].length > 1000) {
-      metrics.responseTimes.domains[detail].shift();
+    if (Object.keys(metrics.responseTimes.domains).length < MAX_METRIC_KEYS || metrics.responseTimes.domains[detail]) {
+      if (!metrics.responseTimes.domains[detail]) {
+        metrics.responseTimes.domains[detail] = [];
+      }
+      metrics.responseTimes.domains[detail].push(durationMs);
+      if (metrics.responseTimes.domains[detail].length > 1000) {
+        metrics.responseTimes.domains[detail].shift();
+      }
     }
   } else if (component === 'legacy') {
     metrics.responseTimes.legacy.push(durationMs);
@@ -122,6 +130,7 @@ function recordResponseTime(component, durationMs, detail = null) {
 function recordDomainAction(domain, action, success = true) {
   const key = `${domain}.${action}`;
   if (!metrics.domainActions[key]) {
+    if (Object.keys(metrics.domainActions).length >= MAX_METRIC_KEYS) return;
     metrics.domainActions[key] = { total: 0, success: 0, failure: 0 };
   }
   metrics.domainActions[key].total++;

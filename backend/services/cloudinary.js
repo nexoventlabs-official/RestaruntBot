@@ -1,6 +1,7 @@
 // Cloudinary Service - Image Upload & Optimization
 const cloudinary = require('cloudinary').v2;
 const logger = require('./logger');
+const { startTimer } = require('./logger');
 
 // Configure Cloudinary
 cloudinary.config({
@@ -18,6 +19,8 @@ const cloudinaryService = {
    * @returns {Promise<string>} - Optimized Cloudinary URL
    */
   async uploadFromUrl(imageUrl, folder = 'restaurant-bot', publicId = null) {
+    const endTimer = startTimer('cloudinary.uploadFromUrl');
+
     try {
       const options = {
         folder,
@@ -34,8 +37,10 @@ const cloudinaryService = {
 
       const result = await cloudinary.uploader.upload(imageUrl, options);
       logger.info('✅ Cloudinary upload success:', result.secure_url);
+      endTimer({ success: true });
       return result.secure_url;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('❌ Cloudinary upload error:', error.message);
       throw error;
     }
@@ -159,11 +164,15 @@ const cloudinaryService = {
    * @param {string} publicId - Public ID of the image
    */
   async deleteImage(publicId) {
+    const endTimer = startTimer('cloudinary.deleteImage');
+
     try {
       const result = await cloudinary.uploader.destroy(publicId);
       logger.info('✅ Cloudinary delete:', publicId, result);
+      endTimer({ success: true });
       return result;
     } catch (error) {
+      endTimer({ success: false, error: error.message });
       logger.error('❌ Cloudinary delete error:', error.message);
       throw error;
     }

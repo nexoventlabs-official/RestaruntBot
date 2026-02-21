@@ -32,7 +32,7 @@ const REDIS_CONFIG = {
   // Reconnection strategy
   retryStrategy(times) {
     const delay = Math.min(times * 50, 2000);
-    logger.info(`🔄 [Redis] Reconnecting... attempt ${times}, delay ${delay}ms`);
+    logger.info('[Redis] Reconnecting... attempt , delay ms', { times, delay });
     return delay;
   },
   
@@ -174,10 +174,6 @@ async function shutdown() {
     redisClient.disconnect();
   }
 }
-
-// Handle process termination
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
 
 module.exports = {
   getClient,

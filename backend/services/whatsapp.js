@@ -61,8 +61,10 @@ async function trackOutbound(phone, messageType, contentSummary, sendFunction) {
     await initialSavePromise;
     
     // Update to sent with Meta response — single update operation
+    const previousStatus = outboundMsg.status;
     outboundMsg.status = 'sent';
     outboundMsg.sentAt = new Date();
+    logger.info('state_transition', { entity: 'outbound_message', from: previousStatus, to: 'sent', phone: normalizedPhone, messageType });
     outboundMsg.metaMessageId = response?.messages?.[0]?.id || response?.id;
     outboundMsg.metaResponse = {
       code: 'success',
@@ -89,9 +91,12 @@ async function trackOutbound(phone, messageType, contentSummary, sendFunction) {
       classification
     });
     
-    outboundMsg.status = classification.isRetryable ? 'failed' : 'policy_violation';
+    const prevStatus = outboundMsg.status;
+    const newStatus = classification.isRetryable ? 'failed' : 'policy_violation';
+    outboundMsg.status = newStatus;
     outboundMsg.failedAt = new Date();
     outboundMsg.failureReason = classification.reason;
+    logger.info('state_transition', { entity: 'outbound_message', from: prevStatus, to: newStatus, phone: normalizedPhone, messageType, reason: classification.reason });
     outboundMsg.isRetryable = classification.isRetryable;
     outboundMsg.error = {
       message: error.message,
@@ -214,7 +219,11 @@ const whatsapp = {
   },
 
   async sendImageWithCtaPhone(phone, imageUrl, message, buttonText, phoneNumber, footer = '') {
-    return metaCloud.sendImageWithCtaPhone(phone, imageUrl, message, buttonText, phoneNumber, footer);
+    return trackOutbound(phone, 'image_cta_phone', {
+      text: message.substring(0, 100)
+    },
+      () => metaCloud.sendImageWithCtaPhone(phone, imageUrl, message, buttonText, phoneNumber, footer)
+    );
   },
 
   // ========== CATALOG / COMMERCE MESSAGES ==========

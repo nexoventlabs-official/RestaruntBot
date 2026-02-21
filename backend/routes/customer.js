@@ -35,33 +35,36 @@ router.get('/', authMiddleware, async (req, res) => {
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
     
-    // Calculate actual order stats for each customer from Orders collection
-    const customersWithStats = await Promise.all(customers.map(async (customer) => {
+    // Batch-aggregate order stats for all customers on this page (avoids N+1 queries)
+    const phoneList = customers.map(c => c.phone);
+
+    const [orderCountsAgg, totalSpentAgg] = await Promise.all([
+      // Count confirmed/delivered orders per phone
+      Order.aggregate([
+        { $match: { 'customer.phone': { $in: phoneList }, status: { $in: ['confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'] } } },
+        { $group: { _id: '$customer.phone', totalOrders: { $sum: 1 } } }
+      ]),
+      // Sum totalAmount of paid, non-cancelled orders per phone
+      Order.aggregate([
+        { $match: { 'customer.phone': { $in: phoneList }, paymentStatus: 'paid', status: { $ne: 'cancelled' } } },
+        { $group: { _id: '$customer.phone', totalSpent: { $sum: { $ifNull: ['$totalAmount', 0] } } } }
+      ])
+    ]);
+
+    const orderCountMap = Object.fromEntries(orderCountsAgg.map(r => [r._id, r.totalOrders]));
+    const totalSpentMap = Object.fromEntries(totalSpentAgg.map(r => [r._id, r.totalSpent]));
+
+    const customersWithStats = customers.map(customer => {
       const customerObj = customer.toObject();
-      
-      // Get confirmed/delivered orders (not cancelled/pending)
-      const orders = await Order.find({ 
-        'customer.phone': customer.phone,
-        status: { $in: ['confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'] }
-      });
-      
-      // Get paid orders for total spent (exclude cancelled/refunded)
-      const paidOrders = await Order.find({
-        'customer.phone': customer.phone,
-        paymentStatus: 'paid',
-        status: { $nin: ['cancelled', 'refunded'] },
-        refundStatus: { $nin: ['completed', 'pending'] }
-      });
-      
-      customerObj.totalOrders = orders.length;
-      customerObj.totalSpent = paidOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
-      
+      customerObj.totalOrders = orderCountMap[customer.phone] || 0;
+      customerObj.totalSpent = totalSpentMap[customer.phone] || 0;
       return customerObj;
-    }));
+    });
     
     res.json({ customers: customersWithStats, total, pages: Math.ceil(total / limit) });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -81,11 +84,10 @@ router.get('/:id', authMiddleware, async (req, res) => {
       ['confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'].includes(o.status)
     );
     
-    // Get paid orders for total spent (exclude cancelled/refunded)
+    // Get paid orders for total spent (exclude cancelled)
     const paidOrders = orders.filter(o => 
       o.paymentStatus === 'paid' && 
-      !['cancelled', 'refunded'].includes(o.status) &&
-      !['completed', 'pending'].includes(o.refundStatus)
+      o.status !== 'cancelled'
     );
     
     customerObj.totalOrders = confirmedOrders.length;
@@ -94,7 +96,8 @@ router.get('/:id', authMiddleware, async (req, res) => {
     
     res.json(customerObj);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 
@@ -104,7 +107,8 @@ router.put('/:id', authMiddleware, async (req, res) => {
     const customer = await Customer.findByIdAndUpdate(req.params.id, { name, email }, { new: true });
     res.json(customer);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    return logRouteError(res, 'Internal server error', error);
   }
 });
 

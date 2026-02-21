@@ -17,6 +17,7 @@
  * - Uses conversationState service for state management
  */
 
+const crypto = require('crypto');
 const Order = require('../../models/Order');
 const Customer = require('../../models/Customer');
 const DashboardStats = require('../../models/DashboardStats');
@@ -28,6 +29,8 @@ const googleSheets = require('../googleSheets');
 const pushNotification = require('../pushNotification');
 const whatsappBroadcast = require('../whatsappBroadcast');
 const chatbotImagesService = require('../chatbotImages');
+const idempotencyService = require('../idempotencyService');
+const transactionManager = require('../transactionManager');
 const { logger } = require('../correlationContext');
 const dataEvents = require('../eventEmitter');
 
@@ -50,7 +53,7 @@ const SERVICE_TYPES = {
 function generateOrderId(serviceType = 'delivery') {
   const prefix = serviceType === 'pickup' ? 'PKP' : 'DLV';
   const timestamp = Date.now().toString().slice(-8);
-  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  const random = crypto.randomBytes(4).toString('hex');
   return `${prefix}${timestamp}${random}`;
 }
 
@@ -210,6 +213,16 @@ async function showPaymentOptions(customer, phone, params = {}) {
 async function initiateOnlinePayment(customer, phone, params = {}) {
   const { serviceType = 'delivery' } = params;
   
+  // Order creation dedup — prevent double-tap creating duplicate orders
+  const orderDedup = idempotencyService.checkOrderOperation(
+    phone, 'upi_initiation', { serviceType }
+  );
+  if (orderDedup.isDuplicate) {
+    logger.warn('Duplicate UPI order initiation prevented', { phone });
+    await whatsapp.sendMessage(phone, '⏳ Your order is already being processed. Please wait.');
+    return { success: false };
+  }
+
   // Refresh customer from database
   const freshCustomer = await Customer.findOne({ phone: customer.phone }).populate('cart.menuItem');
   
@@ -334,22 +347,37 @@ async function initiateOnlinePayment(customer, phone, params = {}) {
     trackingUpdates: [{ status: 'pending', message: 'Order created, awaiting payment' }]
   });
   
-  await order.save();
-  
-  // Remove applied offers
+  // Transaction-based checkout: order.save() + cart clear are atomic
+  const upiCartUpdate = {
+    $set: { cart: [] },
+    $push: { orderHistory: order._id }
+  };
   if (appliedOfferIds.size > 0) {
-    freshCustomer.activeOffers = (freshCustomer.activeOffers || []).filter(
-      offer => !appliedOfferIds.has(offer.offerId?.toString())
-    );
+    upiCartUpdate.$pull = { activeOffers: { offerId: { $in: Array.from(appliedOfferIds) } } };
   }
+  if (!freshCustomer.hasOrdered) {
+    upiCartUpdate.$set.hasOrdered = true;
+  }
+  try {
+    await transactionManager.execute(async (session) => {
+      await order.save({ session });
+      await Customer.findOneAndUpdate({ phone }, upiCartUpdate, { session });
+    });
+  } catch (txErr) {
+    if (txErr.message?.includes('transaction') || txErr.code === 263 || txErr.message?.includes('replica set')) {
+      logger.warn('Transactions not supported, falling back to sequential', { error: txErr.message });
+      await order.save();
+      await Customer.findOneAndUpdate({ phone }, upiCartUpdate);
+    } else {
+      throw txErr;
+    }
+  }
+
+  // Mark order creation as processed (dedup)
+  orderDedup.mark();
   
   // Add to broadcast contacts
   await whatsappBroadcast.addContact(freshCustomer.phone, freshCustomer.name, new Date());
-  
-  // Mark customer as having ordered
-  if (!freshCustomer.hasOrdered) {
-    freshCustomer.hasOrdered = true;
-  }
   
   // Track today's orders
   try {
@@ -402,15 +430,10 @@ async function initiateOnlinePayment(customer, phone, params = {}) {
     logger.error('Admin push error', { error: pushErr.message });
   }
   
-  // Clear cart
-  freshCustomer.cart = [];
-  freshCustomer.orderHistory = freshCustomer.orderHistory || [];
-  freshCustomer.orderHistory.push(order._id);
-  await freshCustomer.save();
-  
-  // Update original customer object
+  // Cart already cleared atomically in transaction above
+  // Update in-memory customer object for state consistency
   customer.cart = [];
-  customer.orderHistory = freshCustomer.orderHistory;
+  customer.orderHistory = freshCustomer.orderHistory || [];
   
   // Store pending order ID
   conversationState.setContext(customer, 'pendingOrderId', orderId);
@@ -457,6 +480,16 @@ async function initiateOnlinePayment(customer, phone, params = {}) {
 async function processCODOrder(customer, phone, params = {}) {
   const { serviceType = 'delivery' } = params;
   
+  // Order creation dedup — prevent double-tap creating duplicate orders
+  const orderDedup = idempotencyService.checkOrderOperation(
+    phone, 'cod_initiation', { serviceType }
+  );
+  if (orderDedup.isDuplicate) {
+    logger.warn('Duplicate COD order initiation prevented', { phone });
+    await whatsapp.sendMessage(phone, '⏳ Your order is already being processed. Please wait.');
+    return { success: false };
+  }
+
   // Refresh customer from database
   const freshCustomer = await Customer.findOne({ phone: customer.phone }).populate('cart.menuItem');
   
@@ -581,22 +614,37 @@ async function processCODOrder(customer, phone, params = {}) {
     trackingUpdates: [{ status: 'confirmed', message: 'Order confirmed - Cash on Delivery' }]
   });
   
-  await order.save();
-  
-  // Remove applied offers from customer's activeOffers (one-time use)
+  // Transaction-based checkout: order.save() + cart clear are atomic
+  const codCartUpdate = {
+    $set: { cart: [], 'conversationState.currentStep': 'order_placed' },
+    $push: { orderHistory: order._id }
+  };
   if (appliedOfferIds.size > 0) {
-    freshCustomer.activeOffers = (freshCustomer.activeOffers || []).filter(
-      offer => !appliedOfferIds.has(offer.offerId?.toString())
-    );
+    codCartUpdate.$pull = { activeOffers: { offerId: { $in: Array.from(appliedOfferIds) } } };
   }
+  if (!freshCustomer.hasOrdered) {
+    codCartUpdate.$set.hasOrdered = true;
+  }
+  try {
+    await transactionManager.execute(async (session) => {
+      await order.save({ session });
+      await Customer.findOneAndUpdate({ phone }, codCartUpdate, { session });
+    });
+  } catch (txErr) {
+    if (txErr.message?.includes('transaction') || txErr.code === 263 || txErr.message?.includes('replica set')) {
+      logger.warn('Transactions not supported, falling back to sequential', { error: txErr.message });
+      await order.save();
+      await Customer.findOneAndUpdate({ phone }, codCartUpdate);
+    } else {
+      throw txErr;
+    }
+  }
+
+  // Mark order creation as processed (dedup)
+  orderDedup.mark();
   
   // Add to broadcast contacts
   await whatsappBroadcast.addContact(freshCustomer.phone, freshCustomer.name, new Date());
-  
-  // Mark customer as having ordered
-  if (!freshCustomer.hasOrdered) {
-    freshCustomer.hasOrdered = true;
-  }
   
   // Track today's orders
   try {
@@ -649,15 +697,10 @@ async function processCODOrder(customer, phone, params = {}) {
     logger.error('Admin push error', { error: pushErr.message });
   }
   
-  // Clear cart
-  freshCustomer.cart = [];
-  freshCustomer.orderHistory = freshCustomer.orderHistory || [];
-  freshCustomer.orderHistory.push(order._id);
-  await freshCustomer.save();
-  
-  // Update original customer object
+  // Cart already cleared atomically in transaction above
+  // Update in-memory customer object for state consistency
   customer.cart = [];
-  customer.orderHistory = freshCustomer.orderHistory;
+  customer.orderHistory = freshCustomer.orderHistory || [];
   
   // Store pending order ID
   conversationState.setContext(customer, 'pendingOrderId', orderId);

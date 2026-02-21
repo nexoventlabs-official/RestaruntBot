@@ -23,6 +23,12 @@ require('winston-daily-rotate-file'); // Phase 6.5: Daily rotation
 const isDevelopment = process.env.NODE_ENV !== 'production';
 const logLevel = process.env.LOG_LEVEL || (isDevelopment ? 'debug' : 'info');
 
+// Correlation context provider — set by correlationContext.js to avoid circular dependency
+let _getCorrelationContext = () => null;
+function setCorrelationProvider(provider) {
+  _getCorrelationContext = provider;
+}
+
 // Sensitive field names to redact from log metadata
 const SENSITIVE_FIELDS = new Set([
   'password', 'secret', 'token', 'authorization', 'apikey', 'api_key',
@@ -65,10 +71,31 @@ const redactFormat = winston.format((info) => {
   return { level, message, timestamp, ...cleanMeta };
 });
 
+// Auto-inject correlation context into every log entry
+const correlationFormat = winston.format((info) => {
+  const ctx = _getCorrelationContext();
+  if (ctx) {
+    info.correlationId = ctx.correlationId || undefined;
+    if (ctx.startTime) {
+      info.requestDuration = Date.now() - ctx.startTime;
+    }
+    if (ctx.metadata) {
+      // Propagate structured context fields (orderId, phone, etc.)
+      for (const [key, value] of Object.entries(ctx.metadata)) {
+        if (value !== undefined && value !== null && !(key in info) && key !== 'createdAt') {
+          info[key] = value;
+        }
+      }
+    }
+  }
+  return info;
+});
+
 // Custom format for development (human-readable with redaction)
 const devFormat = winston.format.combine(
   winston.format.colorize(),
-  winston.format.timestamp({ format: 'HH:mm:ss' }),
+  winston.format.timestamp({ format: 'HH: ss' }),
+  correlationFormat(),
   redactFormat(),
   winston.format.printf(({ timestamp, level, message, ...meta }) => {
     let metaStr = '';
@@ -83,6 +110,7 @@ const devFormat = winston.format.combine(
 const prodFormat = winston.format.combine(
   winston.format.timestamp(),
   winston.format.errors({ stack: true }),
+  correlationFormat(),
   redactFormat(),
   winston.format.json()
 );
@@ -105,15 +133,22 @@ const logger = winston.createLogger({
 });
 
 // Add file transports for production with daily rotation
+// Configurable via environment variables
 if (!isDevelopment) {
+  const LOG_MAX_SIZE = process.env.LOG_MAX_SIZE || '20m';
+  const LOG_ERROR_RETENTION_DAYS = process.env.LOG_ERROR_RETENTION_DAYS || '14d';
+  const LOG_COMBINED_RETENTION_DAYS = process.env.LOG_COMBINED_RETENTION_DAYS || '7d';
+  const LOG_INFO_RETENTION_DAYS = process.env.LOG_INFO_RETENTION_DAYS || '3d';
+  const LOG_COMPRESS = process.env.LOG_COMPRESS !== 'false'; // default: true
+
   // Error logs - daily rotation
   logger.add(new winston.transports.DailyRotateFile({
     filename: path.join(__dirname, '../logs/error-%DATE%.log'),
     datePattern: 'YYYY-MM-DD',
     level: 'error',
-    maxSize: '20m', // 20MB per file
-    maxFiles: '14d', // Keep 14 days
-    zippedArchive: true, // Compress old logs
+    maxSize: LOG_MAX_SIZE,
+    maxFiles: LOG_ERROR_RETENTION_DAYS,
+    zippedArchive: LOG_COMPRESS,
     format: prodFormat
   }));
   
@@ -121,9 +156,9 @@ if (!isDevelopment) {
   logger.add(new winston.transports.DailyRotateFile({
     filename: path.join(__dirname, '../logs/combined-%DATE%.log'),
     datePattern: 'YYYY-MM-DD',
-    maxSize: '20m',
-    maxFiles: '7d', // Keep 7 days
-    zippedArchive: true,
+    maxSize: LOG_MAX_SIZE,
+    maxFiles: LOG_COMBINED_RETENTION_DAYS,
+    zippedArchive: LOG_COMPRESS,
     format: prodFormat
   }));
   
@@ -132,9 +167,9 @@ if (!isDevelopment) {
     filename: path.join(__dirname, '../logs/info-%DATE%.log'),
     datePattern: 'YYYY-MM-DD',
     level: 'info',
-    maxSize: '20m',
-    maxFiles: '3d', // Keep 3 days
-    zippedArchive: true,
+    maxSize: LOG_MAX_SIZE,
+    maxFiles: LOG_INFO_RETENTION_DAYS,
+    zippedArchive: LOG_COMPRESS,
     format: prodFormat
   }));
 }
@@ -164,7 +199,7 @@ function withCorrelation(correlationId) {
  * @param {Object} meta - Additional metadata
  */
 function logDomainAction(domain, action, meta = {}) {
-  logger.info(`Domain action: ${domain}.${action}`, {
+  logger.info('Domain action: .', {
     domain,
     action,
     ...meta
@@ -178,7 +213,7 @@ function logDomainAction(domain, action, meta = {}) {
  * @param {Object} meta - Additional metadata
  */
 function logApiCall(service, operation, meta = {}) {
-  logger.info(`API call: ${service}.${operation}`, {
+  logger.info('API call: .', {
     service,
     operation,
     type: 'external_api',
@@ -208,7 +243,7 @@ function logPerformance(operation, durationMs, meta = {}) {
  * @param {Object} data - Event data
  */
 function logEvent(event, data = {}) {
-  logger.info(`Event: ${event}`, {
+  logger.info('Event', {
     event,
     type: 'business_event',
     ...data
@@ -247,6 +282,122 @@ function startTimer(operation) {
   };
 }
 
+/**
+ * Classify an error for alerting and dashboarding
+ * @param {Error} err - The error to classify
+ * @returns {{ category: string, retryable: boolean }}
+ */
+function classifyError(err) {
+  const msg = (err.message || '').toLowerCase();
+  const code = err.code;
+  const name = err.name || '';
+
+  // Database errors
+  if (name === 'MongoNetworkError' || name === 'MongoServerSelectionError' ||
+      code === 'ECONNREFUSED' || msg.includes('topology was destroyed') ||
+      msg.includes('connection') && msg.includes('mongo')) {
+    return { category: 'database', retryable: true };
+  }
+  if (code === 11000 || name === 'MongoServerError' && msg.includes('duplicate')) {
+    return { category: 'database_duplicate', retryable: false };
+  }
+  if (name === 'ValidationError' || name === 'CastError') {
+    return { category: 'validation', retryable: false };
+  }
+  // Optimistic concurrency conflict
+  if (name === 'VersionError' || msg.includes('no matching document found for id')) {
+    return { category: 'concurrency_conflict', retryable: true };
+  }
+
+  // Redis errors
+  if (msg.includes('redis') || name === 'ReplyError' || name === 'AbortError' ||
+      code === 'NR_CLOSED' || code === 'UNCERTAIN_STATE' ||
+      msg.includes('maxretriesperrequest') || msg.includes('connection is closed')) {
+    return { category: 'redis', retryable: true };
+  }
+
+  // Meta/WhatsApp API errors
+  if (msg.includes('whatsapp') || msg.includes('meta api') || msg.includes('graph.facebook') ||
+      msg.includes('messaging_limit') || msg.includes('template') && msg.includes('rejected') ||
+      msg.includes('recipient') && msg.includes('not valid')) {
+    return { category: 'meta_api', retryable: false };
+  }
+
+  // Payment/Razorpay errors
+  if (msg.includes('razorpay') || msg.includes('payment') && msg.includes('failed') ||
+      msg.includes('order_creation') || msg.includes('signature') && msg.includes('verification')) {
+    return { category: 'payment', retryable: false };
+  }
+
+  // Cloudinary / media upload errors
+  if (msg.includes('cloudinary') || msg.includes('upload') && msg.includes('image') ||
+      msg.includes('resource_type') || msg.includes('transformation')) {
+    return { category: 'media_upload', retryable: true };
+  }
+
+  // Network / external API errors
+  if (code === 'ECONNRESET' || code === 'ETIMEDOUT' || code === 'ENOTFOUND' ||
+      code === 'EAI_AGAIN' || msg.includes('socket hang up') || msg.includes('timeout')) {
+    return { category: 'network', retryable: true };
+  }
+
+  // Rate limiting
+  if (err.status === 429 || msg.includes('rate limit') || msg.includes('too many requests')) {
+    return { category: 'rate_limit', retryable: true };
+  }
+
+  // Auth / permission
+  if (err.status === 401 || err.status === 403 || msg.includes('unauthorized') || msg.includes('forbidden')) {
+    return { category: 'auth', retryable: false };
+  }
+
+  // Business logic
+  if (err.status >= 400 && err.status < 500) {
+    return { category: 'business_logic', retryable: false };
+  }
+
+  return { category: 'unknown', retryable: true };
+}
+
+/**
+ * Log a route-level error with classification and respond with 500.
+ * Replaces the repetitive: logger.error(msg, {error}); res.status(500).json({error})
+ * @param {Object} res - Express response object
+ * @param {string} message - Log message
+ * @param {Error} error - The caught error
+ * @param {number} [statusCode=500] - HTTP status code
+ */
+function logRouteError(res, message, error, statusCode = 500) {
+  const { category, retryable } = classifyError(error);
+  logger.error(message, {
+    error: error.message,
+    stack: error.stack,
+    code: error.code,
+    category,
+    retryable
+  });
+  if (!res.headersSent) {
+    res.status(statusCode).json({ error: error.message });
+  }
+}
+
+/**
+ * Runtime log level change
+ * @param {string} newLevel - New log level (error, warn, info, http, verbose, debug, silly)
+ * @returns {{ previous: string, current: string }}
+ */
+function setLogLevel(newLevel) {
+  const validLevels = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'];
+  if (!validLevels.includes(newLevel)) {
+    throw new Error(`Invalid log level: ${newLevel}. Must be one of: ${validLevels.join(', ')}`);
+  }
+  const previous = logger.level;
+  logger.level = newLevel;
+  logger.transports.forEach(t => { t.level = t.level === previous ? newLevel : t.level; });
+  logger.info('Log level changed at runtime', { from: previous, to: newLevel });
+  return { previous, current: newLevel };
+}
+
 // Export logger and utility functions
 module.exports = {
   // Winston logger instance
@@ -260,7 +411,11 @@ module.exports = {
   logPerformance,
   logEvent,
   logError,
+  logRouteError,
   startTimer,
+  classifyError,
+  setCorrelationProvider,
+  setLogLevel,
   
   // Direct access to log levels
   debug: logger.debug.bind(logger),

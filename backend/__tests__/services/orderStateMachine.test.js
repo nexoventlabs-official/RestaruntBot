@@ -4,8 +4,7 @@
  * Tests ALL valid/invalid state transitions, idempotent same-status transitions,
  * terminal states, and tracking update behavior.
  * 
- * FINANCIAL RISK: Invalid transitions can move paid orders to cancelled 
- * without triggering refunds, or move cancelled orders to delivered.
+ * FINANCIAL RISK: Invalid transitions are blocked.
  */
 
 const { ORDER_STATUS, ALLOWED_TRANSITIONS, validateTransition, transitionStatus } = require('../../services/orderStateMachine');
@@ -42,27 +41,13 @@ describe('Order State Machine', () => {
       ['confirmed', 'preparing'],
       ['confirmed', 'ready'],
       ['confirmed', 'cancelled'],
-      ['confirmed', 'refunded'],
-      ['confirmed', 'refund_failed'],
       ['preparing', 'ready'],
       ['preparing', 'cancelled'],
-      ['preparing', 'refunded'],
-      ['preparing', 'refund_failed'],
       ['ready', 'out_for_delivery'],
       ['ready', 'delivered'],
       ['ready', 'cancelled'],
-      ['ready', 'refunded'],
-      ['ready', 'refund_failed'],
       ['out_for_delivery', 'delivered'],
       ['out_for_delivery', 'cancelled'],
-      ['out_for_delivery', 'refunded'],
-      ['out_for_delivery', 'refund_failed'],
-      ['delivered', 'refunded'],
-      ['delivered', 'refund_failed'],
-      ['cancelled', 'refunded'],
-      ['cancelled', 'refund_failed'],
-      ['refund_failed', 'refunded'],
-      ['refund_failed', 'cancelled'],
     ];
 
     test.each(validPaths)(
@@ -99,10 +84,6 @@ describe('Order State Machine', () => {
       ['delivered', 'pending', 'Cannot revert delivered'],
       ['delivered', 'confirmed', 'Cannot revert delivered'],
       ['delivered', 'cancelled', 'Cannot cancel after delivery'],
-      ['refunded', 'pending', 'Terminal state'],
-      ['refunded', 'confirmed', 'Terminal state'],
-      ['refunded', 'cancelled', 'Terminal state'],
-      ['refunded', 'delivered', 'Terminal state'],
     ];
 
     test.each(invalidPaths)(
@@ -113,22 +94,6 @@ describe('Order State Machine', () => {
         expect(result.reason).toBeDefined();
       }
     );
-  });
-
-  // ─── TERMINAL STATES ─────────────────────────────────────────
-
-  describe('Terminal states', () => {
-    test('refunded has no outbound transitions', () => {
-      expect(ALLOWED_TRANSITIONS[ORDER_STATUS.REFUNDED]).toEqual([]);
-    });
-
-    test('refunded → any status should be invalid', () => {
-      const allStatuses = Object.values(ORDER_STATUS).filter(s => s !== 'refunded');
-      allStatuses.forEach(status => {
-        const result = validateTransition('refunded', status);
-        expect(result.valid).toBe(false);
-      });
-    });
   });
 
   // ─── IDEMPOTENT SAME-STATUS ───────────────────────────────────
@@ -257,21 +222,6 @@ describe('Order State Machine', () => {
       expect(mockOrder.status).toBe('cancelled');
     });
 
-    test('refund path: delivered → refunded', () => {
-      mockOrder.status = 'delivered';
-      const result = transitionStatus(mockOrder, 'refunded');
-      expect(result.success).toBe(true);
-    });
-
-    test('refund failure path: delivered → refund_failed → refunded', () => {
-      mockOrder.status = 'delivered';
-      let result = transitionStatus(mockOrder, 'refund_failed');
-      expect(result.success).toBe(true);
-
-      result = transitionStatus(mockOrder, 'refunded');
-      expect(result.success).toBe(true);
-    });
-
     test('COD order: confirmed immediately (no pending→confirmed for COD)', () => {
       // COD orders are created with status: 'confirmed' directly
       // But if created as pending first, transition should still work
@@ -287,12 +237,6 @@ describe('Order State Machine', () => {
     test('RISK: delivered → cancelled is blocked (would lose paid revenue)', () => {
       mockOrder.status = 'delivered';
       const result = transitionStatus(mockOrder, 'cancelled');
-      expect(result.success).toBe(false);
-    });
-
-    test('RISK: refunded → delivered is blocked (would double-count)', () => {
-      mockOrder.status = 'refunded';
-      const result = transitionStatus(mockOrder, 'delivered');
       expect(result.success).toBe(false);
     });
 

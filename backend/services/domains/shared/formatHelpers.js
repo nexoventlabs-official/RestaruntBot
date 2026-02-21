@@ -129,8 +129,7 @@ function formatOrderStatus(status) {
     ready: '📦',
     out_for_delivery: '🚚',
     delivered: '✅',
-    cancelled: '❌',
-    refunded: '💰'
+    cancelled: '❌'
   };
   
   const emoji = statusEmoji[status] || '📋';

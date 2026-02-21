@@ -15,7 +15,10 @@ jest.mock('mongoose', () => {
     pre: jest.fn(),
     post: jest.fn(),
     virtual: jest.fn().mockReturnValue({ get: jest.fn() }),
-    set: jest.fn()
+    set: jest.fn(),
+    statics: {},
+    methods: {},
+    path: jest.fn()
   });
   SchemaFn.Types = {
     ObjectId: 'ObjectId',
@@ -46,11 +49,15 @@ jest.mock('../../services/eventEmitter', () => ({
 }));
 
 jest.mock('../../services/orderScheduler', () => ({ start: jest.fn(), stop: jest.fn() }));
-jest.mock('../../services/refundScheduler', () => ({ start: jest.fn(), stop: jest.fn(), scheduleRefund: jest.fn(), cancelScheduledRefund: jest.fn() }));
 jest.mock('../../services/dailyCleanup', () => ({ start: jest.fn(), stop: jest.fn() }));
 jest.mock('../../services/categoryScheduler', () => ({ start: jest.fn(), stop: jest.fn() }));
 jest.mock('../../services/orderCleanup', () => ({ start: jest.fn(), stop: jest.fn() }));
 jest.mock('../../services/catalogReviewPoller', () => ({ start: jest.fn(), stop: jest.fn() }));
+jest.mock('../../services/orderReconciliation', () => ({ start: jest.fn(), stop: jest.fn(), reconcileOrders: jest.fn().mockResolvedValue({ reconciled: 0 }) }));
+jest.mock('../../services/outboundRetryWorker', () => ({ start: jest.fn(), stop: jest.fn() }));
+jest.mock('../../services/dashboardStatsSync', () => ({ start: jest.fn(), stop: jest.fn() }));
+jest.mock('../../services/pushTokenCleanup', () => ({ start: jest.fn(), stop: jest.fn() }));
+jest.mock('../../services/shutdownState', () => ({ isShuttingDown: false, setShuttingDown: jest.fn() }));
 jest.mock('../../services/cartCleanup', () => ({
   startCartCleanupScheduler: jest.fn(),
   stopCartCleanupScheduler: jest.fn()
@@ -60,8 +67,7 @@ jest.mock('../../services/googleSheets', () => ({
   initializeDailyReportsSheet: jest.fn().mockResolvedValue(true),
   initializeDashboardStatsSheet: jest.fn().mockResolvedValue(true),
   initializeCustomersSheet: jest.fn().mockResolvedValue(true),
-  updateOrderStatus: jest.fn(),
-  syncPendingRefunds: jest.fn()
+  updateOrderStatus: jest.fn()
 }));
 
 jest.mock('../../config/envValidation', () => ({

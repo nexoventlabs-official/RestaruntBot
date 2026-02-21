@@ -1,0 +1,55 @@
+/**
+ * Default Chatbot Images Configuration
+ * 
+ * Extracted from routes/chatbotImages.js to declutter the route file (R5).
+ * Admin uploads actual images via the dashboard — these define the image slots.
+ */
+const defaultImages = [
+  { key: 'welcome', name: 'Welcome Message', description: 'Shown when customer sends Hi/Hello - Restaurant welcome image with Perivi Hotel branding', imageUrl: '' },
+  { key: 'my_orders', name: 'My Orders', description: 'Shown when customer clicks My Orders button', imageUrl: '' },
+  { key: 'cart_cleared', name: 'Cart Cleared', description: 'Shown when customer clears their cart', imageUrl: '' },
+  { key: 'added_to_cart', name: 'Added to Cart', description: 'Shown when item is added to cart', imageUrl: '' },
+  { key: 'order_confirmed', name: 'Order Confirmed', description: 'Shown when order is confirmed (COD)', imageUrl: '' },
+  { key: 'no_orders_found', name: 'No Orders Found', description: 'Shown when customer has no order history', imageUrl: '' },
+  { key: 'your_orders', name: 'Your Orders', description: 'Shown when displaying order history', imageUrl: '' },
+  { key: 'no_active_orders', name: 'No Active Orders', description: 'Shown when no orders to track', imageUrl: '' },
+  { key: 'order_cancelled', name: 'Order Cancelled', description: 'Shown when order is cancelled', imageUrl: '' },
+  { key: 'payment_success', name: 'Payment Success', description: 'Shown when online payment is successful', imageUrl: '' },
+  { key: 'preparing', name: 'Preparing Order', description: 'Shown when order status changes to preparing', imageUrl: '' },
+  { key: 'out_for_delivery', name: 'Out for Delivery', description: 'Shown when order is out for delivery', imageUrl: '' },
+  { key: 'ready', name: 'Order Ready', description: 'Shown when order is ready for pickup/delivery', imageUrl: '' },
+  { key: 'delivered', name: 'Order Delivered', description: 'Shown when order is delivered', imageUrl: '' },
+  { key: 'item_not_available', name: 'Item Not Available', description: 'Shown when requested item is not available', imageUrl: '' },
+  { key: 'order_tracking', name: 'Order Tracking', description: 'Shown when displaying order tracking details', imageUrl: '' },
+  { key: 'order_summary', name: 'Order Summary', description: 'Shown when displaying order summary before payment', imageUrl: '' },
+  { key: 'order_details', name: 'Order Details', description: 'Shown when displaying order details with payment link', imageUrl: '' },
+  { key: 'browse_menu', name: 'Browse Menu', description: 'Shown when displaying menu browsing options (Veg/Non-Veg/All)', imageUrl: '' },
+  { key: 'payment_timeout_cancelled', name: 'Payment Timeout Cancelled', description: 'Shown when order is cancelled due to payment not received within 15 minutes', imageUrl: '' },
+  { key: 'cart_empty', name: 'Cart Empty', description: 'Shown when customer views an empty cart', imageUrl: '' },
+  { key: 'help_support', name: 'Help & Support', description: 'Shown when displaying help and support information', imageUrl: '' },
+  { key: 'view_cart', name: 'View Cart', description: 'Shown when displaying cart with items', imageUrl: '' },
+  { key: 'open_website', name: 'Open Website', description: 'Shown when user selects Open Website option with CTA button', imageUrl: '' },
+  { key: 'cart_expiry_warning', name: 'Cart Expiry Warning', description: 'Shown when cart items will expire in 10 minutes due to inactivity', imageUrl: '' },
+  { key: 'cart_items_removed', name: 'Cart Items Removed', description: 'Shown when cart items are removed after 30 minutes of inactivity', imageUrl: '' },
+  { key: 'pickup_confirmed', name: 'Pickup Order Confirmed', description: 'Shown when pickup order is confirmed by admin from dashboard', imageUrl: '' },
+  { key: 'pickup_order_requested', name: 'Pickup Order Requested', description: 'Shown when customer places a self-pickup pay-at-hotel order request', imageUrl: '' },
+  { key: 'pickup_ready', name: 'Pickup Order Ready', description: 'Shown when pickup order is ready for collection at restaurant', imageUrl: '' },
+  { key: 'pickup_completed', name: 'Pickup Order Completed', description: 'Shown when customer has picked up their order (with bill and order details)', imageUrl: '' },
+  { key: 'pickup_tracking', name: 'Pickup Order Tracking', description: 'Shown when customer tracks their pickup order status', imageUrl: '' },
+  { key: 'pickup_cancelled', name: 'Pickup Order Cancelled', description: 'Shown when pickup order is successfully cancelled', imageUrl: '' },
+  { key: 'pickup_cancel_restricted', name: 'Pickup Cancel Restricted', description: 'Shown when customer tries to cancel pickup order after confirmation', imageUrl: '' },
+  { key: 'pickup_order_summary', name: 'Pickup Order Summary', description: 'Shown when displaying order summary for self-pickup before payment selection', imageUrl: '' },
+  { key: 'pickup_cancelled_by_restaurant', name: 'Pickup Order Cancelled by Restaurant', description: 'Shown when admin cancels a self-pickup pay-at-hotel order from the app', imageUrl: '' },
+  { key: 'order_cancelled_by_restaurant', name: 'Delivery Order Cancelled by Restaurant', description: 'Shown when admin cancels a COD delivery order from the app', imageUrl: '' },
+  { key: 'offer_not_eligible', name: 'Offer Not Eligible', description: 'Shown when customer tries to claim a targeted offer they are not eligible for (shared link)', imageUrl: '' },
+  { key: 'search_no_results', name: 'Search No Results', description: 'Shown when menu search returns no matching items', imageUrl: '' },
+  { key: 'delivery_location', name: 'Delivery Location', description: 'Shown when requesting customer to share their delivery location', imageUrl: '' },
+  { key: 'out_of_delivery_range', name: 'Out of Delivery Range', description: 'Shown when customer location is beyond the delivery radius', imageUrl: '' },
+  { key: 'payment_failed', name: 'Payment Failed', description: 'Shown when online payment fails or is cancelled', imageUrl: '' },
+  { key: 'voice_error', name: 'Voice Message Error', description: 'Shown when voice message transcription or processing fails', imageUrl: '' },
+  { key: 'food_type_selection', name: 'Food Type Selection', description: 'Shown when customer selects food type preference (Veg/Non-Veg/All)', imageUrl: '' },
+  { key: 'checkout', name: 'Checkout', description: 'Shown when customer proceeds to checkout and selects service type', imageUrl: '' },
+  { key: 'order_history', name: 'Order History', description: 'Shown when displaying customer order history list', imageUrl: '' }
+];
+
+module.exports = defaultImages;

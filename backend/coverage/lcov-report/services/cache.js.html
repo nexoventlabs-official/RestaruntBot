@@ -784,12 +784,12 @@ async function <span class="fstat-no" title="function not covered" >get(</span>n
     
 <span class="cstat-no" title="statement not covered" >    if (data) {</span>
 <span class="cstat-no" title="statement not covered" >      await metricsRedis.recordEvent('cache.hit');</span>
-<span class="cstat-no" title="statement not covered" >      logger.info(`[Cache] Hit: ${key}`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('[Cache] Hit', { key });</span>
 <span class="cstat-no" title="statement not covered" >      return JSON.parse(data);</span>
     }
     
 <span class="cstat-no" title="statement not covered" >    await metricsRedis.recordEvent('cache.miss');</span>
-<span class="cstat-no" title="statement not covered" >    logger.info(`[Cache] Miss: ${key}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('[Cache] Miss', { key });</span>
 <span class="cstat-no" title="statement not covered" >    return null;</span>
   } catch (error) {
 <span class="cstat-no" title="statement not covered" >    logger.error('[Cache] Get error', { error: error.message });</span>
@@ -815,7 +815,7 @@ async function <span class="fstat-no" title="function not covered" >set(</span>n
 <span class="cstat-no" title="statement not covered" >    await client.setex(key, ttl, JSON.stringify(data));</span>
     
 <span class="cstat-no" title="statement not covered" >    await metricsRedis.recordEvent('cache.set');</span>
-<span class="cstat-no" title="statement not covered" >    logger.info(`[Cache] Set: ${key} (TTL: ${ttl}s)`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('[Cache] Set', { key, ttl });</span>
 <span class="cstat-no" title="statement not covered" >    return true;</span>
   } catch (error) {
 <span class="cstat-no" title="statement not covered" >    logger.error('[Cache] Set error', { error: error.message });</span>
@@ -838,7 +838,7 @@ async function <span class="fstat-no" title="function not covered" >del(</span>n
 <span class="cstat-no" title="statement not covered" >    await client.del(key);</span>
     
 <span class="cstat-no" title="statement not covered" >    await metricsRedis.recordEvent('cache.delete');</span>
-<span class="cstat-no" title="statement not covered" >    logger.info(`[Cache] Deleted: ${key}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('[Cache] Deleted', { key });</span>
 <span class="cstat-no" title="statement not covered" >    return true;</span>
   } catch (error) {
 <span class="cstat-no" title="statement not covered" >    logger.error('[Cache] Delete error', { error: error.message });</span>
@@ -861,7 +861,7 @@ async function <span class="fstat-no" title="function not covered" >delNamespace
     
 <span class="cstat-no" title="statement not covered" >    if (keys.length &gt; 0) {</span>
 <span class="cstat-no" title="statement not covered" >      await client.del(...keys);</span>
-<span class="cstat-no" title="statement not covered" >      logger.info(`[Cache] Deleted ${keys.length} keys from namespace: ${namespace}`);</span>
+<span class="cstat-no" title="statement not covered" >      logger.info('[Cache] Deleted keys from namespace', { count: keys.length, namespace });</span>
     }
     
 <span class="cstat-no" title="statement not covered" >    await metricsRedis.recordEvent('cache.namespace_delete');</span>
@@ -914,12 +914,12 @@ async function <span class="fstat-no" title="function not covered" >warmCache(</
     // Cache all menu items
     const menuItems = <span class="cstat-no" title="statement not covered" >await MenuItem.find({ isAvailable: true }).lean();</span>
 <span class="cstat-no" title="statement not covered" >    await set('menu', 'all', menuItems);</span>
-<span class="cstat-no" title="statement not covered" >    logger.info(`[Cache] Warmed menu items: ${menuItems.length}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('[Cache] Warmed menu items', { length : menuItems.length });</span>
     
     // Cache all categories
     const categories = <span class="cstat-no" title="statement not covered" >await Category.find({ isActive: true }).lean();</span>
 <span class="cstat-no" title="statement not covered" >    await set('categories', 'all', categories);</span>
-<span class="cstat-no" title="statement not covered" >    logger.info(`[Cache] Warmed categories: ${categories.length}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('[Cache] Warmed categories', { length : categories.length });</span>
     
     // Cache active offers
     const offers = <span class="cstat-no" title="statement not covered" >await Offer.find({ </span>
@@ -928,7 +928,7 @@ async function <span class="fstat-no" title="function not covered" >warmCache(</
       validUntil: { $gte: new Date() }
     }).lean();
 <span class="cstat-no" title="statement not covered" >    await set('offers', 'active', offers);</span>
-<span class="cstat-no" title="statement not covered" >    logger.info(`[Cache] Warmed offers: ${offers.length}`);</span>
+<span class="cstat-no" title="statement not covered" >    logger.info('[Cache] Warmed offers', { length : offers.length });</span>
     
     // Cache settings
     const settings = <span class="cstat-no" title="statement not covered" >await Settings.findOne().lean();</span>
@@ -1054,7 +1054,7 @@ function <span class="fstat-no" title="function not covered" >cacheMiddleware(</
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-19T18:32:07.239Z
+                at 2026-02-21T10:10:14.953Z
             </div>
         <script src="../prettify.js"></script>
         <script>
