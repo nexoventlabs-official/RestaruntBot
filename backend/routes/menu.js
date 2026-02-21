@@ -283,7 +283,9 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
               const pid = cloudinaryService.extractPublicId(oldImg);
               if (pid) await cloudinaryService.deleteImage(pid);
               logger.info('Deleted removed variant image from Cloudinary', { variantIndex: i, publicId: pid });
-            } catch (e) { warn('Failed to delete variant image from Cloudinary': logger.warn('Failed to delete variant image from Cloudinary', { variantIndex: i, error: e.message }); }
+            } catch (e) {
+              logger.warn('Failed to delete variant image from Cloudinary', { variantIndex: i, error: e.message });
+            }
           }
         }
 
@@ -311,7 +313,9 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
               try {
                 const pid = cloudinaryService.extractPublicId(oldImage);
                 if (pid) await cloudinaryService.deleteImage(pid);
-              } catch (e) { warn('Failed to delete old variant image from Cloudinary': logger.warn('Failed to delete old variant image from Cloudinary', { variantIndex: idx, error: e.message }); }
+              } catch (e) {
+                logger.warn('Failed to delete old variant image from Cloudinary', { variantIndex: idx, error: e.message });
+              }
             }
             variantImage = await cloudinaryService.uploadFromBuffer(imageFileMap[idx].buffer, 'restaurant-bot/menu-variants');
           }
@@ -347,7 +351,9 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
           try {
             const pid = cloudinaryService.extractPublicId(oldV.image);
             if (pid) await cloudinaryService.deleteImage(pid);
-          } catch (e) { warn('Failed to delete variant image during cleanup': logger.warn('Failed to delete variant image during cleanup', { error: e.message }); }
+          } catch (e) {
+            logger.warn('Failed to delete variant image during cleanup', { error: e.message });
+          }
         }
       }
       // Delete all variant products from Meta catalog (non-blocking)
