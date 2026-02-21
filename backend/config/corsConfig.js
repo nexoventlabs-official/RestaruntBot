@@ -22,10 +22,21 @@ const { isProduction, isDevelopment } = require('./envValidation');
  * @returns {string[]} Array of allowed origin URLs
  */
 function getAllowedOrigins() {
-  // Always allow the production frontend
+  const normalizeOrigin = (origin) =>
+    String(origin || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\/$/, '');
+
+  // Always allow known production frontends
   const productionOrigins = [
-    'https://restarunt-bot.vercel.app'
-  ];
+    'https://restarunt-bot.vercel.app',
+    'https://restaurant-bot.vercel.app',
+    process.env.FRONTEND_URL,
+    process.env.WEBSITE_URL
+  ]
+    .filter(Boolean)
+    .map(normalizeOrigin);
 
   if (isProduction()) {
     // Production: Use explicit origins from environment
@@ -38,7 +49,9 @@ function getAllowedOrigins() {
       .filter(origin => origin.length > 0);
     
     // Validate origins (must be HTTPS in production)
-    const validOrigins = origins.filter(origin => {
+    const validOrigins = origins
+      .map(normalizeOrigin)
+      .filter(origin => {
       if (!origin.startsWith('https://')) {
         console.warn(`⚠️ CORS: Ignoring non-HTTPS origin in production: ${origin}`);
         return false;
@@ -89,6 +102,7 @@ const corsOptions = {
    */
   origin: function (origin, callback) {
     const allowedOrigins = getAllowedOrigins();
+    const normalizedOrigin = String(origin || '').trim().toLowerCase().replace(/\/$/, '');
     
     // Allow requests with no origin (mobile apps, Postman, curl, etc.)
     if (!origin) {
@@ -96,10 +110,17 @@ const corsOptions = {
     }
     
     // Check if origin is in whitelist
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    if (allowedOrigins.indexOf(normalizedOrigin) !== -1) {
       callback(null, true);
-    } else if (origin.endsWith('.vercel.app') && origin.includes('nexovent-labs')) {
-      // Allow Vercel preview deployments for the project
+    } else if (
+      normalizedOrigin.endsWith('.vercel.app') &&
+      (
+        normalizedOrigin.includes('restarunt-bot') ||
+        normalizedOrigin.includes('restaurant-bot') ||
+        normalizedOrigin.includes('nexovent-labs')
+      )
+    ) {
+      // Allow Vercel preview deployments for known project names
       callback(null, true);
     } else {
       // Log blocked origin for security monitoring
