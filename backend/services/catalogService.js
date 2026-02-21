@@ -700,7 +700,7 @@ const catalogService = {
    * @returns {string} Description text
    */
   buildProductDescription(menuItem, variant = null, quantityOption = null, options = {}) {
-    const { includeRatings = false } = options;
+    const { includeRatings = true } = options;
     const parts = [];
 
     // ── Part 1: Quantity/unit — use specific quantity option if provided ──
@@ -722,7 +722,7 @@ const catalogService = {
       parts.push(`${menuItem.quantity} ${menuItem.unit}`);
     }
 
-    // ── Part 2: Star rating (only included during scheduled 2 AM sync) ──
+    // ── Part 2: Star rating (included in all syncs) ──
     if (includeRatings) {
       const rating = (variant && variant.avgRating) ? variant.avgRating : (menuItem.avgRating || 0);
       const totalRatings = (variant && variant.totalRatings) ? variant.totalRatings : (menuItem.totalRatings || 0);

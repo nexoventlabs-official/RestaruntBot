@@ -31,15 +31,16 @@ async function syncAllRatingsToMeta() {
 
     const MenuItem = mongoose.model('MenuItem');
     
-    // Find all menu items that have at least one rating
-    const ratedItems = await MenuItem.find({ totalRatings: { $gt: 0 } }).select('_id').lean();
+    // Find all available menu items (rated and unrated) so every product shows stars
+    // Unrated items display ☆☆☆☆☆ No reviews yet
+    const allItems = await MenuItem.find({ available: true }).select('_id').lean();
     
-    if (ratedItems.length === 0) {
-      logger.info('[CatalogRatingSync] No rated items to sync');
+    if (allItems.length === 0) {
+      logger.info('[CatalogRatingSync] No menu items to sync');
       return;
     }
 
-    const menuItemIds = ratedItems.map(item => item._id.toString());
+    const menuItemIds = allItems.map(item => item._id.toString());
     logger.info(`[CatalogRatingSync] Starting daily rating sync for ${menuItemIds.length} items`);
 
     const result = await catalogService.syncRatingsToMeta(menuItemIds);

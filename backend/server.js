@@ -39,6 +39,7 @@ const categoryScheduler = require('./services/categoryScheduler');
 const orderCleanup = require('./services/orderCleanup');
 const cartCleanup = require('./services/cartCleanup');
 const catalogReviewPoller = require('./services/catalogReviewPoller');
+const catalogRatingSync = require('./services/catalogRatingSync');
 const googleSheets = require('./services/googleSheets');
 
 // Validate environment variables at startup (always strict for critical vars)
@@ -124,6 +125,7 @@ const connectMongoDB = async () => {
     orderCleanup.start();
     cartCleanup.startCartCleanupScheduler();
     catalogReviewPoller.start();
+    catalogRatingSync.start();
     
     // Initialize Google Sheets - auto-create missing sheets, then initialize headers
     logger.info('Initializing Google Sheets...');
@@ -326,6 +328,7 @@ const gracefulShutdown = async (signal) => {
     if (categoryScheduler.stop) categoryScheduler.stop();
     if (orderCleanup.stop) orderCleanup.stop();
     if (cartCleanup.stopCartCleanupScheduler) cartCleanup.stopCartCleanupScheduler();
+    if (catalogRatingSync.stop) catalogRatingSync.stop();
     logger.info('Schedulers stopped');
   } catch (err) {
     logger.error('Error stopping schedulers', { error: err.message });
