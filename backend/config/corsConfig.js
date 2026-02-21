@@ -14,6 +14,22 @@
 const { isProduction, isDevelopment } = require('./envValidation');
 
 /**
+ * Normalize an origin URL for comparison
+ * - Lowercase
+ * - Trim whitespace
+ * - Remove trailing slash
+ * 
+ * @param {string} origin - Origin URL to normalize
+ * @returns {string} Normalized origin
+ */
+function normalizeOrigin(origin) {
+  return String(origin || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\/$/, '');
+}
+
+/**
  * Get allowed origins based on environment
  * 
  * Production: Uses ALLOWED_ORIGINS from .env (comma-separated)
@@ -22,12 +38,6 @@ const { isProduction, isDevelopment } = require('./envValidation');
  * @returns {string[]} Array of allowed origin URLs
  */
 function getAllowedOrigins() {
-  const normalizeOrigin = (origin) =>
-    String(origin || '')
-      .trim()
-      .toLowerCase()
-      .replace(/\/$/, '');
-
   // Always allow known production frontends
   const productionOrigins = [
     'https://restarunt-bot.vercel.app',
@@ -230,6 +240,7 @@ function validateCorsConfig() {
 module.exports = {
   corsOptions,
   getAllowedOrigins,
+  normalizeOrigin,
   getCorsInfo,
   validateCorsConfig
 };

@@ -251,15 +251,30 @@ const sseClients = new Set();
 const { initContext, runWithContext } = require('./services/correlationContext');
 
 app.get('/api/events', (req, res) => {
+  // Set CORS headers explicitly for Server-Sent Events (EventSource connections)
+  const { normalizeOrigin, getAllowedOrigins } = require('./config/corsConfig');
+  const requestOrigin = req.get('origin');
+  const normalizedOrigin = normalizeOrigin(requestOrigin);
+  const allowedOrigins = getAllowedOrigins();
+  
+  if (requestOrigin) {
+    if (allowedOrigins.includes(normalizedOrigin)) {
+      res.setHeader('Access-Control-Allow-Origin', requestOrigin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+  }
+  
   // Require valid JWT for SSE connection
   const token = req.query.token || req.headers.authorization?.split(' ')[1];
   if (!token) {
+    res.setHeader('Content-Type', 'application/json');
     return res.status(401).json({ error: 'Authentication required' });
   }
   let decoded;
   try {
     decoded = require('jsonwebtoken').verify(token, process.env.JWT_SECRET);
   } catch (err) {
+    res.setHeader('Content-Type', 'application/json');
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 
