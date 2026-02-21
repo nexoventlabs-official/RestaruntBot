@@ -130,8 +130,7 @@ messageQueue.process(async (job) => {
     
     logger.info('Message processed successfully from queue', {
       messageId,
-      duration: Date.now() - timestamp
-    : job.timestamp
+      duration: Date.now() - job.timestamp
     });
     
     return { success: true, messageId };
