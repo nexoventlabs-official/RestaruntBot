@@ -386,6 +386,7 @@ router.post('/razorpay-webhook', webhookRateLimiter, express.raw({ type: 'applic
               await paymentEvent.save();
             }
           }
+        }
       }
       
       return res.json({ status: 'ok' });
