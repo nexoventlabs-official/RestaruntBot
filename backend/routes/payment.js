@@ -12,6 +12,7 @@ const authMiddleware = require('../middleware/auth');
 const { publicRateLimiter, webhookRateLimiter } = require('../middleware/rateLimiter');
 const { transitionStatus } = require('../services/orderStateMachine');
 const logger = require('../services/logger');
+const { logRouteError } = require('../services/logger');
 const User = require('../models/User');
 const pushNotification = require('../services/pushNotification');
 const dataEvents = require('../services/eventEmitter');

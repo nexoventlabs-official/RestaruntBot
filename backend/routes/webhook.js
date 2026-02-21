@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const logger = require('../services/logger');
+const { logRouteError } = require('../services/logger');
 const chatbot = require('../services/chatbot');
 const whatsapp = require('../services/whatsapp');
 const chatbotImagesService = require('../services/chatbotImages');

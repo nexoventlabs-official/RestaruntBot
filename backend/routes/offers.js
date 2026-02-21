@@ -8,6 +8,7 @@ const googleSheets = require('../services/googleSheets');
 const whatsapp = require('../services/whatsapp');
 const whatsappBroadcast = require('../services/whatsappBroadcast');
 const logger = require('../services/logger');
+const { logRouteError } = require('../services/logger');
 const catalogService = require('../services/catalogService');
 const multer = require('multer');
 
