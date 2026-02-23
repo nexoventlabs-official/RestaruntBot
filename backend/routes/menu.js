@@ -1,5 +1,6 @@
 const express = require('express');
 const logger = require('../services/logger');
+const { logRouteError } = require('../services/logger');
 const MenuItem = require('../models/MenuItem');
 const authMiddleware = require('../middleware/auth');
 const cloudinaryService = require('../services/cloudinary');

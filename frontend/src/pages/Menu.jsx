@@ -828,8 +828,16 @@ export default function Menu() {
                               </button>
                             </div>
                             {(!v.quantities || v.quantities.length === 0) ? (
-                              <input type="number" value={v.price || ''} onChange={e => updateVariant(vi, 'price', e.target.value)}
-                                className="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-lg text-sm" placeholder="Price ₹" />
+                              <div className="flex gap-2 items-center">
+                                <input type="text" value={v.quantity || ''} onChange={e => updateVariant(vi, 'quantity', e.target.value)}
+                                  className="w-20 px-2 py-1.5 bg-dark-50 border border-dark-200 rounded-lg text-xs" placeholder="Qty" />
+                                <select value={v.unit || 'piece'} onChange={e => updateVariant(vi, 'unit', e.target.value)}
+                                  className="px-2 py-1.5 bg-dark-50 border border-dark-200 rounded-lg text-xs">
+                                  {['piece','plate','bowl','glass','bottle','kg','g','ml','l','half','full','small','medium','large','regular'].map(u => <option key={u} value={u}>{u}</option>)}
+                                </select>
+                                <input type="number" value={v.price || ''} onChange={e => updateVariant(vi, 'price', e.target.value)}
+                                  className="flex-1 px-2 py-1.5 bg-dark-50 border border-dark-200 rounded-lg text-xs" placeholder="₹ Price" />
+                              </div>
                             ) : (
                               <div className="space-y-2">
                                 {v.quantities.map((q, qi) => (
