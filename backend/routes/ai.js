@@ -2,6 +2,7 @@ const express = require('express');
 const groqAi = require('../services/groqAi');
 const authMiddleware = require('../middleware/auth');
 const { adminRateLimiter } = require('../middleware/rateLimiter');
+const { logRouteError } = require('../services/logger');
 const router = express.Router();
 
 // Apply admin rate limiting
@@ -21,7 +22,8 @@ router.post('/generate-description', authMiddleware, async (req, res) => {
 router.post('/generate-tags', authMiddleware, async (req, res) => {
   try {
     const { name, category, foodType, quantity, unit } = req.body;
-    const tags = await groqAi.generateTags(name, category, foodType, quantity, unit);
+    const tagsResult = await groqAi.generateTags(name, category, foodType, quantity, unit);
+    const tags = Array.isArray(tagsResult) ? tagsResult : tagsResult.split(',').map(t => t.trim()).filter(Boolean);
     res.json({ tags });
   } catch (error) {
 
