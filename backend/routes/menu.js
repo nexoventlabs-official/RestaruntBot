@@ -135,10 +135,11 @@ router.post('/', authMiddleware, menuUpload, async (req, res) => {
           if (imageFileMap[idx]) {
             variantImage = await cloudinaryService.uploadFromBuffer(imageFileMap[idx].buffer, 'restaurant-bot/menu-variants');
           }
+          const parsedPrice = parseFloat(v.price) || 0;
           const variantData = {
             label: v.label,
             variantType: 'size',
-            price: parseFloat(v.price),
+            price: parsedPrice,
             offerPrice: v.offerPrice ? parseFloat(v.offerPrice) : undefined,
             quantity: v.quantity ? parseFloat(v.quantity) : 1,
             unit: v.unit || 'piece',
@@ -153,9 +154,13 @@ router.post('/', authMiddleware, menuUpload, async (req, res) => {
             variantData.quantities = v.quantities.map(q => ({
               quantity: parseFloat(q.quantity) || 1,
               unit: q.unit || 'piece',
-              price: parseFloat(q.price) || variantData.price,
+              price: parseFloat(q.price) || parsedPrice,
               offerPrice: q.offerPrice ? parseFloat(q.offerPrice) : undefined
             }));
+            // If no direct price set, derive from first quantity option
+            if (!parsedPrice && variantData.quantities.length > 0) {
+              variantData.price = variantData.quantities[0].price || 0;
+            }
           }
           return variantData;
         }));
@@ -320,10 +325,11 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
             }
             variantImage = await cloudinaryService.uploadFromBuffer(imageFileMap[idx].buffer, 'restaurant-bot/menu-variants');
           }
+          const parsedPrice = parseFloat(v.price) || 0;
           const variantData = {
             label: v.label,
             variantType: 'size',
-            price: parseFloat(v.price),
+            price: parsedPrice,
             offerPrice: v.offerPrice ? parseFloat(v.offerPrice) : undefined,
             quantity: v.quantity ? parseFloat(v.quantity) : 1,
             unit: v.unit || 'piece',
@@ -338,9 +344,13 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
             variantData.quantities = v.quantities.map(q => ({
               quantity: parseFloat(q.quantity) || 1,
               unit: q.unit || 'piece',
-              price: parseFloat(q.price) || variantData.price,
+              price: parseFloat(q.price) || parsedPrice,
               offerPrice: q.offerPrice ? parseFloat(q.offerPrice) : undefined
             }));
+            // If no direct price set, derive from first quantity option
+            if (!parsedPrice && variantData.quantities.length > 0) {
+              variantData.price = variantData.quantities[0].price || 0;
+            }
           }
           return variantData;
         }));
