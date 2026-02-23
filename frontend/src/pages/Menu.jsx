@@ -442,7 +442,6 @@ export default function Menu() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) return alert('Please enter a name');
-    if (form.category.length === 0) return alert('Please select at least one category');
 
     setSaving(true);
     try {
@@ -735,24 +734,6 @@ export default function Menu() {
                 <label className="block text-sm font-semibold text-dark-700 mb-1">Title <span className="text-red-500">*</span></label>
                 <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required
                   className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all" placeholder="Item name" />
-              </div>
-
-              {/* Category Multi-Select */}
-              <div>
-                <label className="block text-sm font-semibold text-dark-700 mb-1">Category <span className="text-red-500">*</span></label>
-                <div className="flex flex-wrap gap-2">
-                  {categoryList.map(c => (
-                    <button key={c._id} type="button" onClick={() => {
-                      const sel = form.category.includes(c.name) ? form.category.filter(x => x !== c.name) : [...form.category, c.name];
-                      setForm({ ...form, category: sel });
-                    }} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
-                      form.category.includes(c.name) ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-dark-200 text-dark-600 hover:border-dark-300'
-                    }`}>
-                      {c.image && <img src={c.image} alt="" className="w-5 h-5 rounded-full object-cover" />}
-                      {c.name} {form.category.includes(c.name) && <Check className="w-3.5 h-3.5" />}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               {/* Variants */}
