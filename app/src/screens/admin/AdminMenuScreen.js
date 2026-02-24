@@ -405,6 +405,34 @@ export default function AdminMenuScreen({ navigation, route }) {
   const [customDays, setCustomDays] = useState(
     DAYS.map(d => ({ day: d, enabled: false, startTime: '09:00', endTime: '17:00' }))
   );
+  // Time dropdown state (inline, no nested modal)
+  const [showTimeDropdown, setShowTimeDropdown] = useState(false);
+  const [timeDropdownDayIdx, setTimeDropdownDayIdx] = useState(null);
+  const [timeDropdownField, setTimeDropdownField] = useState(null); // 'startTime' or 'endTime'
+  const TIME_OPTIONS = (() => {
+    const opts = [];
+    for (let h = 0; h < 24; h++) {
+      for (let m = 0; m < 60; m += 30) {
+        opts.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+      }
+    }
+    return opts;
+  })();
+  const openTimeDropdown = (dIdx, field) => {
+    if (showTimeDropdown && timeDropdownDayIdx === dIdx && timeDropdownField === field) {
+      setShowTimeDropdown(false);
+      return;
+    }
+    setTimeDropdownDayIdx(dIdx);
+    setTimeDropdownField(field);
+    setShowTimeDropdown(true);
+  };
+  const selectTime = (time24) => {
+    if (timeDropdownDayIdx !== null && timeDropdownField) {
+      updateCustomDay(timeDropdownDayIdx, timeDropdownField, time24);
+    }
+    setShowTimeDropdown(false);
+  };
 
   const showItemScheduleModal = (parentItem) => {
     setSoldOutItem(parentItem);
@@ -445,10 +473,10 @@ export default function AdminMenuScreen({ navigation, route }) {
       setShowItemSoldOutModal(false);
       fetchMenu();
       if (scheduleType === 'daily') {
-        Alert.alert('Success', `Schedule saved for "${soldOutItem.name}"\nSold out daily: ${formatTime12(dailyStartTime)} – ${formatTime12(dailyEndTime)}`);
+        Alert.alert('Success', `Schedule saved for "${soldOutItem.name}"\nAvailable daily: ${formatTime12(dailyStartTime)} – ${formatTime12(dailyEndTime)}\nSold out outside this window`);
       } else {
         const enabledDays = customDays.filter(d => d.enabled).map(d => d.day).join(', ');
-        Alert.alert('Success', `Custom schedule saved for "${soldOutItem.name}"\nDays: ${enabledDays || 'None'}`);
+        Alert.alert('Success', `Custom schedule saved for "${soldOutItem.name}"\nAvailable on: ${enabledDays || 'None'}\nSold out on other days/times`);
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to save schedule');
@@ -477,8 +505,11 @@ export default function AdminMenuScreen({ navigation, route }) {
       const newH = (h + delta + 24) % 24;
       return `${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
     } else {
-      const newM = (m + delta + 60) % 60;
-      return `${h.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`;
+      const totalMin = h * 60 + m + delta;
+      const wrapped = ((totalMin % 1440) + 1440) % 1440;
+      const newH = Math.floor(wrapped / 60);
+      const newM = wrapped % 60;
+      return `${newH.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`;
     }
   };
 
@@ -1951,7 +1982,7 @@ export default function AdminMenuScreen({ navigation, route }) {
               </TouchableOpacity>
             </View>
             
-            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
               <View style={styles.soldOutModalBody}>
                 <Text style={styles.soldOutCategoryName}>{soldOutItem?.name}</Text>
 
@@ -2041,12 +2072,12 @@ export default function AdminMenuScreen({ navigation, route }) {
                 {scheduleType === 'daily' && (
                   <View>
                     <Text style={styles.soldOutDescription}>
-                      Item will be marked as sold out every day during this time window.
+                      Item will be available only during this time window. Outside this time, it will be sold out.
                     </Text>
 
                     {/* Start Time */}
                     <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151', marginBottom: 10 }}>
-                      Sold out from:
+                      Available from:
                     </Text>
                     <View style={styles.soldOutTimePicker}>
                       <View style={styles.soldOutTimeUnit}>
@@ -2084,7 +2115,7 @@ export default function AdminMenuScreen({ navigation, route }) {
 
                     {/* End Time */}
                     <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151', marginTop: 20, marginBottom: 10 }}>
-                      Available again at:
+                      Available until:
                     </Text>
                     <View style={styles.soldOutTimePicker}>
                       <View style={styles.soldOutTimeUnit}>
@@ -2126,7 +2157,8 @@ export default function AdminMenuScreen({ navigation, route }) {
                       backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#FED7AA',
                     }}>
                       <Text style={{ fontSize: 13, fontWeight: '600', color: '#92400E' }}>
-                        ⏰ Sold out every day: {formatTime12(dailyStartTime)} – {formatTime12(dailyEndTime)}
+                        ✅ Available daily: {formatTime12(dailyStartTime)} – {formatTime12(dailyEndTime)}
+                        {"\n"}🚫 Sold out outside this window
                       </Text>
                     </View>
                   </View>
@@ -2136,7 +2168,7 @@ export default function AdminMenuScreen({ navigation, route }) {
                 {scheduleType === 'custom' && (
                   <View>
                     <Text style={styles.soldOutDescription}>
-                      Enable specific days and set sold-out times for each.
+                      Enable specific days and set available times for each. Item will be sold out outside these times.
                     </Text>
                     {customDays.map((dayItem, dIdx) => (
                       <View key={dayItem.day} style={{
@@ -2191,41 +2223,84 @@ export default function AdminMenuScreen({ navigation, route }) {
 
                         {/* Time pickers (collapsed if disabled) */}
                         {dayItem.enabled && (
-                          <View style={{
-                            flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-                            paddingHorizontal: 16, paddingBottom: 14, gap: 8,
-                          }}>
-                            {/* Start time compact */}
-                            <View style={{ alignItems: 'center' }}>
-                              <Text style={{ fontSize: 10, fontWeight: '600', color: '#6b7280', marginBottom: 4 }}>FROM</Text>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB', paddingHorizontal: 6, paddingVertical: 4 }}>
-                                <TouchableOpacity onPress={() => updateCustomDay(dIdx, 'startTime', cycleTime(dayItem.startTime, 'hour', 1))}>
-                                  <Ionicons name="caret-up" size={16} color={ZOMATO_RED} />
+                          <View>
+                            <View style={{
+                              flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                              paddingHorizontal: 16, paddingBottom: showTimeDropdown && timeDropdownDayIdx === dIdx ? 8 : 14, gap: 10,
+                            }}>
+                              {/* Start time dropdown */}
+                              <View style={{ alignItems: 'center' }}>
+                                <Text style={{ fontSize: 10, fontWeight: '600', color: '#6b7280', marginBottom: 4 }}>FROM</Text>
+                                <TouchableOpacity
+                                  onPress={() => openTimeDropdown(dIdx, 'startTime')}
+                                  style={{
+                                    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
+                                    borderRadius: 10, borderWidth: 1.5,
+                                    borderColor: (showTimeDropdown && timeDropdownDayIdx === dIdx && timeDropdownField === 'startTime') ? ZOMATO_RED : '#E5E7EB',
+                                    paddingHorizontal: 12, paddingVertical: 8,
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginRight: 6 }}>
+                                    {formatTime12(dayItem.startTime)}
+                                  </Text>
+                                  <Ionicons name={showTimeDropdown && timeDropdownDayIdx === dIdx && timeDropdownField === 'startTime' ? 'chevron-up' : 'chevron-down'} size={14} color="#9ca3af" />
                                 </TouchableOpacity>
-                                <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginHorizontal: 4 }}>
-                                  {formatTime12(dayItem.startTime)}
-                                </Text>
-                                <TouchableOpacity onPress={() => updateCustomDay(dIdx, 'startTime', cycleTime(dayItem.startTime, 'hour', -1))}>
-                                  <Ionicons name="caret-down" size={16} color={ZOMATO_RED} />
+                              </View>
+                              <Text style={{ fontSize: 14, color: '#9ca3af', fontWeight: '600', marginTop: 14 }}>→</Text>
+                              {/* End time dropdown */}
+                              <View style={{ alignItems: 'center' }}>
+                                <Text style={{ fontSize: 10, fontWeight: '600', color: '#6b7280', marginBottom: 4 }}>TO</Text>
+                                <TouchableOpacity
+                                  onPress={() => openTimeDropdown(dIdx, 'endTime')}
+                                  style={{
+                                    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
+                                    borderRadius: 10, borderWidth: 1.5,
+                                    borderColor: (showTimeDropdown && timeDropdownDayIdx === dIdx && timeDropdownField === 'endTime') ? ZOMATO_RED : '#E5E7EB',
+                                    paddingHorizontal: 12, paddingVertical: 8,
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginRight: 6 }}>
+                                    {formatTime12(dayItem.endTime)}
+                                  </Text>
+                                  <Ionicons name={showTimeDropdown && timeDropdownDayIdx === dIdx && timeDropdownField === 'endTime' ? 'chevron-up' : 'chevron-down'} size={14} color="#9ca3af" />
                                 </TouchableOpacity>
                               </View>
                             </View>
-                            <Text style={{ fontSize: 14, color: '#9ca3af', fontWeight: '600' }}>→</Text>
-                            {/* End time compact */}
-                            <View style={{ alignItems: 'center' }}>
-                              <Text style={{ fontSize: 10, fontWeight: '600', color: '#6b7280', marginBottom: 4 }}>TO</Text>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB', paddingHorizontal: 6, paddingVertical: 4 }}>
-                                <TouchableOpacity onPress={() => updateCustomDay(dIdx, 'endTime', cycleTime(dayItem.endTime, 'hour', 1))}>
-                                  <Ionicons name="caret-up" size={16} color={ZOMATO_RED} />
-                                </TouchableOpacity>
-                                <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginHorizontal: 4 }}>
-                                  {formatTime12(dayItem.endTime)}
-                                </Text>
-                                <TouchableOpacity onPress={() => updateCustomDay(dIdx, 'endTime', cycleTime(dayItem.endTime, 'hour', -1))}>
-                                  <Ionicons name="caret-down" size={16} color={ZOMATO_RED} />
-                                </TouchableOpacity>
+                            {/* Inline time list */}
+                            {showTimeDropdown && timeDropdownDayIdx === dIdx && (
+                              <View style={{
+                                marginHorizontal: 16, marginBottom: 14, borderRadius: 12,
+                                backgroundColor: '#fff', borderWidth: 1, borderColor: '#E5E7EB',
+                                maxHeight: 200, overflow: 'hidden',
+                              }}>
+                                <ScrollView nestedScrollEnabled={true} showsVerticalScrollIndicator={true}>
+                                  {TIME_OPTIONS.map((t) => {
+                                    const currentVal = customDays[dIdx]?.[timeDropdownField];
+                                    const isSelected = currentVal === t;
+                                    return (
+                                      <TouchableOpacity
+                                        key={t}
+                                        onPress={() => selectTime(t)}
+                                        style={{
+                                          paddingVertical: 11, paddingHorizontal: 18,
+                                          backgroundColor: isSelected ? '#FEF2F2' : '#fff',
+                                          borderBottomWidth: 0.5, borderBottomColor: '#f3f4f6',
+                                          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                                        }}
+                                      >
+                                        <Text style={{
+                                          fontSize: 15, fontWeight: isSelected ? '700' : '500',
+                                          color: isSelected ? ZOMATO_RED : '#374151',
+                                        }}>
+                                          {formatTime12(t)}
+                                        </Text>
+                                        {isSelected && <Ionicons name="checkmark-circle" size={18} color={ZOMATO_RED} />}
+                                      </TouchableOpacity>
+                                    );
+                                  })}
+                                </ScrollView>
                               </View>
-                            </View>
+                            )}
                           </View>
                         )}
                       </View>

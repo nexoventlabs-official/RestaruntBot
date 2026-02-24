@@ -640,25 +640,42 @@ router.patch('/:id/schedule-soldout', authMiddleware, async (req, res) => {
         days: schedule.days || [],
       };
       // Check if item should be sold out RIGHT NOW based on schedule
+      // Schedule defines the AVAILABILITY window — outside = sold out
       const now = new Date();
       const currentDay = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][now.getDay()];
       const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-      let shouldBeSoldOut = false;
+      let isWithinSchedule = false;
 
       if (schedule.type === 'daily' && schedule.dailyStartTime && schedule.dailyEndTime) {
-        shouldBeSoldOut = currentTime >= schedule.dailyStartTime && currentTime < schedule.dailyEndTime;
+        // Handle overnight (e.g., 22:00 - 06:00)
+        if (schedule.dailyEndTime <= schedule.dailyStartTime) {
+          isWithinSchedule = currentTime >= schedule.dailyStartTime || currentTime < schedule.dailyEndTime;
+        } else {
+          isWithinSchedule = currentTime >= schedule.dailyStartTime && currentTime < schedule.dailyEndTime;
+        }
       } else if (schedule.type === 'custom' && schedule.days) {
         const daySchedule = schedule.days.find(d => d.day === currentDay && d.enabled);
         if (daySchedule && daySchedule.startTime && daySchedule.endTime) {
-          shouldBeSoldOut = currentTime >= daySchedule.startTime && currentTime < daySchedule.endTime;
+          if (daySchedule.endTime <= daySchedule.startTime) {
+            isWithinSchedule = currentTime >= daySchedule.startTime || currentTime < daySchedule.endTime;
+          } else {
+            isWithinSchedule = currentTime >= daySchedule.startTime && currentTime < daySchedule.endTime;
+          }
         }
       }
 
-      if (shouldBeSoldOut) {
+      // Outside schedule = sold out
+      if (!isWithinSchedule) {
         if (item.variants && item.variants.length > 0) {
           item.variants.forEach(v => { v.available = false; });
         }
         item.available = false;
+      } else {
+        // Within schedule = available
+        if (item.variants && item.variants.length > 0) {
+          item.variants.forEach(v => { v.available = true; });
+        }
+        item.available = true;
       }
     } else if (endTime) {
       // Legacy: one-time sold out until endTime

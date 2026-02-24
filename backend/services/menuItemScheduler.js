@@ -84,7 +84,10 @@ class MenuItemScheduler {
     try {
       if (!item.soldOutSchedule || !item.soldOutSchedule.enabled) return;
 
-      const shouldBeSoldOut = this.isWithinSchedule(item.soldOutSchedule);
+      // Schedule defines the AVAILABILITY window
+      // Within schedule = available, outside schedule = sold out
+      const isWithinSchedule = this.isWithinSchedule(item.soldOutSchedule);
+      const shouldBeSoldOut = !isWithinSchedule;
 
       // Determine current sold-out state from variants or item-level availability
       const isCurrentlySoldOut = item.variants && item.variants.length > 0
