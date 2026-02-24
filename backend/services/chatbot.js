@@ -4769,14 +4769,12 @@ const chatbot = {
             await customer.save();
           }
           
-          // Set selected item state
-          state.selectedItem = matchedItem._id.toString();
-          customer.conversationState = state;
-          await customer.save();
-          
           // Send the full cart with catalog (no need for separate product card)
           await this.sendCart(phone, customer);
-          state.currentStep = 'viewing_item_details';
+          // Item is already added to cart above, so set step to 'viewing_cart'
+          // NOT 'viewing_item_details' — that would cause the checkout handler to add +1 again
+          state.selectedItem = null;
+          state.currentStep = 'viewing_cart';
         } else if (websiteOrder.itemName) {
           const searchName = websiteOrder.itemName.toLowerCase().trim();
           // No exact match - try to find items that START with the search term
