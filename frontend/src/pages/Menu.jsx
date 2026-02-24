@@ -633,10 +633,6 @@ export default function Menu() {
                     className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit Item">
                     <Edit className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={() => showSoldOutOptions('item', items.find(i => i._id === section.parentId))}
-                    className="p-1.5 text-orange-500 hover:bg-orange-50 rounded-lg transition-colors" title="Sold Out Options">
-                    <Ban className="w-3.5 h-3.5" />
-                  </button>
                   <button onClick={() => deleteItem(items.find(i => i._id === section.parentId))}
                     className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete Item">
                     <Trash2 className="w-3.5 h-3.5" />
@@ -659,13 +655,7 @@ export default function Menu() {
                       {row.foodType && row.foodType !== 'none' && (
                         <span className={`absolute top-1.5 left-1.5 w-3 h-3 rounded-full border-2 border-white ${foodDot(row.foodType)}`} />
                       )}
-                      {/* Toggle badge on image */}
-                      <button onClick={() => toggleVariant(row._parentId, row._variantIndex)} disabled={togglingId === toggleKey}
-                        className={`absolute top-1.5 right-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold shadow-sm ${
-                          isOff ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
-                        } ${togglingId === toggleKey ? 'opacity-50 animate-pulse' : 'hover:opacity-90'}`}>
-                        {isOff ? 'Off' : 'Active'}
-                      </button>
+
                     </div>
 
                     {/* Info */}
