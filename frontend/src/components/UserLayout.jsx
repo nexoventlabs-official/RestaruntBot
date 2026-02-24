@@ -657,8 +657,8 @@ export default function UserLayout() {
           displayPrice = selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price ? selectedItem.offerPrice : selectedItem.price;
           displayOriginalPrice = selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price ? selectedItem.price : null;
         }
-        const displayRating = sv?.avgRating || selectedItem.avgRating;
-        const displayTotalRatings = sv?.totalRatings || selectedItem.totalRatings;
+        const displayRating = sv ? (sv.avgRating || 0) : (selectedItem.avgRating || 0);
+        const displayTotalRatings = sv ? (sv.totalRatings || 0) : (selectedItem.totalRatings || 0);
         const displayUnit = sq ? `${sq.quantity} ${sq.unit}` : sv ? `${sv.quantity || selectedItem.quantity || 1} ${sv.unit || selectedItem.unit || 'piece'}` : `${selectedItem.quantity || 1} ${selectedItem.unit || 'piece'}`;
         return (
         <div 
