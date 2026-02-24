@@ -438,6 +438,34 @@ export default function Offers() {
         fd.append('imageWhatsApp', newWhatsAppFile);
       }
 
+      // Optimistic UI: close form immediately and add placeholder to list
+      const optimisticOffer = {
+        _id: `temp_${Date.now()}`,
+        offerType: offerType.trim(),
+        percentage: percentage ? parseFloat(percentage) : null,
+        isActive: true,
+        templateStatus: 'pending',
+        validFrom: validFrom ? new Date(validFrom).toISOString() : null,
+        validUntil: validUntil ? new Date(validUntil).toISOString() : null,
+        targetType,
+        createdAt: new Date().toISOString(),
+        imageMobile: newImagePreview || image,
+        imageTablet: newImagePreview || image,
+        imageDesktop: newImagePreview || image,
+        _optimistic: true,
+      };
+
+      if (editingOffer) {
+        // For edits, update the existing offer in the list optimistically
+        setOffers(prev => prev.map(o => o._id === editingOffer._id ? { ...o, offerType: offerType.trim(), percentage: percentage ? parseFloat(percentage) : o.percentage, _optimistic: true } : o));
+      } else {
+        // For create, add placeholder to list
+        setOffers(prev => [optimisticOffer, ...prev]);
+      }
+      setShowForm(false);
+      setSaving(false);
+
+      // Process in background
       let res;
       if (editingOffer) {
         res = await api.put(`/offers/${editingOffer._id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 90000 });
@@ -445,20 +473,17 @@ export default function Offers() {
         res = await api.post('/offers', fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 90000 });
       }
 
-      // Show template status
-      const ts = res.data?.templateStatus;
-      if (ts === 'pending') alert('Offer saved! Template submitted to Meta — waiting for approval.');
-      else if (ts === 'rejected') alert(`Offer saved but template was rejected: ${res.data?.rejectionReason || 'Unknown'}`);
-      else if (!ts || ts === 'none') alert('Offer saved! No template created (META_WABA_ID may not be configured).');
-      else alert('Offer saved successfully!');
-
-      setShowForm(false);
+      // Refresh with real data from server
       fetchOffers();
     } catch (err) {
+      // Remove optimistic entry on failure and show error
+      if (!editingOffer) {
+        setOffers(prev => prev.filter(o => !o._optimistic));
+      }
+      fetchOffers();
       if (err.code === 'ECONNABORTED') alert('Upload timed out. Check your internet connection and try again.');
       else alert(err.response?.data?.error || 'Failed to save offer');
     }
-    finally { setSaving(false); }
   };
 
   /* ═══════════ LOADING ═══════════ */
@@ -512,7 +537,16 @@ export default function Offers() {
             const ts = TEMPLATE_STATUS_CONFIG[offer.templateStatus] || TEMPLATE_STATUS_CONFIG.none;
             const imgUrl = offer.imageMobile || offer.imageTablet || offer.imageDesktop;
             return (
-              <div key={offer._id} className="bg-white rounded-2xl overflow-hidden shadow-card hover:shadow-lg transition-all">
+              <div key={offer._id} className={`bg-white rounded-2xl overflow-hidden shadow-card hover:shadow-lg transition-all ${offer._optimistic ? 'relative' : ''}`}>
+                {/* Saving overlay for optimistic entries */}
+                {offer._optimistic && (
+                  <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-2xl">
+                    <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl shadow-lg">
+                      <div className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-sm font-medium text-dark-700">Saving...</span>
+                    </div>
+                  </div>
+                )}
                 {/* Image */}
                 <div className="relative aspect-[19/6] bg-dark-100 cursor-pointer" onClick={() => setDetailOffer(offer)}>
                   {imgUrl ? <img src={`${imgUrl}?t=${offer.updatedAt || ''}`} alt="" className="w-full h-full object-cover" /> :
