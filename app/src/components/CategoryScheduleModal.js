@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Switch, Alert
+  View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Switch, Alert, Platform
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+
+const ZOMATO_RED = '#E23744';
 
 const DAYS = [
   { value: 0, label: 'Sun', fullLabel: 'Sunday' },
@@ -33,19 +36,10 @@ const convertTo24Hour = (hours12, period) => {
 };
 
 // Time Picker Component for individual day
-const DayTimePicker = ({ day, daySchedule, onUpdate, defaultStartTime, defaultEndTime }) => {
+const DayTimePicker = ({ day, daySchedule, onUpdate, defaultStartTime, defaultEndTime, onOpenTimePicker }) => {
   const startTime = daySchedule?.startTime || defaultStartTime || '09:00';
   const endTime = daySchedule?.endTime || defaultEndTime || '22:00';
   const enabled = daySchedule?.enabled !== false;
-
-  const updateDayTime = (field, time) => {
-    onUpdate(day.value, { 
-      day: day.value,
-      enabled: true,
-      startTime: field === 'startTime' ? time : startTime,
-      endTime: field === 'endTime' ? time : endTime
-    });
-  };
 
   const toggleDayEnabled = () => {
     onUpdate(day.value, { 
@@ -54,86 +48,6 @@ const DayTimePicker = ({ day, daySchedule, onUpdate, defaultStartTime, defaultEn
       startTime: startTime,
       endTime: endTime
     });
-  };
-
-  const incrementHour = (field) => {
-    const time = field === 'startTime' ? startTime : endTime;
-    const [hours, minutes] = time.split(':').map(Number);
-    let newHours = (hours + 1) % 24;
-    updateDayTime(field, `${newHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`);
-  };
-
-  const decrementHour = (field) => {
-    const time = field === 'startTime' ? startTime : endTime;
-    const [hours, minutes] = time.split(':').map(Number);
-    let newHours = hours - 1;
-    if (newHours < 0) newHours = 23;
-    updateDayTime(field, `${newHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`);
-  };
-
-  const incrementMinute = (field) => {
-    const time = field === 'startTime' ? startTime : endTime;
-    const [hours, minutes] = time.split(':').map(Number);
-    let newMinutes = (minutes + 5) % 60;
-    updateDayTime(field, `${hours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`);
-  };
-
-  const decrementMinute = (field) => {
-    const time = field === 'startTime' ? startTime : endTime;
-    const [hours, minutes] = time.split(':').map(Number);
-    let newMinutes = minutes - 5;
-    if (newMinutes < 0) newMinutes = 55;
-    updateDayTime(field, `${hours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`);
-  };
-
-  const togglePeriod = (field) => {
-    const time = field === 'startTime' ? startTime : endTime;
-    const [hours, minutes] = time.split(':').map(Number);
-    let newHours = hours >= 12 ? hours - 12 : hours + 12;
-    updateDayTime(field, `${newHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`);
-  };
-
-  const renderTimePicker = (field, label) => {
-    const time = field === 'startTime' ? startTime : endTime;
-    const [hours, minutes] = time.split(':').map(Number);
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const hours12 = hours % 12 || 12;
-
-    return (
-      <View style={styles.miniTimeRow}>
-        <Text style={styles.miniTimeLabel}>{label}</Text>
-        <View style={styles.miniTimePickersContainer}>
-          <View style={styles.miniTimePickerBox}>
-            <TouchableOpacity onPress={() => incrementHour(field)} disabled={!enabled}>
-              <Ionicons name="chevron-up" size={16} color={enabled ? "#E23744" : "#d1d5db"} />
-            </TouchableOpacity>
-            <Text style={[styles.miniTimeDigit, !enabled && styles.textDisabled]}>{hours12}</Text>
-            <TouchableOpacity onPress={() => decrementHour(field)} disabled={!enabled}>
-              <Ionicons name="chevron-down" size={16} color={enabled ? "#E23744" : "#d1d5db"} />
-            </TouchableOpacity>
-          </View>
-          <Text style={[styles.miniTimeSeparator, !enabled && styles.textDisabled]}>:</Text>
-          <View style={styles.miniTimePickerBox}>
-            <TouchableOpacity onPress={() => incrementMinute(field)} disabled={!enabled}>
-              <Ionicons name="chevron-up" size={16} color={enabled ? "#E23744" : "#d1d5db"} />
-            </TouchableOpacity>
-            <Text style={[styles.miniTimeDigit, !enabled && styles.textDisabled]}>
-              {minutes.toString().padStart(2, '0')}
-            </Text>
-            <TouchableOpacity onPress={() => decrementMinute(field)} disabled={!enabled}>
-              <Ionicons name="chevron-down" size={16} color={enabled ? "#E23744" : "#d1d5db"} />
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity 
-            style={[styles.miniPeriodToggle, !enabled && styles.miniPeriodToggleDisabled]}
-            onPress={() => togglePeriod(field)}
-            disabled={!enabled}
-          >
-            <Text style={[styles.miniPeriodText, !enabled && styles.textDisabled]}>{period}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
   };
 
   return (
@@ -160,8 +74,26 @@ const DayTimePicker = ({ day, daySchedule, onUpdate, defaultStartTime, defaultEn
       </View>
       {enabled && (
         <View style={styles.dayCardBody}>
-          {renderTimePicker('startTime', 'From')}
-          {renderTimePicker('endTime', 'To')}
+          <View style={styles.miniTimeRow}>
+            <Text style={styles.miniTimeLabel}>From</Text>
+            <TouchableOpacity
+              onPress={() => onOpenTimePicker('customStartTime', day.value)}
+              style={styles.nativeTimePickerButton}
+            >
+              <Ionicons name="time-outline" size={18} color={ZOMATO_RED} />
+              <Text style={styles.nativeTimePickerText}>{formatTime12Hour(startTime)}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.miniTimeRow}>
+            <Text style={styles.miniTimeLabel}>To</Text>
+            <TouchableOpacity
+              onPress={() => onOpenTimePicker('customEndTime', day.value)}
+              style={styles.nativeTimePickerButton}
+            >
+              <Ionicons name="time-outline" size={18} color={ZOMATO_RED} />
+              <Text style={styles.nativeTimePickerText}>{formatTime12Hour(endTime)}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
     </View>
@@ -223,52 +155,52 @@ export default function CategoryScheduleModal({
     };
   };
 
-  const updateTime = (field, hours, minutes, period) => {
-    const hours24 = convertTo24Hour(hours, period);
-    const timeString = `${hours24}:${minutes}`;
-    setScheduleForm(prev => ({ ...prev, [field]: timeString }));
+  // ─── Native Time Picker State ───
+  const [nativeTimePicker, setNativeTimePicker] = useState({ visible: false, field: '', dayValue: null });
+
+  const timeStringToDate = (timeStr) => {
+    const [h, m] = (timeStr || '09:00').split(':').map(Number);
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d;
   };
 
-  const incrementHour = (field) => {
-    const [hours, minutes] = scheduleForm[field].split(':').map(Number);
-    let newHours24 = (hours + 1) % 24;
-    const newPeriod = newHours24 >= 12 ? 'PM' : 'AM';
-    const newHours12 = newHours24 % 12 || 12;
-    updateTime(field, newHours12, minutes.toString().padStart(2, '0'), newPeriod);
+  const openNativeTimePicker = (field, dayValue = null) => {
+    setNativeTimePicker({ visible: true, field, dayValue });
   };
 
-  const decrementHour = (field) => {
-    const [hours, minutes] = scheduleForm[field].split(':').map(Number);
-    let newHours24 = hours - 1;
-    if (newHours24 < 0) newHours24 = 23;
-    const newPeriod = newHours24 >= 12 ? 'PM' : 'AM';
-    const newHours12 = newHours24 % 12 || 12;
-    updateTime(field, newHours12, minutes.toString().padStart(2, '0'), newPeriod);
+  const onNativeTimeChange = (event, selectedDate) => {
+    setNativeTimePicker(prev => ({ ...prev, visible: Platform.OS === 'ios' }));
+    if (event.type === 'dismissed' || !selectedDate) return;
+    const h = selectedDate.getHours().toString().padStart(2, '0');
+    const m = selectedDate.getMinutes().toString().padStart(2, '0');
+    const timeStr = `${h}:${m}`;
+
+    const { field, dayValue } = nativeTimePicker;
+    if (field === 'startTime' || field === 'endTime') {
+      setScheduleForm(prev => ({ ...prev, [field]: timeStr }));
+    } else if (field === 'customStartTime' || field === 'customEndTime') {
+      const actualField = field === 'customStartTime' ? 'startTime' : 'endTime';
+      const daySchedule = getDaySchedule(dayValue);
+      updateDaySchedule(dayValue, {
+        ...daySchedule,
+        day: dayValue,
+        enabled: true,
+        [actualField]: timeStr,
+      });
+    }
   };
 
-  const incrementMinute = (field) => {
-    const [hours, minutes] = scheduleForm[field].split(':').map(Number);
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const hours12 = hours % 12 || 12;
-    let newMinutes = (minutes + 5) % 60;
-    updateTime(field, hours12, newMinutes.toString().padStart(2, '0'), period);
-  };
-
-  const decrementMinute = (field) => {
-    const [hours, minutes] = scheduleForm[field].split(':').map(Number);
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const hours12 = hours % 12 || 12;
-    let newMinutes = minutes - 5;
-    if (newMinutes < 0) newMinutes = 55;
-    updateTime(field, hours12, newMinutes.toString().padStart(2, '0'), period);
-  };
-
-  const togglePeriod = (field) => {
-    const [hours, minutes] = scheduleForm[field].split(':').map(Number);
-    const currentPeriod = hours >= 12 ? 'PM' : 'AM';
-    const newPeriod = currentPeriod === 'AM' ? 'PM' : 'AM';
-    const hours12 = hours % 12 || 12;
-    updateTime(field, hours12, minutes.toString().padStart(2, '0'), newPeriod);
+  const getNativeTimePickerValue = () => {
+    const { field, dayValue } = nativeTimePicker;
+    if (field === 'startTime' || field === 'endTime') {
+      return timeStringToDate(scheduleForm[field]);
+    } else if (field === 'customStartTime' || field === 'customEndTime') {
+      const actualField = field === 'customStartTime' ? 'startTime' : 'endTime';
+      const daySchedule = getDaySchedule(dayValue);
+      return timeStringToDate(daySchedule[actualField]);
+    }
+    return new Date();
   };
 
   const validateAndSave = () => {
@@ -420,71 +352,25 @@ export default function CategoryScheduleModal({
                     {/* Start Time */}
                     <View style={styles.timeRow}>
                       <Text style={styles.timeLabel}>From</Text>
-                      <View style={styles.timePickersContainer}>
-                        <View style={styles.timePickerBox}>
-                          <TouchableOpacity style={styles.timeArrowButton} onPress={() => incrementHour('startTime')}>
-                            <Ionicons name="chevron-up" size={20} color="#E23744" />
-                          </TouchableOpacity>
-                          <Text style={styles.timeDigit}>
-                            {scheduleForm.startTime.split(':')[0] % 12 || 12}
-                          </Text>
-                          <TouchableOpacity style={styles.timeArrowButton} onPress={() => decrementHour('startTime')}>
-                            <Ionicons name="chevron-down" size={20} color="#E23744" />
-                          </TouchableOpacity>
-                        </View>
-                        <Text style={styles.timeSeparator}>:</Text>
-                        <View style={styles.timePickerBox}>
-                          <TouchableOpacity style={styles.timeArrowButton} onPress={() => incrementMinute('startTime')}>
-                            <Ionicons name="chevron-up" size={20} color="#E23744" />
-                          </TouchableOpacity>
-                          <Text style={styles.timeDigit}>
-                            {scheduleForm.startTime.split(':')[1].padStart(2, '0')}
-                          </Text>
-                          <TouchableOpacity style={styles.timeArrowButton} onPress={() => decrementMinute('startTime')}>
-                            <Ionicons name="chevron-down" size={20} color="#E23744" />
-                          </TouchableOpacity>
-                        </View>
-                        <TouchableOpacity style={styles.periodToggle} onPress={() => togglePeriod('startTime')}>
-                          <Text style={styles.periodText}>
-                            {parseInt(scheduleForm.startTime.split(':')[0]) >= 12 ? 'PM' : 'AM'}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
+                      <TouchableOpacity
+                        onPress={() => openNativeTimePicker('startTime')}
+                        style={styles.nativeTimePickerButton}
+                      >
+                        <Ionicons name="time-outline" size={20} color={ZOMATO_RED} />
+                        <Text style={styles.nativeTimePickerText}>{formatTime12Hour(scheduleForm.startTime)}</Text>
+                      </TouchableOpacity>
                     </View>
 
                     {/* End Time */}
                     <View style={styles.timeRow}>
                       <Text style={styles.timeLabel}>To</Text>
-                      <View style={styles.timePickersContainer}>
-                        <View style={styles.timePickerBox}>
-                          <TouchableOpacity style={styles.timeArrowButton} onPress={() => incrementHour('endTime')}>
-                            <Ionicons name="chevron-up" size={20} color="#E23744" />
-                          </TouchableOpacity>
-                          <Text style={styles.timeDigit}>
-                            {scheduleForm.endTime.split(':')[0] % 12 || 12}
-                          </Text>
-                          <TouchableOpacity style={styles.timeArrowButton} onPress={() => decrementHour('endTime')}>
-                            <Ionicons name="chevron-down" size={20} color="#E23744" />
-                          </TouchableOpacity>
-                        </View>
-                        <Text style={styles.timeSeparator}>:</Text>
-                        <View style={styles.timePickerBox}>
-                          <TouchableOpacity style={styles.timeArrowButton} onPress={() => incrementMinute('endTime')}>
-                            <Ionicons name="chevron-up" size={20} color="#E23744" />
-                          </TouchableOpacity>
-                          <Text style={styles.timeDigit}>
-                            {scheduleForm.endTime.split(':')[1].padStart(2, '0')}
-                          </Text>
-                          <TouchableOpacity style={styles.timeArrowButton} onPress={() => decrementMinute('endTime')}>
-                            <Ionicons name="chevron-down" size={20} color="#E23744" />
-                          </TouchableOpacity>
-                        </View>
-                        <TouchableOpacity style={styles.periodToggle} onPress={() => togglePeriod('endTime')}>
-                          <Text style={styles.periodText}>
-                            {parseInt(scheduleForm.endTime.split(':')[0]) >= 12 ? 'PM' : 'AM'}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
+                      <TouchableOpacity
+                        onPress={() => openNativeTimePicker('endTime')}
+                        style={styles.nativeTimePickerButton}
+                      >
+                        <Ionicons name="time-outline" size={20} color={ZOMATO_RED} />
+                        <Text style={styles.nativeTimePickerText}>{formatTime12Hour(scheduleForm.endTime)}</Text>
+                      </TouchableOpacity>
                     </View>
 
                     <Text style={styles.timeHint}>
@@ -509,6 +395,7 @@ export default function CategoryScheduleModal({
                         onUpdate={updateDaySchedule}
                         defaultStartTime={scheduleForm.startTime}
                         defaultEndTime={scheduleForm.endTime}
+                        onOpenTimePicker={openNativeTimePicker}
                       />
                     ))}
                   </View>
@@ -543,6 +430,17 @@ export default function CategoryScheduleModal({
           </View>
         </View>
       </View>
+
+      {/* Native Time Picker */}
+      {nativeTimePicker.visible && (
+        <DateTimePicker
+          value={getNativeTimePickerValue()}
+          mode="time"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onNativeTimeChange}
+          is24Hour={false}
+        />
+      )}
     </Modal>
   );
 }
@@ -641,6 +539,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
+    gap: 12,
   },
   timeLabel: {
     fontSize: 15,
@@ -648,50 +547,23 @@ const styles = StyleSheet.create({
     color: '#374151',
     width: 60,
   },
-  timePickersContainer: {
+  nativeTimePickerButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
-  timePickerBox: {
-    alignItems: 'center',
+    gap: 10,
     backgroundColor: '#fff',
     borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    minWidth: 70,
-  },
-  timeArrowButton: {
-    padding: 4,
-  },
-  timeDigit: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
-    marginVertical: 4,
-  },
-  timeSeparator: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#9ca3af',
-    marginHorizontal: 4,
-  },
-  periodToggle: {
-    backgroundColor: '#E23744',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 12,
-    minWidth: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
+    minWidth: 140,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
   },
-  periodText: {
+  nativeTimePickerText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#fff',
+    color: '#1f2937',
   },
   timeHint: {
     fontSize: 13,
@@ -751,50 +623,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
+    gap: 12,
   },
   miniTimeLabel: {
     fontSize: 13,
     fontWeight: '500',
     color: '#6b7280',
     width: 45,
-  },
-  miniTimePickersContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  miniTimePickerBox: {
-    alignItems: 'center',
-    backgroundColor: '#f9fafb',
-    borderRadius: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    minWidth: 45,
-  },
-  miniTimeDigit: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  miniTimeSeparator: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#9ca3af',
-  },
-  miniPeriodToggle: {
-    backgroundColor: '#E23744',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  miniPeriodToggleDisabled: {
-    backgroundColor: '#e5e7eb',
-  },
-  miniPeriodText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#fff',
   },
   textDisabled: {
     color: '#d1d5db',

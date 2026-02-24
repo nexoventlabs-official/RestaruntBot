@@ -57,12 +57,22 @@ export default function OfferFormScreen({ route, navigation }) {
   const [loadingData, setLoadingData] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Helper to format Date as local "YYYY-MM-DDTHH:mm" (avoids UTC shift from toISOString)
+  const toLocalDateTimeString = (d) => {
+    const y = d.getFullYear();
+    const mo = (d.getMonth() + 1).toString().padStart(2, '0');
+    const da = d.getDate().toString().padStart(2, '0');
+    const h = d.getHours().toString().padStart(2, '0');
+    const mi = d.getMinutes().toString().padStart(2, '0');
+    return `${y}-${mo}-${da}T${h}:${mi}`;
+  };
+
   // Schedule time state
   const [validFrom, setValidFrom] = useState(
-    existingOffer?.validFrom ? new Date(existingOffer.validFrom).toISOString().slice(0, 16) : ''
+    existingOffer?.validFrom ? toLocalDateTimeString(new Date(existingOffer.validFrom)) : ''
   );
   const [validUntil, setValidUntil] = useState(
-    existingOffer?.validUntil ? new Date(existingOffer.validUntil).toISOString().slice(0, 16) : ''
+    existingOffer?.validUntil ? toLocalDateTimeString(new Date(existingOffer.validUntil)) : ''
   );
 
   // Date/Time picker state
@@ -97,8 +107,8 @@ export default function OfferFormScreen({ route, navigation }) {
     if (event.type === 'dismissed') return;
     if (selectedTime) {
       const final = new Date(tempFromDate);
-      final.setHours(selectedTime.getHours(), selectedTime.getMinutes());
-      setValidFrom(final.toISOString().slice(0, 16));
+      final.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
+      setValidFrom(toLocalDateTimeString(final));
     }
   };
   const onUntilDateChange = (event, selectedDate) => {
@@ -114,8 +124,8 @@ export default function OfferFormScreen({ route, navigation }) {
     if (event.type === 'dismissed') return;
     if (selectedTime) {
       const final = new Date(tempUntilDate);
-      final.setHours(selectedTime.getHours(), selectedTime.getMinutes());
-      setValidUntil(final.toISOString().slice(0, 16));
+      final.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
+      setValidUntil(toLocalDateTimeString(final));
     }
   };
   
@@ -1086,7 +1096,7 @@ export default function OfferFormScreen({ route, navigation }) {
                       <Text style={styles.scheduleLabel}>Valid From</Text>
                       <TouchableOpacity
                         style={styles.scheduleNowChip}
-                        onPress={() => setValidFrom(new Date().toISOString().slice(0, 16))}
+                        onPress={() => setValidFrom(toLocalDateTimeString(new Date()))}
                       >
                         <Ionicons name="flash" size={12} color={ZOMATO_RED} />
                         <Text style={styles.scheduleNowChipText}>Now</Text>
@@ -1142,7 +1152,7 @@ export default function OfferFormScreen({ route, navigation }) {
                           onPress={() => {
                             const from = new Date(validFrom);
                             from.setDate(from.getDate() + 1);
-                            setValidUntil(from.toISOString().slice(0, 16));
+                            setValidUntil(toLocalDateTimeString(from));
                           }}
                         >
                           <Text style={styles.scheduleQuickText}>+1 Day</Text>
@@ -1152,7 +1162,7 @@ export default function OfferFormScreen({ route, navigation }) {
                           onPress={() => {
                             const from = new Date(validFrom);
                             from.setDate(from.getDate() + 7);
-                            setValidUntil(from.toISOString().slice(0, 16));
+                            setValidUntil(toLocalDateTimeString(from));
                           }}
                         >
                           <Text style={styles.scheduleQuickText}>+7 Days</Text>
@@ -1162,7 +1172,7 @@ export default function OfferFormScreen({ route, navigation }) {
                           onPress={() => {
                             const from = new Date(validFrom);
                             from.setMonth(from.getMonth() + 1);
-                            setValidUntil(from.toISOString().slice(0, 16));
+                            setValidUntil(toLocalDateTimeString(from));
                           }}
                         >
                           <Text style={styles.scheduleQuickText}>+1 Month</Text>

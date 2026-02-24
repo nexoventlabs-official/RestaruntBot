@@ -1019,8 +1019,13 @@ export default function Menu() {
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-4">
             <h3 className="text-lg font-bold text-dark-900">Schedule Sold Out</h3>
             <p className="text-sm text-dark-500">Mark as sold out until:</p>
-            <input type="time" value={scheduleSoldOutTime} onChange={e => setScheduleSoldOutTime(e.target.value)}
-              className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl text-sm" />
+            <div className="relative">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-primary-500">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </div>
+              <input type="time" value={scheduleSoldOutTime} onChange={e => setScheduleSoldOutTime(e.target.value)}
+                className="w-full pl-12 pr-4 py-3.5 bg-white border-2 border-dark-200 rounded-xl text-base font-semibold text-dark-800 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 transition-all" />
+            </div>
             <div className="flex gap-3">
               <button onClick={() => setScheduleModal(null)} className="flex-1 py-2.5 border border-dark-200 rounded-xl font-medium text-dark-700">Cancel</button>
               <button onClick={handleScheduleSoldOut} disabled={!scheduleSoldOutTime}
@@ -1044,14 +1049,24 @@ export default function Menu() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-dark-500 mb-1">Start Time</label>
-                <input type="time" value={categorySchedule.startTime} onChange={e => setCategorySchedule(p => ({ ...p, startTime: e.target.value }))}
-                  className="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-lg text-sm" />
+                <label className="block text-xs font-semibold text-dark-500 mb-1.5 uppercase tracking-wide">Start Time</label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-primary-500">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </div>
+                  <input type="time" value={categorySchedule.startTime} onChange={e => setCategorySchedule(p => ({ ...p, startTime: e.target.value }))}
+                    className="w-full pl-10 pr-3 py-2.5 bg-white border-2 border-dark-200 rounded-xl text-sm font-semibold text-dark-800 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 transition-all" />
+                </div>
               </div>
               <div>
-                <label className="block text-xs text-dark-500 mb-1">End Time</label>
-                <input type="time" value={categorySchedule.endTime} onChange={e => setCategorySchedule(p => ({ ...p, endTime: e.target.value }))}
-                  className="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-lg text-sm" />
+                <label className="block text-xs font-semibold text-dark-500 mb-1.5 uppercase tracking-wide">End Time</label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-primary-500">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </div>
+                  <input type="time" value={categorySchedule.endTime} onChange={e => setCategorySchedule(p => ({ ...p, endTime: e.target.value }))}
+                    className="w-full pl-10 pr-3 py-2.5 bg-white border-2 border-dark-200 rounded-xl text-sm font-semibold text-dark-800 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 transition-all" />
+                </div>
               </div>
             </div>
             <div>

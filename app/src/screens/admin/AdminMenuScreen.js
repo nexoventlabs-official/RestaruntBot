@@ -7,6 +7,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import api from '../../config/api';
 import CategoryScheduleModal from '../../components/CategoryScheduleModal';
 
@@ -406,6 +407,52 @@ export default function AdminMenuScreen({ navigation, route }) {
   const [customDays, setCustomDays] = useState(
     DAYS.map(d => ({ day: d, enabled: false, startTime: '09:00', endTime: '17:00' }))
   );
+
+  // Native time picker state
+  const [nativeTimePicker, setNativeTimePicker] = useState({ visible: false, field: null, dayIdx: null });
+
+  const timeStringToDate = (timeStr) => {
+    const [h, m] = (timeStr || '12:00').split(':').map(Number);
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d;
+  };
+
+  const openNativeTimePicker = (field, dayIdx = null) => {
+    setNativeTimePicker({ visible: true, field, dayIdx });
+  };
+
+  const onNativeTimeChange = (event, selectedTime) => {
+    setNativeTimePicker(prev => ({ ...prev, visible: false }));
+    if (event.type === 'dismissed' || !selectedTime) return;
+    const hours = selectedTime.getHours().toString().padStart(2, '0');
+    const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
+    const timeStr = `${hours}:${minutes}`;
+    const { field, dayIdx } = nativeTimePicker;
+
+    if (field === 'soldOutEndTime') {
+      setSoldOutEndTime(timeStr);
+    } else if (field === 'dailyStartTime') {
+      setDailyStartTime(timeStr);
+    } else if (field === 'dailyEndTime') {
+      setDailyEndTime(timeStr);
+    } else if (field === 'customStartTime' && dayIdx !== null) {
+      updateCustomDay(dayIdx, 'startTime', timeStr);
+    } else if (field === 'customEndTime' && dayIdx !== null) {
+      updateCustomDay(dayIdx, 'endTime', timeStr);
+    }
+  };
+
+  const getNativeTimePickerValue = () => {
+    const { field, dayIdx } = nativeTimePicker;
+    if (field === 'soldOutEndTime') return timeStringToDate(soldOutEndTime);
+    if (field === 'dailyStartTime') return timeStringToDate(dailyStartTime);
+    if (field === 'dailyEndTime') return timeStringToDate(dailyEndTime);
+    if (field === 'customStartTime' && dayIdx !== null) return timeStringToDate(customDays[dayIdx]?.startTime);
+    if (field === 'customEndTime' && dayIdx !== null) return timeStringToDate(customDays[dayIdx]?.endTime);
+    return new Date();
+  };
+
   // Time dropdown state (inline, no nested modal)
   const [showTimeDropdown, setShowTimeDropdown] = useState(false);
   const [timeDropdownDayIdx, setTimeDropdownDayIdx] = useState(null);
@@ -1891,80 +1938,15 @@ export default function AdminMenuScreen({ navigation, route }) {
               
               <View style={styles.soldOutTimeSection}>
                 <Text style={styles.soldOutTimeLabel}>Available again at:</Text>
-                <View style={styles.soldOutTimePicker}>
-                  {/* Hour picker */}
-                  <View style={styles.soldOutTimeUnit}>
-                    <TouchableOpacity 
-                      style={styles.soldOutTimeButton}
-                      onPress={() => {
-                        const [h, m] = soldOutEndTime.split(':').map(Number);
-                        const newH = (h + 1) % 24;
-                        setSoldOutEndTime(`${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
-                      }}
-                    >
-                      <Ionicons name="chevron-up" size={24} color={ZOMATO_RED} />
-                    </TouchableOpacity>
-                    <Text style={styles.soldOutTimeValue}>
-                      {(() => {
-                        const h = parseInt(soldOutEndTime.split(':')[0]);
-                        return (h % 12 || 12).toString().padStart(2, '0');
-                      })()}
-                    </Text>
-                    <TouchableOpacity 
-                      style={styles.soldOutTimeButton}
-                      onPress={() => {
-                        const [h, m] = soldOutEndTime.split(':').map(Number);
-                        const newH = (h - 1 + 24) % 24;
-                        setSoldOutEndTime(`${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
-                      }}
-                    >
-                      <Ionicons name="chevron-down" size={24} color={ZOMATO_RED} />
-                    </TouchableOpacity>
-                  </View>
-                  
-                  <Text style={styles.soldOutTimeSeparator}>:</Text>
-                  
-                  {/* Minute picker */}
-                  <View style={styles.soldOutTimeUnit}>
-                    <TouchableOpacity 
-                      style={styles.soldOutTimeButton}
-                      onPress={() => {
-                        const [h, m] = soldOutEndTime.split(':').map(Number);
-                        const newM = (m + 5) % 60;
-                        setSoldOutEndTime(`${h.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`);
-                      }}
-                    >
-                      <Ionicons name="chevron-up" size={24} color={ZOMATO_RED} />
-                    </TouchableOpacity>
-                    <Text style={styles.soldOutTimeValue}>
-                      {soldOutEndTime.split(':')[1]}
-                    </Text>
-                    <TouchableOpacity 
-                      style={styles.soldOutTimeButton}
-                      onPress={() => {
-                        const [h, m] = soldOutEndTime.split(':').map(Number);
-                        const newM = (m - 5 + 60) % 60;
-                        setSoldOutEndTime(`${h.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`);
-                      }}
-                    >
-                      <Ionicons name="chevron-down" size={24} color={ZOMATO_RED} />
-                    </TouchableOpacity>
-                  </View>
-                  
-                  {/* AM/PM picker */}
-                  <TouchableOpacity 
-                    style={styles.soldOutAmPmButton}
-                    onPress={() => {
-                      const [h, m] = soldOutEndTime.split(':').map(Number);
-                      const newH = h >= 12 ? h - 12 : h + 12;
-                      setSoldOutEndTime(`${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
-                    }}
-                  >
-                    <Text style={styles.soldOutAmPmText}>
-                      {parseInt(soldOutEndTime.split(':')[0]) >= 12 ? 'PM' : 'AM'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  style={styles.nativeTimePickerButton}
+                  onPress={() => openNativeTimePicker('soldOutEndTime')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="time-outline" size={20} color={ZOMATO_RED} />
+                  <Text style={styles.nativeTimePickerText}>{formatTime12(soldOutEndTime)}</Text>
+                  <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
+                </TouchableOpacity>
               </View>
             </View>
             
@@ -2113,77 +2095,29 @@ export default function AdminMenuScreen({ navigation, route }) {
                     <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151', marginBottom: 10 }}>
                       Available from:
                     </Text>
-                    <View style={styles.soldOutTimePicker}>
-                      <View style={styles.soldOutTimeUnit}>
-                        <TouchableOpacity style={styles.soldOutTimeButton}
-                          onPress={() => setDailyStartTime(cycleTime(dailyStartTime, 'hour', 1))}>
-                          <Ionicons name="chevron-up" size={24} color={ZOMATO_RED} />
-                        </TouchableOpacity>
-                        <Text style={styles.soldOutTimeValue}>
-                          {(parseInt(dailyStartTime.split(':')[0]) % 12 || 12).toString().padStart(2, '0')}
-                        </Text>
-                        <TouchableOpacity style={styles.soldOutTimeButton}
-                          onPress={() => setDailyStartTime(cycleTime(dailyStartTime, 'hour', -1))}>
-                          <Ionicons name="chevron-down" size={24} color={ZOMATO_RED} />
-                        </TouchableOpacity>
-                      </View>
-                      <Text style={styles.soldOutTimeSeparator}>:</Text>
-                      <View style={styles.soldOutTimeUnit}>
-                        <TouchableOpacity style={styles.soldOutTimeButton}
-                          onPress={() => setDailyStartTime(cycleTime(dailyStartTime, 'min', 5))}>
-                          <Ionicons name="chevron-up" size={24} color={ZOMATO_RED} />
-                        </TouchableOpacity>
-                        <Text style={styles.soldOutTimeValue}>{dailyStartTime.split(':')[1]}</Text>
-                        <TouchableOpacity style={styles.soldOutTimeButton}
-                          onPress={() => setDailyStartTime(cycleTime(dailyStartTime, 'min', -5))}>
-                          <Ionicons name="chevron-down" size={24} color={ZOMATO_RED} />
-                        </TouchableOpacity>
-                      </View>
-                      <TouchableOpacity style={styles.soldOutAmPmButton}
-                        onPress={() => setDailyStartTime(cycleTime(dailyStartTime, 'hour', dailyStartTime.split(':')[0] >= 12 ? -12 : 12))}>
-                        <Text style={styles.soldOutAmPmText}>
-                          {parseInt(dailyStartTime.split(':')[0]) >= 12 ? 'PM' : 'AM'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
+                    <TouchableOpacity
+                      style={styles.nativeTimePickerButton}
+                      onPress={() => openNativeTimePicker('dailyStartTime')}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="time-outline" size={20} color={ZOMATO_RED} />
+                      <Text style={styles.nativeTimePickerText}>{formatTime12(dailyStartTime)}</Text>
+                      <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
+                    </TouchableOpacity>
 
                     {/* End Time */}
                     <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151', marginTop: 20, marginBottom: 10 }}>
                       Available until:
                     </Text>
-                    <View style={styles.soldOutTimePicker}>
-                      <View style={styles.soldOutTimeUnit}>
-                        <TouchableOpacity style={styles.soldOutTimeButton}
-                          onPress={() => setDailyEndTime(cycleTime(dailyEndTime, 'hour', 1))}>
-                          <Ionicons name="chevron-up" size={24} color={ZOMATO_RED} />
-                        </TouchableOpacity>
-                        <Text style={styles.soldOutTimeValue}>
-                          {(parseInt(dailyEndTime.split(':')[0]) % 12 || 12).toString().padStart(2, '0')}
-                        </Text>
-                        <TouchableOpacity style={styles.soldOutTimeButton}
-                          onPress={() => setDailyEndTime(cycleTime(dailyEndTime, 'hour', -1))}>
-                          <Ionicons name="chevron-down" size={24} color={ZOMATO_RED} />
-                        </TouchableOpacity>
-                      </View>
-                      <Text style={styles.soldOutTimeSeparator}>:</Text>
-                      <View style={styles.soldOutTimeUnit}>
-                        <TouchableOpacity style={styles.soldOutTimeButton}
-                          onPress={() => setDailyEndTime(cycleTime(dailyEndTime, 'min', 5))}>
-                          <Ionicons name="chevron-up" size={24} color={ZOMATO_RED} />
-                        </TouchableOpacity>
-                        <Text style={styles.soldOutTimeValue}>{dailyEndTime.split(':')[1]}</Text>
-                        <TouchableOpacity style={styles.soldOutTimeButton}
-                          onPress={() => setDailyEndTime(cycleTime(dailyEndTime, 'min', -5))}>
-                          <Ionicons name="chevron-down" size={24} color={ZOMATO_RED} />
-                        </TouchableOpacity>
-                      </View>
-                      <TouchableOpacity style={styles.soldOutAmPmButton}
-                        onPress={() => setDailyEndTime(cycleTime(dailyEndTime, 'hour', dailyEndTime.split(':')[0] >= 12 ? -12 : 12))}>
-                        <Text style={styles.soldOutAmPmText}>
-                          {parseInt(dailyEndTime.split(':')[0]) >= 12 ? 'PM' : 'AM'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
+                    <TouchableOpacity
+                      style={styles.nativeTimePickerButton}
+                      onPress={() => openNativeTimePicker('dailyEndTime')}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="time-outline" size={20} color={ZOMATO_RED} />
+                      <Text style={styles.nativeTimePickerText}>{formatTime12(dailyEndTime)}</Text>
+                      <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
+                    </TouchableOpacity>
 
                     {/* Preview */}
                     <View style={{
@@ -2257,84 +2191,33 @@ export default function AdminMenuScreen({ navigation, route }) {
 
                         {/* Time pickers (collapsed if disabled) */}
                         {dayItem.enabled && (
-                          <View>
-                            <View style={{
-                              flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-                              paddingHorizontal: 16, paddingBottom: showTimeDropdown && timeDropdownDayIdx === dIdx ? 8 : 14, gap: 10,
-                            }}>
-                              {/* Start time dropdown */}
-                              <View style={{ alignItems: 'center' }}>
-                                <Text style={{ fontSize: 10, fontWeight: '600', color: '#6b7280', marginBottom: 4 }}>FROM</Text>
-                                <TouchableOpacity
-                                  onPress={() => openTimeDropdown(dIdx, 'startTime')}
-                                  style={{
-                                    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
-                                    borderRadius: 10, borderWidth: 1.5,
-                                    borderColor: (showTimeDropdown && timeDropdownDayIdx === dIdx && timeDropdownField === 'startTime') ? ZOMATO_RED : '#E5E7EB',
-                                    paddingHorizontal: 12, paddingVertical: 8,
-                                  }}
-                                >
-                                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginRight: 6 }}>
-                                    {formatTime12(dayItem.startTime)}
-                                  </Text>
-                                  <Ionicons name={showTimeDropdown && timeDropdownDayIdx === dIdx && timeDropdownField === 'startTime' ? 'chevron-up' : 'chevron-down'} size={14} color="#9ca3af" />
-                                </TouchableOpacity>
-                              </View>
-                              <Text style={{ fontSize: 14, color: '#9ca3af', fontWeight: '600', marginTop: 14 }}>→</Text>
-                              {/* End time dropdown */}
-                              <View style={{ alignItems: 'center' }}>
-                                <Text style={{ fontSize: 10, fontWeight: '600', color: '#6b7280', marginBottom: 4 }}>TO</Text>
-                                <TouchableOpacity
-                                  onPress={() => openTimeDropdown(dIdx, 'endTime')}
-                                  style={{
-                                    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
-                                    borderRadius: 10, borderWidth: 1.5,
-                                    borderColor: (showTimeDropdown && timeDropdownDayIdx === dIdx && timeDropdownField === 'endTime') ? ZOMATO_RED : '#E5E7EB',
-                                    paddingHorizontal: 12, paddingVertical: 8,
-                                  }}
-                                >
-                                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginRight: 6 }}>
-                                    {formatTime12(dayItem.endTime)}
-                                  </Text>
-                                  <Ionicons name={showTimeDropdown && timeDropdownDayIdx === dIdx && timeDropdownField === 'endTime' ? 'chevron-up' : 'chevron-down'} size={14} color="#9ca3af" />
-                                </TouchableOpacity>
-                              </View>
+                          <View style={{
+                            flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                            paddingHorizontal: 16, paddingBottom: 14, gap: 10,
+                          }}>
+                            {/* Start time */}
+                            <View style={{ alignItems: 'center', flex: 1 }}>
+                              <Text style={{ fontSize: 10, fontWeight: '600', color: '#6b7280', marginBottom: 4 }}>FROM</Text>
+                              <TouchableOpacity
+                                onPress={() => openNativeTimePicker('customStartTime', dIdx)}
+                                style={[styles.nativeTimePickerButton, { width: '100%' }]}
+                              >
+                                <Ionicons name="time-outline" size={20} color={ZOMATO_RED} />
+                                <Text style={styles.nativeTimePickerText}>{formatTime12(dayItem.startTime)}</Text>
+                              </TouchableOpacity>
                             </View>
-                            {/* Inline time list */}
-                            {showTimeDropdown && timeDropdownDayIdx === dIdx && (
-                              <View style={{
-                                marginHorizontal: 16, marginBottom: 14, borderRadius: 12,
-                                backgroundColor: '#fff', borderWidth: 1, borderColor: '#E5E7EB',
-                                maxHeight: 200, overflow: 'hidden',
-                              }}>
-                                <ScrollView nestedScrollEnabled={true} showsVerticalScrollIndicator={true}>
-                                  {TIME_OPTIONS.map((t) => {
-                                    const currentVal = customDays[dIdx]?.[timeDropdownField];
-                                    const isSelected = currentVal === t;
-                                    return (
-                                      <TouchableOpacity
-                                        key={t}
-                                        onPress={() => selectTime(t)}
-                                        style={{
-                                          paddingVertical: 11, paddingHorizontal: 18,
-                                          backgroundColor: isSelected ? '#FEF2F2' : '#fff',
-                                          borderBottomWidth: 0.5, borderBottomColor: '#f3f4f6',
-                                          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                                        }}
-                                      >
-                                        <Text style={{
-                                          fontSize: 15, fontWeight: isSelected ? '700' : '500',
-                                          color: isSelected ? ZOMATO_RED : '#374151',
-                                        }}>
-                                          {formatTime12(t)}
-                                        </Text>
-                                        {isSelected && <Ionicons name="checkmark-circle" size={18} color={ZOMATO_RED} />}
-                                      </TouchableOpacity>
-                                    );
-                                  })}
-                                </ScrollView>
-                              </View>
-                            )}
+                            <Text style={{ fontSize: 14, color: '#9ca3af', fontWeight: '600', marginTop: 14 }}>→</Text>
+                            {/* End time */}
+                            <View style={{ alignItems: 'center', flex: 1 }}>
+                              <Text style={{ fontSize: 10, fontWeight: '600', color: '#6b7280', marginBottom: 4 }}>TO</Text>
+                              <TouchableOpacity
+                                onPress={() => openNativeTimePicker('customEndTime', dIdx)}
+                                style={[styles.nativeTimePickerButton, { width: '100%' }]}
+                              >
+                                <Ionicons name="time-outline" size={20} color={ZOMATO_RED} />
+                                <Text style={styles.nativeTimePickerText}>{formatTime12(dayItem.endTime)}</Text>
+                              </TouchableOpacity>
+                            </View>
                           </View>
                         )}
                       </View>
@@ -2486,6 +2369,16 @@ export default function AdminMenuScreen({ navigation, route }) {
           </View>
         </View>
       </Modal>
+      {/* Native Time Picker */}
+      {nativeTimePicker.visible && (
+        <DateTimePicker
+          value={getNativeTimePickerValue()}
+          mode="time"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onNativeTimeChange}
+          is24Hour={false}
+        />
+      )}
     </View>
   );
 }
@@ -3470,5 +3363,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9ca3af',
     marginTop: 2,
+  },
+  nativeTimePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minWidth: 140,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+  },
+  nativeTimePickerText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1f2937',
   },
 });
