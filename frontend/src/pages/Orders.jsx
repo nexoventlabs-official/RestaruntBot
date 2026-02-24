@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Search, X, Filter, Phone, Truck, ShoppingBag, Clock, CheckCircle, Package, ArrowRight, RefreshCw, User, MapPin, CreditCard, Image, ChevronLeft } from 'lucide-react';
 import api from '../api';
+import { subscribe } from '../hooks/useSmartRefresh';
 
 /* ─── constants ─── */
 const STATUS_CONFIG = {
@@ -96,11 +97,7 @@ export default function Orders() {
   const [menuItems, setMenuItems] = useState([]);
   const historyLoaded = useRef(false);
 
-  // SSE / polling
-  const sseRef = useRef(null);
-  const pollRef = useRef(null);
   const selectedOrderRef = useRef(null);
-  const POLL_INTERVAL = 15000;
 
   // Keep selectedOrderRef in sync
   useEffect(() => { selectedOrderRef.current = selectedOrder; }, [selectedOrder]);
@@ -114,48 +111,25 @@ export default function Orders() {
     } catch { /* silent */ }
   }, []);
 
-  /* ═══════════ SSE + POLLING ═══════════ */
-  const startPolling = useCallback(() => {
-    if (pollRef.current) return;
-    pollRef.current = setInterval(fetchOrders, POLL_INTERVAL);
-  }, [fetchOrders]);
-
-  const stopPolling = useCallback(() => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-  }, []);
-
-  const connectSSE = useCallback(() => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) { startPolling(); return; }
-      const baseURL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api').replace('/api', '');
-      const es = new EventSource(`${baseURL}/api/events?token=${token}`);
-      es.onmessage = (evt) => {
-        try {
-          const data = JSON.parse(evt.data);
-          if (data.type === 'orders' || data.type === 'new_order' || data.type === 'order_update' || data.type === 'order_status') {
-            fetchOrders();
-            // Also refresh selected order detail if one is open
-            if (selectedOrderRef.current) {
-              api.get(`/orders`).then(r => {
-                const list = Array.isArray(r.data) ? r.data : (r.data?.orders || []);
-                const updated = list.find(o => o._id === selectedOrderRef.current._id);
-                if (updated) setSelectedOrder(updated);
-              }).catch(() => {});
-            }
-          }
-        } catch { /* ignore */ }
-      };
-      es.onerror = () => { es.close(); sseRef.current = null; startPolling(); };
-      sseRef.current = es;
-    } catch { startPolling(); }
-  }, [fetchOrders, startPolling]);
-
+  /* ═══════════ SSE SUBSCRIPTION (shared global connection) ═══════════ */
   useEffect(() => {
     fetchOrders().finally(() => setLoading(false));
-    connectSSE();
-    return () => { sseRef.current?.close(); stopPolling(); };
-  }, [fetchOrders, connectSSE, stopPolling]);
+
+    // Subscribe to the global SSE 'orders' event (auto-reconnects)
+    const unsubscribe = subscribe('orders', () => {
+      fetchOrders();
+      // Also refresh the selected order detail if one is open
+      if (selectedOrderRef.current) {
+        api.get('/orders').then(r => {
+          const list = Array.isArray(r.data) ? r.data : (r.data?.orders || []);
+          const updated = list.find(o => o._id === selectedOrderRef.current._id);
+          if (updated) setSelectedOrder(updated);
+        }).catch(() => {});
+      }
+    });
+
+    return unsubscribe;
+  }, [fetchOrders]);
 
   /* ═══════════ HISTORY FETCH ═══════════ */
   const fetchHistory = useCallback(async (force = false) => {

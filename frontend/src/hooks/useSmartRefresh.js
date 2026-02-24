@@ -43,7 +43,7 @@ const connectSSE = () => {
   };
 };
 
-const subscribe = (type, callback) => {
+export const subscribe = (type, callback) => {
   if (!listeners[type]) listeners[type] = [];
   listeners[type].push(callback);
   connectSSE();
