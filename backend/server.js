@@ -44,6 +44,7 @@ const orderReconciliation = require('./services/orderReconciliation');
 const outboundRetryWorker = require('./services/outboundRetryWorker');
 const dashboardStatsSync = require('./services/dashboardStatsSync');
 const pushTokenCleanup = require('./services/pushTokenCleanup');
+const offerScheduler = require('./services/offerScheduler');
 const googleSheets = require('./services/googleSheets');
 
 // Validate environment variables at startup (always strict for critical vars)
@@ -149,6 +150,7 @@ const connectMongoDB = async () => {
     outboundRetryWorker.start();
     dashboardStatsSync.start();
     pushTokenCleanup.start();
+    offerScheduler.start();
     
     // Run one-time startup reconciliation to catch orders missed during downtime
     orderReconciliation.reconcileOrders().then(result => {
@@ -450,6 +452,7 @@ const gracefulShutdown = async (signal) => {
     if (outboundRetryWorker.stop) outboundRetryWorker.stop();
     if (dashboardStatsSync.stop) dashboardStatsSync.stop();
     if (pushTokenCleanup.stop) pushTokenCleanup.stop();
+    if (offerScheduler.stop) offerScheduler.stop();
     logger.info('Schedulers stopped');
   } catch (err) {
     logger.error('Error stopping schedulers', { error: err.message });

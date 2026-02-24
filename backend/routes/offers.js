@@ -261,7 +261,8 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       minOrderAmount: parseFloat(minOrderAmount) || 0,
       validFrom: validFrom ? new Date(validFrom) : new Date(),
       validUntil: validUntil ? new Date(validUntil) : null,
-      isActive: isActive !== 'false',
+      // Auto-activate if validFrom is now or in the past; otherwise stays inactive until scheduler activates it
+      isActive: validFrom ? new Date(validFrom) <= new Date() : false,
       showAsPopup: showAsPopup !== 'false',
       buttonText: buttonText || 'Order Now',
       buttonLink: buttonLink || '/menu',

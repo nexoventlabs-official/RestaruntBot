@@ -20,7 +20,7 @@ const offerSchema = new mongoose.Schema({
   minOrderAmount: { type: Number, default: 0 },
   validFrom: { type: Date, default: Date.now },
   validUntil: { type: Date },
-  isActive: { type: Boolean, default: true },
+  isActive: { type: Boolean, default: false },
   showAsPopup: { type: Boolean, default: true },
   buttonText: { type: String, default: 'Order Now' },
   buttonLink: { type: String, default: '/menu' },

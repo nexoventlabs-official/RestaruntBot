@@ -7,6 +7,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import api from '../../config/api';
 
 // Toast helper for cross-platform
@@ -63,6 +64,60 @@ export default function OfferFormScreen({ route, navigation }) {
   const [validUntil, setValidUntil] = useState(
     existingOffer?.validUntil ? new Date(existingOffer.validUntil).toISOString().slice(0, 16) : ''
   );
+
+  // Date/Time picker state
+  const [showFromDatePicker, setShowFromDatePicker] = useState(false);
+  const [showFromTimePicker, setShowFromTimePicker] = useState(false);
+  const [showUntilDatePicker, setShowUntilDatePicker] = useState(false);
+  const [showUntilTimePicker, setShowUntilTimePicker] = useState(false);
+  const [tempFromDate, setTempFromDate] = useState(new Date());
+  const [tempUntilDate, setTempUntilDate] = useState(new Date());
+
+  const formatDisplayDate = (isoStr) => {
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+  const formatDisplayTime = (isoStr) => {
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  };
+
+  const onFromDateChange = (event, selectedDate) => {
+    setShowFromDatePicker(false);
+    if (event.type === 'dismissed') return;
+    if (selectedDate) {
+      setTempFromDate(selectedDate);
+      setShowFromTimePicker(true);
+    }
+  };
+  const onFromTimeChange = (event, selectedTime) => {
+    setShowFromTimePicker(false);
+    if (event.type === 'dismissed') return;
+    if (selectedTime) {
+      const final = new Date(tempFromDate);
+      final.setHours(selectedTime.getHours(), selectedTime.getMinutes());
+      setValidFrom(final.toISOString().slice(0, 16));
+    }
+  };
+  const onUntilDateChange = (event, selectedDate) => {
+    setShowUntilDatePicker(false);
+    if (event.type === 'dismissed') return;
+    if (selectedDate) {
+      setTempUntilDate(selectedDate);
+      setShowUntilTimePicker(true);
+    }
+  };
+  const onUntilTimeChange = (event, selectedTime) => {
+    setShowUntilTimePicker(false);
+    if (event.type === 'dismissed') return;
+    if (selectedTime) {
+      const final = new Date(tempUntilDate);
+      final.setHours(selectedTime.getHours(), selectedTime.getMinutes());
+      setValidUntil(final.toISOString().slice(0, 16));
+    }
+  };
   
   // Targeting state
   const [targetType, setTargetType] = useState(existingOffer?.targetType || 'all');
@@ -469,7 +524,9 @@ export default function OfferFormScreen({ route, navigation }) {
     setLoading(true);
     try {
       const formData = new FormData();
-      formData.append('isActive', 'true');
+      // Auto-activate if validFrom is now or in the past; otherwise stays inactive until scheduler activates it
+      const isScheduledNow = validFrom ? new Date(validFrom) <= new Date() : false;
+      formData.append('isActive', isScheduledNow ? 'true' : 'false');
       formData.append('offerType', offerType.trim());
       
       console.log('Submitting offer with:');
@@ -1023,63 +1080,92 @@ export default function OfferFormScreen({ route, navigation }) {
                 </Text>
                 
                 <View style={styles.scheduleRow}>
+                  {/* Valid From */}
                   <View style={styles.scheduleField}>
-                    <Text style={styles.scheduleLabel}>Valid From</Text>
-                    <TextInput
-                      style={styles.scheduleInput}
-                      value={validFrom}
-                      onChangeText={setValidFrom}
-                      placeholder="YYYY-MM-DDTHH:MM"
-                      placeholderTextColor="#9CA3AF"
-                    />
-                    <TouchableOpacity 
-                      style={styles.scheduleNowButton}
-                      onPress={() => setValidFrom(new Date().toISOString().slice(0, 16))}
+                    <View style={styles.scheduleLabelRow}>
+                      <Text style={styles.scheduleLabel}>Valid From</Text>
+                      <TouchableOpacity
+                        style={styles.scheduleNowChip}
+                        onPress={() => setValidFrom(new Date().toISOString().slice(0, 16))}
+                      >
+                        <Ionicons name="flash" size={12} color={ZOMATO_RED} />
+                        <Text style={styles.scheduleNowChipText}>Now</Text>
+                      </TouchableOpacity>
+                      {validFrom ? (
+                        <TouchableOpacity onPress={() => setValidFrom('')}>
+                          <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.scheduleDateButton, validFrom && styles.scheduleDateButtonActive]}
+                      onPress={() => {
+                        setTempFromDate(validFrom ? new Date(validFrom) : new Date());
+                        setShowFromDatePicker(true);
+                      }}
+                      activeOpacity={0.7}
                     >
-                      <Text style={styles.scheduleNowText}>Now</Text>
+                      <Ionicons name="calendar-outline" size={18} color={validFrom ? ZOMATO_RED : '#9CA3AF'} />
+                      <Text style={[styles.scheduleDateText, validFrom && styles.scheduleDateTextActive]}>
+                        {validFrom ? `${formatDisplayDate(validFrom)}  •  ${formatDisplayTime(validFrom)}` : 'Tap to select date & time'}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                   
+                  {/* Valid Until */}
                   <View style={styles.scheduleField}>
-                    <Text style={styles.scheduleLabel}>Valid Until</Text>
-                    <TextInput
-                      style={styles.scheduleInput}
-                      value={validUntil}
-                      onChangeText={setValidUntil}
-                      placeholder="YYYY-MM-DDTHH:MM"
-                      placeholderTextColor="#9CA3AF"
-                    />
+                    <View style={styles.scheduleLabelRow}>
+                      <Text style={styles.scheduleLabel}>Valid Until</Text>
+                      {validUntil ? (
+                        <TouchableOpacity onPress={() => setValidUntil('')}>
+                          <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.scheduleDateButton, validUntil && styles.scheduleDateButtonActive]}
+                      onPress={() => {
+                        setTempUntilDate(validUntil ? new Date(validUntil) : (validFrom ? new Date(validFrom) : new Date()));
+                        setShowUntilDatePicker(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="calendar-outline" size={18} color={validUntil ? ZOMATO_RED : '#9CA3AF'} />
+                      <Text style={[styles.scheduleDateText, validUntil && styles.scheduleDateTextActive]}>
+                        {validUntil ? `${formatDisplayDate(validUntil)}  •  ${formatDisplayTime(validUntil)}` : 'Tap to select date & time'}
+                      </Text>
+                    </TouchableOpacity>
                     {validFrom ? (
                       <View style={styles.scheduleQuickButtons}>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                           style={styles.scheduleQuickBtn}
                           onPress={() => {
-                            const from = validFrom ? new Date(validFrom) : new Date();
+                            const from = new Date(validFrom);
                             from.setDate(from.getDate() + 1);
                             setValidUntil(from.toISOString().slice(0, 16));
                           }}
                         >
-                          <Text style={styles.scheduleQuickText}>+1d</Text>
+                          <Text style={styles.scheduleQuickText}>+1 Day</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                           style={styles.scheduleQuickBtn}
                           onPress={() => {
-                            const from = validFrom ? new Date(validFrom) : new Date();
+                            const from = new Date(validFrom);
                             from.setDate(from.getDate() + 7);
                             setValidUntil(from.toISOString().slice(0, 16));
                           }}
                         >
-                          <Text style={styles.scheduleQuickText}>+7d</Text>
+                          <Text style={styles.scheduleQuickText}>+7 Days</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                           style={styles.scheduleQuickBtn}
                           onPress={() => {
-                            const from = validFrom ? new Date(validFrom) : new Date();
+                            const from = new Date(validFrom);
                             from.setMonth(from.getMonth() + 1);
                             setValidUntil(from.toISOString().slice(0, 16));
                           }}
                         >
-                          <Text style={styles.scheduleQuickText}>+1m</Text>
+                          <Text style={styles.scheduleQuickText}>+1 Month</Text>
                         </TouchableOpacity>
                       </View>
                     ) : null}
@@ -1091,15 +1177,53 @@ export default function OfferFormScreen({ route, navigation }) {
                     <Ionicons name="calendar" size={16} color="#22C55E" />
                     <Text style={styles.selectedItemsInfoText}>
                       {validFrom && validUntil 
-                        ? `Active from ${new Date(validFrom).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} to ${new Date(validUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                        ? `Active from ${formatDisplayDate(validFrom)} ${formatDisplayTime(validFrom)} to ${formatDisplayDate(validUntil)} ${formatDisplayTime(validUntil)}`
                         : validFrom 
-                          ? `Starts ${new Date(validFrom).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
-                          : `Ends ${new Date(validUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                          ? `Starts ${formatDisplayDate(validFrom)} ${formatDisplayTime(validFrom)}`
+                          : `Ends ${formatDisplayDate(validUntil)} ${formatDisplayTime(validUntil)}`
                       }
                     </Text>
                   </View>
                 ) : null}
               </View>
+
+              {/* Native Date/Time Pickers */}
+              {showFromDatePicker && (
+                <DateTimePicker
+                  value={tempFromDate}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={onFromDateChange}
+                  minimumDate={new Date()}
+                />
+              )}
+              {showFromTimePicker && (
+                <DateTimePicker
+                  value={tempFromDate}
+                  mode="time"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={onFromTimeChange}
+                  is24Hour={false}
+                />
+              )}
+              {showUntilDatePicker && (
+                <DateTimePicker
+                  value={tempUntilDate}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={onUntilDateChange}
+                  minimumDate={validFrom ? new Date(validFrom) : new Date()}
+                />
+              )}
+              {showUntilTimePicker && (
+                <DateTimePicker
+                  value={tempUntilDate}
+                  mode="time"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={onUntilTimeChange}
+                  is24Hour={false}
+                />
+              )}
             </View>
           </Animated.View>
           <View style={{ height: 120 }} />
@@ -1913,51 +2037,73 @@ const styles = StyleSheet.create({
   
   // Schedule Time Styles
   scheduleRow: {
-    gap: 12,
+    gap: 16,
   },
   scheduleField: {
-    gap: 6,
+    gap: 8,
+  },
+  scheduleLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   scheduleLabel: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#374151',
+    flex: 1,
   },
-  scheduleInput: {
+  scheduleNowChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  scheduleNowChipText: {
+    color: ZOMATO_RED,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  scheduleDateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     backgroundColor: '#fff',
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 14,
-    height: 44,
+    height: 48,
     borderWidth: 1.5,
     borderColor: '#E5E7EB',
+  },
+  scheduleDateButtonActive: {
+    borderColor: ZOMATO_RED,
+    backgroundColor: '#FEF7F7',
+  },
+  scheduleDateText: {
     fontSize: 14,
-    color: '#1C1C1C',
+    color: '#9CA3AF',
     fontWeight: '500',
+    flex: 1,
   },
-  scheduleNowButton: {
-    position: 'absolute',
-    right: 8,
-    top: 28,
-    backgroundColor: ZOMATO_RED,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  scheduleNowText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
+  scheduleDateTextActive: {
+    color: '#1C1C1C',
+    fontWeight: '600',
   },
   scheduleQuickButtons: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 4,
+    marginTop: 2,
   },
   scheduleQuickBtn: {
     backgroundColor: '#FEF2F2',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#FECACA',
   },

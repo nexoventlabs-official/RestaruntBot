@@ -61,7 +61,8 @@
       ],
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
-      "./plugins/withFirebaseMessagingFix"
+      "./plugins/withFirebaseMessagingFix",
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {
