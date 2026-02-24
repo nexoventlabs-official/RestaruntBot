@@ -17,7 +17,11 @@ const connectSSE = () => {
   
   const baseUrl = api.defaults.baseURL || '/api';
   const token = localStorage.getItem('token') || localStorage.getItem('deliveryToken');
-  const url = token ? `${baseUrl}/events?token=${token}` : `${baseUrl}/events`;
+  
+  // Don't attempt SSE connection without auth token — server requires it
+  if (!token) return;
+  
+  const url = `${baseUrl}/events?token=${token}`;
   eventSource = new EventSource(url);
   
   eventSource.onmessage = (event) => {
