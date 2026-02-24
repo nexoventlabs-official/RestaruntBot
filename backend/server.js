@@ -284,13 +284,26 @@ app.get('/api/events', (req, res) => {
   // Set CORS headers explicitly for Server-Sent Events (EventSource connections)
   const { normalizeOrigin, getAllowedOrigins } = require('./config/corsConfig');
   const requestOrigin = req.get('origin');
-  const normalizedOrigin = normalizeOrigin(requestOrigin);
-  const allowedOrigins = getAllowedOrigins();
   
   if (requestOrigin) {
+    const normalizedOrigin = normalizeOrigin(requestOrigin);
+    const allowedOrigins = getAllowedOrigins();
     if (allowedOrigins.includes(normalizedOrigin)) {
       res.setHeader('Access-Control-Allow-Origin', requestOrigin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+  } else {
+    // EventSource may not send Origin header — allow based on Referer or allow all for SSE
+    const referer = req.get('referer');
+    if (referer) {
+      try {
+        const refOrigin = new URL(referer).origin;
+        const allowedOrigins = getAllowedOrigins();
+        if (allowedOrigins.includes(normalizeOrigin(refOrigin))) {
+          res.setHeader('Access-Control-Allow-Origin', refOrigin);
+          res.setHeader('Access-Control-Allow-Credentials', 'true');
+        }
+      } catch { /* ignore */ }
     }
   }
   

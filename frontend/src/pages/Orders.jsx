@@ -102,23 +102,45 @@ export default function Orders() {
   // Keep selectedOrderRef in sync
   useEffect(() => { selectedOrderRef.current = selectedOrder; }, [selectedOrder]);
 
+  const ordersHashRef = useRef(null);
+
   /* ═══════════ LIVE ORDERS FETCH ═══════════ */
   const fetchOrders = useCallback(async () => {
     try {
       const r = await api.get('/orders');
       const list = Array.isArray(r.data) ? r.data : (r.data?.orders || []);
       setOrders(list);
+      // Track hash for change detection in polling
+      if (r.data?.hash) ordersHashRef.current = r.data.hash;
     } catch { /* silent */ }
   }, []);
 
-  /* ═══════════ SSE SUBSCRIPTION (shared global connection) ═══════════ */
+  // Lightweight poll — only fetches full data when hash changes
+  const checkForUpdates = useCallback(async () => {
+    try {
+      const r = await api.get('/orders/check-updates', { params: { lastHash: ordersHashRef.current || '' } });
+      if (r.data?.hash) ordersHashRef.current = r.data.hash;
+      if (r.data?.hasChanges) {
+        fetchOrders();
+        // Also refresh selected order detail if one is open
+        if (selectedOrderRef.current) {
+          api.get('/orders').then(r2 => {
+            const list = Array.isArray(r2.data) ? r2.data : (r2.data?.orders || []);
+            const updated = list.find(o => o._id === selectedOrderRef.current._id);
+            if (updated) setSelectedOrder(updated);
+          }).catch(() => {});
+        }
+      }
+    } catch { /* silent */ }
+  }, [fetchOrders]);
+
+  /* ═══════════ SSE + POLLING ═══════════ */
   useEffect(() => {
     fetchOrders().finally(() => setLoading(false));
 
     // Subscribe to the global SSE 'orders' event (auto-reconnects)
     const unsubscribe = subscribe('orders', () => {
       fetchOrders();
-      // Also refresh the selected order detail if one is open
       if (selectedOrderRef.current) {
         api.get('/orders').then(r => {
           const list = Array.isArray(r.data) ? r.data : (r.data?.orders || []);
@@ -128,8 +150,11 @@ export default function Orders() {
       }
     });
 
-    return unsubscribe;
-  }, [fetchOrders]);
+    // Lightweight polling as fallback — checks every 5s using hash comparison
+    const pollInterval = setInterval(checkForUpdates, 5000);
+
+    return () => { unsubscribe(); clearInterval(pollInterval); };
+  }, [fetchOrders, checkForUpdates]);
 
   /* ═══════════ HISTORY FETCH ═══════════ */
   const fetchHistory = useCallback(async (force = false) => {
