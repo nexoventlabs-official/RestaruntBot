@@ -723,19 +723,26 @@ const catalogService = {
 
     // ── Part 2: Star rating (included in all syncs) ──
     if (includeRatings) {
-      // Use variant-level ratings if variant has its own totalRatings field (even if 0)
-      // Only fall back to parent item ratings when variant has no rating data at all
-      const hasVariantRatings = variant && typeof variant.totalRatings === 'number';
-      const rating = hasVariantRatings ? (variant.avgRating || 0) : (menuItem.avgRating || 0);
-      const totalRatings = hasVariantRatings ? variant.totalRatings : (menuItem.totalRatings || 0);
-      const filledStars = Math.min(Math.floor(rating), 5);
-      const emptyStars = 5 - filledStars;
-      const starLine = '⭐'.repeat(filledStars) + '☆'.repeat(emptyStars);
-      if (totalRatings > 0) {
-        parts.push(`${starLine} ${rating}/5 (${totalRatings} reviews)`);
+      // For variants: only show ratings if the variant itself has reviews
+      // Do NOT fall back to parent item ratings — keep each variant's ratings independent
+      let rating, totalRatings;
+      if (variant) {
+        // Variant product — use only its own ratings, skip if none
+        rating = variant.avgRating || 0;
+        totalRatings = variant.totalRatings || 0;
       } else {
-        parts.push(`${starLine} No reviews yet`);
+        // Single (non-variant) item — use item-level ratings
+        rating = menuItem.avgRating || 0;
+        totalRatings = menuItem.totalRatings || 0;
       }
+
+      if (totalRatings > 0) {
+        const filledStars = Math.min(Math.floor(rating), 5);
+        const emptyStars = 5 - filledStars;
+        const starLine = '⭐'.repeat(filledStars) + '☆'.repeat(emptyStars);
+        parts.push(`${starLine} ${rating}/5 (${totalRatings} reviews)`);
+      }
+      // If no reviews, simply omit the rating line entirely
     }
 
     // ── Part 3: Food type icon + label (prefer variant-level, fallback to item-level) ──
