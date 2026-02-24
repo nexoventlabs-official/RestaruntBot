@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
 
 const menuItemSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  description: { type: String },
+  name: { type: String, required: true, trim: true },
+  description: { type: String, trim: true },
   price: { type: Number, required: true },
   originalPrice: { type: Number }, // Original price before discount
   offerPrice: { type: Number }, // Price after offer discount is applied
@@ -20,14 +20,14 @@ const menuItemSchema = new mongoose.Schema({
   // e.g., Title: "Biryani" → Variants: "Chicken Biryani", "Mutton Biryani"
   // Each variant can have multiple quantity options (e.g., 0.5 kg, 1 kg)
   variants: [{
-    label: { type: String, required: true },        // Item name (e.g., "Chicken Biryani")
+    label: { type: String, required: true, trim: true },        // Item name (e.g., "Chicken Biryani")
     variantType: { type: String, enum: ['size', 'color'], default: 'size' },
     price: { type: Number, required: true },         // Base price for this variant
     offerPrice: { type: Number },                    // Offer price for this variant
     quantity: { type: Number, default: 1 },           // Default quantity
     unit: { type: String, default: 'piece', enum: ['piece', 'kg', 'gram', 'liter', 'ml', 'plate', 'bowl', 'cup', 'slice', 'inch', 'full', 'half', 'small'] },
     image: { type: String },                         // Variant-specific image
-    description: { type: String },                   // Variant-specific description
+    description: { type: String, trim: true },                   // Variant-specific description
     foodType: { type: String, default: 'none', enum: ['veg', 'nonveg', 'egg', 'none'] },
     tags: [String],                                  // Variant-specific tags
     available: { type: Boolean, default: true },
@@ -58,6 +58,15 @@ const menuItemSchema = new mongoose.Schema({
 
 menuItemSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
+  // Auto-trim variant labels and descriptions
+  if (this.variants && this.variants.length > 0) {
+    this.variants.forEach(v => {
+      if (v.label) v.label = v.label.trim();
+      if (v.description) v.description = v.description.trim();
+    });
+  }
+  if (this.name) this.name = this.name.trim();
+  if (this.description) this.description = this.description.trim();
   next();
 });
 

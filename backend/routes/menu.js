@@ -137,14 +137,14 @@ router.post('/', authMiddleware, menuUpload, async (req, res) => {
           }
           const parsedPrice = parseFloat(v.price) || 0;
           const variantData = {
-            label: v.label,
+            label: v.label ? v.label.trim() : '',
             variantType: 'size',
             price: parsedPrice,
             offerPrice: v.offerPrice ? parseFloat(v.offerPrice) : undefined,
             quantity: v.quantity ? parseFloat(v.quantity) : 1,
             unit: v.unit || 'piece',
             image: variantImage,
-            description: v.description || '',
+            description: v.description ? v.description.trim() : '',
             foodType: v.foodType || 'none',
             tags: Array.isArray(v.tags) ? v.tags : (typeof v.tags === 'string' ? v.tags.split(',').map(s => s.trim()).filter(Boolean) : []),
             available: v.available !== false && v.available !== 'false'
@@ -327,14 +327,14 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
           }
           const parsedPrice = parseFloat(v.price) || 0;
           const variantData = {
-            label: v.label,
+            label: v.label ? v.label.trim() : '',
             variantType: 'size',
             price: parsedPrice,
             offerPrice: v.offerPrice ? parseFloat(v.offerPrice) : undefined,
             quantity: v.quantity ? parseFloat(v.quantity) : 1,
             unit: v.unit || 'piece',
             image: variantImage,
-            description: v.description || '',
+            description: v.description ? v.description.trim() : '',
             foodType: v.foodType || 'none',
             tags: Array.isArray(v.tags) ? v.tags : (typeof v.tags === 'string' ? v.tags.split(',').map(s => s.trim()).filter(Boolean) : []),
             available: v.available !== false && v.available !== 'false'
