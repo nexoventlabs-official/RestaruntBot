@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, Image, Alert, ActivityIndicator, Switch, Modal, FlatList,
-  Animated, Platform, KeyboardAvoidingView, StatusBar, LayoutAnimation, UIManager, Dimensions
+  Animated, Platform, KeyboardAvoidingView, StatusBar, LayoutAnimation, UIManager, Dimensions, ToastAndroid
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +15,14 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const showToast = (msg) => {
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(msg, ToastAndroid.LONG);
+  } else {
+    Alert.alert('', msg);
+  }
+};
 
 let _variantIdCounter = Date.now();
 
@@ -383,111 +391,109 @@ export default function MenuItemFormScreen({ route, navigation }) {
     const trimmedVariants = variants.map(v => ({ ...v, label: v.label?.trim() || '' }));
     setVariants(trimmedVariants);
 
-    setLoading(true);
-    try {
-      const formData = new FormData();
-      formData.append('name', trimmedName);
-      formData.append('description', description);
-      // Auto-derive base price/qty/unit from variants
-      const lowestPrice = Math.min(...trimmedVariants.map(v => {
-        if (v.quantities && v.quantities.length > 0) {
-          return Math.min(...v.quantities.map(q => parseFloat(q.price) || 0));
-        }
-        return parseFloat(v.price) || 0;
+    const formData = new FormData();
+    formData.append('name', trimmedName);
+    formData.append('description', description);
+    // Auto-derive base price/qty/unit from variants
+    const lowestPrice = Math.min(...trimmedVariants.map(v => {
+      if (v.quantities && v.quantities.length > 0) {
+        return Math.min(...v.quantities.map(q => parseFloat(q.price) || 0));
+      }
+      return parseFloat(v.price) || 0;
+    }));
+    formData.append('price', lowestPrice.toString());
+    if (trimmedVariants[0].quantities && trimmedVariants[0].quantities.length > 0) {
+      formData.append('quantity', trimmedVariants[0].quantities[0].quantity || '1');
+      formData.append('unit', trimmedVariants[0].quantities[0].unit || 'piece');
+    } else {
+      formData.append('quantity', trimmedVariants[0].quantity || '1');
+      formData.append('unit', trimmedVariants[0].unit || 'piece');
+    }
+    formData.append('category', JSON.stringify(selectedCategories));
+    formData.append('foodType', foodType);
+    formData.append('available', available.toString());
+    formData.append('preparationTime', preparationTime);
+    formData.append('tags', tags || '');
+
+    if (newImage) {
+      const filename = newImage.uri.split('/').pop();
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+      formData.append('image', { uri: newImage.uri, name: filename, type });
+    } else if (!image && existingItem?.image) {
+      formData.append('removeImage', 'true');
+    }
+
+    // ── Variants ──
+    if (trimmedVariants.length > 0) {
+      const variantsPayload = trimmedVariants.map(v => ({
+        label: v.label,
+        variantType: 'size',
+        price: v.quantities?.length > 0 ? Math.min(...v.quantities.map(q => parseFloat(q.price) || 0)).toString() : v.price,
+        quantity: v.quantity || '1',
+        unit: v.unit || 'piece',
+        available: v.available,
+        description: v.description || '',
+        foodType: v.foodType || 'veg',
+        tags: v.tags || '',
+        quantities: (v.quantities || []).map(q => ({
+          quantity: q.quantity || '1',
+          unit: q.unit || 'piece',
+          price: q.price || '0',
+          offerPrice: q.offerPrice || ''
+        })),
+        // keep existing image url if no new file picked
+        image: v.newImageFile ? '' : (v.image || ''),
       }));
-      formData.append('price', lowestPrice.toString());
-      if (trimmedVariants[0].quantities && trimmedVariants[0].quantities.length > 0) {
-        formData.append('quantity', trimmedVariants[0].quantities[0].quantity || '1');
-        formData.append('unit', trimmedVariants[0].quantities[0].unit || 'piece');
-      } else {
-        formData.append('quantity', trimmedVariants[0].quantity || '1');
-        formData.append('unit', trimmedVariants[0].unit || 'piece');
-      }
-      formData.append('category', JSON.stringify(selectedCategories));
-      formData.append('foodType', foodType);
-      formData.append('available', available.toString());
-      formData.append('preparationTime', preparationTime);
-      formData.append('tags', tags || '');
+      formData.append('variants', JSON.stringify(variantsPayload));
 
-      if (newImage) {
-        const filename = newImage.uri.split('/').pop();
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : 'image/jpeg';
-        formData.append('image', { uri: newImage.uri, name: filename, type });
-      } else if (!image && existingItem?.image) {
-        formData.append('removeImage', 'true');
-      }
+      // Append new variant image files with index tracking
+      const newImageIndices = [];
+      trimmedVariants.forEach((v, index) => {
+        if (v.newImageFile) {
+          newImageIndices.push(index);
+          const fname = v.newImageFile.uri.split('/').pop();
+          const ext = /\.(\w+)$/.exec(fname);
+          const mimeType = ext ? `image/${ext[1]}` : 'image/jpeg';
+          formData.append('variantImages', { uri: v.newImageFile.uri, name: fname, type: mimeType });
+        }
+      });
+      // Tell the backend which variant index each uploaded file belongs to
+      formData.append('variantImageIndices', JSON.stringify(newImageIndices));
+    } else {
+      // Send empty array to clear variants if all removed
+      formData.append('variants', JSON.stringify([]));
+    }
 
-      // ── Variants ──
-      if (trimmedVariants.length > 0) {
-        const variantsPayload = trimmedVariants.map(v => ({
-          label: v.label,
-          variantType: 'size',
-          price: v.quantities?.length > 0 ? Math.min(...v.quantities.map(q => parseFloat(q.price) || 0)).toString() : v.price,
-          quantity: v.quantity || '1',
-          unit: v.unit || 'piece',
-          available: v.available,
-          description: v.description || '',
-          foodType: v.foodType || 'veg',
-          tags: v.tags || '',
-          quantities: (v.quantities || []).map(q => ({
-            quantity: q.quantity || '1',
-            unit: q.unit || 'piece',
-            price: q.price || '0',
-            offerPrice: q.offerPrice || ''
-          })),
-          // keep existing image url if no new file picked
-          image: v.newImageFile ? '' : (v.image || ''),
-        }));
-        formData.append('variants', JSON.stringify(variantsPayload));
+    // ── Optimistic: navigate back immediately, save in background ──
+    navigation.goBack();
+    showToast(isEditing ? '⏳ Updating item...' : '⏳ Creating item...');
 
-        // Append new variant image files with index tracking
-        const newImageIndices = [];
-        trimmedVariants.forEach((v, index) => {
-          if (v.newImageFile) {
-            newImageIndices.push(index);
-            const fname = v.newImageFile.uri.split('/').pop();
-            const ext = /\.(\w+)$/.exec(fname);
-            const mimeType = ext ? `image/${ext[1]}` : 'image/jpeg';
-            formData.append('variantImages', { uri: v.newImageFile.uri, name: fname, type: mimeType });
-          }
-        });
-        // Tell the backend which variant index each uploaded file belongs to
-        formData.append('variantImageIndices', JSON.stringify(newImageIndices));
-      } else {
-        // Send empty array to clear variants if all removed
-        formData.append('variants', JSON.stringify([]));
-      }
-
+    try {
       if (isEditing) {
         await api.put(`/menu/${existingItem._id}`, formData, { 
           headers: { 'Content-Type': 'multipart/form-data' },
-          timeout: 90000 // 90 seconds for image uploads
+          timeout: 90000
         });
-        Alert.alert('Success', 'Menu item updated');
+        showToast('✅ Menu item updated');
       } else {
         await api.post('/menu', formData, { 
           headers: { 'Content-Type': 'multipart/form-data' },
-          timeout: 90000 // 90 seconds for image uploads
+          timeout: 90000
         });
-        Alert.alert('Success', 'Menu item created');
+        showToast('✅ Menu item created');
       }
-      navigation.goBack();
     } catch (error) {
       console.error('Submit error:', error);
       let errorMessage = 'Failed to save item';
-      
       if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        errorMessage = 'Upload timed out. Please check your internet connection and try again.';
+        errorMessage = 'Upload timed out. Check your connection and try again.';
       } else if (error.response?.data?.error) {
         errorMessage = error.response.data.error;
       } else if (!error.response) {
-        errorMessage = 'Network error. Please check your internet connection.';
+        errorMessage = 'Network error. Check your connection.';
       }
-      
-      Alert.alert('Error', errorMessage);
-    } finally {
-      setLoading(false);
+      showToast('❌ ' + errorMessage);
     }
   };
 
