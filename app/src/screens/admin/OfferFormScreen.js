@@ -2,12 +2,21 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, Image, Alert, ActivityIndicator, Animated, Platform,
-  KeyboardAvoidingView, StatusBar, Modal, FlatList
+  KeyboardAvoidingView, StatusBar, Modal, FlatList, ToastAndroid
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import api from '../../config/api';
+
+// Toast helper for cross-platform
+const showToast = (message) => {
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(message, ToastAndroid.LONG);
+  } else {
+    Alert.alert('', message);
+  }
+};
 
 // Zomato Theme Colors
 const ZOMATO_RED = '#E23744';
@@ -531,35 +540,36 @@ export default function OfferFormScreen({ route, navigation }) {
         formData.append('imageWhatsApp', { uri: newWhatsAppImage.uri, name: waFilename, type: waType });
       }
 
-      if (isEditing) {
-        await api.put(`/offers/${existingOffer._id}`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-          timeout: 90000 // 90 seconds for image uploads
-        });
-        Alert.alert('Success', 'Offer updated successfully', [
-          { text: 'OK', onPress: () => navigation.goBack() }
-        ]);
-      } else {
-        const response = await api.post('/offers', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-          timeout: 90000 // 90 seconds for image uploads
-        });
-        
-        // Show template status in success message
-        const tplStatus = response.data?.templateStatus;
-        let successMsg = 'Offer created successfully!';
-        if (tplStatus === 'pending') {
-          successMsg += '\n\n📤 WhatsApp template submitted to Meta for review.\n\n⏳ You can send this offer to customers once the template is approved (usually takes a few minutes).';
-        } else if (tplStatus === 'rejected') {
-          successMsg += `\n\n❌ Template submission failed: ${response.data?.templateRejectionReason || 'Unknown error'}\n\nYou can retry from the offers list.`;
-        } else if (!tplStatus || tplStatus === 'none') {
-          successMsg += '\n\n⚠️ No WhatsApp template created (META_WABA_ID may not be configured).';
+      // Navigate back immediately for instant feedback
+      navigation.goBack();
+      showToast(isEditing ? '⏳ Updating offer...' : '⏳ Creating offer...');
+
+      // Process API call in background
+      try {
+        if (isEditing) {
+          await api.put(`/offers/${existingOffer._id}`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 90000
+          });
+          showToast('✅ Offer updated successfully');
+        } else {
+          const response = await api.post('/offers', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 90000
+          });
+          const tplStatus = response.data?.templateStatus;
+          if (tplStatus === 'pending') {
+            showToast('✅ Offer created! Template pending Meta review');
+          } else if (tplStatus === 'rejected') {
+            showToast('✅ Offer created but template rejected');
+          } else {
+            showToast('✅ Offer created successfully');
+          }
         }
-        
-        Alert.alert('Success', successMsg, [
-          { text: 'OK' }
-        ]);
-        // Don't navigate back - keep the form with data
+      } catch (bgError) {
+        console.error('Background offer save failed:', bgError);
+        const errMsg = bgError.code === 'ECONNABORTED' ? 'Upload timed out' : (bgError.response?.data?.error || 'Failed to save');
+        showToast(`❌ Offer save failed: ${errMsg}`);
       }
     } catch (error) {
       console.error('Error saving offer:', error);
