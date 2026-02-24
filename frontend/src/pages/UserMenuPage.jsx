@@ -54,6 +54,7 @@ export default function UserMenuPage() {
   const [dialogQuantity, setDialogQuantity] = useState(1);
   const [selectedVariantIndex, setSelectedVariantIndex] = useState(null);
   const [selectedQuantityIndex, setSelectedQuantityIndex] = useState(null);
+  const [showAllVariants, setShowAllVariants] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const eventSourceRef = useRef(null);
 
@@ -329,6 +330,7 @@ export default function UserMenuPage() {
   // Open item detail dialog
   const openItemDialog = (item, preselectedVariantIndex = null) => {
     setSelectedItem(item);
+    setShowAllVariants(false);
     setDialogQuantity(cart?.find(c => c._id === item._id)?.quantity || 1);
     // If a specific variant was pre-selected (e.g., from variant card click), use it
     if (preselectedVariantIndex !== null) {
@@ -1396,13 +1398,29 @@ export default function UserMenuPage() {
               })()}
 
               {/* Variant Selector */}
-              {selectedItem.variants && selectedItem.variants.length > 0 && (
+              {selectedItem.variants && selectedItem.variants.length > 0 && (() => {
+                const variants = selectedItem.variants;
+                const MAX_VISIBLE = 2;
+                let visibleIndices;
+                if (showAllVariants || variants.length <= MAX_VISIBLE) {
+                  visibleIndices = variants.map((_, i) => i);
+                } else {
+                  // Always include first 2 + the selected variant if it's beyond index 1
+                  const base = [0, 1];
+                  if (selectedVariantIndex !== null && selectedVariantIndex >= MAX_VISIBLE) {
+                    base.push(selectedVariantIndex);
+                  }
+                  visibleIndices = [...new Set(base)];
+                }
+                const hiddenCount = variants.length - visibleIndices.length;
+                return (
                 <div className="mb-4">
                   <p className="text-sm font-semibold text-gray-700 mb-2">
-                    {selectedItem.variants[0]?.variantType === 'color' ? 'Color' : 'Items'}
+                    {variants[0]?.variantType === 'color' ? 'Color' : 'Items'}
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {selectedItem.variants.map((v, idx) => {
+                    {visibleIndices.map((idx) => {
+                      const v = variants[idx];
                       const isSelected = selectedVariantIndex === idx;
                       const isAvailable = v.available !== false;
                       return (
@@ -1411,7 +1429,6 @@ export default function UserMenuPage() {
                           onClick={() => {
                             if (!isAvailable) return;
                             setSelectedVariantIndex(idx);
-                            // Reset quantity index when switching variants
                             if (v.quantities?.length > 0) {
                               setSelectedQuantityIndex(0);
                             } else {
@@ -1439,9 +1456,26 @@ export default function UserMenuPage() {
                         </button>
                       );
                     })}
+                    {!showAllVariants && hiddenCount > 0 && (
+                      <button
+                        onClick={() => setShowAllVariants(true)}
+                        className="px-4 py-2 rounded-xl text-sm font-medium border-2 border-dashed border-orange-300 text-orange-500 hover:bg-orange-50 transition-all"
+                      >
+                        +{hiddenCount} more
+                      </button>
+                    )}
+                    {showAllVariants && variants.length > MAX_VISIBLE && (
+                      <button
+                        onClick={() => setShowAllVariants(false)}
+                        className="px-4 py-2 rounded-xl text-sm font-medium border-2 border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 transition-all"
+                      >
+                        Show less
+                      </button>
+                    )}
                   </div>
                 </div>
-              )}
+                );
+              })()}
 
               {/* Quantity Option Selector (e.g., 750 ml, 1 kg) */}
               {selectedVariantIndex !== null && selectedItem.variants?.[selectedVariantIndex]?.quantities?.length > 0 && (

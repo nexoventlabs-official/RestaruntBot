@@ -40,6 +40,7 @@ export default function UserLayout() {
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(null);
   const [selectedQuantityIdx, setSelectedQuantityIdx] = useState(null);
   const [dialogQuantity, setDialogQuantity] = useState(1);
+  const [showAllVariants, setShowAllVariants] = useState(false);
   const [holidayMode, setHolidayMode] = useState(false);
   const searchInputRef = useRef(null);
   const eventSourceRef = useRef(null);
@@ -323,6 +324,7 @@ export default function UserLayout() {
 
   const openItemDetail = (item, variantIndex = null) => {
     setSelectedItem(item);
+    setShowAllVariants(false);
     setSelectedVariantIdx(variantIndex);
     setSelectedQuantityIdx(variantIndex !== null && item.variants?.[variantIndex]?.quantities?.length > 0 ? 0 : null);
     setDialogQuantity(1);
@@ -792,26 +794,60 @@ export default function UserLayout() {
               {selectedItem.variants && selectedItem.variants.length > 0 && (
                 <div className="mb-4">
                   <p className="text-sm font-semibold text-gray-700 mb-2">Items</p>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedItem.variants.map((v, idx) => {
-                      const isSelected = selectedVariantIdx === idx;
-                      const vPrice = v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price;
-                      return (
+                  {(() => {
+                    const variants = selectedItem.variants;
+                    const MAX_VISIBLE = 2;
+                    let visibleIndices;
+                    if (showAllVariants || variants.length <= MAX_VISIBLE) {
+                      visibleIndices = variants.map((_, i) => i);
+                    } else {
+                      const base = [0, 1];
+                      if (selectedVariantIdx !== null && selectedVariantIdx >= MAX_VISIBLE) {
+                        base.push(selectedVariantIdx);
+                      }
+                      visibleIndices = [...new Set(base)];
+                    }
+                    const hiddenCount = variants.length - visibleIndices.length;
+                    return (
+                    <div className="flex flex-wrap gap-2">
+                      {visibleIndices.map((idx) => {
+                        const v = variants[idx];
+                        const isSelected = selectedVariantIdx === idx;
+                        const vPrice = v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price;
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => { setSelectedVariantIdx(idx); setSelectedQuantityIdx(v.quantities?.length > 0 ? 0 : null); setDialogQuantity(1); }}
+                            className={`px-3 py-1.5 rounded-xl text-sm font-medium border-2 transition-all ${
+                              isSelected
+                                ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-sm'
+                                : 'border-gray-200 bg-white text-gray-700 hover:border-orange-300 hover:bg-orange-50'
+                            }`}
+                          >
+                            {v.label}
+                            <span className="ml-1.5 text-xs text-gray-400">₹{vPrice}</span>
+                          </button>
+                        );
+                      })}
+                      {!showAllVariants && hiddenCount > 0 && (
                         <button
-                          key={idx}
-                          onClick={() => { setSelectedVariantIdx(idx); setSelectedQuantityIdx(v.quantities?.length > 0 ? 0 : null); setDialogQuantity(1); }}
-                          className={`px-3 py-1.5 rounded-xl text-sm font-medium border-2 transition-all ${
-                            isSelected
-                              ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-sm'
-                              : 'border-gray-200 bg-white text-gray-700 hover:border-orange-300 hover:bg-orange-50'
-                          }`}
+                          onClick={() => setShowAllVariants(true)}
+                          className="px-3 py-1.5 rounded-xl text-sm font-medium border-2 border-dashed border-orange-300 text-orange-500 hover:bg-orange-50 transition-all"
                         >
-                          {v.label}
-                          <span className="ml-1.5 text-xs text-gray-400">₹{vPrice}</span>
+                          +{hiddenCount} more
                         </button>
-                      );
-                    })}
-                  </div>
+                      )}
+                      {showAllVariants && variants.length > MAX_VISIBLE && (
+                        <button
+                          onClick={() => setShowAllVariants(false)}
+                          className="px-3 py-1.5 rounded-xl text-sm font-medium border-2 border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 transition-all"
+                        >
+                          Show less
+                        </button>
+                      )}
+                    </div>
+                    );
+                  })()}
                 </div>
               )}
 
