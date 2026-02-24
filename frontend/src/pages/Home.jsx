@@ -148,7 +148,13 @@ export default function Home() {
         const res = await axios.get(`${API_URL}/categories`);
         catData = res.data;
       }
-      setCategories(catData.filter(cat => cat.isActive && !cat.isPaused));
+      setCategories(catData.filter(cat => cat.isActive && !cat.isPaused).sort((a, b) => {
+        // Push emoji-starting categories to the end
+        const aEmoji = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(a.name);
+        const bEmoji = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(b.name);
+        if (aEmoji !== bEmoji) return aEmoji ? 1 : -1;
+        return 0;
+      }));
     } catch (err) {
       console.error('Error loading categories:', err);
     }
