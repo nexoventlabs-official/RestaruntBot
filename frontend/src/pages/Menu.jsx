@@ -63,8 +63,16 @@ export default function Menu() {
   const [categorySchedule, setCategorySchedule] = useState({ enabled: false, type: 'daily', startTime: '09:00', endTime: '22:00', days: [] });
 
   const [deleting, setDeleting] = useState(false);
+  const [toast, setToast] = useState(null); // { message, type: 'info'|'success'|'error' }
+  const toastTimer = useRef(null);
   const initialLoadDone = useRef(false);
   const lastTapRef = useRef({});
+
+  const showToast = useCallback((message, type = 'info') => {
+    setToast({ message, type });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), type === 'error' ? 5000 : 3000);
+  }, []);
 
   /* ═══════════ DATA FETCHING ═══════════ */
   const fetchItems = useCallback(async () => {
@@ -217,10 +225,18 @@ export default function Menu() {
     setConfirmDialog({
       title: 'Delete Variant?', message: 'This variant will be permanently removed.',
       onConfirm: async () => {
-        setDeleting(true);
-        try { await api.delete(`/menu/${parentId}/variant/${variantIndex}`); await fetchItems(); }
-        catch { alert('Failed to delete variant'); }
-        finally { setDeleting(false); setConfirmDialog(null); }
+        // Optimistic: remove from UI immediately
+        setItems(prev => prev.map(i => i._id === parentId ? { ...i, variants: i.variants.filter((_, idx) => idx !== variantIndex) } : i));
+        setConfirmDialog(null);
+        showToast('⏳ Deleting variant...', 'info');
+        try {
+          await api.delete(`/menu/${parentId}/variant/${variantIndex}`);
+          showToast('✅ Variant deleted', 'success');
+          await fetchItems();
+        } catch {
+          showToast('❌ Failed to delete variant', 'error');
+          await fetchItems(); // revert
+        }
       }
     });
   };
@@ -229,10 +245,18 @@ export default function Menu() {
     setConfirmDialog({
       title: 'Delete Item?', message: `Delete "${item.name}" and all its variants?`,
       onConfirm: async () => {
-        setDeleting(true);
-        try { await api.delete(`/menu/${item._id}`); await fetchItems(); }
-        catch { alert('Failed to delete item'); }
-        finally { setDeleting(false); setConfirmDialog(null); }
+        // Optimistic: remove from UI immediately
+        setItems(prev => prev.filter(i => i._id !== item._id));
+        setConfirmDialog(null);
+        showToast('⏳ Deleting item...', 'info');
+        try {
+          await api.delete(`/menu/${item._id}`);
+          showToast('✅ Item deleted', 'success');
+          await fetchItems();
+        } catch {
+          showToast('❌ Failed to delete item', 'error');
+          await fetchItems(); // revert
+        }
       }
     });
   };
@@ -443,46 +467,51 @@ export default function Menu() {
     e.preventDefault();
     if (!form.name.trim()) return alert('Please enter a name');
 
-    setSaving(true);
+    const fd = new FormData();
+    fd.append('name', form.name.trim());
+    fd.append('category', JSON.stringify(form.category));
+    fd.append('available', form.available);
+
+    // Auto-derive from variants
+    const v0 = form.variants[0];
+    if (v0) {
+      fd.append('foodType', v0.foodType || 'veg');
+      fd.append('description', v0.description || '');
+      fd.append('tags', v0.tags || '');
+      const prices = form.variants.flatMap(v => v.quantities?.length > 0 ? v.quantities.map(q => parseFloat(q.price) || 0) : [parseFloat(v.price) || 0]);
+      fd.append('price', Math.min(...prices.filter(p => p > 0)) || 0);
+    }
+    if (imageFile) fd.append('image', imageFile);
+
+    // Variants JSON
+    const cleanVariants = form.variants.map(v => {
+      const { _uid, _collapsed, ...rest } = v;
+      return { ...rest, quantities: (rest.quantities || []).filter(q => q.quantity && q.price) };
+    });
+    fd.append('variants', JSON.stringify(cleanVariants));
+
+    // Variant images
+    const imgIndices = [];
+    form.variants.forEach((v, i) => {
+      const uid = v._uid;
+      if (variantImageFiles[uid]) { fd.append('variantImages', variantImageFiles[uid]); imgIndices.push(i); }
+    });
+    if (imgIndices.length > 0) fd.append('variantImageIndices', JSON.stringify(imgIndices));
+
+    // Optimistic: close modal immediately
+    const isEdit = !!editing;
+    const editId = editing?._id;
+    setShowModal(false); setEditing(null); setSaving(false);
+    showToast(isEdit ? '⏳ Updating item...' : '⏳ Creating item...', 'info');
+
     try {
-      const fd = new FormData();
-      fd.append('name', form.name.trim());
-      fd.append('category', JSON.stringify(form.category));
-      fd.append('available', form.available);
-
-      // Auto-derive from variants
-      const v0 = form.variants[0];
-      if (v0) {
-        fd.append('foodType', v0.foodType || 'veg');
-        fd.append('description', v0.description || '');
-        fd.append('tags', v0.tags || '');
-        const prices = form.variants.flatMap(v => v.quantities?.length > 0 ? v.quantities.map(q => parseFloat(q.price) || 0) : [parseFloat(v.price) || 0]);
-        fd.append('price', Math.min(...prices.filter(p => p > 0)) || 0);
-      }
-      if (imageFile) fd.append('image', imageFile);
-
-      // Variants JSON
-      const cleanVariants = form.variants.map(v => {
-        const { _uid, _collapsed, ...rest } = v;
-        return { ...rest, quantities: (rest.quantities || []).filter(q => q.quantity && q.price) };
-      });
-      fd.append('variants', JSON.stringify(cleanVariants));
-
-      // Variant images
-      const imgIndices = [];
-      form.variants.forEach((v, i) => {
-        const uid = v._uid;
-        if (variantImageFiles[uid]) { fd.append('variantImages', variantImageFiles[uid]); imgIndices.push(i); }
-      });
-      if (imgIndices.length > 0) fd.append('variantImageIndices', JSON.stringify(imgIndices));
-
-      if (editing) { await api.put(`/menu/${editing._id}`, fd, { timeout: 90000 }); }
+      if (isEdit) { await api.put(`/menu/${editId}`, fd, { timeout: 90000 }); }
       else { await api.post('/menu', fd, { timeout: 90000 }); }
-
-      setShowModal(false); setEditing(null);
+      showToast('✅ Item saved successfully', 'success');
       await fetchItems();
-    } catch (err) { alert(err.response?.data?.error || 'Failed to save item'); }
-    finally { setSaving(false); }
+    } catch (err) {
+      showToast('❌ ' + (err.response?.data?.error || 'Failed to save item'), 'error');
+    }
   };
 
   /* ═══════════ LOADING ═══════════ */
@@ -1070,6 +1099,15 @@ export default function Menu() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-xl shadow-lg text-sm font-medium ${
+          toast.type === 'error' ? 'bg-red-600 text-white' : toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-dark-800 text-white'
+        }`}>
+          {toast.message}
         </div>
       )}
     </div>
