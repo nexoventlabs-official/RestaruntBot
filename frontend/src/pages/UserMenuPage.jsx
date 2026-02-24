@@ -5,7 +5,7 @@ import { Star, Plus, Minus, Heart, ShoppingCart, X, Clock, Package, Search, Tag 
 import { useCachedData } from '../hooks/useImagePreloader';
 
 const API_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api') + '/public';
-const SSE_URL = 'https://restaruntbot.onrender.com/api/events';
+const SSE_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api') + '/public/events';
 const WHATSAPP_NUMBER = '9440203095';
 
 // WhatsApp Icon Component

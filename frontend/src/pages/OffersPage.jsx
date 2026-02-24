@@ -138,7 +138,7 @@ export default function OffersPage() {
 
   const setupSSE = () => {
     try {
-      const SSE_URL = 'https://restaruntbot.onrender.com/api/events';
+      const SSE_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api') + '/public/events';
       eventSourceRef.current = new EventSource(SSE_URL);
       eventSourceRef.current.onmessage = (event) => {
         try {

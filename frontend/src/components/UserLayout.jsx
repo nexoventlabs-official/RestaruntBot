@@ -17,7 +17,7 @@ import {
 const WHATSAPP_NUMBER = '9440203095';
 const API_URL = 'https://restaruntbot.onrender.com/api/public';
 const SETTINGS_URL = 'https://restaruntbot.onrender.com/api/settings';
-const SSE_URL = 'https://restaruntbot.onrender.com/api/events';
+const SSE_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api') + '/public/events';
 
 const navLinks = [
   { path: '/', label: 'Home', icon: HomeIcon },

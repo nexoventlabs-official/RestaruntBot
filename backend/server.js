@@ -246,6 +246,36 @@ app.get('/', (req, res) => res.json({
   version: '1.0.0'
 }));
 
+// Public SSE endpoint for real-time menu/offers updates (no auth required)
+const publicSseClients = new Set();
+
+app.get('/api/public/events', (req, res) => {
+  const { normalizeOrigin, getAllowedOrigins } = require('./config/corsConfig');
+  const requestOrigin = req.get('origin');
+  const normalizedOrigin = normalizeOrigin(requestOrigin);
+  const allowedOrigins = getAllowedOrigins();
+
+  if (requestOrigin) {
+    if (allowedOrigins.includes(normalizedOrigin)) {
+      res.setHeader('Access-Control-Allow-Origin', requestOrigin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  publicSseClients.add(res);
+  const keepAlive = setInterval(() => res.write(': ping\n\n'), 30000);
+
+  req.on('close', () => {
+    clearInterval(keepAlive);
+    publicSseClients.delete(res);
+  });
+});
+
 // SSE endpoint for real-time updates (authenticated)
 const sseClients = new Set();
 const { initContext, runWithContext } = require('./services/correlationContext');
@@ -298,23 +328,33 @@ app.get('/api/events', (req, res) => {
   });
 });
 
-// Broadcast to all SSE clients
+// Broadcast to all SSE clients (authenticated)
 const broadcast = (data) => {
   const payload = typeof data === 'string' ? { type: data } : data;
   sseClients.forEach(c => c.write(`data: ${JSON.stringify(payload)}\n\n`));
 };
 
+// Broadcast to public SSE clients (menu/offers only)
+const broadcastPublic = (data) => {
+  const payload = typeof data === 'string' ? { type: data } : data;
+  publicSseClients.forEach(c => c.write(`data: ${JSON.stringify(payload)}\n\n`));
+};
+
 dataEvents.on('orders', () => broadcast('orders'));
 dataEvents.on('dashboard', () => broadcast('dashboard'));
 dataEvents.on('customers', () => broadcast('customers'));
-dataEvents.on('menu', () => broadcast('menu'));
+dataEvents.on('menu', () => { broadcast('menu'); broadcastPublic('menu'); });
 dataEvents.on('deliveryboys', () => broadcast('deliveryboys'));
-dataEvents.on('offers', () => broadcast('offers'));
+dataEvents.on('offers', () => { broadcast('offers'); broadcastPublic('offers'); });
 
 // Also listen for dataUpdate events (alternative format used in some routes)
 dataEvents.on('dataUpdate', (data) => {
   if (data && data.type) {
     broadcast(data);
+    // Forward menu/offers updates to public clients too
+    if (data.type === 'menu' || data.type === 'offers') {
+      broadcastPublic(data);
+    }
   }
 });
 
