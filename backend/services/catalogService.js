@@ -736,13 +736,14 @@ const catalogService = {
         totalRatings = menuItem.totalRatings || 0;
       }
 
+      const filledStars = Math.min(Math.floor(rating), 5);
+      const emptyStars = 5 - filledStars;
+      const starLine = '⭐'.repeat(filledStars) + '☆'.repeat(emptyStars);
       if (totalRatings > 0) {
-        const filledStars = Math.min(Math.floor(rating), 5);
-        const emptyStars = 5 - filledStars;
-        const starLine = '⭐'.repeat(filledStars) + '☆'.repeat(emptyStars);
         parts.push(`${starLine} ${rating}/5 (${totalRatings} reviews)`);
+      } else {
+        parts.push(`☆☆☆☆☆ No reviews yet`);
       }
-      // If no reviews, simply omit the rating line entirely
     }
 
     // ── Part 3: Food type icon + label (prefer variant-level, fallback to item-level) ──
