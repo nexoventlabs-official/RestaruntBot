@@ -25,7 +25,7 @@ function countItemsWithVariants(items) {
   let count = 0;
   for (const item of items) {
     if (item.variants && item.variants.length > 0) {
-      count += item.variants.filter(v => v.available !== false).length;
+      count += item.variants.length;
     } else {
       count += 1;
     }
@@ -3263,7 +3263,7 @@ const chatbot = {
           
           for (let vi = 0; vi < item.variants.length; vi++) {
             const variant = item.variants[vi];
-            if (!variant.label || variant.available === false) continue;
+            if (!variant.label) continue;
             
             const variantLabel = variant.label.toLowerCase();
             const variantTagsStr = (variant.tags || []).join(' ').toLowerCase();
@@ -6437,10 +6437,10 @@ const chatbot = {
           
           const vi = matchedVariants[itemId];
           if (Array.isArray(vi)) {
-            // Array of matched variant indices → include only available variants
+            // Array of matched variant indices → include all (unavailable shown grayed out by Meta)
             for (const vIdx of vi) {
               const variant = item.variants?.[vIdx];
-              if (!variant || variant.available === false) continue;
+              if (!variant) continue;
               if (variant.quantities && variant.quantities.length > 0) {
                 variant.quantities.forEach((_, qIdx) => {
                   retailerIds.push(`${itemId}_v${vIdx}_q${qIdx}`);
@@ -6610,9 +6610,12 @@ const chatbot = {
     msg += `💰 *Price:* ${formatPriceWithActiveOffers(item, activeOffers)} / ${item.quantity || 1} ${item.unit || 'piece'}\n`;
     msg += `⏱️ *Prep Time:* ${item.preparationTime || 15} mins\n`;
     if (item.tags?.length) msg += `🏷️ *Tags:* ${item.tags.join(', ')}\n`;
-    // Show variant names if item has variants
+    // Show variant names if item has variants (including unavailable ones marked as out of stock)
     if (item.variants && item.variants.length > 0) {
-      const variantLabels = item.variants.filter(v => v.label && v.available !== false).map(v => v.label);
+      const variantLabels = item.variants.filter(v => v.label).map(v => {
+        if (v.available === false) return `${v.label} (Out of stock)`;
+        return v.label;
+      });
       if (variantLabels.length > 0) {
         msg += `🔖 *Variants:* ${variantLabels.join(', ')}\n`;
       }
@@ -6639,10 +6642,10 @@ const chatbot = {
           
           const vi = matchedVariants[itemId];
           if (Array.isArray(vi)) {
-            // Array of matched variant indices → include only available variants
+            // Array of matched variant indices → include all (unavailable shown grayed out by Meta)
             for (const vIdx of vi) {
               const variant = item.variants?.[vIdx];
-              if (!variant || variant.available === false) continue;
+              if (!variant) continue;
               if (variant.quantities && variant.quantities.length > 0) {
                 variant.quantities.forEach((_, qIdx) => {
                   retailerIds.push(`${itemId}_v${vIdx}_q${qIdx}`);
@@ -6776,7 +6779,6 @@ const chatbot = {
           const catalogId = catalogService.getCatalogId();
           const variantsArr = item.variants || [];
           const totalCatalogProducts = variantsArr.reduce((sum, v) => {
-            if (v.available === false) return sum;
             return sum + (v.quantities && v.quantities.length > 0 ? v.quantities.length : 1);
           }, 0);
           
@@ -6808,12 +6810,12 @@ const chatbot = {
             }
           }
           
-          // === CASE 2: Array of matched variant indices → show only available variants ===
+          // === CASE 2: Array of matched variant indices → include all (unavailable shown grayed out by Meta) ===
           if (isArrayMatch && matchedVariantIndex.length > 0) {
             const retailerIds = [];
             for (const vi of matchedVariantIndex) {
               const variant = item.variants?.[vi];
-              if (!variant || variant.available === false) continue;
+              if (!variant) continue;
               if (variant.quantities && variant.quantities.length > 0) {
                 variant.quantities.forEach((_, qIdx) => {
                   retailerIds.push(`${item._id.toString()}_v${vi}_q${qIdx}`);
