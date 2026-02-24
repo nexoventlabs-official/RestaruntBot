@@ -99,7 +99,11 @@ export default function Orders() {
   // SSE / polling
   const sseRef = useRef(null);
   const pollRef = useRef(null);
+  const selectedOrderRef = useRef(null);
   const POLL_INTERVAL = 15000;
+
+  // Keep selectedOrderRef in sync
+  useEffect(() => { selectedOrderRef.current = selectedOrder; }, [selectedOrder]);
 
   /* ═══════════ LIVE ORDERS FETCH ═══════════ */
   const fetchOrders = useCallback(async () => {
@@ -123,13 +127,22 @@ export default function Orders() {
   const connectSSE = useCallback(() => {
     try {
       const token = localStorage.getItem('token');
+      if (!token) { startPolling(); return; }
       const baseURL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api').replace('/api', '');
       const es = new EventSource(`${baseURL}/api/events?token=${token}`);
       es.onmessage = (evt) => {
         try {
           const data = JSON.parse(evt.data);
-          if (data.type === 'new_order' || data.type === 'order_update' || data.type === 'order_status') {
+          if (data.type === 'orders' || data.type === 'new_order' || data.type === 'order_update' || data.type === 'order_status') {
             fetchOrders();
+            // Also refresh selected order detail if one is open
+            if (selectedOrderRef.current) {
+              api.get(`/orders`).then(r => {
+                const list = Array.isArray(r.data) ? r.data : (r.data?.orders || []);
+                const updated = list.find(o => o._id === selectedOrderRef.current._id);
+                if (updated) setSelectedOrder(updated);
+              }).catch(() => {});
+            }
           }
         } catch { /* ignore */ }
       };
