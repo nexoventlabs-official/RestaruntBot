@@ -60,7 +60,7 @@ export default function Menu() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [foodTypeFilter, setFoodTypeFilter] = useState('all');
-  const [selectedTitle, setSelectedTitle] = useState('all');
+
   const [togglingId, setTogglingId] = useState(null);
 
   /* ═══════════ FORM STATE ═══════════ */
@@ -115,7 +115,7 @@ export default function Menu() {
   const [toast, setToast] = useState(null);
   const [, setBulkPausingCategory] = useState(null);
   const toastTimer = useRef(null);
-  const lastTapRef = useRef({});
+
 
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
@@ -162,23 +162,6 @@ export default function Menu() {
     return cats.every(c => unavailableCategoryNames.has(c) || scheduledLockedCategoryNames.has(c));
   }, [unavailableCategoryNames, scheduledLockedCategoryNames]);
 
-  const titleCards = useMemo(() => {
-    let filtered = items;
-    if (selectedCategory !== 'all') filtered = filtered.filter(i => (Array.isArray(i.category) ? i.category : [i.category]).includes(selectedCategory));
-    const emojiRegex = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
-    const cards = filtered.map(i => {
-      const allOff = i.variants?.length > 0 ? i.variants.every(v => v.available === false) : !i.available;
-      return { _id: i._id, name: i.name, image: i.image || i.variants?.[0]?.image, variantCount: i.variants?.length || 0, isSoldOut: allOff };
-    });
-    cards.sort((a, b) => {
-      const ae = emojiRegex.test(a.name), be = emojiRegex.test(b.name);
-      if (ae && !be) return -1;
-      if (!ae && be) return 1;
-      return a.name.localeCompare(b.name);
-    });
-    return cards;
-  }, [items, selectedCategory]);
-
   const totalVariantCount = useMemo(() => items.reduce((s, i) => s + (i.variants?.length || 1), 0), [items]);
 
   const flattenedVariants = useMemo(() => {
@@ -188,7 +171,6 @@ export default function Menu() {
       filtered = filtered.filter(i => i.name.toLowerCase().includes(q) || i.variants?.some(v => v.label?.toLowerCase().includes(q)));
     }
     if (selectedCategory !== 'all') filtered = filtered.filter(i => (Array.isArray(i.category) ? i.category : [i.category]).includes(selectedCategory));
-    if (selectedTitle !== 'all') filtered = filtered.filter(i => i._id === selectedTitle);
 
     const rows = [];
     filtered.forEach(item => {
@@ -221,7 +203,7 @@ export default function Menu() {
       }
     });
     return rows;
-  }, [items, searchTerm, selectedCategory, selectedTitle, statusFilter, foodTypeFilter, isItemUnavailable]);
+  }, [items, searchTerm, selectedCategory, statusFilter, foodTypeFilter, isItemUnavailable]);
 
   const sectionData = useMemo(() => {
     const map = new Map();
@@ -318,11 +300,6 @@ export default function Menu() {
   };
 
   /* ═══════════ ITEM SOLD OUT / SCHEDULE ═══════════ */
-  const showItemSoldOutOptions = (parentItem) => {
-    const allOff = parentItem.variants?.length > 0 ? parentItem.variants.every(v => v.available === false) : !parentItem.available;
-    setSoldOutModal({ type: 'item', target: parentItem, allOff });
-  };
-
   const openItemScheduleModal = (parentItem) => {
     setSoldOutItem(parentItem);
     const existing = parentItem.soldOutSchedule;
@@ -698,22 +675,6 @@ export default function Menu() {
       await fetchItems();
     } catch (err) {
       showToast('❌ ' + (err.response?.data?.error || 'Failed to save item'), 'error');
-    }
-  };
-
-  /* ═══════════ PRODUCT TITLE DOUBLE-CLICK ═══════════ */
-  const handleTitleClick = (tc) => {
-    const now = Date.now();
-    const last = lastTapRef.current[tc._id] || 0;
-    if (now - last < 400) {
-      const item = items.find(i => i._id === tc._id);
-      if (item) openForm(item);
-      lastTapRef.current[tc._id] = 0;
-    } else {
-      lastTapRef.current[tc._id] = now;
-      setTimeout(() => {
-        if (lastTapRef.current[tc._id] === now) setSelectedTitle(tc._id === selectedTitle ? 'all' : tc._id);
-      }, 400);
     }
   };
 
@@ -1195,60 +1156,6 @@ export default function Menu() {
           <span className="text-[10px] text-gray-400 font-medium">Add</span>
         </button>
       </div>
-
-      {/* ── PRODUCT TITLE CARDS ── */}
-      {titleCards.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Products</p>
-          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-            {/* All Items */}
-            <button onClick={() => setSelectedTitle('all')} className="flex-shrink-0 flex flex-col items-center gap-1.5 min-w-[70px]">
-              <div className={`w-16 h-16 rounded-xl overflow-hidden flex items-center justify-center border-2 transition-all ${
-                selectedTitle === 'all' ? 'border-red-500' : 'border-gray-200'
-              }`} style={selectedTitle === 'all' ? { backgroundColor: ZOMATO_RED } : { backgroundColor: '#f9fafb' }}>
-                <div className="text-center">
-                  <Package className={`w-5 h-5 mx-auto ${selectedTitle === 'all' ? 'text-white' : 'text-gray-400'}`} />
-                  <span className={`text-[9px] font-bold ${selectedTitle === 'all' ? 'text-white' : 'text-gray-400'}`}>All</span>
-                </div>
-              </div>
-              <span className={`text-[10px] font-medium ${selectedTitle === 'all' ? 'text-red-600' : 'text-gray-500'}`}>All Items</span>
-              <span className="text-[9px] text-gray-400">{totalVariantCount} items</span>
-              {selectedTitle === 'all' && <div className="w-5 h-0.5 rounded-full" style={{ backgroundColor: ZOMATO_RED }} />}
-            </button>
-            {titleCards.map(tc => (
-              <div key={tc._id} className="flex-shrink-0 flex flex-col items-center gap-1.5 min-w-[70px] cursor-pointer"
-                onClick={() => handleTitleClick(tc)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  const item = items.find(i => i._id === tc._id);
-                  if (item) showItemSoldOutOptions(item);
-                }}>
-                <div className={`w-16 h-16 rounded-xl overflow-hidden border-2 transition-all relative ${
-                  selectedTitle === tc._id ? 'border-red-500' : 'border-gray-200'
-                }`}>
-                  {tc.image ? (
-                    <img src={tc.image} alt="" className={`w-full h-full object-cover ${tc.isSoldOut ? 'opacity-40' : ''}`} />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gray-50">
-                      <ImageIcon className="w-5 h-5 text-gray-300" />
-                    </div>
-                  )}
-                  {tc.isSoldOut && (
-                    <div className="absolute bottom-0 inset-x-0 bg-red-500/90 py-0.5 text-center">
-                      <span className="text-[7px] font-bold text-white tracking-wider">SOLD OUT</span>
-                    </div>
-                  )}
-                </div>
-                <span className={`text-[10px] font-medium truncate max-w-[70px] ${
-                  selectedTitle === tc._id ? 'text-red-600' : tc.isSoldOut ? 'text-gray-300' : 'text-gray-600'
-                }`}>{tc.name}</span>
-                {tc.variantCount > 0 && <span className="text-[9px] text-gray-400">{tc.variantCount} variant{tc.variantCount > 1 ? 's' : ''}</span>}
-                {selectedTitle === tc._id && <div className="w-5 h-0.5 rounded-full" style={{ backgroundColor: ZOMATO_RED }} />}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── VARIANT LIST (matching mobile's flat variant cards) ── */}
       {sectionData.length === 0 ? (
