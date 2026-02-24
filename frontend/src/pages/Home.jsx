@@ -125,9 +125,55 @@ export default function Home() {
         menuData = res.data;
       }
       
-      const sorted = menuData
-        .filter(item => item.isActive !== false)
-        .sort((a, b) => (b.totalRatings || 0) - (a.totalRatings || 0))
+      // Flatten all variants across all items into individual cards
+      const allVariants = [];
+      menuData.filter(item => item.isActive !== false).forEach(item => {
+        if (item.variants && item.variants.length > 0) {
+          item.variants.forEach((v, vIdx) => {
+            allVariants.push({
+              _id: `${item._id}_v${vIdx}`,
+              parentId: item._id,
+              name: v.label || item.name,
+              image: v.image || item.image,
+              description: v.description || item.description,
+              price: v.price,
+              offerPrice: v.offerPrice,
+              foodType: v.foodType || item.foodType,
+              avgRating: v.totalRatings > 0 ? v.avgRating : (item.avgRating || 0),
+              totalRatings: v.totalRatings > 0 ? v.totalRatings : (item.totalRatings || 0),
+              available: v.available !== false && item.available,
+              itemStatus: item.itemStatus,
+              scheduleInfo: item.scheduleInfo,
+              isVariant: true,
+              quantity: v.quantity,
+              unit: v.unit,
+            });
+          });
+        } else {
+          allVariants.push({
+            _id: item._id,
+            name: item.name,
+            image: item.image,
+            description: item.description,
+            price: item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price,
+            offerPrice: item.offerPrice,
+            originalPrice: item.offerPrice && item.offerPrice < item.price ? item.price : null,
+            foodType: item.foodType,
+            avgRating: item.avgRating || 0,
+            totalRatings: item.totalRatings || 0,
+            available: item.available,
+            itemStatus: item.itemStatus,
+            scheduleInfo: item.scheduleInfo,
+            isVariant: false,
+            quantity: item.quantity,
+            unit: item.unit,
+          });
+        }
+      });
+
+      // Sort by totalRatings descending, then avgRating
+      const sorted = allVariants
+        .sort((a, b) => (b.totalRatings || 0) - (a.totalRatings || 0) || (b.avgRating || 0) - (a.avgRating || 0))
         .slice(0, 4);
       setTopItems(sorted);
       setMenuItems(menuData);
@@ -283,11 +329,9 @@ export default function Home() {
   const navigate = useNavigate();
 
   const renderItemCard = (item) => {
-    const inCart = isInCart ? isInCart(item._id) : false;
-    const cartItem = cart?.find(c => c._id === item._id);
     const rating = item.avgRating || 0;
     const totalRatings = item.totalRatings || 0;
-    const itemStatus = getItemStatus(item);
+    const itemStatus = item.itemStatus || (item.available ? 'available' : 'unavailable');
     const isAvailable = itemStatus === 'available';
 
     const renderStars = () => {
@@ -390,18 +434,9 @@ export default function Home() {
             ) : (
               <>
                 {(() => {
-                  // Calculate display price considering variants
-                  let displayPrice, originalPrice, hasOffer;
-                  if (item.variants && item.variants.length > 0) {
-                    const prices = item.variants.map(v => v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price);
-                    displayPrice = Math.min(...prices);
-                    hasOffer = item.variants.some(v => v.offerPrice && v.offerPrice < v.price);
-                    originalPrice = hasOffer ? Math.min(...item.variants.map(v => v.price)) : null;
-                  } else {
-                    displayPrice = item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price;
-                    hasOffer = item.offerPrice && item.offerPrice < item.price;
-                    originalPrice = hasOffer ? item.price : null;
-                  }
+                  const displayPrice = item.offerPrice && item.offerPrice < item.price ? item.offerPrice : item.price;
+                  const hasOffer = item.offerPrice && item.offerPrice < item.price;
+                  const originalPrice = hasOffer ? item.price : null;
                   return (
                     <>
                       <div className="relative">
@@ -416,11 +451,6 @@ export default function Home() {
                     </>
                   );
                 })()}
-                {item.variants && item.variants.length > 0 && (
-                  <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold">
-                    {item.variants.length} variants
-                  </span>
-                )}
               </>
             )}
           </div>
