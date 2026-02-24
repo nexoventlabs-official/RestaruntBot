@@ -312,15 +312,47 @@ export default function Orders() {
     if (!itemName || menuItems.length === 0) return null;
     const q = itemName.toLowerCase().trim();
     for (const mi of menuItems) {
+      // Exact variant label match
       if (mi.variants) {
         for (const v of mi.variants) {
           if (v.label?.toLowerCase().trim() === q && v.image) return v.image;
         }
       }
+      // Exact menu item name match
       if (mi.name?.toLowerCase().trim() === q) return mi.image || mi.variants?.[0]?.image;
+      // Variant item names are stored as "ParentName - VariantLabel (qty unit)"
+      // Match if itemName starts with the menu item name and contains a variant label
+      const miName = mi.name?.toLowerCase().trim();
+      if (miName && q.startsWith(miName) && mi.variants) {
+        for (const v of mi.variants) {
+          const vLabel = v.label?.toLowerCase().trim();
+          if (vLabel && q.includes(vLabel)) {
+            return v.image || mi.image;
+          }
+        }
+        // Matched parent name but no specific variant label — use first variant or parent image
+        return mi.variants?.[0]?.image || mi.image;
+      }
     }
     return null;
   }, [menuItems]);
+
+  /* ═══════════ ORDER ITEM IMAGE RESOLVER ═══════════ */
+  const getItemImage = useCallback((item) => {
+    // 1. Direct image stored on the order item
+    if (item.image) return item.image;
+    // 2. Populated menuItem — resolve variant image using variantIndex
+    if (item.menuItem) {
+      const mi = item.menuItem;
+      if (item.variantIndex != null && mi.variants?.[item.variantIndex]?.image) {
+        return mi.variants[item.variantIndex].image;
+      }
+      if (mi.image) return mi.image;
+      if (mi.variants?.[0]?.image) return mi.variants[0].image;
+    }
+    // 3. Fallback: search by name in current menu
+    return findItemImage(item.name);
+  }, [findItemImage]);
 
   /* Open history order in detail */
   const openHistoryOrderDetail = useCallback((ho) => {
@@ -642,8 +674,8 @@ export default function Orders() {
                 {(selectedOrder.items || []).map((item, i) => (
                   <div key={i} className="flex items-center gap-3 py-1.5">
                     <div className="w-10 h-10 rounded-lg bg-dark-100 overflow-hidden flex-shrink-0">
-                      {(item.image || item.variantImage || findItemImage(item.name)) ?
-                        <img src={item.image || item.variantImage || findItemImage(item.name)} alt="" className="w-full h-full object-cover" /> :
+                      {getItemImage(item) ?
+                        <img src={getItemImage(item)} alt="" className="w-full h-full object-cover" /> :
                         <div className="w-full h-full flex items-center justify-center"><Image className="w-4 h-4 text-dark-300" /></div>}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -816,7 +848,7 @@ export default function Orders() {
                     {/* Items */}
                     <div className="flex gap-1.5 mb-2 overflow-hidden">
                       {parsedItems.slice(0, 3).map((pi, i) => {
-                        const img = findItemImage(pi.name);
+                        const img = pi.image || findItemImage(pi.name);
                         return (
                           <div key={i} className="flex items-center gap-1 px-1.5 py-0.5 bg-dark-50 rounded text-[10px] text-dark-600 flex-shrink-0">
                             {img && <img src={img} alt="" className="w-4 h-4 rounded object-cover" />}
