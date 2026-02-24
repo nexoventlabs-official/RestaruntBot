@@ -132,6 +132,7 @@ export default function AdminMenuScreen({ navigation, route }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const shineAnim = useRef(new Animated.Value(-1)).current;
+  const lastTitleTap = useRef({});
 
   // Category modal
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -1011,12 +1012,19 @@ export default function AdminMenuScreen({ navigation, route }) {
 
   // Unique titles (menu item names) for title filter - memoized
   const titleCards = useMemo(() => {
-    const cards = items.map(item => ({
-      id: item._id,
-      name: item.name,
-      image: item.image || (item.variants?.[0]?.image) || null,
-      variantCount: item.variants?.length || 0,
-    }));
+    const cards = items.map(item => {
+      // Item is sold out if all variants are unavailable or item itself is unavailable
+      const isSoldOut = item.variants && item.variants.length > 0
+        ? item.variants.every(v => v.available === false)
+        : item.available === false;
+      return {
+        id: item._id,
+        name: item.name,
+        image: item.image || (item.variants?.[0]?.image) || null,
+        variantCount: item.variants?.length || 0,
+        isSoldOut,
+      };
+    });
     // Sort: emoji-prefixed names first, then alphabetical
     const emojiRegex = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
     cards.sort((a, b) => {
@@ -1157,7 +1165,7 @@ export default function AdminMenuScreen({ navigation, route }) {
       <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
         <TouchableOpacity
           style={[styles.itemCard, !isAvail && styles.itemCardOutOfStock]}
-          onPress={() => navigation.navigate('MenuItemForm', { item: parentItem })}
+          onPress={() => navigation.navigate('MenuItemForm', { item: parentItem, focusVariantIndex: vItem.variantIndex })}
           activeOpacity={0.7}
         >
           <View style={styles.itemImageContainer}>
@@ -1494,17 +1502,34 @@ export default function AdminMenuScreen({ navigation, route }) {
               <TouchableOpacity
                 key={tc.id}
                 style={styles.titleFilterItem}
-                onPress={() => setSelectedTitle(tc.id === selectedTitle ? 'all' : tc.id)}
+                onPress={() => {
+                  const now = Date.now();
+                  const last = lastTitleTap.current[tc.id] || 0;
+                  if (now - last < 300) {
+                    // Double tap — navigate to edit
+                    const parentItem = items.find(i => i._id === tc.id);
+                    if (parentItem) navigation.navigate('MenuItemForm', { item: parentItem });
+                    lastTitleTap.current[tc.id] = 0;
+                  } else {
+                    lastTitleTap.current[tc.id] = now;
+                    // Single tap — filter
+                    setTimeout(() => {
+                      if (lastTitleTap.current[tc.id] === now) {
+                        setSelectedTitle(tc.id === selectedTitle ? 'all' : tc.id);
+                      }
+                    }, 300);
+                  }
+                }}
                 onLongPress={() => {
                   const parentItem = items.find(i => i._id === tc.id);
                   if (parentItem) showItemSoldOutOptions(parentItem);
                 }}
               >
-                <View style={[styles.titleImageWrapper, selectedTitle === tc.id && styles.titleImageWrapperActive]}>
+                <View style={[styles.titleImageWrapper, selectedTitle === tc.id && styles.titleImageWrapperActive, tc.isSoldOut && { opacity: 0.4 }]}>
                   {tc.image ? (
                     <Image
                       source={{ uri: tc.image, cache: 'force-cache' }}
-                      style={styles.titleImage}
+                      style={[styles.titleImage, tc.isSoldOut && { opacity: 0.6 }]}
                       resizeMode="cover"
                     />
                   ) : (
@@ -1512,8 +1537,17 @@ export default function AdminMenuScreen({ navigation, route }) {
                       <Ionicons name="restaurant-outline" size={24} color="#9ca3af" />
                     </View>
                   )}
+                  {tc.isSoldOut && (
+                    <View style={{
+                      position: 'absolute', bottom: 0, left: 0, right: 0,
+                      backgroundColor: 'rgba(239,68,68,0.85)', paddingVertical: 2,
+                      alignItems: 'center',
+                    }}>
+                      <Text style={{ fontSize: 7, fontWeight: '800', color: '#fff', letterSpacing: 0.5 }}>SOLD OUT</Text>
+                    </View>
+                  )}
                 </View>
-                <Text style={[styles.titleName, selectedTitle === tc.id && styles.titleNameActive]} numberOfLines={1}>{tc.name}</Text>
+                <Text style={[styles.titleName, selectedTitle === tc.id && styles.titleNameActive, tc.isSoldOut && { color: '#d1d5db' }]} numberOfLines={1}>{tc.name}</Text>
                 {tc.variantCount > 0 && (
                   <Text style={styles.titleVariantCount}>{tc.variantCount} variant{tc.variantCount > 1 ? 's' : ''}</Text>
                 )}

@@ -32,6 +32,7 @@ const UNITS = ['piece', 'plate', 'bowl', 'cup', 'slice', 'full', 'half', 'small'
 
 export default function MenuItemFormScreen({ route, navigation }) {
   const existingItem = route.params?.item;
+  const focusVariantIndex = route.params?.focusVariantIndex ?? null;
   const isEditing = !!existingItem;
 
   const [name, setName] = useState(existingItem?.name || '');
@@ -72,7 +73,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
         offerPrice: q.offerPrice?.toString() || '' 
       })) || [],
       newImageFile: null,
-      _collapsed: true
+      _collapsed: focusVariantIndex !== null ? i !== focusVariantIndex : true
     })) || []
   );
   
@@ -504,7 +505,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{isEditing ? 'Edit Item' : 'New Item'}</Text>
+          <Text style={styles.headerTitle}>{focusVariantIndex !== null ? `Edit ${existingItem?.variants?.[focusVariantIndex]?.label || 'Variant'}` : isEditing ? 'Edit Item' : 'New Item'}</Text>
           <View style={{ width: 44 }} />
         </LinearGradient>
       </Animated.View>
@@ -516,6 +517,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
             {/* Image Section */}
+            {focusVariantIndex === null && (
             <View style={styles.imageSection}>
               <TouchableOpacity 
                 style={styles.imageContainer} 
@@ -555,9 +557,11 @@ export default function MenuItemFormScreen({ route, navigation }) {
                 </TouchableOpacity>
               )}
             </View>
+            )}
 
             <View style={styles.form}>
               {/* Title */}
+              {focusVariantIndex === null && (
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Title <Text style={styles.required}>*</Text></Text>
                 <TextInput 
@@ -568,11 +572,13 @@ export default function MenuItemFormScreen({ route, navigation }) {
                   placeholderTextColor="#9CA3AF"
                 />
               </View>
+              )}
 
 
 
               {/* ── Variants Section ── */}
               <View style={styles.variantsSection}>
+                {focusVariantIndex === null && (
                 <View style={styles.variantsSectionHeader}>
                   <View style={styles.variantsTitleRow}>
                     <View style={styles.variantsIconContainer}>
@@ -588,9 +594,10 @@ export default function MenuItemFormScreen({ route, navigation }) {
                     <Text style={styles.addVariantButtonText}>Add</Text>
                   </TouchableOpacity>
                 </View>
+                )}
 
                 {/* Variant count badge */}
-                {variants.length > 0 && (
+                {focusVariantIndex === null && variants.length > 0 && (
                   <View style={styles.variantCountRow}>
                     <View style={styles.variantCountBadge}>
                       <Text style={styles.variantCountText}>{variants.length} variant{variants.length !== 1 ? 's' : ''}</Text>
@@ -613,7 +620,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
                   </View>
                 )}
 
-                {variants.length === 0 && (
+                {focusVariantIndex === null && variants.length === 0 && (
                   <TouchableOpacity style={styles.noVariantsContainer} onPress={addVariant} activeOpacity={0.7}>
                     <View style={styles.noVariantsIconCircle}>
                       <Ionicons name="add-circle-outline" size={32} color={ZOMATO_RED} />
@@ -623,12 +630,15 @@ export default function MenuItemFormScreen({ route, navigation }) {
                   </TouchableOpacity>
                 )}
 
-                {variants.map((variant, index) => (
+                {(focusVariantIndex !== null ? variants.filter((_, i) => i === focusVariantIndex) : variants).map((variant, idx) => {
+                  const index = focusVariantIndex !== null ? focusVariantIndex : idx;
+                  return (
                   <View key={variant._uid} style={[
                     styles.variantCard,
                     !variant.available && styles.variantCardDisabled,
                   ]}>
-                    {/* Variant Header - always visible */}
+                    {/* Variant Header - always visible (hidden in single-variant edit mode) */}
+                    {focusVariantIndex === null && (
                     <TouchableOpacity 
                       style={styles.variantCardHeader}
                       onPress={() => toggleVariantCollapse(index)}
@@ -676,9 +686,10 @@ export default function MenuItemFormScreen({ route, navigation }) {
                         />
                       </View>
                     </TouchableOpacity>
+                    )}
 
-                    {/* Collapsible Content */}
-                    {!variant._collapsed && (
+                    {/* Collapsible Content (always show when editing single variant) */}
+                    {(focusVariantIndex !== null || !variant._collapsed) && (
                       <View style={styles.variantCardBody}>
                         {/* Variant Image */}
                         <View style={styles.variantImageRow}>
@@ -944,10 +955,11 @@ export default function MenuItemFormScreen({ route, navigation }) {
                       </View>
                     )}
                   </View>
-                ))}
+                  );
+                })}
 
                 {/* Add variant button at bottom when items exist */}
-                {variants.length > 0 && (
+                {focusVariantIndex === null && variants.length > 0 && (
                   <TouchableOpacity style={styles.addVariantBottomButton} onPress={addVariant} activeOpacity={0.7}>
                     <Ionicons name="add-circle-outline" size={20} color={ZOMATO_RED} />
                     <Text style={styles.addVariantBottomText}>Add Another Variant</Text>
@@ -957,6 +969,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
 
 
 
+              {focusVariantIndex === null && (<>
               {/* Applied Offers (Read-only) */}
               {existingItem?.offerType && (Array.isArray(existingItem.offerType) ? existingItem.offerType.length > 0 : existingItem.offerType) && (() => {
                 const itemOfferTypes = Array.isArray(existingItem.offerType) ? existingItem.offerType : [existingItem.offerType];
@@ -1019,6 +1032,7 @@ export default function MenuItemFormScreen({ route, navigation }) {
                   thumbColor={available ? '#22C55E' : '#9CA3AF'}
                 />
               </View>
+              </>)}
             </View>
           </Animated.View>
           <View style={{ height: 120 }} />

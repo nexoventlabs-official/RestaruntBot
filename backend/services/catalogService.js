@@ -723,8 +723,11 @@ const catalogService = {
 
     // ── Part 2: Star rating (included in all syncs) ──
     if (includeRatings) {
-      const rating = (variant && variant.avgRating) ? variant.avgRating : (menuItem.avgRating || 0);
-      const totalRatings = (variant && variant.totalRatings) ? variant.totalRatings : (menuItem.totalRatings || 0);
+      // Use variant-level ratings if variant has its own totalRatings field (even if 0)
+      // Only fall back to parent item ratings when variant has no rating data at all
+      const hasVariantRatings = variant && typeof variant.totalRatings === 'number';
+      const rating = hasVariantRatings ? (variant.avgRating || 0) : (menuItem.avgRating || 0);
+      const totalRatings = hasVariantRatings ? variant.totalRatings : (menuItem.totalRatings || 0);
       const filledStars = Math.min(Math.floor(rating), 5);
       const emptyStars = 5 - filledStars;
       const starLine = '⭐'.repeat(filledStars) + '☆'.repeat(emptyStars);
