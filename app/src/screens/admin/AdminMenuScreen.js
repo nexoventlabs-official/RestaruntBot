@@ -398,37 +398,87 @@ export default function AdminMenuScreen({ navigation, route }) {
   const [showItemSoldOutModal, setShowItemSoldOutModal] = useState(false);
   const [soldOutItem, setSoldOutItem] = useState(null);
   const [soldOutItemEndTime, setSoldOutItemEndTime] = useState('17:00');
+  const [scheduleType, setScheduleType] = useState(null); // null = choice screen, 'daily', 'custom'
+  const [dailyStartTime, setDailyStartTime] = useState('09:00');
+  const [dailyEndTime, setDailyEndTime] = useState('17:00');
+  const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const [customDays, setCustomDays] = useState(
+    DAYS.map(d => ({ day: d, enabled: false, startTime: '09:00', endTime: '17:00' }))
+  );
 
   const showItemScheduleModal = (parentItem) => {
     setSoldOutItem(parentItem);
-    const now = new Date();
-    const hours = (now.getHours() + 1) % 24;
-    setSoldOutItemEndTime(`${hours.toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
+    // Pre-fill from existing schedule if any
+    const existing = parentItem.soldOutSchedule;
+    if (existing && existing.enabled) {
+      setScheduleType(existing.type || 'daily');
+      if (existing.type === 'daily') {
+        setDailyStartTime(existing.dailyStartTime || '09:00');
+        setDailyEndTime(existing.dailyEndTime || '17:00');
+      } else if (existing.type === 'custom' && existing.days) {
+        setCustomDays(DAYS.map(d => {
+          const found = existing.days.find(ed => ed.day === d);
+          return found ? { ...found } : { day: d, enabled: false, startTime: '09:00', endTime: '17:00' };
+        }));
+      }
+    } else {
+      setScheduleType(null);
+      setDailyStartTime('09:00');
+      setDailyEndTime('17:00');
+      setCustomDays(DAYS.map(d => ({ day: d, enabled: false, startTime: '09:00', endTime: '17:00' })));
+    }
     setShowItemSoldOutModal(true);
   };
 
   const saveItemSoldOutSchedule = async () => {
-    if (!soldOutItem) return;
+    if (!soldOutItem || !scheduleType) return;
     const parentId = soldOutItem._id;
     try {
       setSavingCategory(true);
-      // Optimistic update
-      setItems(prev => prev.map(i => {
-        if (i._id !== parentId) return i;
-        const updatedVariants = (i.variants || []).map(v => ({ ...v, available: false }));
-        return { ...i, available: false, variants: updatedVariants };
-      }));
-      await api.patch(`/menu/${parentId}/schedule-soldout`, { endTime: soldOutItemEndTime });
+      const schedule = {
+        type: scheduleType,
+        dailyStartTime: scheduleType === 'daily' ? dailyStartTime : null,
+        dailyEndTime: scheduleType === 'daily' ? dailyEndTime : null,
+        days: scheduleType === 'custom' ? customDays : [],
+      };
+      await api.patch(`/menu/${parentId}/schedule-soldout`, { schedule });
       setShowItemSoldOutModal(false);
-      const [hours, mins] = soldOutItemEndTime.split(':').map(Number);
-      const period = hours >= 12 ? 'PM' : 'AM';
-      const hours12 = hours % 12 || 12;
-      Alert.alert('Success', `"${soldOutItem.name}" marked sold out until ${hours12}:${mins.toString().padStart(2, '0')} ${period}`);
+      fetchMenu();
+      if (scheduleType === 'daily') {
+        Alert.alert('Success', `Schedule saved for "${soldOutItem.name}"\nSold out daily: ${formatTime12(dailyStartTime)} – ${formatTime12(dailyEndTime)}`);
+      } else {
+        const enabledDays = customDays.filter(d => d.enabled).map(d => d.day).join(', ');
+        Alert.alert('Success', `Custom schedule saved for "${soldOutItem.name}"\nDays: ${enabledDays || 'None'}`);
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to schedule sold out');
+      Alert.alert('Error', 'Failed to save schedule');
       fetchMenu();
     } finally {
       setSavingCategory(false);
+    }
+  };
+
+  // Helper to format 24h time to 12h
+  const formatTime12 = (time) => {
+    const [h, m] = time.split(':').map(Number);
+    const period = h >= 12 ? 'PM' : 'AM';
+    return `${(h % 12 || 12)}:${m.toString().padStart(2, '0')} ${period}`;
+  };
+
+  // Helper to update a custom day's time
+  const updateCustomDay = (dayIndex, field, value) => {
+    setCustomDays(prev => prev.map((d, i) => i === dayIndex ? { ...d, [field]: value } : d));
+  };
+
+  // Helper to cycle time up/down
+  const cycleTime = (time, part, delta) => {
+    const [h, m] = time.split(':').map(Number);
+    if (part === 'hour') {
+      const newH = (h + delta + 24) % 24;
+      return `${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    } else {
+      const newM = (m + delta + 60) % 60;
+      return `${h.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`;
     }
   };
 
@@ -930,12 +980,22 @@ export default function AdminMenuScreen({ navigation, route }) {
 
   // Unique titles (menu item names) for title filter - memoized
   const titleCards = useMemo(() => {
-    return items.map(item => ({
+    const cards = items.map(item => ({
       id: item._id,
       name: item.name,
       image: item.image || (item.variants?.[0]?.image) || null,
       variantCount: item.variants?.length || 0,
     }));
+    // Sort: emoji-prefixed names first, then alphabetical
+    const emojiRegex = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
+    cards.sort((a, b) => {
+      const aEmoji = emojiRegex.test(a.name);
+      const bEmoji = emojiRegex.test(b.name);
+      if (aEmoji && !bEmoji) return -1;
+      if (!aEmoji && bEmoji) return 1;
+      return a.name.localeCompare(b.name);
+    });
+    return cards;
   }, [items]);
 
   // Total variant count for "All" label
@@ -1032,11 +1092,21 @@ export default function AdminMenuScreen({ navigation, route }) {
       }
       map.get(pid).data.push(vItem);
     });
-    return Array.from(map.values()).map(s => ({
+    const sections = Array.from(map.values()).map(s => ({
       title: s.parentItem.name,
       parentItem: s.parentItem,
       data: s.data,
     }));
+    // Sort: emoji-prefixed names first, then alphabetical
+    const emojiRegex = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
+    sections.sort((a, b) => {
+      const aEmoji = emojiRegex.test(a.title);
+      const bEmoji = emojiRegex.test(b.title);
+      if (aEmoji && !bEmoji) return -1;
+      if (!aEmoji && bEmoji) return 1;
+      return a.title.localeCompare(b.title);
+    });
+    return sections;
   }, [flattenedVariants]);
 
   // Stats - memoized
@@ -1115,21 +1185,18 @@ export default function AdminMenuScreen({ navigation, route }) {
             <TouchableOpacity
               onPress={() => toggleVariantAvailability(vItem)}
               activeOpacity={0.6}
-              style={[styles.variantAvailBadge, { backgroundColor: isAvail ? '#DCFCE7' : '#FEE2E2' }]}
+              style={{
+                paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                backgroundColor: isAvail ? '#22C55E' : '#EF4444',
+                shadowColor: isAvail ? '#22C55E' : '#EF4444',
+                shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4,
+                elevation: 3,
+              }}
             >
-              <Text style={{ fontSize: 10, fontWeight: '700', color: isAvail ? '#16A34A' : '#DC2626' }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#fff', letterSpacing: 0.5 }}>
                 {isAvail ? 'Active' : 'Off'}
               </Text>
             </TouchableOpacity>
-            {vItem.variantIndex >= 0 && (
-              <TouchableOpacity
-                onPress={() => deleteVariant(vItem)}
-                activeOpacity={0.6}
-                style={styles.variantDeleteBtn}
-              >
-                <Ionicons name="trash-outline" size={14} color="#DC2626" />
-              </TouchableOpacity>
-            )}
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -1859,7 +1926,7 @@ export default function AdminMenuScreen({ navigation, route }) {
         </View>
       </Modal>
 
-      {/* Item Sold Out Schedule Modal */}
+      {/* Item Schedule Modal */}
       <Modal
         visible={showItemSoldOutModal}
         animationType="slide"
@@ -1867,193 +1934,446 @@ export default function AdminMenuScreen({ navigation, route }) {
         onRequestClose={() => setShowItemSoldOutModal(false)}
       >
         <View style={styles.soldOutModalOverlay}>
-          <View style={styles.soldOutModalContent}>
+          <View style={[styles.soldOutModalContent, { maxHeight: '85%' }]}>
             <View style={styles.soldOutModalHeader}>
-              <Text style={styles.soldOutModalTitle}>Schedule Sold Out</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {scheduleType && (
+                  <TouchableOpacity onPress={() => setScheduleType(null)} style={{ marginRight: 10 }}>
+                    <Ionicons name="arrow-back" size={22} color="#1f2937" />
+                  </TouchableOpacity>
+                )}
+                <Text style={styles.soldOutModalTitle}>
+                  {!scheduleType ? 'Schedule Type' : scheduleType === 'daily' ? 'Daily Schedule' : 'Custom Schedule'}
+                </Text>
+              </View>
               <TouchableOpacity onPress={() => setShowItemSoldOutModal(false)} style={styles.soldOutCloseButton}>
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
             
-            <View style={styles.soldOutModalBody}>
-              <Text style={styles.soldOutCategoryName}>{soldOutItem?.name}</Text>
-              <Text style={styles.soldOutDescription}>
-                Mark all variants of this item as sold out until a specific time. WhatsApp catalog will be updated in real-time.
-              </Text>
-              
-              <View style={styles.soldOutTimeSection}>
-                <Text style={styles.soldOutTimeLabel}>Available again at:</Text>
-                <View style={styles.soldOutTimePicker}>
-                  <View style={styles.soldOutTimeUnit}>
-                    <TouchableOpacity 
-                      style={styles.soldOutTimeButton}
-                      onPress={() => {
-                        const [h, m] = soldOutItemEndTime.split(':').map(Number);
-                        const newH = (h + 1) % 24;
-                        setSoldOutItemEndTime(`${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
-                      }}
-                    >
-                      <Ionicons name="chevron-up" size={24} color={ZOMATO_RED} />
-                    </TouchableOpacity>
-                    <Text style={styles.soldOutTimeValue}>
-                      {(() => {
-                        const h = parseInt(soldOutItemEndTime.split(':')[0]);
-                        return (h % 12 || 12).toString().padStart(2, '0');
-                      })()}
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+              <View style={styles.soldOutModalBody}>
+                <Text style={styles.soldOutCategoryName}>{soldOutItem?.name}</Text>
+
+                {/* ─── Step 1: Choose schedule type ─── */}
+                {!scheduleType && (
+                  <View>
+                    <Text style={styles.soldOutDescription}>
+                      Choose how you want to schedule sold-out times for this item.
                     </Text>
-                    <TouchableOpacity 
-                      style={styles.soldOutTimeButton}
-                      onPress={() => {
-                        const [h, m] = soldOutItemEndTime.split(':').map(Number);
-                        const newH = (h - 1 + 24) % 24;
-                        setSoldOutItemEndTime(`${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => setScheduleType('daily')}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 16,
+                        backgroundColor: '#F0F9FF', borderWidth: 1.5, borderColor: '#BAE6FD', marginBottom: 12,
                       }}
                     >
-                      <Ionicons name="chevron-down" size={24} color={ZOMATO_RED} />
+                      <View style={{
+                        width: 48, height: 48, borderRadius: 14, backgroundColor: '#DBEAFE',
+                        justifyContent: 'center', alignItems: 'center', marginRight: 14,
+                      }}>
+                        <Ionicons name="time-outline" size={24} color="#2563EB" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>Daily Schedule</Text>
+                        <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 3 }}>
+                          Set one time — applies to all days
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
                     </TouchableOpacity>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => setScheduleType('custom')}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 16,
+                        backgroundColor: '#FFF7ED', borderWidth: 1.5, borderColor: '#FED7AA', marginBottom: 12,
+                      }}
+                    >
+                      <View style={{
+                        width: 48, height: 48, borderRadius: 14, backgroundColor: '#FFEDD5',
+                        justifyContent: 'center', alignItems: 'center', marginRight: 14,
+                      }}>
+                        <Ionicons name="calendar-outline" size={24} color="#EA580C" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>Custom Schedule</Text>
+                        <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 3 }}>
+                          Set different times for each day (Sun–Sat)
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+                    </TouchableOpacity>
+
+                    {/* Remove schedule option */}
+                    {soldOutItem?.soldOutSchedule?.enabled && (
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={async () => {
+                          try {
+                            setSavingCategory(true);
+                            await api.patch(`/menu/${soldOutItem._id}/schedule-soldout`, {
+                              schedule: { type: 'daily', dailyStartTime: null, dailyEndTime: null, days: [] }
+                            });
+                            // Clear the enabled flag
+                            await api.put(`/menu/${soldOutItem._id}`, { ...soldOutItem, soldOutSchedule: { enabled: false } });
+                            setShowItemSoldOutModal(false);
+                            fetchMenu();
+                            Alert.alert('Success', 'Schedule removed');
+                          } catch { Alert.alert('Error', 'Failed to remove schedule'); }
+                          finally { setSavingCategory(false); }
+                        }}
+                        style={{
+                          flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                          padding: 14, borderRadius: 12, backgroundColor: '#FEF2F2',
+                          borderWidth: 1, borderColor: '#FECACA', marginTop: 4,
+                        }}
+                      >
+                        <Ionicons name="trash-outline" size={18} color="#DC2626" style={{ marginRight: 8 }} />
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#DC2626' }}>Remove Schedule</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
-                  
-                  <Text style={styles.soldOutTimeSeparator}>:</Text>
-                  
-                  <View style={styles.soldOutTimeUnit}>
-                    <TouchableOpacity 
-                      style={styles.soldOutTimeButton}
-                      onPress={() => {
-                        const [h, m] = soldOutItemEndTime.split(':').map(Number);
-                        const newM = (m + 5) % 60;
-                        setSoldOutItemEndTime(`${h.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`);
-                      }}
-                    >
-                      <Ionicons name="chevron-up" size={24} color={ZOMATO_RED} />
-                    </TouchableOpacity>
-                    <Text style={styles.soldOutTimeValue}>
-                      {soldOutItemEndTime.split(':')[1]}
-                    </Text>
-                    <TouchableOpacity 
-                      style={styles.soldOutTimeButton}
-                      onPress={() => {
-                        const [h, m] = soldOutItemEndTime.split(':').map(Number);
-                        const newM = (m - 5 + 60) % 60;
-                        setSoldOutItemEndTime(`${h.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`);
-                      }}
-                    >
-                      <Ionicons name="chevron-down" size={24} color={ZOMATO_RED} />
-                    </TouchableOpacity>
-                  </View>
-                  
-                  <TouchableOpacity 
-                    style={styles.soldOutAmPmButton}
-                    onPress={() => {
-                      const [h, m] = soldOutItemEndTime.split(':').map(Number);
-                      const newH = h >= 12 ? h - 12 : h + 12;
-                      setSoldOutItemEndTime(`${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
-                    }}
-                  >
-                    <Text style={styles.soldOutAmPmText}>
-                      {parseInt(soldOutItemEndTime.split(':')[0]) >= 12 ? 'PM' : 'AM'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-            
-            <View style={styles.soldOutModalFooter}>
-              <TouchableOpacity 
-                style={styles.soldOutCancelButton} 
-                onPress={() => setShowItemSoldOutModal(false)}
-              >
-                <Text style={styles.soldOutCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.soldOutSaveButton, savingCategory && styles.soldOutSaveButtonDisabled]} 
-                onPress={saveItemSoldOutSchedule}
-                disabled={savingCategory}
-              >
-                {savingCategory ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.soldOutSaveButtonText}>Mark Sold Out</Text>
                 )}
-              </TouchableOpacity>
-            </View>
+
+                {/* ─── Step 2a: Daily Schedule ─── */}
+                {scheduleType === 'daily' && (
+                  <View>
+                    <Text style={styles.soldOutDescription}>
+                      Item will be marked as sold out every day during this time window.
+                    </Text>
+
+                    {/* Start Time */}
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151', marginBottom: 10 }}>
+                      Sold out from:
+                    </Text>
+                    <View style={styles.soldOutTimePicker}>
+                      <View style={styles.soldOutTimeUnit}>
+                        <TouchableOpacity style={styles.soldOutTimeButton}
+                          onPress={() => setDailyStartTime(cycleTime(dailyStartTime, 'hour', 1))}>
+                          <Ionicons name="chevron-up" size={24} color={ZOMATO_RED} />
+                        </TouchableOpacity>
+                        <Text style={styles.soldOutTimeValue}>
+                          {(parseInt(dailyStartTime.split(':')[0]) % 12 || 12).toString().padStart(2, '0')}
+                        </Text>
+                        <TouchableOpacity style={styles.soldOutTimeButton}
+                          onPress={() => setDailyStartTime(cycleTime(dailyStartTime, 'hour', -1))}>
+                          <Ionicons name="chevron-down" size={24} color={ZOMATO_RED} />
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={styles.soldOutTimeSeparator}>:</Text>
+                      <View style={styles.soldOutTimeUnit}>
+                        <TouchableOpacity style={styles.soldOutTimeButton}
+                          onPress={() => setDailyStartTime(cycleTime(dailyStartTime, 'min', 5))}>
+                          <Ionicons name="chevron-up" size={24} color={ZOMATO_RED} />
+                        </TouchableOpacity>
+                        <Text style={styles.soldOutTimeValue}>{dailyStartTime.split(':')[1]}</Text>
+                        <TouchableOpacity style={styles.soldOutTimeButton}
+                          onPress={() => setDailyStartTime(cycleTime(dailyStartTime, 'min', -5))}>
+                          <Ionicons name="chevron-down" size={24} color={ZOMATO_RED} />
+                        </TouchableOpacity>
+                      </View>
+                      <TouchableOpacity style={styles.soldOutAmPmButton}
+                        onPress={() => setDailyStartTime(cycleTime(dailyStartTime, 'hour', dailyStartTime.split(':')[0] >= 12 ? -12 : 12))}>
+                        <Text style={styles.soldOutAmPmText}>
+                          {parseInt(dailyStartTime.split(':')[0]) >= 12 ? 'PM' : 'AM'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* End Time */}
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151', marginTop: 20, marginBottom: 10 }}>
+                      Available again at:
+                    </Text>
+                    <View style={styles.soldOutTimePicker}>
+                      <View style={styles.soldOutTimeUnit}>
+                        <TouchableOpacity style={styles.soldOutTimeButton}
+                          onPress={() => setDailyEndTime(cycleTime(dailyEndTime, 'hour', 1))}>
+                          <Ionicons name="chevron-up" size={24} color={ZOMATO_RED} />
+                        </TouchableOpacity>
+                        <Text style={styles.soldOutTimeValue}>
+                          {(parseInt(dailyEndTime.split(':')[0]) % 12 || 12).toString().padStart(2, '0')}
+                        </Text>
+                        <TouchableOpacity style={styles.soldOutTimeButton}
+                          onPress={() => setDailyEndTime(cycleTime(dailyEndTime, 'hour', -1))}>
+                          <Ionicons name="chevron-down" size={24} color={ZOMATO_RED} />
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={styles.soldOutTimeSeparator}>:</Text>
+                      <View style={styles.soldOutTimeUnit}>
+                        <TouchableOpacity style={styles.soldOutTimeButton}
+                          onPress={() => setDailyEndTime(cycleTime(dailyEndTime, 'min', 5))}>
+                          <Ionicons name="chevron-up" size={24} color={ZOMATO_RED} />
+                        </TouchableOpacity>
+                        <Text style={styles.soldOutTimeValue}>{dailyEndTime.split(':')[1]}</Text>
+                        <TouchableOpacity style={styles.soldOutTimeButton}
+                          onPress={() => setDailyEndTime(cycleTime(dailyEndTime, 'min', -5))}>
+                          <Ionicons name="chevron-down" size={24} color={ZOMATO_RED} />
+                        </TouchableOpacity>
+                      </View>
+                      <TouchableOpacity style={styles.soldOutAmPmButton}
+                        onPress={() => setDailyEndTime(cycleTime(dailyEndTime, 'hour', dailyEndTime.split(':')[0] >= 12 ? -12 : 12))}>
+                        <Text style={styles.soldOutAmPmText}>
+                          {parseInt(dailyEndTime.split(':')[0]) >= 12 ? 'PM' : 'AM'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Preview */}
+                    <View style={{
+                      marginTop: 20, padding: 14, borderRadius: 12,
+                      backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#FED7AA',
+                    }}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#92400E' }}>
+                        ⏰ Sold out every day: {formatTime12(dailyStartTime)} – {formatTime12(dailyEndTime)}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* ─── Step 2b: Custom Schedule ─── */}
+                {scheduleType === 'custom' && (
+                  <View>
+                    <Text style={styles.soldOutDescription}>
+                      Enable specific days and set sold-out times for each.
+                    </Text>
+                    {customDays.map((dayItem, dIdx) => (
+                      <View key={dayItem.day} style={{
+                        marginBottom: 10, borderRadius: 14, overflow: 'hidden',
+                        borderWidth: 1.5, borderColor: dayItem.enabled ? '#BBF7D0' : '#E5E7EB',
+                        backgroundColor: dayItem.enabled ? '#F0FDF4' : '#F9FAFB',
+                      }}>
+                        {/* Day header row */}
+                        <TouchableOpacity
+                          activeOpacity={0.7}
+                          onPress={() => updateCustomDay(dIdx, 'enabled', !dayItem.enabled)}
+                          style={{
+                            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                            paddingHorizontal: 16, paddingVertical: 14,
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <View style={{
+                              width: 36, height: 36, borderRadius: 10,
+                              backgroundColor: dayItem.enabled ? '#DCFCE7' : '#F3F4F6',
+                              justifyContent: 'center', alignItems: 'center', marginRight: 12,
+                            }}>
+                              <Text style={{
+                                fontSize: 13, fontWeight: '800',
+                                color: dayItem.enabled ? '#16A34A' : '#9CA3AF',
+                              }}>{dayItem.day}</Text>
+                            </View>
+                            <Text style={{
+                              fontSize: 15, fontWeight: '600',
+                              color: dayItem.enabled ? '#1f2937' : '#9ca3af',
+                            }}>
+                              {dayItem.day === 'Sun' ? 'Sunday' : dayItem.day === 'Mon' ? 'Monday' :
+                               dayItem.day === 'Tue' ? 'Tuesday' : dayItem.day === 'Wed' ? 'Wednesday' :
+                               dayItem.day === 'Thu' ? 'Thursday' : dayItem.day === 'Fri' ? 'Friday' : 'Saturday'}
+                            </Text>
+                          </View>
+                          <View style={{
+                            width: 44, height: 26, borderRadius: 13,
+                            backgroundColor: dayItem.enabled ? '#22C55E' : '#D1D5DB',
+                            justifyContent: 'center',
+                            paddingHorizontal: 2,
+                          }}>
+                            <View style={{
+                              width: 22, height: 22, borderRadius: 11,
+                              backgroundColor: '#fff',
+                              alignSelf: dayItem.enabled ? 'flex-end' : 'flex-start',
+                              shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+                              shadowOpacity: 0.15, shadowRadius: 2, elevation: 2,
+                            }} />
+                          </View>
+                        </TouchableOpacity>
+
+                        {/* Time pickers (collapsed if disabled) */}
+                        {dayItem.enabled && (
+                          <View style={{
+                            flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                            paddingHorizontal: 16, paddingBottom: 14, gap: 8,
+                          }}>
+                            {/* Start time compact */}
+                            <View style={{ alignItems: 'center' }}>
+                              <Text style={{ fontSize: 10, fontWeight: '600', color: '#6b7280', marginBottom: 4 }}>FROM</Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB', paddingHorizontal: 6, paddingVertical: 4 }}>
+                                <TouchableOpacity onPress={() => updateCustomDay(dIdx, 'startTime', cycleTime(dayItem.startTime, 'hour', 1))}>
+                                  <Ionicons name="caret-up" size={16} color={ZOMATO_RED} />
+                                </TouchableOpacity>
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginHorizontal: 4 }}>
+                                  {formatTime12(dayItem.startTime)}
+                                </Text>
+                                <TouchableOpacity onPress={() => updateCustomDay(dIdx, 'startTime', cycleTime(dayItem.startTime, 'hour', -1))}>
+                                  <Ionicons name="caret-down" size={16} color={ZOMATO_RED} />
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                            <Text style={{ fontSize: 14, color: '#9ca3af', fontWeight: '600' }}>→</Text>
+                            {/* End time compact */}
+                            <View style={{ alignItems: 'center' }}>
+                              <Text style={{ fontSize: 10, fontWeight: '600', color: '#6b7280', marginBottom: 4 }}>TO</Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB', paddingHorizontal: 6, paddingVertical: 4 }}>
+                                <TouchableOpacity onPress={() => updateCustomDay(dIdx, 'endTime', cycleTime(dayItem.endTime, 'hour', 1))}>
+                                  <Ionicons name="caret-up" size={16} color={ZOMATO_RED} />
+                                </TouchableOpacity>
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937', marginHorizontal: 4 }}>
+                                  {formatTime12(dayItem.endTime)}
+                                </Text>
+                                <TouchableOpacity onPress={() => updateCustomDay(dIdx, 'endTime', cycleTime(dayItem.endTime, 'hour', -1))}>
+                                  <Ionicons name="caret-down" size={16} color={ZOMATO_RED} />
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+
+            {/* Footer — only show on daily/custom step */}
+            {scheduleType && (
+              <View style={styles.soldOutModalFooter}>
+                <TouchableOpacity 
+                  style={styles.soldOutCancelButton} 
+                  onPress={() => setShowItemSoldOutModal(false)}
+                >
+                  <Text style={styles.soldOutCancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.soldOutSaveButton, savingCategory && styles.soldOutSaveButtonDisabled]} 
+                  onPress={saveItemSoldOutSchedule}
+                  disabled={savingCategory}
+                >
+                  {savingCategory ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.soldOutSaveButtonText}>Save Schedule</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
 
       {/* Quantity Toggle Modal */}
       <Modal
-        animationType="fade"
+        animationType="slide"
         transparent={true}
         visible={showQtyModal}
         onRequestClose={() => setShowQtyModal(false)}
       >
-        <View style={styles.soldOutOverlay}>
-          <View style={[styles.soldOutContent, { maxHeight: '70%' }]}>
-            <View style={styles.soldOutHeader}>
-              <Text style={styles.soldOutTitle}>{qtyModalItem?.name || 'Manage Sizes'}</Text>
+        <View style={styles.soldOutModalOverlay}>
+          <View style={styles.soldOutModalContent}>
+            {/* Header */}
+            <View style={styles.soldOutModalHeader}>
+              <Text style={styles.soldOutModalTitle}>Manage Sizes</Text>
               <TouchableOpacity onPress={() => setShowQtyModal(false)} style={styles.soldOutCloseButton}>
-                <Ionicons name="close" size={20} color="#6b7280" />
+                <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
-            <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 16, paddingHorizontal: 20 }}>
-              Toggle availability for each size
-            </Text>
-            <ScrollView style={{ paddingHorizontal: 20 }}>
+
+            <View style={styles.soldOutModalBody}>
+              {/* Item name */}
+              <Text style={styles.soldOutCategoryName}>{qtyModalItem?.name}</Text>
+              <Text style={styles.soldOutDescription}>
+                Toggle availability for individual sizes. Customers won't be able to order sizes marked as Off.
+              </Text>
+
+              {/* Quantity option rows */}
               {qtyModalItem?.quantities?.map((q, qIdx) => {
                 const qAvail = q.available !== false;
                 return (
                   <TouchableOpacity
                     key={qIdx}
+                    activeOpacity={0.7}
                     onPress={() => toggleQuantityAvailability(qtyModalItem, qIdx)}
                     style={{
                       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                      paddingVertical: 14, paddingHorizontal: 16,
-                      marginBottom: 8, borderRadius: 12,
+                      paddingVertical: 16, paddingHorizontal: 18,
+                      marginBottom: 10, borderRadius: 16,
                       backgroundColor: qAvail ? '#F0FDF4' : '#FEF2F2',
-                      borderWidth: 1, borderColor: qAvail ? '#BBF7D0' : '#FECACA',
+                      borderWidth: 1.5, borderColor: qAvail ? '#BBF7D0' : '#FECACA',
                     }}
                   >
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937' }}>
-                        {q.quantity} {q.unit}
-                      </Text>
-                      <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>₹{q.price}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                      <View style={{
+                        width: 40, height: 40, borderRadius: 12,
+                        backgroundColor: qAvail ? '#DCFCE7' : '#FEE2E2',
+                        justifyContent: 'center', alignItems: 'center', marginRight: 14,
+                      }}>
+                        <Ionicons
+                          name={qAvail ? 'checkmark-circle' : 'close-circle'}
+                          size={22}
+                          color={qAvail ? '#22C55E' : '#EF4444'}
+                        />
+                      </View>
+                      <View>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>
+                          {q.quantity} {q.unit}
+                        </Text>
+                        <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 2, fontWeight: '500' }}>
+                          ₹{q.price}{q.offerPrice ? ` (Offer: ₹${q.offerPrice})` : ''}
+                        </Text>
+                      </View>
                     </View>
                     <View style={{
-                      paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
+                      paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
                       backgroundColor: qAvail ? '#22C55E' : '#EF4444',
+                      shadowColor: qAvail ? '#22C55E' : '#EF4444',
+                      shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4,
+                      elevation: 3,
                     }}>
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#fff', letterSpacing: 0.5 }}>
                         {qAvail ? 'Active' : 'Off'}
                       </Text>
                     </View>
                   </TouchableOpacity>
                 );
               })}
+
               {/* Toggle All button */}
-              <TouchableOpacity
-                onPress={() => {
-                  if (!qtyModalItem?.quantities) return;
-                  const allAvail = qtyModalItem.quantities.every(q => q.available !== false);
-                  // Toggle all to opposite
-                  qtyModalItem.quantities.forEach((_, qIdx) => {
-                    const isAvail = qtyModalItem.quantities[qIdx].available !== false;
-                    if (allAvail ? isAvail : !isAvail) {
-                      toggleQuantityAvailability(qtyModalItem, qIdx);
-                    }
-                  });
-                }}
-                style={{
-                  marginTop: 8, marginBottom: 16, paddingVertical: 14, borderRadius: 12,
-                  backgroundColor: '#F3F4F6', alignItems: 'center',
-                  borderWidth: 1, borderColor: '#E5E7EB',
-                }}
-              >
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>
-                  {qtyModalItem?.quantities?.every(q => q.available !== false) ? 'Turn Off All' : 'Turn On All'}
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
+              {qtyModalItem?.quantities?.length > 1 && (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    if (!qtyModalItem?.quantities) return;
+                    const allAvail = qtyModalItem.quantities.every(q => q.available !== false);
+                    qtyModalItem.quantities.forEach((_, qIdx) => {
+                      const isAvail = qtyModalItem.quantities[qIdx].available !== false;
+                      if (allAvail ? isAvail : !isAvail) {
+                        toggleQuantityAvailability(qtyModalItem, qIdx);
+                      }
+                    });
+                  }}
+                  style={{
+                    marginTop: 14, paddingVertical: 16, borderRadius: 16,
+                    alignItems: 'center', justifyContent: 'center', flexDirection: 'row',
+                    backgroundColor: qtyModalItem?.quantities?.every(q => q.available !== false) ? '#FEF2F2' : '#F0FDF4',
+                    borderWidth: 1.5,
+                    borderColor: qtyModalItem?.quantities?.every(q => q.available !== false) ? '#FECACA' : '#BBF7D0',
+                  }}
+                >
+                  <Ionicons
+                    name={qtyModalItem?.quantities?.every(q => q.available !== false) ? 'pause-circle' : 'play-circle'}
+                    size={20}
+                    color={qtyModalItem?.quantities?.every(q => q.available !== false) ? '#EF4444' : '#22C55E'}
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={{
+                    fontSize: 15, fontWeight: '700',
+                    color: qtyModalItem?.quantities?.every(q => q.available !== false) ? '#DC2626' : '#16A34A',
+                  }}>
+                    {qtyModalItem?.quantities?.every(q => q.available !== false) ? 'Turn Off All Sizes' : 'Turn On All Sizes'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
       </Modal>

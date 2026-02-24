@@ -53,6 +53,21 @@ const menuItemSchema = new mongoose.Schema({
   avgRating: { type: Number, default: 0 },
   totalRatings: { type: Number, default: 0 },
   soldOutUntil: { type: String },  // HH:mm time string — auto-resume after this time
+  // Recurring sold-out schedule (daily or per-day custom)
+  soldOutSchedule: {
+    enabled: { type: Boolean, default: false },
+    type: { type: String, enum: ['daily', 'custom'], default: 'daily' },
+    // For 'daily': single startTime/endTime applies to all days
+    dailyStartTime: { type: String },  // HH:mm
+    dailyEndTime: { type: String },    // HH:mm
+    // For 'custom': per-day schedule
+    days: [{
+      day: { type: String, enum: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] },
+      enabled: { type: Boolean, default: false },
+      startTime: { type: String },  // HH:mm
+      endTime: { type: String },    // HH:mm
+    }]
+  },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

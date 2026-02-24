@@ -35,6 +35,7 @@ const catalogRoutes = require('./routes/catalog');
 const orderScheduler = require('./services/orderScheduler');
 const dailyCleanup = require('./services/dailyCleanup');
 const categoryScheduler = require('./services/categoryScheduler');
+const menuItemScheduler = require('./services/menuItemScheduler');
 const orderCleanup = require('./services/orderCleanup');
 const cartCleanup = require('./services/cartCleanup');
 const catalogReviewPoller = require('./services/catalogReviewPoller');
@@ -139,6 +140,7 @@ const connectMongoDB = async () => {
     orderScheduler.start();
     dailyCleanup.start();
     categoryScheduler.start();
+    menuItemScheduler.start();
     orderCleanup.start();
     cartCleanup.startCartCleanupScheduler();
     catalogReviewPoller.start();
@@ -440,6 +442,7 @@ const gracefulShutdown = async (signal) => {
     if (orderScheduler.stop) orderScheduler.stop();
     if (dailyCleanup.stop) dailyCleanup.stop();
     if (categoryScheduler.stop) categoryScheduler.stop();
+    if (menuItemScheduler.stop) menuItemScheduler.stop();
     if (orderCleanup.stop) orderCleanup.stop();
     if (cartCleanup.stopCartCleanupScheduler) cartCleanup.stopCartCleanupScheduler();
     if (catalogRatingSync.stop) catalogRatingSync.stop();

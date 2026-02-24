@@ -626,21 +626,51 @@ router.patch('/:id/variants-soldout', authMiddleware, async (req, res) => {
 // Schedule sold-out for a menu item (all variants) with auto-resume time
 router.patch('/:id/schedule-soldout', authMiddleware, async (req, res) => {
   try {
-    const { endTime } = req.body; // e.g. "17:00"
+    const { endTime, schedule } = req.body;
     const item = await MenuItem.findById(req.params.id);
     if (!item) return res.status(404).json({ error: 'Item not found' });
 
-    // Mark all variants as unavailable now
-    if (item.variants && item.variants.length > 0) {
-      item.variants.forEach(v => { v.available = false; });
-    }
-    item.available = false;
+    if (schedule) {
+      // New recurring schedule format
+      item.soldOutSchedule = {
+        enabled: true,
+        type: schedule.type || 'daily',
+        dailyStartTime: schedule.dailyStartTime || null,
+        dailyEndTime: schedule.dailyEndTime || null,
+        days: schedule.days || [],
+      };
+      // Check if item should be sold out RIGHT NOW based on schedule
+      const now = new Date();
+      const currentDay = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][now.getDay()];
+      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+      let shouldBeSoldOut = false;
 
-    // Store schedule end time so a cron/check can auto-resume
-    item.soldOutUntil = endTime;
+      if (schedule.type === 'daily' && schedule.dailyStartTime && schedule.dailyEndTime) {
+        shouldBeSoldOut = currentTime >= schedule.dailyStartTime && currentTime < schedule.dailyEndTime;
+      } else if (schedule.type === 'custom' && schedule.days) {
+        const daySchedule = schedule.days.find(d => d.day === currentDay && d.enabled);
+        if (daySchedule && daySchedule.startTime && daySchedule.endTime) {
+          shouldBeSoldOut = currentTime >= daySchedule.startTime && currentTime < daySchedule.endTime;
+        }
+      }
+
+      if (shouldBeSoldOut) {
+        if (item.variants && item.variants.length > 0) {
+          item.variants.forEach(v => { v.available = false; });
+        }
+        item.available = false;
+      }
+    } else if (endTime) {
+      // Legacy: one-time sold out until endTime
+      if (item.variants && item.variants.length > 0) {
+        item.variants.forEach(v => { v.available = false; });
+      }
+      item.available = false;
+      item.soldOutUntil = endTime;
+    }
+
     await item.save();
 
-    // Sync to Meta Catalog immediately (mark out of stock)
     catalogService.syncProductToMeta(item).catch(err => {
       logger.info('Catalog sync skipped for schedule sold out', { itemId: item._id, error: err.message });
     });
@@ -648,7 +678,6 @@ router.patch('/:id/schedule-soldout', authMiddleware, async (req, res) => {
     dataEvents.emit('menu');
     res.json(item);
   } catch (error) {
-
     return logRouteError(res, 'Internal server error', error);
   }
 });
