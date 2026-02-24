@@ -149,10 +149,10 @@ export default function Home() {
         catData = res.data;
       }
       setCategories(catData.filter(cat => cat.isActive && !cat.isPaused).sort((a, b) => {
-        // Push emoji-starting categories to the end
+        // Show emoji-starting categories first
         const aEmoji = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(a.name);
         const bEmoji = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(b.name);
-        if (aEmoji !== bEmoji) return aEmoji ? 1 : -1;
+        if (aEmoji !== bEmoji) return aEmoji ? -1 : 1;
         return 0;
       }));
     } catch (err) {

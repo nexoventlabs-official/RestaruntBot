@@ -1118,7 +1118,7 @@ export default function UserMenuPage() {
             {[...allItems].sort((a, b) => {
               const aEmoji = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(a.name);
               const bEmoji = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(b.name);
-              if (aEmoji !== bEmoji) return aEmoji ? 1 : -1;
+              if (aEmoji !== bEmoji) return aEmoji ? -1 : 1;
               return 0;
             }).map(item => {
               const variantCount = item.variants && item.variants.length > 0 ? item.variants.length : 1;
@@ -1212,11 +1212,11 @@ export default function UserMenuPage() {
               </div>
             );
 
-            // Sort: emoji-starting items last
+            // Sort: emoji-starting items first
             const emojiSort = (a, b) => {
               const aE = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(a.name);
               const bE = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(b.name);
-              if (aE !== bE) return aE ? 1 : -1;
+              if (aE !== bE) return aE ? -1 : 1;
               return 0;
             };
 
