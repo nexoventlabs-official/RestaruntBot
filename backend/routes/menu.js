@@ -568,6 +568,34 @@ router.patch('/:id/variant/:variantIndex/toggle', authMiddleware, async (req, re
   }
 });
 
+// Toggle availability for a specific quantity option within a variant
+router.patch('/:id/variant/:variantIndex/quantity/:qtyIndex/toggle', authMiddleware, async (req, res) => {
+  try {
+    const item = await MenuItem.findById(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    const vIdx = parseInt(req.params.variantIndex);
+    const qIdx = parseInt(req.params.qtyIndex);
+    if (!item.variants || !item.variants[vIdx]) {
+      return res.status(404).json({ error: 'Variant not found' });
+    }
+    if (!item.variants[vIdx].quantities || !item.variants[vIdx].quantities[qIdx]) {
+      return res.status(404).json({ error: 'Quantity option not found' });
+    }
+    const qty = item.variants[vIdx].quantities[qIdx];
+    qty.available = qty.available === false ? true : false;
+    await item.save();
+
+    catalogService.syncProductToMeta(item).catch(err => {
+      logger.info('Catalog sync skipped for quantity toggle', { itemId: item._id, variantIndex: vIdx, qtyIndex: qIdx, error: err.message });
+    });
+
+    dataEvents.emit('menu');
+    res.json(item);
+  } catch (error) {
+    return logRouteError(res, 'Internal server error', error);
+  }
+});
+
 // Bulk mark all variants of a menu item as sold out or available
 router.patch('/:id/variants-soldout', authMiddleware, async (req, res) => {
   try {

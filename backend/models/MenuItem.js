@@ -39,7 +39,8 @@ const menuItemSchema = new mongoose.Schema({
       quantity: { type: Number, required: true },
       unit: { type: String, required: true, enum: ['piece', 'kg', 'gram', 'liter', 'ml', 'plate', 'bowl', 'cup', 'slice', 'inch', 'full', 'half', 'small'] },
       price: { type: Number, required: true },
-      offerPrice: { type: Number }
+      offerPrice: { type: Number },
+      available: { type: Boolean, default: true }
     }]
   }],
   ratings: [{

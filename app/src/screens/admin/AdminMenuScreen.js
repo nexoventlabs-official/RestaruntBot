@@ -266,8 +266,52 @@ export default function AdminMenuScreen({ navigation, route }) {
     }
   };
 
+  // Quantity toggle modal state
+  const [showQtyModal, setShowQtyModal] = useState(false);
+  const [qtyModalItem, setQtyModalItem] = useState(null); // the vItem with quantities
+
+  // Toggle a single quantity option's availability
+  const toggleQuantityAvailability = async (vItem, qIdx) => {
+    const parentId = vItem.parentId;
+    const vIdx = vItem.variantIndex;
+    // Optimistic update
+    setItems(prev => prev.map(i => {
+      if (i._id !== parentId) return i;
+      const updatedVariants = i.variants.map((v, idx) => {
+        if (idx !== vIdx) return v;
+        const updatedQtys = v.quantities.map((q, qi) =>
+          qi === qIdx ? { ...q, available: q.available === false ? true : false } : q
+        );
+        return { ...v, quantities: updatedQtys };
+      });
+      return { ...i, variants: updatedVariants };
+    }));
+    // Update modal item too
+    setQtyModalItem(prev => {
+      if (!prev) return prev;
+      const updatedQtys = prev.quantities.map((q, qi) =>
+        qi === qIdx ? { ...q, available: q.available === false ? true : false } : q
+      );
+      return { ...prev, quantities: updatedQtys };
+    });
+    try {
+      await api.patch(`/menu/${parentId}/variant/${vIdx}/quantity/${qIdx}/toggle`);
+    } catch (error) {
+      // Revert on error — refetch
+      try { const { data } = await api.get('/menu'); setItems(data); } catch {}
+      Alert.alert('Error', 'Failed to toggle quantity availability');
+    }
+  };
+
   // Toggle a single variant's availability (tapping Active/Off badge)
   const toggleVariantAvailability = async (vItem) => {
+    // If variant has quantity options, show the qty dialog instead
+    if (vItem.quantities && vItem.quantities.length > 0 && vItem.variantIndex >= 0) {
+      setQtyModalItem(vItem);
+      setShowQtyModal(true);
+      return;
+    }
+
     const parentId = vItem.parentId;
     const vIdx = vItem.variantIndex;
     const wasAvail = vItem.variantAvailable;
@@ -905,7 +949,8 @@ export default function AdminMenuScreen({ navigation, route }) {
     items.forEach(item => {
       const itemCategories = Array.isArray(item.category) ? item.category : [item.category];
       const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        itemCategories.some(cat => cat?.toLowerCase().includes(searchTerm.toLowerCase()));
+        itemCategories.some(cat => cat?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        item.variants?.some(v => v.label?.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesCategory = selectedCategory === 'all' || itemCategories.includes(selectedCategory);
       const matchesStatus = statusFilter === 'all' ||
         (statusFilter === 'available' && item.available) ||
@@ -918,6 +963,13 @@ export default function AdminMenuScreen({ navigation, route }) {
         item.variants.forEach((v, vIdx) => {
           // Food type filter also applies at variant level
           if (foodTypeFilter !== 'all' && v.foodType && v.foodType !== foodTypeFilter) return;
+          // When searching, only show variants whose label matches (or parent name/category matches)
+          if (searchTerm) {
+            const q = searchTerm.toLowerCase();
+            const parentMatch = item.name?.toLowerCase().includes(q) || itemCategories.some(cat => cat?.toLowerCase().includes(q));
+            const variantMatch = v.label?.toLowerCase().includes(q);
+            if (!parentMatch && !variantMatch) return;
+          }
           result.push({
             _id: `${item._id}_v${vIdx}`,
             parentId: item._id,
@@ -1038,8 +1090,8 @@ export default function AdminMenuScreen({ navigation, route }) {
             {vItem.quantities && vItem.quantities.length > 0 ? (
               <View style={styles.variantQtyRow}>
                 {vItem.quantities.map((q, qIdx) => (
-                  <View key={qIdx} style={styles.variantQtyChip}>
-                    <Text style={styles.variantQtyText}>{q.quantity} {q.unit} — ₹{q.price}</Text>
+                  <View key={qIdx} style={[styles.variantQtyChip, q.available === false && { backgroundColor: '#FEE2E2', borderColor: '#FECACA', borderWidth: 1 }]}>
+                    <Text style={[styles.variantQtyText, q.available === false && { color: '#DC2626', textDecorationLine: 'line-through' }]}>{q.quantity} {q.unit} — ₹{q.price}</Text>
                   </View>
                 ))}
               </View>
@@ -1154,61 +1206,6 @@ export default function AdminMenuScreen({ navigation, route }) {
             </TouchableOpacity>
           )}
         </View>
-      </View>
-
-      {/* Stats Cards */}
-      <View style={styles.statsContainer}>
-        <LinearGradient
-          colors={['#3B82F6', '#2563EB']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.statCardGradient}
-        >
-          <View style={styles.statCardDecor}>
-            <Ionicons name="restaurant" size={40} color="rgba(255,255,255,0.15)" />
-          </View>
-          <Text style={styles.statValueWhite}>{stats.totalItems}</Text>
-          <Text style={styles.statLabelWhite}>TOTAL</Text>
-        </LinearGradient>
-
-        <LinearGradient
-          colors={['#8B5CF6', '#7C3AED']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.statCardGradient}
-        >
-          <View style={styles.statCardDecor}>
-            <Ionicons name="folder" size={40} color="rgba(255,255,255,0.15)" />
-          </View>
-          <Text style={styles.statValueWhite}>{stats.uniqueCategories.length}</Text>
-          <Text style={styles.statLabelWhite}>CATEGORIES</Text>
-        </LinearGradient>
-
-        <LinearGradient
-          colors={['#22C55E', '#16A34A']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.statCardGradient}
-        >
-          <View style={styles.statCardDecor}>
-            <Ionicons name="checkmark-circle" size={40} color="rgba(255,255,255,0.15)" />
-          </View>
-          <Text style={styles.statValueWhite}>{stats.availableCount}</Text>
-          <Text style={styles.statLabelWhite}>IN STOCK</Text>
-        </LinearGradient>
-
-        <LinearGradient
-          colors={['#EF4444', '#DC2626']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.statCardGradient}
-        >
-          <View style={styles.statCardDecor}>
-            <Ionicons name="close-circle" size={40} color="rgba(255,255,255,0.15)" />
-          </View>
-          <Text style={styles.statValueWhite}>{stats.unavailableCount}</Text>
-          <Text style={styles.statLabelWhite}>OUT</Text>
-        </LinearGradient>
       </View>
 
       {/* Filter Chips */}
@@ -1400,6 +1397,10 @@ export default function AdminMenuScreen({ navigation, route }) {
                 key={tc.id}
                 style={styles.titleFilterItem}
                 onPress={() => setSelectedTitle(tc.id === selectedTitle ? 'all' : tc.id)}
+                onLongPress={() => {
+                  const parentItem = items.find(i => i._id === tc.id);
+                  if (parentItem) showItemSoldOutOptions(parentItem);
+                }}
               >
                 <View style={[styles.titleImageWrapper, selectedTitle === tc.id && styles.titleImageWrapperActive]}>
                   {tc.image ? (
@@ -1434,33 +1435,7 @@ export default function AdminMenuScreen({ navigation, route }) {
         <SectionList
           sections={sectionData}
           renderItem={renderVariantItem}
-          renderSectionHeader={({ section }) => {
-            const pItem = section.parentItem;
-            const allOff = section.data.every(d => !d.available);
-            return (
-              <TouchableOpacity
-                style={styles.sectionHeader}
-                activeOpacity={0.7}
-                onPress={() => navigation.navigate('MenuItemForm', { item: pItem })}
-                onLongPress={() => showItemSoldOutOptions(pItem)}
-              >
-                {pItem.image ? (
-                  <Image source={{ uri: pItem.image, cache: 'force-cache' }} style={styles.sectionHeaderImage} />
-                ) : (
-                  <View style={[styles.sectionHeaderImage, { backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' }]}>
-                    <Ionicons name="restaurant-outline" size={18} color="#9ca3af" />
-                  </View>
-                )}
-                <Text style={styles.sectionHeaderTitle} numberOfLines={1}>{pItem.name}</Text>
-                {allOff && (
-                  <View style={styles.sectionSoldOutBadge}>
-                    <Text style={styles.sectionSoldOutText}>SOLD OUT</Text>
-                  </View>
-                )}
-                <Ionicons name="ellipsis-vertical" size={18} color="#9ca3af" style={{ marginLeft: 'auto' }} />
-              </TouchableOpacity>
-            );
-          }}
+          renderSectionHeader={() => null}
           keyExtractor={variantKeyExtractor}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[ZOMATO_RED]} tintColor={ZOMATO_RED} />}
@@ -2001,6 +1976,84 @@ export default function AdminMenuScreen({ navigation, route }) {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Quantity Toggle Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showQtyModal}
+        onRequestClose={() => setShowQtyModal(false)}
+      >
+        <View style={styles.soldOutOverlay}>
+          <View style={[styles.soldOutContent, { maxHeight: '70%' }]}>
+            <View style={styles.soldOutHeader}>
+              <Text style={styles.soldOutTitle}>{qtyModalItem?.name || 'Manage Sizes'}</Text>
+              <TouchableOpacity onPress={() => setShowQtyModal(false)} style={styles.soldOutCloseButton}>
+                <Ionicons name="close" size={20} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 16, paddingHorizontal: 20 }}>
+              Toggle availability for each size
+            </Text>
+            <ScrollView style={{ paddingHorizontal: 20 }}>
+              {qtyModalItem?.quantities?.map((q, qIdx) => {
+                const qAvail = q.available !== false;
+                return (
+                  <TouchableOpacity
+                    key={qIdx}
+                    onPress={() => toggleQuantityAvailability(qtyModalItem, qIdx)}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                      paddingVertical: 14, paddingHorizontal: 16,
+                      marginBottom: 8, borderRadius: 12,
+                      backgroundColor: qAvail ? '#F0FDF4' : '#FEF2F2',
+                      borderWidth: 1, borderColor: qAvail ? '#BBF7D0' : '#FECACA',
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937' }}>
+                        {q.quantity} {q.unit}
+                      </Text>
+                      <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>₹{q.price}</Text>
+                    </View>
+                    <View style={{
+                      paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
+                      backgroundColor: qAvail ? '#22C55E' : '#EF4444',
+                    }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff' }}>
+                        {qAvail ? 'Active' : 'Off'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+              {/* Toggle All button */}
+              <TouchableOpacity
+                onPress={() => {
+                  if (!qtyModalItem?.quantities) return;
+                  const allAvail = qtyModalItem.quantities.every(q => q.available !== false);
+                  // Toggle all to opposite
+                  qtyModalItem.quantities.forEach((_, qIdx) => {
+                    const isAvail = qtyModalItem.quantities[qIdx].available !== false;
+                    if (allAvail ? isAvail : !isAvail) {
+                      toggleQuantityAvailability(qtyModalItem, qIdx);
+                    }
+                  });
+                }}
+                style={{
+                  marginTop: 8, marginBottom: 16, paddingVertical: 14, borderRadius: 12,
+                  backgroundColor: '#F3F4F6', alignItems: 'center',
+                  borderWidth: 1, borderColor: '#E5E7EB',
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>
+                  {qtyModalItem?.quantities?.every(q => q.available !== false) ? 'Turn Off All' : 'Turn On All'}
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
