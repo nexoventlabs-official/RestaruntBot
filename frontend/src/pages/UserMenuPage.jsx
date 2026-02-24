@@ -689,14 +689,14 @@ export default function UserMenuPage() {
                     <p className="text-xs text-gray-500 mb-1 line-clamp-1">{item.name}</p>
 
                     {/* Variant Rating */}
-                    {(v.avgRating > 0 || v.totalRatings > 0) && (
-                      <div className="flex items-center gap-1 mb-2">
-                        {[1, 2, 3, 4, 5].map(i => (
-                          <Star key={i} className={`w-3 h-3 ${i <= Math.round(v.avgRating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
-                        ))}
-                        <span className="text-xs text-gray-500 ml-0.5">({v.totalRatings || 0})</span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1 mb-2">
+                      {[1, 2, 3, 4, 5].map(i => (
+                        <Star key={i} className={`w-3 h-3 ${i <= Math.round(v.avgRating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                      ))}
+                      {(v.totalRatings > 0) && (
+                        <span className="text-xs text-gray-500 ml-0.5">({v.totalRatings})</span>
+                      )}
+                    </div>
 
                     {/* Price */}
                     <div className="flex items-center gap-3 mb-3 flex-wrap">
@@ -1371,20 +1371,29 @@ export default function UserMenuPage() {
                 </div>
               )}
 
-              {/* Rating */}
-              <div className="flex items-center gap-2 mb-4">
-                <div className="flex">
-                  {[1, 2, 3, 4, 5].map(i => (
-                    <Star 
-                      key={i} 
-                      className={`w-4 h-4 sm:w-5 sm:h-5 ${i <= Math.round(selectedItem.avgRating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} 
-                    />
-                  ))}
-                </div>
-                <span className="text-sm text-gray-500">
-                  {selectedItem.avgRating?.toFixed(1) || '0.0'} ({selectedItem.totalRatings || 0} reviews)
-                </span>
-              </div>
+              {/* Rating - show variant-specific rating when a variant is selected */}
+              {(() => {
+                const ratingSource = (selectedVariantIndex !== null && selectedItem.variants?.[selectedVariantIndex])
+                  ? selectedItem.variants[selectedVariantIndex]
+                  : selectedItem;
+                const avgR = ratingSource.avgRating || 0;
+                const totalR = ratingSource.totalRatings || 0;
+                return (
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="flex">
+                      {[1, 2, 3, 4, 5].map(i => (
+                        <Star 
+                          key={i} 
+                          className={`w-4 h-4 sm:w-5 sm:h-5 ${i <= Math.round(avgR) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} 
+                        />
+                      ))}
+                    </div>
+                    <span className="text-sm text-gray-500">
+                      {avgR.toFixed(1)} ({totalR} review{totalR !== 1 ? 's' : ''})
+                    </span>
+                  </div>
+                );
+              })()}
 
               {/* Variant Selector */}
               {selectedItem.variants && selectedItem.variants.length > 0 && (
