@@ -39,7 +39,9 @@ const uploadMultiple = upload.fields([
 // Get all offers (admin)
 router.get('/', auth, async (req, res) => {
   try {
-    const offers = await Offer.find().sort({ createdAt: -1 });
+    const offers = await Offer.find()
+      .populate('appliedItems', 'name image variants')
+      .sort({ createdAt: -1 });
     res.json(offers);
   } catch (err) {
 
@@ -259,9 +261,8 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       discountType: discountType || 'none',
       discountValue: parseFloat(discountValue) || 0,
       minOrderAmount: parseFloat(minOrderAmount) || 0,
-      validFrom: validFrom ? new Date(validFrom) : new Date(),
+      validFrom: validFrom ? new Date(validFrom) : null,
       validUntil: validUntil ? new Date(validUntil) : null,
-      // Auto-activate if validFrom is now or in the past; otherwise stays inactive until scheduler activates it
       isActive: validFrom ? new Date(validFrom) <= new Date() : false,
       showAsPopup: showAsPopup !== 'false',
       buttonText: buttonText || 'Order Now',
@@ -798,7 +799,7 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
       discountType: discountType || 'none',
       discountValue: parseFloat(discountValue) || 0,
       minOrderAmount: parseFloat(minOrderAmount) || 0,
-      validFrom: validFrom ? new Date(validFrom) : new Date(),
+      validFrom: validFrom ? new Date(validFrom) : null,
       validUntil: validUntil ? new Date(validUntil) : null,
       isActive: isActive !== 'false',
       showAsPopup: showAsPopup !== 'false',

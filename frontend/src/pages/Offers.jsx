@@ -9,6 +9,16 @@ const foodDot = (ft) =>
 
 const fmtDate = (d) => { if (!d) return ''; return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
 
+// Format Date to local "YYYY-MM-DDTHH:mm" for datetime-local inputs (avoids UTC shift from toISOString)
+const toLocalDT = (d) => {
+  const y = d.getFullYear();
+  const mo = (d.getMonth() + 1).toString().padStart(2, '0');
+  const da = d.getDate().toString().padStart(2, '0');
+  const h = d.getHours().toString().padStart(2, '0');
+  const mi = d.getMinutes().toString().padStart(2, '0');
+  return `${y}-${mo}-${da}T${h}:${mi}`;
+};
+
 const TEMPLATE_STATUS_CONFIG = {
   approved: { color: '#22C55E', bg: '#DCFCE7', label: '✅ Approved' },
   pending:  { color: '#F59E0B', bg: '#FEF3C7', label: '⏳ Pending Review' },
@@ -180,8 +190,8 @@ export default function Offers() {
       setSelectedItems(Array.isArray(offer.appliedItems) ? offer.appliedItems.map(i => typeof i === 'string' ? i : i._id) : []);
       setSelectedVariants(offer.appliedVariants || []);
       setSelectedQuantities(offer.appliedQuantities || []);
-      setValidFrom(offer.validFrom ? new Date(offer.validFrom).toISOString().slice(0, 16) : '');
-      setValidUntil(offer.validUntil ? new Date(offer.validUntil).toISOString().slice(0, 16) : '');
+      setValidFrom(offer.validFrom ? toLocalDT(new Date(offer.validFrom)) : '');
+      setValidUntil(offer.validUntil ? toLocalDT(new Date(offer.validUntil)) : '');
       setTargetType(offer.targetType || 'all');
       setTargetPercentage(offer.targetPercentage?.toString() || '10');
       setTargetMinSpent(offer.targetMinSpent?.toString() || '1000');
@@ -391,16 +401,16 @@ export default function Offers() {
   }, [selectedItems, selectedVariants, selectedQuantities, menuItems]);
 
   /* ═══════════ SCHEDULE QUICK BUTTONS ═══════════ */
-  const setNow = () => setValidFrom(new Date().toISOString().slice(0, 16));
+  const setNow = () => setValidFrom(toLocalDT(new Date()));
   const addDays = (days) => {
     if (!validFrom) return;
     const d = new Date(validFrom); d.setDate(d.getDate() + days);
-    setValidUntil(d.toISOString().slice(0, 16));
+    setValidUntil(toLocalDT(d));
   };
   const addMonth = () => {
     if (!validFrom) return;
     const d = new Date(validFrom); d.setMonth(d.getMonth() + 1);
-    setValidUntil(d.toISOString().slice(0, 16));
+    setValidUntil(toLocalDT(d));
   };
 
   /* ═══════════ FORM SUBMIT ═══════════ */
@@ -629,6 +639,45 @@ export default function Offers() {
                   </div>
                 )}
                 <div><p className="text-xs text-dark-400">Applied Items</p><p className="text-sm font-semibold text-dark-900">{detailOffer.appliedItems?.length || 0} items, {detailOffer.appliedVariants?.length || 0} variants</p></div>
+                {/* Variant Details */}
+                {detailOffer.appliedVariants?.length > 0 && detailOffer.appliedItems?.length > 0 && (() => {
+                  const variantDetails = detailOffer.appliedVariants.map(v => {
+                    const [itemId, vIdx] = v.split('_');
+                    const item = detailOffer.appliedItems.find(i => (i._id || i) === itemId);
+                    if (!item || !item.variants) return null;
+                    const variant = item.variants[parseInt(vIdx)];
+                    if (!variant) return null;
+                    return { ...variant, itemName: item.name, itemImage: item.image, key: v };
+                  }).filter(Boolean);
+                  if (variantDetails.length === 0) return null;
+                  return (
+                    <div>
+                      <p className="text-xs text-dark-400 mb-2">Applied Variants</p>
+                      <div className="space-y-2 max-h-52 overflow-y-auto">
+                        {variantDetails.map(vd => (
+                          <div key={vd.key} className="flex items-center gap-3 p-2.5 bg-dark-50 rounded-xl">
+                            <img src={vd.image || vd.itemImage || ''} alt="" className="w-11 h-11 rounded-lg object-cover bg-dark-200 flex-shrink-0" onError={e => { e.target.style.display = 'none'; }} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-dark-900 truncate">{vd.label}</p>
+                              <p className="text-xs text-dark-500">{vd.itemName}</p>
+                              {vd.quantities?.length > 0 ? (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {vd.quantities.map((q, qi) => (
+                                    <span key={qi} className="px-1.5 py-0.5 bg-white border border-dark-200 rounded text-[10px] font-medium text-dark-600">
+                                      {q.quantity} {q.unit} — ₹{q.price}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-dark-500 mt-0.5">₹{vd.price}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div><p className="text-xs text-dark-400">Target</p><p className="text-sm font-semibold text-dark-900">{TARGET_LABELS[detailOffer.targetType] || 'All'}{detailOffer.targetedCustomers ? ` (${detailOffer.targetedCustomers} customers)` : ''}</p></div>
                 {detailOffer.validFrom && <div><p className="text-xs text-dark-400">Valid From</p><p className="text-sm text-dark-700">{fmtDate(detailOffer.validFrom)}</p></div>}
                 {detailOffer.validUntil && <div><p className="text-xs text-dark-400">Valid Until</p><p className="text-sm text-dark-700">{fmtDate(detailOffer.validUntil)}</p></div>}

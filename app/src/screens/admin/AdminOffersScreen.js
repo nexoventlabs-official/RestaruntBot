@@ -477,6 +477,50 @@ export default function AdminOffersScreen({ navigation }) {
                 </View>
               ) : null}
 
+              {/* Applied Variants with details */}
+              {o.appliedVariants && o.appliedVariants.length > 0 && o.appliedItems && o.appliedItems.length > 0 ? (() => {
+                const variantDetails = o.appliedVariants.map(v => {
+                  const [itemId, vIdx] = v.split('_');
+                  const item = o.appliedItems.find(i => (i._id || i) === itemId);
+                  if (!item || !item.variants) return null;
+                  const variant = item.variants[parseInt(vIdx)];
+                  if (!variant) return null;
+                  return { ...variant, itemName: item.name, itemImage: item.image, key: v };
+                }).filter(Boolean);
+                if (variantDetails.length === 0) return null;
+                return (
+                  <View style={{ marginTop: 4 }}>
+                    <Text style={styles.detailLabel}>Applied Variants</Text>
+                    {variantDetails.map(vd => (
+                      <View key={vd.key} style={styles.variantCard}>
+                        {(vd.image || vd.itemImage) ? (
+                          <Image source={{ uri: vd.image || vd.itemImage }} style={styles.variantImage} />
+                        ) : (
+                          <View style={[styles.variantImage, { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }]}>
+                            <Ionicons name="fast-food-outline" size={18} color="#9CA3AF" />
+                          </View>
+                        )}
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.variantName}>{vd.label}</Text>
+                          <Text style={styles.variantItemName}>{vd.itemName}</Text>
+                          {vd.quantities && vd.quantities.length > 0 ? (
+                            <View style={styles.variantSizes}>
+                              {vd.quantities.map((q, qi) => (
+                                <View key={qi} style={styles.variantSizeChip}>
+                                  <Text style={styles.variantSizeText}>{q.quantity} {q.unit} — ₹{q.price}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          ) : (
+                            <Text style={styles.variantPrice}>₹{vd.price}</Text>
+                          )}
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                );
+              })() : null}
+
               {/* Targeting */}
               {isTargeted ? (
                 <View style={styles.detailRow}>
@@ -505,10 +549,12 @@ export default function AdminOffersScreen({ navigation }) {
               {/* Dates */}
               <View style={styles.detailDivider} />
 
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Created</Text>
-                <Text style={styles.detailValue}>{formatDate(o.createdAt)}</Text>
-              </View>
+              {o.validFrom ? (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Valid From</Text>
+                  <Text style={styles.detailValue}>{formatDate(o.validFrom)}</Text>
+                </View>
+              ) : null}
 
               {o.validUntil ? (
                 <View style={styles.detailRow}>
@@ -516,6 +562,11 @@ export default function AdminOffersScreen({ navigation }) {
                   <Text style={styles.detailValue}>{formatDate(o.validUntil)}</Text>
                 </View>
               ) : null}
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Created</Text>
+                <Text style={styles.detailValue}>{formatDate(o.createdAt)}</Text>
+              </View>
 
               {o.templateApprovedAt ? (
                 <View style={styles.detailRow}>
@@ -925,5 +976,53 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#F3F4F6',
     marginVertical: 8,
+  },
+  variantCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 10,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  variantImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+  },
+  variantName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  variantItemName: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 1,
+  },
+  variantSizes: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 4,
+  },
+  variantSizeChip: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  variantSizeText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#4B5563',
+  },
+  variantPrice: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
   },
 });
