@@ -255,36 +255,64 @@ export default function ReportDetailScreen({ navigation }) {
     ]);
   }, [reportData, reportType]);
 
-  /* ═══ Download PDF ═══ */
+  /* ═══ Download PDF (async job-based) ═══ */
   const handleDownloadPdf = useCallback(async () => {
     if (!reportData || generatingPdf) return;
     setGeneratingPdf(true);
-    Alert.alert('Generating PDF', 'Please wait while the report is being generated with item images...');
+    Alert.alert('PDF Queued!', 'Your PDF report is being generated in the background. The share dialog will open automatically once ready.');
     try {
       const token = await AsyncStorage.getItem('authToken');
-      const resp = await fetch(`${API_BASE_URL}/api/analytics/report/download-pdf`, {
+      
+      // 1. Start PDF generation job
+      const startResp = await fetch(`${API_BASE_URL}/api/analytics/report/download-pdf`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ reportData, reportType }),
       });
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({}));
-        throw new Error(errData.error || 'Server error');
+      const startData = await startResp.json();
+      if (!startData.jobId) throw new Error('Failed to start PDF generation');
+      
+      const jobId = startData.jobId;
+      
+      // 2. Poll for the result
+      let attempts = 0;
+      const maxAttempts = 60; // up to ~2 minutes
+      while (attempts < maxAttempts) {
+        await new Promise(r => setTimeout(r, 2000)); // wait 2s between polls
+        const pollResp = await fetch(`${API_BASE_URL}/api/analytics/report/download-pdf/${jobId}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        
+        const contentType = pollResp.headers.get('content-type') || '';
+        
+        if (contentType.includes('application/pdf')) {
+          // PDF is ready — download and share
+          const blob = await pollResp.blob();
+          const reader = new FileReader();
+          const base64 = await new Promise((resolve, reject) => {
+            reader.onloadend = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          const fileUri = FileSystem.documentDirectory + `FoodAdmin_${reportType}_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+          await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf', dialogTitle: 'Share Report PDF' });
+          } else {
+            Alert.alert('Downloaded!', 'PDF report has been saved successfully.');
+          }
+          return;
+        }
+        
+        // JSON status response
+        const status = await pollResp.json();
+        if (status.status === 'failed') {
+          throw new Error(status.error || 'PDF generation failed');
+        }
+        // status === 'processing' — keep polling
+        attempts++;
       }
-      const blob = await resp.blob();
-      const reader = new FileReader();
-      const base64 = await new Promise((resolve, reject) => {
-        reader.onloadend = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-      const fileUri = FileSystem.documentDirectory + `FoodAdmin_${reportType}_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-      await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf', dialogTitle: 'Share Report PDF' });
-      } else {
-        Alert.alert('Downloaded!', 'PDF report has been saved successfully.');
-      }
+      throw new Error('PDF generation timed out. Please try again.');
     } catch (err) {
       console.error('PDF download error:', err);
       Alert.alert('Error', err.message || 'Failed to download PDF report. Please try again.');

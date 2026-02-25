@@ -137,18 +137,46 @@ export default function Reports() {
     } catch { return fallback; }
   };
 
-  /* ═══ PDF download ═══ */
+  /* ═══ PDF download (async job-based) ═══ */
   const handleDownloadPdf = async () => {
     if (!reportData || generatingPdf) return;
     setGeneratingPdf(true);
-    setDialog({ isOpen: true, title: 'Generating PDF', message: 'Please wait while the report is being generated with item images...', type: 'info' });
+    setDialog({ isOpen: true, title: 'PDF Queued!', message: 'Your PDF report is being generated in the background. The download will start automatically once ready.', type: 'success' });
     try {
-      const r = await api.post('/analytics/report/download-pdf', { reportData, reportType }, { responseType: 'blob', timeout: 120000 });
-      const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
-      const a = document.createElement('a'); a.href = url;
-      a.setAttribute('download', `FoodAdmin_${reportType}_Report_${new Date().toISOString().split('T')[0]}.pdf`);
-      document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
-      setDialog({ isOpen: true, title: 'Downloaded!', message: 'PDF report has been downloaded successfully.', type: 'success' });
+      // 1. Start the PDF generation job
+      const startRes = await api.post('/analytics/report/download-pdf', { reportData, reportType }, { timeout: 15000 });
+      const { jobId } = startRes.data;
+      
+      if (!jobId) throw new Error('Failed to start PDF generation');
+      
+      // 2. Poll for the result
+      let attempts = 0;
+      const maxAttempts = 60; // up to ~2 minutes
+      while (attempts < maxAttempts) {
+        await new Promise(r => setTimeout(r, 2000)); // wait 2s between polls
+        const pollRes = await api.get(`/analytics/report/download-pdf/${jobId}`, { responseType: 'blob', timeout: 15000 });
+        
+        // If we get a PDF blob back, it's ready
+        if (pollRes.headers['content-type']?.includes('application/pdf')) {
+          const url = window.URL.createObjectURL(new Blob([pollRes.data], { type: 'application/pdf' }));
+          const a = document.createElement('a'); a.href = url;
+          a.setAttribute('download', `FoodAdmin_${reportType}_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+          document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
+          setDialog({ isOpen: true, title: 'Downloaded!', message: 'PDF report has been downloaded successfully.', type: 'success' });
+          return;
+        }
+        
+        // Otherwise it's a JSON status — parse it
+        const text = await new Response(pollRes.data).text();
+        const status = JSON.parse(text);
+        
+        if (status.status === 'failed') {
+          throw new Error(status.error || 'PDF generation failed');
+        }
+        // status === 'processing' — keep polling
+        attempts++;
+      }
+      throw new Error('PDF generation timed out. Please try again.');
     } catch (err) {
       console.error('PDF download error:', err);
       const msg = await parseErrorMessage(err, 'Failed to generate PDF report');

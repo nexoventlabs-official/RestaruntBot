@@ -152,6 +152,60 @@ const brevoMail = {
     
     const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
     sendSmtpEmail.subject = subject;
+    // Build top selling items HTML
+    const topItems = (reportData.topSellingItems || []).filter(i => i.quantity > 0).slice(0, 10);
+    const topItemsHtml = topItems.length > 0 ? `
+          <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
+            <h3 style="color: #1c1d21; margin-top: 0;">🔥 Top Selling Items</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr style="background: #f8f9fb;">
+                <th style="padding: 8px; text-align: left; font-size: 12px; color: #61636b; border-bottom: 2px solid #e2e3e5;">#</th>
+                <th style="padding: 8px; text-align: left; font-size: 12px; color: #61636b; border-bottom: 2px solid #e2e3e5;">Item</th>
+                <th style="padding: 8px; text-align: right; font-size: 12px; color: #61636b; border-bottom: 2px solid #e2e3e5;">Qty</th>
+                <th style="padding: 8px; text-align: right; font-size: 12px; color: #61636b; border-bottom: 2px solid #e2e3e5;">Revenue</th>
+              </tr>
+              ${topItems.map((item, idx) => `
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #e2e3e5; font-size: 13px; color: #61636b; vertical-align: middle;">${idx + 1}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #e2e3e5; vertical-align: middle;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    ${item.image ? `<img src="${item.image}" alt="${item.name}" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; vertical-align: middle;" />` : ''}
+                    <span style="font-size: 13px; color: #1c1d21; font-weight: 500;">${item.name || '-'}</span>
+                  </div>
+                </td>
+                <td style="padding: 8px; border-bottom: 1px solid #e2e3e5; text-align: right; font-size: 13px; color: #1c1d21; vertical-align: middle;">${item.quantity || 0}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #e2e3e5; text-align: right; font-size: 13px; color: #1c1d21; font-weight: 600; vertical-align: middle;">₹${(item.revenue || 0).toLocaleString()}</td>
+              </tr>`).join('')}
+            </table>
+          </div>` : '';
+
+    // Build least selling items HTML
+    const leastItems = (reportData.leastSellingItems || []).filter(i => i.quantity >= 0).slice(0, 5);
+    const leastItemsHtml = leastItems.length > 0 ? `
+          <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
+            <h3 style="color: #1c1d21; margin-top: 0;">📉 Least Selling Items</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr style="background: #f8f9fb;">
+                <th style="padding: 8px; text-align: left; font-size: 12px; color: #61636b; border-bottom: 2px solid #e2e3e5;">#</th>
+                <th style="padding: 8px; text-align: left; font-size: 12px; color: #61636b; border-bottom: 2px solid #e2e3e5;">Item</th>
+                <th style="padding: 8px; text-align: right; font-size: 12px; color: #61636b; border-bottom: 2px solid #e2e3e5;">Qty</th>
+                <th style="padding: 8px; text-align: right; font-size: 12px; color: #61636b; border-bottom: 2px solid #e2e3e5;">Revenue</th>
+              </tr>
+              ${leastItems.map((item, idx) => `
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #e2e3e5; font-size: 13px; color: #61636b; vertical-align: middle;">${idx + 1}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #e2e3e5; vertical-align: middle;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    ${item.image ? `<img src="${item.image}" alt="${item.name}" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; vertical-align: middle;" />` : ''}
+                    <span style="font-size: 13px; color: #1c1d21; font-weight: 500;">${item.name || '-'}</span>
+                  </div>
+                </td>
+                <td style="padding: 8px; border-bottom: 1px solid #e2e3e5; text-align: right; font-size: 13px; color: #1c1d21; vertical-align: middle;">${item.quantity || 0}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #e2e3e5; text-align: right; font-size: 13px; color: #1c1d21; font-weight: 600; vertical-align: middle;">₹${(item.revenue || 0).toLocaleString()}</td>
+              </tr>`).join('')}
+            </table>
+          </div>` : '';
+
     sendSmtpEmail.htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: #e63946; padding: 20px; text-align: center;">
@@ -189,8 +243,11 @@ const brevoMail = {
             <h3 style="color: #1c1d21; margin-top: 0;">Order Status</h3>
             <p>✅ Delivered: <strong>${reportData.deliveredOrders || 0}</strong></p>
             <p>❌ Cancelled: <strong>${reportData.cancelledOrders || 0}</strong></p>
-            <p> COD: <strong>${reportData.codOrders || 0}</strong> | 💳 UPI: <strong>${reportData.upiOrders || 0}</strong></p>
+            <p>💵 COD: <strong>${reportData.codOrders || 0}</strong> | 💳 UPI: <strong>${reportData.upiOrders || 0}</strong></p>
           </div>
+          
+          ${topItemsHtml}
+          ${leastItemsHtml}
         </div>
         
         <div style="padding: 20px; text-align: center; color: #61636b; font-size: 12px;">

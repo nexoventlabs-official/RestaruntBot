@@ -9,6 +9,20 @@ const authMiddleware = require('../middleware/auth');
 const { adminRateLimiter } = require('../middleware/rateLimiter');
 const router = express.Router();
 
+// In-memory store for async PDF jobs
+const pdfJobs = new Map();
+const PDF_JOB_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Cleanup expired PDF jobs every 2 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [jobId, job] of pdfJobs) {
+    if (now - job.createdAt > PDF_JOB_TTL) {
+      pdfJobs.delete(jobId);
+    }
+  }
+}, 2 * 60 * 1000);
+
 // Apply admin rate limiting
 router.use(adminRateLimiter);
 
@@ -667,21 +681,71 @@ router.post('/sync-today-revenue', authMiddleware, async (req, res) => {
   }
 });
 
-// Download Report as PDF
+// Download Report as PDF (responds immediately, generates in background)
 router.post('/report/download-pdf', authMiddleware, async (req, res) => {
   try {
     const { reportData, reportType } = req.body;
-    const { generateReportPdf } = require('../services/reportPdf');
     
-    const pdfBuffer = await generateReportPdf(reportData, reportType);
+    if (!reportData) {
+      return res.status(400).json({ error: 'No report data provided' });
+    }
     
-    const filename = `FoodAdmin_${reportType}_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+    // Generate a unique job ID
+    const jobId = `pdf_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(pdfBuffer);
+    // Store pending job
+    pdfJobs.set(jobId, { status: 'processing', createdAt: Date.now() });
+    
+    // Respond immediately with job ID
+    res.json({ success: true, jobId, message: 'PDF generation started' });
+    
+    // Generate PDF in background
+    (async () => {
+      try {
+        const { generateReportPdf } = require('../services/reportPdf');
+        const pdfBuffer = await generateReportPdf(reportData, reportType);
+        const filename = `FoodAdmin_${reportType}_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+        
+        pdfJobs.set(jobId, { status: 'ready', pdfBuffer, filename, createdAt: Date.now() });
+        logger.info('PDF generated successfully', { jobId, reportType });
+      } catch (bgError) {
+        pdfJobs.set(jobId, { status: 'failed', error: bgError.message, createdAt: Date.now() });
+        logger.error('Background PDF generation failed', { jobId, error: bgError.message, stack: bgError.stack });
+      }
+    })();
   } catch (error) {
     return logRouteError(res, 'PDF generation error', error);
+  }
+});
+
+// Poll / Download generated PDF by job ID
+router.get('/report/download-pdf/:jobId', authMiddleware, async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const job = pdfJobs.get(jobId);
+    
+    if (!job) {
+      return res.status(404).json({ error: 'PDF job not found or expired' });
+    }
+    
+    if (job.status === 'processing') {
+      return res.json({ status: 'processing', message: 'PDF is still being generated...' });
+    }
+    
+    if (job.status === 'failed') {
+      pdfJobs.delete(jobId);
+      return res.status(500).json({ status: 'failed', error: job.error || 'PDF generation failed' });
+    }
+    
+    // PDF is ready — send it
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${job.filename}"`);
+    res.send(job.pdfBuffer);
+    
+    // Clean up after download
+    pdfJobs.delete(jobId);
+  } catch (error) {
+    return logRouteError(res, 'PDF download error', error);
   }
 });
 
