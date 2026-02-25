@@ -41,7 +41,50 @@ router.get('/', auth, async (req, res) => {
   try {
     const offers = await Offer.find()
       .populate('appliedItems', 'name image variants')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Also fetch parent items referenced in appliedVariants (may not be in appliedItems)
+    const allVariantItemIds = new Set();
+    offers.forEach(offer => {
+      if (offer.appliedVariants && offer.appliedVariants.length > 0) {
+        offer.appliedVariants.forEach(v => {
+          const itemId = v.split('_')[0];
+          if (itemId) allVariantItemIds.add(itemId);
+        });
+      }
+    });
+
+    if (allVariantItemIds.size > 0) {
+      const MenuItem = require('../models/MenuItem');
+      const variantItems = await MenuItem.find(
+        { _id: { $in: [...allVariantItemIds] } },
+        'name image variants'
+      ).lean();
+      const itemMap = {};
+      variantItems.forEach(item => { itemMap[item._id.toString()] = item; });
+
+      // Merge variant-parent items into appliedItems so frontend can resolve variant details
+      offers.forEach(offer => {
+        if (offer.appliedVariants && offer.appliedVariants.length > 0) {
+          const existingIds = new Set((offer.appliedItems || []).map(i => (i._id || i).toString()));
+          const additionalItems = [];
+          offer.appliedVariants.forEach(v => {
+            const itemId = v.split('_')[0];
+            if (!existingIds.has(itemId) && itemMap[itemId]) {
+              additionalItems.push(itemMap[itemId]);
+              existingIds.add(itemId);
+            }
+          });
+          // Store original count before merging
+          offer._directItemCount = offer.appliedItems ? offer.appliedItems.length : 0;
+          if (additionalItems.length > 0) {
+            offer.appliedItems = [...(offer.appliedItems || []), ...additionalItems];
+          }
+        }
+      });
+    }
+
     res.json(offers);
   } catch (err) {
 

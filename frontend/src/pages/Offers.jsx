@@ -639,11 +639,29 @@ export default function Offers() {
                   </div>
                 )}
                 <div><p className="text-xs text-dark-400">Applied Items</p><p className="text-sm font-semibold text-dark-900">{detailOffer.appliedItems?.length || 0} items, {detailOffer.appliedVariants?.length || 0} variants</p></div>
+                {/* Applied Items with names */}
+                {detailOffer.appliedItems?.length > 0 && detailOffer.appliedVariants?.length === 0 && (
+                  <div>
+                    <p className="text-xs text-dark-400 mb-2">Items</p>
+                    <div className="space-y-2 max-h-52 overflow-y-auto">
+                      {detailOffer.appliedItems.map((item, idx) => {
+                        const name = typeof item === 'object' ? item.name : item;
+                        const img = typeof item === 'object' ? item.image : null;
+                        return (
+                          <div key={idx} className="flex items-center gap-3 p-2.5 bg-dark-50 rounded-xl">
+                            {img ? <img src={img} alt="" className="w-10 h-10 rounded-lg object-cover bg-dark-200 flex-shrink-0" onError={e => { e.target.style.display = 'none'; }} /> : <div className="w-10 h-10 rounded-lg bg-dark-200 flex items-center justify-center flex-shrink-0"><span className="text-dark-400 text-lg">🍽</span></div>}
+                            <p className="text-sm font-semibold text-dark-900 truncate">{name || 'Unknown Item'}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 {/* Variant Details */}
-                {detailOffer.appliedVariants?.length > 0 && detailOffer.appliedItems?.length > 0 && (() => {
+                {detailOffer.appliedVariants?.length > 0 && (() => {
                   const variantDetails = detailOffer.appliedVariants.map(v => {
                     const [itemId, vIdx] = v.split('_');
-                    const item = detailOffer.appliedItems.find(i => (i._id || i) === itemId);
+                    const item = (detailOffer.appliedItems || []).find(i => ((i._id || i).toString()) === itemId);
                     if (!item || !item.variants) return null;
                     const variant = item.variants[parseInt(vIdx)];
                     if (!variant) return null;
@@ -656,7 +674,7 @@ export default function Offers() {
                       <div className="space-y-2 max-h-52 overflow-y-auto">
                         {variantDetails.map(vd => (
                           <div key={vd.key} className="flex items-center gap-3 p-2.5 bg-dark-50 rounded-xl">
-                            <img src={vd.image || vd.itemImage || ''} alt="" className="w-11 h-11 rounded-lg object-cover bg-dark-200 flex-shrink-0" onError={e => { e.target.style.display = 'none'; }} />
+                            {(vd.image || vd.itemImage) ? <img src={vd.image || vd.itemImage} alt="" className="w-11 h-11 rounded-lg object-cover bg-dark-200 flex-shrink-0" onError={e => { e.target.style.display = 'none'; }} /> : <div className="w-11 h-11 rounded-lg bg-dark-200 flex items-center justify-center flex-shrink-0"><span className="text-dark-400 text-lg">🍽</span></div>}
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-semibold text-dark-900 truncate">{vd.label}</p>
                               <p className="text-xs text-dark-500">{vd.itemName}</p>

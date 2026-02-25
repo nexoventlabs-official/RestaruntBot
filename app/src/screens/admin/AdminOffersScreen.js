@@ -470,18 +470,36 @@ export default function AdminOffersScreen({ navigation }) {
                 </View>
               ) : null}
 
-              {hasItems ? (
-                <View style={styles.detailRow}>
+              {/* Applied Items with details */}
+              {hasItems && (!o.appliedVariants || o.appliedVariants.length === 0) ? (
+                <View style={{ marginTop: 4 }}>
                   <Text style={styles.detailLabel}>Applied Items</Text>
-                  <Text style={styles.detailValue}>{o.appliedItems.length} item{o.appliedItems.length !== 1 ? 's' : ''}</Text>
+                  {o.appliedItems.map((item, idx) => {
+                    const name = typeof item === 'object' ? item.name : item;
+                    const img = typeof item === 'object' ? item.image : null;
+                    return (
+                      <View key={idx} style={styles.variantCard}>
+                        {img ? (
+                          <Image source={{ uri: img }} style={styles.variantImage} />
+                        ) : (
+                          <View style={[styles.variantImage, { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }]}>
+                            <Ionicons name="fast-food-outline" size={18} color="#9CA3AF" />
+                          </View>
+                        )}
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.variantName}>{name || 'Unknown Item'}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
                 </View>
               ) : null}
 
               {/* Applied Variants with details */}
-              {o.appliedVariants && o.appliedVariants.length > 0 && o.appliedItems && o.appliedItems.length > 0 ? (() => {
+              {o.appliedVariants && o.appliedVariants.length > 0 ? (() => {
                 const variantDetails = o.appliedVariants.map(v => {
                   const [itemId, vIdx] = v.split('_');
-                  const item = o.appliedItems.find(i => (i._id || i) === itemId);
+                  const item = (o.appliedItems || []).find(i => ((i._id || i).toString()) === itemId);
                   if (!item || !item.variants) return null;
                   const variant = item.variants[parseInt(vIdx)];
                   if (!variant) return null;
