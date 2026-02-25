@@ -141,12 +141,14 @@ export default function Reports() {
   const handleDownloadPdf = async () => {
     if (!reportData || generatingPdf) return;
     setGeneratingPdf(true);
+    setDialog({ isOpen: true, title: 'Generating PDF', message: 'Please wait while the report is being generated with item images...', type: 'info' });
     try {
       const r = await api.post('/analytics/report/download-pdf', { reportData, reportType }, { responseType: 'blob', timeout: 120000 });
       const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
       const a = document.createElement('a'); a.href = url;
       a.setAttribute('download', `FoodAdmin_${reportType}_Report_${new Date().toISOString().split('T')[0]}.pdf`);
       document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
+      setDialog({ isOpen: true, title: 'Downloaded!', message: 'PDF report has been downloaded successfully.', type: 'success' });
     } catch (err) {
       console.error('PDF download error:', err);
       const msg = await parseErrorMessage(err, 'Failed to generate PDF report');
@@ -164,11 +166,12 @@ export default function Reports() {
         setDialog({ isOpen: false });
         setSendingEmail(true);
         try {
-          const r = await api.post('/analytics/report/send-email', { reportData, reportType }, { timeout: 120000 });
-          setDialog({ isOpen: true, title: 'Sent!', message: r.data.message || 'Report emailed successfully', type: 'success' });
+          const r = await api.post('/analytics/report/send-email', { reportData, reportType }, { timeout: 30000 });
+          setDialog({ isOpen: true, title: 'Email Queued!', message: r.data.message || 'Report is being generated and sent in the background. You will receive it shortly.', type: 'success' });
         } catch (err) {
           console.error('Email send error:', err);
-          setDialog({ isOpen: true, title: 'Failed', message: err.response?.data?.error || 'Failed to send email', type: 'error' });
+          const msg = err.response?.data?.error || 'Failed to send email. Please try again.';
+          setDialog({ isOpen: true, title: 'Failed', message: msg, type: 'error' });
         } finally { setSendingEmail(false); }
       },
     });

@@ -685,40 +685,55 @@ router.post('/report/download-pdf', authMiddleware, async (req, res) => {
   }
 });
 
-// Send Report via Email
+// Send Report via Email (responds immediately, processes in background)
 router.post('/report/send-email', authMiddleware, async (req, res) => {
   try {
     const { reportData, reportType } = req.body;
-    const { generateReportPdf } = require('../services/reportPdf');
-    const brevoMail = require('../services/brevoMail');
     
     const reportEmail = process.env.REPORT_EMAIL;
     if (!reportEmail) {
       return res.status(400).json({ error: 'Report email not configured' });
     }
     
-    const pdfBuffer = await generateReportPdf(reportData, reportType);
+    if (!reportData) {
+      return res.status(400).json({ error: 'No report data provided' });
+    }
     
-    const REPORT_TYPE_LABELS = {
-      today: "Today's Report",
-      weekly: 'Weekly Report',
-      monthly: 'Monthly Report',
-      yearly: 'Annual Report',
-      custom: 'Custom Range Report'
-    };
+    // Respond immediately — PDF generation + email happens in background
+    res.json({ success: true, message: `Report is being sent to ${reportEmail}` });
     
-    const reportLabel = REPORT_TYPE_LABELS[reportType] || 'Report';
-    const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
-    
-    await brevoMail.sendReportEmail(
-      reportEmail,
-      `FoodAdmin ${reportLabel} - ${dateStr}`,
-      reportData,
-      reportType,
-      pdfBuffer
-    );
-    
-    res.json({ success: true, message: `Report sent to ${reportEmail}` });
+    // Background processing
+    (async () => {
+      try {
+        const { generateReportPdf } = require('../services/reportPdf');
+        const brevoMail = require('../services/brevoMail');
+        
+        const pdfBuffer = await generateReportPdf(reportData, reportType);
+        
+        const REPORT_TYPE_LABELS = {
+          today: "Today's Report",
+          weekly: 'Weekly Report',
+          monthly: 'Monthly Report',
+          yearly: 'Annual Report',
+          custom: 'Custom Range Report'
+        };
+        
+        const reportLabel = REPORT_TYPE_LABELS[reportType] || 'Report';
+        const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+        
+        await brevoMail.sendReportEmail(
+          reportEmail,
+          `FoodAdmin ${reportLabel} - ${dateStr}`,
+          reportData,
+          reportType,
+          pdfBuffer
+        );
+        
+        logger.info('Report email sent successfully', { to: reportEmail, reportType });
+      } catch (bgError) {
+        logger.error('Background report email failed', { error: bgError.message, stack: bgError.stack });
+      }
+    })();
   } catch (error) {
     return logRouteError(res, 'Email send error', error);
   }

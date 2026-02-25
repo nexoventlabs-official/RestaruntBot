@@ -247,9 +247,9 @@ export default function ReportDetailScreen({ navigation }) {
         setSendingEmail(true);
         try {
           const res = await api.post('/analytics/report/send-email', { reportData, reportType });
-          Alert.alert('Sent!', res.data.message || 'Report emailed successfully');
+          Alert.alert('Email Queued!', res.data.message || 'Report is being generated and sent in the background. You will receive it shortly.');
         } catch (err) {
-          Alert.alert('Failed', err.response?.data?.error || 'Failed to send email');
+          Alert.alert('Failed', err.response?.data?.error || 'Failed to send email. Please try again.');
         } finally { setSendingEmail(false); }
       }},
     ]);
@@ -259,6 +259,7 @@ export default function ReportDetailScreen({ navigation }) {
   const handleDownloadPdf = useCallback(async () => {
     if (!reportData || generatingPdf) return;
     setGeneratingPdf(true);
+    Alert.alert('Generating PDF', 'Please wait while the report is being generated with item images...');
     try {
       const token = await AsyncStorage.getItem('authToken');
       const resp = await fetch(`${API_BASE_URL}/api/analytics/report/download-pdf`, {
@@ -282,11 +283,11 @@ export default function ReportDetailScreen({ navigation }) {
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf', dialogTitle: 'Share Report PDF' });
       } else {
-        Alert.alert('Downloaded', 'PDF saved successfully');
+        Alert.alert('Downloaded!', 'PDF report has been saved successfully.');
       }
     } catch (err) {
       console.error('PDF download error:', err);
-      Alert.alert('Error', err.message || 'Failed to download PDF report');
+      Alert.alert('Error', err.message || 'Failed to download PDF report. Please try again.');
     } finally { setGeneratingPdf(false); }
   }, [reportData, reportType, generatingPdf]);
 
