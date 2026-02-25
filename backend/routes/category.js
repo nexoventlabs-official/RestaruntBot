@@ -7,6 +7,7 @@ const dataEvents = require('../services/eventEmitter');
 const multer = require('multer');
 const { publicRateLimiter } = require('../middleware/rateLimiter');
 const logger = require('../services/logger');
+const { logRouteError } = require('../services/logger');
 const router = express.Router();
 
 // Rate limiting for category routes

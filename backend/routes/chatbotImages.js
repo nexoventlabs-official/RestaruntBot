@@ -1,5 +1,6 @@
 const express = require('express');
 const logger = require('../services/logger');
+const { logRouteError } = require('../services/logger');
 const router = express.Router();
 const ChatbotImage = require('../models/ChatbotImage');
 const cloudinaryService = require('../services/cloudinary');

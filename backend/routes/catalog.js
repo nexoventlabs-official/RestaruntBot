@@ -12,6 +12,7 @@ const router = express.Router();
 const authMiddleware = require('../middleware/auth');
 const catalogService = require('../services/catalogService');
 const logger = require('../services/logger');
+const { logRouteError } = require('../services/logger');
 
 // GET /api/catalog/stats - Get catalog integration status
 router.get('/stats', authMiddleware, async (req, res) => {

@@ -1,5 +1,6 @@
 const express = require('express');
 const logger = require('../services/logger');
+const { logRouteError } = require('../services/logger');
 const Order = require('../models/Order');
 const Customer = require('../models/Customer');
 const MenuItem = require('../models/MenuItem');

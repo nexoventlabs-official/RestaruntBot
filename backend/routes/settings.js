@@ -1,5 +1,6 @@
 const express = require('express');
 const logger = require('../services/logger');
+const { logRouteError } = require('../services/logger');
 const Settings = require('../models/Settings');
 const authMiddleware = require('../middleware/auth');
 const { adminRateLimiter } = require('../middleware/rateLimiter');

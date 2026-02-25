@@ -3,6 +3,7 @@ const Customer = require('../models/Customer');
 const Order = require('../models/Order');
 const authMiddleware = require('../middleware/auth');
 const { adminRateLimiter } = require('../middleware/rateLimiter');
+const { logRouteError } = require('../services/logger');
 const router = express.Router();
 
 // Apply admin rate limiting
