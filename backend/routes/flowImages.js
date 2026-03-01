@@ -5,6 +5,7 @@ const router = express.Router();
 const ChatbotImage = require('../models/ChatbotImage');
 const cloudinaryService = require('../services/cloudinary');
 const chatbotImagesService = require('../services/chatbotImages');
+const catalogService = require('../services/catalogService');
 const defaultImages = require('../config/defaultChatbotImages');
 const auth = require('../middleware/auth');
 const { adminRateLimiter } = require('../middleware/rateLimiter');
@@ -142,7 +143,38 @@ router.put('/:key', auth, upload.single('image'), async (req, res) => {
     chatbotImagesService.clearCache();
     logger.info('[Flow Images] Uploaded flow image', { key, aspectRatio });
 
-    res.json(chatbotImage);
+    // If banner was updated, auto-republish the welcome flow with new asset
+    let flowRepublishResult = null;
+    if (key === 'flow_welcome_banner') {
+      try {
+        logger.info('[Flow Images] Banner updated, republishing welcome flow...');
+        flowRepublishResult = await catalogService.republishWelcomeFlow();
+        logger.info('[Flow Images] Welcome flow republished', flowRepublishResult);
+
+        // Update .env file so new flow ID persists across restarts
+        if (flowRepublishResult.flowId) {
+          try {
+            const fs = require('fs');
+            const path = require('path');
+            const envPath = path.join(__dirname, '..', '.env');
+            let envContent = fs.readFileSync(envPath, 'utf8');
+            envContent = envContent.replace(
+              /WHATSAPP_WELCOME_FLOW_ID=.*/,
+              `WHATSAPP_WELCOME_FLOW_ID=${flowRepublishResult.flowId}`
+            );
+            fs.writeFileSync(envPath, envContent);
+            logger.info('[Flow Images] .env updated with new welcome flow ID', { flowId: flowRepublishResult.flowId });
+          } catch (envErr) {
+            logger.warn('[Flow Images] Could not update .env file', envErr.message);
+          }
+        }
+      } catch (republishErr) {
+        logger.error('[Flow Images] Failed to republish welcome flow', republishErr.message);
+        flowRepublishResult = { error: republishErr.message };
+      }
+    }
+
+    res.json({ ...chatbotImage.toObject(), flowRepublishResult });
   } catch (error) {
     return logRouteError(res, '[Flow Images] Upload error', error);
   }

@@ -1763,7 +1763,7 @@ const catalogService = {
   async buildWelcomeFlowData(flowToken = 'welcome_service') {
     const chatbotImagesService = require('./chatbotImages');
 
-    // Fetch banner + all service icons from admin-configured chatbot images
+    // Fetch all service icons from admin-configured chatbot images
     const [orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, deliveryAddressImg, visitWebsiteImg, helpSupportImg] = await Promise.all([
       chatbotImagesService.getImageUrl('flow_order_food'),
       chatbotImagesService.getImageUrl('flow_my_orders'),
@@ -1774,17 +1774,21 @@ const catalogService = {
       chatbotImagesService.getImageUrl('flow_help_support')
     ]);
 
-    // Default placeholder images if no admin image is set
-    const defaultImg = 'https://res.cloudinary.com/du53jb0t7/image/upload/v1/restaurant-bot/default-icon.png';
+    // Build service items — only include image if a valid URL is uploaded
+    const buildService = (id, title, description, imgUrl) => {
+      const item = { id, title, description };
+      if (imgUrl) item.image = imgUrl;
+      return item;
+    };
 
     const services = [
-      { id: 'order_food', title: 'Order Food', description: 'Browse our menu and place an order', image: orderFoodImg || defaultImg },
-      { id: 'my_orders', title: 'My Orders', description: 'Check order status & track delivery', image: myOrdersImg || defaultImg },
-      { id: 'view_offers', title: 'View Offers', description: 'See current deals and discounts', image: viewOffersImg || defaultImg },
-      { id: 'account_details', title: 'Account Details', description: 'View or update your profile info', image: accountDetailsImg || defaultImg },
-      { id: 'delivery_address', title: 'Delivery Address', description: 'Manage your delivery addresses', image: deliveryAddressImg || defaultImg },
-      { id: 'open_website', title: 'Visit Website', description: 'View our full website', image: visitWebsiteImg || defaultImg },
-      { id: 'help', title: 'Help & Support', description: 'Get assistance with your queries', image: helpSupportImg || defaultImg }
+      buildService('order_food', 'Order Food', 'Browse our menu and place an order', orderFoodImg),
+      buildService('my_orders', 'My Orders', 'Check order status & track delivery', myOrdersImg),
+      buildService('view_offers', 'View Offers', 'See current deals and discounts', viewOffersImg),
+      buildService('account_details', 'Account Details', 'View or update your profile info', accountDetailsImg),
+      buildService('delivery_address', 'Delivery Address', 'Manage your delivery addresses', deliveryAddressImg),
+      buildService('open_website', 'Visit Website', 'View our full website', visitWebsiteImg),
+      buildService('help', 'Help & Support', 'Get assistance with your queries', helpSupportImg)
     ];
 
     return {
@@ -1803,20 +1807,29 @@ const catalogService = {
     const chatbotImagesService = require('./chatbotImages');
     const axios = require('axios');
 
-    const FLOW_VERSION = 'v5';
-    const FLOW_NAME = `JRB Welcome Services ${FLOW_VERSION}`;
     const BANNER_ASSET_NAME = 'banner.jpg';
 
-    // Check if this version already exists and is published
+    // Find the latest Welcome flow version number
     const flows = await metaCloud.getFlows();
-    const existing = flows.find(f => f.name === FLOW_NAME);
-
-    if (existing && existing.status === 'PUBLISHED') {
-      logger.info(`Welcome Flow ${FLOW_VERSION} already exists and is published`, { flowId: existing.id });
-      process.env.WHATSAPP_WELCOME_FLOW_ID = existing.id;
+    const welcomeFlows = flows.filter(f => f.name.startsWith('JRB Welcome Services'));
+    
+    // Check if any existing version is already published — reuse it
+    const published = welcomeFlows.find(f => f.status === 'PUBLISHED');
+    if (published) {
+      logger.info('Welcome Flow already published, reusing', { flowId: published.id, name: published.name });
+      process.env.WHATSAPP_WELCOME_FLOW_ID = published.id;
       process.env.WHATSAPP_WELCOME_FLOW_STATUS = 'PUBLISHED';
-      return { flowId: existing.id, status: 'already_published' };
+      return { flowId: published.id, status: 'already_published' };
     }
+
+    // Auto-increment version
+    let maxVersion = 0;
+    welcomeFlows.forEach(f => {
+      const match = f.name.match(/v(\d+)/);
+      if (match) maxVersion = Math.max(maxVersion, parseInt(match[1]));
+    });
+    const nextVersion = maxVersion + 1;
+    const FLOW_NAME = `JRB Welcome Services v${nextVersion}`;
 
     // Helper: download image as buffer from URL
     async function downloadImageBuffer(url) {
@@ -1824,52 +1837,25 @@ const catalogService = {
       return Buffer.from(response.data);
     }
 
-    // Helper: upload banner asset and publish flow
-    async function uploadBannerAndPublish(flowId, bannerUrl) {
-      if (bannerUrl) {
-        try {
-          const imgBuffer = await downloadImageBuffer(bannerUrl);
-          await metaCloud.uploadFlowImageAsset(flowId, imgBuffer, BANNER_ASSET_NAME);
-          logger.info('Banner asset uploaded to flow', { flowId, bannerUrl: bannerUrl.substring(0, 80) });
-        } catch (assetErr) {
-          logger.warn('Could not upload banner asset, flow will show placeholder', {
-            error: assetErr.response?.data?.error?.message || assetErr.message
-          });
-        }
-      }
-    }
-
     // Get admin-configured banner URL
     const bannerUrl = await chatbotImagesService.getImageUrl('flow_welcome_banner');
-
-    // If exists as draft, try to update and publish
-    if (existing && existing.status === 'DRAFT') {
-      logger.info(`Welcome Flow ${FLOW_VERSION} exists as draft, updating...`, { flowId: existing.id });
-      try {
-        await uploadBannerAndPublish(existing.id, bannerUrl);
-        const flowJson = this.buildWelcomeFlowJSON(BANNER_ASSET_NAME);
-        await metaCloud.updateFlowJSON(existing.id, flowJson);
-        await metaCloud.publishFlow(existing.id);
-        process.env.WHATSAPP_WELCOME_FLOW_ID = existing.id;
-        process.env.WHATSAPP_WELCOME_FLOW_STATUS = 'PUBLISHED';
-        return { flowId: existing.id, status: 'published' };
-      } catch (pubErr) {
-        logger.warn(`Could not publish draft Welcome Flow ${FLOW_VERSION}, using draft mode`, {
-          flowId: existing.id,
-          error: pubErr.response?.data?.error?.message || pubErr.message
-        });
-        process.env.WHATSAPP_WELCOME_FLOW_ID = existing.id;
-        process.env.WHATSAPP_WELCOME_FLOW_STATUS = 'DRAFT';
-        return { flowId: existing.id, status: 'draft' };
-      }
-    }
 
     // Step 1: Create the Flow
     const createResult = await metaCloud.createFlow(FLOW_NAME, ['OTHER']);
     const flowId = createResult.id;
 
     // Step 2: Upload banner image as flow asset
-    await uploadBannerAndPublish(flowId, bannerUrl);
+    if (bannerUrl) {
+      try {
+        const imgBuffer = await downloadImageBuffer(bannerUrl);
+        await metaCloud.uploadFlowImageAsset(flowId, imgBuffer, BANNER_ASSET_NAME);
+        logger.info('Banner asset uploaded to flow', { flowId });
+      } catch (assetErr) {
+        logger.warn('Could not upload banner asset', {
+          error: assetErr.response?.data?.error?.message || assetErr.message
+        });
+      }
+    }
 
     // Step 3: Upload the Flow JSON (referencing banner asset by filename)
     const flowJson = this.buildWelcomeFlowJSON(BANNER_ASSET_NAME);
@@ -1880,10 +1866,10 @@ const catalogService = {
       await metaCloud.publishFlow(flowId);
       process.env.WHATSAPP_WELCOME_FLOW_ID = flowId;
       process.env.WHATSAPP_WELCOME_FLOW_STATUS = 'PUBLISHED';
-      logger.info(`Welcome Flow ${FLOW_VERSION} created and published`, { flowId });
+      logger.info(`Welcome Flow ${FLOW_NAME} created and published`, { flowId });
       return { flowId, status: 'created_and_published' };
     } catch (pubErr) {
-      logger.warn(`Welcome Flow ${FLOW_VERSION} created but publish failed, using draft mode`, {
+      logger.warn(`Welcome Flow ${FLOW_NAME} created but publish failed, using draft mode`, {
         flowId,
         error: pubErr.response?.data?.error?.message || pubErr.message
       });
@@ -1891,6 +1877,44 @@ const catalogService = {
       process.env.WHATSAPP_WELCOME_FLOW_STATUS = 'DRAFT';
       return { flowId, status: 'created_as_draft' };
     }
+  },
+
+  /**
+   * Republish the Welcome Flow with updated banner image.
+   * Creates a new flow version, uploads the banner as an asset, publishes, 
+   * then deprecates the old flow.
+   * @returns {Promise<{flowId: string, status: string, oldFlowId?: string}>}
+   */
+  async republishWelcomeFlow() {
+    const oldFlowId = process.env.WHATSAPP_WELCOME_FLOW_ID;
+    const metaCloud = require('./metaCloud');
+
+    // Force creation of a new version by temporarily clearing the published status
+    // so setupWelcomeFlow won't short-circuit on the existing published flow
+    const axios = require('axios');
+    const { accessToken } = { accessToken: process.env.META_ACCESS_TOKEN };
+
+    // Deprecate old flow first so setupWelcomeFlow creates a new one
+    if (oldFlowId) {
+      try {
+        await axios.post(
+          `https://graph.facebook.com/v24.0/${oldFlowId}`,
+          { status: 'DEPRECATED' },
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        logger.info('Deprecated old welcome flow for republish', { oldFlowId });
+      } catch (depErr) {
+        logger.warn('Could not deprecate old flow', { oldFlowId, error: depErr.message });
+      }
+    }
+
+    // Clear env so setupWelcomeFlow creates fresh
+    process.env.WHATSAPP_WELCOME_FLOW_ID = '';
+    process.env.WHATSAPP_WELCOME_FLOW_STATUS = '';
+
+    // Now setup will create a new version
+    const result = await this.setupWelcomeFlow();
+    return { ...result, oldFlowId };
   },
 
   /**

@@ -7,6 +7,7 @@ export default function FlowImages() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(null);
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
   const fileInputRefs = useRef({});
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export default function FlowImages() {
     if (!file) return;
     setUploading(key);
     setError(null);
+    setSuccess(null);
     try {
       const formData = new FormData();
       formData.append('image', file);
@@ -36,6 +38,10 @@ export default function FlowImages() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setImages(prev => prev.map(img => img.key === key ? res.data : img));
+      if (res.data.flowRepublishResult && !res.data.flowRepublishResult.error) {
+        setSuccess('Image uploaded & WhatsApp Flow republished successfully!');
+        setTimeout(() => setSuccess(null), 6000);
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Upload failed');
     } finally {
@@ -171,6 +177,17 @@ export default function FlowImages() {
           <X className="w-5 h-5" />
           {error}
           <button onClick={() => setError(null)} className="ml-auto">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Success */}
+      {success && (
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl flex items-center gap-2">
+          <Check className="w-5 h-5" />
+          {success}
+          <button onClick={() => setSuccess(null)} className="ml-auto">
             <X className="w-4 h-4" />
           </button>
         </div>
