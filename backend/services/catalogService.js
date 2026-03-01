@@ -1808,12 +1808,12 @@ const catalogService = {
   async setupWelcomeFlow() {
     const metaCloud = require('./metaCloud');
 
-    // Check if a flow already exists (v3 = with banner + image support)
+    // Check if a flow already exists (v4 = reduced banner height + updated layout)
     const flows = await metaCloud.getFlows();
-    const existing = flows.find(f => f.name === 'JRB Welcome Services v3');
+    const existing = flows.find(f => f.name === 'JRB Welcome Services v4');
 
     if (existing && existing.status === 'PUBLISHED') {
-      logger.info('Welcome Flow v3 already exists and is published', { flowId: existing.id });
+      logger.info('Welcome Flow v4 already exists and is published', { flowId: existing.id });
       process.env.WHATSAPP_WELCOME_FLOW_ID = existing.id;
       process.env.WHATSAPP_WELCOME_FLOW_STATUS = 'PUBLISHED';
       return { flowId: existing.id, status: 'already_published' };
@@ -1821,7 +1821,7 @@ const catalogService = {
 
     // If exists as draft, try to update JSON and publish
     if (existing && existing.status === 'DRAFT') {
-      logger.info('Welcome Flow v3 exists as draft, updating JSON and attempting to publish', { flowId: existing.id });
+      logger.info('Welcome Flow v4 exists as draft, updating JSON and attempting to publish', { flowId: existing.id });
       try {
         const flowJson = this.buildWelcomeFlowJSON();
         await metaCloud.updateFlowJSON(existing.id, flowJson);
@@ -1830,7 +1830,7 @@ const catalogService = {
         process.env.WHATSAPP_WELCOME_FLOW_STATUS = 'PUBLISHED';
         return { flowId: existing.id, status: 'published' };
       } catch (pubErr) {
-        logger.warn('Could not publish existing draft Welcome Flow v3, using draft mode', {
+        logger.warn('Could not publish existing draft Welcome Flow v4, using draft mode', {
           flowId: existing.id,
           error: pubErr.response?.data?.error?.message || pubErr.message
         });
@@ -1840,9 +1840,9 @@ const catalogService = {
       }
     }
 
-    // Step 1: Create the Flow (v3 with banner + image support)
+    // Step 1: Create the Flow (v4 with reduced banner height)
     const flowJson = this.buildWelcomeFlowJSON();
-    const createResult = await metaCloud.createFlow('JRB Welcome Services v3', ['OTHER']);
+    const createResult = await metaCloud.createFlow('JRB Welcome Services v4', ['OTHER']);
     const flowId = createResult.id;
 
     // Step 2: Upload the Flow JSON
@@ -1853,10 +1853,10 @@ const catalogService = {
       await metaCloud.publishFlow(flowId);
       process.env.WHATSAPP_WELCOME_FLOW_ID = flowId;
       process.env.WHATSAPP_WELCOME_FLOW_STATUS = 'PUBLISHED';
-      logger.info('Welcome Flow created and published', { flowId });
+      logger.info('Welcome Flow v4 created and published', { flowId });
       return { flowId, status: 'created_and_published' };
     } catch (pubErr) {
-      logger.warn('Welcome Flow created but publish failed, using draft mode', {
+      logger.warn('Welcome Flow v4 created but publish failed, using draft mode', {
         flowId,
         error: pubErr.response?.data?.error?.message || pubErr.message
       });
