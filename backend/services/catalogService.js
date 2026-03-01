@@ -1721,7 +1721,7 @@ const catalogService = {
                 type: 'Image',
                 src: '${data.banner_url}',
                 width: 500,
-                height: 130,
+                height: 100,
                 'scale-type': 'cover',
                 'alt-text': 'Welcome to Perivi Hotel'
               },

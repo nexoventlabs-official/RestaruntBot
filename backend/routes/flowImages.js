@@ -39,15 +39,15 @@ const FLOW_IMAGE_KEYS = [
 // Determine Cloudinary crop dimensions based on image type
 function getCropDimensions(key) {
   if (key === 'flow_welcome_banner') {
-    // Banner: 5:2 landscape ratio
-    return { width: 1000, height: 400 };
+    // Banner: 5:1 thin landscape strip
+    return { width: 1000, height: 200 };
   }
   // Service icons: 1:1 square ratio
   return { width: 600, height: 600 };
 }
 
 function getAspectRatio(key) {
-  return key === 'flow_welcome_banner' ? '5:2' : '1:1';
+  return key === 'flow_welcome_banner' ? '5:1' : '1:1';
 }
 
 // Get all flow images
