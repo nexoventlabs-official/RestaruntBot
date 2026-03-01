@@ -435,6 +435,31 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       text = responseData.selected_category;
                       messageType = 'button'; // Treat as button press for chatbot routing
                       logger.info('Flow category selected', { category: responseData.selected_category, selectedId, isOrderFlow });
+                    }
+                    // Welcome service selection flow
+                    else if (responseData.flow_token?.startsWith('welcome_service_') && responseData.selected_service) {
+                      selectedId = responseData.selected_service;
+                      text = responseData.selected_service;
+                      messageType = 'button'; // Treat as button press for chatbot routing
+                      logger.info('Flow welcome service selected', { service: responseData.selected_service, selectedId });
+                    }
+                    // Account Details form flow response
+                    else if (responseData.flow_token?.startsWith('account_form_') && responseData.customer_name) {
+                      messageType = 'flow_reply';
+                      text = JSON.stringify({ type: 'account_form', ...responseData });
+                      logger.info('Account form submitted', { phone, name: responseData.customer_name });
+                    }
+                    // Delivery Address form flow response
+                    else if (responseData.flow_token?.startsWith('address_form_') && responseData.address_line) {
+                      messageType = 'flow_reply';
+                      text = JSON.stringify({ type: 'address_form', ...responseData });
+                      logger.info('Address form submitted', { phone, address: responseData.address_line, pincode: responseData.pincode });
+                    }
+                    // Delivery Address flow — user chose "Share Location"
+                    else if (responseData.flow_token?.startsWith('address_form_') && responseData.method === 'share_location') {
+                      messageType = 'flow_reply';
+                      text = JSON.stringify({ type: 'address_share_location', ...responseData });
+                      logger.info('Address flow: user chose share location', { phone });
                     } else {
                       // Generic flow response — pass as text
                       messageType = 'flow_reply';

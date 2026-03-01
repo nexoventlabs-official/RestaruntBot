@@ -1665,6 +1665,682 @@ const catalogService = {
     const status = process.env.WHATSAPP_CATEGORY_FLOW_STATUS || 'DRAFT';
     if (status === 'BLOCKED') return null;
     return status === 'PUBLISHED' ? 'published' : 'draft';
+  },
+
+  // ============ WELCOME SERVICE SELECTION FLOW ============
+
+  /**
+   * Build the Flow JSON for the welcome service selection screen.
+   * Single-screen Flow with Dropdown showing available services.
+   * Each service has an id, title, and description.
+   *
+   * @returns {object} Flow JSON definition
+   */
+  buildWelcomeFlowJSON() {
+    return {
+      version: '6.3',
+      screens: [
+        {
+          id: 'SERVICE_SELECT',
+          title: 'Welcome',
+          terminal: true,
+          success: true,
+          data: {
+            banner_url: {
+              type: 'string',
+              __example__: 'https://res.cloudinary.com/demo/image/upload/sample.jpg'
+            },
+            services: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'order_food', title: 'Order Food', description: 'Browse our menu and place an order', image: 'https://res.cloudinary.com/demo/image/upload/sample.jpg' },
+                { id: 'my_orders', title: 'My Orders', description: 'Check order status & track delivery', image: 'https://res.cloudinary.com/demo/image/upload/sample.jpg' },
+                { id: 'view_offers', title: 'View Offers', description: 'See current deals and discounts', image: 'https://res.cloudinary.com/demo/image/upload/sample.jpg' },
+                { id: 'open_website', title: 'Visit Website', description: 'View our full website', image: 'https://res.cloudinary.com/demo/image/upload/sample.jpg' },
+                { id: 'help', title: 'Help & Support', description: 'Get assistance with your queries', image: 'https://res.cloudinary.com/demo/image/upload/sample.jpg' }
+              ]
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'welcome_service_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'Image',
+                src: '${data.banner_url}',
+                width: 500,
+                height: 200,
+                'scale-type': 'cover',
+                'alt-text': 'Welcome to Perivi Hotel'
+              },
+              {
+                type: 'TextHeading',
+                text: 'How can we help you today?'
+              },
+              {
+                type: 'TextBody',
+                text: 'Choose a service to get started with your order or check your existing orders.'
+              },
+              {
+                type: 'Dropdown',
+                name: 'selected_service',
+                label: 'Select a Service',
+                required: true,
+                'data-source': '${data.services}'
+              },
+              {
+                type: 'Footer',
+                label: 'Continue',
+                'on-click-action': {
+                  name: 'complete',
+                  payload: {
+                    selected_service: '${form.selected_service}',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    };
+  },
+
+  /**
+   * Build data payload for the welcome service selection Flow.
+   * Fetches chatbot images from admin panel for each service icon.
+   * @param {string} flowToken - Unique token to identify this flow instance
+   * @returns {Promise<object>} { services: [{id, title, description, image}], flow_token }
+   */
+  async buildWelcomeFlowData(flowToken = 'welcome_service') {
+    const chatbotImagesService = require('./chatbotImages');
+
+    // Fetch banner + all service icons from admin-configured chatbot images
+    const [bannerImg, orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, deliveryAddressImg, visitWebsiteImg, helpSupportImg] = await Promise.all([
+      chatbotImagesService.getImageUrl('flow_welcome_banner'),
+      chatbotImagesService.getImageUrl('flow_order_food'),
+      chatbotImagesService.getImageUrl('flow_my_orders'),
+      chatbotImagesService.getImageUrl('flow_view_offers'),
+      chatbotImagesService.getImageUrl('flow_account_details'),
+      chatbotImagesService.getImageUrl('flow_delivery_address'),
+      chatbotImagesService.getImageUrl('flow_visit_website'),
+      chatbotImagesService.getImageUrl('flow_help_support')
+    ]);
+
+    // Default placeholder images if no admin image is set
+    const defaultImg = 'https://res.cloudinary.com/du53jb0t7/image/upload/v1/restaurant-bot/default-icon.png';
+    const defaultBanner = 'https://res.cloudinary.com/du53jb0t7/image/upload/v1/restaurant-bot/default-banner.png';
+
+    const services = [
+      { id: 'order_food', title: 'Order Food', description: 'Browse our menu and place an order', image: orderFoodImg || defaultImg },
+      { id: 'my_orders', title: 'My Orders', description: 'Check order status & track delivery', image: myOrdersImg || defaultImg },
+      { id: 'view_offers', title: 'View Offers', description: 'See current deals and discounts', image: viewOffersImg || defaultImg },
+      { id: 'account_details', title: 'Account Details', description: 'View or update your profile info', image: accountDetailsImg || defaultImg },
+      { id: 'delivery_address', title: 'Delivery Address', description: 'Manage your delivery addresses', image: deliveryAddressImg || defaultImg },
+      { id: 'open_website', title: 'Visit Website', description: 'View our full website', image: visitWebsiteImg || defaultImg },
+      { id: 'help', title: 'Help & Support', description: 'Get assistance with your queries', image: helpSupportImg || defaultImg }
+    ];
+
+    return {
+      banner_url: bannerImg || defaultBanner,
+      services,
+      flow_token: flowToken
+    };
+  },
+
+  /**
+   * Create and publish the Welcome Service Selection Flow.
+   * Stores the Flow ID in process.env.WHATSAPP_WELCOME_FLOW_ID.
+   * @returns {Promise<{flowId: string, status: string}>}
+   */
+  async setupWelcomeFlow() {
+    const metaCloud = require('./metaCloud');
+
+    // Check if a flow already exists (v3 = with banner + image support)
+    const flows = await metaCloud.getFlows();
+    const existing = flows.find(f => f.name === 'JRB Welcome Services v3');
+
+    if (existing && existing.status === 'PUBLISHED') {
+      logger.info('Welcome Flow v3 already exists and is published', { flowId: existing.id });
+      process.env.WHATSAPP_WELCOME_FLOW_ID = existing.id;
+      process.env.WHATSAPP_WELCOME_FLOW_STATUS = 'PUBLISHED';
+      return { flowId: existing.id, status: 'already_published' };
+    }
+
+    // If exists as draft, try to update JSON and publish
+    if (existing && existing.status === 'DRAFT') {
+      logger.info('Welcome Flow v3 exists as draft, updating JSON and attempting to publish', { flowId: existing.id });
+      try {
+        const flowJson = this.buildWelcomeFlowJSON();
+        await metaCloud.updateFlowJSON(existing.id, flowJson);
+        await metaCloud.publishFlow(existing.id);
+        process.env.WHATSAPP_WELCOME_FLOW_ID = existing.id;
+        process.env.WHATSAPP_WELCOME_FLOW_STATUS = 'PUBLISHED';
+        return { flowId: existing.id, status: 'published' };
+      } catch (pubErr) {
+        logger.warn('Could not publish existing draft Welcome Flow v3, using draft mode', {
+          flowId: existing.id,
+          error: pubErr.response?.data?.error?.message || pubErr.message
+        });
+        process.env.WHATSAPP_WELCOME_FLOW_ID = existing.id;
+        process.env.WHATSAPP_WELCOME_FLOW_STATUS = 'DRAFT';
+        return { flowId: existing.id, status: 'draft' };
+      }
+    }
+
+    // Step 1: Create the Flow (v3 with banner + image support)
+    const flowJson = this.buildWelcomeFlowJSON();
+    const createResult = await metaCloud.createFlow('JRB Welcome Services v3', ['OTHER']);
+    const flowId = createResult.id;
+
+    // Step 2: Upload the Flow JSON
+    await metaCloud.updateFlowJSON(flowId, flowJson);
+
+    // Step 3: Try to publish the Flow
+    try {
+      await metaCloud.publishFlow(flowId);
+      process.env.WHATSAPP_WELCOME_FLOW_ID = flowId;
+      process.env.WHATSAPP_WELCOME_FLOW_STATUS = 'PUBLISHED';
+      logger.info('Welcome Flow created and published', { flowId });
+      return { flowId, status: 'created_and_published' };
+    } catch (pubErr) {
+      logger.warn('Welcome Flow created but publish failed, using draft mode', {
+        flowId,
+        error: pubErr.response?.data?.error?.message || pubErr.message
+      });
+      process.env.WHATSAPP_WELCOME_FLOW_ID = flowId;
+      process.env.WHATSAPP_WELCOME_FLOW_STATUS = 'DRAFT';
+      return { flowId, status: 'created_as_draft' };
+    }
+  },
+
+  /**
+   * Get the Welcome Flow ID (from env or cached).
+   * @returns {string|null}
+   */
+  getWelcomeFlowId() {
+    return process.env.WHATSAPP_WELCOME_FLOW_ID || null;
+  },
+
+  /**
+   * Get the Welcome Flow send mode (published, draft, or null if blocked).
+   * @returns {string|null} 'published', 'draft', or null if blocked/unavailable
+   */
+  getWelcomeFlowMode() {
+    const status = process.env.WHATSAPP_WELCOME_FLOW_STATUS || 'DRAFT';
+    if (status === 'BLOCKED') return null;
+    return status === 'PUBLISHED' ? 'published' : 'draft';
+  },
+
+  // ==================== ACCOUNT DETAILS FLOW ====================
+
+  /**
+   * Build the Account Details Flow JSON (WhatsApp Flows v6.3).
+   * Single screen form: Name + Mobile (pre-filled).
+   */
+  buildAccountDetailsFlowJSON() {
+    return {
+      version: '6.3',
+      screens: [
+        {
+          id: 'ACCOUNT_FORM',
+          title: 'Account Details',
+          terminal: true,
+          success: true,
+          data: {
+            customer_name: {
+              type: 'string',
+              __example__: 'John'
+            },
+            customer_phone: {
+              type: 'string',
+              __example__: '9876543210'
+            },
+            customer_email: {
+              type: 'string',
+              __example__: 'john@example.com'
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'account_form_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'TextHeading',
+                text: 'Your Account Details'
+              },
+              {
+                type: 'TextBody',
+                text: 'Fill in your details below. Your phone number is auto-filled from WhatsApp.'
+              },
+              {
+                type: 'TextInput',
+                name: 'customer_name',
+                label: 'Full Name',
+                required: true,
+                'input-type': 'text',
+                'init-value': '${data.customer_name}',
+                'helper-text': 'Enter your full name'
+              },
+              {
+                type: 'TextInput',
+                name: 'customer_phone',
+                label: 'Mobile Number',
+                required: true,
+                'input-type': 'phone',
+                'init-value': '${data.customer_phone}',
+                'helper-text': 'Your WhatsApp number (auto-filled)'
+              },
+              {
+                type: 'TextInput',
+                name: 'customer_email',
+                label: 'Email (Optional)',
+                required: false,
+                'input-type': 'email',
+                'init-value': '${data.customer_email}',
+                'helper-text': 'We\'ll send order updates here'
+              },
+              {
+                type: 'Footer',
+                label: 'Save Details',
+                'on-click-action': {
+                  name: 'complete',
+                  payload: {
+                    customer_name: '${form.customer_name}',
+                    customer_phone: '${form.customer_phone}',
+                    customer_email: '${form.customer_email}',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    };
+  },
+
+  /**
+   * Build data payload for the Account Details Flow.
+   * Pre-fills name, phone, email from existing customer profile.
+   * @param {object} customer - Customer document from DB
+   * @param {string} phone - WhatsApp phone number
+   * @returns {object}
+   */
+  buildAccountFormData(customer, phone) {
+    // Strip country code for display (91XXXXXXXXXX → XXXXXXXXXX)
+    const displayPhone = phone.length > 10 ? phone.slice(-10) : phone;
+    return {
+      customer_name: customer?.name || '',
+      customer_phone: displayPhone,
+      customer_email: customer?.email || '',
+      flow_token: `account_form_${phone}`
+    };
+  },
+
+  /**
+   * Create and publish the Account Details Flow.
+   */
+  async setupAccountFlow() {
+    const metaCloud = require('./metaCloud');
+
+    const flows = await metaCloud.getFlows();
+    const existing = flows.find(f => f.name === 'JRB Account Details v1');
+
+    if (existing && existing.status === 'PUBLISHED') {
+      logger.info('Account Flow already published', { flowId: existing.id });
+      process.env.WHATSAPP_ACCOUNT_FLOW_ID = existing.id;
+      process.env.WHATSAPP_ACCOUNT_FLOW_STATUS = 'PUBLISHED';
+      return { flowId: existing.id, status: 'already_published' };
+    }
+
+    if (existing && existing.status === 'DRAFT') {
+      logger.info('Account Flow exists as draft, updating and publishing', { flowId: existing.id });
+      try {
+        const flowJson = this.buildAccountDetailsFlowJSON();
+        await metaCloud.updateFlowJSON(existing.id, flowJson);
+        await metaCloud.publishFlow(existing.id);
+        process.env.WHATSAPP_ACCOUNT_FLOW_ID = existing.id;
+        process.env.WHATSAPP_ACCOUNT_FLOW_STATUS = 'PUBLISHED';
+        return { flowId: existing.id, status: 'published' };
+      } catch (pubErr) {
+        logger.warn('Could not publish Account Flow draft', {
+          flowId: existing.id,
+          error: pubErr.response?.data?.error?.message || pubErr.message
+        });
+        process.env.WHATSAPP_ACCOUNT_FLOW_ID = existing.id;
+        process.env.WHATSAPP_ACCOUNT_FLOW_STATUS = 'DRAFT';
+        return { flowId: existing.id, status: 'draft' };
+      }
+    }
+
+    // Create new
+    const flowJson = this.buildAccountDetailsFlowJSON();
+    const createResult = await metaCloud.createFlow('JRB Account Details v1', ['OTHER']);
+    const flowId = createResult.id;
+    await metaCloud.updateFlowJSON(flowId, flowJson);
+
+    try {
+      await metaCloud.publishFlow(flowId);
+      process.env.WHATSAPP_ACCOUNT_FLOW_ID = flowId;
+      process.env.WHATSAPP_ACCOUNT_FLOW_STATUS = 'PUBLISHED';
+      logger.info('Account Flow created and published', { flowId });
+      return { flowId, status: 'created_and_published' };
+    } catch (pubErr) {
+      logger.warn('Account Flow created but publish failed', {
+        flowId,
+        error: pubErr.response?.data?.error?.message || pubErr.message
+      });
+      process.env.WHATSAPP_ACCOUNT_FLOW_ID = flowId;
+      process.env.WHATSAPP_ACCOUNT_FLOW_STATUS = 'DRAFT';
+      return { flowId, status: 'created_as_draft' };
+    }
+  },
+
+  getAccountFlowId() {
+    return process.env.WHATSAPP_ACCOUNT_FLOW_ID || null;
+  },
+
+  getAccountFlowMode() {
+    const status = process.env.WHATSAPP_ACCOUNT_FLOW_STATUS || 'DRAFT';
+    if (status === 'BLOCKED') return null;
+    return status === 'PUBLISHED' ? 'published' : 'draft';
+  },
+
+  // ==================== DELIVERY ADDRESS FLOW ====================
+
+  /**
+   * Build the Delivery Address Flow JSON (WhatsApp Flows v6.3).
+   * Screen 1: Address form with manual entry fields + link to share location.
+   * Screen 2: Share Location prompt (completes with method=share_location).
+   */
+  buildDeliveryAddressFlowJSON() {
+    const { indianStates } = require('../config/indianStates');
+
+    const stateOptions = indianStates.map(s => ({
+      id: s.id,
+      title: s.title
+    }));
+
+    return {
+      version: '6.3',
+      screens: [
+        {
+          id: 'ADDRESS_FORM',
+          title: 'Delivery Address',
+          terminal: true,
+          success: true,
+          data: {
+            init_address: {
+              type: 'string',
+              __example__: '123 Main Street'
+            },
+            init_landmark: {
+              type: 'string',
+              __example__: 'Near City Mall'
+            },
+            init_pincode: {
+              type: 'string',
+              __example__: '500001'
+            },
+            init_district: {
+              type: 'string',
+              __example__: 'Hyderabad'
+            },
+            state_options: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' }
+                }
+              },
+              __example__: stateOptions.slice(0, 3)
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'address_form_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'TextHeading',
+                text: 'Delivery Address'
+              },
+              {
+                type: 'TextBody',
+                text: 'Enter your address manually or use your current location.'
+              },
+              {
+                type: 'EmbeddedLink',
+                text: '📍 Use Current Location',
+                'on-click-action': {
+                  name: 'navigate',
+                  next: {
+                    type: 'screen',
+                    name: 'SHARE_LOCATION'
+                  },
+                  payload: {
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              },
+              {
+                type: 'TextInput',
+                name: 'address_line',
+                label: 'Address',
+                required: true,
+                'input-type': 'text',
+                'init-value': '${data.init_address}',
+                'helper-text': 'House/Flat No., Street, Area'
+              },
+              {
+                type: 'TextInput',
+                name: 'landmark',
+                label: 'Landmark',
+                required: false,
+                'input-type': 'text',
+                'init-value': '${data.init_landmark}',
+                'helper-text': 'Nearby landmark for easy discovery'
+              },
+              {
+                type: 'TextInput',
+                name: 'pincode',
+                label: 'Pincode',
+                required: true,
+                'input-type': 'number',
+                'init-value': '${data.init_pincode}',
+                'helper-text': '6-digit pincode (auto-detects state & district)'
+              },
+              {
+                type: 'Dropdown',
+                name: 'selected_state',
+                label: 'State',
+                required: true,
+                'data-source': '${data.state_options}'
+              },
+              {
+                type: 'TextInput',
+                name: 'district',
+                label: 'District / City',
+                required: true,
+                'input-type': 'text',
+                'init-value': '${data.init_district}',
+                'helper-text': 'Your district or city name'
+              },
+              {
+                type: 'Footer',
+                label: 'Save Address',
+                'on-click-action': {
+                  name: 'complete',
+                  payload: {
+                    address_line: '${form.address_line}',
+                    landmark: '${form.landmark}',
+                    pincode: '${form.pincode}',
+                    selected_state: '${form.selected_state}',
+                    district: '${form.district}',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: 'SHARE_LOCATION',
+          title: 'Share Location',
+          terminal: true,
+          success: true,
+          data: {
+            flow_token: {
+              type: 'string',
+              __example__: 'address_form_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'TextHeading',
+                text: '📍 Share Your Location'
+              },
+              {
+                type: 'TextBody',
+                text: 'Tap the button below to continue. Then share your current location using WhatsApp\'s location feature:\n\n1️⃣ Tap the 📎 attachment button\n2️⃣ Select \"Location\"\n3️⃣ Choose \"Send Your Current Location\"\n\nYour address will be automatically filled from your location.'
+              },
+              {
+                type: 'Footer',
+                label: 'Continue',
+                'on-click-action': {
+                  name: 'complete',
+                  payload: {
+                    method: 'share_location',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    };
+  },
+
+  /**
+   * Build data payload for the Delivery Address Flow.
+   * Pre-fills from existing default address if available.
+   * @param {object} customer - Customer document
+   * @param {string} phone - WhatsApp phone number
+   * @returns {object}
+   */
+  buildAddressFormData(customer, phone) {
+    const { indianStates, findStateByName } = require('../config/indianStates');
+
+    // Find existing default address to pre-fill
+    const defaultAddr = customer?.addresses?.find(a => a.isDefault) || customer?.addresses?.[0] || {};
+
+    // Try to match existing state to dropdown id
+    let initStateId = '';
+    if (defaultAddr.state) {
+      const matched = findStateByName(defaultAddr.state);
+      if (matched) initStateId = matched.id;
+    }
+
+    return {
+      init_address: defaultAddr.address || '',
+      init_landmark: defaultAddr.landmark || '',
+      init_pincode: defaultAddr.pincode || '',
+      init_district: defaultAddr.district || '',
+      state_options: indianStates,
+      flow_token: `address_form_${phone}`
+    };
+  },
+
+  /**
+   * Create and publish the Delivery Address Flow.
+   */
+  async setupAddressFlow() {
+    const metaCloud = require('./metaCloud');
+
+    const flows = await metaCloud.getFlows();
+    const existing = flows.find(f => f.name === 'JRB Delivery Address v3');
+
+    if (existing && existing.status === 'PUBLISHED') {
+      logger.info('Address Flow already published', { flowId: existing.id });
+      process.env.WHATSAPP_ADDRESS_FLOW_ID = existing.id;
+      process.env.WHATSAPP_ADDRESS_FLOW_STATUS = 'PUBLISHED';
+      return { flowId: existing.id, status: 'already_published' };
+    }
+
+    if (existing && existing.status === 'DRAFT') {
+      logger.info('Address Flow exists as draft, updating and publishing', { flowId: existing.id });
+      try {
+        const flowJson = this.buildDeliveryAddressFlowJSON();
+        await metaCloud.updateFlowJSON(existing.id, flowJson);
+        await metaCloud.publishFlow(existing.id);
+        process.env.WHATSAPP_ADDRESS_FLOW_ID = existing.id;
+        process.env.WHATSAPP_ADDRESS_FLOW_STATUS = 'PUBLISHED';
+        return { flowId: existing.id, status: 'published' };
+      } catch (pubErr) {
+        logger.warn('Could not publish Address Flow draft', {
+          flowId: existing.id,
+          error: pubErr.response?.data?.error?.message || pubErr.message
+        });
+        process.env.WHATSAPP_ADDRESS_FLOW_ID = existing.id;
+        process.env.WHATSAPP_ADDRESS_FLOW_STATUS = 'DRAFT';
+        return { flowId: existing.id, status: 'draft' };
+      }
+    }
+
+    // Create new
+    const flowJson = this.buildDeliveryAddressFlowJSON();
+    const createResult = await metaCloud.createFlow('JRB Delivery Address v3', ['OTHER']);
+    const flowId = createResult.id;
+    await metaCloud.updateFlowJSON(flowId, flowJson);
+
+    try {
+      await metaCloud.publishFlow(flowId);
+      process.env.WHATSAPP_ADDRESS_FLOW_ID = flowId;
+      process.env.WHATSAPP_ADDRESS_FLOW_STATUS = 'PUBLISHED';
+      logger.info('Address Flow created and published', { flowId });
+      return { flowId, status: 'created_and_published' };
+    } catch (pubErr) {
+      logger.warn('Address Flow created but publish failed', {
+        flowId,
+        error: pubErr.response?.data?.error?.message || pubErr.message
+      });
+      process.env.WHATSAPP_ADDRESS_FLOW_ID = flowId;
+      process.env.WHATSAPP_ADDRESS_FLOW_STATUS = 'DRAFT';
+      return { flowId, status: 'created_as_draft' };
+    }
+  },
+
+  getAddressFlowId() {
+    return process.env.WHATSAPP_ADDRESS_FLOW_ID || null;
+  },
+
+  getAddressFlowMode() {
+    const status = process.env.WHATSAPP_ADDRESS_FLOW_STATUS || 'DRAFT';
+    if (status === 'BLOCKED') return null;
+    return status === 'PUBLISHED' ? 'published' : 'draft';
   }
 };
 

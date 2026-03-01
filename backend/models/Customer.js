@@ -8,6 +8,12 @@ const customerSchema = new mongoose.Schema({
   addresses: [{
     label: String,
     address: String,
+    landmark: String,
+    state: String,
+    district: String,
+    pincode: String,
+    latitude: Number,
+    longitude: Number,
     isDefault: Boolean
   }],
   deliveryAddress: {

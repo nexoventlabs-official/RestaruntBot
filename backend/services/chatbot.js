@@ -4355,6 +4355,14 @@ const chatbot = {
         const locationData = typeof message === 'object' ? message : {};
         
         logger.info('Location received', { location: locationData });
+
+        // ========== SPECIAL: Location shared for address saving (not order delivery) ==========
+        if (state.currentStep === 'awaiting_address_location') {
+          await this.handleLocationForAddress(phone, customer, locationData, state);
+          customer.conversationState = state;
+          await customer.save();
+          return;
+        }
         
         // Get proper address - prefer WhatsApp's address, only geocode if no address provided
         let formattedAddress = null;
@@ -4454,6 +4462,27 @@ const chatbot = {
               { id: 'home', text: 'Main Menu' }
             ]
           );
+          state.currentStep = 'main_menu';
+        }
+      }
+      // ========== FLOW REPLY: Account Form / Address Form ==========
+      else if (messageType === 'flow_reply') {
+        let flowData = {};
+        try { flowData = typeof message === 'string' ? JSON.parse(message) : message; } catch (e) { /* ignore */ }
+
+        if (flowData.type === 'account_form') {
+          await this.handleAccountFormResponse(phone, customer, flowData);
+          state.currentStep = 'main_menu';
+        } else if (flowData.type === 'address_form') {
+          await this.handleAddressFormResponse(phone, customer, flowData);
+          state.currentStep = 'main_menu';
+        } else if (flowData.type === 'address_share_location') {
+          // User chose "Use Current Location" from the address flow
+          await whatsapp.sendMessage(phone, '📍 *Share Your Location*\n\nPlease share your current location now:\n\n1️⃣ Tap the 📎 attachment button below\n2️⃣ Select *Location*\n3️⃣ Tap *Send Your Current Location*\n\nYour address will be automatically filled from your location.');
+          state.currentStep = 'awaiting_address_location';
+        } else {
+          logger.info('Unknown flow_reply type', { phone, flowData });
+          await this.sendWelcome(phone);
           state.currentStep = 'main_menu';
         }
       }
@@ -5066,6 +5095,11 @@ const chatbot = {
         await this.sendWebsiteLink(phone);
         state.currentStep = 'main_menu';
       }
+      // ========== VIEW OFFERS BUTTON (from welcome flow) ==========
+      else if (selection === 'view_offers') {
+        await this.sendViewOffers(phone);
+        state.currentStep = 'main_menu';
+      }
       // ========== ORDER FOOD BUTTON (from welcome message) ==========
       else if (selection === 'order_food') {
         await this.sendOrderFoodMenu(phone);
@@ -5074,6 +5108,31 @@ const chatbot = {
       // ========== MY ORDERS BUTTON (from welcome message) ==========
       else if (selection === 'my_orders') {
         await this.sendMyOrdersMenu(phone);
+        state.currentStep = 'main_menu';
+      }
+      // ========== ACCOUNT DETAILS (from welcome flow) ==========
+      else if (selection === 'account_details') {
+        await this.sendAccountDetails(phone, customer);
+        state.currentStep = 'main_menu';
+      }
+      // ========== DELIVERY ADDRESS (from welcome flow) ==========
+      else if (selection === 'delivery_address') {
+        await this.sendDeliveryAddressOptions(phone, customer);
+        state.currentStep = 'awaiting_address_method';
+      }
+      // ========== ENTER ADDRESS MANUALLY (sends address form flow) ==========
+      else if (selection === 'enter_address_manual') {
+        await this.sendAddressFormFlow(phone, customer);
+        state.currentStep = 'main_menu';
+      }
+      // ========== SHARE LOCATION FOR ADDRESS ==========
+      else if (selection === 'share_location_address') {
+        await whatsapp.sendMessage(phone, '📍 Please share your current location using the attachment (📎) button → Location.\n\nWe\'ll automatically fill your address from your location.');
+        state.currentStep = 'awaiting_address_location';
+      }
+      // ========== EDIT ACCOUNT (re-open form with existing data) ==========
+      else if (selection === 'edit_account') {
+        await this.sendAccountFormFlow(phone, customer);
         state.currentStep = 'main_menu';
       }
       // ========== TEXT-BASED ADD TO CART (e.g., "add biryani to cart") ==========
@@ -6080,12 +6139,46 @@ const chatbot = {
 
   // ============ WELCOME & MAIN MENU ============
   async sendWelcome(phone) {
-    // Step 1: Send restaurant image with welcome message and 3 quick reply buttons
+    // Step 1: Send restaurant image with welcome message
     const welcomeImageUrl = await chatbotImagesService.getImageUrl('welcome');
     const welcomeMessage = `🏨 *Perivi Hotel*\n\n` +
       `Welcome! 🙏\n\n` +
       `We're delighted to serve you delicious food. How can we help you today?`;
-    
+
+    // Step 2: Try sending WhatsApp Flow for service selection
+    try {
+      const flowId = catalogService.getWelcomeFlowId();
+      const flowMode = catalogService.getWelcomeFlowMode();
+      if (flowId && flowMode) {
+        const metaCloud = require('./metaCloud');
+        const flowData = await catalogService.buildWelcomeFlowData(`welcome_service_${phone}`);
+
+        // Send welcome image first (if available)
+        if (welcomeImageUrl) {
+          await whatsapp.sendImage(phone, welcomeImageUrl, welcomeMessage);
+        }
+
+        // Then send the Flow message with service selection
+        await metaCloud.sendFlowMessage(phone, {
+          flowId,
+          flowCta: 'Choose Service',
+          headerText: 'Perivi Hotel',
+          bodyText: 'Select a service below to get started.\n\n🍽️ Order Food\n📦 My Orders\n🏷️ View Offers\n👤 Account Details\n📍 Delivery Address\n🌐 Website\n❓ Help',
+          footerText: 'Powered by JRB Gold',
+          screenName: 'SERVICE_SELECT',
+          screenData: flowData,
+          flowToken: `welcome_service_${phone}`,
+          mode: flowMode
+        });
+
+        logger.info('Sent Welcome Flow service selector', { phone, flowId, mode: flowMode });
+        return;
+      }
+    } catch (flowErr) {
+      logger.info('Welcome Flow fallback to buttons', { error: flowErr.message });
+    }
+
+    // Fallback: Send with quick reply buttons (original behavior)
     await sendWithOptionalImage(phone, welcomeImageUrl, welcomeMessage, [
       { id: 'order_food', text: 'Order Food' },
       { id: 'my_orders', text: 'My Orders' },
@@ -9061,6 +9154,40 @@ const chatbot = {
     await sendWithOptionalImageCta(phone, openWebsiteImageUrl, msg, 'Open Website', websiteUrl, 'Tap to visit');
   },
 
+  // ============ VIEW OFFERS ============
+  async sendViewOffers(phone) {
+    const Offer = require('../models/Offer');
+    const activeOffers = await Offer.find({ isActive: true }).lean();
+
+    if (activeOffers.length === 0) {
+      await sendWithOptionalImage(phone, null, '🏷️ *No Active Offers*\n\nThere are no special offers right now.\n\nCheck back later for exciting deals!', [
+        { id: 'order_food', text: 'Order Food' },
+        { id: 'home', text: 'Main Menu' }
+      ]);
+      return;
+    }
+
+    let offerMessage = `🏷️ *Current Offers & Deals*\n\n`;
+    activeOffers.forEach((offer, i) => {
+      offerMessage += `${i + 1}. *${offer.title || 'Special Offer'}*\n`;
+      if (offer.description) offerMessage += `   ${offer.description}\n`;
+      if (offer.code) offerMessage += `   🎟️ Code: *${offer.code}*\n`;
+      if (offer.discountType === 'percentage' && offer.discountValue) {
+        offerMessage += `   💰 ${offer.discountValue}% OFF\n`;
+      } else if (offer.discountType === 'fixed' && offer.discountValue) {
+        offerMessage += `   💰 ₹${offer.discountValue} OFF\n`;
+      }
+      offerMessage += '\n';
+    });
+
+    offerMessage += `Tap 'Order Food' to start ordering!`;
+
+    await sendWithOptionalImage(phone, null, offerMessage, [
+      { id: 'order_food', text: 'Order Food' },
+      { id: 'home', text: 'Main Menu' }
+    ]);
+  },
+
   // ============ SERVICE TYPE SELECTION ============
   async sendServiceTypeSelection(phone) {
     const checkoutImg = await chatbotImagesService.getImageUrl('checkout');
@@ -9439,6 +9566,345 @@ const chatbot = {
       ]);
       return { success: false };
     }
+  },
+
+  // ==================== ACCOUNT DETAILS METHODS ====================
+
+  /**
+   * Send account details to user.
+   * If profile exists → show details with Edit button.
+   * If no profile → send Account Details form flow.
+   */
+  async sendAccountDetails(phone, customer) {
+    if (customer.name) {
+      // Customer has profile — show their details
+      const displayPhone = phone.length > 10 ? phone.slice(-10) : phone;
+      let detailsMsg = `👤 *Your Account Details*\n\n`;
+      detailsMsg += `📛 *Name:* ${customer.name}\n`;
+      detailsMsg += `📱 *Mobile:* ${displayPhone}\n`;
+      if (customer.email) {
+        detailsMsg += `📧 *Email:* ${customer.email}\n`;
+      }
+      detailsMsg += `\n📅 *Member since:* ${customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}\n`;
+      detailsMsg += `🛒 *Total Orders:* ${customer.totalOrders || 0}\n`;
+      detailsMsg += `💰 *Total Spent:* ₹${customer.totalSpent || 0}\n`;
+
+      if (customer.addresses && customer.addresses.length > 0) {
+        const defaultAddr = customer.addresses.find(a => a.isDefault) || customer.addresses[0];
+        detailsMsg += `\n📍 *Saved Address:* ${defaultAddr.address || ''}`;
+        if (defaultAddr.landmark) detailsMsg += `, ${defaultAddr.landmark}`;
+        if (defaultAddr.district) detailsMsg += `, ${defaultAddr.district}`;
+        if (defaultAddr.state) detailsMsg += `, ${defaultAddr.state}`;
+        if (defaultAddr.pincode) detailsMsg += ` - ${defaultAddr.pincode}`;
+        detailsMsg += `\n`;
+      }
+
+      await whatsapp.sendButtons(phone, detailsMsg, [
+        { id: 'edit_account', text: 'Edit Profile' },
+        { id: 'delivery_address', text: 'My Address' },
+        { id: 'home', text: 'Main Menu' }
+      ], 'Perivi Hotel');
+    } else {
+      // No profile — send form flow
+      await this.sendAccountFormFlow(phone, customer);
+    }
+  },
+
+  /**
+   * Send the Account Details form Flow to the user.
+   */
+  async sendAccountFormFlow(phone, customer) {
+    try {
+      const flowId = catalogService.getAccountFlowId();
+      const flowMode = catalogService.getAccountFlowMode();
+
+      if (flowId && flowMode) {
+        const metaCloud = require('./metaCloud');
+        const flowData = catalogService.buildAccountFormData(customer, phone);
+
+        await metaCloud.sendFlowMessage(phone, {
+          flowId,
+          flowCta: 'Fill Details',
+          headerText: 'Account Details',
+          bodyText: 'Please fill in your account details. Your WhatsApp number is auto-filled.',
+          footerText: 'Perivi Hotel',
+          screenName: 'ACCOUNT_FORM',
+          screenData: flowData,
+          flowToken: `account_form_${phone}`,
+          mode: flowMode
+        });
+        logger.info('Sent Account Details Flow', { phone, flowId });
+        return;
+      }
+    } catch (flowErr) {
+      logger.warn('Account Flow not available, fallback to text', { error: flowErr.message });
+    }
+
+    // Fallback: ask via text messages
+    await whatsapp.sendMessage(phone, '📝 *Account Setup*\n\nPlease send your *full name* to create your account.');
+  },
+
+  /**
+   * Handle the Account Details form response from the Flow.
+   */
+  async handleAccountFormResponse(phone, customer, flowData) {
+    const { customer_name, customer_phone, customer_email } = flowData;
+
+    // Update customer profile
+    if (customer_name) customer.name = customer_name.trim();
+    if (customer_email) customer.email = customer_email.trim();
+    // Don't overwrite phone — it's the primary key
+    await customer.save();
+
+    logger.info('Account details saved from Flow', { phone, name: customer.name, email: customer.email });
+
+    let confirmMsg = `✅ *Account Details Saved!*\n\n`;
+    confirmMsg += `📛 *Name:* ${customer.name}\n`;
+    const displayPhone = phone.length > 10 ? phone.slice(-10) : phone;
+    confirmMsg += `📱 *Mobile:* ${displayPhone}\n`;
+    if (customer.email) {
+      confirmMsg += `📧 *Email:* ${customer.email}\n`;
+    }
+    confirmMsg += `\nYour profile has been updated. You can view or edit it anytime from the welcome menu.`;
+
+    await whatsapp.sendButtons(phone, confirmMsg, [
+      { id: 'order_food', text: 'Order Food' },
+      { id: 'home', text: 'Main Menu' }
+    ], 'Perivi Hotel');
+  },
+
+  // ==================== DELIVERY ADDRESS METHODS ====================
+
+  /**
+   * Show delivery address options: Enter manually or Share location.
+   * If user already has a saved address, show it with edit option.
+   */
+  async sendDeliveryAddressOptions(phone, customer) {
+    const savedAddr = customer.addresses?.find(a => a.isDefault) || customer.addresses?.[0];
+
+    if (savedAddr && savedAddr.address) {
+      // Show existing address with options
+      let addrMsg = `📍 *Your Delivery Address*\n\n`;
+      addrMsg += `🏠 ${savedAddr.address}`;
+      if (savedAddr.landmark) addrMsg += `\n📌 *Landmark:* ${savedAddr.landmark}`;
+      if (savedAddr.district) addrMsg += `\n🏙️ *District:* ${savedAddr.district}`;
+      if (savedAddr.state) addrMsg += `\n🗺️ *State:* ${savedAddr.state}`;
+      if (savedAddr.pincode) addrMsg += `\n📮 *Pincode:* ${savedAddr.pincode}`;
+      addrMsg += `\n\nWould you like to update your address?`;
+
+      await whatsapp.sendButtons(phone, addrMsg, [
+        { id: 'enter_address_manual', text: 'Edit Address' },
+        { id: 'share_location_address', text: 'Share Location' },
+        { id: 'home', text: 'Main Menu' }
+      ], 'Perivi Hotel');
+    } else {
+      // No saved address — show options
+      await whatsapp.sendButtons(phone,
+        '📍 *Set Delivery Address*\n\nChoose how you\'d like to add your delivery address:',
+        [
+          { id: 'enter_address_manual', text: 'Enter Manually' },
+          { id: 'share_location_address', text: 'Share Location' },
+          { id: 'home', text: 'Main Menu' }
+        ], 'Perivi Hotel');
+    }
+  },
+
+  /**
+   * Send the Delivery Address form Flow to the user.
+   */
+  async sendAddressFormFlow(phone, customer) {
+    try {
+      const flowId = catalogService.getAddressFlowId();
+      const flowMode = catalogService.getAddressFlowMode();
+
+      if (flowId && flowMode) {
+        const metaCloud = require('./metaCloud');
+        const flowData = catalogService.buildAddressFormData(customer, phone);
+
+        await metaCloud.sendFlowMessage(phone, {
+          flowId,
+          flowCta: 'Fill Address',
+          headerText: 'Delivery Address',
+          bodyText: 'Enter your delivery address details. If you know your pincode, state and district will be auto-detected.',
+          footerText: 'Perivi Hotel',
+          screenName: 'ADDRESS_FORM',
+          screenData: flowData,
+          flowToken: `address_form_${phone}`,
+          mode: flowMode
+        });
+        logger.info('Sent Delivery Address Flow', { phone, flowId });
+        return;
+      }
+    } catch (flowErr) {
+      logger.warn('Address Flow not available, fallback to text', { error: flowErr.message });
+    }
+
+    // Fallback: ask via text
+    await whatsapp.sendMessage(phone, '📍 *Delivery Address*\n\nPlease send your full delivery address (including landmark, city, state, and pincode).');
+  },
+
+  /**
+   * Handle the Address form response from the Flow.
+   * Uses pincode API to validate/enrich state and district.
+   */
+  async handleAddressFormResponse(phone, customer, flowData) {
+    const { address_line, landmark, pincode, selected_state, district } = flowData;
+    const { getStateName } = require('../config/indianStates');
+    const pincodeService = require('./pincodeService');
+
+    // Resolve state name from dropdown ID
+    let stateName = getStateName(selected_state) || selected_state || '';
+    let districtName = district || '';
+
+    // If pincode is provided, try to auto-detect/validate state & district
+    if (pincode && /^\d{6}$/.test(pincode.trim())) {
+      try {
+        const pincodeResult = await pincodeService.lookupPincode(pincode.trim());
+        if (pincodeResult.success) {
+          // If user left state/district empty or we can enrich from pincode
+          if (pincodeResult.state) stateName = pincodeResult.state;
+          if (pincodeResult.district) districtName = pincodeResult.district;
+          logger.info('Address enriched from pincode', { pincode, state: stateName, district: districtName });
+        }
+      } catch (pinErr) {
+        logger.warn('Pincode lookup failed, using user-provided values', { error: pinErr.message });
+      }
+    }
+
+    // Build address entry
+    const newAddress = {
+      label: 'Home',
+      address: address_line?.trim() || '',
+      landmark: landmark?.trim() || '',
+      state: stateName,
+      district: districtName,
+      pincode: pincode?.trim() || '',
+      isDefault: true
+    };
+
+    // Replace default address or add new one
+    if (!customer.addresses) customer.addresses = [];
+
+    const existingDefaultIdx = customer.addresses.findIndex(a => a.isDefault);
+    if (existingDefaultIdx >= 0) {
+      customer.addresses[existingDefaultIdx] = newAddress;
+    } else {
+      // Mark all existing as non-default
+      customer.addresses.forEach(a => { a.isDefault = false; });
+      customer.addresses.push(newAddress);
+    }
+
+    await customer.save();
+
+    logger.info('Address saved from Flow', { phone, address: newAddress.address, state: stateName, district: districtName });
+
+    // Confirm
+    let confirmMsg = `✅ *Address Saved!*\n\n`;
+    confirmMsg += `🏠 ${newAddress.address}\n`;
+    if (newAddress.landmark) confirmMsg += `📌 *Landmark:* ${newAddress.landmark}\n`;
+    if (newAddress.district) confirmMsg += `🏙️ *District:* ${newAddress.district}\n`;
+    if (newAddress.state) confirmMsg += `🗺️ *State:* ${newAddress.state}\n`;
+    if (newAddress.pincode) confirmMsg += `📮 *Pincode:* ${newAddress.pincode}\n`;
+    confirmMsg += `\nYour delivery address has been updated.`;
+
+    await whatsapp.sendButtons(phone, confirmMsg, [
+      { id: 'order_food', text: 'Order Food' },
+      { id: 'home', text: 'Main Menu' }
+    ], 'Perivi Hotel');
+  },
+
+  /**
+   * Handle location shared for address saving (not during order).
+   * Reverse geocodes coordinate and saves as delivery address.
+   */
+  async handleLocationForAddress(phone, customer, locationData, state) {
+    const pincodeService = require('./pincodeService');
+
+    // Get formatted address from location
+    let formattedAddress = '';
+    if (locationData.address && locationData.address.trim() && locationData.address !== 'undefined') {
+      formattedAddress = locationData.address.trim();
+      if (locationData.name && locationData.name.trim() && locationData.name !== locationData.address) {
+        formattedAddress = `${locationData.name.trim()}, ${formattedAddress}`;
+      }
+    }
+
+    // Reverse geocode if no address provided
+    if (!formattedAddress && locationData.latitude && locationData.longitude) {
+      const geocoded = await this.reverseGeocode(locationData.latitude, locationData.longitude);
+      if (geocoded) formattedAddress = geocoded;
+    }
+
+    if (!formattedAddress) {
+      formattedAddress = `Location: ${locationData.latitude?.toFixed(6)}, ${locationData.longitude?.toFixed(6)}`;
+    }
+
+    // Try to extract pincode and get state/district from reverse-geocoded address
+    let extractedState = '';
+    let extractedDistrict = '';
+    let extractedPincode = '';
+
+    // Try pincode from formatted address
+    const pincodeMatch = formattedAddress.match(/\b(\d{6})\b/);
+    if (pincodeMatch) {
+      extractedPincode = pincodeMatch[1];
+      try {
+        const pincodeResult = await pincodeService.lookupPincode(extractedPincode);
+        if (pincodeResult.success) {
+          extractedState = pincodeResult.state || '';
+          extractedDistrict = pincodeResult.district || '';
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    // Build and save address
+    const newAddress = {
+      label: 'Home',
+      address: formattedAddress,
+      landmark: '',
+      state: extractedState,
+      district: extractedDistrict,
+      pincode: extractedPincode,
+      latitude: locationData.latitude,
+      longitude: locationData.longitude,
+      isDefault: true
+    };
+
+    if (!customer.addresses) customer.addresses = [];
+    const existingDefaultIdx = customer.addresses.findIndex(a => a.isDefault);
+    if (existingDefaultIdx >= 0) {
+      customer.addresses[existingDefaultIdx] = newAddress;
+    } else {
+      customer.addresses.forEach(a => { a.isDefault = false; });
+      customer.addresses.push(newAddress);
+    }
+
+    // Also update deliveryAddress for order flow compatibility
+    customer.deliveryAddress = {
+      latitude: locationData.latitude,
+      longitude: locationData.longitude,
+      address: formattedAddress,
+      updatedAt: new Date()
+    };
+
+    await customer.save();
+
+    logger.info('Address saved from location', { phone, address: formattedAddress, state: extractedState, district: extractedDistrict });
+
+    let confirmMsg = `✅ *Address Saved from Location!*\n\n`;
+    confirmMsg += `🏠 ${formattedAddress}\n`;
+    if (extractedDistrict) confirmMsg += `🏙️ *District:* ${extractedDistrict}\n`;
+    if (extractedState) confirmMsg += `🗺️ *State:* ${extractedState}\n`;
+    if (extractedPincode) confirmMsg += `📮 *Pincode:* ${extractedPincode}\n`;
+    confirmMsg += `\nYour delivery address has been updated.`;
+
+    await whatsapp.sendButtons(phone, confirmMsg, [
+      { id: 'order_food', text: 'Order Food' },
+      { id: 'delivery_address', text: 'View Address' },
+      { id: 'home', text: 'Main Menu' }
+    ], 'Perivi Hotel');
+
+    state.currentStep = 'main_menu';
   }
 };
 

@@ -182,6 +182,48 @@ const connectMongoDB = async () => {
     } catch (flowErr) {
       logger.warn('WhatsApp Category Flow setup skipped', { error: flowErr.message });
     }
+
+    // Initialize WhatsApp Flows (welcome service selection)
+    try {
+      const catalogService = require('./services/catalogService');
+      if (!catalogService.getWelcomeFlowId()) {
+        logger.info('Setting up WhatsApp Welcome Flow...');
+        const result = await catalogService.setupWelcomeFlow();
+        logger.info('WhatsApp Welcome Flow initialized', { flowId: result.flowId, status: result.status });
+      } else {
+        logger.info('WhatsApp Welcome Flow already configured', { flowId: catalogService.getWelcomeFlowId() });
+      }
+    } catch (flowErr) {
+      logger.warn('WhatsApp Welcome Flow setup skipped', { error: flowErr.message });
+    }
+
+    // Initialize WhatsApp Flows (account details form)
+    try {
+      const catalogService = require('./services/catalogService');
+      if (!catalogService.getAccountFlowId()) {
+        logger.info('Setting up WhatsApp Account Flow...');
+        const result = await catalogService.setupAccountFlow();
+        logger.info('WhatsApp Account Flow initialized', { flowId: result.flowId, status: result.status });
+      } else {
+        logger.info('WhatsApp Account Flow already configured', { flowId: catalogService.getAccountFlowId() });
+      }
+    } catch (flowErr) {
+      logger.warn('WhatsApp Account Flow setup skipped', { error: flowErr.message });
+    }
+
+    // Initialize WhatsApp Flows (delivery address form)
+    try {
+      const catalogService = require('./services/catalogService');
+      if (!catalogService.getAddressFlowId()) {
+        logger.info('Setting up WhatsApp Address Flow...');
+        const result = await catalogService.setupAddressFlow();
+        logger.info('WhatsApp Address Flow initialized', { flowId: result.flowId, status: result.status });
+      } else {
+        logger.info('WhatsApp Address Flow already configured', { flowId: catalogService.getAddressFlowId() });
+      }
+    } catch (flowErr) {
+      logger.warn('WhatsApp Address Flow setup skipped', { error: flowErr.message });
+    }
   } catch (err) {
     mongoRetryCount++;
     const delayMs = Math.min(MONGO_BASE_DELAY * Math.pow(2, Math.min(mongoRetryCount - 1, 5)), 160000);

@@ -49,7 +49,15 @@ const defaultImages = [
   { key: 'voice_error', name: 'Voice Message Error', description: 'Shown when voice message transcription or processing fails', imageUrl: '' },
   { key: 'food_type_selection', name: 'Food Type Selection', description: 'Shown when customer selects food type preference (Veg/Non-Veg/All)', imageUrl: '' },
   { key: 'checkout', name: 'Checkout', description: 'Shown when customer proceeds to checkout and selects service type', imageUrl: '' },
-  { key: 'order_history', name: 'Order History', description: 'Shown when displaying customer order history list', imageUrl: '' }
+  { key: 'order_history', name: 'Order History', description: 'Shown when displaying customer order history list', imageUrl: '' },
+  { key: 'flow_order_food', name: 'Flow: Order Food Icon', description: 'Icon shown in welcome Flow service list for Order Food option (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_my_orders', name: 'Flow: My Orders Icon', description: 'Icon shown in welcome Flow service list for My Orders option (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_view_offers', name: 'Flow: View Offers Icon', description: 'Icon shown in welcome Flow service list for View Offers option (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_visit_website', name: 'Flow: Visit Website Icon', description: 'Icon shown in welcome Flow service list for Visit Website option (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_help_support', name: 'Flow: Help & Support Icon', description: 'Icon shown in welcome Flow service list for Help & Support option (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_welcome_banner', name: 'Flow: Welcome Banner', description: 'Banner image shown at top of welcome Flow service selection screen (landscape 5:2 ratio recommended, e.g. 1000x400px)', imageUrl: '' },
+  { key: 'flow_account_details', name: 'Flow: Account Details Icon', description: 'Icon shown in welcome Flow service list for Account Details option (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_delivery_address', name: 'Flow: Delivery Address Icon', description: 'Icon shown in welcome Flow service list for Delivery Address option (square aspect ratio recommended)', imageUrl: '' }
 ];
 
 module.exports = defaultImages;

@@ -121,6 +121,22 @@ router.post('/setup-flow', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/catalog/setup-welcome-flow - Create & publish the welcome service selection Flow
+router.post('/setup-welcome-flow', authMiddleware, async (req, res) => {
+  try {
+    const result = await catalogService.setupWelcomeFlow();
+    res.json({
+      success: true,
+      message: result.status === 'already_published'
+        ? `Welcome Flow already published (ID: ${result.flowId})`
+        : `Welcome Flow created (ID: ${result.flowId}, status: ${result.status})`,
+      ...result
+    });
+  } catch (error) {
+    return logRouteError(res, 'Setup Welcome Flow error', error);
+  }
+});
+
 // GET /api/catalog/flows - List all Flows under the WABA
 router.get('/flows', authMiddleware, async (req, res) => {
   try {
@@ -136,9 +152,16 @@ router.get('/flows', authMiddleware, async (req, res) => {
 router.get('/flow-status', authMiddleware, async (req, res) => {
   const catalogService = require('../services/catalogService');
   res.json({
-    flowId: catalogService.getCategoryFlowId(),
-    flowMode: catalogService.getCategoryFlowMode(),
-    flowStatus: process.env.WHATSAPP_CATEGORY_FLOW_STATUS || 'NOT_SET',
+    categoryFlow: {
+      flowId: catalogService.getCategoryFlowId(),
+      flowMode: catalogService.getCategoryFlowMode(),
+      flowStatus: process.env.WHATSAPP_CATEGORY_FLOW_STATUS || 'NOT_SET'
+    },
+    welcomeFlow: {
+      flowId: catalogService.getWelcomeFlowId(),
+      flowMode: catalogService.getWelcomeFlowMode(),
+      flowStatus: process.env.WHATSAPP_WELCOME_FLOW_STATUS || 'NOT_SET'
+    },
     catalogEnabled: catalogService.isEnabled(),
     catalogId: process.env.META_CATALOG_ID ? 'set' : 'not_set',
     phoneNumberId: process.env.META_PHONE_NUMBER_ID ? 'set' : 'not_set',

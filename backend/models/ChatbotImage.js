@@ -50,7 +50,15 @@ const chatbotImageSchema = new mongoose.Schema({
       'voice_error',
       'food_type_selection',
       'checkout',
-      'order_history'
+      'order_history',
+      'flow_order_food',
+      'flow_my_orders',
+      'flow_view_offers',
+      'flow_visit_website',
+      'flow_help_support',
+      'flow_welcome_banner',
+      'flow_account_details',
+      'flow_delivery_address'
     ]
   },
   name: {
