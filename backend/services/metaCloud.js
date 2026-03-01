@@ -1826,6 +1826,57 @@ const metaCloud = {
   },
 
   /**
+   * Upload an image asset to a Flow (must be DRAFT).
+   * @param {string} flowId - The Flow ID
+   * @param {Buffer} imageBuffer - Image file buffer
+   * @param {string} filename - Asset filename (e.g., 'banner.png')
+   * @returns {Promise<object>} upload result
+   */
+  async uploadFlowImageAsset(flowId, imageBuffer, filename) {
+    const endTimer = startTimer('meta.uploadFlowImageAsset');
+
+    try {
+      const { accessToken } = getConfig();
+      const FormData = require('form-data');
+      const formData = new FormData();
+
+      const ext = filename.split('.').pop().toLowerCase();
+      const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
+      const contentType = mimeMap[ext] || 'image/png';
+
+      formData.append('file', imageBuffer, { filename, contentType });
+      formData.append('name', filename);
+      formData.append('asset_type', 'FLOW_JSON'); // Meta uses FLOW_JSON for all assets
+
+      const response = await metaApi.post(
+        `https://graph.facebook.com/v24.0/${flowId}/assets`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            ...formData.getHeaders()
+          },
+          maxContentLength: 10 * 1024 * 1024,
+          maxBodyLength: 10 * 1024 * 1024
+        }
+      );
+
+      logger.info('Flow image asset uploaded', { flowId, filename });
+      endTimer({ success: true });
+      return response.data;
+    } catch (error) {
+      endTimer({ success: false, error: error.message });
+      logger.error('uploadFlowImageAsset error', {
+        flowId,
+        filename,
+        error: error.response?.data?.error?.message || error.message,
+        details: error.response?.data
+      });
+      throw error;
+    }
+  },
+
+  /**
    * Publish a Flow (changes status from DRAFT to PUBLISHED).
    * @param {string} flowId - The Flow ID
    */
