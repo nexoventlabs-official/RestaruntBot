@@ -1831,6 +1831,8 @@ const metaCloud = {
    * @param {Buffer} imageBuffer - Image file buffer
    * @param {string} filename - Asset filename (e.g., 'banner.png')
    * @returns {Promise<object>} upload result
+   * @deprecated Meta Flows /assets endpoint only accepts application/json.
+   *   Use direct Cloudinary URLs in Image src instead (supported in Flow v4.0+).
    */
   async uploadFlowImageAsset(flowId, imageBuffer, filename) {
     const endTimer = startTimer('meta.uploadFlowImageAsset');

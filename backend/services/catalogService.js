@@ -1676,7 +1676,17 @@ const catalogService = {
    *
    * @returns {object} Flow JSON definition
    */
-  buildWelcomeFlowJSON(bannerAssetName = 'banner.jpg') {
+  buildWelcomeFlowJSON(bannerUrl) {
+    // Build Image child only if a valid banner URL is provided
+    const imageChild = bannerUrl ? {
+      type: 'Image',
+      src: bannerUrl,
+      width: 500,
+      height: 100,
+      'scale-type': 'cover',
+      'alt-text': 'Welcome to Perivi Hotel'
+    } : null;
+
     return {
       version: '6.3',
       screens: [
@@ -1713,14 +1723,8 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: [
-              {
-                type: 'Image',
-                src: bannerAssetName,
-                width: 500,
-                height: 100,
-                'scale-type': 'cover',
-                'alt-text': 'Welcome to Perivi Hotel'
-              },
+              // Include banner image only if URL is provided
+              ...(imageChild ? [imageChild] : []),
               {
                 type: 'TextHeading',
                 text: 'How can we help you today?'
@@ -1805,9 +1809,6 @@ const catalogService = {
   async setupWelcomeFlow() {
     const metaCloud = require('./metaCloud');
     const chatbotImagesService = require('./chatbotImages');
-    const axios = require('axios');
-
-    const BANNER_ASSET_NAME = 'banner.jpg';
 
     // Find the latest Welcome flow version number
     const flows = await metaCloud.getFlows();
@@ -1831,37 +1832,18 @@ const catalogService = {
     const nextVersion = maxVersion + 1;
     const FLOW_NAME = `JRB Welcome Services v${nextVersion}`;
 
-    // Helper: download image as buffer from URL
-    async function downloadImageBuffer(url) {
-      const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 15000 });
-      return Buffer.from(response.data);
-    }
-
-    // Get admin-configured banner URL
+    // Get admin-configured banner URL (Cloudinary direct URL used in flow JSON)
     const bannerUrl = await chatbotImagesService.getImageUrl('flow_welcome_banner');
 
     // Step 1: Create the Flow
     const createResult = await metaCloud.createFlow(FLOW_NAME, ['OTHER']);
     const flowId = createResult.id;
 
-    // Step 2: Upload banner image as flow asset
-    if (bannerUrl) {
-      try {
-        const imgBuffer = await downloadImageBuffer(bannerUrl);
-        await metaCloud.uploadFlowImageAsset(flowId, imgBuffer, BANNER_ASSET_NAME);
-        logger.info('Banner asset uploaded to flow', { flowId });
-      } catch (assetErr) {
-        logger.warn('Could not upload banner asset', {
-          error: assetErr.response?.data?.error?.message || assetErr.message
-        });
-      }
-    }
-
-    // Step 3: Upload the Flow JSON (referencing banner asset by filename)
-    const flowJson = this.buildWelcomeFlowJSON(BANNER_ASSET_NAME);
+    // Step 2: Upload the Flow JSON with banner URL directly in Image src
+    const flowJson = this.buildWelcomeFlowJSON(bannerUrl);
     await metaCloud.updateFlowJSON(flowId, flowJson);
 
-    // Step 4: Try to publish the Flow
+    // Step 3: Try to publish the Flow
     try {
       await metaCloud.publishFlow(flowId);
       process.env.WHATSAPP_WELCOME_FLOW_ID = flowId;
