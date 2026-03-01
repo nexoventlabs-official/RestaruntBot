@@ -1676,11 +1676,12 @@ const catalogService = {
    *
    * @returns {object} Flow JSON definition
    */
-  buildWelcomeFlowJSON(bannerUrl) {
-    // Build Image child only if a valid banner URL is provided
-    const imageChild = bannerUrl ? {
+  buildWelcomeFlowJSON(bannerBase64DataUri) {
+    // Build Image child only if a valid base64 data URI is provided
+    // WhatsApp Flows only render base64 data URIs in Image src, NOT external URLs
+    const imageChild = bannerBase64DataUri ? {
       type: 'Image',
-      src: bannerUrl,
+      src: bannerBase64DataUri,
       width: 500,
       height: 100,
       'scale-type': 'cover',
@@ -1832,15 +1833,29 @@ const catalogService = {
     const nextVersion = maxVersion + 1;
     const FLOW_NAME = `JRB Welcome Services v${nextVersion}`;
 
-    // Get admin-configured banner URL (Cloudinary direct URL used in flow JSON)
+    // Get admin-configured banner image and convert to base64 data URI
+    // WhatsApp Flows Image component only renders base64 data URIs, NOT external URLs
+    const axios = require('axios');
+    let bannerBase64DataUri = null;
     const bannerUrl = await chatbotImagesService.getImageUrl('flow_welcome_banner');
+    if (bannerUrl) {
+      try {
+        const imgRes = await axios.get(bannerUrl, { responseType: 'arraybuffer', timeout: 15000 });
+        const base64 = Buffer.from(imgRes.data).toString('base64');
+        const contentType = imgRes.headers['content-type'] || 'image/jpeg';
+        bannerBase64DataUri = `data:${contentType};base64,${base64}`;
+        logger.info('Banner image converted to base64', { size: imgRes.data.length, base64Length: base64.length });
+      } catch (imgErr) {
+        logger.warn('Could not download banner image for base64 conversion', { error: imgErr.message });
+      }
+    }
 
     // Step 1: Create the Flow
     const createResult = await metaCloud.createFlow(FLOW_NAME, ['OTHER']);
     const flowId = createResult.id;
 
-    // Step 2: Upload the Flow JSON with banner URL directly in Image src
-    const flowJson = this.buildWelcomeFlowJSON(bannerUrl);
+    // Step 2: Upload the Flow JSON with base64 banner embedded
+    const flowJson = this.buildWelcomeFlowJSON(bannerBase64DataUri);
     await metaCloud.updateFlowJSON(flowId, flowJson);
 
     // Step 3: Try to publish the Flow
