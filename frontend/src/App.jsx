@@ -18,6 +18,7 @@ import Track from './pages/Track';
 import Payment from './pages/Payment';
 import PaymentSuccess from './pages/PaymentSuccess';
 import ChatbotImages from './pages/ChatbotImages';
+import FlowImages from './pages/FlowImages';
 import DeliveryPersons from './pages/DeliveryPersons';
 import DeliveryLogin from './pages/DeliveryLogin';
 import DeliveryDashboard from './pages/DeliveryDashboard';
@@ -101,6 +102,7 @@ function App() {
             <Route path="offers" element={<Offers />} />
             <Route path="reports" element={<Reports />} />
             <Route path="chatbot-images" element={<ChatbotImages />} />
+            <Route path="flow-images" element={<FlowImages />} />
             <Route path="delivery-persons" element={<DeliveryPersons />} />
             <Route path="settings" element={<Settings />} />
           </Route>

@@ -17,7 +17,8 @@ export default function ChatbotImages() {
     try {
       setLoading(true);
       const res = await api.get('/chatbot-images');
-      setImages(res.data);
+      // Filter out flow images (managed on Flow Images page)
+      setImages(res.data.filter(img => !img.key.startsWith('flow_')));
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load images');
     } finally {

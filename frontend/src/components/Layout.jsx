@@ -7,6 +7,7 @@ import {
   ChefHat,
   BarChart3,
   Image,
+  Layers,
   Bike,
   Tag,
   Settings
@@ -20,6 +21,7 @@ const navItems = [
   { path: '/admin/delivery-persons', icon: Bike, label: 'Delivery', description: 'Delivery partners' },
   { path: '/admin/reports', icon: BarChart3, label: 'Reports', description: 'Analytics & reports' },
   { path: '/admin/chatbot-images', icon: Image, label: 'Bot Images', description: 'WhatsApp images' },
+  { path: '/admin/flow-images', icon: Layers, label: 'Flow Images', description: 'Flow icons & banner' },
   { path: '/admin/settings', icon: Settings, label: 'Settings', description: 'Restaurant settings' },
 ];
 
