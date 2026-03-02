@@ -75,16 +75,15 @@ export default function FlowImages() {
     );
   }
 
-  const ImageCard = ({ image, aspectClass, sizeLabel, aspectRatio }) => (
+  const ImageCard = ({ image, aspectClass, sizeLabel }) => (
     <div className="bg-white rounded-2xl shadow-card overflow-hidden">
-      {/* Image Preview — use inline paddingBottom for exact ratio */}
-      <div className="relative bg-dark-100" style={{ paddingBottom: aspectRatio ? `${(1 / aspectRatio) * 100}%` : undefined }}>
+      {/* Image Preview */}
+      <div className={`relative ${aspectClass} bg-dark-100`}>
         {image.imageUrl ? (
           <img
             src={image.imageUrl}
             alt={image.name}
-            className="absolute inset-0 w-full h-full object-cover"
-            style={aspectRatio && aspectRatio > 2 ? { borderRadius: '12px' } : {}}
+            className="w-full h-full object-cover"
             onError={(e) => {
               e.target.style.display = 'none';
               e.target.nextSibling.style.display = 'flex';
@@ -196,50 +195,11 @@ export default function FlowImages() {
       {bannerImages.length > 0 && (
         <div>
           <h2 className="text-lg font-semibold text-dark-800 mb-3">Welcome Banner</h2>
-          <p className="text-sm text-dark-400 mb-4">Displayed at the top of the welcome flow. Recommended: 1000 × 250px (4:1 ratio). Auto-cropped with rounded corners.</p>
-          <div className="flex flex-col lg:flex-row gap-6">
-            {/* Upload Card */}
-            <div className="max-w-2xl flex-1">
-              {bannerImages.map(img => (
-                <ImageCard key={img.key} image={img} sizeLabel="1000 × 250px (4:1)" aspectRatio={4} />
-              ))}
-            </div>
-            {/* WhatsApp Flow Preview */}
-            {bannerImages[0]?.imageUrl && (
-              <div className="w-72 shrink-0">
-                <p className="text-xs text-dark-400 mb-2 text-center">WhatsApp Flow Preview</p>
-                <div className="bg-white rounded-2xl shadow-card overflow-hidden border border-dark-100">
-                  {/* Mock title bar */}
-                  <div className="flex items-center justify-between px-3 py-2 border-b border-dark-100">
-                    <span className="text-xs text-dark-400">✕</span>
-                    <span className="text-sm font-semibold text-dark-900">Perivi Hotel</span>
-                    <span className="text-xs text-dark-400">⋮</span>
-                  </div>
-                  {/* Banner renders at 4:1 ratio — matches actual WhatsApp rendering */}
-                  <div className="px-3 pt-3">
-                    <div className="w-full rounded-lg overflow-hidden" style={{ aspectRatio: '4 / 1' }}>
-                      <img
-                        src={bannerImages[0].imageUrl}
-                        alt="Banner preview"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  </div>
-                  {/* Mock flow content */}
-                  <div className="px-3 py-3">
-                    <p className="font-bold text-sm text-dark-900">🍽️ How can we help you today?</p>
-                    <p className="text-xs text-dark-500 mt-1">Choose a service to get started...</p>
-                    <div className="mt-3 border border-dark-200 rounded-lg px-3 py-2 flex items-center justify-between">
-                      <span className="text-xs text-dark-400">Select a Service</span>
-                      <span className="text-xs text-dark-300">›</span>
-                    </div>
-                  </div>
-                  <div className="border-t border-dark-100 px-3 py-2">
-                    <div className="bg-dark-50 rounded-lg py-2 text-center text-xs text-dark-400">Continue</div>
-                  </div>
-                </div>
-              </div>
-            )}
+          <p className="text-sm text-dark-400 mb-4">Displayed at the top of the welcome flow. Recommended: 1000 × 200px (5:1 ratio). Auto-cropped with rounded corners.</p>
+          <div className="max-w-2xl">
+            {bannerImages.map(img => (
+              <ImageCard key={img.key} image={img} aspectClass="aspect-[5/1]" sizeLabel="1000 × 200px (5:1)" />
+            ))}
           </div>
         </div>
       )}
@@ -251,7 +211,7 @@ export default function FlowImages() {
           <p className="text-sm text-dark-400 mb-4">Square icons for each service in the welcome flow dropdown. Recommended: 600 × 600px (1:1 ratio)</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {iconImages.map(img => (
-              <ImageCard key={img.key} image={img} sizeLabel="600 × 600px (1:1)" aspectRatio={1} />
+              <ImageCard key={img.key} image={img} aspectClass="aspect-square" sizeLabel="600 × 600px (1:1)" />
             ))}
           </div>
         </div>
@@ -264,7 +224,7 @@ export default function FlowImages() {
           <div>
             <h4 className="font-medium text-blue-900">Flow Image Guidelines</h4>
             <ul className="text-sm text-blue-700 mt-2 space-y-1">
-              <li>• <strong>Banner:</strong> 1000 × 250px (4:1 ratio) with rounded corners — auto-cropped on upload</li>
+              <li>• <strong>Banner:</strong> 1000 × 200px (5:1 landscape) with rounded corners — auto-cropped on upload</li>
               <li>• <strong>Service Icons:</strong> 600 × 600px (1:1 square) — auto-cropped on upload</li>
               <li>• Supported formats: JPG, PNG, WebP</li>
               <li>• Max file size: 10MB</li>
