@@ -1726,7 +1726,7 @@ const catalogService = {
       version: '7.3',
       screens: [
         {
-          id: 'SERVICE_SELECT',
+          id: 'WELCOME_SERVICES',
           title: 'Perivi Hotel',
           terminal: true,
           success: true,

@@ -6165,7 +6165,7 @@ const chatbot = {
           headerText: 'Perivi Hotel',
           bodyText: 'Select a service below to get started.\n\n🍽️ Order Food\n📦 My Orders\n🏷️ View Offers\n👤 Account Details\n📍 Delivery Address\n🌐 Website\n❓ Help',
           footerText: 'Powered by JRB Gold',
-          screenName: 'SERVICE_SELECT',
+          screenName: 'WELCOME_SERVICES',
           screenData: flowData,
           flowToken: `welcome_service_${phone}`,
           mode: flowMode
