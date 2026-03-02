@@ -1679,15 +1679,17 @@ const catalogService = {
   buildWelcomeFlowJSON(bannerBase64 = null) {
     // WhatsApp Flows Image `src` requires RAW base64 strings (no data:image/...;base64, prefix).
     // Banner is embedded directly in flow JSON; service icons go via dropdown `image` field.
+    // Layout matches AP Government WhatsApp Flow style: Banner → Text → Dropdown → Confirm
     const children = [];
 
-    // Banner image at top — 5:1 ratio matching AP Government flow banner style
+    // Banner image at top — 8:1 ratio (1000×125)
+    // Rounded corners are applied automatically by WhatsApp Flows renderer
     if (bannerBase64) {
       children.push({
         type: 'Image',
         src: bannerBase64,
         width: 1000,
-        height: 200,
+        height: 125,
         'scale-type': 'cover',
         'alt-text': 'Perivi Hotel Welcome Banner'
       });
@@ -1695,23 +1697,19 @@ const catalogService = {
 
     children.push(
       {
-        type: 'TextHeading',
-        text: '🍽️ How can we help you today?'
-      },
-      {
         type: 'TextBody',
-        text: 'Choose a service to get started with your order or check your existing orders.'
+        text: 'Choose from one of the Hotel Services'
       },
       {
         type: 'Dropdown',
         name: 'selected_service',
-        label: 'Select a Service',
+        label: 'Select Hotel Service',
         required: true,
         'data-source': '${data.services}'
       },
       {
         type: 'Footer',
-        label: 'Continue',
+        label: 'Confirm',
         'on-click-action': {
           name: 'complete',
           payload: {
@@ -1727,7 +1725,7 @@ const catalogService = {
       screens: [
         {
           id: 'SERVICE_SELECT',
-          title: 'Perivi Hotel',
+          title: 'Service Selection',
           terminal: true,
           success: true,
           data: {

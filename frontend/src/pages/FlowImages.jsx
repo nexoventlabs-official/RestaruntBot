@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Upload, RefreshCw, Image as ImageIcon, Check, X, Loader2 } from 'lucide-react';
+import { Upload, RefreshCw, Image as ImageIcon, Check, X, Loader2, RotateCcw } from 'lucide-react';
 import api from '../api';
 
 export default function FlowImages() {
@@ -8,6 +8,7 @@ export default function FlowImages() {
   const [uploading, setUploading] = useState(null);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [republishing, setRepublishing] = useState(false);
   const fileInputRefs = useRef({});
 
   useEffect(() => {
@@ -58,6 +59,22 @@ export default function FlowImages() {
       setError(err.response?.data?.error || 'Reset failed');
     } finally {
       setUploading(null);
+    }
+  };
+
+  const handleRepublish = async () => {
+    if (!confirm('Create a new version of the Welcome Flow? The old flow will be deprecated.')) return;
+    setRepublishing(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await api.post('/catalog/republish-welcome-flow');
+      setSuccess(`New Welcome Flow version created! Flow ID: ${res.data.flowId} (${res.data.status})`);
+      setTimeout(() => setSuccess(null), 8000);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to republish welcome flow');
+    } finally {
+      setRepublishing(false);
     }
   };
 
@@ -160,13 +177,23 @@ export default function FlowImages() {
           <h1 className="text-2xl font-bold text-dark-900">Flow Images</h1>
           <p className="text-dark-500 mt-1">Manage WhatsApp Flow images (banner &amp; service icons)</p>
         </div>
-        <button
-          onClick={fetchImages}
-          className="flex items-center gap-2 px-4 py-2 bg-dark-100 hover:bg-dark-200 rounded-xl transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleRepublish}
+            disabled={republishing}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-colors disabled:opacity-50"
+          >
+            {republishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+            {republishing ? 'Creating...' : 'New Flow Version'}
+          </button>
+          <button
+            onClick={fetchImages}
+            className="flex items-center gap-2 px-4 py-2 bg-dark-100 hover:bg-dark-200 rounded-xl transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Error */}
@@ -195,10 +222,10 @@ export default function FlowImages() {
       {bannerImages.length > 0 && (
         <div>
           <h2 className="text-lg font-semibold text-dark-800 mb-3">Welcome Banner</h2>
-          <p className="text-sm text-dark-400 mb-4">Displayed at the top of the welcome flow. Recommended: 1000 × 200px (5:1 ratio). Auto-cropped with rounded corners.</p>
+          <p className="text-sm text-dark-400 mb-4">Displayed at the top of the welcome flow. Recommended: 1000 × 125px (8:1 ratio). Auto-resized to fit (no cropping) with rounded corners.</p>
           <div className="max-w-2xl">
             {bannerImages.map(img => (
-              <ImageCard key={img.key} image={img} aspectClass="aspect-[5/1]" sizeLabel="1000 × 200px (5:1)" />
+              <ImageCard key={img.key} image={img} aspectClass="aspect-[8/1]" sizeLabel="1000 × 125px (8:1)" />
             ))}
           </div>
         </div>
@@ -224,7 +251,7 @@ export default function FlowImages() {
           <div>
             <h4 className="font-medium text-blue-900">Flow Image Guidelines</h4>
             <ul className="text-sm text-blue-700 mt-2 space-y-1">
-              <li>• <strong>Banner:</strong> 1000 × 200px (5:1 landscape) with rounded corners — auto-cropped on upload</li>
+              <li>• <strong>Banner:</strong> 1000 × 125px (8:1 landscape) with rounded corners — auto-cropped on upload</li>
               <li>• <strong>Service Icons:</strong> 600 × 600px (1:1 square) — auto-cropped on upload</li>
               <li>• Supported formats: JPG, PNG, WebP</li>
               <li>• Max file size: 10MB</li>

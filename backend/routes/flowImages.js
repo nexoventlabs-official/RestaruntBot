@@ -40,15 +40,15 @@ const FLOW_IMAGE_KEYS = [
 // Determine Cloudinary crop dimensions based on image type
 function getCropDimensions(key) {
   if (key === 'flow_welcome_banner') {
-    // Banner: 5:1 ratio — matching AP Government flow banner style
-    return { width: 1000, height: 200 };
+    // Banner: 8:1 ratio
+    return { width: 1000, height: 125 };
   }
   // Service icons: 1:1 square ratio
   return { width: 600, height: 600 };
 }
 
 function getAspectRatio(key) {
-  return key === 'flow_welcome_banner' ? '5:1' : '1:1';
+  return key === 'flow_welcome_banner' ? '8:1' : '1:1';
 }
 
 // Get all flow images
@@ -113,7 +113,10 @@ router.put('/:key', auth, upload.single('image'), async (req, res) => {
           folder: 'restaurant-bot/flow-images',
           public_id: `flow_${key}_${Date.now()}`,
           transformation: [
-            { width, height, crop: 'fill', gravity: 'center' },
+            // Banner: pad to 8:1 (no crop, full image preserved); Icons: fill to square
+            key === 'flow_welcome_banner'
+              ? { width, height, crop: 'pad', background: 'auto', gravity: 'center' }
+              : { width, height, crop: 'fill', gravity: 'center' },
             // Rounded corners for banner (matching AP Government flow style)
             ...(key === 'flow_welcome_banner' ? [{ radius: 20 }] : []),
             { quality: 'auto:best', fetch_format: 'png' }
