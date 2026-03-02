@@ -197,10 +197,47 @@ export default function FlowImages() {
         <div>
           <h2 className="text-lg font-semibold text-dark-800 mb-3">Welcome Banner</h2>
           <p className="text-sm text-dark-400 mb-4">Displayed at the top of the welcome flow. Recommended: 1000 × 200px (5:1 ratio). Auto-cropped with rounded corners.</p>
-          <div className="max-w-2xl">
-            {bannerImages.map(img => (
-              <ImageCard key={img.key} image={img} sizeLabel="1000 × 200px (5:1)" aspectRatio={5} />
-            ))}
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Upload Card */}
+            <div className="max-w-2xl flex-1">
+              {bannerImages.map(img => (
+                <ImageCard key={img.key} image={img} sizeLabel="1000 × 200px (5:1)" aspectRatio={5} />
+              ))}
+            </div>
+            {/* WhatsApp Flow Preview */}
+            {bannerImages[0]?.imageUrl && (
+              <div className="w-72 shrink-0">
+                <p className="text-xs text-dark-400 mb-2 text-center">WhatsApp Flow Preview</p>
+                <div className="bg-white rounded-2xl shadow-card overflow-hidden border border-dark-100">
+                  {/* Mock title bar */}
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-dark-100">
+                    <span className="text-xs text-dark-400">✕</span>
+                    <span className="text-sm font-semibold text-dark-900">Perivi Hotel</span>
+                    <span className="text-xs text-dark-400">⋮</span>
+                  </div>
+                  {/* Banner renders at full width, natural height */}
+                  <div className="px-3 pt-3">
+                    <img
+                      src={bannerImages[0].imageUrl}
+                      alt="Banner preview"
+                      className="w-full rounded-lg"
+                    />
+                  </div>
+                  {/* Mock flow content */}
+                  <div className="px-3 py-3">
+                    <p className="font-bold text-sm text-dark-900">🍽️ How can we help you today?</p>
+                    <p className="text-xs text-dark-500 mt-1">Choose a service to get started...</p>
+                    <div className="mt-3 border border-dark-200 rounded-lg px-3 py-2 flex items-center justify-between">
+                      <span className="text-xs text-dark-400">Select a Service</span>
+                      <span className="text-xs text-dark-300">›</span>
+                    </div>
+                  </div>
+                  <div className="border-t border-dark-100 px-3 py-2">
+                    <div className="bg-dark-50 rounded-lg py-2 text-center text-xs text-dark-400">Continue</div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
