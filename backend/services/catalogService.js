@@ -1676,24 +1676,58 @@ const catalogService = {
    *
    * @returns {object} Flow JSON definition
    */
-  buildWelcomeFlowJSON(bannerBase64DataUri) {
-    // Build Image child only if a valid base64 data URI is provided
-    // WhatsApp Flows only render base64 data URIs in Image src, NOT external URLs
-    const imageChild = bannerBase64DataUri ? {
-      type: 'Image',
-      src: bannerBase64DataUri,
-      width: 500,
-      height: 100,
-      'scale-type': 'cover',
-      'alt-text': 'Welcome to Perivi Hotel'
-    } : null;
+  buildWelcomeFlowJSON(bannerBase64 = null) {
+    // WhatsApp Flows Image `src` requires RAW base64 strings (no data:image/...;base64, prefix).
+    // Banner is embedded directly in flow JSON; service icons go via dropdown `image` field.
+    const children = [];
+
+    // Banner image at top (if provided)
+    if (bannerBase64) {
+      children.push({
+        type: 'Image',
+        src: bannerBase64,
+        width: 1000,
+        height: 200,
+        'scale-type': 'contain',
+        'alt-text': 'Perivi Hotel Welcome Banner'
+      });
+    }
+
+    children.push(
+      {
+        type: 'TextHeading',
+        text: '🍽️ How can we help you today?'
+      },
+      {
+        type: 'TextBody',
+        text: 'Choose a service to get started with your order or check your existing orders.'
+      },
+      {
+        type: 'Dropdown',
+        name: 'selected_service',
+        label: 'Select a Service',
+        required: true,
+        'data-source': '${data.services}'
+      },
+      {
+        type: 'Footer',
+        label: 'Continue',
+        'on-click-action': {
+          name: 'complete',
+          payload: {
+            selected_service: '${form.selected_service}',
+            flow_token: '${data.flow_token}'
+          }
+        }
+      }
+    );
 
     return {
-      version: '6.3',
+      version: '7.3',
       screens: [
         {
           id: 'SERVICE_SELECT',
-          title: 'Welcome',
+          title: 'Perivi Hotel',
           terminal: true,
           success: true,
           data: {
@@ -1709,11 +1743,8 @@ const catalogService = {
                 }
               },
               __example__: [
-                { id: 'order_food', title: 'Order Food', description: 'Browse our menu and place an order', image: 'https://res.cloudinary.com/demo/image/upload/sample.jpg' },
-                { id: 'my_orders', title: 'My Orders', description: 'Check order status & track delivery', image: 'https://res.cloudinary.com/demo/image/upload/sample.jpg' },
-                { id: 'view_offers', title: 'View Offers', description: 'See current deals and discounts', image: 'https://res.cloudinary.com/demo/image/upload/sample.jpg' },
-                { id: 'open_website', title: 'Visit Website', description: 'View our full website', image: 'https://res.cloudinary.com/demo/image/upload/sample.jpg' },
-                { id: 'help', title: 'Help & Support', description: 'Get assistance with your queries', image: 'https://res.cloudinary.com/demo/image/upload/sample.jpg' }
+                { id: 'order_food', title: 'Order Food', description: 'Browse our menu', image: 'iVBORw0KGgo...' },
+                { id: 'my_orders', title: 'My Orders', description: 'Track delivery', image: 'iVBORw0KGgo...' }
               ]
             },
             flow_token: {
@@ -1723,36 +1754,7 @@ const catalogService = {
           },
           layout: {
             type: 'SingleColumnLayout',
-            children: [
-              // Include banner image only if URL is provided
-              ...(imageChild ? [imageChild] : []),
-              {
-                type: 'TextHeading',
-                text: 'How can we help you today?'
-              },
-              {
-                type: 'TextBody',
-                text: 'Choose a service to get started with your order or check your existing orders.'
-              },
-              {
-                type: 'Dropdown',
-                name: 'selected_service',
-                label: 'Select a Service',
-                required: true,
-                'data-source': '${data.services}'
-              },
-              {
-                type: 'Footer',
-                label: 'Continue',
-                'on-click-action': {
-                  name: 'complete',
-                  payload: {
-                    selected_service: '${form.selected_service}',
-                    flow_token: '${data.flow_token}'
-                  }
-                }
-              }
-            ]
+            children
           }
         }
       ]
@@ -1760,8 +1762,29 @@ const catalogService = {
   },
 
   /**
+   * Download an image from a URL and return RAW base64 string.
+   * WhatsApp Flows Image `src` requires raw base64 (no data:image/...;base64, prefix).
+   * @param {string} url - Cloudinary or any image URL
+   * @returns {Promise<string|null>} Raw base64 string or null on failure
+   */
+  async _imageUrlToRawBase64(url) {
+    if (!url) return null;
+    try {
+      const axios = require('axios');
+      const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 15000 });
+      const base64 = Buffer.from(response.data).toString('base64');
+      // Strip any data URI prefix just in case (safety)
+      return base64.replace(/^data:image\/[^;]+;base64,/, '');
+    } catch (err) {
+      logger.warn('Failed to convert image URL to base64', { url, error: err.message });
+      return null;
+    }
+  },
+
+  /**
    * Build data payload for the welcome service selection Flow.
    * Fetches chatbot images from admin panel for each service icon.
+   * Converts Cloudinary URLs to raw base64 for WhatsApp Flow compatibility.
    * @param {string} flowToken - Unique token to identify this flow instance
    * @returns {Promise<object>} { services: [{id, title, description, image}], flow_token }
    */
@@ -1779,21 +1802,33 @@ const catalogService = {
       chatbotImagesService.getImageUrl('flow_help_support')
     ]);
 
-    // Build service items — only include image if a valid URL is uploaded
-    const buildService = (id, title, description, imgUrl) => {
+    // Convert Cloudinary URLs to raw base64 (WhatsApp Flows require raw base64, not data URIs)
+    const toBase64 = (url) => this._imageUrlToRawBase64(url);
+    const [orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, deliveryAddressB64, visitWebsiteB64, helpSupportB64] = await Promise.all([
+      toBase64(orderFoodImg),
+      toBase64(myOrdersImg),
+      toBase64(viewOffersImg),
+      toBase64(accountDetailsImg),
+      toBase64(deliveryAddressImg),
+      toBase64(visitWebsiteImg),
+      toBase64(helpSupportImg)
+    ]);
+
+    // Build service items — only include image if base64 conversion succeeded
+    const buildService = (id, title, description, base64Img) => {
       const item = { id, title, description };
-      if (imgUrl) item.image = imgUrl;
+      if (base64Img) item.image = base64Img;
       return item;
     };
 
     const services = [
-      buildService('order_food', 'Order Food', 'Browse our menu and place an order', orderFoodImg),
-      buildService('my_orders', 'My Orders', 'Check order status & track delivery', myOrdersImg),
-      buildService('view_offers', 'View Offers', 'See current deals and discounts', viewOffersImg),
-      buildService('account_details', 'Account Details', 'View or update your profile info', accountDetailsImg),
-      buildService('delivery_address', 'Delivery Address', 'Manage your delivery addresses', deliveryAddressImg),
-      buildService('open_website', 'Visit Website', 'View our full website', visitWebsiteImg),
-      buildService('help', 'Help & Support', 'Get assistance with your queries', helpSupportImg)
+      buildService('order_food', 'Order Food', 'Browse our menu and place an order', orderFoodB64),
+      buildService('my_orders', 'My Orders', 'Check order status & track delivery', myOrdersB64),
+      buildService('view_offers', 'View Offers', 'See current deals and discounts', viewOffersB64),
+      buildService('account_details', 'Account Details', 'View or update your profile info', accountDetailsB64),
+      buildService('delivery_address', 'Delivery Address', 'Manage your delivery addresses', deliveryAddressB64),
+      buildService('open_website', 'Visit Website', 'View our full website', visitWebsiteB64),
+      buildService('help', 'Help & Support', 'Get assistance with your queries', helpSupportB64)
     ];
 
     return {
@@ -1809,7 +1844,6 @@ const catalogService = {
    */
   async setupWelcomeFlow() {
     const metaCloud = require('./metaCloud');
-    const chatbotImagesService = require('./chatbotImages');
 
     // Find the latest Welcome flow version number
     const flows = await metaCloud.getFlows();
@@ -1833,29 +1867,15 @@ const catalogService = {
     const nextVersion = maxVersion + 1;
     const FLOW_NAME = `JRB Welcome Services v${nextVersion}`;
 
-    // Get admin-configured banner image and convert to base64 data URI
-    // WhatsApp Flows Image component only renders base64 data URIs, NOT external URLs
-    const axios = require('axios');
-    let bannerBase64DataUri = null;
-    const bannerUrl = await chatbotImagesService.getImageUrl('flow_welcome_banner');
-    if (bannerUrl) {
-      try {
-        const imgRes = await axios.get(bannerUrl, { responseType: 'arraybuffer', timeout: 15000 });
-        const base64 = Buffer.from(imgRes.data).toString('base64');
-        const contentType = imgRes.headers['content-type'] || 'image/jpeg';
-        bannerBase64DataUri = `data:${contentType};base64,${base64}`;
-        logger.info('Banner image converted to base64', { size: imgRes.data.length, base64Length: base64.length });
-      } catch (imgErr) {
-        logger.warn('Could not download banner image for base64 conversion', { error: imgErr.message });
-      }
-    }
-
     // Step 1: Create the Flow
     const createResult = await metaCloud.createFlow(FLOW_NAME, ['OTHER']);
     const flowId = createResult.id;
 
-    // Step 2: Upload the Flow JSON with base64 banner embedded
-    const flowJson = this.buildWelcomeFlowJSON(bannerBase64DataUri);
+    // Step 2: Upload the Flow JSON with banner image (raw base64)
+    const chatbotImagesService = require('./chatbotImages');
+    const bannerUrl = await chatbotImagesService.getImageUrl('flow_welcome_banner');
+    const bannerBase64 = await this._imageUrlToRawBase64(bannerUrl);
+    const flowJson = this.buildWelcomeFlowJSON(bannerBase64);
     await metaCloud.updateFlowJSON(flowId, flowJson);
 
     // Step 3: Try to publish the Flow
