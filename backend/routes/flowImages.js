@@ -145,38 +145,40 @@ router.put('/:key', auth, upload.single('image'), async (req, res) => {
     chatbotImagesService.clearCache();
     logger.info('[Flow Images] Uploaded flow image', { key, aspectRatio });
 
-    // Auto-republish welcome flow when ANY flow image is updated (banner or service icon)
-    // Banner is embedded in flow JSON; service icons go in data payload at send time
-    // but republish ensures the flow is always fresh with latest banner
-    let flowRepublishResult = null;
-    try {
-      logger.info('[Flow Images] Flow image updated, republishing welcome flow...', { key });
-      flowRepublishResult = await catalogService.republishWelcomeFlow();
-      logger.info('[Flow Images] Welcome flow republished', flowRepublishResult);
+    // Respond immediately — don't make the user wait for republish
+    res.json({ ...chatbotImage.toObject(), flowRepublishResult: { status: 'republishing' } });
 
-      // Update .env file so new flow ID persists across restarts
-      if (flowRepublishResult.flowId) {
+    // Auto-republish welcome flow in the background (banner embedded in flow JSON)
+    // Service icons don't strictly need republish but banner does
+    if (key === 'flow_welcome_banner') {
+      setImmediate(async () => {
         try {
-          const fs = require('fs');
-          const path = require('path');
-          const envPath = path.join(__dirname, '..', '.env');
-          let envContent = fs.readFileSync(envPath, 'utf8');
-          envContent = envContent.replace(
-            /WHATSAPP_WELCOME_FLOW_ID=.*/,
-            `WHATSAPP_WELCOME_FLOW_ID=${flowRepublishResult.flowId}`
-          );
-          fs.writeFileSync(envPath, envContent);
-          logger.info('[Flow Images] .env updated with new welcome flow ID', { flowId: flowRepublishResult.flowId });
-        } catch (envErr) {
-          logger.warn('[Flow Images] Could not update .env file', envErr.message);
-        }
-      }
-    } catch (republishErr) {
-      logger.error('[Flow Images] Failed to republish welcome flow', republishErr.message);
-      flowRepublishResult = { error: republishErr.message };
-    }
+          logger.info('[Flow Images] Banner updated, republishing welcome flow in background...', { key });
+          const result = await catalogService.republishWelcomeFlow();
+          logger.info('[Flow Images] Welcome flow republished', result);
 
-    res.json({ ...chatbotImage.toObject(), flowRepublishResult });
+          // Update .env file so new flow ID persists across restarts
+          if (result.flowId) {
+            try {
+              const fs = require('fs');
+              const path = require('path');
+              const envPath = path.join(__dirname, '..', '.env');
+              let envContent = fs.readFileSync(envPath, 'utf8');
+              envContent = envContent.replace(
+                /WHATSAPP_WELCOME_FLOW_ID=.*/,
+                `WHATSAPP_WELCOME_FLOW_ID=${result.flowId}`
+              );
+              fs.writeFileSync(envPath, envContent);
+              logger.info('[Flow Images] .env updated with new welcome flow ID', { flowId: result.flowId });
+            } catch (envErr) {
+              logger.warn('[Flow Images] Could not update .env file', envErr.message);
+            }
+          }
+        } catch (republishErr) {
+          logger.error('[Flow Images] Background republish failed', republishErr.message);
+        }
+      });
+    }
   } catch (error) {
     return logRouteError(res, '[Flow Images] Upload error', error);
   }

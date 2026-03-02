@@ -38,10 +38,8 @@ export default function FlowImages() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setImages(prev => prev.map(img => img.key === key ? res.data : img));
-      if (res.data.flowRepublishResult && !res.data.flowRepublishResult.error) {
-        setSuccess(`Image uploaded & WhatsApp Flow republished! (New Flow: ${res.data.flowRepublishResult.flowId || 'OK'})`);
-        setTimeout(() => setSuccess(null), 8000);
-      }
+      setSuccess('Image uploaded successfully!' + (key === 'flow_welcome_banner' ? ' Flow is republishing in background...' : ''));
+      setTimeout(() => setSuccess(null), 6000);
     } catch (err) {
       setError(err.response?.data?.error || 'Upload failed');
     } finally {
