@@ -40,7 +40,7 @@ const FLOW_IMAGE_KEYS = [
 // Determine Cloudinary crop dimensions based on image type
 function getCropDimensions(key) {
   if (key === 'flow_welcome_banner') {
-    // Banner: 5:1 thin landscape strip
+    // Banner: 5:1 ratio — matching AP Government flow banner style
     return { width: 1000, height: 200 };
   }
   // Service icons: 1:1 square ratio
@@ -114,7 +114,9 @@ router.put('/:key', auth, upload.single('image'), async (req, res) => {
           public_id: `flow_${key}_${Date.now()}`,
           transformation: [
             { width, height, crop: 'fill', gravity: 'center' },
-            { quality: 'auto:best', fetch_format: 'auto' }
+            // Rounded corners for banner (matching AP Government flow style)
+            ...(key === 'flow_welcome_banner' ? [{ radius: 20 }] : []),
+            { quality: 'auto:best', fetch_format: 'png' }
           ]
         },
         (error, result) => {
@@ -143,35 +145,35 @@ router.put('/:key', auth, upload.single('image'), async (req, res) => {
     chatbotImagesService.clearCache();
     logger.info('[Flow Images] Uploaded flow image', { key, aspectRatio });
 
-    // If banner was updated, auto-republish the welcome flow with new asset
+    // Auto-republish welcome flow when ANY flow image is updated (banner or service icon)
+    // Banner is embedded in flow JSON; service icons go in data payload at send time
+    // but republish ensures the flow is always fresh with latest banner
     let flowRepublishResult = null;
-    if (key === 'flow_welcome_banner') {
-      try {
-        logger.info('[Flow Images] Banner updated, republishing welcome flow...');
-        flowRepublishResult = await catalogService.republishWelcomeFlow();
-        logger.info('[Flow Images] Welcome flow republished', flowRepublishResult);
+    try {
+      logger.info('[Flow Images] Flow image updated, republishing welcome flow...', { key });
+      flowRepublishResult = await catalogService.republishWelcomeFlow();
+      logger.info('[Flow Images] Welcome flow republished', flowRepublishResult);
 
-        // Update .env file so new flow ID persists across restarts
-        if (flowRepublishResult.flowId) {
-          try {
-            const fs = require('fs');
-            const path = require('path');
-            const envPath = path.join(__dirname, '..', '.env');
-            let envContent = fs.readFileSync(envPath, 'utf8');
-            envContent = envContent.replace(
-              /WHATSAPP_WELCOME_FLOW_ID=.*/,
-              `WHATSAPP_WELCOME_FLOW_ID=${flowRepublishResult.flowId}`
-            );
-            fs.writeFileSync(envPath, envContent);
-            logger.info('[Flow Images] .env updated with new welcome flow ID', { flowId: flowRepublishResult.flowId });
-          } catch (envErr) {
-            logger.warn('[Flow Images] Could not update .env file', envErr.message);
-          }
+      // Update .env file so new flow ID persists across restarts
+      if (flowRepublishResult.flowId) {
+        try {
+          const fs = require('fs');
+          const path = require('path');
+          const envPath = path.join(__dirname, '..', '.env');
+          let envContent = fs.readFileSync(envPath, 'utf8');
+          envContent = envContent.replace(
+            /WHATSAPP_WELCOME_FLOW_ID=.*/,
+            `WHATSAPP_WELCOME_FLOW_ID=${flowRepublishResult.flowId}`
+          );
+          fs.writeFileSync(envPath, envContent);
+          logger.info('[Flow Images] .env updated with new welcome flow ID', { flowId: flowRepublishResult.flowId });
+        } catch (envErr) {
+          logger.warn('[Flow Images] Could not update .env file', envErr.message);
         }
-      } catch (republishErr) {
-        logger.error('[Flow Images] Failed to republish welcome flow', republishErr.message);
-        flowRepublishResult = { error: republishErr.message };
       }
+    } catch (republishErr) {
+      logger.error('[Flow Images] Failed to republish welcome flow', republishErr.message);
+      flowRepublishResult = { error: republishErr.message };
     }
 
     res.json({ ...chatbotImage.toObject(), flowRepublishResult });

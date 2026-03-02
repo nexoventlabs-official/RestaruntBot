@@ -39,8 +39,8 @@ export default function FlowImages() {
       });
       setImages(prev => prev.map(img => img.key === key ? res.data : img));
       if (res.data.flowRepublishResult && !res.data.flowRepublishResult.error) {
-        setSuccess('Image uploaded & WhatsApp Flow republished successfully!');
-        setTimeout(() => setSuccess(null), 6000);
+        setSuccess(`Image uploaded & WhatsApp Flow republished! (New Flow: ${res.data.flowRepublishResult.flowId || 'OK'})`);
+        setTimeout(() => setSuccess(null), 8000);
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Upload failed');
@@ -197,7 +197,7 @@ export default function FlowImages() {
       {bannerImages.length > 0 && (
         <div>
           <h2 className="text-lg font-semibold text-dark-800 mb-3">Welcome Banner</h2>
-          <p className="text-sm text-dark-400 mb-4">Displayed at the top of the welcome flow. Recommended: 1000 × 200px (5:1 ratio)</p>
+          <p className="text-sm text-dark-400 mb-4">Displayed at the top of the welcome flow. Recommended: 1000 × 200px (5:1 ratio). Auto-cropped with rounded corners.</p>
           <div className="max-w-2xl">
             {bannerImages.map(img => (
               <ImageCard key={img.key} image={img} aspectClass="aspect-[5/1]" sizeLabel="1000 × 200px (5:1)" />
@@ -226,7 +226,7 @@ export default function FlowImages() {
           <div>
             <h4 className="font-medium text-blue-900">Flow Image Guidelines</h4>
             <ul className="text-sm text-blue-700 mt-2 space-y-1">
-              <li>• <strong>Banner:</strong> 1000 × 200px (5:1 landscape strip) — auto-cropped on upload</li>
+              <li>• <strong>Banner:</strong> 1000 × 200px (5:1 landscape) with rounded corners — auto-cropped on upload</li>
               <li>• <strong>Service Icons:</strong> 600 × 600px (1:1 square) — auto-cropped on upload</li>
               <li>• Supported formats: JPG, PNG, WebP</li>
               <li>• Max file size: 10MB</li>
