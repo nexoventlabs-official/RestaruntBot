@@ -1681,13 +1681,13 @@ const catalogService = {
     // Banner is embedded directly in flow JSON; service icons go via dropdown `image` field.
     const children = [];
 
-    // Banner image at top — 5:1 ratio matching AP Government flow banner style
+    // Banner image at top — cover mode with matching 4:1 ratio eliminates gaps
     if (bannerBase64) {
       children.push({
         type: 'Image',
         src: bannerBase64,
         width: 1000,
-        height: 200,
+        height: 250,
         'scale-type': 'cover',
         'alt-text': 'Perivi Hotel Welcome Banner'
       });
