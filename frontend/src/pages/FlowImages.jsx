@@ -201,7 +201,7 @@ export default function FlowImages() {
             {/* Upload Card */}
             <div className="max-w-2xl flex-1">
               {bannerImages.map(img => (
-                <ImageCard key={img.key} image={img} sizeLabel="1000 × 200px (5:1)" aspectRatio={5} />
+                <ImageCard key={img.key} image={img} sizeLabel="~3:2 (WhatsApp crop)" aspectRatio={3/2} />
               ))}
             </div>
             {/* WhatsApp Flow Preview */}
