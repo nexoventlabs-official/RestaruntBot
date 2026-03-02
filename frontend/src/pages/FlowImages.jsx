@@ -75,15 +75,16 @@ export default function FlowImages() {
     );
   }
 
-  const ImageCard = ({ image, aspectClass, sizeLabel }) => (
+  const ImageCard = ({ image, aspectClass, sizeLabel, aspectRatio }) => (
     <div className="bg-white rounded-2xl shadow-card overflow-hidden">
-      {/* Image Preview */}
-      <div className={`relative ${aspectClass} bg-dark-100`}>
+      {/* Image Preview — use inline paddingBottom for exact ratio */}
+      <div className="relative bg-dark-100" style={{ paddingBottom: aspectRatio ? `${(1 / aspectRatio) * 100}%` : undefined }}>
         {image.imageUrl ? (
           <img
             src={image.imageUrl}
             alt={image.name}
-            className="w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover"
+            style={aspectRatio && aspectRatio > 2 ? { borderRadius: '12px' } : {}}
             onError={(e) => {
               e.target.style.display = 'none';
               e.target.nextSibling.style.display = 'flex';
@@ -198,7 +199,7 @@ export default function FlowImages() {
           <p className="text-sm text-dark-400 mb-4">Displayed at the top of the welcome flow. Recommended: 1000 × 200px (5:1 ratio). Auto-cropped with rounded corners.</p>
           <div className="max-w-2xl">
             {bannerImages.map(img => (
-              <ImageCard key={img.key} image={img} aspectClass="aspect-[5/1]" sizeLabel="1000 × 200px (5:1)" />
+              <ImageCard key={img.key} image={img} sizeLabel="1000 × 200px (5:1)" aspectRatio={5} />
             ))}
           </div>
         </div>
@@ -211,7 +212,7 @@ export default function FlowImages() {
           <p className="text-sm text-dark-400 mb-4">Square icons for each service in the welcome flow dropdown. Recommended: 600 × 600px (1:1 ratio)</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {iconImages.map(img => (
-              <ImageCard key={img.key} image={img} aspectClass="aspect-square" sizeLabel="600 × 600px (1:1)" />
+              <ImageCard key={img.key} image={img} sizeLabel="600 × 600px (1:1)" aspectRatio={1} />
             ))}
           </div>
         </div>
