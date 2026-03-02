@@ -196,7 +196,7 @@ export default function FlowImages() {
       {bannerImages.length > 0 && (
         <div>
           <h2 className="text-lg font-semibold text-dark-800 mb-3">Welcome Banner</h2>
-          <p className="text-sm text-dark-400 mb-4">Displayed at the top of the welcome flow. Recommended: 1000 × 200px (5:1 ratio). Auto-cropped with rounded corners.</p>
+          <p className="text-sm text-dark-400 mb-4">Displayed at the top of the welcome flow. WhatsApp renders it in a ~3:2 container with cover crop. Auto-cropped with rounded corners.</p>
           <div className="flex flex-col lg:flex-row gap-6">
             {/* Upload Card */}
             <div className="max-w-2xl flex-1">
@@ -215,13 +215,15 @@ export default function FlowImages() {
                     <span className="text-sm font-semibold text-dark-900">Perivi Hotel</span>
                     <span className="text-xs text-dark-400">⋮</span>
                   </div>
-                  {/* Banner renders at full width, natural height */}
+                  {/* Banner renders at ~3:2 ratio with cover crop — matches actual WhatsApp rendering */}
                   <div className="px-3 pt-3">
-                    <img
-                      src={bannerImages[0].imageUrl}
-                      alt="Banner preview"
-                      className="w-full rounded-lg"
-                    />
+                    <div className="w-full rounded-lg overflow-hidden" style={{ aspectRatio: '3 / 2' }}>
+                      <img
+                        src={bannerImages[0].imageUrl}
+                        alt="Banner preview"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
                   </div>
                   {/* Mock flow content */}
                   <div className="px-3 py-3">
@@ -262,7 +264,7 @@ export default function FlowImages() {
           <div>
             <h4 className="font-medium text-blue-900">Flow Image Guidelines</h4>
             <ul className="text-sm text-blue-700 mt-2 space-y-1">
-              <li>• <strong>Banner:</strong> 1000 × 200px (5:1 landscape) with rounded corners — auto-cropped on upload</li>
+              <li>• <strong>Banner:</strong> WhatsApp displays in ~3:2 container with cover crop — design around centre area</li>
               <li>• <strong>Service Icons:</strong> 600 × 600px (1:1 square) — auto-cropped on upload</li>
               <li>• Supported formats: JPG, PNG, WebP</li>
               <li>• Max file size: 10MB</li>
