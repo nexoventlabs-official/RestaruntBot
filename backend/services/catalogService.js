@@ -1980,10 +1980,11 @@ const catalogService = {
       await metaCloud.publishFlow(flowId);
       process.env.WHATSAPP_WELCOME_FLOW_ID = flowId;
       process.env.WHATSAPP_WELCOME_FLOW_STATUS = 'PUBLISHED';
-      logger.info(`Welcome Flow ${FLOW_NAME} created and published`, { flowId });
+      logger.info('Welcome Flow created and published', { flowName: FLOW_NAME, flowId });
       return { flowId, status: 'created_and_published' };
     } catch (pubErr) {
-      logger.warn(`Welcome Flow ${FLOW_NAME} created but publish failed, using draft mode`, {
+      logger.warn('Welcome Flow created but publish failed, using draft mode', {
+        flowName: FLOW_NAME,
         flowId,
         error: pubErr.response?.data?.error?.message || pubErr.message
       });
