@@ -438,10 +438,18 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                     }
                     // Welcome service selection flow
                     else if (responseData.flow_token?.startsWith('welcome_service_') && responseData.selected_service) {
-                      selectedId = responseData.selected_service;
-                      text = responseData.selected_service;
-                      messageType = 'button'; // Treat as button press for chatbot routing
-                      logger.info('Flow welcome service selected', { service: responseData.selected_service, selectedId });
+                      // If food type was also selected (Order Food → Veg/Non-Veg/Egg), use that
+                      if (responseData.selected_food_type) {
+                        selectedId = responseData.selected_food_type;
+                        text = responseData.selected_food_type;
+                        messageType = 'button';
+                        logger.info('Flow food type selected', { service: responseData.selected_service, foodType: responseData.selected_food_type });
+                      } else {
+                        selectedId = responseData.selected_service;
+                        text = responseData.selected_service;
+                        messageType = 'button';
+                        logger.info('Flow welcome service selected', { service: responseData.selected_service, selectedId });
+                      }
                     }
                     // Account Details form flow response
                     else if (responseData.flow_token?.startsWith('account_form_') && responseData.customer_name) {

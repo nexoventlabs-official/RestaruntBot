@@ -1680,12 +1680,14 @@ const catalogService = {
     // WhatsApp Flows Image `src` requires RAW base64 strings (no data:image/...;base64, prefix).
     // Banner is embedded directly in flow JSON; service icons go via dropdown `image` field.
     // Layout matches AP Government WhatsApp Flow style: Banner → Text → Dropdown → Confirm
-    const children = [];
+    // Two screens: SERVICE_SELECT → FOOD_TYPE_SELECT (with Veg/Non-Veg/Egg radio buttons with images)
+
+    // ─── Screen 1: Service Selection ───
+    const screen1Children = [];
 
     // Banner image at top — 8:1 ratio (1000×125)
-    // Rounded corners are applied automatically by WhatsApp Flows renderer
     if (bannerBase64) {
-      children.push({
+      screen1Children.push({
         type: 'Image',
         src: bannerBase64,
         width: 1000,
@@ -1695,7 +1697,7 @@ const catalogService = {
       });
     }
 
-    children.push(
+    screen1Children.push(
       {
         type: 'TextBody',
         text: 'Choose from one of the Hotel Services'
@@ -1711,14 +1713,48 @@ const catalogService = {
         type: 'Footer',
         label: 'Confirm',
         'on-click-action': {
-          name: 'complete',
+          name: 'navigate',
+          next: { type: 'screen', name: 'FOOD_TYPE_SELECT' },
           payload: {
             selected_service: '${form.selected_service}',
+            food_types: '${data.food_types}',
             flow_token: '${data.flow_token}'
           }
         }
       }
     );
+
+    // ─── Screen 2: Food Type Selection (Veg / Non-Veg / Egg with images) ───
+    // Like AP Gov temple selection: title + radio buttons with images
+    const screen2Children = [
+      {
+        type: 'TextHeading',
+        text: 'Select Food Type'
+      },
+      {
+        type: 'TextBody',
+        text: 'What would you like to browse?'
+      },
+      {
+        type: 'RadioButtonsGroup',
+        name: 'selected_food_type',
+        label: 'Select Food Type',
+        required: true,
+        'data-source': '${data.food_types}'
+      },
+      {
+        type: 'Footer',
+        label: 'Confirm',
+        'on-click-action': {
+          name: 'complete',
+          payload: {
+            selected_service: '${data.selected_service}',
+            selected_food_type: '${form.selected_food_type}',
+            flow_token: '${data.flow_token}'
+          }
+        }
+      }
+    ];
 
     return {
       version: '7.3',
@@ -1726,8 +1762,6 @@ const catalogService = {
         {
           id: 'SERVICE_SELECT',
           title: 'Service Selection',
-          terminal: true,
-          success: true,
           data: {
             services: {
               type: 'array',
@@ -1745,6 +1779,21 @@ const catalogService = {
                 { id: 'my_orders', title: 'My Orders', description: 'Track delivery', image: 'iVBORw0KGgo...' }
               ]
             },
+            food_types: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'food_veg', title: 'Veg', description: 'Vegetarian dishes', image: 'iVBORw0KGgo...' }
+              ]
+            },
             flow_token: {
               type: 'string',
               __example__: 'welcome_service_919999999999'
@@ -1752,7 +1801,43 @@ const catalogService = {
           },
           layout: {
             type: 'SingleColumnLayout',
-            children
+            children: screen1Children
+          }
+        },
+        {
+          id: 'FOOD_TYPE_SELECT',
+          title: 'Food Type',
+          terminal: true,
+          success: true,
+          data: {
+            selected_service: {
+              type: 'string',
+              __example__: 'order_food'
+            },
+            food_types: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'food_veg', title: 'Veg', description: 'Vegetarian dishes', image: 'iVBORw0KGgo...' },
+                { id: 'food_nonveg', title: 'Non-Veg', description: 'Non-vegetarian dishes', image: 'iVBORw0KGgo...' }
+              ]
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'welcome_service_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: screen2Children
           }
         }
       ]
@@ -1789,48 +1874,62 @@ const catalogService = {
   async buildWelcomeFlowData(flowToken = 'welcome_service') {
     const chatbotImagesService = require('./chatbotImages');
 
-    // Fetch all service icons from admin-configured chatbot images
-    const [orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, deliveryAddressImg, visitWebsiteImg, helpSupportImg] = await Promise.all([
+    // Fetch all service icons + food type icons from admin-configured chatbot images
+    const [orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, deliveryAddressImg, visitWebsiteImg, helpSupportImg, vegImg, nonvegImg, eggImg] = await Promise.all([
       chatbotImagesService.getImageUrl('flow_order_food'),
       chatbotImagesService.getImageUrl('flow_my_orders'),
       chatbotImagesService.getImageUrl('flow_view_offers'),
       chatbotImagesService.getImageUrl('flow_account_details'),
       chatbotImagesService.getImageUrl('flow_delivery_address'),
       chatbotImagesService.getImageUrl('flow_visit_website'),
-      chatbotImagesService.getImageUrl('flow_help_support')
+      chatbotImagesService.getImageUrl('flow_help_support'),
+      chatbotImagesService.getImageUrl('flow_food_veg'),
+      chatbotImagesService.getImageUrl('flow_food_nonveg'),
+      chatbotImagesService.getImageUrl('flow_food_egg')
     ]);
 
     // Convert Cloudinary URLs to raw base64 (WhatsApp Flows require raw base64, not data URIs)
     const toBase64 = (url) => this._imageUrlToRawBase64(url);
-    const [orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, deliveryAddressB64, visitWebsiteB64, helpSupportB64] = await Promise.all([
+    const [orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, deliveryAddressB64, visitWebsiteB64, helpSupportB64, vegB64, nonvegB64, eggB64] = await Promise.all([
       toBase64(orderFoodImg),
       toBase64(myOrdersImg),
       toBase64(viewOffersImg),
       toBase64(accountDetailsImg),
       toBase64(deliveryAddressImg),
       toBase64(visitWebsiteImg),
-      toBase64(helpSupportImg)
+      toBase64(helpSupportImg),
+      toBase64(vegImg),
+      toBase64(nonvegImg),
+      toBase64(eggImg)
     ]);
 
     // Build service items — only include image if base64 conversion succeeded
-    const buildService = (id, title, description, base64Img) => {
+    const buildItem = (id, title, description, base64Img) => {
       const item = { id, title, description };
       if (base64Img) item.image = base64Img;
       return item;
     };
 
     const services = [
-      buildService('order_food', 'Order Food', 'Browse our menu and place an order', orderFoodB64),
-      buildService('my_orders', 'My Orders', 'Check order status & track delivery', myOrdersB64),
-      buildService('view_offers', 'View Offers', 'See current deals and discounts', viewOffersB64),
-      buildService('account_details', 'Account Details', 'View or update your profile info', accountDetailsB64),
-      buildService('delivery_address', 'Delivery Address', 'Manage your delivery addresses', deliveryAddressB64),
-      buildService('open_website', 'Visit Website', 'View our full website', visitWebsiteB64),
-      buildService('help', 'Help & Support', 'Get assistance with your queries', helpSupportB64)
+      buildItem('order_food', 'Order Food', 'Browse our menu and place an order', orderFoodB64),
+      buildItem('my_orders', 'My Orders', 'Check order status & track delivery', myOrdersB64),
+      buildItem('view_offers', 'View Offers', 'See current deals and discounts', viewOffersB64),
+      buildItem('account_details', 'Account Details', 'View or update your profile info', accountDetailsB64),
+      buildItem('delivery_address', 'Delivery Address', 'Manage your delivery addresses', deliveryAddressB64),
+      buildItem('open_website', 'Visit Website', 'View our full website', visitWebsiteB64),
+      buildItem('help', 'Help & Support', 'Get assistance with your queries', helpSupportB64)
+    ];
+
+    // Food type items for second screen (Veg / Non-Veg / Egg with images)
+    const food_types = [
+      buildItem('food_veg', 'Veg', 'Pure vegetarian dishes', vegB64),
+      buildItem('food_nonveg', 'Non-Veg', 'Non-vegetarian dishes', nonvegB64),
+      buildItem('food_egg', 'Egg', 'Egg-based dishes', eggB64)
     ];
 
     return {
       services,
+      food_types,
       flow_token: flowToken
     };
   },

@@ -34,7 +34,10 @@ const FLOW_IMAGE_KEYS = [
   'flow_help_support',
   'flow_welcome_banner',
   'flow_account_details',
-  'flow_delivery_address'
+  'flow_delivery_address',
+  'flow_food_veg',
+  'flow_food_nonveg',
+  'flow_food_egg'
 ];
 
 // Determine Cloudinary crop dimensions based on image type
