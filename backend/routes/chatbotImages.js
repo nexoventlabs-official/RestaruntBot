@@ -128,7 +128,11 @@ router.put('/:key', auth, upload.single('image'), async (req, res) => {
       }
     }
 
-    // Upload new image to Cloudinary with 2:1 aspect ratio (1200x600)
+    // Upload new image to Cloudinary with appropriate aspect ratio
+    // Welcome image: 1:1 square (600x600); All others: 2:1 landscape (1200x600)
+    const isWelcome = key === 'welcome';
+    const cropWidth = isWelcome ? 600 : 1200;
+    const cropHeight = isWelcome ? 600 : 600;
     const cloudinary = require('cloudinary').v2;
     
     const uploadResult = await new Promise((resolve, reject) => {
@@ -137,7 +141,7 @@ router.put('/:key', auth, upload.single('image'), async (req, res) => {
           folder: 'restaurant-bot/chatbot-images',
           public_id: `chatbot_${key}_${Date.now()}`,
           transformation: [
-            { width: 1200, height: 600, crop: 'fill', gravity: 'center' },
+            { width: cropWidth, height: cropHeight, crop: 'fill', gravity: 'center' },
             { quality: 'auto:best', fetch_format: 'auto' }
           ]
         },
@@ -160,7 +164,7 @@ router.put('/:key', auth, upload.single('image'), async (req, res) => {
         description: defaultImg?.description || '',
         imageUrl: uploadResult.secure_url,
         cloudinaryPublicId: uploadResult.public_id,
-        aspectRatio: '2:1'
+        aspectRatio: isWelcome ? '1:1' : '2:1'
       },
       { upsert: true, new: true }
     );

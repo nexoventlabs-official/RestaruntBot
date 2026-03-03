@@ -6145,7 +6145,7 @@ const chatbot = {
       `Welcome! 🙏\n\n` +
       `We're delighted to serve you delicious food. How can we help you today?`;
 
-    // Step 2: Try sending WhatsApp Flow for service selection
+    // Step 2: Try sending WhatsApp Flow for service selection (single combined message)
     try {
       const flowId = catalogService.getWelcomeFlowId();
       const flowMode = catalogService.getWelcomeFlowMode();
@@ -6153,17 +6153,13 @@ const chatbot = {
         const metaCloud = require('./metaCloud');
         const flowData = await catalogService.buildWelcomeFlowData(`welcome_service_${phone}`);
 
-        // Send welcome image first (if available)
-        if (welcomeImageUrl) {
-          await whatsapp.sendImage(phone, welcomeImageUrl, welcomeMessage);
-        }
-
-        // Then send the Flow message with service selection
+        // Send single Flow message with welcome image as header + service list in body
         await metaCloud.sendFlowMessage(phone, {
           flowId,
           flowCta: 'Choose Service',
+          headerImageUrl: welcomeImageUrl || undefined,
           headerText: 'Perivi Hotel',
-          bodyText: 'Select a service below to get started.\n\n🍽️ Order Food\n📦 My Orders\n🏷️ View Offers\n👤 Account Details\n📍 Delivery Address\n🌐 Website\n❓ Help',
+          bodyText: welcomeMessage,
           footerText: 'Powered by JRB Gold',
           screenName: 'SERVICE_SELECT',
           screenData: flowData,

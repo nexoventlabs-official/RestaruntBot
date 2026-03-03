@@ -2006,6 +2006,7 @@ const metaCloud = {
         flowId,
         flowCta,
         headerText,
+        headerImageUrl,
         bodyText,
         footerText,
         screenName = 'CATEGORY_SELECT',
@@ -2014,6 +2015,14 @@ const metaCloud = {
         mode = 'published'
       } = options;
 
+      // Build header: image if provided, otherwise text
+      let header;
+      if (headerImageUrl) {
+        header = { type: 'image', image: { link: headerImageUrl } };
+      } else {
+        header = { type: 'text', text: headerText || 'Menu' };
+      }
+
       const payload = {
         messaging_product: 'whatsapp',
         recipient_type: 'individual',
@@ -2021,7 +2030,7 @@ const metaCloud = {
         type: 'interactive',
         interactive: {
           type: 'flow',
-          header: { type: 'text', text: headerText || 'Menu' },
+          header,
           body: { text: bodyText || 'Select a category' },
           action: {
             name: 'flow',

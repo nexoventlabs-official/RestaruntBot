@@ -82,7 +82,7 @@ export default function ChatbotImages() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-dark-900">Chatbot Images</h1>
-          <p className="text-dark-500 mt-1">Manage WhatsApp bot message images (2:1 landscape format)</p>
+          <p className="text-dark-500 mt-1">Manage WhatsApp bot message images</p>
         </div>
         <button
           onClick={fetchImages}
@@ -108,8 +108,8 @@ export default function ChatbotImages() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {images.map(image => (
           <div key={image.key} className="bg-white rounded-2xl shadow-card overflow-hidden">
-            {/* Image Preview - 2:1 aspect ratio */}
-            <div className="relative aspect-[2/1] bg-dark-100">
+            {/* Image Preview - 1:1 for welcome, 2:1 for others */}
+            <div className={`relative ${image.key === 'welcome' ? 'aspect-square' : 'aspect-[2/1]'} bg-dark-100`}>
               <img
                 src={image.imageUrl}
                 alt={image.name}
@@ -177,8 +177,8 @@ export default function ChatbotImages() {
           <div>
             <h4 className="font-medium text-blue-900">Image Guidelines</h4>
             <ul className="text-sm text-blue-700 mt-2 space-y-1">
-              <li>• Recommended size: 1200 x 600 pixels (2:1 aspect ratio)</li>
-              <li>• Images are automatically cropped to 2:1 landscape format</li>
+              <li>• Welcome image: 600 × 600px (1:1 square) — others: 1200 × 600px (2:1 landscape)</li>
+              <li>• Images are automatically cropped to the correct aspect ratio</li>
               <li>• Supported formats: JPG, PNG, WebP</li>
               <li>• Max file size: 10MB</li>
               <li>• Images are optimized via Cloudinary for fast delivery</li>
