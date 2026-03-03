@@ -115,8 +115,9 @@ function cleanExpired() {
   }
 }
 
-// Clean every minute
-setInterval(cleanExpired, 60 * 1000);
+// Clean every minute (unref so it doesn't block process exit in tests)
+const cleanupInterval = setInterval(cleanExpired, 60 * 1000);
+cleanupInterval.unref();
 
 /**
  * Outbound message idempotency
