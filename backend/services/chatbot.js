@@ -6146,23 +6146,22 @@ const chatbot = {
       `We're delighted to serve you delicious food. How can we help you today?`;
 
     // Step 2: Try sending WhatsApp Flow for service selection (single combined message)
+    // For data_api_version 3.0 endpoint flows: DON'T send screenData in the message.
+    // The endpoint's INIT action provides initial data when the flow opens.
     try {
       const flowId = catalogService.getWelcomeFlowId();
       const flowMode = catalogService.getWelcomeFlowMode();
       if (flowId && flowMode) {
         const metaCloud = require('./metaCloud');
-        const flowData = await catalogService.buildWelcomeFlowData(`welcome_service_${phone}`);
 
-        // Send single Flow message with welcome image as header + service list in body
+        // Send Flow message — endpoint INIT provides screen data (services, food types etc.)
         await metaCloud.sendFlowMessage(phone, {
           flowId,
           flowCta: 'Choose Service',
-          headerImageUrl: welcomeImageUrl || undefined,
           headerText: 'Perivi Hotel',
           bodyText: welcomeMessage,
           footerText: 'Powered by JRB Gold',
           screenName: 'SERVICE_SELECT',
-          screenData: flowData,
           flowToken: `welcome_service_${phone}`,
           mode: flowMode
         });

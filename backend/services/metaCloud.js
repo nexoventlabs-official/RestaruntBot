@@ -2073,6 +2073,13 @@ const metaCloud = {
         header = { type: 'text', text: headerText || 'Menu' };
       }
 
+      // Build flow_action_payload: include data only if screenData is provided
+      // For endpoint flows (data_api_version 3.0), INIT provides data — don't send screenData
+      const flowActionPayload = { screen: screenName };
+      if (screenData && Object.keys(screenData).length > 0) {
+        flowActionPayload.data = { ...screenData, flow_token: flowToken };
+      }
+
       const payload = {
         messaging_product: 'whatsapp',
         recipient_type: 'individual',
@@ -2091,13 +2098,7 @@ const metaCloud = {
               flow_cta: flowCta,
               mode,
               flow_action: 'navigate',
-              flow_action_payload: {
-                screen: screenName,
-                data: {
-                  ...screenData,
-                  flow_token: flowToken
-                }
-              }
+              flow_action_payload: flowActionPayload
             }
           }
         }

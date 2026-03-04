@@ -223,14 +223,24 @@ async function handleFlowEndpoint(req, res) {
   }
 
   // Handle INIT action — initial screen load
+  // For data_api_version 3.0 flows, INIT provides ALL initial screen data
   if (decryptedBody.action === 'INIT') {
-    // Return initial data with food types hidden
     const responseData = {
       version: FLOW_DATA_API_VERSION,
       screen: 'SERVICE_SELECT',
       data: {
+        services: [
+          { id: 'order_food', title: 'Order Food' },
+          { id: 'my_orders', title: 'My Orders' },
+          { id: 'view_offers', title: 'View Offers' },
+          { id: 'account_details', title: 'Account Details' },
+          { id: 'delivery_address', title: 'Delivery Address' },
+          { id: 'open_website', title: 'Visit Website' },
+          { id: 'help', title: 'Help & Support' }
+        ],
         show_food_types: false,
-        food_types: []
+        food_types: [],
+        flow_token: decryptedBody.flow_token || 'init'
       }
     };
     const encrypted = encryptResponse(responseData, aesKey, iv);
