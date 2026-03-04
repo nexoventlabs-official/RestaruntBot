@@ -5059,9 +5059,9 @@ const chatbot = {
           egg: '🟡 Egg Menu'
         };
         
-        // If coming from order flow, show title list; otherwise category browsing
+        // If coming from order flow, send Menu Items Flow; otherwise category browsing
         if (state.currentStep === 'select_food_type_order') {
-          await this.sendTitleListForOrder(phone, menuItems, state.foodTypePreference, foodTypeLabels[state.foodTypePreference]);
+          await this.sendMenuItemsFlow(phone, state.foodTypePreference);
           state.currentStep = 'select_title_order';
         } else {
           await this.sendMenuCategoriesWithLabel(phone, filteredItems, foodTypeLabels[state.foodTypePreference]);
@@ -6184,8 +6184,81 @@ const chatbot = {
 
   // ============ ORDER FOOD MENU ============
   async sendOrderFoodMenu(phone) {
-    // Send only the browse menu options (same as sendFoodTypeSelection)
+    // Try sending Food Type Flow (Veg / Non-Veg / Egg with images)
+    try {
+      const foodTypeFlowId = catalogService.getFoodTypeFlowId();
+      const foodTypeFlowMode = catalogService.getFoodTypeFlowMode();
+      if (foodTypeFlowId && foodTypeFlowMode) {
+        const metaCloud = require('./metaCloud');
+        const flowData = await catalogService.buildFoodTypeFlowData(`food_type_${phone}`);
+
+        const browseMenuImageUrl = await chatbotImagesService.getImageUrl('browse_menu');
+        await metaCloud.sendFlowMessage(phone, {
+          flowId: foodTypeFlowId,
+          flowCta: 'Choose Food Type',
+          headerImageUrl: browseMenuImageUrl || undefined,
+          headerText: 'Order Food',
+          bodyText: '🍽️ *Browse Menu*\n\nSelect your food preference to see available items.',
+          footerText: 'Perivi Hotel',
+          screenName: 'FOOD_TYPE',
+          screenData: flowData,
+          flowToken: `food_type_${phone}`,
+          mode: foodTypeFlowMode
+        });
+        logger.info('Sent Food Type Flow', { phone, flowId: foodTypeFlowId });
+        return;
+      }
+    } catch (flowErr) {
+      logger.info('Food Type Flow fallback to buttons', { error: flowErr.message });
+    }
+
+    // Fallback: reply buttons
     await this.sendFoodTypeSelection(phone);
+  },
+
+  // ============ MENU ITEMS FLOW ============
+  async sendMenuItemsFlow(phone, foodType) {
+    // Try sending Menu Items Flow with items matching the food type
+    try {
+      const menuItemsFlowId = catalogService.getMenuItemsFlowId();
+      const menuItemsFlowMode = catalogService.getMenuItemsFlowMode();
+      if (menuItemsFlowId && menuItemsFlowMode) {
+        const metaCloud = require('./metaCloud');
+        const flowData = await catalogService.buildMenuItemsFlowData(foodType, `menu_items_${foodType}_${phone}`);
+
+        if (!flowData.items || flowData.items.length === 0) {
+          const searchNoResultsImg = await chatbotImagesService.getImageUrl('search_no_results');
+          await sendWithOptionalImage(phone, searchNoResultsImg, '📋 No matching items found for this food type.', [
+            { id: 'order_food', text: 'Order Food' },
+            { id: 'home', text: 'Main Menu' }
+          ]);
+          return;
+        }
+
+        const foodTypeLabel = foodType === 'veg' ? '🟢 Veg' : foodType === 'nonveg' ? '🔴 Non-Veg' : '🟡 Egg';
+        await metaCloud.sendFlowMessage(phone, {
+          flowId: menuItemsFlowId,
+          flowCta: 'Select Item',
+          headerText: flowData.heading,
+          bodyText: `${foodTypeLabel} items available. Tap below to pick a dish and see its variants.`,
+          footerText: 'Perivi Hotel',
+          screenName: 'MENU_ITEMS',
+          screenData: flowData,
+          flowToken: `menu_items_${foodType}_${phone}`,
+          mode: menuItemsFlowMode
+        });
+        logger.info('Sent Menu Items Flow', { phone, foodType, itemCount: flowData.items.length });
+        return;
+      }
+    } catch (flowErr) {
+      logger.info('Menu Items Flow fallback to list', { error: flowErr.message });
+    }
+
+    // Fallback: use existing title list for order
+    const MenuItem = require('../models/MenuItem');
+    const menuItems = await MenuItem.find({ available: true, isPaused: { $ne: true } }).lean();
+    const foodTypeLabels = { veg: '🌿 Veg Menu', nonveg: '🍗 Non-Veg Menu', egg: '🟡 Egg Menu' };
+    await this.sendTitleListForOrder(phone, menuItems, foodType, foodTypeLabels[foodType]);
   },
 
   // ============ MY ORDERS MENU ============

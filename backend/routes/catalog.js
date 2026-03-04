@@ -175,6 +175,26 @@ router.post('/republish-welcome-flow', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/catalog/setup-food-type-flow - Create & publish the Food Type selection Flow
+router.post('/setup-food-type-flow', authMiddleware, async (req, res) => {
+  try {
+    const result = await catalogService.setupFoodTypeFlow();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    return logRouteError(res, 'Setup Food Type Flow error', error);
+  }
+});
+
+// POST /api/catalog/setup-menu-items-flow - Create & publish the Menu Items selection Flow
+router.post('/setup-menu-items-flow', authMiddleware, async (req, res) => {
+  try {
+    const result = await catalogService.setupMenuItemsFlow();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    return logRouteError(res, 'Setup Menu Items Flow error', error);
+  }
+});
+
 // GET /api/catalog/flows - List all Flows under the WABA
 router.get('/flows', authMiddleware, async (req, res) => {
   try {
@@ -199,6 +219,16 @@ router.get('/flow-status', authMiddleware, async (req, res) => {
       flowId: catalogService.getWelcomeFlowId(),
       flowMode: catalogService.getWelcomeFlowMode(),
       flowStatus: process.env.WHATSAPP_WELCOME_FLOW_STATUS || 'NOT_SET'
+    },
+    foodTypeFlow: {
+      flowId: catalogService.getFoodTypeFlowId(),
+      flowMode: catalogService.getFoodTypeFlowMode(),
+      flowStatus: process.env.WHATSAPP_FOOD_TYPE_FLOW_STATUS || 'NOT_SET'
+    },
+    menuItemsFlow: {
+      flowId: catalogService.getMenuItemsFlowId(),
+      flowMode: catalogService.getMenuItemsFlowMode(),
+      flowStatus: process.env.WHATSAPP_MENU_ITEMS_FLOW_STATUS || 'NOT_SET'
     },
     catalogEnabled: catalogService.isEnabled(),
     catalogId: process.env.META_CATALOG_ID ? 'set' : 'not_set',

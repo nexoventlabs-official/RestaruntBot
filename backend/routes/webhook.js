@@ -436,20 +436,27 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       messageType = 'button'; // Treat as button press for chatbot routing
                       logger.info('Flow category selected', { category: responseData.selected_category, selectedId, isOrderFlow });
                     }
-                    // Welcome service selection flow
+                    // Welcome service selection flow (single screen — no food type)
                     else if (responseData.flow_token?.startsWith('welcome_service_') && responseData.selected_service) {
-                      // If food type was also selected (Order Food → Veg/Non-Veg/Egg), use that
-                      if (responseData.selected_food_type) {
-                        selectedId = responseData.selected_food_type;
-                        text = responseData.selected_food_type;
-                        messageType = 'button';
-                        logger.info('Flow food type selected', { service: responseData.selected_service, foodType: responseData.selected_food_type });
-                      } else {
-                        selectedId = responseData.selected_service;
-                        text = responseData.selected_service;
-                        messageType = 'button';
-                        logger.info('Flow welcome service selected', { service: responseData.selected_service, selectedId });
-                      }
+                      selectedId = responseData.selected_service;
+                      text = responseData.selected_service;
+                      messageType = 'button';
+                      logger.info('Flow welcome service selected', { service: responseData.selected_service, selectedId });
+                    }
+                    // Food Type selection flow (Veg / Non-Veg / Egg)
+                    else if (responseData.flow_token?.startsWith('food_type_') && responseData.selected_food_type) {
+                      selectedId = responseData.selected_food_type;
+                      text = responseData.selected_food_type;
+                      messageType = 'button';
+                      logger.info('Flow food type selected', { foodType: responseData.selected_food_type });
+                    }
+                    // Menu Items flow (user selected a specific menu item)
+                    else if (responseData.flow_token?.startsWith('menu_items_') && responseData.selected_item) {
+                      // Route as order_title_{itemId} so existing chatbot handles variant display
+                      selectedId = 'order_title_' + responseData.selected_item;
+                      text = responseData.selected_item;
+                      messageType = 'button';
+                      logger.info('Flow menu item selected', { itemId: responseData.selected_item });
                     }
                     // Account Details form flow response
                     else if (responseData.flow_token?.startsWith('account_form_') && responseData.customer_name) {

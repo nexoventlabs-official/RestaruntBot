@@ -1680,14 +1680,13 @@ const catalogService = {
     // WhatsApp Flows Image `src` requires RAW base64 strings (no data:image/...;base64, prefix).
     // Banner is embedded directly in flow JSON; service icons go via dropdown `image` field.
     // Layout matches AP Government WhatsApp Flow style: Banner → Text → Dropdown → Confirm
-    // Two screens: SERVICE_SELECT → FOOD_TYPE_SELECT (with Veg/Non-Veg/Egg radio buttons with images)
+    // Single screen: SERVICE_SELECT → complete (food type handled separately via Menu Items Flow)
 
-    // ─── Screen 1: Service Selection ───
-    const screen1Children = [];
+    const screenChildren = [];
 
     // Banner image at top — 8:1 ratio (1000×125)
     if (bannerBase64) {
-      screen1Children.push({
+      screenChildren.push({
         type: 'Image',
         src: bannerBase64,
         width: 1000,
@@ -1697,7 +1696,7 @@ const catalogService = {
       });
     }
 
-    screen1Children.push(
+    screenChildren.push(
       {
         type: 'TextBody',
         text: 'Choose from one of the Hotel Services'
@@ -1713,48 +1712,14 @@ const catalogService = {
         type: 'Footer',
         label: 'Confirm',
         'on-click-action': {
-          name: 'navigate',
-          next: { type: 'screen', name: 'FOOD_TYPE_SELECT' },
+          name: 'complete',
           payload: {
             selected_service: '${form.selected_service}',
-            food_types: '${data.food_types}',
             flow_token: '${data.flow_token}'
           }
         }
       }
     );
-
-    // ─── Screen 2: Food Type Selection (Veg / Non-Veg / Egg with images) ───
-    // Like AP Gov temple selection: title + radio buttons with images
-    const screen2Children = [
-      {
-        type: 'TextHeading',
-        text: 'Select Food Type'
-      },
-      {
-        type: 'TextBody',
-        text: 'What would you like to browse?'
-      },
-      {
-        type: 'RadioButtonsGroup',
-        name: 'selected_food_type',
-        label: 'Select Food Type',
-        required: true,
-        'data-source': '${data.food_types}'
-      },
-      {
-        type: 'Footer',
-        label: 'Confirm',
-        'on-click-action': {
-          name: 'complete',
-          payload: {
-            selected_service: '${data.selected_service}',
-            selected_food_type: '${form.selected_food_type}',
-            flow_token: '${data.flow_token}'
-          }
-        }
-      }
-    ];
 
     return {
       version: '7.3',
@@ -1762,6 +1727,8 @@ const catalogService = {
         {
           id: 'SERVICE_SELECT',
           title: 'Service Selection',
+          terminal: true,
+          success: true,
           data: {
             services: {
               type: 'array',
@@ -1779,21 +1746,6 @@ const catalogService = {
                 { id: 'my_orders', title: 'My Orders', description: 'Track delivery', image: 'iVBORw0KGgo...' }
               ]
             },
-            food_types: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  title: { type: 'string' },
-                  description: { type: 'string' },
-                  image: { type: 'string' }
-                }
-              },
-              __example__: [
-                { id: 'food_veg', title: 'Veg', description: 'Vegetarian dishes', image: 'iVBORw0KGgo...' }
-              ]
-            },
             flow_token: {
               type: 'string',
               __example__: 'welcome_service_919999999999'
@@ -1801,19 +1753,28 @@ const catalogService = {
           },
           layout: {
             type: 'SingleColumnLayout',
-            children: screen1Children
+            children: screenChildren
           }
-        },
+        }
+      ]
+    };
+  },
+
+  /**
+   * Build the Food Type Selection Flow JSON (WhatsApp Flows v7.3).
+   * Single screen: RadioButtonsGroup — Veg / Non-Veg / Egg with images → complete.
+   * Launched after user selects "Order Food" from welcome flow.
+   */
+  buildFoodTypeFlowJSON() {
+    return {
+      version: '7.3',
+      screens: [
         {
-          id: 'FOOD_TYPE_SELECT',
-          title: 'Food Type',
+          id: 'FOOD_TYPE',
+          title: 'Choose Food Type',
           terminal: true,
           success: true,
           data: {
-            selected_service: {
-              type: 'string',
-              __example__: 'order_food'
-            },
             food_types: {
               type: 'array',
               items: {
@@ -1826,18 +1787,119 @@ const catalogService = {
                 }
               },
               __example__: [
-                { id: 'food_veg', title: 'Veg', description: 'Vegetarian dishes', image: 'iVBORw0KGgo...' },
-                { id: 'food_nonveg', title: 'Non-Veg', description: 'Non-vegetarian dishes', image: 'iVBORw0KGgo...' }
+                { id: 'food_veg', title: '🟢 Veg', description: 'Vegetarian dishes', image: 'iVBORw0KGgo...' }
               ]
             },
             flow_token: {
               type: 'string',
-              __example__: 'welcome_service_919999999999'
+              __example__: 'food_type_919999999999'
             }
           },
           layout: {
             type: 'SingleColumnLayout',
-            children: screen2Children
+            children: [
+              {
+                type: 'TextHeading',
+                text: '🍽️ What would you like?'
+              },
+              {
+                type: 'TextBody',
+                text: 'Choose your food preference to browse the menu'
+              },
+              {
+                type: 'RadioButtonsGroup',
+                name: 'selected_food_type',
+                label: 'Food Type',
+                required: true,
+                'data-source': '${data.food_types}'
+              },
+              {
+                type: 'Footer',
+                label: 'See Menu',
+                'on-click-action': {
+                  name: 'complete',
+                  payload: {
+                    selected_food_type: '${form.selected_food_type}',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    };
+  },
+
+  /**
+   * Build the Menu Items Flow JSON (WhatsApp Flows v7.3).
+   * Single screen: RadioButtonsGroup — menu items with images & names → complete.
+   * Data is populated dynamically at launch time with items matching the selected food type.
+   */
+  buildMenuItemsFlowJSON() {
+    return {
+      version: '7.3',
+      screens: [
+        {
+          id: 'MENU_ITEMS',
+          title: 'Select Item',
+          terminal: true,
+          success: true,
+          data: {
+            heading: {
+              type: 'string',
+              __example__: '🟢 Vegetarian Menu'
+            },
+            items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'item_abc123', title: 'Paneer Butter Masala', description: '₹250 • 3 variants', image: 'iVBORw0KGgo...' }
+              ]
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'menu_items_veg_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'TextHeading',
+                text: '${data.heading}'
+              },
+              {
+                type: 'TextBody',
+                text: 'Select an item to see its variants'
+              },
+              {
+                type: 'RadioButtonsGroup',
+                name: 'selected_item',
+                label: 'Menu Items',
+                required: true,
+                'data-source': '${data.items}'
+              },
+              {
+                type: 'Footer',
+                label: 'View Variants',
+                'on-click-action': {
+                  name: 'complete',
+                  payload: {
+                    selected_item: '${form.selected_item}',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
           }
         }
       ]
@@ -1874,33 +1936,27 @@ const catalogService = {
   async buildWelcomeFlowData(flowToken = 'welcome_service') {
     const chatbotImagesService = require('./chatbotImages');
 
-    // Fetch all service icons + food type icons from admin-configured chatbot images
-    const [orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, deliveryAddressImg, visitWebsiteImg, helpSupportImg, vegImg, nonvegImg, eggImg] = await Promise.all([
+    // Fetch all service icons from admin-configured chatbot images
+    const [orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, deliveryAddressImg, visitWebsiteImg, helpSupportImg] = await Promise.all([
       chatbotImagesService.getImageUrl('flow_order_food'),
       chatbotImagesService.getImageUrl('flow_my_orders'),
       chatbotImagesService.getImageUrl('flow_view_offers'),
       chatbotImagesService.getImageUrl('flow_account_details'),
       chatbotImagesService.getImageUrl('flow_delivery_address'),
       chatbotImagesService.getImageUrl('flow_visit_website'),
-      chatbotImagesService.getImageUrl('flow_help_support'),
-      chatbotImagesService.getImageUrl('flow_food_veg'),
-      chatbotImagesService.getImageUrl('flow_food_nonveg'),
-      chatbotImagesService.getImageUrl('flow_food_egg')
+      chatbotImagesService.getImageUrl('flow_help_support')
     ]);
 
     // Convert Cloudinary URLs to raw base64 (WhatsApp Flows require raw base64, not data URIs)
     const toBase64 = (url) => this._imageUrlToRawBase64(url);
-    const [orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, deliveryAddressB64, visitWebsiteB64, helpSupportB64, vegB64, nonvegB64, eggB64] = await Promise.all([
+    const [orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, deliveryAddressB64, visitWebsiteB64, helpSupportB64] = await Promise.all([
       toBase64(orderFoodImg),
       toBase64(myOrdersImg),
       toBase64(viewOffersImg),
       toBase64(accountDetailsImg),
       toBase64(deliveryAddressImg),
       toBase64(visitWebsiteImg),
-      toBase64(helpSupportImg),
-      toBase64(vegImg),
-      toBase64(nonvegImg),
-      toBase64(eggImg)
+      toBase64(helpSupportImg)
     ]);
 
     // Build service items — only include image if base64 conversion succeeded
@@ -1920,16 +1976,130 @@ const catalogService = {
       buildItem('help', 'Help & Support', 'Get assistance with your queries', helpSupportB64)
     ];
 
-    // Food type items for second screen (Veg / Non-Veg / Egg with images)
-    const food_types = [
-      buildItem('food_veg', 'Veg', 'Pure vegetarian dishes', vegB64),
-      buildItem('food_nonveg', 'Non-Veg', 'Non-vegetarian dishes', nonvegB64),
-      buildItem('food_egg', 'Egg', 'Egg-based dishes', eggB64)
-    ];
-
     return {
       services,
-      food_types,
+      flow_token: flowToken
+    };
+  },
+
+  /**
+   * Build data payload for the Food Type Selection Flow.
+   * Returns Veg/Non-Veg/Egg options with images from admin panel.
+   * @param {string} flowToken - Unique token for this flow instance
+   * @returns {Promise<object>} { food_types: [{id, title, description, image}], flow_token }
+   */
+  async buildFoodTypeFlowData(flowToken = 'food_type') {
+    const chatbotImagesService = require('./chatbotImages');
+
+    const [vegImg, nonvegImg, eggImg] = await Promise.all([
+      chatbotImagesService.getImageUrl('flow_food_veg'),
+      chatbotImagesService.getImageUrl('flow_food_nonveg'),
+      chatbotImagesService.getImageUrl('flow_food_egg')
+    ]);
+
+    const toBase64 = (url) => this._imageUrlToRawBase64(url);
+    const [vegB64, nonvegB64, eggB64] = await Promise.all([
+      toBase64(vegImg),
+      toBase64(nonvegImg),
+      toBase64(eggImg)
+    ]);
+
+    const buildItem = (id, title, description, base64Img) => {
+      const item = { id, title, description };
+      if (base64Img) item.image = base64Img;
+      return item;
+    };
+
+    return {
+      food_types: [
+        buildItem('food_veg', '🟢 Veg', 'Pure vegetarian dishes', vegB64),
+        buildItem('food_nonveg', '🔴 Non-Veg', 'Non-vegetarian dishes', nonvegB64),
+        buildItem('food_egg', '🟡 Egg', 'Egg-based dishes', eggB64)
+      ],
+      flow_token: flowToken
+    };
+  },
+
+  /**
+   * Build data payload for the Menu Items Flow.
+   * Fetches menu items from DB filtered by food type, converts images to base64.
+   * @param {string} foodType - 'veg', 'nonveg', or 'egg'
+   * @param {string} flowToken - Unique token for this flow instance
+   * @returns {Promise<object>} { heading, items: [{id, title, description, image}], flow_token }
+   */
+  async buildMenuItemsFlowData(foodType, flowToken = 'menu_items') {
+    const MenuItem = require('../models/MenuItem');
+
+    const headingMap = {
+      veg: '🟢 Vegetarian Menu',
+      nonveg: '🔴 Non-Veg Menu',
+      egg: '🟡 Egg Menu'
+    };
+
+    // Fetch available menu items
+    const allItems = await MenuItem.find({
+      available: true,
+      isPaused: { $ne: true }
+    }).lean();
+
+    // Filter by food type (same logic as chatbot.filterByFoodType but strict for variant items)
+    const matchesFoodType = (ft, pref) => {
+      if (!ft || ft === 'none') return false;
+      if (pref === 'veg') return ft === 'veg';
+      if (pref === 'nonveg') return ft === 'nonveg' || ft === 'egg';
+      if (pref === 'egg') return ft === 'egg';
+      return false;
+    };
+
+    const filteredItems = allItems.filter(item => {
+      if (item.variants && item.variants.length > 0) {
+        return item.variants.some(v => {
+          const vft = v.foodType || item.foodType;
+          return matchesFoodType(vft, foodType);
+        });
+      }
+      // Non-variant items: include 'none'/unset in all filters
+      const ft = item.foodType;
+      if (!ft || ft === 'none') return true;
+      return matchesFoodType(ft, foodType);
+    });
+
+    // Convert item images to base64 (limit to 10 items, use small thumbnails)
+    const toBase64 = (url) => this._imageUrlToRawBase64(url);
+    const itemsToShow = filteredItems.slice(0, 10);
+
+    const itemsWithBase64 = await Promise.all(
+      itemsToShow.map(async (item) => {
+        const base64Img = item.image ? await toBase64(item.image) : null;
+        // Build description: price or variant count
+        let description;
+        if (item.variants && item.variants.length > 0) {
+          const matchingVariants = item.variants.filter(v => {
+            const vft = v.foodType || item.foodType;
+            return foodType === 'both' || matchesFoodType(vft, foodType);
+          });
+          let count = 0;
+          matchingVariants.forEach(v => {
+            count += (v.quantities && v.quantities.length > 0) ? v.quantities.length : 1;
+          });
+          description = count + ' variant' + (count > 1 ? 's' : '') + ' available';
+        } else {
+          description = '\u20b9' + (item.offerPrice || item.price);
+        }
+
+        const entry = {
+          id: item._id.toString(),
+          title: item.name.substring(0, 30),
+          description
+        };
+        if (base64Img) entry.image = base64Img;
+        return entry;
+      })
+    );
+
+    return {
+      heading: headingMap[foodType] || '📋 Menu Items',
+      items: itemsWithBase64,
       flow_token: flowToken
     };
   },
@@ -2046,6 +2216,124 @@ const catalogService = {
    */
   getWelcomeFlowMode() {
     const status = process.env.WHATSAPP_WELCOME_FLOW_STATUS || 'DRAFT';
+    if (status === 'BLOCKED') return null;
+    return status === 'PUBLISHED' ? 'published' : 'draft';
+  },
+
+  // ==================== FOOD TYPE FLOW ====================
+
+  /**
+   * Create and publish the Food Type Selection Flow.
+   * Stores the Flow ID in process.env.WHATSAPP_FOOD_TYPE_FLOW_ID.
+   */
+  async setupFoodTypeFlow() {
+    const metaCloud = require('./metaCloud');
+    const flows = await metaCloud.getFlows();
+    const ftFlows = flows.filter(f => f.name.startsWith('JRB Food Type'));
+
+    const published = ftFlows.find(f => f.status === 'PUBLISHED');
+    if (published) {
+      logger.info('Food Type Flow already published, reusing', { flowId: published.id });
+      process.env.WHATSAPP_FOOD_TYPE_FLOW_ID = published.id;
+      process.env.WHATSAPP_FOOD_TYPE_FLOW_STATUS = 'PUBLISHED';
+      return { flowId: published.id, status: 'already_published' };
+    }
+
+    let maxVersion = 0;
+    ftFlows.forEach(f => {
+      const match = f.name.match(/v(\d+)/);
+      if (match) maxVersion = Math.max(maxVersion, parseInt(match[1]));
+    });
+    const FLOW_NAME = 'JRB Food Type v' + (maxVersion + 1);
+
+    const createResult = await metaCloud.createFlow(FLOW_NAME, ['OTHER']);
+    const flowId = createResult.id;
+
+    const flowJson = this.buildFoodTypeFlowJSON();
+    await metaCloud.updateFlowJSON(flowId, flowJson);
+
+    try {
+      await metaCloud.publishFlow(flowId);
+      process.env.WHATSAPP_FOOD_TYPE_FLOW_ID = flowId;
+      process.env.WHATSAPP_FOOD_TYPE_FLOW_STATUS = 'PUBLISHED';
+      logger.info('Food Type Flow created and published', { flowName: FLOW_NAME, flowId });
+      return { flowId, status: 'created_and_published' };
+    } catch (pubErr) {
+      logger.warn('Food Type Flow publish failed, using draft', {
+        flowName: FLOW_NAME, flowId,
+        error: pubErr.response?.data?.error?.message || pubErr.message
+      });
+      process.env.WHATSAPP_FOOD_TYPE_FLOW_ID = flowId;
+      process.env.WHATSAPP_FOOD_TYPE_FLOW_STATUS = 'DRAFT';
+      return { flowId, status: 'created_as_draft' };
+    }
+  },
+
+  getFoodTypeFlowId() {
+    return process.env.WHATSAPP_FOOD_TYPE_FLOW_ID || null;
+  },
+
+  getFoodTypeFlowMode() {
+    const status = process.env.WHATSAPP_FOOD_TYPE_FLOW_STATUS || 'DRAFT';
+    if (status === 'BLOCKED') return null;
+    return status === 'PUBLISHED' ? 'published' : 'draft';
+  },
+
+  // ==================== MENU ITEMS FLOW ====================
+
+  /**
+   * Create and publish the Menu Items Selection Flow.
+   * Stores the Flow ID in process.env.WHATSAPP_MENU_ITEMS_FLOW_ID.
+   */
+  async setupMenuItemsFlow() {
+    const metaCloud = require('./metaCloud');
+    const flows = await metaCloud.getFlows();
+    const miFlows = flows.filter(f => f.name.startsWith('JRB Menu Items'));
+
+    const published = miFlows.find(f => f.status === 'PUBLISHED');
+    if (published) {
+      logger.info('Menu Items Flow already published, reusing', { flowId: published.id });
+      process.env.WHATSAPP_MENU_ITEMS_FLOW_ID = published.id;
+      process.env.WHATSAPP_MENU_ITEMS_FLOW_STATUS = 'PUBLISHED';
+      return { flowId: published.id, status: 'already_published' };
+    }
+
+    let maxVersion = 0;
+    miFlows.forEach(f => {
+      const match = f.name.match(/v(\d+)/);
+      if (match) maxVersion = Math.max(maxVersion, parseInt(match[1]));
+    });
+    const FLOW_NAME = 'JRB Menu Items v' + (maxVersion + 1);
+
+    const createResult = await metaCloud.createFlow(FLOW_NAME, ['OTHER']);
+    const flowId = createResult.id;
+
+    const flowJson = this.buildMenuItemsFlowJSON();
+    await metaCloud.updateFlowJSON(flowId, flowJson);
+
+    try {
+      await metaCloud.publishFlow(flowId);
+      process.env.WHATSAPP_MENU_ITEMS_FLOW_ID = flowId;
+      process.env.WHATSAPP_MENU_ITEMS_FLOW_STATUS = 'PUBLISHED';
+      logger.info('Menu Items Flow created and published', { flowName: FLOW_NAME, flowId });
+      return { flowId, status: 'created_and_published' };
+    } catch (pubErr) {
+      logger.warn('Menu Items Flow publish failed, using draft', {
+        flowName: FLOW_NAME, flowId,
+        error: pubErr.response?.data?.error?.message || pubErr.message
+      });
+      process.env.WHATSAPP_MENU_ITEMS_FLOW_ID = flowId;
+      process.env.WHATSAPP_MENU_ITEMS_FLOW_STATUS = 'DRAFT';
+      return { flowId, status: 'created_as_draft' };
+    }
+  },
+
+  getMenuItemsFlowId() {
+    return process.env.WHATSAPP_MENU_ITEMS_FLOW_ID || null;
+  },
+
+  getMenuItemsFlowMode() {
+    const status = process.env.WHATSAPP_MENU_ITEMS_FLOW_STATUS || 'DRAFT';
     if (status === 'BLOCKED') return null;
     return status === 'PUBLISHED' ? 'published' : 'draft';
   },
