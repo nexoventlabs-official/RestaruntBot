@@ -6139,22 +6139,19 @@ const chatbot = {
 
   // ============ WELCOME & MAIN MENU ============
   async sendWelcome(phone) {
-    // Step 1: Send restaurant image with welcome message
-    const welcomeImageUrl = await chatbotImagesService.getImageUrl('welcome');
     const welcomeMessage = `🏨 *Perivi Hotel*\n\n` +
       `Welcome! 🙏\n\n` +
       `We're delighted to serve you delicious food. How can we help you today?`;
 
-    // Step 2: Try sending WhatsApp Flow for service selection (single combined message)
-    // For data_api_version 3.0 endpoint flows: DON'T send screenData in the message.
-    // The endpoint's INIT action provides initial data when the flow opens.
+    // Try sending WhatsApp Flow (endpoint-based, data_api_version 3.0)
+    // The endpoint's INIT action provides all screen data (services, food types)
+    // For published flows: do NOT send mode parameter (Meta rejects mode:'published')
     try {
       const flowId = catalogService.getWelcomeFlowId();
-      const flowMode = catalogService.getWelcomeFlowMode();
-      if (flowId && flowMode) {
+      const isDraft = catalogService.isWelcomeFlowDraft();
+      if (flowId) {
         const metaCloud = require('./metaCloud');
 
-        // Send Flow message — endpoint INIT provides screen data (services, food types etc.)
         await metaCloud.sendFlowMessage(phone, {
           flowId,
           flowCta: 'Choose Service',
@@ -6162,18 +6159,22 @@ const chatbot = {
           bodyText: welcomeMessage,
           footerText: 'Powered by JRB Gold',
           screenName: 'SERVICE_SELECT',
-          flowToken: `welcome_service_${phone}`,
-          mode: flowMode
+          flowToken: `welcome_${phone}_${Date.now()}`,
+          draft: isDraft
         });
 
-        logger.info('Sent Welcome Flow service selector', { phone, flowId, mode: flowMode });
+        logger.info('Sent Welcome Flow', { phone, flowId, isDraft });
         return;
       }
     } catch (flowErr) {
-      logger.info('Welcome Flow fallback to buttons', { error: flowErr.message });
+      logger.error('Welcome Flow failed, falling back to buttons', {
+        error: flowErr.message,
+        details: flowErr.response?.data?.error
+      });
     }
 
-    // Fallback: Send with quick reply buttons (original behavior)
+    // Fallback: reply buttons
+    const welcomeImageUrl = await chatbotImagesService.getImageUrl('welcome');
     await sendWithOptionalImage(phone, welcomeImageUrl, welcomeMessage, [
       { id: 'order_food', text: 'Order Food' },
       { id: 'my_orders', text: 'My Orders' },
@@ -6217,7 +6218,7 @@ const chatbot = {
           screenName: 'MENU_ITEMS',
           screenData: flowData,
           flowToken: `menu_items_${foodType}_${phone}`,
-          mode: menuItemsFlowMode
+          draft: menuItemsFlowMode === 'draft'
         });
         logger.info('Sent Menu Items Flow', { phone, foodType, itemCount: flowData.items.length });
         return;
@@ -6281,7 +6282,7 @@ const chatbot = {
 
         if (flowData.categories.length > 0) {
           // Send WhatsApp Flow message for category selection (categories first, catalog after selection)
-          logger.info('Attempting Flow category send', { phone, flowId, mode: flowMode, categories: flowData.categories.length });
+          logger.info('Attempting Flow category send', { phone, flowId, categories: flowData.categories.length });
           await metaCloud.sendFlowMessage(phone, {
             flowId,
             flowCta: 'Browse by Category',
@@ -6291,10 +6292,10 @@ const chatbot = {
             screenName: 'CATEGORY_SELECT',
             screenData: flowData,
             flowToken: `category_select_${phone}`,
-            mode: flowMode
+            draft: flowMode === 'draft'
           });
 
-          logger.info('Sent Flow category selector', { phone, categoryCount: flowData.categories.length, mode: flowMode });
+          logger.info('Sent Flow category selector', { phone, categoryCount: flowData.categories.length });
           return;
         }
       }
@@ -7245,7 +7246,7 @@ const chatbot = {
           }
 
           // Send WhatsApp Flow message for category selection
-          logger.info('Attempting Flow category send (order)', { phone, flowId, mode: flowMode, categories: flowData.categories.length });
+          logger.info('Attempting Flow category send (order)', { phone, flowId, categories: flowData.categories.length });
           await metaCloud.sendFlowMessage(phone, {
             flowId,
             flowCta: 'Browse by Category',
@@ -7255,10 +7256,10 @@ const chatbot = {
             screenName: 'CATEGORY_SELECT',
             screenData: flowData,
             flowToken: `category_select_order_${phone}`,
-            mode: flowMode
+            draft: flowMode === 'draft'
           });
 
-          logger.info('Sent Flow category selector (order)', { phone, categoryCount: flowData.categories.length, mode: flowMode });
+          logger.info('Sent Flow category selector (order)', { phone, categoryCount: flowData.categories.length });
           return;
         }
       }
@@ -9672,7 +9673,7 @@ const chatbot = {
           screenName: 'ACCOUNT_FORM',
           screenData: flowData,
           flowToken: `account_form_${phone}`,
-          mode: flowMode
+          draft: flowMode === 'draft'
         });
         logger.info('Sent Account Details Flow', { phone, flowId });
         return;
@@ -9771,7 +9772,7 @@ const chatbot = {
           screenName: 'ADDRESS_FORM',
           screenData: flowData,
           flowToken: `address_form_${phone}`,
-          mode: flowMode
+          draft: flowMode === 'draft'
         });
         logger.info('Sent Delivery Address Flow', { phone, flowId });
         return;

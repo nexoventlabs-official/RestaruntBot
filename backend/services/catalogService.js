@@ -1689,15 +1689,13 @@ const catalogService = {
    * @returns {object} Flow JSON definition
    */
   buildWelcomeFlowJSON(bannerBase64 = null) {
-    // WhatsApp Flows Image `src` requires RAW base64 strings (no data:image/...;base64, prefix).
-    // Banner is embedded directly in flow JSON; service icons go via dropdown `image` field.
-    // Layout matches AP Government WhatsApp Flow style: Banner → Text → Dropdown → Conditional RadioButtons → Confirm
-    // Uses data_exchange on Dropdown to dynamically show/hide food type section.
-    // When "Order Food" is selected → food types appear; other services → food types hidden.
+    // AP Government-style WhatsApp Flow:
+    //   Banner Image → Text → Dropdown (data_exchange) → Conditional RadioButtons → Footer
+    // data_api_version 3.0: INIT endpoint provides initial data, data_exchange updates on selection
 
     const screenChildren = [];
 
-    // Banner image at top — 8:1 ratio (1000×125)
+    // Banner image (optional)
     if (bannerBase64) {
       screenChildren.push({
         type: 'Image',
@@ -1705,10 +1703,11 @@ const catalogService = {
         width: 1000,
         height: 125,
         'scale-type': 'cover',
-        'alt-text': 'Perivi Hotel Welcome Banner'
+        'alt-text': 'Perivi Hotel'
       });
     }
 
+    // Service dropdown with data_exchange
     screenChildren.push(
       {
         type: 'TextBody',
@@ -1727,25 +1726,20 @@ const catalogService = {
           }
         }
       },
-      // Conditional: Food type selection — dynamically shown via data_exchange
-      // visible is bound to ${data.show_food_types} (boolean from endpoint)
+      // Conditional food type section — shown only when "Order Food" is selected
       {
         type: 'TextHeading',
         text: 'Select Food Type',
         visible: '${data.show_food_types}'
       },
       {
-        type: 'TextBody',
-        text: 'Choose your food preference',
-        visible: '${data.show_food_types}'
-      },
-      {
         type: 'RadioButtonsGroup',
         name: 'selected_food_type',
-        label: 'Select Food Type',
+        label: 'Food Type',
         'data-source': '${data.food_types}',
         visible: '${data.show_food_types}'
       },
+      // Confirm button
       {
         type: 'Footer',
         label: 'Confirm',
@@ -1767,7 +1761,7 @@ const catalogService = {
       screens: [
         {
           id: 'SERVICE_SELECT',
-          title: 'Service Selection',
+          title: 'Perivi Hotel',
           terminal: true,
           success: true,
           data: {
@@ -1777,14 +1771,12 @@ const catalogService = {
                 type: 'object',
                 properties: {
                   id: { type: 'string' },
-                  title: { type: 'string' },
-                  description: { type: 'string' },
-                  image: { type: 'string' }
+                  title: { type: 'string' }
                 }
               },
               __example__: [
-                { id: 'order_food', title: 'Order Food', description: 'Browse our menu', image: 'iVBORw0KGgo...' },
-                { id: 'my_orders', title: 'My Orders', description: 'Track delivery', image: 'iVBORw0KGgo...' }
+                { id: 'order_food', title: 'Order Food' },
+                { id: 'my_orders', title: 'My Orders' }
               ]
             },
             show_food_types: {
@@ -1797,18 +1789,16 @@ const catalogService = {
                 type: 'object',
                 properties: {
                   id: { type: 'string' },
-                  title: { type: 'string' },
-                  description: { type: 'string' },
-                  image: { type: 'string' }
+                  title: { type: 'string' }
                 }
               },
               __example__: [
-                { id: 'food_veg', title: '🟢 Veg', description: 'Vegetarian dishes', image: 'iVBORw0KGgo...' }
+                { id: 'food_veg', title: 'Veg' }
               ]
             },
             flow_token: {
               type: 'string',
-              __example__: 'welcome_service_919999999999'
+              __example__: 'welcome_token'
             }
           },
           layout: {
@@ -2309,17 +2299,27 @@ const catalogService = {
    * @returns {string|null}
    */
   getWelcomeFlowId() {
-    return process.env.WHATSAPP_WELCOME_FLOW_ID || null;
+    const id = process.env.WHATSAPP_WELCOME_FLOW_ID;
+    if (!id || id === 'BLOCKED') return null;
+    return id;
   },
 
   /**
-   * Get the Welcome Flow send mode (published, draft, or null if blocked).
-   * @returns {string|null} 'published', 'draft', or null if blocked/unavailable
+   * Check if the Welcome Flow is in draft mode.
+   * For published flows → false (mode param omitted from API call).
+   * For draft flows → true (mode:'draft' sent to API).
+   * @returns {boolean}
+   */
+  isWelcomeFlowDraft() {
+    const status = process.env.WHATSAPP_WELCOME_FLOW_STATUS || 'DRAFT';
+    return status !== 'PUBLISHED';
+  },
+
+  /**
+   * @deprecated Use isWelcomeFlowDraft() instead
    */
   getWelcomeFlowMode() {
-    const status = process.env.WHATSAPP_WELCOME_FLOW_STATUS || 'DRAFT';
-    if (status === 'BLOCKED') return null;
-    return status === 'PUBLISHED' ? 'published' : 'draft';
+    return this.isWelcomeFlowDraft() ? 'draft' : 'published';
   },
 
   // ==================== FOOD TYPE FLOW ====================

@@ -2062,7 +2062,7 @@ const metaCloud = {
         screenName = 'CATEGORY_SELECT',
         screenData = {},
         flowToken = 'unused',
-        mode = 'published'
+        draft = false    // ONLY set true for draft flows; omit mode for published
       } = options;
 
       // Build header: image if provided, otherwise text
@@ -2073,11 +2073,25 @@ const metaCloud = {
         header = { type: 'text', text: headerText || 'Menu' };
       }
 
-      // Build flow_action_payload: include data only if screenData is provided
+      // Build flow_action_payload: include data only if screenData has content
       // For endpoint flows (data_api_version 3.0), INIT provides data — don't send screenData
       const flowActionPayload = { screen: screenName };
       if (screenData && Object.keys(screenData).length > 0) {
         flowActionPayload.data = { ...screenData, flow_token: flowToken };
+      }
+
+      // Build parameters — mode: 'draft' ONLY for draft flows, OMIT for published
+      // Meta API rejects mode: 'published' — the field must not be present for published flows
+      const parameters = {
+        flow_message_version: '3',
+        flow_token: flowToken,
+        flow_id: flowId,
+        flow_cta: flowCta,
+        flow_action: 'navigate',
+        flow_action_payload: flowActionPayload
+      };
+      if (draft) {
+        parameters.mode = 'draft';
       }
 
       const payload = {
@@ -2091,15 +2105,7 @@ const metaCloud = {
           body: { text: bodyText || 'Select a category' },
           action: {
             name: 'flow',
-            parameters: {
-              flow_message_version: '3',
-              flow_token: flowToken,
-              flow_id: flowId,
-              flow_cta: flowCta,
-              mode,
-              flow_action: 'navigate',
-              flow_action_payload: flowActionPayload
-            }
+            parameters
           }
         }
       };
@@ -2108,7 +2114,7 @@ const metaCloud = {
         payload.interactive.footer = { text: footerText };
       }
 
-      logger.info('Sending WhatsApp Flow message', { to, flowId, screen: screenName, mode, cta: flowCta });
+      logger.info('Sending WhatsApp Flow message', { to, flowId, screen: screenName, draft, cta: flowCta });
 
       const response = await metaApi.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}` }
