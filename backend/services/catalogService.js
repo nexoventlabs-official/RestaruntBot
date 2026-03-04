@@ -1691,8 +1691,8 @@ const catalogService = {
   buildWelcomeFlowJSON(bannerBase64 = null) {
     // WhatsApp Flows Image `src` requires RAW base64 strings (no data:image/...;base64, prefix).
     // Banner is embedded directly in flow JSON; service icons go via dropdown `image` field.
-    // Layout matches AP Government WhatsApp Flow style: Banner → Text → Dropdown → Confirm
-    // Single screen: SERVICE_SELECT → complete (food type handled separately via Menu Items Flow)
+    // Layout matches AP Government WhatsApp Flow style: Banner → Text → Dropdown → Conditional RadioButtons → Confirm
+    // Single screen with conditional food type selection visible only when "Order Food" is chosen.
 
     const screenChildren = [];
 
@@ -1720,6 +1720,24 @@ const catalogService = {
         required: true,
         'data-source': '${data.services}'
       },
+      // Conditional: Food type selection — only visible when "Order Food" is selected
+      {
+        type: 'TextHeading',
+        text: '🍽️ What would you like?',
+        visible: "${form.selected_service} == 'order_food'"
+      },
+      {
+        type: 'TextBody',
+        text: 'Choose your food preference to browse the menu',
+        visible: "${form.selected_service} == 'order_food'"
+      },
+      {
+        type: 'RadioButtonsGroup',
+        name: 'selected_food_type',
+        label: 'Select Food Type',
+        'data-source': '${data.food_types}',
+        visible: "${form.selected_service} == 'order_food'"
+      },
       {
         type: 'Footer',
         label: 'Confirm',
@@ -1727,6 +1745,7 @@ const catalogService = {
           name: 'complete',
           payload: {
             selected_service: '${form.selected_service}',
+            selected_food_type: '${form.selected_food_type}',
             flow_token: '${data.flow_token}'
           }
         }
@@ -1756,6 +1775,21 @@ const catalogService = {
               __example__: [
                 { id: 'order_food', title: 'Order Food', description: 'Browse our menu', image: 'iVBORw0KGgo...' },
                 { id: 'my_orders', title: 'My Orders', description: 'Track delivery', image: 'iVBORw0KGgo...' }
+              ]
+            },
+            food_types: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'food_veg', title: '🟢 Veg', description: 'Vegetarian dishes', image: 'iVBORw0KGgo...' }
               ]
             },
             flow_token: {
@@ -1948,27 +1982,33 @@ const catalogService = {
   async buildWelcomeFlowData(flowToken = 'welcome_service') {
     const chatbotImagesService = require('./chatbotImages');
 
-    // Fetch all service icons from admin-configured chatbot images
-    const [orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, deliveryAddressImg, visitWebsiteImg, helpSupportImg] = await Promise.all([
+    // Fetch all service icons AND food type images from admin-configured chatbot images
+    const [orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, deliveryAddressImg, visitWebsiteImg, helpSupportImg, vegImg, nonvegImg, eggImg] = await Promise.all([
       chatbotImagesService.getImageUrl('flow_order_food'),
       chatbotImagesService.getImageUrl('flow_my_orders'),
       chatbotImagesService.getImageUrl('flow_view_offers'),
       chatbotImagesService.getImageUrl('flow_account_details'),
       chatbotImagesService.getImageUrl('flow_delivery_address'),
       chatbotImagesService.getImageUrl('flow_visit_website'),
-      chatbotImagesService.getImageUrl('flow_help_support')
+      chatbotImagesService.getImageUrl('flow_help_support'),
+      chatbotImagesService.getImageUrl('flow_food_veg'),
+      chatbotImagesService.getImageUrl('flow_food_nonveg'),
+      chatbotImagesService.getImageUrl('flow_food_egg')
     ]);
 
     // Convert Cloudinary URLs to raw base64 (WhatsApp Flows require raw base64, not data URIs)
     const toBase64 = (url) => this._imageUrlToRawBase64(url);
-    const [orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, deliveryAddressB64, visitWebsiteB64, helpSupportB64] = await Promise.all([
+    const [orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, deliveryAddressB64, visitWebsiteB64, helpSupportB64, vegB64, nonvegB64, eggB64] = await Promise.all([
       toBase64(orderFoodImg),
       toBase64(myOrdersImg),
       toBase64(viewOffersImg),
       toBase64(accountDetailsImg),
       toBase64(deliveryAddressImg),
       toBase64(visitWebsiteImg),
-      toBase64(helpSupportImg)
+      toBase64(helpSupportImg),
+      toBase64(vegImg),
+      toBase64(nonvegImg),
+      toBase64(eggImg)
     ]);
 
     // Build service items — only include image if base64 conversion succeeded
@@ -1988,8 +2028,15 @@ const catalogService = {
       buildItem('help', 'Help & Support', 'Get assistance with your queries', helpSupportB64)
     ];
 
+    const food_types = [
+      buildItem('food_veg', '🟢 Veg', 'Pure vegetarian dishes', vegB64),
+      buildItem('food_nonveg', '🔴 Non-Veg', 'Non-vegetarian dishes', nonvegB64),
+      buildItem('food_egg', '🟡 Egg', 'Egg-based dishes', eggB64)
+    ];
+
     return {
       services,
+      food_types,
       flow_token: flowToken
     };
   },

@@ -5059,8 +5059,8 @@ const chatbot = {
           egg: '🟡 Egg Menu'
         };
         
-        // If coming from order flow, send Menu Items Flow; otherwise category browsing
-        if (state.currentStep === 'select_food_type_order') {
+        // If coming from order flow OR directly from welcome flow (food type embedded), send Menu Items Flow
+        if (state.currentStep === 'select_food_type_order' || state.currentStep === 'main_menu' || state.currentStep === 'awaiting_main_menu') {
           await this.sendMenuItemsFlow(phone, state.foodTypePreference);
           state.currentStep = 'select_title_order';
         } else {
@@ -6184,35 +6184,8 @@ const chatbot = {
 
   // ============ ORDER FOOD MENU ============
   async sendOrderFoodMenu(phone) {
-    // Try sending Food Type Flow (Veg / Non-Veg / Egg with images)
-    try {
-      const foodTypeFlowId = catalogService.getFoodTypeFlowId();
-      const foodTypeFlowMode = catalogService.getFoodTypeFlowMode();
-      if (foodTypeFlowId && foodTypeFlowMode) {
-        const metaCloud = require('./metaCloud');
-        const flowData = await catalogService.buildFoodTypeFlowData(`food_type_${phone}`);
-
-        const browseMenuImageUrl = await chatbotImagesService.getImageUrl('browse_menu');
-        await metaCloud.sendFlowMessage(phone, {
-          flowId: foodTypeFlowId,
-          flowCta: 'Choose Food Type',
-          headerImageUrl: browseMenuImageUrl || undefined,
-          headerText: 'Order Food',
-          bodyText: '🍽️ *Browse Menu*\n\nSelect your food preference to see available items.',
-          footerText: 'Perivi Hotel',
-          screenName: 'FOOD_TYPE',
-          screenData: flowData,
-          flowToken: `food_type_${phone}`,
-          mode: foodTypeFlowMode
-        });
-        logger.info('Sent Food Type Flow', { phone, flowId: foodTypeFlowId });
-        return;
-      }
-    } catch (flowErr) {
-      logger.info('Food Type Flow fallback to buttons', { error: flowErr.message });
-    }
-
-    // Fallback: reply buttons
+    // When Order Food is selected outside the welcome flow (e.g., from reply buttons),
+    // send food type selection. The welcome flow handles this inline with conditional visibility.
     await this.sendFoodTypeSelection(phone);
   },
 

@@ -436,12 +436,21 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       messageType = 'button'; // Treat as button press for chatbot routing
                       logger.info('Flow category selected', { category: responseData.selected_category, selectedId, isOrderFlow });
                     }
-                    // Welcome service selection flow (single screen — no food type)
+                    // Welcome service selection flow (with conditional food type for Order Food)
                     else if (responseData.flow_token?.startsWith('welcome_service_') && responseData.selected_service) {
-                      selectedId = responseData.selected_service;
-                      text = responseData.selected_service;
-                      messageType = 'button';
-                      logger.info('Flow welcome service selected', { service: responseData.selected_service, selectedId });
+                      // If user selected "Order Food" AND chose a food type, route to food type handler
+                      if (responseData.selected_service === 'order_food' && responseData.selected_food_type) {
+                        selectedId = responseData.selected_food_type;
+                        text = responseData.selected_food_type;
+                        messageType = 'button';
+                        logger.info('Flow welcome: order food with food type', { service: 'order_food', foodType: responseData.selected_food_type });
+                      } else {
+                        // Other services — route normally
+                        selectedId = responseData.selected_service;
+                        text = responseData.selected_service;
+                        messageType = 'button';
+                        logger.info('Flow welcome service selected', { service: responseData.selected_service });
+                      }
                     }
                     // Food Type selection flow (Veg / Non-Veg / Egg)
                     else if (responseData.flow_token?.startsWith('food_type_') && responseData.selected_food_type) {
