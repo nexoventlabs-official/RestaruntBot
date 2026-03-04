@@ -1963,30 +1963,53 @@ const catalogService = {
 
   /**
    * Republish the Welcome Flow with updated banner image.
-   * Creates a new flow version, uploads the banner as an asset, publishes, 
-   * then deprecates the old flow.
+   * Deprecates ALL published welcome flows, then creates a brand new version
+   * with the latest banner image from the admin panel.
    * @returns {Promise<{flowId: string, status: string, oldFlowId?: string}>}
    */
   async republishWelcomeFlow() {
     const oldFlowId = process.env.WHATSAPP_WELCOME_FLOW_ID;
     const metaCloud = require('./metaCloud');
-
-    // Force creation of a new version by temporarily clearing the published status
-    // so setupWelcomeFlow won't short-circuit on the existing published flow
     const axios = require('axios');
-    const { accessToken } = { accessToken: process.env.META_ACCESS_TOKEN };
+    const accessToken = process.env.META_ACCESS_TOKEN;
 
-    // Deprecate old flow first so setupWelcomeFlow creates a new one
-    if (oldFlowId) {
-      try {
-        await axios.post(
-          `https://graph.facebook.com/v24.0/${oldFlowId}`,
-          { status: 'DEPRECATED' },
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        logger.info('Deprecated old welcome flow for republish', { oldFlowId });
-      } catch (depErr) {
-        logger.warn('Could not deprecate old flow', { oldFlowId, error: depErr.message });
+    // Deprecate ALL published welcome flows (not just the one in .env)
+    // This prevents setupWelcomeFlow from short-circuiting on any existing published flow
+    try {
+      const flows = await metaCloud.getFlows();
+      const publishedWelcomeFlows = flows.filter(
+        f => f.name.startsWith('JRB Welcome Services') && f.status === 'PUBLISHED'
+      );
+
+      for (const flow of publishedWelcomeFlows) {
+        try {
+          await axios.post(
+            `https://graph.facebook.com/v24.0/${flow.id}`,
+            { status: 'DEPRECATED' },
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+          logger.info('Deprecated published welcome flow for republish', { flowId: flow.id, name: flow.name });
+        } catch (depErr) {
+          logger.warn('Could not deprecate flow', { flowId: flow.id, error: depErr.message });
+        }
+      }
+
+      if (publishedWelcomeFlows.length === 0) {
+        logger.info('No published welcome flows to deprecate');
+      }
+    } catch (listErr) {
+      logger.warn('Could not list flows for deprecation, proceeding anyway', { error: listErr.message });
+      // Still try to deprecate the old flow ID from env as fallback
+      if (oldFlowId) {
+        try {
+          await axios.post(
+            `https://graph.facebook.com/v24.0/${oldFlowId}`,
+            { status: 'DEPRECATED' },
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+        } catch (depErr) {
+          logger.warn('Could not deprecate old flow', { oldFlowId, error: depErr.message });
+        }
       }
     }
 
@@ -1994,7 +2017,7 @@ const catalogService = {
     process.env.WHATSAPP_WELCOME_FLOW_ID = '';
     process.env.WHATSAPP_WELCOME_FLOW_STATUS = '';
 
-    // Now setup will create a new version
+    // Now setup will create a new version (no published flow exists to short-circuit)
     const result = await this.setupWelcomeFlow();
     return { ...result, oldFlowId };
   },

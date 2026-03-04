@@ -72,7 +72,8 @@ export default function FlowImages() {
       setSuccess(`New Welcome Flow version created! Flow ID: ${res.data.flowId} (${res.data.status})`);
       setTimeout(() => setSuccess(null), 8000);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to republish welcome flow');
+      const serverMsg = err.response?.data?.error || err.response?.data?.message || '';
+      setError(serverMsg ? `Failed to republish: ${serverMsg}` : 'Failed to republish welcome flow. Check server logs.');
     } finally {
       setRepublishing(false);
     }
