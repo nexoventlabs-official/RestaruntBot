@@ -1298,28 +1298,23 @@ const metaCloud = {
             data.image_link = product.imageUrl;
           }
 
-          return { method: 'UPDATE', data };
+          endTimer({ success: true });
+          return { method: 'CREATE', data };
         });
 
-        // items_batch is asynchronous on Meta side — use longer timeout (60s)
         const batchResponse = await metaApi.post(
           `https://graph.facebook.com/v24.0/${catalogId}/items_batch`,
           {
             item_type: 'PRODUCT_ITEM',
             requests: itemsBatchRequests
           },
-          {
-            headers: { Authorization: `Bearer ${accessToken}` },
-            timeout: 60000
-          }
+          { headers: { Authorization: `Bearer ${accessToken}` } }
         );
 
         logger.info('Meta items_batch success', {
-          catalogId,
           count: products.length,
           handles: batchResponse.data?.handles,
-          validation: batchResponse.data?.validation_status,
-          retailerIds: products.map(p => p.retailerId)
+          validation: batchResponse.data?.validation_status
         });
 
         endTimer({ success: true });
@@ -1329,22 +1324,9 @@ const metaCloud = {
       endTimer({ success: false, error: error.message });
       const errorData = error.response?.data?.error || error.response?.data;
       logger.error('Meta batchCreateOrUpdateProducts error', {
-        catalogId,
         error: errorData?.message || error.message,
-        errorCode: errorData?.code,
-        errorSubcode: errorData?.error_subcode,
-        errorType: errorData?.type,
-        count: products.length,
-        retailerIds: products.map(p => p.retailerId),
-        httpStatus: error.response?.status,
-        fullResponse: JSON.stringify(error.response?.data || {}).substring(0, 500)
+        count: products.length
       });
-      // Attach error details for callers to inspect
-      error.metaErrorDetails = {
-        message: errorData?.message || error.message,
-        code: errorData?.code,
-        httpStatus: error.response?.status
-      };
       throw error;
     }
   },
@@ -1999,38 +1981,6 @@ const metaCloud = {
   },
 
   /**
-   * Set the data exchange endpoint URI on a Flow.
-   * Required for flows that use data_exchange actions (e.g., on-select-action).
-   * @param {string} flowId - The Flow ID
-   * @param {string} endpointUri - The publicly accessible endpoint URL
-   */
-  async setFlowEndpointUri(flowId, endpointUri) {
-    const endTimer = startTimer('meta.setFlowEndpointUri');
-
-    try {
-      const { accessToken } = getConfig();
-      const response = await metaApi.post(
-        `https://graph.facebook.com/v24.0/${flowId}`,
-        { endpoint_uri: endpointUri },
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-
-      logger.info('Flow endpoint URI set', { flowId, endpointUri });
-      endTimer({ success: true });
-      return response.data;
-    } catch (error) {
-      endTimer({ success: false, error: error.message });
-      logger.error('setFlowEndpointUri error', {
-        flowId,
-        endpointUri,
-        error: error.response?.data?.error?.message || error.message,
-        details: error.response?.data
-      });
-      throw error;
-    }
-  },
-
-  /**
    * Send an interactive Flow message to a user (user-initiated conversation).
    *
    * @param {string} phone - Recipient phone number
@@ -2062,7 +2012,7 @@ const metaCloud = {
         screenName = 'CATEGORY_SELECT',
         screenData = {},
         flowToken = 'unused',
-        draft = false    // ONLY set true for draft flows; omit mode for published
+        mode = 'published'
       } = options;
 
       // Build header: image if provided, otherwise text
@@ -2071,36 +2021,6 @@ const metaCloud = {
         header = { type: 'image', image: { link: headerImageUrl } };
       } else {
         header = { type: 'text', text: headerText || 'Menu' };
-      }
-
-      // Build flow_action_payload: include data only if screenData has content
-      // For endpoint flows (data_api_version 3.0), INIT provides data — don't send screenData
-      // If screenName is null/undefined, omit flow_action and flow_action_payload entirely
-      // (endpoint determines first screen via INIT action)
-      const isEndpointFlow = !screenName;
-      const flowActionPayload = {};
-      if (screenName) {
-        flowActionPayload.screen = screenName;
-      }
-      if (screenData && Object.keys(screenData).length > 0) {
-        flowActionPayload.data = { ...screenData, flow_token: flowToken };
-      }
-
-      // Build parameters — mode: 'draft' ONLY for draft flows, OMIT for published
-      // Meta API rejects mode: 'published' — the field must not be present for published flows
-      const parameters = {
-        flow_message_version: '3',
-        flow_token: flowToken,
-        flow_id: flowId,
-        flow_cta: flowCta
-      };
-      // Only include flow_action and flow_action_payload for non-endpoint flows (screen specified)
-      if (!isEndpointFlow) {
-        parameters.flow_action = 'navigate';
-        parameters.flow_action_payload = flowActionPayload;
-      }
-      if (draft) {
-        parameters.mode = 'draft';
       }
 
       const payload = {
@@ -2114,7 +2034,21 @@ const metaCloud = {
           body: { text: bodyText || 'Select a category' },
           action: {
             name: 'flow',
-            parameters
+            parameters: {
+              flow_message_version: '3',
+              flow_token: flowToken,
+              flow_id: flowId,
+              flow_cta: flowCta,
+              mode,
+              flow_action: 'navigate',
+              flow_action_payload: {
+                screen: screenName,
+                data: {
+                  ...screenData,
+                  flow_token: flowToken
+                }
+              }
+            }
           }
         }
       };
@@ -2123,7 +2057,7 @@ const metaCloud = {
         payload.interactive.footer = { text: footerText };
       }
 
-      logger.info('Sending WhatsApp Flow message', { to, flowId, screen: screenName, draft, cta: flowCta });
+      logger.info('Sending WhatsApp Flow message', { to, flowId, screen: screenName, mode, cta: flowCta });
 
       const response = await metaApi.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}` }

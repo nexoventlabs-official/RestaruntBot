@@ -5059,9 +5059,9 @@ const chatbot = {
           egg: '🟡 Egg Menu'
         };
         
-        // If coming from order flow OR directly from welcome flow (food type embedded), send Menu Items Flow
-        if (state.currentStep === 'select_food_type_order' || state.currentStep === 'main_menu' || state.currentStep === 'awaiting_main_menu') {
-          await this.sendMenuItemsFlow(phone, state.foodTypePreference);
+        // If coming from order flow, show title list; otherwise category browsing
+        if (state.currentStep === 'select_food_type_order') {
+          await this.sendTitleListForOrder(phone, menuItems, state.foodTypePreference, foodTypeLabels[state.foodTypePreference]);
           state.currentStep = 'select_title_order';
         } else {
           await this.sendMenuCategoriesWithLabel(phone, filteredItems, foodTypeLabels[state.foodTypePreference]);
@@ -6139,42 +6139,42 @@ const chatbot = {
 
   // ============ WELCOME & MAIN MENU ============
   async sendWelcome(phone) {
+    // Step 1: Send restaurant image with welcome message
+    const welcomeImageUrl = await chatbotImagesService.getImageUrl('welcome');
     const welcomeMessage = `🏨 *Perivi Hotel*\n\n` +
       `Welcome! 🙏\n\n` +
       `We're delighted to serve you delicious food. How can we help you today?`;
 
-    // Try sending WhatsApp Flow (endpoint-based, data_api_version 3.0)
-    // The endpoint's INIT action provides all screen data (services, food types)
-    // For published flows: do NOT send mode parameter (Meta rejects mode:'published')
+    // Step 2: Try sending WhatsApp Flow for service selection (single combined message)
     try {
       const flowId = catalogService.getWelcomeFlowId();
-      const isDraft = catalogService.isWelcomeFlowDraft();
-      if (flowId) {
+      const flowMode = catalogService.getWelcomeFlowMode();
+      if (flowId && flowMode) {
         const metaCloud = require('./metaCloud');
+        const flowData = await catalogService.buildWelcomeFlowData(`welcome_service_${phone}`);
 
+        // Send single Flow message with welcome image as header + service list in body
         await metaCloud.sendFlowMessage(phone, {
           flowId,
           flowCta: 'Choose Service',
+          headerImageUrl: welcomeImageUrl || undefined,
           headerText: 'Perivi Hotel',
           bodyText: welcomeMessage,
           footerText: 'Powered by JRB Gold',
-          screenName: null, // endpoint-based flow (data_api_version 3.0) — INIT determines first screen
-          flowToken: `welcome_${phone}_${Date.now()}`,
-          draft: isDraft
+          screenName: 'SERVICE_SELECT',
+          screenData: flowData,
+          flowToken: `welcome_service_${phone}`,
+          mode: flowMode
         });
 
-        logger.info('Sent Welcome Flow', { phone, flowId, isDraft });
+        logger.info('Sent Welcome Flow service selector', { phone, flowId, mode: flowMode });
         return;
       }
     } catch (flowErr) {
-      logger.error('Welcome Flow failed, falling back to buttons', {
-        error: flowErr.message,
-        details: flowErr.response?.data?.error
-      });
+      logger.info('Welcome Flow fallback to buttons', { error: flowErr.message });
     }
 
-    // Fallback: reply buttons
-    const welcomeImageUrl = await chatbotImagesService.getImageUrl('welcome');
+    // Fallback: Send with quick reply buttons (original behavior)
     await sendWithOptionalImage(phone, welcomeImageUrl, welcomeMessage, [
       { id: 'order_food', text: 'Order Food' },
       { id: 'my_orders', text: 'My Orders' },
@@ -6184,54 +6184,8 @@ const chatbot = {
 
   // ============ ORDER FOOD MENU ============
   async sendOrderFoodMenu(phone) {
-    // When Order Food is selected outside the welcome flow (e.g., from reply buttons),
-    // send food type selection. The welcome flow handles this inline with conditional visibility.
+    // Send only the browse menu options (same as sendFoodTypeSelection)
     await this.sendFoodTypeSelection(phone);
-  },
-
-  // ============ MENU ITEMS FLOW ============
-  async sendMenuItemsFlow(phone, foodType) {
-    // Try sending Menu Items Flow with items matching the food type
-    try {
-      const menuItemsFlowId = catalogService.getMenuItemsFlowId();
-      const menuItemsFlowMode = catalogService.getMenuItemsFlowMode();
-      if (menuItemsFlowId && menuItemsFlowMode) {
-        const metaCloud = require('./metaCloud');
-        const flowData = await catalogService.buildMenuItemsFlowData(foodType, `menu_items_${foodType}_${phone}`);
-
-        if (!flowData.items || flowData.items.length === 0) {
-          const searchNoResultsImg = await chatbotImagesService.getImageUrl('search_no_results');
-          await sendWithOptionalImage(phone, searchNoResultsImg, '📋 No matching items found for this food type.', [
-            { id: 'order_food', text: 'Order Food' },
-            { id: 'home', text: 'Main Menu' }
-          ]);
-          return;
-        }
-
-        const foodTypeLabel = foodType === 'veg' ? '🟢 Veg' : foodType === 'nonveg' ? '🔴 Non-Veg' : '🟡 Egg';
-        await metaCloud.sendFlowMessage(phone, {
-          flowId: menuItemsFlowId,
-          flowCta: 'Select Item',
-          headerText: flowData.heading,
-          bodyText: `${foodTypeLabel} items available. Tap below to pick a dish and see its variants.`,
-          footerText: 'Perivi Hotel',
-          screenName: 'MENU_ITEMS',
-          screenData: flowData,
-          flowToken: `menu_items_${foodType}_${phone}`,
-          draft: menuItemsFlowMode === 'draft'
-        });
-        logger.info('Sent Menu Items Flow', { phone, foodType, itemCount: flowData.items.length });
-        return;
-      }
-    } catch (flowErr) {
-      logger.info('Menu Items Flow fallback to list', { error: flowErr.message });
-    }
-
-    // Fallback: use existing title list for order
-    const MenuItem = require('../models/MenuItem');
-    const menuItems = await MenuItem.find({ available: true, isPaused: { $ne: true } }).lean();
-    const foodTypeLabels = { veg: '🌿 Veg Menu', nonveg: '🍗 Non-Veg Menu', egg: '🟡 Egg Menu' };
-    await this.sendTitleListForOrder(phone, menuItems, foodType, foodTypeLabels[foodType]);
   },
 
   // ============ MY ORDERS MENU ============
@@ -6282,7 +6236,7 @@ const chatbot = {
 
         if (flowData.categories.length > 0) {
           // Send WhatsApp Flow message for category selection (categories first, catalog after selection)
-          logger.info('Attempting Flow category send', { phone, flowId, categories: flowData.categories.length });
+          logger.info('Attempting Flow category send', { phone, flowId, mode: flowMode, categories: flowData.categories.length });
           await metaCloud.sendFlowMessage(phone, {
             flowId,
             flowCta: 'Browse by Category',
@@ -6292,10 +6246,10 @@ const chatbot = {
             screenName: 'CATEGORY_SELECT',
             screenData: flowData,
             flowToken: `category_select_${phone}`,
-            draft: flowMode === 'draft'
+            mode: flowMode
           });
 
-          logger.info('Sent Flow category selector', { phone, categoryCount: flowData.categories.length });
+          logger.info('Sent Flow category selector', { phone, categoryCount: flowData.categories.length, mode: flowMode });
           return;
         }
       }
@@ -7246,7 +7200,7 @@ const chatbot = {
           }
 
           // Send WhatsApp Flow message for category selection
-          logger.info('Attempting Flow category send (order)', { phone, flowId, categories: flowData.categories.length });
+          logger.info('Attempting Flow category send (order)', { phone, flowId, mode: flowMode, categories: flowData.categories.length });
           await metaCloud.sendFlowMessage(phone, {
             flowId,
             flowCta: 'Browse by Category',
@@ -7256,10 +7210,10 @@ const chatbot = {
             screenName: 'CATEGORY_SELECT',
             screenData: flowData,
             flowToken: `category_select_order_${phone}`,
-            draft: flowMode === 'draft'
+            mode: flowMode
           });
 
-          logger.info('Sent Flow category selector (order)', { phone, categoryCount: flowData.categories.length });
+          logger.info('Sent Flow category selector (order)', { phone, categoryCount: flowData.categories.length, mode: flowMode });
           return;
         }
       }
@@ -9673,7 +9627,7 @@ const chatbot = {
           screenName: 'ACCOUNT_FORM',
           screenData: flowData,
           flowToken: `account_form_${phone}`,
-          draft: flowMode === 'draft'
+          mode: flowMode
         });
         logger.info('Sent Account Details Flow', { phone, flowId });
         return;
@@ -9772,7 +9726,7 @@ const chatbot = {
           screenName: 'ADDRESS_FORM',
           screenData: flowData,
           flowToken: `address_form_${phone}`,
-          draft: flowMode === 'draft'
+          mode: flowMode
         });
         logger.info('Sent Delivery Address Flow', { phone, flowId });
         return;

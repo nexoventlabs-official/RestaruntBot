@@ -137,12 +137,11 @@ router.post('/setup-welcome-flow', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/catalog/republish-welcome-flow - Update/create welcome Flow (optionally target a specific flow ID)
+// POST /api/catalog/republish-welcome-flow - Create a new version of the welcome Flow (deprecates old)
 router.post('/republish-welcome-flow', authMiddleware, async (req, res) => {
   try {
     const oldFlowId = catalogService.getWelcomeFlowId();
-    const targetFlowId = req.body?.flowId || null;
-    const result = await catalogService.republishWelcomeFlow(targetFlowId);
+    const result = await catalogService.republishWelcomeFlow();
     
     // Persist new flow ID to .env file so it survives restarts
     if (result.flowId) {
@@ -155,10 +154,9 @@ router.post('/republish-welcome-flow', authMiddleware, async (req, res) => {
           /WHATSAPP_WELCOME_FLOW_ID=.*/,
           `WHATSAPP_WELCOME_FLOW_ID=${result.flowId}`
         );
-        const isPublished = result.status.includes('published');
         envContent = envContent.replace(
           /WHATSAPP_WELCOME_FLOW_STATUS=.*/,
-          `WHATSAPP_WELCOME_FLOW_STATUS=${isPublished ? 'PUBLISHED' : 'DRAFT'}`
+          `WHATSAPP_WELCOME_FLOW_STATUS=${result.status === 'created_and_published' ? 'PUBLISHED' : 'DRAFT'}`
         );
         fs.writeFileSync(envPath, envContent);
       } catch (envErr) {
@@ -168,32 +166,12 @@ router.post('/republish-welcome-flow', authMiddleware, async (req, res) => {
 
     res.json({
       success: true,
-      message: `Welcome Flow updated (ID: ${result.flowId}, status: ${result.status})`,
+      message: `New Welcome Flow version created (ID: ${result.flowId}, status: ${result.status})`,
       oldFlowId,
       ...result
     });
   } catch (error) {
     return logRouteError(res, 'Republish Welcome Flow error', error);
-  }
-});
-
-// POST /api/catalog/setup-food-type-flow - Create & publish the Food Type selection Flow
-router.post('/setup-food-type-flow', authMiddleware, async (req, res) => {
-  try {
-    const result = await catalogService.setupFoodTypeFlow();
-    res.json({ success: true, ...result });
-  } catch (error) {
-    return logRouteError(res, 'Setup Food Type Flow error', error);
-  }
-});
-
-// POST /api/catalog/setup-menu-items-flow - Create & publish the Menu Items selection Flow
-router.post('/setup-menu-items-flow', authMiddleware, async (req, res) => {
-  try {
-    const result = await catalogService.setupMenuItemsFlow();
-    res.json({ success: true, ...result });
-  } catch (error) {
-    return logRouteError(res, 'Setup Menu Items Flow error', error);
   }
 });
 
@@ -220,18 +198,7 @@ router.get('/flow-status', authMiddleware, async (req, res) => {
     welcomeFlow: {
       flowId: catalogService.getWelcomeFlowId(),
       flowMode: catalogService.getWelcomeFlowMode(),
-      flowStatus: process.env.WHATSAPP_WELCOME_FLOW_STATUS || 'NOT_SET',
-      endpointConfigured: !!process.env.FLOW_ENDPOINT_PRIVATE_KEY
-    },
-    foodTypeFlow: {
-      flowId: catalogService.getFoodTypeFlowId(),
-      flowMode: catalogService.getFoodTypeFlowMode(),
-      flowStatus: process.env.WHATSAPP_FOOD_TYPE_FLOW_STATUS || 'NOT_SET'
-    },
-    menuItemsFlow: {
-      flowId: catalogService.getMenuItemsFlowId(),
-      flowMode: catalogService.getMenuItemsFlowMode(),
-      flowStatus: process.env.WHATSAPP_MENU_ITEMS_FLOW_STATUS || 'NOT_SET'
+      flowStatus: process.env.WHATSAPP_WELCOME_FLOW_STATUS || 'NOT_SET'
     },
     catalogEnabled: catalogService.isEnabled(),
     catalogId: process.env.META_CATALOG_ID ? 'set' : 'not_set',
@@ -239,40 +206,6 @@ router.get('/flow-status', authMiddleware, async (req, res) => {
     tokenSet: !!process.env.META_ACCESS_TOKEN,
     wabaId: process.env.META_WABA_ID ? 'set' : 'not_set'
   });
-});
-
-// POST /api/catalog/setup-flow-endpoint - Register data_exchange endpoint on welcome flow
-// Sets the endpoint_uri on the flow so WhatsApp can call it for on-select-action data_exchange.
-router.post('/setup-flow-endpoint', authMiddleware, async (req, res) => {
-  try {
-    const metaCloud = require('../services/metaCloud');
-    const catalogService = require('../services/catalogService');
-    const flowId = req.body.flowId || catalogService.getWelcomeFlowId();
-
-    if (!flowId) {
-      return res.status(400).json({ error: 'No welcome flow ID configured. Set WHATSAPP_WELCOME_FLOW_ID first.' });
-    }
-
-    const backendUrl = process.env.BACKEND_URL;
-    if (!backendUrl) {
-      return res.status(400).json({ error: 'BACKEND_URL not configured' });
-    }
-
-    const endpointUri = `${backendUrl}/api/webhook/flow-endpoint`;
-
-    // Set the endpoint URI on the flow
-    const result = await metaCloud.setFlowEndpointUri(flowId, endpointUri);
-
-    res.json({
-      success: true,
-      flowId,
-      endpointUri,
-      metaResponse: result,
-      note: 'Endpoint registered. The flow must be in DRAFT state. After setting endpoint, upload JSON and publish.'
-    });
-  } catch (error) {
-    return logRouteError(res, 'Setup flow endpoint error', error);
-  }
 });
 
 // GET /api/catalog/flow/:flowId - Get Flow details

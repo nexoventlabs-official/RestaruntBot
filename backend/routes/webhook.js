@@ -21,7 +21,6 @@ const User = require('../models/User');
 const OutboundMessage = require('../models/OutboundMessage');
 const InboundMessage = require('../models/InboundMessage');
 const dataEvents = require('../services/eventEmitter');
-const { handleFlowEndpoint } = require('../services/flowEndpoint');
 const router = express.Router();
 
 // ============================================================
@@ -437,36 +436,20 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       messageType = 'button'; // Treat as button press for chatbot routing
                       logger.info('Flow category selected', { category: responseData.selected_category, selectedId, isOrderFlow });
                     }
-                    // Welcome service selection flow (with conditional food type for Order Food)
+                    // Welcome service selection flow
                     else if (responseData.flow_token?.startsWith('welcome_service_') && responseData.selected_service) {
-                      // If user selected "Order Food" AND chose a food type, route to food type handler
-                      if (responseData.selected_service === 'order_food' && responseData.selected_food_type) {
+                      // If food type was also selected (Order Food → Veg/Non-Veg/Egg), use that
+                      if (responseData.selected_food_type) {
                         selectedId = responseData.selected_food_type;
                         text = responseData.selected_food_type;
                         messageType = 'button';
-                        logger.info('Flow welcome: order food with food type', { service: 'order_food', foodType: responseData.selected_food_type });
+                        logger.info('Flow food type selected', { service: responseData.selected_service, foodType: responseData.selected_food_type });
                       } else {
-                        // Other services — route normally
                         selectedId = responseData.selected_service;
                         text = responseData.selected_service;
                         messageType = 'button';
-                        logger.info('Flow welcome service selected', { service: responseData.selected_service });
+                        logger.info('Flow welcome service selected', { service: responseData.selected_service, selectedId });
                       }
-                    }
-                    // Food Type selection flow (Veg / Non-Veg / Egg)
-                    else if (responseData.flow_token?.startsWith('food_type_') && responseData.selected_food_type) {
-                      selectedId = responseData.selected_food_type;
-                      text = responseData.selected_food_type;
-                      messageType = 'button';
-                      logger.info('Flow food type selected', { foodType: responseData.selected_food_type });
-                    }
-                    // Menu Items flow (user selected a specific menu item)
-                    else if (responseData.flow_token?.startsWith('menu_items_') && responseData.selected_item) {
-                      // Route as order_title_{itemId} so existing chatbot handles variant display
-                      selectedId = 'order_title_' + responseData.selected_item;
-                      text = responseData.selected_item;
-                      messageType = 'button';
-                      logger.info('Flow menu item selected', { itemId: responseData.selected_item });
                     }
                     // Account Details form flow response
                     else if (responseData.flow_token?.startsWith('account_form_') && responseData.customer_name) {
@@ -660,13 +643,5 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
     logger.error('Meta webhook async processing error', { error: error.message, stack: error.stack });
   }
 });
-
-// ============================================================
-// WHATSAPP FLOWS DATA EXCHANGE ENDPOINT
-// ============================================================
-// WhatsApp calls this endpoint when a flow component triggers data_exchange.
-// Receives encrypted request, processes, returns encrypted response.
-// No auth middleware — WhatsApp authenticates via encryption (RSA-OAEP + AES-GCM).
-router.post('/flow-endpoint', handleFlowEndpoint);
 
 module.exports = router;
