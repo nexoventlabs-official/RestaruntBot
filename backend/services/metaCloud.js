@@ -2075,7 +2075,13 @@ const metaCloud = {
 
       // Build flow_action_payload: include data only if screenData has content
       // For endpoint flows (data_api_version 3.0), INIT provides data — don't send screenData
-      const flowActionPayload = { screen: screenName };
+      // If screenName is null/undefined, omit flow_action and flow_action_payload entirely
+      // (endpoint determines first screen via INIT action)
+      const isEndpointFlow = !screenName;
+      const flowActionPayload = {};
+      if (screenName) {
+        flowActionPayload.screen = screenName;
+      }
       if (screenData && Object.keys(screenData).length > 0) {
         flowActionPayload.data = { ...screenData, flow_token: flowToken };
       }
@@ -2086,10 +2092,13 @@ const metaCloud = {
         flow_message_version: '3',
         flow_token: flowToken,
         flow_id: flowId,
-        flow_cta: flowCta,
-        flow_action: 'navigate',
-        flow_action_payload: flowActionPayload
+        flow_cta: flowCta
       };
+      // Only include flow_action and flow_action_payload for non-endpoint flows (screen specified)
+      if (!isEndpointFlow) {
+        parameters.flow_action = 'navigate';
+        parameters.flow_action_payload = flowActionPayload;
+      }
       if (draft) {
         parameters.mode = 'draft';
       }

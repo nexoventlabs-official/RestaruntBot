@@ -6158,7 +6158,7 @@ const chatbot = {
           headerText: 'Perivi Hotel',
           bodyText: welcomeMessage,
           footerText: 'Powered by JRB Gold',
-          screenName: 'SERVICE_SELECT',
+          screenName: null, // endpoint-based flow (data_api_version 3.0) — INIT determines first screen
           flowToken: `welcome_${phone}_${Date.now()}`,
           draft: isDraft
         });
