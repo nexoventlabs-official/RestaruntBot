@@ -1745,17 +1745,21 @@ const metaCloud = {
    * Create a new WhatsApp Flow under the WABA.
    * @param {string} name - Flow name
    * @param {string[]} categories - Flow categories, e.g. ['OTHER']
-   * @param {string} [flowJson] - Optional Flow JSON string to create+publish in one request
+   * @param {object} [options] - Additional options
+   * @param {string} [options.endpointUri] - Data channel URI for endpoint-mode flows
    * @returns {{ id: string, success: boolean, validation_errors: Array }}
    */
-  async createFlow(name, categories = ['OTHER'], flowJson = null) {
+  async createFlow(name, categories = ['OTHER'], options = {}) {
     const endTimer = startTimer('meta.createFlow');
 
     try {
       const { accessToken, wabaId } = getConfig();
       const data = { name, categories };
-      if (flowJson) {
-        data.flow_json = flowJson;
+      if (options.endpointUri) {
+        data.data_channel_uri = options.endpointUri;
+      }
+      if (options.flowJson) {
+        data.flow_json = options.flowJson;
       }
 
       const response = await metaApi.post(

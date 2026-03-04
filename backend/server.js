@@ -33,6 +33,7 @@ const whatsappBroadcastRoutes = require('./routes/whatsappBroadcast');
 const settingsRoutes = require('./routes/settings');
 const healthRoutes = require('./routes/health');
 const catalogRoutes = require('./routes/catalog');
+const flowEndpointRoutes = require('./routes/flowEndpoint');
 const orderScheduler = require('./services/orderScheduler');
 const dailyCleanup = require('./services/dailyCleanup');
 const categoryScheduler = require('./services/categoryScheduler');
@@ -283,6 +284,7 @@ app.use('/api/offers', offersRoutes);
 app.use('/api/whatsapp-broadcast', whatsappBroadcastRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/catalog', catalogRoutes);
+app.use('/api/whatsapp-flow', flowEndpointRoutes);
 
 // Health check routes (comprehensive readiness/liveness checks)
 app.use('/health', healthRoutes);

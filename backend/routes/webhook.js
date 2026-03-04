@@ -440,14 +440,21 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                     else if (responseData.flow_token?.startsWith('welcome_service_') && responseData.selected_service) {
                       const service = responseData.selected_service;
                       
-                      // For Order Food - send food type selection flow next
+                      // For Order Food - check if food type was already selected in 2-screen flow
                       if (service === 'order_food') {
-                        // Extract phone from flow_token
                         const phone = responseData.flow_token.replace('welcome_service_', '');
-                        // Send food type selection flow
-                        messageType = 'flow_trigger';
-                        text = JSON.stringify({ type: 'food_type_selection', phone, service });
-                        logger.info('Flow: Order Food selected, triggering food type selection', { phone, service });
+                        if (responseData.selected_food_type) {
+                          // 2-screen flow: food type already chosen (e.g., food_veg, food_nonveg, food_egg)
+                          selectedId = responseData.selected_food_type;
+                          text = responseData.selected_food_type;
+                          messageType = 'button';
+                          logger.info('Flow: Order Food with food type selected', { phone, service, foodType: responseData.selected_food_type });
+                        } else {
+                          // Legacy single-screen flow: send food type selection flow next
+                          messageType = 'flow_trigger';
+                          text = JSON.stringify({ type: 'food_type_selection', phone, service });
+                          logger.info('Flow: Order Food selected, triggering food type selection', { phone, service });
+                        }
                       }
                       // For My Orders - send recent orders list flow next
                       else if (service === 'my_orders') {

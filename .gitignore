@@ -34,3 +34,6 @@ Thumbs.db
 # K8s secrets (never commit real values)
 k8s/secrets-*.yaml
 !k8s/secrets.yaml
+
+# Encryption keys
+*.pem

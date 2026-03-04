@@ -1677,10 +1677,10 @@ const catalogService = {
    * @returns {object} Flow JSON definition
    */
   buildWelcomeFlowJSON(bannerBase64 = null) {
-    // WhatsApp Flows Image `src` requires RAW base64 strings (no data:image/...;base64, prefix).
-    // Banner is embedded directly in flow JSON; service icons go via dropdown `image` field.
-    // Layout matches AP Government WhatsApp Flow style: Banner → Text → Dropdown → Complete
-    // Single screen flow - routing handled on backend based on selected service
+    // Endpoint-mode Flow JSON (Data API).
+    // WhatsApp calls our endpoint for INIT (screen data) and data_exchange (interactions).
+    // Banner is embedded in flow JSON; all other data served dynamically by endpoint.
+    // Two screens: SERVICE_SELECT → FOOD_TYPE_SELECT (conditionally, only for Order Food)
 
     // ─── Screen 1: Service Selection ───
     const screen1Children = [];
@@ -1713,7 +1713,7 @@ const catalogService = {
         type: 'Footer',
         label: 'Confirm',
         'on-click-action': {
-          name: 'complete',
+          name: 'data_exchange',
           payload: {
             selected_service: '${form.selected_service}',
             flow_token: '${data.flow_token}'
@@ -1722,14 +1722,44 @@ const catalogService = {
       }
     );
 
+    // ─── Screen 2: Food Type Selection (shown only when Order Food is selected) ───
+    const screen2Children = [
+      {
+        type: 'TextSubheading',
+        text: 'Select Food Type'
+      },
+      {
+        type: 'RadioButtonsGroup',
+        name: 'selected_food_type',
+        label: 'Food Type',
+        required: true,
+        'data-source': '${data.food_types}'
+      },
+      {
+        type: 'Footer',
+        label: 'Confirm',
+        'on-click-action': {
+          name: 'complete',
+          payload: {
+            selected_service: '${data.selected_service}',
+            selected_food_type: '${form.selected_food_type}',
+            flow_token: '${data.flow_token}'
+          }
+        }
+      }
+    ];
+
     return {
       version: '7.3',
+      data_api_version: '3.0',
+      routing_model: {
+        'SERVICE_SELECT': ['FOOD_TYPE_SELECT'],
+        'FOOD_TYPE_SELECT': []
+      },
       screens: [
         {
           id: 'SERVICE_SELECT',
           title: 'Service Selection',
-          terminal: true,
-          success: true,
           data: {
             services: {
               type: 'array',
@@ -1743,8 +1773,8 @@ const catalogService = {
                 }
               },
               __example__: [
-                { id: 'order_food', title: 'Order Food', description: 'Browse our menu', image: 'iVBORw0KGgo...' },
-                { id: 'my_orders', title: 'My Orders', description: 'Track delivery', image: 'iVBORw0KGgo...' }
+                { id: 'order_food', title: 'Order Food', description: 'Browse our menu', image: 'iVBORw0KGgo' },
+                { id: 'my_orders', title: 'My Orders', description: 'Track delivery', image: 'iVBORw0KGgo' }
               ]
             },
             flow_token: {
@@ -1755,6 +1785,41 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: screen1Children
+          }
+        },
+        {
+          id: 'FOOD_TYPE_SELECT',
+          title: 'Food Type',
+          terminal: true,
+          success: true,
+          data: {
+            food_types: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'food_veg', title: 'Veg', description: 'Vegetarian', image: 'iVBORw0KGgo' }
+              ]
+            },
+            selected_service: {
+              type: 'string',
+              __example__: 'order_food'
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'welcome_service_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: screen2Children
           }
         }
       ]
@@ -1931,8 +1996,10 @@ const catalogService = {
     const nextVersion = maxVersion + 1;
     const FLOW_NAME = `JRB Welcome Services v${nextVersion}`;
 
-    // Step 1: Create the Flow
-    const createResult = await metaCloud.createFlow(FLOW_NAME, ['OTHER']);
+    // Step 1: Create the Flow with endpoint URI for data exchange
+    const backendUrl = process.env.BACKEND_URL || 'https://restaruntbot.onrender.com';
+    const endpointUri = `${backendUrl}/api/whatsapp-flow`;
+    const createResult = await metaCloud.createFlow(FLOW_NAME, ['OTHER'], { endpointUri });
     const flowId = createResult.id;
 
     // Step 2: Upload the Flow JSON with banner image (raw base64)
