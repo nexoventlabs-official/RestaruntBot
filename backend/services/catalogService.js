@@ -1723,20 +1723,17 @@ const catalogService = {
       // Conditional: Food type selection — only visible when "Order Food" is selected
       {
         type: 'TextHeading',
-        text: '🍽️ What would you like?',
-        visible: "${form.selected_service} == 'order_food'"
+        text: 'Select Food Type'
       },
       {
         type: 'TextBody',
-        text: 'Choose your food preference to browse the menu',
-        visible: "${form.selected_service} == 'order_food'"
+        text: 'Choose your food preference (for Order Food)'
       },
       {
         type: 'RadioButtonsGroup',
         name: 'selected_food_type',
         label: 'Select Food Type',
-        'data-source': '${data.food_types}',
-        visible: "${form.selected_service} == 'order_food'"
+        'data-source': '${data.food_types}'
       },
       {
         type: 'Footer',
