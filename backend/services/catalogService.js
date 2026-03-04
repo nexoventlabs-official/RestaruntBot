@@ -2229,16 +2229,56 @@ const catalogService = {
    * then deprecates the old flow.
    * @returns {Promise<{flowId: string, status: string, oldFlowId?: string}>}
    */
-  async republishWelcomeFlow() {
-    const oldFlowId = process.env.WHATSAPP_WELCOME_FLOW_ID;
+  async republishWelcomeFlow(targetFlowId = null) {
     const metaCloud = require('./metaCloud');
+    const chatbotImagesService = require('./chatbotImages');
 
-    // Force creation of a new version by temporarily clearing the published status
-    // so setupWelcomeFlow won't short-circuit on the existing published flow
+    // Build the updated flow JSON with banner
+    const bannerUrl = await chatbotImagesService.getImageUrl('flow_welcome_banner');
+    const bannerBase64 = await this._imageUrlToRawBase64(bannerUrl);
+    const flowJson = this.buildWelcomeFlowJSON(bannerBase64);
+
+    // If a specific target flow ID is given, update that flow directly
+    if (targetFlowId) {
+      try {
+        // Check if flow exists and is in DRAFT (updatable)
+        const flowInfo = await metaCloud.getFlowDetails(targetFlowId);
+        
+        if (flowInfo.status === 'DRAFT') {
+          // Update JSON on existing draft flow
+          await metaCloud.updateFlowJSON(targetFlowId, flowJson);
+          
+          // Publish it
+          try {
+            await metaCloud.publishFlow(targetFlowId);
+            process.env.WHATSAPP_WELCOME_FLOW_ID = targetFlowId;
+            process.env.WHATSAPP_WELCOME_FLOW_STATUS = 'PUBLISHED';
+            logger.info('Updated and published target Welcome Flow', { flowId: targetFlowId });
+            return { flowId: targetFlowId, status: 'updated_and_published' };
+          } catch (pubErr) {
+            process.env.WHATSAPP_WELCOME_FLOW_ID = targetFlowId;
+            process.env.WHATSAPP_WELCOME_FLOW_STATUS = 'DRAFT';
+            logger.warn('Updated target flow but publish failed', { flowId: targetFlowId, error: pubErr.message });
+            return { flowId: targetFlowId, status: 'updated_as_draft', error: pubErr.response?.data?.error?.message || pubErr.message };
+          }
+        } else if (flowInfo.status === 'PUBLISHED') {
+          // Already published — just use it
+          process.env.WHATSAPP_WELCOME_FLOW_ID = targetFlowId;
+          process.env.WHATSAPP_WELCOME_FLOW_STATUS = 'PUBLISHED';
+          return { flowId: targetFlowId, status: 'already_published' };
+        } else {
+          logger.warn('Target flow in non-updatable state', { flowId: targetFlowId, status: flowInfo.status });
+        }
+      } catch (err) {
+        logger.warn('Could not update target flow, falling back to new creation', { targetFlowId, error: err.message });
+      }
+    }
+
+    // Fallback: deprecate old + create new (original behavior)
+    const oldFlowId = process.env.WHATSAPP_WELCOME_FLOW_ID;
     const axios = require('axios');
     const { accessToken } = { accessToken: process.env.META_ACCESS_TOKEN };
 
-    // Deprecate old flow first so setupWelcomeFlow creates a new one
     if (oldFlowId) {
       try {
         await axios.post(
@@ -2252,11 +2292,9 @@ const catalogService = {
       }
     }
 
-    // Clear env so setupWelcomeFlow creates fresh
     process.env.WHATSAPP_WELCOME_FLOW_ID = '';
     process.env.WHATSAPP_WELCOME_FLOW_STATUS = '';
 
-    // Now setup will create a new version
     const result = await this.setupWelcomeFlow();
     return { ...result, oldFlowId };
   },

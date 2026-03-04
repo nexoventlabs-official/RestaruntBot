@@ -137,11 +137,12 @@ router.post('/setup-welcome-flow', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/catalog/republish-welcome-flow - Create a new version of the welcome Flow (deprecates old)
+// POST /api/catalog/republish-welcome-flow - Update/create welcome Flow (optionally target a specific flow ID)
 router.post('/republish-welcome-flow', authMiddleware, async (req, res) => {
   try {
     const oldFlowId = catalogService.getWelcomeFlowId();
-    const result = await catalogService.republishWelcomeFlow();
+    const targetFlowId = req.body?.flowId || null;
+    const result = await catalogService.republishWelcomeFlow(targetFlowId);
     
     // Persist new flow ID to .env file so it survives restarts
     if (result.flowId) {
@@ -154,9 +155,10 @@ router.post('/republish-welcome-flow', authMiddleware, async (req, res) => {
           /WHATSAPP_WELCOME_FLOW_ID=.*/,
           `WHATSAPP_WELCOME_FLOW_ID=${result.flowId}`
         );
+        const isPublished = result.status.includes('published');
         envContent = envContent.replace(
           /WHATSAPP_WELCOME_FLOW_STATUS=.*/,
-          `WHATSAPP_WELCOME_FLOW_STATUS=${result.status === 'created_and_published' ? 'PUBLISHED' : 'DRAFT'}`
+          `WHATSAPP_WELCOME_FLOW_STATUS=${isPublished ? 'PUBLISHED' : 'DRAFT'}`
         );
         fs.writeFileSync(envPath, envContent);
       } catch (envErr) {
@@ -166,7 +168,7 @@ router.post('/republish-welcome-flow', authMiddleware, async (req, res) => {
 
     res.json({
       success: true,
-      message: `New Welcome Flow version created (ID: ${result.flowId}, status: ${result.status})`,
+      message: `Welcome Flow updated (ID: ${result.flowId}, status: ${result.status})`,
       oldFlowId,
       ...result
     });
