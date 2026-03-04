@@ -589,6 +589,9 @@ const catalogService = {
         }
       }
 
+      // Collect error details for response
+      const metaErrors = [];
+
       // Push variant products first (items_batch endpoint)
       for (let i = 0; i < variantProducts.length; i += BATCH_SIZE) {
         const batch = variantProducts.slice(i, i + BATCH_SIZE);
@@ -598,7 +601,9 @@ const catalogService = {
           logger.info('Catalog variant batch pushed', { batchStart: i, count: batch.length });
         } catch (err) {
           metaFailed += batch.length;
-          logger.error('Catalog variant batch failed', { batchStart: i, error: err.message });
+          const details = err.metaErrorDetails || { message: err.message };
+          metaErrors.push({ type: 'variant', batchStart: i, ...details });
+          logger.error('Catalog variant batch failed', { batchStart: i, error: err.message, details });
         }
         if (i + BATCH_SIZE < variantProducts.length) {
           await new Promise(resolve => setTimeout(resolve, DELAY_MS));
@@ -614,11 +619,18 @@ const catalogService = {
           logger.info('Catalog single batch pushed', { batchStart: i, count: batch.length });
         } catch (err) {
           metaFailed += batch.length;
-          logger.error('Catalog single batch failed', { batchStart: i, error: err.message });
+          const details = err.metaErrorDetails || { message: err.message };
+          metaErrors.push({ type: 'single', batchStart: i, ...details });
+          logger.error('Catalog single batch failed', { batchStart: i, error: err.message, details });
         }
         if (i + BATCH_SIZE < singleProducts.length) {
           await new Promise(resolve => setTimeout(resolve, DELAY_MS));
         }
+      }
+
+      // Store errors for response
+      if (metaErrors.length > 0) {
+        logger.error('Catalog sync had failures', { metaErrors, catalogId });
       }
     }
 
@@ -631,8 +643,8 @@ const catalogService = {
       logger.error('Collections sync failed during auto-sync', { error: err.message });
     }
 
-    logger.info('Catalog auto-sync completed', { created, skipped, metaPushed, metaFailed, collections: collectionResult, total: items.length });
-    return { created, skipped, metaPushed, metaFailed, collections: collectionResult, total: items.length };
+    logger.info('Catalog auto-sync completed', { created, skipped, metaPushed, metaFailed, collections: collectionResult, total: items.length, catalogId: this.getCatalogId() });
+    return { created, skipped, metaPushed, metaFailed, collections: collectionResult, total: items.length, catalogId: this.getCatalogId() };
   },
 
   /**

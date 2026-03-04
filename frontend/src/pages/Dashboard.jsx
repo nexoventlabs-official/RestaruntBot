@@ -161,11 +161,13 @@ export default function Dashboard() {
   const handleCatalogSync = async () => {
     try {
       setSyncing(true);
-      const res = await api.post('/catalog/auto-sync', {}, { timeout: 180000 });
+      const res = await api.post('/catalog/auto-sync', { overwrite: true }, { timeout: 180000 });
       const d = res.data;
-      alert(`✅ Catalog Synced\n${d.metaPushed} products pushed, ${d.metaFailed} failed\n${d.collections?.updated || 0} collections updated`);
+      const errInfo = d.metaFailed > 0 ? `\n\nError: ${d.message}` : '';
+      alert(`✅ Catalog Synced (ID: ${d.catalogId || 'N/A'})\n${d.metaPushed} products pushed, ${d.metaFailed} failed\n${(d.collections?.created || 0) + (d.collections?.updated || 0)} collections synced${errInfo}`);
     } catch (err) {
-      alert('❌ Sync Failed: ' + (err?.response?.data?.error || err.message));
+      const errData = err?.response?.data;
+      alert('❌ Sync Failed: ' + (errData?.message || errData?.error || err.message));
     } finally { setSyncing(false); }
   };
 

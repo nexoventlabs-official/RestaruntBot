@@ -1301,19 +1301,25 @@ const metaCloud = {
           return { method: 'UPDATE', data };
         });
 
+        // items_batch is asynchronous on Meta side — use longer timeout (60s)
         const batchResponse = await metaApi.post(
           `https://graph.facebook.com/v24.0/${catalogId}/items_batch`,
           {
             item_type: 'PRODUCT_ITEM',
             requests: itemsBatchRequests
           },
-          { headers: { Authorization: `Bearer ${accessToken}` } }
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            timeout: 60000
+          }
         );
 
         logger.info('Meta items_batch success', {
+          catalogId,
           count: products.length,
           handles: batchResponse.data?.handles,
-          validation: batchResponse.data?.validation_status
+          validation: batchResponse.data?.validation_status,
+          retailerIds: products.map(p => p.retailerId)
         });
 
         endTimer({ success: true });
@@ -1323,9 +1329,22 @@ const metaCloud = {
       endTimer({ success: false, error: error.message });
       const errorData = error.response?.data?.error || error.response?.data;
       logger.error('Meta batchCreateOrUpdateProducts error', {
+        catalogId,
         error: errorData?.message || error.message,
-        count: products.length
+        errorCode: errorData?.code,
+        errorSubcode: errorData?.error_subcode,
+        errorType: errorData?.type,
+        count: products.length,
+        retailerIds: products.map(p => p.retailerId),
+        httpStatus: error.response?.status,
+        fullResponse: JSON.stringify(error.response?.data || {}).substring(0, 500)
       });
+      // Attach error details for callers to inspect
+      error.metaErrorDetails = {
+        message: errorData?.message || error.message,
+        code: errorData?.code,
+        httpStatus: error.response?.status
+      };
       throw error;
     }
   },
