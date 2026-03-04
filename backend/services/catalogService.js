@@ -1692,7 +1692,8 @@ const catalogService = {
     // WhatsApp Flows Image `src` requires RAW base64 strings (no data:image/...;base64, prefix).
     // Banner is embedded directly in flow JSON; service icons go via dropdown `image` field.
     // Layout matches AP Government WhatsApp Flow style: Banner → Text → Dropdown → Conditional RadioButtons → Confirm
-    // Single screen with conditional food type selection visible only when "Order Food" is chosen.
+    // Uses data_exchange on Dropdown to dynamically show/hide food type section.
+    // When "Order Food" is selected → food types appear; other services → food types hidden.
 
     const screenChildren = [];
 
@@ -1718,22 +1719,32 @@ const catalogService = {
         name: 'selected_service',
         label: 'Select Hotel Service',
         required: true,
-        'data-source': '${data.services}'
+        'data-source': '${data.services}',
+        'on-select-action': {
+          name: 'data_exchange',
+          payload: {
+            selected_service: '${form.selected_service}'
+          }
+        }
       },
-      // Conditional: Food type selection — only visible when "Order Food" is selected
+      // Conditional: Food type selection — dynamically shown via data_exchange
+      // visible is bound to ${data.show_food_types} (boolean from endpoint)
       {
         type: 'TextHeading',
-        text: 'Select Food Type'
+        text: 'Select Food Type',
+        visible: '${data.show_food_types}'
       },
       {
         type: 'TextBody',
-        text: 'Choose your food preference (for Order Food)'
+        text: 'Choose your food preference',
+        visible: '${data.show_food_types}'
       },
       {
         type: 'RadioButtonsGroup',
         name: 'selected_food_type',
         label: 'Select Food Type',
-        'data-source': '${data.food_types}'
+        'data-source': '${data.food_types}',
+        visible: '${data.show_food_types}'
       },
       {
         type: 'Footer',
@@ -1751,6 +1762,8 @@ const catalogService = {
 
     return {
       version: '7.3',
+      data_api_version: '3.0',
+      routing_model: {},
       screens: [
         {
           id: 'SERVICE_SELECT',
@@ -1773,6 +1786,10 @@ const catalogService = {
                 { id: 'order_food', title: 'Order Food', description: 'Browse our menu', image: 'iVBORw0KGgo...' },
                 { id: 'my_orders', title: 'My Orders', description: 'Track delivery', image: 'iVBORw0KGgo...' }
               ]
+            },
+            show_food_types: {
+              type: 'boolean',
+              __example__: false
             },
             food_types: {
               type: 'array',
@@ -1973,39 +1990,35 @@ const catalogService = {
    * Build data payload for the welcome service selection Flow.
    * Fetches chatbot images from admin panel for each service icon.
    * Converts Cloudinary URLs to raw base64 for WhatsApp Flow compatibility.
+   * Food type images are NOT included here — they come from the data_exchange endpoint
+   * when the user selects "Order Food" from the dropdown.
    * @param {string} flowToken - Unique token to identify this flow instance
-   * @returns {Promise<object>} { services: [{id, title, description, image}], flow_token }
+   * @returns {Promise<object>} { services, show_food_types, food_types, flow_token }
    */
   async buildWelcomeFlowData(flowToken = 'welcome_service') {
     const chatbotImagesService = require('./chatbotImages');
 
-    // Fetch all service icons AND food type images from admin-configured chatbot images
-    const [orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, deliveryAddressImg, visitWebsiteImg, helpSupportImg, vegImg, nonvegImg, eggImg] = await Promise.all([
+    // Fetch service icons from admin-configured chatbot images (food type images come via data_exchange)
+    const [orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, deliveryAddressImg, visitWebsiteImg, helpSupportImg] = await Promise.all([
       chatbotImagesService.getImageUrl('flow_order_food'),
       chatbotImagesService.getImageUrl('flow_my_orders'),
       chatbotImagesService.getImageUrl('flow_view_offers'),
       chatbotImagesService.getImageUrl('flow_account_details'),
       chatbotImagesService.getImageUrl('flow_delivery_address'),
       chatbotImagesService.getImageUrl('flow_visit_website'),
-      chatbotImagesService.getImageUrl('flow_help_support'),
-      chatbotImagesService.getImageUrl('flow_food_veg'),
-      chatbotImagesService.getImageUrl('flow_food_nonveg'),
-      chatbotImagesService.getImageUrl('flow_food_egg')
+      chatbotImagesService.getImageUrl('flow_help_support')
     ]);
 
     // Convert Cloudinary URLs to raw base64 (WhatsApp Flows require raw base64, not data URIs)
     const toBase64 = (url) => this._imageUrlToRawBase64(url);
-    const [orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, deliveryAddressB64, visitWebsiteB64, helpSupportB64, vegB64, nonvegB64, eggB64] = await Promise.all([
+    const [orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, deliveryAddressB64, visitWebsiteB64, helpSupportB64] = await Promise.all([
       toBase64(orderFoodImg),
       toBase64(myOrdersImg),
       toBase64(viewOffersImg),
       toBase64(accountDetailsImg),
       toBase64(deliveryAddressImg),
       toBase64(visitWebsiteImg),
-      toBase64(helpSupportImg),
-      toBase64(vegImg),
-      toBase64(nonvegImg),
-      toBase64(eggImg)
+      toBase64(helpSupportImg)
     ]);
 
     // Build service items — only include image if base64 conversion succeeded
@@ -2025,15 +2038,10 @@ const catalogService = {
       buildItem('help', 'Help & Support', 'Get assistance with your queries', helpSupportB64)
     ];
 
-    const food_types = [
-      buildItem('food_veg', '🟢 Veg', 'Pure vegetarian dishes', vegB64),
-      buildItem('food_nonveg', '🔴 Non-Veg', 'Non-vegetarian dishes', nonvegB64),
-      buildItem('food_egg', '🟡 Egg', 'Egg-based dishes', eggB64)
-    ];
-
     return {
       services,
-      food_types,
+      show_food_types: false,   // Hidden initially; data_exchange shows when "Order Food" selected
+      food_types: [],           // Empty initially; populated via data_exchange endpoint
       flow_token: flowToken
     };
   },

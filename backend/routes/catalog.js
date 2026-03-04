@@ -220,7 +220,8 @@ router.get('/flow-status', authMiddleware, async (req, res) => {
     welcomeFlow: {
       flowId: catalogService.getWelcomeFlowId(),
       flowMode: catalogService.getWelcomeFlowMode(),
-      flowStatus: process.env.WHATSAPP_WELCOME_FLOW_STATUS || 'NOT_SET'
+      flowStatus: process.env.WHATSAPP_WELCOME_FLOW_STATUS || 'NOT_SET',
+      endpointConfigured: !!process.env.FLOW_ENDPOINT_PRIVATE_KEY
     },
     foodTypeFlow: {
       flowId: catalogService.getFoodTypeFlowId(),
@@ -238,6 +239,40 @@ router.get('/flow-status', authMiddleware, async (req, res) => {
     tokenSet: !!process.env.META_ACCESS_TOKEN,
     wabaId: process.env.META_WABA_ID ? 'set' : 'not_set'
   });
+});
+
+// POST /api/catalog/setup-flow-endpoint - Register data_exchange endpoint on welcome flow
+// Sets the endpoint_uri on the flow so WhatsApp can call it for on-select-action data_exchange.
+router.post('/setup-flow-endpoint', authMiddleware, async (req, res) => {
+  try {
+    const metaCloud = require('../services/metaCloud');
+    const catalogService = require('../services/catalogService');
+    const flowId = req.body.flowId || catalogService.getWelcomeFlowId();
+
+    if (!flowId) {
+      return res.status(400).json({ error: 'No welcome flow ID configured. Set WHATSAPP_WELCOME_FLOW_ID first.' });
+    }
+
+    const backendUrl = process.env.BACKEND_URL;
+    if (!backendUrl) {
+      return res.status(400).json({ error: 'BACKEND_URL not configured' });
+    }
+
+    const endpointUri = `${backendUrl}/api/webhook/flow-endpoint`;
+
+    // Set the endpoint URI on the flow
+    const result = await metaCloud.setFlowEndpointUri(flowId, endpointUri);
+
+    res.json({
+      success: true,
+      flowId,
+      endpointUri,
+      metaResponse: result,
+      note: 'Endpoint registered. The flow must be in DRAFT state. After setting endpoint, upload JSON and publish.'
+    });
+  } catch (error) {
+    return logRouteError(res, 'Setup flow endpoint error', error);
+  }
 });
 
 // GET /api/catalog/flow/:flowId - Get Flow details

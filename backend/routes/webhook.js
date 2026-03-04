@@ -21,6 +21,7 @@ const User = require('../models/User');
 const OutboundMessage = require('../models/OutboundMessage');
 const InboundMessage = require('../models/InboundMessage');
 const dataEvents = require('../services/eventEmitter');
+const { handleFlowEndpoint } = require('../services/flowEndpoint');
 const router = express.Router();
 
 // ============================================================
@@ -659,5 +660,13 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
     logger.error('Meta webhook async processing error', { error: error.message, stack: error.stack });
   }
 });
+
+// ============================================================
+// WHATSAPP FLOWS DATA EXCHANGE ENDPOINT
+// ============================================================
+// WhatsApp calls this endpoint when a flow component triggers data_exchange.
+// Receives encrypted request, processes, returns encrypted response.
+// No auth middleware — WhatsApp authenticates via encryption (RSA-OAEP + AES-GCM).
+router.post('/flow-endpoint', handleFlowEndpoint);
 
 module.exports = router;

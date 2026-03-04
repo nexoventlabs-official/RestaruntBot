@@ -1999,6 +1999,38 @@ const metaCloud = {
   },
 
   /**
+   * Set the data exchange endpoint URI on a Flow.
+   * Required for flows that use data_exchange actions (e.g., on-select-action).
+   * @param {string} flowId - The Flow ID
+   * @param {string} endpointUri - The publicly accessible endpoint URL
+   */
+  async setFlowEndpointUri(flowId, endpointUri) {
+    const endTimer = startTimer('meta.setFlowEndpointUri');
+
+    try {
+      const { accessToken } = getConfig();
+      const response = await metaApi.post(
+        `https://graph.facebook.com/v24.0/${flowId}`,
+        { endpoint_uri: endpointUri },
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+
+      logger.info('Flow endpoint URI set', { flowId, endpointUri });
+      endTimer({ success: true });
+      return response.data;
+    } catch (error) {
+      endTimer({ success: false, error: error.message });
+      logger.error('setFlowEndpointUri error', {
+        flowId,
+        endpointUri,
+        error: error.response?.data?.error?.message || error.message,
+        details: error.response?.data
+      });
+      throw error;
+    }
+  },
+
+  /**
    * Send an interactive Flow message to a user (user-initiated conversation).
    *
    * @param {string} phone - Recipient phone number
