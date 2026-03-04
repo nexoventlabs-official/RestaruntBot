@@ -1957,6 +1957,40 @@ const metaCloud = {
   },
 
   /**
+   * Get Flow JSON definition.
+   * @param {string} flowId
+   * @returns {Promise<object>} Flow JSON object
+   */
+  async getFlowJSON(flowId) {
+    const endTimer = startTimer('meta.getFlowJSON');
+
+    try {
+      const { accessToken } = getConfig();
+      const response = await metaApi.get(
+        `https://graph.facebook.com/v24.0/${flowId}/assets`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          params: { fields: 'name' }
+        }
+      );
+
+      // The assets endpoint returns the flow JSON in the data array
+      const flowAsset = response.data.data?.[0];
+      if (!flowAsset) {
+        throw new Error('No flow JSON found');
+      }
+
+      logger.info('WhatsApp Flow JSON retrieved', { flowId });
+      endTimer({ success: true });
+      return flowAsset;
+    } catch (error) {
+      endTimer({ success: false, error: error.message });
+      logger.error('getFlowJSON error', { flowId, error: error.response?.data?.error?.message || error.message });
+      throw error;
+    }
+  },
+
+  /**
    * Delete a Flow (only works on DRAFT flows).
    * @param {string} flowId
    */

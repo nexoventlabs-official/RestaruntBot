@@ -438,17 +438,30 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                     }
                     // Welcome service selection flow
                     else if (responseData.flow_token?.startsWith('welcome_service_') && responseData.selected_service) {
-                      // If food type was also selected (Order Food → Veg/Non-Veg/Egg), use that
-                      if (responseData.selected_food_type) {
-                        selectedId = responseData.selected_food_type;
-                        text = responseData.selected_food_type;
+                      const service = responseData.selected_service;
+                      
+                      // For Order Food - send food type selection flow next
+                      if (service === 'order_food') {
+                        // Extract phone from flow_token
+                        const phone = responseData.flow_token.replace('welcome_service_', '');
+                        // Send food type selection flow
+                        messageType = 'flow_trigger';
+                        text = JSON.stringify({ type: 'food_type_selection', phone, service });
+                        logger.info('Flow: Order Food selected, triggering food type selection', { phone, service });
+                      }
+                      // For My Orders - send recent orders list flow next
+                      else if (service === 'my_orders') {
+                        const phone = responseData.flow_token.replace('welcome_service_', '');
+                        messageType = 'flow_trigger';
+                        text = JSON.stringify({ type: 'my_orders_list', phone, service });
+                        logger.info('Flow: My Orders selected, triggering orders list', { phone, service });
+                      }
+                      // For other services - handle directly
+                      else {
+                        selectedId = service;
+                        text = service;
                         messageType = 'button';
-                        logger.info('Flow food type selected', { service: responseData.selected_service, foodType: responseData.selected_food_type });
-                      } else {
-                        selectedId = responseData.selected_service;
-                        text = responseData.selected_service;
-                        messageType = 'button';
-                        logger.info('Flow welcome service selected', { service: responseData.selected_service, selectedId });
+                        logger.info('Flow welcome service selected', { service, selectedId });
                       }
                     }
                     // Account Details form flow response

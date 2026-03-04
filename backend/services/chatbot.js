@@ -4465,8 +4465,8 @@ const chatbot = {
           state.currentStep = 'main_menu';
         }
       }
-      // ========== FLOW REPLY: Account Form / Address Form ==========
-      else if (messageType === 'flow_reply') {
+      // ========== FLOW REPLY: Account Form / Address Form / View Order / Flow Triggers ==========
+      else if (messageType === 'flow_reply' || messageType === 'flow_trigger') {
         let flowData = {};
         try { flowData = typeof message === 'string' ? JSON.parse(message) : message; } catch (e) { /* ignore */ }
 
@@ -4480,6 +4480,18 @@ const chatbot = {
           // User chose "Use Current Location" from the address flow
           await whatsapp.sendMessage(phone, '📍 *Share Your Location*\n\nPlease share your current location now:\n\n1️⃣ Tap the 📎 attachment button below\n2️⃣ Select *Location*\n3️⃣ Tap *Send Your Current Location*\n\nYour address will be automatically filled from your location.');
           state.currentStep = 'awaiting_address_location';
+        } else if (flowData.type === 'view_order') {
+          // User selected an order from My Orders flow
+          await this.handleViewOrderDetails(phone, customer, flowData.orderId);
+          state.currentStep = 'main_menu';
+        } else if (flowData.type === 'food_type_selection') {
+          // Send food type selection flow after Order Food selected
+          await this.sendFoodTypeSelectionFlow(phone);
+          state.currentStep = 'main_menu';
+        } else if (flowData.type === 'my_orders_list') {
+          // Send recent orders list flow after My Orders selected
+          await this.sendMyOrdersListFlow(phone, customer);
+          state.currentStep = 'main_menu';
         } else {
           logger.info('Unknown flow_reply type', { phone, flowData });
           await this.sendWelcome(phone);
@@ -6151,7 +6163,7 @@ const chatbot = {
       const flowMode = catalogService.getWelcomeFlowMode();
       if (flowId && flowMode) {
         const metaCloud = require('./metaCloud');
-        const flowData = await catalogService.buildWelcomeFlowData(`welcome_service_${phone}`);
+        const flowData = await catalogService.buildWelcomeFlowData(`welcome_service_${phone}`, phone);
 
         // Send single Flow message with welcome image as header + service list in body
         await metaCloud.sendFlowMessage(phone, {
@@ -6199,6 +6211,139 @@ const chatbot = {
       { id: 'track_order', text: 'Track Delivery' },
       { id: 'cancel_order', text: 'Cancel Order' }
     ], 'Perivi Hotel');
+  },
+
+  /**
+   * Handle viewing order details when user selects an order from My Orders flow
+   */
+  async handleViewOrderDetails(phone, customer, orderId) {
+    try {
+      const Order = require('../models/Order');
+      const order = await Order.findById(orderId);
+
+      if (!order) {
+        await whatsapp.sendMessage(phone, '❌ Order not found. Please try again.');
+        await this.sendMyOrdersMenu(phone);
+        return;
+      }
+
+      // Build order details message
+      const statusEmoji = {
+        'pending': '⏳ Pending',
+        'confirmed': '✅ Confirmed',
+        'preparing': '👨‍🍳 Preparing',
+        'ready': '🎉 Ready',
+        'out_for_delivery': '🚚 Out for Delivery',
+        'delivered': '✓ Delivered',
+        'cancelled': '❌ Cancelled'
+      };
+
+      let orderMsg = `📦 *Order #${order.orderNumber}*\n\n`;
+      orderMsg += `*Status:* ${statusEmoji[order.status] || order.status}\n`;
+      orderMsg += `*Date:* ${new Date(order.createdAt).toLocaleString('en-IN')}\n\n`;
+      
+      orderMsg += `*Items:*\n`;
+      order.items.forEach((item, idx) => {
+        orderMsg += `${idx + 1}. ${item.name} x${item.quantity} - ₹${item.price * item.quantity}\n`;
+      });
+      
+      orderMsg += `\n*Total Amount:* ₹${order.totalAmount}\n`;
+      orderMsg += `*Service Type:* ${order.serviceType === 'delivery' ? '🚚 Delivery' : '🏪 Takeaway'}\n`;
+      
+      if (order.serviceType === 'delivery' && order.deliveryAddress) {
+        orderMsg += `\n*Delivery Address:*\n${order.deliveryAddress.address}`;
+        if (order.deliveryAddress.landmark) orderMsg += `\nLandmark: ${order.deliveryAddress.landmark}`;
+      }
+
+      // Send order details with action buttons
+      const buttons = [];
+      if (order.status === 'pending' || order.status === 'confirmed') {
+        buttons.push({ id: 'cancel_order', text: 'Cancel Order' });
+      }
+      if (order.status === 'out_for_delivery' || order.status === 'ready') {
+        buttons.push({ id: 'track_order', text: 'Track Order' });
+      }
+      buttons.push({ id: 'home', text: 'Main Menu' });
+
+      await whatsapp.sendButtons(phone, orderMsg, buttons, 'Perivi Hotel');
+      
+      logger.info('Order details sent from flow', { phone, orderId, orderNumber: order.orderNumber });
+    } catch (error) {
+      logger.error('Error fetching order details', { phone, orderId, error: error.message });
+      await whatsapp.sendMessage(phone, '❌ Unable to fetch order details. Please try again later.');
+      await this.sendMyOrdersMenu(phone);
+    }
+  },
+
+  /**
+   * Send food type selection flow (Veg/Non-Veg/Egg) after Order Food is selected
+   */
+  async sendFoodTypeSelectionFlow(phone) {
+    // For now, use the existing food type selection with buttons
+    // This can be enhanced with a dedicated flow later
+    await this.sendFoodTypeSelection(phone);
+  },
+
+  /**
+   * Send My Orders list flow showing recent orders
+   */
+  async sendMyOrdersListFlow(phone, customer) {
+    try {
+      const Order = require('../models/Order');
+      const orders = await Order.find({ phone })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select('orderNumber totalAmount status createdAt items');
+
+      if (orders.length === 0) {
+        await whatsapp.sendMessage(phone, '📦 *My Orders*\n\nYou haven\'t placed any orders yet.\n\nWould you like to order something now?');
+        await whatsapp.sendButtons(phone, 'Start ordering:', [
+          { id: 'order_food', text: 'Order Food' },
+          { id: 'home', text: 'Main Menu' }
+        ], 'Perivi Hotel');
+        return;
+      }
+
+      // Build orders list message
+      let ordersMsg = `📦 *Your Recent Orders*\n\n`;
+      ordersMsg += `You have ${orders.length} recent order${orders.length > 1 ? 's' : ''}:\n\n`;
+
+      orders.forEach((order, idx) => {
+        const statusEmoji = {
+          'pending': '⏳',
+          'confirmed': '✅',
+          'preparing': '👨‍🍳',
+          'ready': '🎉',
+          'out_for_delivery': '🚚',
+          'delivered': '✓',
+          'cancelled': '❌'
+        };
+        
+        const emoji = statusEmoji[order.status] || '📦';
+        const statusText = order.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        const date = new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+        const itemCount = order.items?.length || 0;
+        
+        ordersMsg += `${idx + 1}. *Order #${order.orderNumber}*\n`;
+        ordersMsg += `   ${emoji} ${statusText} • ₹${order.totalAmount}\n`;
+        ordersMsg += `   ${itemCount} items • ${date}\n\n`;
+      });
+
+      ordersMsg += `\nSelect an option:`;
+
+      // Send with buttons to view specific orders or track
+      await whatsapp.sendButtons(phone, ordersMsg, [
+        { id: 'order_status', text: 'View Order Status' },
+        { id: 'track_order', text: 'Track Delivery' },
+        { id: 'home', text: 'Main Menu' }
+      ], 'Perivi Hotel');
+
+      logger.info('Recent orders list sent', { phone, orderCount: orders.length });
+    } catch (error) {
+      logger.error('Error fetching recent orders', { phone, error: error.message });
+      await whatsapp.sendMessage(phone, '❌ Unable to fetch your orders. Please try again later.');
+      await this.sendMyOrdersMenu(phone);
+    }
   },
 
   // ============ MENU BROWSING ============

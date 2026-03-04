@@ -1679,8 +1679,8 @@ const catalogService = {
   buildWelcomeFlowJSON(bannerBase64 = null) {
     // WhatsApp Flows Image `src` requires RAW base64 strings (no data:image/...;base64, prefix).
     // Banner is embedded directly in flow JSON; service icons go via dropdown `image` field.
-    // Layout matches AP Government WhatsApp Flow style: Banner → Text → Dropdown → Confirm
-    // Two screens: SERVICE_SELECT → FOOD_TYPE_SELECT (with Veg/Non-Veg/Egg radio buttons with images)
+    // Layout matches AP Government WhatsApp Flow style: Banner → Text → Dropdown → Complete
+    // Single screen flow - routing handled on backend based on selected service
 
     // ─── Screen 1: Service Selection ───
     const screen1Children = [];
@@ -1713,48 +1713,14 @@ const catalogService = {
         type: 'Footer',
         label: 'Confirm',
         'on-click-action': {
-          name: 'navigate',
-          next: { type: 'screen', name: 'FOOD_TYPE_SELECT' },
+          name: 'complete',
           payload: {
             selected_service: '${form.selected_service}',
-            food_types: '${data.food_types}',
             flow_token: '${data.flow_token}'
           }
         }
       }
     );
-
-    // ─── Screen 2: Food Type Selection (Veg / Non-Veg / Egg with images) ───
-    // Like AP Gov temple selection: title + radio buttons with images
-    const screen2Children = [
-      {
-        type: 'TextHeading',
-        text: 'Select Food Type'
-      },
-      {
-        type: 'TextBody',
-        text: 'What would you like to browse?'
-      },
-      {
-        type: 'RadioButtonsGroup',
-        name: 'selected_food_type',
-        label: 'Select Food Type',
-        required: true,
-        'data-source': '${data.food_types}'
-      },
-      {
-        type: 'Footer',
-        label: 'Confirm',
-        'on-click-action': {
-          name: 'complete',
-          payload: {
-            selected_service: '${data.selected_service}',
-            selected_food_type: '${form.selected_food_type}',
-            flow_token: '${data.flow_token}'
-          }
-        }
-      }
-    ];
 
     return {
       version: '7.3',
@@ -1762,6 +1728,8 @@ const catalogService = {
         {
           id: 'SERVICE_SELECT',
           title: 'Service Selection',
+          terminal: true,
+          success: true,
           data: {
             services: {
               type: 'array',
@@ -1779,21 +1747,6 @@ const catalogService = {
                 { id: 'my_orders', title: 'My Orders', description: 'Track delivery', image: 'iVBORw0KGgo...' }
               ]
             },
-            food_types: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  title: { type: 'string' },
-                  description: { type: 'string' },
-                  image: { type: 'string' }
-                }
-              },
-              __example__: [
-                { id: 'food_veg', title: 'Veg', description: 'Vegetarian dishes', image: 'iVBORw0KGgo...' }
-              ]
-            },
             flow_token: {
               type: 'string',
               __example__: 'welcome_service_919999999999'
@@ -1802,42 +1755,6 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: screen1Children
-          }
-        },
-        {
-          id: 'FOOD_TYPE_SELECT',
-          title: 'Food Type',
-          terminal: true,
-          success: true,
-          data: {
-            selected_service: {
-              type: 'string',
-              __example__: 'order_food'
-            },
-            food_types: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  title: { type: 'string' },
-                  description: { type: 'string' },
-                  image: { type: 'string' }
-                }
-              },
-              __example__: [
-                { id: 'food_veg', title: 'Veg', description: 'Vegetarian dishes', image: 'iVBORw0KGgo...' },
-                { id: 'food_nonveg', title: 'Non-Veg', description: 'Non-vegetarian dishes', image: 'iVBORw0KGgo...' }
-              ]
-            },
-            flow_token: {
-              type: 'string',
-              __example__: 'welcome_service_919999999999'
-            }
-          },
-          layout: {
-            type: 'SingleColumnLayout',
-            children: screen2Children
           }
         }
       ]
@@ -1869,9 +1786,10 @@ const catalogService = {
    * Fetches chatbot images from admin panel for each service icon.
    * Converts Cloudinary URLs to raw base64 for WhatsApp Flow compatibility.
    * @param {string} flowToken - Unique token to identify this flow instance
-   * @returns {Promise<object>} { services: [{id, title, description, image}], flow_token }
+   * @param {string} phone - Customer phone number to fetch recent orders
+   * @returns {Promise<object>} { services: [{id, title, description, image}], food_types, recent_orders, flow_token }
    */
-  async buildWelcomeFlowData(flowToken = 'welcome_service') {
+  async buildWelcomeFlowData(flowToken = 'welcome_service', phone = null) {
     const chatbotImagesService = require('./chatbotImages');
 
     // Fetch all service icons + food type icons from admin-configured chatbot images
@@ -1927,9 +1845,58 @@ const catalogService = {
       buildItem('food_egg', 'Egg', 'Egg-based dishes', eggB64)
     ];
 
+    // Fetch recent orders for the customer (if phone provided)
+    let recent_orders = [];
+    if (phone) {
+      try {
+        const Order = require('../models/Order');
+        const orders = await Order.find({ phone })
+          .sort({ createdAt: -1 })
+          .limit(5)
+          .select('orderNumber totalAmount status createdAt items');
+
+        recent_orders = orders.map(order => {
+          const statusEmoji = {
+            'pending': '⏳',
+            'confirmed': '✅',
+            'preparing': '👨‍🍳',
+            'ready': '🎉',
+            'out_for_delivery': '🚚',
+            'delivered': '✓',
+            'cancelled': '❌'
+          };
+          
+          const emoji = statusEmoji[order.status] || '📦';
+          const statusText = order.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          const date = new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+          const itemCount = order.items?.length || 0;
+          
+          return {
+            id: order._id.toString(),
+            title: `Order #${order.orderNumber}`,
+            description: `${emoji} ${statusText} • ₹${order.totalAmount} • ${itemCount} items • ${date}`
+          };
+        });
+      } catch (err) {
+        logger.warn('Failed to fetch recent orders for welcome flow', { phone, error: err.message });
+      }
+    }
+
+    // If no orders found, provide a default message
+    if (recent_orders.length === 0) {
+      recent_orders = [
+        {
+          id: 'no_orders',
+          title: 'No Recent Orders',
+          description: 'You haven\'t placed any orders yet'
+        }
+      ];
+    }
+
     return {
       services,
       food_types,
+      recent_orders,
       flow_token: flowToken
     };
   },
