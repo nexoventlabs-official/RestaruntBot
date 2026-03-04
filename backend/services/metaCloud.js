@@ -1298,8 +1298,7 @@ const metaCloud = {
             data.image_link = product.imageUrl;
           }
 
-          endTimer({ success: true });
-          return { method: 'CREATE', data };
+          return { method: 'UPDATE', data };
         });
 
         const batchResponse = await metaApi.post(
