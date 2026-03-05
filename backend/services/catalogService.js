@@ -2051,8 +2051,8 @@ const catalogService = {
       for (const flow of publishedWelcomeFlows) {
         try {
           await axios.post(
-            `https://graph.facebook.com/v24.0/${flow.id}`,
-            { status: 'DEPRECATED' },
+            `https://graph.facebook.com/v24.0/${flow.id}/deprecate`,
+            {},
             { headers: { Authorization: `Bearer ${accessToken}` } }
           );
           logger.info('Deprecated published welcome flow for republish', { flowId: flow.id, name: flow.name });
@@ -2070,8 +2070,8 @@ const catalogService = {
       if (oldFlowId) {
         try {
           await axios.post(
-            `https://graph.facebook.com/v24.0/${oldFlowId}`,
-            { status: 'DEPRECATED' },
+            `https://graph.facebook.com/v24.0/${oldFlowId}/deprecate`,
+            {},
             { headers: { Authorization: `Bearer ${accessToken}` } }
           );
         } catch (depErr) {
