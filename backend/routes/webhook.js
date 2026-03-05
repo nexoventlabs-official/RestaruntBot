@@ -471,7 +471,13 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       // webhook receives completed flow with selected_order or no_orders flag
                       else if (service === 'my_orders') {
                         const phone = responseData.flow_token.replace('welcome_service_', '');
-                        if (responseData.selected_order) {
+                        if (responseData.order_viewed === 'true' && responseData.selected_order) {
+                          // User viewed order details on ORDER_DETAILS screen then closed
+                          selectedId = `view_order_${responseData.selected_order}`;
+                          text = `view_order_${responseData.selected_order}`;
+                          messageType = 'button';
+                          logger.info('Flow: My Orders - order details viewed', { phone, orderId: responseData.selected_order });
+                        } else if (responseData.selected_order) {
                           // User selected an order from MY_ORDERS screen
                           selectedId = `view_order_${responseData.selected_order}`;
                           text = `view_order_${responseData.selected_order}`;

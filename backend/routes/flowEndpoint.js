@@ -463,6 +463,118 @@ router.post('/', async (req, res) => {
         }
       }
 
+      // Screen 3: User selected an order on MY_ORDERS and tapped View Order → show ORDER_DETAILS
+      else if (screen === 'MY_ORDERS') {
+        const selectedOrderId = data?.selected_order;
+        const token = data?.flow_token || flow_token || 'welcome_service';
+
+        try {
+          const order = await Order.findOne({ orderId: selectedOrderId })
+            .select('orderId status items totalAmount itemsTotal deliveryCharge discountAmount serviceType paymentMethod createdAt')
+            .lean();
+
+          if (order) {
+            const images = await getFlowImages();
+
+            const STATUS_LABELS = {
+              pending: 'Pending',
+              confirmed: 'Confirmed',
+              preparing: 'Preparing',
+              ready: 'Ready',
+              out_for_delivery: 'Out for Delivery',
+              delivered: 'Delivered',
+              cancelled: 'Cancelled'
+            };
+
+            const SERVICE_LABELS = {
+              delivery: 'Delivery',
+              pickup: 'Pickup',
+              dine_in: 'Dine In'
+            };
+
+            const statusLabel = STATUS_LABELS[order.status] || order.status;
+            const serviceLabel = SERVICE_LABELS[order.serviceType] || order.serviceType;
+            const date = new Date(order.createdAt);
+            const dateStr = date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+            // Status image
+            const statusImg = images.statusImages?.[order.status];
+            const hasStatusImage = !!statusImg;
+
+            // Build item list with images
+            const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
+            const orderItems = await Promise.all((order.items || []).map(async (item, idx) => {
+              const entry = {
+                id: `item_${idx}`,
+                title: `${item.name} x${item.quantity}`,
+                description: `₹${item.price} each${item.variantLabel ? ' • ' + item.variantLabel : ''}`
+              };
+              if (item.image) {
+                const b64 = await toBase64(item.image);
+                if (b64) entry.image = b64;
+              }
+              return entry;
+            }));
+
+            // Build summary text
+            const summaryLines = [];
+            const itemsTotal = order.itemsTotal || order.totalAmount;
+            summaryLines.push(`Items Total: ₹${itemsTotal}`);
+            if (order.deliveryCharge > 0) summaryLines.push(`Delivery: ₹${order.deliveryCharge}`);
+            if (order.discountAmount > 0) summaryLines.push(`Discount: -₹${order.discountAmount}`);
+            summaryLines.push('─────────');
+            summaryLines.push(`Total: ₹${order.totalAmount}`);
+
+            const paymentLabel = order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'UPI';
+            const orderInfo = `Status: ${statusLabel}\nService: ${serviceLabel}\nPayment: ${paymentLabel}\nDate: ${dateStr}`;
+
+            response = {
+              screen: 'ORDER_DETAILS',
+              data: {
+                status_image: statusImg || 'iVBORw0KGgo',
+                has_status_image: hasStatusImage,
+                order_heading: `Order #${order.orderId}`,
+                order_info: orderInfo,
+                order_items: orderItems.length > 0 ? orderItems : [{ id: 'no_items', title: 'No items', description: 'Order has no items' }],
+                order_summary: summaryLines.join('\n'),
+                order_id: order.orderId,
+                flow_token: token
+              }
+            };
+          } else {
+            // Order not found → close flow
+            response = {
+              screen: 'SUCCESS',
+              data: {
+                extension_message_response: {
+                  params: {
+                    flow_token: token,
+                    selected_service: 'my_orders',
+                    selected_order: selectedOrderId || '',
+                    order_viewed: 'true'
+                  }
+                }
+              }
+            };
+          }
+        } catch (dbErr) {
+          logger.error('[FlowEndpoint] Failed to fetch order details', { orderId: selectedOrderId, error: dbErr.message });
+          response = {
+            screen: 'SUCCESS',
+            data: {
+              extension_message_response: {
+                params: {
+                  flow_token: token,
+                  selected_service: 'my_orders',
+                  selected_order: selectedOrderId || '',
+                  order_viewed: 'true'
+                }
+              }
+            }
+          };
+        }
+      }
+
       // Screen 2: User selected a food type and tapped Confirm → show menu categories
       else if (screen === 'FOOD_TYPE_SELECT') {
         const selectedFoodType = data?.selected_food_type; // e.g. food_veg, food_nonveg, food_egg, food_all

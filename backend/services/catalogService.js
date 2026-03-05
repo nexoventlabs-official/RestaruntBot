@@ -1821,10 +1821,59 @@ const catalogService = {
         type: 'Footer',
         label: 'View Order',
         'on-click-action': {
-          name: 'complete',
+          name: 'data_exchange',
           payload: {
             selected_service: 'my_orders',
             selected_order: '${form.selected_order}',
+            flow_token: '${data.flow_token}'
+          }
+        }
+      }
+    ];
+
+    // ─── Screen 3b: Order Details (shown when user selects an order from MY_ORDERS) ───
+    const screenOrderDetailsChildren = [
+      {
+        type: 'Image',
+        src: '${data.status_image}',
+        width: 200,
+        height: 200,
+        'scale-type': 'contain',
+        'alt-text': 'Order Status',
+        visible: '${data.has_status_image}'
+      },
+      {
+        type: 'TextHeading',
+        text: '${data.order_heading}'
+      },
+      {
+        type: 'TextBody',
+        text: '${data.order_info}'
+      },
+      {
+        type: 'TextSubheading',
+        text: 'Items'
+      },
+      {
+        type: 'RadioButtonsGroup',
+        name: 'selected_item',
+        label: 'Order Items',
+        required: true,
+        'data-source': '${data.order_items}'
+      },
+      {
+        type: 'TextBody',
+        text: '${data.order_summary}'
+      },
+      {
+        type: 'Footer',
+        label: 'Close',
+        'on-click-action': {
+          name: 'complete',
+          payload: {
+            selected_service: 'my_orders',
+            selected_order: '${data.order_id}',
+            order_viewed: 'true',
             flow_token: '${data.flow_token}'
           }
         }
@@ -1865,7 +1914,8 @@ const catalogService = {
         'SERVICE_SELECT': ['FOOD_TYPE_SELECT', 'MY_ORDERS', 'VIEW_OFFERS'],
         'FOOD_TYPE_SELECT': ['MENU_CATEGORIES'],
         'MENU_CATEGORIES': [],
-        'MY_ORDERS': [],
+        'MY_ORDERS': ['ORDER_DETAILS'],
+        'ORDER_DETAILS': [],
         'VIEW_OFFERS': []
       },
       screens: [
@@ -1974,8 +2024,6 @@ const catalogService = {
         {
           id: 'MY_ORDERS',
           title: 'My Orders',
-          terminal: true,
-          success: true,
           data: {
             orders: {
               type: 'array',
@@ -2000,6 +2048,61 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: screen3Children
+          }
+        },
+        {
+          id: 'ORDER_DETAILS',
+          title: 'Order Details',
+          terminal: true,
+          success: true,
+          data: {
+            status_image: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
+            },
+            has_status_image: {
+              type: 'boolean',
+              __example__: true
+            },
+            order_heading: {
+              type: 'string',
+              __example__: 'Order #JRB001'
+            },
+            order_info: {
+              type: 'string',
+              __example__: 'Status: Preparing\nService: Delivery\nDate: 6 Mar'
+            },
+            order_items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'item1', title: 'Chicken Biryani x2', description: '₹250 each', image: 'iVBORw0KGgo' }
+              ]
+            },
+            order_summary: {
+              type: 'string',
+              __example__: 'Items Total: ₹500\nDelivery: ₹30\nDiscount: -₹50\n─────────\nTotal: ₹480'
+            },
+            order_id: {
+              type: 'string',
+              __example__: 'JRB001'
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'welcome_service_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: screenOrderDetailsChildren
           }
         },
         {
