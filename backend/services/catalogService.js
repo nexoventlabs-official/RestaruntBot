@@ -72,6 +72,30 @@ const catalogService = {
   },
 
   /**
+   * Get ALL retailer IDs for a menu item (includes all variants and quantity combos).
+   * For non-variant items returns [itemId]. For variant items returns all variant/quantity IDs.
+   * @param {Object} item - MenuItem document
+   * @returns {string[]} Array of retailer IDs
+   */
+  _getAllRetailerIds(item) {
+    const itemId = item._id.toString();
+    if (item.variants && item.variants.length > 0) {
+      const ids = [];
+      item.variants.forEach((v, vIdx) => {
+        if (v.quantities && v.quantities.length > 0) {
+          v.quantities.forEach((_, qIdx) => {
+            ids.push(`${itemId}_v${vIdx}_q${qIdx}`);
+          });
+        } else {
+          ids.push(`${itemId}_v${vIdx}`);
+        }
+      });
+      return ids;
+    }
+    return [itemId];
+  },
+
+  /**
    * Check if a specific menu item has a catalog mapping
    */
   async hasProduct(menuItemId) {
@@ -131,7 +155,7 @@ const catalogService = {
       return null;
     }
 
-    // Group by category
+    // Group by category — include ALL variant retailer IDs per item
     const categoryMap = new Map();
     for (const item of mappedItems) {
       const categories = Array.isArray(item.category) ? item.category : [item.category];
@@ -139,7 +163,8 @@ const catalogService = {
       if (!categoryMap.has(cat)) {
         categoryMap.set(cat, []);
       }
-      categoryMap.get(cat).push(map.get(item._id.toString()));
+      const allIds = this._getAllRetailerIds(item);
+      categoryMap.get(cat).push(...allIds);
     }
 
     // Build sections (max 10 sections, max 30 products TOTAL for WhatsApp product_list API)
@@ -181,13 +206,14 @@ const catalogService = {
       return null;
     }
 
-    // Group by category preserving order
+    // Group by category preserving order — include ALL variant retailer IDs per item
     const categoryMap = new Map();
     for (const item of mappedItems) {
       const categories = Array.isArray(item.category) ? item.category : [item.category];
       const cat = categories[0] || 'Menu';
       if (!categoryMap.has(cat)) categoryMap.set(cat, []);
-      categoryMap.get(cat).push(map.get(item._id.toString()));
+      const allIds = this._getAllRetailerIds(item);
+      categoryMap.get(cat).push(...allIds);
     }
 
     // Flatten categories into sequential entries
@@ -1220,13 +1246,14 @@ const catalogService = {
     const mappedItems = items.filter(item => map.has(item._id.toString()));
     if (mappedItems.length === 0) return null;
 
-    // Group by category
+    // Group by category — include ALL variant retailer IDs per item
     const categoryMap = new Map();
     for (const item of mappedItems) {
       const categories = Array.isArray(item.category) ? item.category : [item.category];
       const cat = categories[0] || 'Results';
       if (!categoryMap.has(cat)) categoryMap.set(cat, []);
-      categoryMap.get(cat).push(map.get(item._id.toString()));
+      const allIds = this._getAllRetailerIds(item);
+      categoryMap.get(cat).push(...allIds);
     }
 
     // Build sections (max 10 sections, max 30 products)
