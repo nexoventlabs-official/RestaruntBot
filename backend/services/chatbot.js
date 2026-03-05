@@ -5070,12 +5070,13 @@ const chatbot = {
           state.currentStep = 'select_food_type';
         }
       }
-      else if (selection === 'food_veg' || selection === 'food_nonveg' || selection === 'food_egg') {
+      else if (selection === 'food_all' || selection === 'food_veg' || selection === 'food_nonveg' || selection === 'food_egg') {
         state.foodTypePreference = selection.replace('food_', '');
         logger.info('Food type selected', { data: state.foodTypePreference });
-        const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference);
+        const filteredItems = selection === 'food_all' ? menuItems : this.filterByFoodType(menuItems, state.foodTypePreference);
         
         const foodTypeLabels = {
+          all: '🍽️ All Menu',
           veg: '🌿 Veg Menu',
           nonveg: '🍗 Non-Veg Menu',
           egg: '🟡 Egg Menu'

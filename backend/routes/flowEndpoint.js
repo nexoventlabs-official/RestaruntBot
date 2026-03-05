@@ -130,7 +130,7 @@ async function getFlowImages() {
   // Fetch all image URLs (services + food types + order statuses)
   const [
     orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, deliveryAddressImg, visitWebsiteImg, helpSupportImg,
-    vegImg, nonvegImg, eggImg,
+    allFoodImg, vegImg, nonvegImg, eggImg,
     pendingImg, confirmedImg, preparingImg, readyImg, outForDeliveryImg, deliveredImg, cancelledImg
   ] = await Promise.all([
     chatbotImagesService.getImageUrl('flow_order_food'),
@@ -140,6 +140,7 @@ async function getFlowImages() {
     chatbotImagesService.getImageUrl('flow_delivery_address'),
     chatbotImagesService.getImageUrl('flow_visit_website'),
     chatbotImagesService.getImageUrl('flow_help_support'),
+    chatbotImagesService.getImageUrl('flow_food_all'),
     chatbotImagesService.getImageUrl('flow_food_veg'),
     chatbotImagesService.getImageUrl('flow_food_nonveg'),
     chatbotImagesService.getImageUrl('flow_food_egg'),
@@ -155,12 +156,12 @@ async function getFlowImages() {
   // Convert to base64
   const [
     orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, deliveryAddressB64, visitWebsiteB64, helpSupportB64,
-    vegB64, nonvegB64, eggB64,
+    allFoodB64, vegB64, nonvegB64, eggB64,
     pendingB64, confirmedB64, preparingB64, readyB64, outForDeliveryB64, deliveredB64, cancelledB64
   ] = await Promise.all([
     toBase64(orderFoodImg), toBase64(myOrdersImg), toBase64(viewOffersImg),
     toBase64(accountDetailsImg), toBase64(deliveryAddressImg), toBase64(visitWebsiteImg),
-    toBase64(helpSupportImg), toBase64(vegImg), toBase64(nonvegImg), toBase64(eggImg),
+    toBase64(helpSupportImg), toBase64(allFoodImg), toBase64(vegImg), toBase64(nonvegImg), toBase64(eggImg),
     toBase64(pendingImg), toBase64(confirmedImg), toBase64(preparingImg),
     toBase64(readyImg), toBase64(outForDeliveryImg), toBase64(deliveredImg), toBase64(cancelledImg)
   ]);
@@ -182,6 +183,7 @@ async function getFlowImages() {
       buildItem('help', 'Help & Support', 'Get assistance with your queries', helpSupportB64)
     ],
     foodTypes: [
+      buildItem('food_all', 'All', 'All dishes (Veg, Non-Veg & Egg)', allFoodB64),
       buildItem('food_veg', 'Veg', 'Pure vegetarian dishes', vegB64),
       buildItem('food_nonveg', 'Non-Veg', 'Non-vegetarian dishes', nonvegB64),
       buildItem('food_egg', 'Egg', 'Egg-based dishes', eggB64)
