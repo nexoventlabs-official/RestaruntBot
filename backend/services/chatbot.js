@@ -4502,6 +4502,11 @@ const chatbot = {
           await whatsapp.sendMessage(phone, '🏷️ *No Offers Available*\n\nThere are no offers available for you right now. Check back soon! 🎉');
           await this.sendWelcome(phone);
           state.currentStep = 'main_menu';
+        } else if (flowData.type === 'no_menu_items') {
+          // No menu items found for selected food type
+          await whatsapp.sendMessage(phone, '📋 *No Items Found*\n\nNo menu items available for this food type right now. Try a different option! 🍽️');
+          await this.sendWelcome(phone);
+          state.currentStep = 'main_menu';
         } else {
           logger.info('Unknown flow_reply type', { phone, flowData });
           await this.sendWelcome(phone);
@@ -5483,6 +5488,18 @@ const chatbot = {
         const foodType = state.foodTypePreference || 'both';
         logger.info('Title selected for order', { titleItemId, foodType });
         await this.sendTitleVariantsForOrder(phone, menuItems, titleItemId, foodType);
+        state.selectedTitle = titleItemId;
+        state.currentStep = 'selecting_item';
+      }
+      else if (selection.startsWith('flow_order_')) {
+        // From WhatsApp Flow: flow_order_{foodPref}_{menuItemId}
+        const parts = selection.replace('flow_order_', '').split('_');
+        const foodPref = parts.shift(); // all, veg, nonveg, egg
+        const titleItemId = parts.join('_');
+        state.foodTypePreference = foodPref;
+        state.currentStep = 'select_title_order';
+        logger.info('Flow order category selected', { titleItemId, foodPref });
+        await this.sendTitleVariantsForOrder(phone, menuItems, titleItemId, foodPref === 'all' ? 'both' : foodPref);
         state.selectedTitle = titleItemId;
         state.currentStep = 'selecting_item';
       }

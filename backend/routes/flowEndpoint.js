@@ -19,6 +19,7 @@ const catalogService = require('../services/catalogService');
 const chatbotImagesService = require('../services/chatbotImages');
 const Order = require('../models/Order');
 const Offer = require('../models/Offer');
+const MenuItem = require('../models/MenuItem');
 
 const router = express.Router();
 
@@ -455,6 +456,110 @@ router.post('/', async (req, res) => {
                 params: {
                   flow_token: token,
                   selected_service: selectedService
+                }
+              }
+            }
+          };
+        }
+      }
+
+      // Screen 2: User selected a food type and tapped Confirm → show menu categories
+      else if (screen === 'FOOD_TYPE_SELECT') {
+        const selectedFoodType = data?.selected_food_type; // e.g. food_veg, food_nonveg, food_egg, food_all
+        const token = data?.flow_token || flow_token || 'welcome_service';
+        const foodPref = selectedFoodType ? selectedFoodType.replace('food_', '') : 'all';
+
+        try {
+          // Fetch available menu items filtered by food type
+          const query = { available: true, isPaused: { $ne: true } };
+          const allItems = await MenuItem.find(query)
+            .select('name image foodType variants price offerPrice')
+            .lean();
+
+          // Filter by food type preference
+          const matchesFoodType = (ft, pref) => {
+            if (!ft || ft === 'none') return true;
+            if (pref === 'veg') return ft === 'veg';
+            if (pref === 'nonveg') return ft === 'nonveg' || ft === 'egg';
+            if (pref === 'egg') return ft === 'egg';
+            return true;
+          };
+
+          let filteredItems;
+          if (foodPref === 'all') {
+            filteredItems = allItems;
+          } else {
+            filteredItems = allItems.filter(item => {
+              if (item.variants && item.variants.length > 0) {
+                return item.variants.some(v => matchesFoodType(v.foodType || item.foodType, foodPref));
+              }
+              return matchesFoodType(item.foodType, foodPref);
+            });
+          }
+
+          if (filteredItems.length > 0) {
+            const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
+
+            // Build category items (max 10 for RadioButtonsGroup)
+            const categoryItems = await Promise.all(filteredItems.slice(0, 10).map(async (item) => {
+              let desc;
+              if (item.variants && item.variants.length > 0) {
+                const vCount = item.variants.length;
+                desc = `${vCount} variant${vCount > 1 ? 's' : ''} available`;
+              } else {
+                desc = `₹${item.offerPrice || item.price}`;
+              }
+
+              const catItem = {
+                id: item._id.toString(),
+                title: item.name.substring(0, 30),
+                description: desc
+              };
+
+              if (item.image) {
+                const b64 = await toBase64(item.image);
+                if (b64) catItem.image = b64;
+              }
+
+              return catItem;
+            }));
+
+            response = {
+              screen: 'MENU_CATEGORIES',
+              data: {
+                categories: categoryItems,
+                selected_service: 'order_food',
+                selected_food_type: selectedFoodType,
+                flow_token: token
+              }
+            };
+          } else {
+            // No items found for this food type → close flow
+            response = {
+              screen: 'SUCCESS',
+              data: {
+                extension_message_response: {
+                  params: {
+                    flow_token: token,
+                    selected_service: 'order_food',
+                    selected_food_type: selectedFoodType,
+                    no_items: 'true'
+                  }
+                }
+              }
+            };
+          }
+        } catch (dbErr) {
+          logger.error('[FlowEndpoint] Failed to fetch menu items', { error: dbErr.message });
+          response = {
+            screen: 'SUCCESS',
+            data: {
+              extension_message_response: {
+                params: {
+                  flow_token: token,
+                  selected_service: 'order_food',
+                  selected_food_type: selectedFoodType,
+                  no_items: 'true'
                 }
               }
             }

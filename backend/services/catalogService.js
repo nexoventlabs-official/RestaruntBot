@@ -1766,10 +1766,38 @@ const catalogService = {
         type: 'Footer',
         label: 'Confirm',
         'on-click-action': {
-          name: 'complete',
+          name: 'data_exchange',
           payload: {
             selected_service: '${data.selected_service}',
             selected_food_type: '${form.selected_food_type}',
+            flow_token: '${data.flow_token}'
+          }
+        }
+      }
+    ];
+
+    // ─── Screen 2b: Menu Categories (shown after food type selection — items loaded dynamically) ───
+    const screenMenuCategoriesChildren = [
+      {
+        type: 'TextSubheading',
+        text: 'Select a Category'
+      },
+      {
+        type: 'RadioButtonsGroup',
+        name: 'selected_category',
+        label: 'Menu Items',
+        required: true,
+        'data-source': '${data.categories}'
+      },
+      {
+        type: 'Footer',
+        label: 'View Item',
+        'on-click-action': {
+          name: 'complete',
+          payload: {
+            selected_service: '${data.selected_service}',
+            selected_food_type: '${data.selected_food_type}',
+            selected_category: '${form.selected_category}',
             flow_token: '${data.flow_token}'
           }
         }
@@ -1835,7 +1863,8 @@ const catalogService = {
       data_api_version: '3.0',
       routing_model: {
         'SERVICE_SELECT': ['FOOD_TYPE_SELECT', 'MY_ORDERS', 'VIEW_OFFERS'],
-        'FOOD_TYPE_SELECT': [],
+        'FOOD_TYPE_SELECT': ['MENU_CATEGORIES'],
+        'MENU_CATEGORIES': [],
         'MY_ORDERS': [],
         'VIEW_OFFERS': []
       },
@@ -1873,8 +1902,6 @@ const catalogService = {
         {
           id: 'FOOD_TYPE_SELECT',
           title: 'Food Type',
-          terminal: true,
-          success: true,
           data: {
             food_types: {
               type: 'array',
@@ -1903,6 +1930,45 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: screen2Children
+          }
+        },
+        {
+          id: 'MENU_CATEGORIES',
+          title: 'Menu Items',
+          terminal: true,
+          success: true,
+          data: {
+            categories: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: '507f1f77bcf86cd799439011', title: 'Ice Creams', description: '3 variants', image: 'iVBORw0KGgo' }
+              ]
+            },
+            selected_service: {
+              type: 'string',
+              __example__: 'order_food'
+            },
+            selected_food_type: {
+              type: 'string',
+              __example__: 'food_veg'
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'welcome_service_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: screenMenuCategoriesChildren
           }
         },
         {
