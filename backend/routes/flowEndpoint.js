@@ -6,16 +6,18 @@
  * Based on the action and data, we return the appropriate screen data.
  *
  * Flow screens:
- *   SERVICE_SELECT  — Banner + service dropdown (always shown first)
+ *   SERVICE_SELECT   — Banner + service dropdown (always shown first)
  *   FOOD_TYPE_SELECT — Food type radio buttons (shown only for "Order Food")
+ *   MY_ORDERS        — Recent orders with status icons (shown for "My Orders")
  *
- * For non-food services, the flow completes directly from SERVICE_SELECT.
+ * For non-food services (except My Orders), the flow completes directly from SERVICE_SELECT.
  */
 const express = require('express');
 const crypto = require('crypto');
 const logger = require('../services/logger');
 const catalogService = require('../services/catalogService');
 const chatbotImagesService = require('../services/chatbotImages');
+const Order = require('../models/Order');
 
 const router = express.Router();
 
@@ -111,7 +113,7 @@ function encryptResponse(responseObj, aesKeyBuffer, initialVectorBuffer) {
 }
 
 // ─── Cache for base64 images (avoid re-downloading on every request) ───
-let imageCache = { services: null, foodTypes: null, banner: null, lastFetched: 0 };
+let imageCache = { services: null, foodTypes: null, statusImages: null, banner: null, lastFetched: 0 };
 const IMAGE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 async function getFlowImages() {
@@ -124,8 +126,12 @@ async function getFlowImages() {
 
   const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
 
-  // Fetch all image URLs
-  const [orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, deliveryAddressImg, visitWebsiteImg, helpSupportImg, vegImg, nonvegImg, eggImg] = await Promise.all([
+  // Fetch all image URLs (services + food types + order statuses)
+  const [
+    orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, deliveryAddressImg, visitWebsiteImg, helpSupportImg,
+    vegImg, nonvegImg, eggImg,
+    pendingImg, confirmedImg, preparingImg, readyImg, outForDeliveryImg, deliveredImg, cancelledImg
+  ] = await Promise.all([
     chatbotImagesService.getImageUrl('flow_order_food'),
     chatbotImagesService.getImageUrl('flow_my_orders'),
     chatbotImagesService.getImageUrl('flow_view_offers'),
@@ -135,14 +141,27 @@ async function getFlowImages() {
     chatbotImagesService.getImageUrl('flow_help_support'),
     chatbotImagesService.getImageUrl('flow_food_veg'),
     chatbotImagesService.getImageUrl('flow_food_nonveg'),
-    chatbotImagesService.getImageUrl('flow_food_egg')
+    chatbotImagesService.getImageUrl('flow_food_egg'),
+    chatbotImagesService.getImageUrl('flow_status_pending'),
+    chatbotImagesService.getImageUrl('flow_status_confirmed'),
+    chatbotImagesService.getImageUrl('flow_status_preparing'),
+    chatbotImagesService.getImageUrl('flow_status_ready'),
+    chatbotImagesService.getImageUrl('flow_status_out_for_delivery'),
+    chatbotImagesService.getImageUrl('flow_status_delivered'),
+    chatbotImagesService.getImageUrl('flow_status_cancelled')
   ]);
 
   // Convert to base64
-  const [orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, deliveryAddressB64, visitWebsiteB64, helpSupportB64, vegB64, nonvegB64, eggB64] = await Promise.all([
+  const [
+    orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, deliveryAddressB64, visitWebsiteB64, helpSupportB64,
+    vegB64, nonvegB64, eggB64,
+    pendingB64, confirmedB64, preparingB64, readyB64, outForDeliveryB64, deliveredB64, cancelledB64
+  ] = await Promise.all([
     toBase64(orderFoodImg), toBase64(myOrdersImg), toBase64(viewOffersImg),
     toBase64(accountDetailsImg), toBase64(deliveryAddressImg), toBase64(visitWebsiteImg),
-    toBase64(helpSupportImg), toBase64(vegImg), toBase64(nonvegImg), toBase64(eggImg)
+    toBase64(helpSupportImg), toBase64(vegImg), toBase64(nonvegImg), toBase64(eggImg),
+    toBase64(pendingImg), toBase64(confirmedImg), toBase64(preparingImg),
+    toBase64(readyImg), toBase64(outForDeliveryImg), toBase64(deliveredImg), toBase64(cancelledImg)
   ]);
 
   const buildItem = (id, title, description, base64Img) => {
@@ -166,6 +185,15 @@ async function getFlowImages() {
       buildItem('food_nonveg', 'Non-Veg', 'Non-vegetarian dishes', nonvegB64),
       buildItem('food_egg', 'Egg', 'Egg-based dishes', eggB64)
     ],
+    statusImages: {
+      pending: pendingB64,
+      confirmed: confirmedB64,
+      preparing: preparingB64,
+      ready: readyB64,
+      out_for_delivery: outForDeliveryB64,
+      delivered: deliveredB64,
+      cancelled: cancelledB64
+    },
     banner: null,
     lastFetched: now
   };
@@ -247,6 +275,87 @@ router.post('/', async (req, res) => {
               flow_token: token
             }
           };
+        } else if (selectedService === 'my_orders') {
+          // My Orders → fetch recent orders and show MY_ORDERS screen
+          const images = await getFlowImages();
+          const phone = token.replace('welcome_service_', '');
+
+          // Status display labels
+          const STATUS_LABELS = {
+            pending: 'Pending',
+            confirmed: 'Confirmed',
+            preparing: 'Preparing',
+            ready: 'Ready',
+            out_for_delivery: 'Out for Delivery',
+            delivered: 'Delivered',
+            cancelled: 'Cancelled'
+          };
+
+          try {
+            const recentOrders = await Order.find({ 'customer.phone': phone })
+              .sort({ createdAt: -1 })
+              .limit(10)
+              .select('orderId status items totalAmount createdAt serviceType')
+              .lean();
+
+            if (recentOrders.length > 0) {
+              const orderItems = recentOrders.map(order => {
+                const itemCount = order.items ? order.items.length : 0;
+                const date = new Date(order.createdAt);
+                const dateStr = date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+                const statusLabel = STATUS_LABELS[order.status] || order.status;
+
+                const item = {
+                  id: order.orderId,
+                  title: `#${order.orderId} - ₹${order.totalAmount}`,
+                  description: `${statusLabel} • ${itemCount} item${itemCount !== 1 ? 's' : ''} • ${dateStr}`
+                };
+
+                // Attach status-based image if available
+                const statusImg = images.statusImages?.[order.status];
+                if (statusImg) item.image = statusImg;
+
+                return item;
+              });
+
+              response = {
+                screen: 'MY_ORDERS',
+                data: {
+                  orders: orderItems,
+                  flow_token: token
+                }
+              };
+            } else {
+              // No orders found → close flow, webhook will send a text message
+              response = {
+                screen: 'SUCCESS',
+                data: {
+                  extension_message_response: {
+                    params: {
+                      flow_token: token,
+                      selected_service: 'my_orders',
+                      no_orders: 'true'
+                    }
+                  }
+                }
+              };
+            }
+          } catch (dbErr) {
+            logger.error('[FlowEndpoint] Failed to fetch orders', { phone, error: dbErr.message });
+            // On DB error, close flow gracefully
+            response = {
+              screen: 'SUCCESS',
+              data: {
+                extension_message_response: {
+                  params: {
+                    flow_token: token,
+                    selected_service: 'my_orders',
+                    no_orders: 'true'
+                  }
+                }
+              }
+            };
+          }
         } else {
           // Any other service → close the flow and send result to webhook
           response = {

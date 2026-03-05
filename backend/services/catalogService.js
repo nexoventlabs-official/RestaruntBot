@@ -1749,12 +1749,40 @@ const catalogService = {
       }
     ];
 
+    // ─── Screen 3: My Orders (shown when My Orders is selected — orders loaded dynamically) ───
+    const screen3Children = [
+      {
+        type: 'TextSubheading',
+        text: 'Your Recent Orders'
+      },
+      {
+        type: 'RadioButtonsGroup',
+        name: 'selected_order',
+        label: 'Select an Order',
+        required: true,
+        'data-source': '${data.orders}'
+      },
+      {
+        type: 'Footer',
+        label: 'View Order',
+        'on-click-action': {
+          name: 'complete',
+          payload: {
+            selected_service: 'my_orders',
+            selected_order: '${form.selected_order}',
+            flow_token: '${data.flow_token}'
+          }
+        }
+      }
+    ];
+
     return {
       version: '7.3',
       data_api_version: '3.0',
       routing_model: {
-        'SERVICE_SELECT': ['FOOD_TYPE_SELECT'],
-        'FOOD_TYPE_SELECT': []
+        'SERVICE_SELECT': ['FOOD_TYPE_SELECT', 'MY_ORDERS'],
+        'FOOD_TYPE_SELECT': [],
+        'MY_ORDERS': []
       },
       screens: [
         {
@@ -1820,6 +1848,37 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: screen2Children
+          }
+        },
+        {
+          id: 'MY_ORDERS',
+          title: 'My Orders',
+          terminal: true,
+          success: true,
+          data: {
+            orders: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'ORD001', title: 'Order #JRB001 - ₹250', description: 'Preparing • 2 items', image: 'iVBORw0KGgo' }
+              ]
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'welcome_service_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: screen3Children
           }
         }
       ]

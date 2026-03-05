@@ -60,7 +60,14 @@ const defaultImages = [
   { key: 'flow_delivery_address', name: 'Flow: Delivery Address Icon', description: 'Icon shown in welcome Flow service list for Delivery Address option (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_food_veg', name: 'Flow: Veg Food Icon', description: 'Icon shown in food type selection for Vegetarian option (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_food_nonveg', name: 'Flow: Non-Veg Food Icon', description: 'Icon shown in food type selection for Non-Vegetarian option (square aspect ratio recommended)', imageUrl: '' },
-  { key: 'flow_food_egg', name: 'Flow: Egg Food Icon', description: 'Icon shown in food type selection for Egg option (square aspect ratio recommended)', imageUrl: '' }
+  { key: 'flow_food_egg', name: 'Flow: Egg Food Icon', description: 'Icon shown in food type selection for Egg option (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_status_pending', name: 'Flow: Pending Status Icon', description: 'Icon shown for orders with Pending status in My Orders list (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_status_confirmed', name: 'Flow: Confirmed Status Icon', description: 'Icon shown for orders with Confirmed status in My Orders list (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_status_preparing', name: 'Flow: Preparing Status Icon', description: 'Icon shown for orders with Preparing status in My Orders list (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_status_ready', name: 'Flow: Ready Status Icon', description: 'Icon shown for orders with Ready status in My Orders list (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_status_out_for_delivery', name: 'Flow: Out for Delivery Status Icon', description: 'Icon shown for orders with Out for Delivery status in My Orders list (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_status_delivered', name: 'Flow: Delivered Status Icon', description: 'Icon shown for orders with Delivered status in My Orders list (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_status_cancelled', name: 'Flow: Cancelled Status Icon', description: 'Icon shown for orders with Cancelled status in My Orders list (square aspect ratio recommended)', imageUrl: '' }
 ];
 
 module.exports = defaultImages;

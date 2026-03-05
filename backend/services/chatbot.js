@@ -4492,6 +4492,11 @@ const chatbot = {
           // Send recent orders list flow after My Orders selected
           await this.sendMyOrdersListFlow(phone, customer);
           state.currentStep = 'main_menu';
+        } else if (flowData.type === 'my_orders_empty') {
+          // No orders found for this phone — send a friendly message
+          await whatsapp.sendMessage(phone, '📋 *No Recent Orders*\n\nYou don\'t have any orders yet. Place your first order now! 🍽️');
+          await this.sendWelcome(phone);
+          state.currentStep = 'main_menu';
         } else {
           logger.info('Unknown flow_reply type', { phone, flowData });
           await this.sendWelcome(phone);
@@ -5120,6 +5125,12 @@ const chatbot = {
       // ========== MY ORDERS BUTTON (from welcome message) ==========
       else if (selection === 'my_orders') {
         await this.sendMyOrdersMenu(phone);
+        state.currentStep = 'main_menu';
+      }
+      // ========== VIEW ORDER (from My Orders flow screen) ==========
+      else if (selection?.startsWith('view_order_')) {
+        const orderId = selection.replace('view_order_', '');
+        await this.handleViewOrderDetails(phone, customer, orderId);
         state.currentStep = 'main_menu';
       }
       // ========== ACCOUNT DETAILS (from welcome flow) ==========

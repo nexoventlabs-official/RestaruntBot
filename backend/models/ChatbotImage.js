@@ -61,7 +61,14 @@ const chatbotImageSchema = new mongoose.Schema({
       'flow_delivery_address',
       'flow_food_veg',
       'flow_food_nonveg',
-      'flow_food_egg'
+      'flow_food_egg',
+      'flow_status_pending',
+      'flow_status_confirmed',
+      'flow_status_preparing',
+      'flow_status_ready',
+      'flow_status_out_for_delivery',
+      'flow_status_delivered',
+      'flow_status_cancelled'
     ]
   },
   name: {

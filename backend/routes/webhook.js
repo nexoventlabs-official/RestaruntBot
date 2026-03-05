@@ -456,12 +456,27 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           logger.info('Flow: Order Food selected, triggering food type selection', { phone, service });
                         }
                       }
-                      // For My Orders - send recent orders list flow next
+                      // For My Orders — endpoint flow handles screen navigation;
+                      // webhook receives completed flow with selected_order or no_orders flag
                       else if (service === 'my_orders') {
                         const phone = responseData.flow_token.replace('welcome_service_', '');
-                        messageType = 'flow_trigger';
-                        text = JSON.stringify({ type: 'my_orders_list', phone, service });
-                        logger.info('Flow: My Orders selected, triggering orders list', { phone, service });
+                        if (responseData.selected_order) {
+                          // User selected an order from MY_ORDERS screen
+                          selectedId = `view_order_${responseData.selected_order}`;
+                          text = `view_order_${responseData.selected_order}`;
+                          messageType = 'button';
+                          logger.info('Flow: My Orders - order selected', { phone, orderId: responseData.selected_order });
+                        } else if (responseData.no_orders === 'true') {
+                          // No orders found — endpoint closed flow, trigger no-orders message
+                          messageType = 'flow_trigger';
+                          text = JSON.stringify({ type: 'my_orders_empty', phone, service });
+                          logger.info('Flow: My Orders - no orders found', { phone });
+                        } else {
+                          // Fallback
+                          messageType = 'flow_trigger';
+                          text = JSON.stringify({ type: 'my_orders_list', phone, service });
+                          logger.info('Flow: My Orders selected, triggering orders list', { phone, service });
+                        }
                       }
                       // For other services - handle directly
                       else {
