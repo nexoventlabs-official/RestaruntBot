@@ -1907,16 +1907,68 @@ const catalogService = {
       }
     ];
 
+    // ─── Screen 5: Account Details (shown when Account Details is selected — pre-filled dynamically) ───
+    const screenAccountDetailsChildren = [
+      {
+        type: 'TextSubheading',
+        text: 'Your Profile'
+      },
+      {
+        type: 'TextBody',
+        text: '${data.account_info}'
+      },
+      {
+        type: 'TextInput',
+        name: 'customer_name',
+        label: 'Full Name',
+        required: true,
+        'input-type': 'text',
+        'init-value': '${data.init_name}'
+      },
+      {
+        type: 'TextInput',
+        name: 'customer_email',
+        label: 'Email (optional)',
+        required: false,
+        'input-type': 'email',
+        'init-value': '${data.init_email}'
+      },
+      {
+        type: 'TextInput',
+        name: 'customer_phone',
+        label: 'WhatsApp Number',
+        required: false,
+        'input-type': 'phone',
+        enabled: false,
+        'init-value': '${data.init_phone}'
+      },
+      {
+        type: 'Footer',
+        label: 'Save',
+        'on-click-action': {
+          name: 'complete',
+          payload: {
+            selected_service: 'account_details',
+            customer_name: '${form.customer_name}',
+            customer_email: '${form.customer_email}',
+            customer_phone: '${data.init_phone}',
+            flow_token: '${data.flow_token}'
+          }
+        }
+      }
+    ];
+
     return {
       version: '7.3',
       data_api_version: '3.0',
       routing_model: {
-        'SERVICE_SELECT': ['FOOD_TYPE_SELECT', 'MY_ORDERS', 'VIEW_OFFERS'],
+        'SERVICE_SELECT': ['FOOD_TYPE_SELECT', 'MY_ORDERS', 'VIEW_OFFERS', 'ACCOUNT_DETAILS'],
         'FOOD_TYPE_SELECT': ['MENU_CATEGORIES'],
         'MENU_CATEGORIES': [],
         'MY_ORDERS': ['ORDER_DETAILS'],
         'ORDER_DETAILS': [],
-        'VIEW_OFFERS': []
+        'VIEW_OFFERS': [],
+        'ACCOUNT_DETAILS': []
       },
       screens: [
         {
@@ -2134,6 +2186,38 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: screen4Children
+          }
+        },
+        {
+          id: 'ACCOUNT_DETAILS',
+          title: 'Account Details',
+          terminal: true,
+          success: true,
+          data: {
+            account_info: {
+              type: 'string',
+              __example__: 'Member since: 1 Jan 2025 • Orders: 5 • Spent: ₹1200'
+            },
+            init_name: {
+              type: 'string',
+              __example__: 'John Doe'
+            },
+            init_email: {
+              type: 'string',
+              __example__: 'john@example.com'
+            },
+            init_phone: {
+              type: 'string',
+              __example__: '9999999999'
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'welcome_service_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: screenAccountDetailsChildren
           }
         }
       ]

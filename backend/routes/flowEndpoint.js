@@ -20,6 +20,7 @@ const chatbotImagesService = require('../services/chatbotImages');
 const Order = require('../models/Order');
 const Offer = require('../models/Offer');
 const MenuItem = require('../models/MenuItem');
+const Customer = require('../models/Customer');
 
 const router = express.Router();
 
@@ -447,20 +448,49 @@ router.post('/', async (req, res) => {
               }
             };
           }
-        } else {
-          // Any other service → close the flow and send result to webhook
-          response = {
-            screen: 'SUCCESS',
-            data: {
-              extension_message_response: {
-                params: {
-                  flow_token: token,
-                  selected_service: selectedService
-                }
-              }
+        } else if (selectedService === 'account_details') {
+          // Account Details → fetch customer profile and show ACCOUNT_DETAILS screen
+          const phone = token.replace('welcome_service_', '');
+
+          try {
+            const customer = await Customer.findOne({ phone })
+              .select('name email totalOrders totalSpent createdAt')
+              .lean();
+
+            const displayPhone = phone.length > 10 ? phone.slice(-10) : phone;
+            let accountInfo = '';
+            if (customer?.createdAt) {
+              const memberSince = new Date(customer.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+              accountInfo = `Member since: ${memberSince}`;
             }
-          };
-        }
+            if (customer?.totalOrders) accountInfo += ` • Orders: ${customer.totalOrders}`;
+            if (customer?.totalSpent) accountInfo += ` • Spent: ₹${customer.totalSpent}`;
+            if (!accountInfo) accountInfo = 'Fill in your details below';
+
+            response = {
+              screen: 'ACCOUNT_DETAILS',
+              data: {
+                account_info: accountInfo,
+                init_name: customer?.name || '',
+                init_email: customer?.email || '',
+                init_phone: displayPhone,
+                flow_token: token
+              }
+            };
+          } catch (dbErr) {
+            logger.error('[FlowEndpoint] Failed to fetch customer', { phone, error: dbErr.message });
+            response = {
+              screen: 'ACCOUNT_DETAILS',
+              data: {
+                account_info: 'Fill in your details below',
+                init_name: '',
+                init_email: '',
+                init_phone: phone.length > 10 ? phone.slice(-10) : phone,
+                flow_token: token
+              }
+            };
+          }
+        } else {
       }
 
       // Screen 3: User selected an order on MY_ORDERS and tapped View Order → show ORDER_DETAILS

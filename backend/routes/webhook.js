@@ -518,6 +518,22 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           logger.info('Flow: View Offers selected', { phone });
                         }
                       }
+                      // For Account Details — flow shows editable form, completes with customer data
+                      else if (service === 'account_details') {
+                        const phone = responseData.flow_token.replace('welcome_service_', '');
+                        if (responseData.customer_name) {
+                          // User filled/edited account details and tapped Save
+                          messageType = 'flow_reply';
+                          text = JSON.stringify({ type: 'account_form', ...responseData, flow_token: `account_form_${phone}` });
+                          logger.info('Flow: Account Details saved from welcome flow', { phone, name: responseData.customer_name });
+                        } else {
+                          // Fallback
+                          selectedId = 'account_details';
+                          text = 'account_details';
+                          messageType = 'button';
+                          logger.info('Flow: Account Details selected', { phone });
+                        }
+                      }
                       // For other services - handle directly
                       else {
                         selectedId = service;
