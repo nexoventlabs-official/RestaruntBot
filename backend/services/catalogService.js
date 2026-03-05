@@ -1730,7 +1730,7 @@ const catalogService = {
         text: 'Choose from one of the Hotel Services'
       },
       {
-        type: 'Dropdown',
+        type: 'RadioButtonsGroup',
         name: 'selected_service',
         label: 'Select Hotel Service',
         required: true,
