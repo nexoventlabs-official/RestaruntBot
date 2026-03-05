@@ -4497,6 +4497,11 @@ const chatbot = {
           await whatsapp.sendMessage(phone, '📋 *No Recent Orders*\n\nYou don\'t have any orders yet. Place your first order now! 🍽️');
           await this.sendWelcome(phone);
           state.currentStep = 'main_menu';
+        } else if (flowData.type === 'no_offers') {
+          // No eligible offers for this phone
+          await whatsapp.sendMessage(phone, '🏷️ *No Offers Available*\n\nThere are no offers available for you right now. Check back soon! 🎉');
+          await this.sendWelcome(phone);
+          state.currentStep = 'main_menu';
         } else {
           logger.info('Unknown flow_reply type', { phone, flowData });
           await this.sendWelcome(phone);
@@ -5131,6 +5136,12 @@ const chatbot = {
       else if (selection?.startsWith('view_order_')) {
         const orderId = selection.replace('view_order_', '');
         await this.handleViewOrderDetails(phone, customer, orderId);
+        state.currentStep = 'main_menu';
+      }
+      // ========== VIEW OFFER (from View Offers flow screen) ==========
+      else if (selection?.startsWith('view_offer_')) {
+        const offerId = selection.replace('view_offer_', '');
+        await this.handleOfferClaim(phone, offerId, customer);
         state.currentStep = 'main_menu';
       }
       // ========== ACCOUNT DETAILS (from welcome flow) ==========

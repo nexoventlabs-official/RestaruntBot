@@ -18,6 +18,7 @@ const logger = require('../services/logger');
 const catalogService = require('../services/catalogService');
 const chatbotImagesService = require('../services/chatbotImages');
 const Order = require('../models/Order');
+const Offer = require('../models/Offer');
 
 const router = express.Router();
 
@@ -351,6 +352,93 @@ router.post('/', async (req, res) => {
                     flow_token: token,
                     selected_service: 'my_orders',
                     no_orders: 'true'
+                  }
+                }
+              }
+            };
+          }
+        } else if (selectedService === 'view_offers') {
+          // View Offers → fetch eligible offers for this phone
+          const phone = token.replace('welcome_service_', '');
+          const normalizedPhone = phone.replace(/[^0-9]/g, '');
+
+          try {
+            const now = new Date();
+            const activeOffers = await Offer.find({
+              isActive: true,
+              $or: [{ validUntil: { $gte: now } }, { validUntil: null }]
+            }).select('_id title description code discountType discountValue imageWhatsApp image targetType targetedCustomers').lean();
+
+            // Filter offers eligible for this phone
+            const eligibleOffers = activeOffers.filter(offer => {
+              if (offer.targetType === 'all') return true;
+              if (!offer.targetedCustomers?.length) return false;
+              return offer.targetedCustomers.some(tp => {
+                const nt = tp.replace(/[^0-9]/g, '');
+                return nt.includes(normalizedPhone) || normalizedPhone.includes(nt);
+              });
+            });
+
+            if (eligibleOffers.length > 0) {
+              const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
+
+              const offerItems = await Promise.all(eligibleOffers.map(async (offer) => {
+                let desc = '';
+                if (offer.discountType === 'percentage' && offer.discountValue)
+                  desc = `${offer.discountValue}% OFF`;
+                else if (offer.discountType === 'fixed' && offer.discountValue)
+                  desc = `₹${offer.discountValue} OFF`;
+                if (offer.code) desc += desc ? ` • Code: ${offer.code}` : `Code: ${offer.code}`;
+                if (offer.description && !desc) desc = offer.description;
+
+                const item = {
+                  id: offer._id.toString(),
+                  title: offer.title || 'Special Offer',
+                  description: desc || offer.description || 'Tap to view details'
+                };
+
+                // Convert offer image to base64
+                const imgUrl = offer.imageWhatsApp || offer.image;
+                if (imgUrl) {
+                  const b64 = await toBase64(imgUrl);
+                  if (b64) item.image = b64;
+                }
+
+                return item;
+              }));
+
+              response = {
+                screen: 'VIEW_OFFERS',
+                data: {
+                  offers: offerItems,
+                  flow_token: token
+                }
+              };
+            } else {
+              // No eligible offers → close flow with no_offers flag
+              response = {
+                screen: 'SUCCESS',
+                data: {
+                  extension_message_response: {
+                    params: {
+                      flow_token: token,
+                      selected_service: 'view_offers',
+                      no_offers: 'true'
+                    }
+                  }
+                }
+              };
+            }
+          } catch (dbErr) {
+            logger.error('[FlowEndpoint] Failed to fetch offers', { phone, error: dbErr.message });
+            response = {
+              screen: 'SUCCESS',
+              data: {
+                extension_message_response: {
+                  params: {
+                    flow_token: token,
+                    selected_service: 'view_offers',
+                    no_offers: 'true'
                   }
                 }
               }

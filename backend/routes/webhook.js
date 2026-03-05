@@ -478,6 +478,29 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           logger.info('Flow: My Orders selected, triggering orders list', { phone, service });
                         }
                       }
+                      // For View Offers — endpoint flow shows eligible offers;
+                      // webhook receives completed flow with selected_offer or no_offers flag
+                      else if (service === 'view_offers') {
+                        const phone = responseData.flow_token.replace('welcome_service_', '');
+                        if (responseData.selected_offer) {
+                          // User selected an offer from VIEW_OFFERS screen
+                          selectedId = `view_offer_${responseData.selected_offer}`;
+                          text = `view_offer_${responseData.selected_offer}`;
+                          messageType = 'button';
+                          logger.info('Flow: View Offers - offer selected', { phone, offerId: responseData.selected_offer });
+                        } else if (responseData.no_offers === 'true') {
+                          // No eligible offers — endpoint closed flow
+                          messageType = 'flow_trigger';
+                          text = JSON.stringify({ type: 'no_offers', phone, service });
+                          logger.info('Flow: View Offers - no offers found', { phone });
+                        } else {
+                          // Fallback — treat as regular view_offers button
+                          selectedId = 'view_offers';
+                          text = 'view_offers';
+                          messageType = 'button';
+                          logger.info('Flow: View Offers selected', { phone });
+                        }
+                      }
                       // For other services - handle directly
                       else {
                         selectedId = service;
