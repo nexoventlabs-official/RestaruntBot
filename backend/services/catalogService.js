@@ -2787,14 +2787,6 @@ const catalogService = {
               type: 'string',
               __example__: 'iVBORw0KGgo'
             },
-            delivery_image: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
-            pickup_image: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
             order_summary: {
               type: 'string',
               __example__: '3 items • Total: ₹276'
@@ -2805,12 +2797,14 @@ const catalogService = {
                 type: 'object',
                 properties: {
                   id: { type: 'string' },
-                  title: { type: 'string' }
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
                 }
               },
               __example__: [
-                { id: 'delivery', title: '🚚 Delivery - To your doorstep' },
-                { id: 'pickup', title: '🏪 Self-Pickup - From restaurant' }
+                { id: 'delivery', title: 'Delivery', description: 'To your doorstep', image: 'iVBORw0KGgo' },
+                { id: 'pickup', title: 'Self-Pickup', description: 'From restaurant', image: 'iVBORw0KGgo' }
               ]
             },
             flow_token: {
@@ -2836,22 +2830,6 @@ const catalogService = {
               {
                 type: 'TextBody',
                 text: '${data.order_summary}'
-              },
-              {
-                type: 'Image',
-                src: '${data.delivery_image}',
-                width: 800,
-                height: 400,
-                'scale-type': 'cover',
-                'alt-text': 'Delivery Option'
-              },
-              {
-                type: 'Image',
-                src: '${data.pickup_image}',
-                width: 800,
-                height: 400,
-                'scale-type': 'cover',
-                'alt-text': 'Self-Pickup Option'
               },
               {
                 type: 'RadioButtonsGroup',

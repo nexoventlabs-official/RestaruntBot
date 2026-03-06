@@ -907,23 +907,26 @@ router.post('/', async (req, res) => {
             total += price * ci.quantity;
           });
 
-          // Convert delivery/pickup images
+          // Convert delivery/pickup images for RadioButtonsGroup thumbnails
           const [deliveryB64, pickupB64] = await Promise.all([
             toBase64(images.deliveryOptionImg).catch(() => ''),
             toBase64(images.pickupOptionImg).catch(() => '')
           ]);
 
+          // Build service options with images (like food type icons)
+          const serviceOptions = [
+            { id: 'delivery', title: 'Delivery', description: 'To your doorstep' },
+            { id: 'pickup', title: 'Self-Pickup', description: 'From restaurant' }
+          ];
+          if (deliveryB64) serviceOptions[0].image = deliveryB64;
+          if (pickupB64) serviceOptions[1].image = pickupB64;
+
           response = {
             screen: 'CHOOSE_SERVICE',
             data: {
               service_banner: images.serviceTypeBanner || '',
-              delivery_image: deliveryB64 || '',
-              pickup_image: pickupB64 || '',
               order_summary: `${validItems.length} item${validItems.length > 1 ? 's' : ''} • Total: ₹${total}`,
-              service_options: [
-                { id: 'delivery', title: '🚚 Delivery — To your doorstep' },
-                { id: 'pickup', title: '🏪 Self-Pickup — From restaurant' }
-              ],
+              service_options: serviceOptions,
               flow_token: token
             }
           };
