@@ -116,7 +116,7 @@ function encryptResponse(responseObj, aesKeyBuffer, initialVectorBuffer) {
 }
 
 // ─── Cache for base64 images (avoid re-downloading on every request) ───
-let imageCache = { services: null, foodTypes: null, statusImages: null, banner: null, websiteBanner: null, offersBanner: null, lastFetched: 0 };
+let imageCache = { services: null, foodTypes: null, statusImages: null, banner: null, websiteBanner: null, offersBanner: null, foodtypeBanner: null, menuBanner: null, ordersBanner: null, accountBanner: null, lastFetched: 0 };
 const IMAGE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 async function getFlowImages() {
@@ -135,7 +135,11 @@ async function getFlowImages() {
     allFoodImg, vegImg, nonvegImg, eggImg,
     pendingImg, confirmedImg, preparingImg, readyImg, outForDeliveryImg, deliveredImg, cancelledImg,
     websiteBannerImg,
-    offersBannerImg
+    offersBannerImg,
+    foodtypeBannerImg,
+    menuBannerImg,
+    ordersBannerImg,
+    accountBannerImg
   ] = await Promise.all([
     chatbotImagesService.getImageUrl('flow_order_food'),
     chatbotImagesService.getImageUrl('flow_my_orders'),
@@ -155,7 +159,11 @@ async function getFlowImages() {
     chatbotImagesService.getImageUrl('flow_status_delivered'),
     chatbotImagesService.getImageUrl('flow_status_cancelled'),
     chatbotImagesService.getImageUrl('flow_website_banner'),
-    chatbotImagesService.getImageUrl('flow_offers_banner')
+    chatbotImagesService.getImageUrl('flow_offers_banner'),
+    chatbotImagesService.getImageUrl('flow_foodtype_banner'),
+    chatbotImagesService.getImageUrl('flow_menu_banner'),
+    chatbotImagesService.getImageUrl('flow_orders_banner'),
+    chatbotImagesService.getImageUrl('flow_account_banner')
   ]);
 
   // Convert to base64
@@ -164,7 +172,11 @@ async function getFlowImages() {
     allFoodB64, vegB64, nonvegB64, eggB64,
     pendingB64, confirmedB64, preparingB64, readyB64, outForDeliveryB64, deliveredB64, cancelledB64,
     websiteBannerB64,
-    offersBannerB64
+    offersBannerB64,
+    foodtypeBannerB64,
+    menuBannerB64,
+    ordersBannerB64,
+    accountBannerB64
   ] = await Promise.all([
     toBase64(orderFoodImg), toBase64(myOrdersImg), toBase64(viewOffersImg),
     toBase64(accountDetailsImg), toBase64(visitWebsiteImg),
@@ -172,7 +184,11 @@ async function getFlowImages() {
     toBase64(pendingImg), toBase64(confirmedImg), toBase64(preparingImg),
     toBase64(readyImg), toBase64(outForDeliveryImg), toBase64(deliveredImg), toBase64(cancelledImg),
     toBase64(websiteBannerImg),
-    toBase64(offersBannerImg)
+    toBase64(offersBannerImg),
+    toBase64(foodtypeBannerImg),
+    toBase64(menuBannerImg),
+    toBase64(ordersBannerImg),
+    toBase64(accountBannerImg)
   ]);
 
   const buildItem = (id, title, description, base64Img) => {
@@ -208,6 +224,10 @@ async function getFlowImages() {
     banner: null,
     websiteBanner: websiteBannerB64 || null,
     offersBanner: offersBannerB64 || null,
+    foodtypeBanner: foodtypeBannerB64 || null,
+    menuBanner: menuBannerB64 || null,
+    ordersBanner: ordersBannerB64 || null,
+    accountBanner: accountBannerB64 || null,
     lastFetched: now
   };
 
@@ -284,6 +304,7 @@ router.post('/', async (req, res) => {
             screen: 'FOOD_TYPE_SELECT',
             data: {
               food_types: images.foodTypes,
+              foodtype_banner: images.foodtypeBanner || '',
               selected_service: selectedService,
               flow_token: token
             }
@@ -335,6 +356,7 @@ router.post('/', async (req, res) => {
                 screen: 'MY_ORDERS',
                 data: {
                   orders: orderItems,
+                  orders_banner: images.ordersBanner || '',
                   flow_token: token
                 }
               };
@@ -460,6 +482,7 @@ router.post('/', async (req, res) => {
           }
         } else if (selectedService === 'account_details') {
           // Account Details → fetch customer profile and show ACCOUNT_DETAILS screen
+          const images = await getFlowImages();
           const phone = token.replace('welcome_service_', '');
 
           try {
@@ -481,6 +504,7 @@ router.post('/', async (req, res) => {
               screen: 'ACCOUNT_DETAILS',
               data: {
                 account_info: accountInfo,
+                account_banner: images.accountBanner || '',
                 init_name: customer?.name || '',
                 init_email: customer?.email || '',
                 init_phone: displayPhone,
@@ -493,6 +517,7 @@ router.post('/', async (req, res) => {
               screen: 'ACCOUNT_DETAILS',
               data: {
                 account_info: 'Fill in your details below',
+                account_banner: images.accountBanner || '',
                 init_name: '',
                 init_email: '',
                 init_phone: phone.length > 10 ? phone.slice(-10) : phone,
@@ -644,6 +669,7 @@ router.post('/', async (req, res) => {
         const selectedFoodType = data?.selected_food_type; // e.g. food_veg, food_nonveg, food_egg, food_all
         const token = data?.flow_token || flow_token || 'welcome_service';
         const foodPref = selectedFoodType ? selectedFoodType.replace('food_', '') : 'all';
+        const images = await getFlowImages();
 
         try {
           // Fetch available menu items filtered by food type
@@ -704,6 +730,7 @@ router.post('/', async (req, res) => {
               screen: 'MENU_CATEGORIES',
               data: {
                 categories: categoryItems,
+                menu_banner: images.menuBanner || '',
                 selected_service: 'order_food',
                 selected_food_type: selectedFoodType,
                 flow_token: token

@@ -1752,6 +1752,14 @@ const catalogService = {
     // ─── Screen 2: Food Type Selection (shown only when Order Food is selected) ───
     const screen2Children = [
       {
+        type: 'Image',
+        src: '${data.foodtype_banner}',
+        width: 1000,
+        height: 125,
+        'scale-type': 'cover',
+        'alt-text': 'Food Type Selection Banner'
+      },
+      {
         type: 'TextSubheading',
         text: 'Select Food Type'
       },
@@ -1778,6 +1786,14 @@ const catalogService = {
 
     // ─── Screen 2b: Menu Categories (shown after food type selection — items loaded dynamically) ───
     const screenMenuCategoriesChildren = [
+      {
+        type: 'Image',
+        src: '${data.menu_banner}',
+        width: 1000,
+        height: 125,
+        'scale-type': 'cover',
+        'alt-text': 'Menu Categories Banner'
+      },
       {
         type: 'TextSubheading',
         text: 'Select a Category'
@@ -1806,6 +1822,14 @@ const catalogService = {
 
     // ─── Screen 3: My Orders (shown when My Orders is selected — orders loaded dynamically) ───
     const screen3Children = [
+      {
+        type: 'Image',
+        src: '${data.orders_banner}',
+        width: 1000,
+        height: 125,
+        'scale-type': 'cover',
+        'alt-text': 'My Orders Banner'
+      },
       {
         type: 'TextSubheading',
         text: 'Your Recent Orders'
@@ -1918,6 +1942,14 @@ const catalogService = {
     // ─── Screen 5: Account Details (shown when Account Details is selected — pre-filled dynamically) ───
     const screenAccountDetailsChildren = [
       {
+        type: 'Image',
+        src: '${data.account_banner}',
+        width: 1000,
+        height: 125,
+        'scale-type': 'cover',
+        'alt-text': 'Account Details Banner'
+      },
+      {
         type: 'TextSubheading',
         text: 'Your Profile'
       },
@@ -2029,6 +2061,10 @@ const catalogService = {
                 { id: 'food_veg', title: 'Veg', description: 'Vegetarian', image: 'iVBORw0KGgo' }
               ]
             },
+            foodtype_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
+            },
             selected_service: {
               type: 'string',
               __example__: 'order_food'
@@ -2063,6 +2099,10 @@ const catalogService = {
               __example__: [
                 { id: '507f1f77bcf86cd799439011', title: 'Ice Creams', description: '3 variants', image: 'iVBORw0KGgo' }
               ]
+            },
+            menu_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
             },
             selected_service: {
               type: 'string',
@@ -2100,6 +2140,10 @@ const catalogService = {
               __example__: [
                 { id: 'ORD001', title: 'Order #JRB001 - ₹250', description: 'Preparing • 2 items', image: 'iVBORw0KGgo' }
               ]
+            },
+            orders_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
             },
             flow_token: {
               type: 'string',
@@ -2210,6 +2254,10 @@ const catalogService = {
             account_info: {
               type: 'string',
               __example__: 'Member since: 1 Jan 2025 • Orders: 5 • Spent: ₹1200'
+            },
+            account_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
             },
             init_name: {
               type: 'string',
