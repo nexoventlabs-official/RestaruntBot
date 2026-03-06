@@ -56,21 +56,27 @@ const FLOW_IMAGE_KEYS = [
   'flow_status_ready',
   'flow_status_out_for_delivery',
   'flow_status_delivered',
-  'flow_status_cancelled'
+  'flow_status_cancelled',
+  'flow_payment_banner',
+  'flow_pay_cod',
+  'flow_pay_hotel',
+  'flow_pay_gpay',
+  'flow_pay_phonepe',
+  'flow_pay_paytm'
 ];
 
 // Determine Cloudinary crop dimensions based on image type
 function getCropDimensions(key) {
-  if (key === 'flow_welcome_banner') {
+  if (key.endsWith('_banner')) {
     // Banner: 8:1 ratio
     return { width: 1000, height: 125 };
   }
-  // Service icons: 1:1 square ratio
+  // Service/payment icons: 1:1 square ratio
   return { width: 600, height: 600 };
 }
 
 function getAspectRatio(key) {
-  return key === 'flow_welcome_banner' ? '8:1' : '1:1';
+  return key.endsWith('_banner') ? '8:1' : '1:1';
 }
 
 // Get all flow images
