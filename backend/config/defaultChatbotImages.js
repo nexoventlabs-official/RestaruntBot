@@ -79,7 +79,13 @@ const defaultImages = [
   { key: 'flow_status_ready', name: 'Flow: Ready Status Icon', description: 'Icon shown for orders with Ready status in My Orders list (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_status_out_for_delivery', name: 'Flow: Out for Delivery Status Icon', description: 'Icon shown for orders with Out for Delivery status in My Orders list (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_status_delivered', name: 'Flow: Delivered Status Icon', description: 'Icon shown for orders with Delivered status in My Orders list (square aspect ratio recommended)', imageUrl: '' },
-  { key: 'flow_status_cancelled', name: 'Flow: Cancelled Status Icon', description: 'Icon shown for orders with Cancelled status in My Orders list (square aspect ratio recommended)', imageUrl: '' }
+  { key: 'flow_status_cancelled', name: 'Flow: Cancelled Status Icon', description: 'Icon shown for orders with Cancelled status in My Orders list (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_payment_banner', name: 'Flow: Payment Banner', description: 'Banner image for payment method selection screen (8:1 ratio, 1000x125px)', imageUrl: '' },
+  { key: 'flow_pay_cod', name: 'Flow: COD Payment Icon', description: 'Icon for Cash on Delivery payment option (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_pay_hotel', name: 'Flow: Pay at Hotel Icon', description: 'Icon for Pay at Hotel payment option for self-pickup (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_pay_gpay', name: 'Flow: Google Pay Icon', description: 'Icon for Google Pay payment option (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_pay_phonepe', name: 'Flow: PhonePe Icon', description: 'Icon for PhonePe payment option (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_pay_paytm', name: 'Flow: Paytm Icon', description: 'Icon for Paytm payment option (square aspect ratio recommended)', imageUrl: '' }
 ];
 
 module.exports = defaultImages;

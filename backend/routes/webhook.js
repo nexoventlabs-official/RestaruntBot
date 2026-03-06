@@ -445,6 +445,25 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       messageType = 'button';
                       logger.info('Order confirm flow: service type selected', { phone, serviceType, selectedId });
                     }
+                    // Payment Method flow — user chose a payment method
+                    else if (responseData.flow_token?.startsWith('payment_') && responseData.selected_payment) {
+                      const parts = responseData.flow_token.replace('payment_', '').split('_');
+                      const serviceType = parts.pop(); // 'delivery' or 'pickup'
+                      const payment = responseData.selected_payment; // 'cod', 'pay_hotel', 'gpay', 'phonepe', 'paytm'
+
+                      // Map payment selection to existing button IDs
+                      if (payment === 'cod') {
+                        selectedId = 'pay_cod';
+                      } else if (payment === 'pay_hotel') {
+                        selectedId = 'pickup_pay_hotel';
+                      } else {
+                        // App payments (gpay, phonepe, paytm) → route to UPI handler
+                        selectedId = serviceType === 'pickup' ? 'pickup_pay_upi' : 'pay_upi';
+                      }
+                      text = selectedId;
+                      messageType = 'button';
+                      logger.info('Payment flow: method selected', { phone, payment, serviceType, selectedId });
+                    }
                     // Welcome service selection flow
                     else if (responseData.flow_token?.startsWith('welcome_service_') && responseData.selected_service) {
                       const service = responseData.selected_service;

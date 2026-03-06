@@ -4450,7 +4450,10 @@ const chatbot = {
         
         // If customer has items in cart, show order summary with payment options
         if (customer.cart?.length > 0) {
-          await this.sendPaymentMethodOptions(phone, customer, state);
+          const launched = await this.launchPaymentFlow(phone, 'delivery');
+          if (!launched) {
+            await this.sendPaymentMethodOptions(phone, customer, state);
+          }
           state.currentStep = 'select_payment_method';
         } else {
           // No cart items, just confirm location saved
@@ -5329,7 +5332,10 @@ const chatbot = {
           updatedAt: new Date()
         };
         await customer.save();
-        await this.sendPickupPaymentMethodOptions(phone, customer);
+        const launched = await this.launchPaymentFlow(phone, 'pickup');
+        if (!launched) {
+          await this.sendPickupPaymentMethodOptions(phone, customer);
+        }
         state.currentStep = 'select_pickup_payment_method';
       }
       else if (selection === 'share_location') {
@@ -5350,7 +5356,10 @@ const chatbot = {
           updatedAt: new Date()
         };
         await customer.save();
-        await this.sendPaymentMethodOptions(phone, customer);
+        const launched = await this.launchPaymentFlow(phone, 'delivery');
+        if (!launched) {
+          await this.sendPaymentMethodOptions(phone, customer);
+        }
         state.currentStep = 'select_payment_method';
       }
       else if (selection === 'pay_upi') {
@@ -8019,6 +8028,40 @@ const chatbot = {
     await whatsapp.sendLocationRequest(phone,
       `📍 *Share Your Delivery Location*\n\nPlease share your location for accurate delivery.`
     );
+  },
+
+  /**
+   * Launch Payment Method Selection Flow (or fall back to buttons).
+   * @param {string} phone - Customer phone number
+   * @param {string} serviceType - 'delivery' or 'pickup'
+   */
+  async launchPaymentFlow(phone, serviceType) {
+    const paymentFlowId = catalogService.getPaymentFlowId();
+    if (paymentFlowId) {
+      try {
+        const metaCloud = require('./metaCloud');
+        const flowToken = `payment_${phone}_${serviceType}`;
+        const orderSummaryImg = await chatbotImagesService.getImageUrl(
+          serviceType === 'pickup' ? 'pickup_order_summary' : 'order_summary'
+        );
+        await metaCloud.sendFlowMessage(phone, {
+          flowId: paymentFlowId,
+          flowCta: 'Select Payment',
+          headerImageUrl: orderSummaryImg || undefined,
+          headerText: 'Payment Method',
+          bodyText: '💳 Choose your payment method',
+          footerText: 'Perivi Hotel',
+          flowToken,
+          flowAction: 'data_exchange',
+          mode: 'published'
+        });
+        logger.info('Sent payment method flow', { phone, serviceType, flowId: paymentFlowId });
+        return true;
+      } catch (flowErr) {
+        logger.warn('Payment flow failed, falling back to buttons', { error: flowErr.message });
+      }
+    }
+    return false;
   },
 
   async sendPaymentMethodOptions(phone, customer, state = {}) {

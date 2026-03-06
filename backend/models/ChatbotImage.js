@@ -80,7 +80,13 @@ const chatbotImageSchema = new mongoose.Schema({
       'flow_status_ready',
       'flow_status_out_for_delivery',
       'flow_status_delivered',
-      'flow_status_cancelled'
+      'flow_status_cancelled',
+      'flow_payment_banner',
+      'flow_pay_cod',
+      'flow_pay_hotel',
+      'flow_pay_gpay',
+      'flow_pay_phonepe',
+      'flow_pay_paytm'
     ]
   },
   name: {

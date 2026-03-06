@@ -144,7 +144,13 @@ async function getFlowImages() {
     orderReviewBannerImg,
     serviceTypeBannerImg,
     deliveryOptionImgUrl,
-    pickupOptionImgUrl
+    pickupOptionImgUrl,
+    paymentBannerImg,
+    payCodImg,
+    payHotelImg,
+    payGpayImg,
+    payPhonepeImg,
+    payPaytmImg
   ] = await Promise.all([
     chatbotImagesService.getImageUrl('flow_order_food'),
     chatbotImagesService.getImageUrl('flow_my_orders'),
@@ -173,7 +179,13 @@ async function getFlowImages() {
     chatbotImagesService.getImageUrl('flow_order_review_banner'),
     chatbotImagesService.getImageUrl('flow_service_type_banner'),
     chatbotImagesService.getImageUrl('flow_delivery_option'),
-    chatbotImagesService.getImageUrl('flow_pickup_option')
+    chatbotImagesService.getImageUrl('flow_pickup_option'),
+    chatbotImagesService.getImageUrl('flow_payment_banner'),
+    chatbotImagesService.getImageUrl('flow_pay_cod'),
+    chatbotImagesService.getImageUrl('flow_pay_hotel'),
+    chatbotImagesService.getImageUrl('flow_pay_gpay'),
+    chatbotImagesService.getImageUrl('flow_pay_phonepe'),
+    chatbotImagesService.getImageUrl('flow_pay_paytm')
   ]);
 
   // Convert to base64
@@ -191,7 +203,13 @@ async function getFlowImages() {
     orderReviewBannerB64,
     serviceTypeBannerB64,
     deliveryOptionB64,
-    pickupOptionB64
+    pickupOptionB64,
+    paymentBannerB64,
+    payCodB64,
+    payHotelB64,
+    payGpayB64,
+    payPhonepeB64,
+    payPaytmB64
   ] = await Promise.all([
     toBase64(orderFoodImg), toBase64(myOrdersImg), toBase64(viewOffersImg),
     toBase64(accountDetailsImg), toBase64(visitWebsiteImg),
@@ -208,7 +226,13 @@ async function getFlowImages() {
     toBase64(orderReviewBannerImg),
     toBase64(serviceTypeBannerImg),
     toBase64(deliveryOptionImgUrl),
-    toBase64(pickupOptionImgUrl)
+    toBase64(pickupOptionImgUrl),
+    toBase64(paymentBannerImg),
+    toBase64(payCodImg),
+    toBase64(payHotelImg),
+    toBase64(payGpayImg),
+    toBase64(payPhonepeImg),
+    toBase64(payPaytmImg)
   ]);
 
   const buildItem = (id, title, description, base64Img) => {
@@ -253,6 +277,12 @@ async function getFlowImages() {
     serviceTypeBanner: serviceTypeBannerB64 || null,
     deliveryOptionImg: deliveryOptionImgUrl || null,
     pickupOptionImg: pickupOptionImgUrl || null,
+    paymentBanner: paymentBannerB64 || null,
+    payCodImg: payCodB64 || null,
+    payHotelImg: payHotelB64 || null,
+    payGpayImg: payGpayB64 || null,
+    payPhonepeImg: payPhonepeB64 || null,
+    payPaytmImg: payPaytmB64 || null,
     lastFetched: now
   };
 
@@ -374,6 +404,77 @@ router.post('/', async (req, res) => {
         } catch (err) {
           logger.error('[FlowEndpoint] Order confirm INIT error', { phone, error: err.message });
           response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'init_error' } } } };
+        }
+      }
+      // Payment Method Flow — build PAYMENT_SELECT screen
+      else if (flow_token?.startsWith('payment_')) {
+        // flow_token format: payment_{phone}_{serviceType}
+        const parts = flow_token.replace('payment_', '').split('_');
+        const serviceType = parts.pop(); // 'delivery' or 'pickup'
+        const phone = parts.join('_'); // phone number
+        try {
+          const images = await getFlowImages();
+          const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
+          const validItems = (freshCustomer?.cart || []).filter(ci => ci.menuItem);
+          let total = 0;
+
+          validItems.forEach(ci => {
+            const mi = ci.menuItem;
+            let price = mi.offerPrice || mi.price;
+            if (ci.variantIndex != null && mi.variants?.[ci.variantIndex]) {
+              const v = mi.variants[ci.variantIndex];
+              if (ci.quantityIndex != null && v.quantities?.[ci.quantityIndex]) {
+                const q = v.quantities[ci.quantityIndex];
+                price = (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : q.price;
+              } else {
+                price = (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : v.price;
+              }
+            }
+            total += price * ci.quantity;
+          });
+
+          // Build order summary text
+          let summaryText = `🛒 ${validItems.length} item${validItems.length > 1 ? 's' : ''} • Total: ₹${total}`;
+          if (serviceType === 'delivery') {
+            // Calculate delivery charge if available
+            const deliveryCharge = freshCustomer?.deliveryCharge || 0;
+            summaryText += `\n🚚 Delivery: ${deliveryCharge > 0 ? '₹' + deliveryCharge : 'FREE'}`;
+            if (deliveryCharge > 0) {
+              summaryText += `\n💰 Grand Total: ₹${total + deliveryCharge}`;
+            }
+          } else {
+            summaryText += '\n🏪 Self-Pickup from restaurant';
+          }
+
+          // Build payment methods with images based on service type
+          const buildPaymentOption = (id, title, description, imgB64) => {
+            const opt = { id, title, description };
+            if (imgB64) opt.image = imgB64;
+            return opt;
+          };
+
+          const paymentMethods = [];
+          if (serviceType === 'delivery') {
+            paymentMethods.push(buildPaymentOption('cod', 'Cash on Delivery', 'Pay when you receive your order', images.payCodImg));
+          } else {
+            paymentMethods.push(buildPaymentOption('pay_hotel', 'Pay at Hotel', 'Pay when you pick up your order', images.payHotelImg));
+          }
+          paymentMethods.push(buildPaymentOption('gpay', 'Google Pay', 'Pay via Google Pay app', images.payGpayImg));
+          paymentMethods.push(buildPaymentOption('phonepe', 'PhonePe', 'Pay via PhonePe app', images.payPhonepeImg));
+          paymentMethods.push(buildPaymentOption('paytm', 'Paytm', 'Pay via Paytm app', images.payPaytmImg));
+
+          response = {
+            screen: 'PAYMENT_SELECT',
+            data: {
+              payment_banner: images.paymentBanner || '',
+              order_summary_text: summaryText,
+              payment_methods: paymentMethods,
+              flow_token
+            }
+          };
+        } catch (err) {
+          logger.error('[FlowEndpoint] Payment flow INIT error', { phone, error: err.message });
+          response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'payment_init_error' } } } };
         }
       }
       // Welcome Services Flow — default INIT

@@ -2856,6 +2856,104 @@ const catalogService = {
     };
   },
 
+  // ==================== PAYMENT METHOD FLOW ====================
+
+  getPaymentFlowId() {
+    return process.env.WHATSAPP_PAYMENT_FLOW_ID || null;
+  },
+
+  /**
+   * Build the Payment Method Selection Flow JSON (WhatsApp Flows v7.3, Data API v3.0).
+   * Single terminal screen: ORDER_SUMMARY with order details + payment RadioButtonsGroup with icons.
+   * Payment options dynamically change based on service type (delivery vs pickup).
+   */
+  buildPaymentFlowJSON() {
+    return {
+      version: '7.3',
+      data_api_version: '3.0',
+      routing_model: {
+        PAYMENT_SELECT: []
+      },
+      screens: [
+        {
+          id: 'PAYMENT_SELECT',
+          title: 'Payment Method',
+          terminal: true,
+          success: true,
+          data: {
+            payment_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
+            },
+            order_summary_text: {
+              type: 'string',
+              __example__: '🛒 1 item • Total: ₹69\n📍 Delivery: FREE'
+            },
+            payment_methods: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'cod', title: 'Cash on Delivery', description: 'Pay when you receive', image: 'iVBORw0KGgo' },
+                { id: 'gpay', title: 'Google Pay', description: 'Pay via Google Pay', image: 'iVBORw0KGgo' }
+              ]
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'payment_919999999999_delivery'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'Image',
+                src: '${data.payment_banner}',
+                width: 1000,
+                height: 125,
+                'scale-type': 'cover',
+                'alt-text': 'Payment Banner'
+              },
+              {
+                type: 'TextHeading',
+                text: '💳 Select Payment Method'
+              },
+              {
+                type: 'TextBody',
+                text: '${data.order_summary_text}'
+              },
+              {
+                type: 'RadioButtonsGroup',
+                name: 'payment_method',
+                label: 'Payment Method',
+                required: true,
+                'data-source': '${data.payment_methods}'
+              },
+              {
+                type: 'Footer',
+                label: 'Confirm Payment',
+                'on-click-action': {
+                  name: 'complete',
+                  payload: {
+                    selected_payment: '${form.payment_method}',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    };
+  },
+
   // ==================== ACCOUNT DETAILS FLOW ====================
 
   /**
