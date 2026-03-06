@@ -5296,9 +5296,8 @@ const chatbot = {
                   headerText: 'Order Confirmation',
                   bodyText: '📋 Review your order and choose delivery type',
                   footerText: 'Perivi Hotel',
-                  screenName: 'ORDER_REVIEW',
-                  screenData: {},
                   flowToken,
+                  flowAction: 'data_exchange',
                   mode: 'published'
                 });
                 state.currentStep = 'order_confirm_flow';

@@ -2050,7 +2050,8 @@ const metaCloud = {
         screenName = 'CATEGORY_SELECT',
         screenData = {},
         flowToken = 'unused',
-        mode = 'published'
+        mode = 'published',
+        flowAction = 'navigate'
       } = options;
 
       // Build header: image if provided, otherwise text
@@ -2060,6 +2061,26 @@ const metaCloud = {
       } else {
         header = { type: 'text', text: headerText || 'Menu' };
       }
+
+      const actionParams = {
+              flow_message_version: '3',
+              flow_token: flowToken,
+              flow_id: flowId,
+              flow_cta: flowCta,
+              mode,
+              flow_action: flowAction
+            };
+
+            // navigate: open screen with provided data; data_exchange: call INIT endpoint
+            if (flowAction === 'navigate') {
+              actionParams.flow_action_payload = {
+                screen: screenName,
+                data: {
+                  ...screenData,
+                  flow_token: flowToken
+                }
+              };
+            }
 
       const payload = {
         messaging_product: 'whatsapp',
@@ -2072,21 +2093,7 @@ const metaCloud = {
           body: { text: bodyText || 'Select a category' },
           action: {
             name: 'flow',
-            parameters: {
-              flow_message_version: '3',
-              flow_token: flowToken,
-              flow_id: flowId,
-              flow_cta: flowCta,
-              mode,
-              flow_action: 'navigate',
-              flow_action_payload: {
-                screen: screenName,
-                data: {
-                  ...screenData,
-                  flow_token: flowToken
-                }
-              }
-            }
+            parameters: actionParams
           }
         }
       };
