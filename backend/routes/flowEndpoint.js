@@ -456,12 +456,11 @@ router.post('/', async (req, res) => {
           const paymentMethods = [];
           if (serviceType === 'delivery') {
             paymentMethods.push(buildPaymentOption('cod', 'Cash on Delivery', 'Pay when you receive your order', images.payCodImg));
+            paymentMethods.push(buildPaymentOption('online', 'Online Payment', 'Pay securely via UPI', images.payGpayImg));
           } else {
             paymentMethods.push(buildPaymentOption('pay_hotel', 'Pay at Hotel', 'Pay when you pick up your order', images.payHotelImg));
+            paymentMethods.push(buildPaymentOption('online', 'Online Payment', 'Pay securely via UPI', images.payGpayImg));
           }
-          paymentMethods.push(buildPaymentOption('gpay', 'Google Pay', 'Pay via Google Pay app', images.payGpayImg));
-          paymentMethods.push(buildPaymentOption('phonepe', 'PhonePe', 'Pay via PhonePe app', images.payPhonepeImg));
-          paymentMethods.push(buildPaymentOption('paytm', 'Paytm', 'Pay via Paytm app', images.payPaytmImg));
 
           response = {
             screen: 'PAYMENT_SELECT',

@@ -2902,7 +2902,7 @@ const catalogService = {
               },
               __example__: [
                 { id: 'cod', title: 'Cash on Delivery', description: 'Pay when you receive', image: 'iVBORw0KGgo' },
-                { id: 'gpay', title: 'Google Pay', description: 'Pay via Google Pay', image: 'iVBORw0KGgo' }
+                { id: 'online', title: 'Online Payment', description: 'Pay securely via UPI', image: 'iVBORw0KGgo' }
               ]
             },
             flow_token: {

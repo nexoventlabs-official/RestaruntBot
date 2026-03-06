@@ -449,23 +449,15 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                     else if (responseData.flow_token?.startsWith('payment_') && responseData.selected_payment) {
                       const parts = responseData.flow_token.replace('payment_', '').split('_');
                       const serviceType = parts.pop(); // 'delivery' or 'pickup'
-                      const payment = responseData.selected_payment; // 'cod', 'pay_hotel', 'gpay', 'phonepe', 'paytm'
-
-                      // Store preferred UPI app in conversation state for processCheckout
-                      if (['gpay', 'phonepe', 'paytm'].includes(payment)) {
-                        try {
-                          const Customer = require('../models/Customer');
-                          await Customer.updateOne({ phone }, { 'conversationState.preferredUpiApp': payment });
-                        } catch (e) { /* ignore */ }
-                      }
+                      const payment = responseData.selected_payment; // 'cod', 'pay_hotel', 'online'
 
                       // Map payment selection to existing button IDs
                       if (payment === 'cod') {
                         selectedId = 'pay_cod';
                       } else if (payment === 'pay_hotel') {
                         selectedId = 'pickup_pay_hotel';
-                      } else {
-                        // App payments (gpay, phonepe, paytm) → route to UPI handler
+                      } else if (payment === 'online') {
+                        // Online payment → route to UPI handler (tries WhatsApp native pay first, then Razorpay)
                         selectedId = serviceType === 'pickup' ? 'pickup_pay_upi' : 'pay_upi';
                       }
                       text = selectedId;

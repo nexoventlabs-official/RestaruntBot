@@ -1,15 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { CheckCircle } from 'lucide-react';
 import api from '../api';
 
 export default function Payment() {
   const { orderId } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const appParam = searchParams.get('app'); // 'gpay', 'phonepe', 'paytm', or null
-  // Razorpay uses 'google_pay' not 'gpay'
-  const preferredApp = appParam === 'gpay' ? 'google_pay' : appParam;
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -46,8 +42,7 @@ export default function Payment() {
         description: `Order #${orderData.orderId}`,
         order_id: razorpayData.razorpayOrderId,
         prefill: {
-          contact: orderData.customer?.phone || '',
-          ...(preferredApp && { method: 'upi' })
+          contact: orderData.customer?.phone || ''
         },
         notes: {
           orderId: orderData.orderId
@@ -56,28 +51,6 @@ export default function Payment() {
           color: '#f97316'
         },
         ...(razorpayData.configId && { checkout_config_id: razorpayData.configId }),
-        ...(preferredApp && {
-          config: {
-            display: {
-              blocks: {
-                upi: {
-                  name: 'Pay via UPI',
-                  instruments: [
-                    {
-                      method: 'upi',
-                      flows: ['intent'],
-                      apps: [preferredApp]
-                    }
-                  ]
-                }
-              },
-              sequence: ['block.upi'],
-              preferences: {
-                show_default_blocks: false
-              }
-            }
-          }
-        }),
         handler: async function(response) {
           try {
             await api.post('/payment/verify-upi', {
@@ -112,7 +85,7 @@ export default function Payment() {
       setError('Failed to open payment. Please try again.');
       setRazorpayOpened(false);
     }
-  }, [razorpayOpened, loadRazorpayScript, navigate, preferredApp]);
+  }, [razorpayOpened, loadRazorpayScript, navigate]);
 
   useEffect(() => {
     const fetchOrder = async () => {
