@@ -534,6 +534,26 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           logger.info('Flow: Account Details selected', { phone });
                         }
                       }
+                      // For Help & Support — "Call Us" button tapped, send CTA phone message
+                      else if (service === 'help_call') {
+                        const userPhone = responseData.flow_token.replace('welcome_service_', '');
+                        try {
+                          await whatsapp.sendCtaPhone(
+                            userPhone,
+                            '📞 *Help & Support*\n\nTap the button below to call our support team directly. We\'re happy to help!',
+                            'Call +91 94402 03095',
+                            '+919440203095',
+                            'Available during business hours'
+                          );
+                          logger.info('Flow: Help Call - sent CTA phone message', { phone: userPhone });
+                        } catch (ctaErr) {
+                          logger.error('Flow: Help Call - failed to send CTA phone', { error: ctaErr.message, phone: userPhone });
+                          // Fallback: send plain text with phone number
+                          await whatsapp.sendMessage(userPhone, '📞 *Help & Support*\n\nCall us at: +91 94402 03095\n\nOur support team is happy to help!');
+                        }
+                        // Skip further processing — we already sent the response
+                        return res.sendStatus(200);
+                      }
                       // For other services - handle directly
                       else {
                         selectedId = service;

@@ -2352,10 +2352,6 @@ const catalogService = {
               type: 'string',
               __example__: 'iVBORw0KGgo'
             },
-            help_phone: {
-              type: 'string',
-              __example__: '+91 94402 03095'
-            },
             flow_token: {
               type: 'string',
               __example__: 'welcome_service_919999999999'
@@ -2382,19 +2378,19 @@ const catalogService = {
               },
               {
                 type: 'TextSubheading',
-                text: '📞 Call Us'
+                text: '📞 Need to talk?'
               },
               {
                 type: 'TextBody',
-                text: '${data.help_phone}\n\nOur support team is available to assist you. Tap the number above to call directly.'
+                text: 'Tap the button below and we\'ll send you our support number so you can call us directly.'
               },
               {
                 type: 'Footer',
-                label: 'Close',
+                label: '📞 Call Us',
                 'on-click-action': {
                   name: 'complete',
                   payload: {
-                    selected_service: 'help',
+                    selected_service: 'help_call',
                     flow_token: '${data.flow_token}'
                   }
                 }

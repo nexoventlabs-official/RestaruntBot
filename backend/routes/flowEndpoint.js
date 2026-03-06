@@ -548,7 +548,6 @@ router.post('/', async (req, res) => {
             screen: 'HELP_SUPPORT',
             data: {
               help_banner: images.helpBanner || '',
-              help_phone: '+91 94402 03095',
               flow_token: token
             }
           };
