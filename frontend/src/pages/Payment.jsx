@@ -7,7 +7,9 @@ export default function Payment() {
   const { orderId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const preferredApp = searchParams.get('app'); // 'gpay', 'phonepe', 'paytm', or null
+  const appParam = searchParams.get('app'); // 'gpay', 'phonepe', 'paytm', or null
+  // Razorpay uses 'google_pay' not 'gpay'
+  const preferredApp = appParam === 'gpay' ? 'google_pay' : appParam;
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
