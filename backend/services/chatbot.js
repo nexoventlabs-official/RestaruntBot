@@ -9037,7 +9037,10 @@ const chatbot = {
     try {
       // Generate payment page URL (UPI app selection page)
       const frontendUrl = process.env.FRONTEND_URL || process.env.WEBSITE_URL || 'https://restarunt-bot.vercel.app';
-      const paymentPageUrl = `${frontendUrl}/pay/${orderId}`;
+      const preferredApp = state.preferredUpiApp || '';
+      const paymentPageUrl = preferredApp
+        ? `${frontendUrl}/pay/${orderId}?app=${encodeURIComponent(preferredApp)}`
+        : `${frontendUrl}/pay/${orderId}`;
 
       const orderDetailsImageUrl = await chatbotImagesService.getImageUrl('order_details');
       await whatsapp.sendOrder(phone, order, items, paymentPageUrl, orderDetailsImageUrl);

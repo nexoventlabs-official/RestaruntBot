@@ -451,6 +451,14 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       const serviceType = parts.pop(); // 'delivery' or 'pickup'
                       const payment = responseData.selected_payment; // 'cod', 'pay_hotel', 'gpay', 'phonepe', 'paytm'
 
+                      // Store preferred UPI app in conversation state for processCheckout
+                      if (['gpay', 'phonepe', 'paytm'].includes(payment)) {
+                        try {
+                          const Customer = require('../models/Customer');
+                          await Customer.updateOne({ phone }, { 'conversationState.preferredUpiApp': payment });
+                        } catch (e) { /* ignore */ }
+                      }
+
                       // Map payment selection to existing button IDs
                       if (payment === 'cod') {
                         selectedId = 'pay_cod';
