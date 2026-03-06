@@ -9006,10 +9006,12 @@ const chatbot = {
             quantity: item.quantity
           }));
 
+          const orderDetailsImg = await chatbotImagesService.getImageUrl('order_details');
           await whatsapp.sendOrderDetails(phone, orderId, orderItems, total, {
             tax: 0,
             shipping: deliveryCharge,
-            discount: totalDiscount
+            discount: totalDiscount,
+            headerImageUrl: orderDetailsImg || null
           });
 
           // Don't send admin push yet — wait for payment confirmation webhook

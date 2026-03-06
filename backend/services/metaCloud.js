@@ -1391,7 +1391,7 @@ const metaCloud = {
    * @param {number} [discount=0] - Discount in rupees
    * @returns {Object} Meta API response
    */
-  async sendOrderDetails(phone, referenceId, items, totalAmount, { tax = 0, shipping = 0, discount = 0 } = {}) {
+  async sendOrderDetails(phone, referenceId, items, totalAmount, { tax = 0, shipping = 0, discount = 0, headerImageUrl = null } = {}) {
     const endTimer = startTimer('meta.sendOrderDetails');
 
     try {
@@ -1439,12 +1439,12 @@ const metaCloud = {
         type: 'interactive',
         interactive: {
           type: 'order_details',
-          header: {
-            type: 'image',
-            image: {
-              link: 'https://res.cloudinary.com/dzmmp2dxy/image/upload/v1/rb/order_payment'
+          ...(headerImageUrl && {
+            header: {
+              type: 'image',
+              image: { link: headerImageUrl }
             }
-          },
+          }),
           body: {
             text: `🧾 *Order #${referenceId}*\nReview your items and pay securely via UPI.`
           },
