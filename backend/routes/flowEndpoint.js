@@ -131,7 +131,7 @@ async function getFlowImages() {
 
   // Fetch all image URLs (services + food types + order statuses)
   const [
-    orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, deliveryAddressImg, visitWebsiteImg, helpSupportImg,
+    orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, visitWebsiteImg, helpSupportImg,
     allFoodImg, vegImg, nonvegImg, eggImg,
     pendingImg, confirmedImg, preparingImg, readyImg, outForDeliveryImg, deliveredImg, cancelledImg
   ] = await Promise.all([
@@ -139,7 +139,6 @@ async function getFlowImages() {
     chatbotImagesService.getImageUrl('flow_my_orders'),
     chatbotImagesService.getImageUrl('flow_view_offers'),
     chatbotImagesService.getImageUrl('flow_account_details'),
-    chatbotImagesService.getImageUrl('flow_delivery_address'),
     chatbotImagesService.getImageUrl('flow_visit_website'),
     chatbotImagesService.getImageUrl('flow_help_support'),
     chatbotImagesService.getImageUrl('flow_food_all'),
@@ -157,12 +156,12 @@ async function getFlowImages() {
 
   // Convert to base64
   const [
-    orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, deliveryAddressB64, visitWebsiteB64, helpSupportB64,
+    orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, visitWebsiteB64, helpSupportB64,
     allFoodB64, vegB64, nonvegB64, eggB64,
     pendingB64, confirmedB64, preparingB64, readyB64, outForDeliveryB64, deliveredB64, cancelledB64
   ] = await Promise.all([
     toBase64(orderFoodImg), toBase64(myOrdersImg), toBase64(viewOffersImg),
-    toBase64(accountDetailsImg), toBase64(deliveryAddressImg), toBase64(visitWebsiteImg),
+    toBase64(accountDetailsImg), toBase64(visitWebsiteImg),
     toBase64(helpSupportImg), toBase64(allFoodImg), toBase64(vegImg), toBase64(nonvegImg), toBase64(eggImg),
     toBase64(pendingImg), toBase64(confirmedImg), toBase64(preparingImg),
     toBase64(readyImg), toBase64(outForDeliveryImg), toBase64(deliveredImg), toBase64(cancelledImg)
@@ -180,7 +179,6 @@ async function getFlowImages() {
       buildItem('my_orders', 'My Orders', 'Check order status & track delivery', myOrdersB64),
       buildItem('view_offers', 'View Offers', 'See current deals and discounts', viewOffersB64),
       buildItem('account_details', 'Account Details', 'View or update your profile info', accountDetailsB64),
-      buildItem('delivery_address', 'Delivery Address', 'Manage your delivery addresses', deliveryAddressB64),
       buildItem('open_website', 'Visit Website', 'View our full website', visitWebsiteB64),
       buildItem('help', 'Help & Support', 'Get assistance with your queries', helpSupportB64)
     ],
@@ -486,60 +484,6 @@ router.post('/', async (req, res) => {
                 init_name: '',
                 init_email: '',
                 init_phone: phone.length > 10 ? phone.slice(-10) : phone,
-                flow_token: token
-              }
-            };
-          }
-        } else if (selectedService === 'delivery_address') {
-          // Delivery Address → fetch saved address and show DELIVERY_ADDRESS screen
-          const phone = token.replace('welcome_service_', '');
-          let states;
-          try {
-            states = require('../config/indianStates').indianStates;
-          } catch (e) {
-            states = [];
-          }
-
-          try {
-            const customer = await Customer.findOne({ phone })
-              .select('addresses')
-              .lean();
-
-            const savedAddr = customer?.addresses?.find(a => a.isDefault) || customer?.addresses?.[0];
-
-            // Find the state id from saved state name
-            let initState = '';
-            if (savedAddr?.state) {
-              const match = states.find(s =>
-                s.title.toLowerCase() === savedAddr.state.toLowerCase() ||
-                s.id === savedAddr.state
-              );
-              initState = match ? match.id : '';
-            }
-
-            response = {
-              screen: 'DELIVERY_ADDRESS',
-              data: {
-                init_address: savedAddr?.address || '',
-                init_landmark: savedAddr?.landmark || '',
-                init_pincode: savedAddr?.pincode || '',
-                init_district: savedAddr?.district || '',
-                init_state: initState,
-                states: states,
-                flow_token: token
-              }
-            };
-          } catch (dbErr) {
-            logger.error('[FlowEndpoint] Failed to fetch address', { phone, error: dbErr.message });
-            response = {
-              screen: 'DELIVERY_ADDRESS',
-              data: {
-                init_address: '',
-                init_landmark: '',
-                init_pincode: '',
-                init_district: '',
-                init_state: '',
-                states: states,
                 flow_token: token
               }
             };

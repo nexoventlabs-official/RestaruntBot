@@ -1958,82 +1958,17 @@ const catalogService = {
       }
     ];
 
-    // ─── Screen 6: Delivery Address (shown when Delivery Address is selected — pre-filled dynamically) ───
-    const screenDeliveryAddressChildren = [
-      {
-        type: 'TextSubheading',
-        text: 'Your Delivery Address'
-      },
-      {
-        type: 'TextInput',
-        name: 'address_line',
-        label: 'Address',
-        required: true,
-        'input-type': 'text',
-        'init-value': '${data.init_address}'
-      },
-      {
-        type: 'TextInput',
-        name: 'landmark',
-        label: 'Landmark (optional)',
-        required: false,
-        'input-type': 'text',
-        'init-value': '${data.init_landmark}'
-      },
-      {
-        type: 'TextInput',
-        name: 'pincode',
-        label: 'Pincode',
-        required: false,
-        'input-type': 'number',
-        'init-value': '${data.init_pincode}'
-      },
-      {
-        type: 'TextInput',
-        name: 'district',
-        label: 'District',
-        required: false,
-        'input-type': 'text',
-        'init-value': '${data.init_district}'
-      },
-      {
-        type: 'Dropdown',
-        name: 'selected_state',
-        label: 'State',
-        required: false,
-        'data-source': '${data.states}',
-        'init-value': '${data.init_state}'
-      },
-      {
-        type: 'Footer',
-        label: 'Save Address',
-        'on-click-action': {
-          name: 'complete',
-          payload: {
-            selected_service: 'delivery_address',
-            address_line: '${form.address_line}',
-            landmark: '${form.landmark}',
-            pincode: '${form.pincode}',
-            district: '${form.district}',
-            selected_state: '${form.selected_state}',
-            flow_token: '${data.flow_token}'
-          }
-        }
-      }
-    ];
-
     return {
       version: '7.3',
       data_api_version: '3.0',
       routing_model: {
-        'SERVICE_SELECT': ['FOOD_TYPE_SELECT', 'MY_ORDERS', 'VIEW_OFFERS', 'ACCOUNT_DETAILS', 'DELIVERY_ADDRESS'],
+        'SERVICE_SELECT': ['FOOD_TYPE_SELECT', 'MY_ORDERS', 'VIEW_OFFERS', 'ACCOUNT_DETAILS'],
         'FOOD_TYPE_SELECT': ['MENU_CATEGORIES'],
         'MENU_CATEGORIES': [],
         'MY_ORDERS': ['ORDER_DETAILS'],
         'ORDER_DETAILS': [],
         'VIEW_OFFERS': [],
-        'ACCOUNT_DETAILS': [],
-        'DELIVERY_ADDRESS': []
+        'ACCOUNT_DETAILS': []
       },
       screens: [
         {
@@ -2284,55 +2219,6 @@ const catalogService = {
             type: 'SingleColumnLayout',
             children: screenAccountDetailsChildren
           }
-        },
-        {
-          id: 'DELIVERY_ADDRESS',
-          title: 'Delivery Address',
-          terminal: true,
-          success: true,
-          data: {
-            init_address: {
-              type: 'string',
-              __example__: '123 Main Street'
-            },
-            init_landmark: {
-              type: 'string',
-              __example__: 'Near City Mall'
-            },
-            init_pincode: {
-              type: 'string',
-              __example__: '500001'
-            },
-            init_district: {
-              type: 'string',
-              __example__: 'Hyderabad'
-            },
-            init_state: {
-              type: 'string',
-              __example__: 'telangana'
-            },
-            states: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  title: { type: 'string' }
-                }
-              },
-              __example__: [
-                { id: 'andhra_pradesh', title: 'Andhra Pradesh' }
-              ]
-            },
-            flow_token: {
-              type: 'string',
-              __example__: 'welcome_service_919999999999'
-            }
-          },
-          layout: {
-            type: 'SingleColumnLayout',
-            children: screenDeliveryAddressChildren
-          }
         }
       ]
     };
@@ -2370,12 +2256,11 @@ const catalogService = {
     const chatbotImagesService = require('./chatbotImages');
 
     // Fetch all service icons + food type icons from admin-configured chatbot images
-    const [orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, deliveryAddressImg, visitWebsiteImg, helpSupportImg, vegImg, nonvegImg, eggImg] = await Promise.all([
+    const [orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, visitWebsiteImg, helpSupportImg, vegImg, nonvegImg, eggImg] = await Promise.all([
       chatbotImagesService.getImageUrl('flow_order_food'),
       chatbotImagesService.getImageUrl('flow_my_orders'),
       chatbotImagesService.getImageUrl('flow_view_offers'),
       chatbotImagesService.getImageUrl('flow_account_details'),
-      chatbotImagesService.getImageUrl('flow_delivery_address'),
       chatbotImagesService.getImageUrl('flow_visit_website'),
       chatbotImagesService.getImageUrl('flow_help_support'),
       chatbotImagesService.getImageUrl('flow_food_veg'),
@@ -2385,12 +2270,11 @@ const catalogService = {
 
     // Convert Cloudinary URLs to raw base64 (WhatsApp Flows require raw base64, not data URIs)
     const toBase64 = (url) => this._imageUrlToRawBase64(url);
-    const [orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, deliveryAddressB64, visitWebsiteB64, helpSupportB64, vegB64, nonvegB64, eggB64] = await Promise.all([
+    const [orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, visitWebsiteB64, helpSupportB64, vegB64, nonvegB64, eggB64] = await Promise.all([
       toBase64(orderFoodImg),
       toBase64(myOrdersImg),
       toBase64(viewOffersImg),
       toBase64(accountDetailsImg),
-      toBase64(deliveryAddressImg),
       toBase64(visitWebsiteImg),
       toBase64(helpSupportImg),
       toBase64(vegImg),
@@ -2410,7 +2294,6 @@ const catalogService = {
       buildItem('my_orders', 'My Orders', 'Check order status & track delivery', myOrdersB64),
       buildItem('view_offers', 'View Offers', 'See current deals and discounts', viewOffersB64),
       buildItem('account_details', 'Account Details', 'View or update your profile info', accountDetailsB64),
-      buildItem('delivery_address', 'Delivery Address', 'Manage your delivery addresses', deliveryAddressB64),
       buildItem('open_website', 'Visit Website', 'View our full website', visitWebsiteB64),
       buildItem('help', 'Help & Support', 'Get assistance with your queries', helpSupportB64)
     ];
