@@ -62,6 +62,7 @@ const defaultImages = [
   { key: 'flow_menu_banner', name: 'Flow: Menu Banner', description: 'Banner image at top of Menu Categories screen (8:1 ratio, 1000x125px)', imageUrl: '' },
   { key: 'flow_orders_banner', name: 'Flow: My Orders Banner', description: 'Banner image at top of My Orders screen (8:1 ratio, 1000x125px)', imageUrl: '' },
   { key: 'flow_account_banner', name: 'Flow: Account Banner', description: 'Banner image at top of Account Details screen (8:1 ratio, 1000x125px)', imageUrl: '' },
+  { key: 'flow_help_banner', name: 'Flow: Help Banner', description: 'Banner image at top of Help & Support screen (8:1 ratio, 1000x125px)', imageUrl: '' },
   { key: 'flow_account_details', name: 'Flow: Account Details Icon', description: 'Icon shown in welcome Flow service list for Account Details option (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_delivery_address', name: 'Flow: Delivery Address Icon', description: 'Icon shown in welcome Flow service list for Delivery Address option (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_food_all', name: 'Flow: All Food Icon', description: 'Icon shown in food type selection for All (Veg + Non-Veg + Egg) option (square aspect ratio recommended)', imageUrl: '' },

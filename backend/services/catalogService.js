@@ -2002,14 +2002,15 @@ const catalogService = {
       version: '7.3',
       data_api_version: '3.0',
       routing_model: {
-        'SERVICE_SELECT': ['FOOD_TYPE_SELECT', 'MY_ORDERS', 'VIEW_OFFERS', 'ACCOUNT_DETAILS', 'VISIT_WEBSITE'],
+        'SERVICE_SELECT': ['FOOD_TYPE_SELECT', 'MY_ORDERS', 'VIEW_OFFERS', 'ACCOUNT_DETAILS', 'VISIT_WEBSITE', 'HELP_SUPPORT'],
         'FOOD_TYPE_SELECT': ['MENU_CATEGORIES'],
         'MENU_CATEGORIES': [],
         'MY_ORDERS': ['ORDER_DETAILS'],
         'ORDER_DETAILS': [],
         'VIEW_OFFERS': [],
         'ACCOUNT_DETAILS': [],
-        'VISIT_WEBSITE': []
+        'VISIT_WEBSITE': [],
+        'HELP_SUPPORT': []
       },
       screens: [
         {
@@ -2334,6 +2335,66 @@ const catalogService = {
                   name: 'complete',
                   payload: {
                     selected_service: 'open_website',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: 'HELP_SUPPORT',
+          title: 'Help & Support',
+          terminal: true,
+          success: true,
+          data: {
+            help_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
+            },
+            help_phone: {
+              type: 'string',
+              __example__: '+91 94402 03095'
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'welcome_service_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'Image',
+                src: '${data.help_banner}',
+                width: 1000,
+                height: 125,
+                'scale-type': 'cover',
+                'alt-text': 'Help & Support Banner'
+              },
+              {
+                type: 'TextHeading',
+                text: 'Help & Support'
+              },
+              {
+                type: 'TextBody',
+                text: 'Having trouble? We\'re here to help with:\n\n🚚 Delivery issues or delays\n🍽️ Food quality or wrong items\n💰 Pricing or billing concerns\n📦 Order cancellations or refunds\n🔄 Any other queries'
+              },
+              {
+                type: 'TextSubheading',
+                text: '📞 Call Us'
+              },
+              {
+                type: 'TextBody',
+                text: '${data.help_phone}\n\nOur support team is available to assist you. Tap the number above to call directly.'
+              },
+              {
+                type: 'Footer',
+                label: 'Close',
+                'on-click-action': {
+                  name: 'complete',
+                  payload: {
+                    selected_service: 'help',
                     flow_token: '${data.flow_token}'
                   }
                 }

@@ -39,6 +39,7 @@ const FLOW_IMAGE_KEYS = [
   'flow_menu_banner',
   'flow_orders_banner',
   'flow_account_banner',
+  'flow_help_banner',
   'flow_account_details',
   'flow_delivery_address',
   'flow_food_all',

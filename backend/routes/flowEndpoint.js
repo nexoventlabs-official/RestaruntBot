@@ -116,7 +116,7 @@ function encryptResponse(responseObj, aesKeyBuffer, initialVectorBuffer) {
 }
 
 // ─── Cache for base64 images (avoid re-downloading on every request) ───
-let imageCache = { services: null, foodTypes: null, statusImages: null, banner: null, websiteBanner: null, offersBanner: null, foodtypeBanner: null, menuBanner: null, ordersBanner: null, accountBanner: null, lastFetched: 0 };
+let imageCache = { services: null, foodTypes: null, statusImages: null, banner: null, websiteBanner: null, offersBanner: null, foodtypeBanner: null, menuBanner: null, ordersBanner: null, accountBanner: null, helpBanner: null, lastFetched: 0 };
 const IMAGE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 async function getFlowImages() {
@@ -139,7 +139,8 @@ async function getFlowImages() {
     foodtypeBannerImg,
     menuBannerImg,
     ordersBannerImg,
-    accountBannerImg
+    accountBannerImg,
+    helpBannerImg
   ] = await Promise.all([
     chatbotImagesService.getImageUrl('flow_order_food'),
     chatbotImagesService.getImageUrl('flow_my_orders'),
@@ -163,7 +164,8 @@ async function getFlowImages() {
     chatbotImagesService.getImageUrl('flow_foodtype_banner'),
     chatbotImagesService.getImageUrl('flow_menu_banner'),
     chatbotImagesService.getImageUrl('flow_orders_banner'),
-    chatbotImagesService.getImageUrl('flow_account_banner')
+    chatbotImagesService.getImageUrl('flow_account_banner'),
+    chatbotImagesService.getImageUrl('flow_help_banner')
   ]);
 
   // Convert to base64
@@ -176,7 +178,8 @@ async function getFlowImages() {
     foodtypeBannerB64,
     menuBannerB64,
     ordersBannerB64,
-    accountBannerB64
+    accountBannerB64,
+    helpBannerB64
   ] = await Promise.all([
     toBase64(orderFoodImg), toBase64(myOrdersImg), toBase64(viewOffersImg),
     toBase64(accountDetailsImg), toBase64(visitWebsiteImg),
@@ -188,7 +191,8 @@ async function getFlowImages() {
     toBase64(foodtypeBannerImg),
     toBase64(menuBannerImg),
     toBase64(ordersBannerImg),
-    toBase64(accountBannerImg)
+    toBase64(accountBannerImg),
+    toBase64(helpBannerImg)
   ]);
 
   const buildItem = (id, title, description, base64Img) => {
@@ -228,6 +232,7 @@ async function getFlowImages() {
     menuBanner: menuBannerB64 || null,
     ordersBanner: ordersBannerB64 || null,
     accountBanner: accountBannerB64 || null,
+    helpBanner: helpBannerB64 || null,
     lastFetched: now
   };
 
@@ -533,6 +538,17 @@ router.post('/', async (req, res) => {
             data: {
               website_url: 'https://restarunt-bot.vercel.app/',
               website_banner: images.websiteBanner || '',
+              flow_token: token
+            }
+          };
+        } else if (selectedService === 'help') {
+          // Help & Support → show HELP_SUPPORT screen with banner and contact info
+          const images = await getFlowImages();
+          response = {
+            screen: 'HELP_SUPPORT',
+            data: {
+              help_banner: images.helpBanner || '',
+              help_phone: '+91 94402 03095',
               flow_token: token
             }
           };
