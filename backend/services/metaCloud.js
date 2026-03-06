@@ -1423,13 +1423,11 @@ const metaCloud = {
             offset: 100
           };
         }
-        endTimer({ success: true });
         return obj;
       });
 
       const subtotal = items.reduce((sum, i) => {
         const price = i.saleAmount != null ? i.saleAmount : i.priceAmount;
-        endTimer({ success: true });
         return sum + price * i.quantity;
       }, 0);
 
@@ -1455,9 +1453,16 @@ const metaCloud = {
             name: 'review_and_pay',
             parameters: {
               reference_id: referenceId,
-              type: 'digital-goods',
-              payment_type: 'upi',
-              payment_configuration: paymentConfig,
+              type: 'physical-goods',
+              payment_settings: [
+                {
+                  type: 'payment_gateway',
+                  payment_gateway: {
+                    type: 'razorpay',
+                    configuration_name: paymentConfig
+                  }
+                }
+              ],
               currency: 'INR',
               total_amount: {
                 value: toPaise(totalAmount),
