@@ -116,7 +116,7 @@ function encryptResponse(responseObj, aesKeyBuffer, initialVectorBuffer) {
 }
 
 // ─── Cache for base64 images (avoid re-downloading on every request) ───
-let imageCache = { services: null, foodTypes: null, statusImages: null, banner: null, websiteBanner: null, lastFetched: 0 };
+let imageCache = { services: null, foodTypes: null, statusImages: null, banner: null, websiteBanner: null, offersBanner: null, lastFetched: 0 };
 const IMAGE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 async function getFlowImages() {
@@ -134,7 +134,8 @@ async function getFlowImages() {
     orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, visitWebsiteImg, helpSupportImg,
     allFoodImg, vegImg, nonvegImg, eggImg,
     pendingImg, confirmedImg, preparingImg, readyImg, outForDeliveryImg, deliveredImg, cancelledImg,
-    websiteBannerImg
+    websiteBannerImg,
+    offersBannerImg
   ] = await Promise.all([
     chatbotImagesService.getImageUrl('flow_order_food'),
     chatbotImagesService.getImageUrl('flow_my_orders'),
@@ -153,7 +154,8 @@ async function getFlowImages() {
     chatbotImagesService.getImageUrl('flow_status_out_for_delivery'),
     chatbotImagesService.getImageUrl('flow_status_delivered'),
     chatbotImagesService.getImageUrl('flow_status_cancelled'),
-    chatbotImagesService.getImageUrl('flow_website_banner')
+    chatbotImagesService.getImageUrl('flow_website_banner'),
+    chatbotImagesService.getImageUrl('flow_offers_banner')
   ]);
 
   // Convert to base64
@@ -161,14 +163,16 @@ async function getFlowImages() {
     orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, visitWebsiteB64, helpSupportB64,
     allFoodB64, vegB64, nonvegB64, eggB64,
     pendingB64, confirmedB64, preparingB64, readyB64, outForDeliveryB64, deliveredB64, cancelledB64,
-    websiteBannerB64
+    websiteBannerB64,
+    offersBannerB64
   ] = await Promise.all([
     toBase64(orderFoodImg), toBase64(myOrdersImg), toBase64(viewOffersImg),
     toBase64(accountDetailsImg), toBase64(visitWebsiteImg),
     toBase64(helpSupportImg), toBase64(allFoodImg), toBase64(vegImg), toBase64(nonvegImg), toBase64(eggImg),
     toBase64(pendingImg), toBase64(confirmedImg), toBase64(preparingImg),
     toBase64(readyImg), toBase64(outForDeliveryImg), toBase64(deliveredImg), toBase64(cancelledImg),
-    toBase64(websiteBannerImg)
+    toBase64(websiteBannerImg),
+    toBase64(offersBannerImg)
   ]);
 
   const buildItem = (id, title, description, base64Img) => {
@@ -203,6 +207,7 @@ async function getFlowImages() {
     },
     banner: null,
     websiteBanner: websiteBannerB64 || null,
+    offersBanner: offersBannerB64 || null,
     lastFetched: now
   };
 
@@ -414,10 +419,12 @@ router.post('/', async (req, res) => {
                 return item;
               }));
 
+              const images = await getFlowImages();
               response = {
                 screen: 'VIEW_OFFERS',
                 data: {
                   offers: offerItems,
+                  offers_banner: images.offersBanner || '',
                   flow_token: token
                 }
               };

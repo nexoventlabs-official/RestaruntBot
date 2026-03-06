@@ -1883,6 +1883,14 @@ const catalogService = {
     // ─── Screen 4: View Offers (shown when View Offers is selected — offers loaded dynamically) ───
     const screen4Children = [
       {
+        type: 'Image',
+        src: '${data.offers_banner}',
+        width: 1000,
+        height: 125,
+        'scale-type': 'cover',
+        'alt-text': 'View Offers Banner'
+      },
+      {
         type: 'TextSubheading',
         text: 'Available Offers for You'
       },
@@ -2178,6 +2186,10 @@ const catalogService = {
               __example__: [
                 { id: 'offer1', title: '50% Off Biryani', description: 'Use code BIRYANI50', image: 'iVBORw0KGgo' }
               ]
+            },
+            offers_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
             },
             flow_token: {
               type: 'string',
