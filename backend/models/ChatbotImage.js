@@ -57,6 +57,7 @@ const chatbotImageSchema = new mongoose.Schema({
       'flow_visit_website',
       'flow_help_support',
       'flow_welcome_banner',
+      'flow_website_banner',
       'flow_account_details',
       'flow_delivery_address',
       'flow_food_all',

@@ -56,6 +56,7 @@ const defaultImages = [
   { key: 'flow_visit_website', name: 'Flow: Visit Website Icon', description: 'Icon shown in welcome Flow service list for Visit Website option (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_help_support', name: 'Flow: Help & Support Icon', description: 'Icon shown in welcome Flow service list for Help & Support option (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_welcome_banner', name: 'Flow: Welcome Banner', description: 'Banner image at top of welcome Flow (5:1 ratio, 1000x200px, rounded corners applied automatically)', imageUrl: '' },
+  { key: 'flow_website_banner', name: 'Flow: Website Banner', description: 'Banner image at top of Visit Website screen (8:1 ratio, 1000x125px)', imageUrl: '' },
   { key: 'flow_account_details', name: 'Flow: Account Details Icon', description: 'Icon shown in welcome Flow service list for Account Details option (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_delivery_address', name: 'Flow: Delivery Address Icon', description: 'Icon shown in welcome Flow service list for Delivery Address option (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_food_all', name: 'Flow: All Food Icon', description: 'Icon shown in food type selection for All (Veg + Non-Veg + Egg) option (square aspect ratio recommended)', imageUrl: '' },

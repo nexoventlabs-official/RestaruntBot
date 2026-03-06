@@ -2231,6 +2231,10 @@ const catalogService = {
               type: 'string',
               __example__: 'https://restarunt-bot.vercel.app/'
             },
+            website_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
+            },
             flow_token: {
               type: 'string',
               __example__: 'welcome_service_919999999999'
@@ -2239,6 +2243,14 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: [
+              {
+                type: 'Image',
+                src: '${data.website_banner}',
+                width: 1000,
+                height: 125,
+                'scale-type': 'cover',
+                'alt-text': 'Visit Our Website'
+              },
               {
                 type: 'TextHeading',
                 text: 'Visit Our Website'
