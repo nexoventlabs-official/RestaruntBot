@@ -1962,13 +1962,14 @@ const catalogService = {
       version: '7.3',
       data_api_version: '3.0',
       routing_model: {
-        'SERVICE_SELECT': ['FOOD_TYPE_SELECT', 'MY_ORDERS', 'VIEW_OFFERS', 'ACCOUNT_DETAILS'],
+        'SERVICE_SELECT': ['FOOD_TYPE_SELECT', 'MY_ORDERS', 'VIEW_OFFERS', 'ACCOUNT_DETAILS', 'VISIT_WEBSITE'],
         'FOOD_TYPE_SELECT': ['MENU_CATEGORIES'],
         'MENU_CATEGORIES': [],
         'MY_ORDERS': ['ORDER_DETAILS'],
         'ORDER_DETAILS': [],
         'VIEW_OFFERS': [],
-        'ACCOUNT_DETAILS': []
+        'ACCOUNT_DETAILS': [],
+        'VISIT_WEBSITE': []
       },
       screens: [
         {
@@ -2218,6 +2219,54 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: screenAccountDetailsChildren
+          }
+        },
+        {
+          id: 'VISIT_WEBSITE',
+          title: 'Visit Website',
+          terminal: true,
+          success: true,
+          data: {
+            website_url: {
+              type: 'string',
+              __example__: 'https://restarunt-bot.vercel.app/'
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'welcome_service_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'TextHeading',
+                text: 'Visit Our Website'
+              },
+              {
+                type: 'TextBody',
+                text: 'Tap the link below to visit our website for full menu, online ordering, and more!'
+              },
+              {
+                type: 'EmbeddedLink',
+                text: '🌐 Open Website',
+                'on-click-action': {
+                  name: 'open_url',
+                  url: '${data.website_url}'
+                }
+              },
+              {
+                type: 'Footer',
+                label: 'Close',
+                'on-click-action': {
+                  name: 'complete',
+                  payload: {
+                    selected_service: 'open_website',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
           }
         }
       ]

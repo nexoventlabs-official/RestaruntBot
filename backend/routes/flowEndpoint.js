@@ -488,6 +488,15 @@ router.post('/', async (req, res) => {
               }
             };
           }
+        } else if (selectedService === 'open_website') {
+          // Visit Website → show VISIT_WEBSITE screen with link
+          response = {
+            screen: 'VISIT_WEBSITE',
+            data: {
+              website_url: 'https://restarunt-bot.vercel.app/',
+              flow_token: token
+            }
+          };
         } else {
           // Any other service → close the flow and send result to webhook
           response = {
