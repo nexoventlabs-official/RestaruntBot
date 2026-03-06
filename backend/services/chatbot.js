@@ -8887,7 +8887,7 @@ const chatbot = {
         latitude: freshCustomer.deliveryAddress.latitude,
         longitude: freshCustomer.deliveryAddress.longitude
       } : null,
-      paymentMethod: 'online',
+      paymentMethod: 'upi',
       trackingUpdates: [{ status: 'pending', message: 'Order created, awaiting payment' }]
     });
     // Transaction-based checkout: order.save() + cart clear are atomic
