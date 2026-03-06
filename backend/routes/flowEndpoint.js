@@ -491,6 +491,19 @@ router.post('/', async (req, res) => {
             };
           }
         } else {
+          // Any other service → close the flow and send result to webhook
+          response = {
+            screen: 'SUCCESS',
+            data: {
+              extension_message_response: {
+                params: {
+                  flow_token: token,
+                  selected_service: selectedService
+                }
+              }
+            }
+          };
+        }
       }
 
       // Screen 3: User selected an order on MY_ORDERS and tapped View Order → show ORDER_DETAILS
