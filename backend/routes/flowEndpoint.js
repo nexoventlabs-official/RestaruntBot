@@ -490,6 +490,60 @@ router.post('/', async (req, res) => {
               }
             };
           }
+        } else if (selectedService === 'delivery_address') {
+          // Delivery Address → fetch saved address and show DELIVERY_ADDRESS screen
+          const phone = token.replace('welcome_service_', '');
+          let states;
+          try {
+            states = require('../config/indianStates').indianStates;
+          } catch (e) {
+            states = [];
+          }
+
+          try {
+            const customer = await Customer.findOne({ phone })
+              .select('addresses')
+              .lean();
+
+            const savedAddr = customer?.addresses?.find(a => a.isDefault) || customer?.addresses?.[0];
+
+            // Find the state id from saved state name
+            let initState = '';
+            if (savedAddr?.state) {
+              const match = states.find(s =>
+                s.title.toLowerCase() === savedAddr.state.toLowerCase() ||
+                s.id === savedAddr.state
+              );
+              initState = match ? match.id : '';
+            }
+
+            response = {
+              screen: 'DELIVERY_ADDRESS',
+              data: {
+                init_address: savedAddr?.address || '',
+                init_landmark: savedAddr?.landmark || '',
+                init_pincode: savedAddr?.pincode || '',
+                init_district: savedAddr?.district || '',
+                init_state: initState,
+                states: states,
+                flow_token: token
+              }
+            };
+          } catch (dbErr) {
+            logger.error('[FlowEndpoint] Failed to fetch address', { phone, error: dbErr.message });
+            response = {
+              screen: 'DELIVERY_ADDRESS',
+              data: {
+                init_address: '',
+                init_landmark: '',
+                init_pincode: '',
+                init_district: '',
+                init_state: '',
+                states: states,
+                flow_token: token
+              }
+            };
+          }
         } else {
           // Any other service → close the flow and send result to webhook
           response = {

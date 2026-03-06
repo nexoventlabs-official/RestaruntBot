@@ -534,6 +534,22 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           logger.info('Flow: Account Details selected', { phone });
                         }
                       }
+                      // For Delivery Address — flow shows editable address form, completes with address data
+                      else if (service === 'delivery_address') {
+                        const phone = responseData.flow_token.replace('welcome_service_', '');
+                        if (responseData.address_line) {
+                          // User filled/edited address and tapped Save Address
+                          messageType = 'flow_reply';
+                          text = JSON.stringify({ type: 'address_form', ...responseData, flow_token: `address_form_${phone}` });
+                          logger.info('Flow: Delivery Address saved from welcome flow', { phone, address: responseData.address_line });
+                        } else {
+                          // Fallback
+                          selectedId = 'delivery_address';
+                          text = 'delivery_address';
+                          messageType = 'button';
+                          logger.info('Flow: Delivery Address selected', { phone });
+                        }
+                      }
                       // For other services - handle directly
                       else {
                         selectedId = service;

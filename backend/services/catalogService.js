@@ -1958,17 +1958,82 @@ const catalogService = {
       }
     ];
 
+    // ─── Screen 6: Delivery Address (shown when Delivery Address is selected — pre-filled dynamically) ───
+    const screenDeliveryAddressChildren = [
+      {
+        type: 'TextSubheading',
+        text: 'Your Delivery Address'
+      },
+      {
+        type: 'TextInput',
+        name: 'address_line',
+        label: 'Address',
+        required: true,
+        'input-type': 'text',
+        'init-value': '${data.init_address}'
+      },
+      {
+        type: 'TextInput',
+        name: 'landmark',
+        label: 'Landmark (optional)',
+        required: false,
+        'input-type': 'text',
+        'init-value': '${data.init_landmark}'
+      },
+      {
+        type: 'TextInput',
+        name: 'pincode',
+        label: 'Pincode',
+        required: false,
+        'input-type': 'number',
+        'init-value': '${data.init_pincode}'
+      },
+      {
+        type: 'TextInput',
+        name: 'district',
+        label: 'District',
+        required: false,
+        'input-type': 'text',
+        'init-value': '${data.init_district}'
+      },
+      {
+        type: 'Dropdown',
+        name: 'selected_state',
+        label: 'State',
+        required: false,
+        'data-source': '${data.states}',
+        'init-value': '${data.init_state}'
+      },
+      {
+        type: 'Footer',
+        label: 'Save Address',
+        'on-click-action': {
+          name: 'complete',
+          payload: {
+            selected_service: 'delivery_address',
+            address_line: '${form.address_line}',
+            landmark: '${form.landmark}',
+            pincode: '${form.pincode}',
+            district: '${form.district}',
+            selected_state: '${form.selected_state}',
+            flow_token: '${data.flow_token}'
+          }
+        }
+      }
+    ];
+
     return {
       version: '7.3',
       data_api_version: '3.0',
       routing_model: {
-        'SERVICE_SELECT': ['FOOD_TYPE_SELECT', 'MY_ORDERS', 'VIEW_OFFERS', 'ACCOUNT_DETAILS'],
+        'SERVICE_SELECT': ['FOOD_TYPE_SELECT', 'MY_ORDERS', 'VIEW_OFFERS', 'ACCOUNT_DETAILS', 'DELIVERY_ADDRESS'],
         'FOOD_TYPE_SELECT': ['MENU_CATEGORIES'],
         'MENU_CATEGORIES': [],
         'MY_ORDERS': ['ORDER_DETAILS'],
         'ORDER_DETAILS': [],
         'VIEW_OFFERS': [],
-        'ACCOUNT_DETAILS': []
+        'ACCOUNT_DETAILS': [],
+        'DELIVERY_ADDRESS': []
       },
       screens: [
         {
@@ -2218,6 +2283,55 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: screenAccountDetailsChildren
+          }
+        },
+        {
+          id: 'DELIVERY_ADDRESS',
+          title: 'Delivery Address',
+          terminal: true,
+          success: true,
+          data: {
+            init_address: {
+              type: 'string',
+              __example__: '123 Main Street'
+            },
+            init_landmark: {
+              type: 'string',
+              __example__: 'Near City Mall'
+            },
+            init_pincode: {
+              type: 'string',
+              __example__: '500001'
+            },
+            init_district: {
+              type: 'string',
+              __example__: 'Hyderabad'
+            },
+            init_state: {
+              type: 'string',
+              __example__: 'telangana'
+            },
+            states: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'andhra_pradesh', title: 'Andhra Pradesh' }
+              ]
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'welcome_service_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: screenDeliveryAddressChildren
           }
         }
       ]
