@@ -5282,9 +5282,37 @@ const chatbot = {
             ]);
             state.currentStep = 'viewing_cart';
           } else {
-            // All items available - ask for service type (Delivery or Self-Pickup)
-            await this.sendServiceTypeSelection(phone);
-            state.currentStep = 'select_service_type';
+            // All items available — launch order confirmation flow (or fallback to buttons)
+            const orderFlowId = catalogService.getOrderConfirmFlowId();
+            if (orderFlowId) {
+              try {
+                const metaCloud = require('./metaCloud');
+                const flowToken = `order_confirm_${phone}`;
+                const checkoutImg = await chatbotImagesService.getImageUrl('checkout');
+                await metaCloud.sendFlowMessage(phone, {
+                  flowId: orderFlowId,
+                  flowCta: 'Review & Place Order',
+                  headerImageUrl: checkoutImg || undefined,
+                  headerText: 'Order Confirmation',
+                  bodyText: '📋 Review your order and choose delivery type',
+                  footerText: 'Perivi Hotel',
+                  screenName: 'ORDER_REVIEW',
+                  screenData: {},
+                  flowToken,
+                  mode: 'published'
+                });
+                state.currentStep = 'order_confirm_flow';
+                logger.info('Sent order confirmation flow', { phone, flowId: orderFlowId });
+              } catch (flowErr) {
+                logger.warn('Order confirm flow failed, falling back to buttons', { error: flowErr.message });
+                await this.sendServiceTypeSelection(phone);
+                state.currentStep = 'select_service_type';
+              }
+            } else {
+              // No order confirm flow configured — use original buttons
+              await this.sendServiceTypeSelection(phone);
+              state.currentStep = 'select_service_type';
+            }
           }
         }
       }

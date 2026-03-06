@@ -116,7 +116,7 @@ function encryptResponse(responseObj, aesKeyBuffer, initialVectorBuffer) {
 }
 
 // ─── Cache for base64 images (avoid re-downloading on every request) ───
-let imageCache = { services: null, foodTypes: null, statusImages: null, banner: null, websiteBanner: null, offersBanner: null, foodtypeBanner: null, menuBanner: null, ordersBanner: null, accountBanner: null, helpBanner: null, lastFetched: 0 };
+let imageCache = { services: null, foodTypes: null, statusImages: null, banner: null, websiteBanner: null, offersBanner: null, foodtypeBanner: null, menuBanner: null, ordersBanner: null, accountBanner: null, helpBanner: null, orderReviewBanner: null, serviceTypeBanner: null, deliveryOptionImg: null, pickupOptionImg: null, lastFetched: 0 };
 const IMAGE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 async function getFlowImages() {
@@ -140,7 +140,11 @@ async function getFlowImages() {
     menuBannerImg,
     ordersBannerImg,
     accountBannerImg,
-    helpBannerImg
+    helpBannerImg,
+    orderReviewBannerImg,
+    serviceTypeBannerImg,
+    deliveryOptionImgUrl,
+    pickupOptionImgUrl
   ] = await Promise.all([
     chatbotImagesService.getImageUrl('flow_order_food'),
     chatbotImagesService.getImageUrl('flow_my_orders'),
@@ -165,7 +169,11 @@ async function getFlowImages() {
     chatbotImagesService.getImageUrl('flow_menu_banner'),
     chatbotImagesService.getImageUrl('flow_orders_banner'),
     chatbotImagesService.getImageUrl('flow_account_banner'),
-    chatbotImagesService.getImageUrl('flow_help_banner')
+    chatbotImagesService.getImageUrl('flow_help_banner'),
+    chatbotImagesService.getImageUrl('flow_order_review_banner'),
+    chatbotImagesService.getImageUrl('flow_service_type_banner'),
+    chatbotImagesService.getImageUrl('flow_delivery_option'),
+    chatbotImagesService.getImageUrl('flow_pickup_option')
   ]);
 
   // Convert to base64
@@ -179,7 +187,11 @@ async function getFlowImages() {
     menuBannerB64,
     ordersBannerB64,
     accountBannerB64,
-    helpBannerB64
+    helpBannerB64,
+    orderReviewBannerB64,
+    serviceTypeBannerB64,
+    deliveryOptionB64,
+    pickupOptionB64
   ] = await Promise.all([
     toBase64(orderFoodImg), toBase64(myOrdersImg), toBase64(viewOffersImg),
     toBase64(accountDetailsImg), toBase64(visitWebsiteImg),
@@ -192,7 +204,11 @@ async function getFlowImages() {
     toBase64(menuBannerImg),
     toBase64(ordersBannerImg),
     toBase64(accountBannerImg),
-    toBase64(helpBannerImg)
+    toBase64(helpBannerImg),
+    toBase64(orderReviewBannerImg),
+    toBase64(serviceTypeBannerImg),
+    toBase64(deliveryOptionImgUrl),
+    toBase64(pickupOptionImgUrl)
   ]);
 
   const buildItem = (id, title, description, base64Img) => {
@@ -233,6 +249,10 @@ async function getFlowImages() {
     ordersBanner: ordersBannerB64 || null,
     accountBanner: accountBannerB64 || null,
     helpBanner: helpBannerB64 || null,
+    orderReviewBanner: orderReviewBannerB64 || null,
+    serviceTypeBanner: serviceTypeBannerB64 || null,
+    deliveryOptionImg: deliveryOptionImgUrl || null,
+    pickupOptionImg: pickupOptionImgUrl || null,
     lastFetched: now
   };
 
@@ -283,15 +303,74 @@ router.post('/', async (req, res) => {
 
     // ─── INIT — first screen data (called when flow opens) ───
     if (action === 'INIT') {
-      const images = await getFlowImages();
+      // Order Confirmation Flow — build ORDER_REVIEW screen from customer cart
+      if (flow_token?.startsWith('order_confirm_')) {
+        const phone = flow_token.replace('order_confirm_', '');
+        try {
+          const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
+          if (!freshCustomer?.cart?.length) {
+            // Empty cart — close flow
+            response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'empty_cart' } } } };
+          } else {
+            const images = await getFlowImages();
+            const validItems = freshCustomer.cart.filter(ci => ci.menuItem);
+            let total = 0;
 
-      response = {
-        screen: 'SERVICE_SELECT',
-        data: {
-          services: images.services,
-          flow_token: flow_token || 'welcome_service'
+            // Build formatted text for all items
+            const itemLines = validItems.map((ci, idx) => {
+              const mi = ci.menuItem;
+              let displayName = mi.name;
+              let effectivePrice = mi.offerPrice || mi.price;
+              let unitInfo = `${mi.quantity || 1} ${mi.unit || 'piece'}`;
+
+              // Resolve variant pricing
+              if (ci.variantIndex != null && mi.variants?.[ci.variantIndex]) {
+                const variant = mi.variants[ci.variantIndex];
+                if (ci.quantityIndex != null && variant.quantities?.[ci.quantityIndex]) {
+                  const q = variant.quantities[ci.quantityIndex];
+                  effectivePrice = (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : q.price;
+                  displayName = variant.label;
+                  unitInfo = `${q.quantity} ${q.unit}`;
+                } else {
+                  effectivePrice = (variant.offerPrice && variant.offerPrice < variant.price) ? variant.offerPrice : variant.price;
+                  displayName = variant.label;
+                  unitInfo = `${variant.quantity || 1} ${variant.unit || mi.unit || 'piece'}`;
+                }
+              }
+
+              const subtotal = effectivePrice * ci.quantity;
+              total += subtotal;
+
+              return `${idx + 1}. *${displayName}* (${unitInfo})\n   ${ci.quantity} × ₹${effectivePrice} = ₹${subtotal}`;
+            });
+
+            response = {
+              screen: 'ORDER_REVIEW',
+              data: {
+                order_banner: images.orderReviewBanner || '',
+                order_items: itemLines.join('\n\n'),
+                order_total_text: `━━━━━━━━━━━━━━━\n💰 *Total: ₹${total}*`,
+                flow_token
+              }
+            };
+          }
+        } catch (err) {
+          logger.error('[FlowEndpoint] Order confirm INIT error', { phone, error: err.message });
+          response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'init_error' } } } };
         }
-      };
+      }
+      // Welcome Services Flow — default INIT
+      else {
+        const images = await getFlowImages();
+
+        response = {
+          screen: 'SERVICE_SELECT',
+          data: {
+            services: images.services,
+            flow_token: flow_token || 'welcome_service'
+          }
+        };
+      }
     }
 
     // ─── data_exchange — user tapped Confirm on Screen 1 ───
@@ -782,6 +861,58 @@ router.post('/', async (req, res) => {
               }
             }
           };
+        }
+      }
+
+      // Order Confirmation Flow: ORDER_REVIEW → CHOOSE_SERVICE
+      else if (data?.confirm_order_review === 'true') {
+        const token = data?.flow_token || flow_token || '';
+        const phone = token.replace('order_confirm_', '');
+        try {
+          const images = await getFlowImages();
+          const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
+
+          // Fetch cart for order summary
+          const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
+          const validItems = (freshCustomer?.cart || []).filter(ci => ci.menuItem);
+          let total = 0;
+          validItems.forEach(ci => {
+            const mi = ci.menuItem;
+            let price = mi.offerPrice || mi.price;
+            if (ci.variantIndex != null && mi.variants?.[ci.variantIndex]) {
+              const v = mi.variants[ci.variantIndex];
+              if (ci.quantityIndex != null && v.quantities?.[ci.quantityIndex]) {
+                price = (v.quantities[ci.quantityIndex].offerPrice && v.quantities[ci.quantityIndex].offerPrice < v.quantities[ci.quantityIndex].price) ? v.quantities[ci.quantityIndex].offerPrice : v.quantities[ci.quantityIndex].price;
+              } else {
+                price = (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : v.price;
+              }
+            }
+            total += price * ci.quantity;
+          });
+
+          // Convert delivery/pickup images
+          const [deliveryB64, pickupB64] = await Promise.all([
+            toBase64(images.deliveryOptionImg).catch(() => ''),
+            toBase64(images.pickupOptionImg).catch(() => '')
+          ]);
+
+          response = {
+            screen: 'CHOOSE_SERVICE',
+            data: {
+              service_banner: images.serviceTypeBanner || '',
+              delivery_image: deliveryB64 || '',
+              pickup_image: pickupB64 || '',
+              order_summary: `${validItems.length} item${validItems.length > 1 ? 's' : ''} • Total: ₹${total}`,
+              service_options: [
+                { id: 'delivery', title: '🚚 Delivery — To your doorstep' },
+                { id: 'pickup', title: '🏪 Self-Pickup — From restaurant' }
+              ],
+              flow_token: token
+            }
+          };
+        } catch (err) {
+          logger.error('[FlowEndpoint] Order confirm CHOOSE_SERVICE error', { phone, error: err.message });
+          response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token: token, error: 'service_error' } } } };
         }
       }
 

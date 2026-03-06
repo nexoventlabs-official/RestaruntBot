@@ -2680,6 +2680,189 @@ const catalogService = {
     return status === 'PUBLISHED' ? 'published' : 'draft';
   },
 
+  // ==================== ORDER CONFIRMATION FLOW ====================
+
+  /**
+   * Get the Order Confirmation Flow ID (from env).
+   * @returns {string|null}
+   */
+  getOrderConfirmFlowId() {
+    return process.env.WHATSAPP_ORDER_CONFIRM_FLOW_ID || null;
+  },
+
+  /**
+   * Build the Order Confirmation Flow JSON (WhatsApp Flows v7.3, Data API v3.0).
+   * 2 screens: ORDER_REVIEW (cart items as text) → CHOOSE_SERVICE (delivery/pickup with images).
+   * Max 3 images per screen (WhatsApp Flows limit).
+   */
+  buildOrderConfirmFlowJSON() {
+    return {
+      version: '7.3',
+      data_api_version: '3.0',
+      routing_model: {
+        ORDER_REVIEW: ['CHOOSE_SERVICE'],
+        CHOOSE_SERVICE: []
+      },
+      screens: [
+        {
+          id: 'ORDER_REVIEW',
+          title: 'Your Order',
+          data: {
+            order_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
+            },
+            order_items: {
+              type: 'string',
+              __example__: '1. 🍨 Butter Scotch (1 bowl)\n   4 × ₹69 = ₹276\n\n2. 🍗 Chicken Biryani (1 piece)\n   2 × ₹249 = ₹498'
+            },
+            order_total_text: {
+              type: 'string',
+              __example__: '━━━━━━━━━━━━━━━\n💰 Total: ₹276'
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'order_confirm_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'Image',
+                src: '${data.order_banner}',
+                width: 1000,
+                height: 125,
+                'scale-type': 'cover',
+                'alt-text': 'Order Review Banner'
+              },
+              {
+                type: 'TextHeading',
+                text: '📋 Your Order'
+              },
+              {
+                type: 'TextBody',
+                text: '${data.order_items}'
+              },
+              {
+                type: 'TextBody',
+                text: '${data.order_total_text}'
+              },
+              {
+                type: 'Footer',
+                label: 'Choose Delivery Type',
+                'on-click-action': {
+                  name: 'data_exchange',
+                  payload: {
+                    confirm_order_review: 'true',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: 'CHOOSE_SERVICE',
+          title: 'Service Type',
+          terminal: true,
+          success: true,
+          data: {
+            service_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
+            },
+            delivery_image: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
+            },
+            pickup_image: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
+            },
+            order_summary: {
+              type: 'string',
+              __example__: '3 items • Total: ₹276'
+            },
+            service_options: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'delivery', title: '🚚 Delivery - To your doorstep' },
+                { id: 'pickup', title: '🏪 Self-Pickup - From restaurant' }
+              ]
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'order_confirm_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'Image',
+                src: '${data.service_banner}',
+                width: 1000,
+                height: 125,
+                'scale-type': 'cover',
+                'alt-text': 'Service Type Banner'
+              },
+              {
+                type: 'TextHeading',
+                text: '🚚 Choose Service Type'
+              },
+              {
+                type: 'TextBody',
+                text: '${data.order_summary}'
+              },
+              {
+                type: 'Image',
+                src: '${data.delivery_image}',
+                width: 800,
+                height: 400,
+                'scale-type': 'cover',
+                'alt-text': 'Delivery Option'
+              },
+              {
+                type: 'Image',
+                src: '${data.pickup_image}',
+                width: 800,
+                height: 400,
+                'scale-type': 'cover',
+                'alt-text': 'Self-Pickup Option'
+              },
+              {
+                type: 'RadioButtonsGroup',
+                name: 'service_type',
+                label: 'Select Service Type',
+                required: true,
+                'data-source': '${data.service_options}'
+              },
+              {
+                type: 'Footer',
+                label: 'Place Order',
+                'on-click-action': {
+                  name: 'complete',
+                  payload: {
+                    selected_service_type: '${form.service_type}',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    };
+  },
+
   // ==================== ACCOUNT DETAILS FLOW ====================
 
   /**

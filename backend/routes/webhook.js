@@ -436,6 +436,15 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       messageType = 'button'; // Treat as button press for chatbot routing
                       logger.info('Flow category selected', { category: responseData.selected_category, selectedId, isOrderFlow });
                     }
+                    // Order Confirmation flow — user chose delivery/pickup
+                    else if (responseData.flow_token?.startsWith('order_confirm_') && responseData.selected_service_type) {
+                      const serviceType = responseData.selected_service_type; // 'delivery' or 'pickup'
+                      // Route as button press matching existing service_delivery / service_pickup handlers
+                      selectedId = serviceType === 'pickup' ? 'service_pickup' : 'service_delivery';
+                      text = selectedId;
+                      messageType = 'button';
+                      logger.info('Order confirm flow: service type selected', { phone, serviceType, selectedId });
+                    }
                     // Welcome service selection flow
                     else if (responseData.flow_token?.startsWith('welcome_service_') && responseData.selected_service) {
                       const service = responseData.selected_service;
