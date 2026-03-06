@@ -2719,12 +2719,13 @@ const catalogService = {
                 properties: {
                   id: { type: 'string' },
                   title: { type: 'string' },
-                  description: { type: 'string' }
+                  description: { type: 'string' },
+                  image: { type: 'string' }
                 }
               },
               __example__: [
-                { id: 'item_0', title: 'Butter Scotch (1 bowl)', description: '4 × ₹69 = ₹276' },
-                { id: 'item_1', title: 'Chicken Biryani (1 piece)', description: '2 × ₹249 = ₹498' }
+                { id: 'item_0', title: 'Butter Scotch (1 bowl)', description: '4 × ₹69 = ₹276', image: 'iVBORw0KGgo' },
+                { id: 'item_1', title: 'Chicken Biryani (1 piece)', description: '2 × ₹249 = ₹498', image: 'iVBORw0KGgo' }
               ]
             },
             order_total_text: {

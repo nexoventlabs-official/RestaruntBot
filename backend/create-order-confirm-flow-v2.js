@@ -9,7 +9,7 @@ async function main() {
   const metaCloud = require('./services/metaCloud');
   const catalogService = require('./services/catalogService');
 
-  const FLOW_NAME = 'JRB Order Confirm v5';
+  const FLOW_NAME = 'JRB Order Confirm v6';
   const ENDPOINT_URI = 'https://restaruntbot.onrender.com/api/whatsapp-flow';
   const TOKEN = process.env.META_ACCESS_TOKEN;
 
