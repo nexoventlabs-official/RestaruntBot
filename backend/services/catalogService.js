@@ -2712,13 +2712,24 @@ const catalogService = {
               type: 'string',
               __example__: 'iVBORw0KGgo'
             },
-            order_items: {
-              type: 'string',
-              __example__: '1. 🍨 Butter Scotch (1 bowl)\n   4 × ₹69 = ₹276\n\n2. 🍗 Chicken Biryani (1 piece)\n   2 × ₹249 = ₹498'
+            cart_items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'item_0', title: 'Butter Scotch (1 bowl)', description: '4 × ₹69 = ₹276' },
+                { id: 'item_1', title: 'Chicken Biryani (1 piece)', description: '2 × ₹249 = ₹498' }
+              ]
             },
             order_total_text: {
               type: 'string',
-              __example__: '━━━━━━━━━━━━━━━\n💰 Total: ₹276'
+              __example__: '━━━━━━━━━━━━━━━\n💰 Total: ₹774'
             },
             flow_token: {
               type: 'string',
@@ -2741,8 +2752,11 @@ const catalogService = {
                 text: '📋 Your Order'
               },
               {
-                type: 'TextBody',
-                text: '${data.order_items}'
+                type: 'RadioButtonsGroup',
+                name: 'selected_item',
+                label: 'Order Items',
+                required: false,
+                'data-source': '${data.cart_items}'
               },
               {
                 type: 'TextBody',

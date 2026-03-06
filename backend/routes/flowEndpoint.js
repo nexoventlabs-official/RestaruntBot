@@ -313,11 +313,12 @@ router.post('/', async (req, res) => {
             response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'empty_cart' } } } };
           } else {
             const images = await getFlowImages();
+            const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
             const validItems = freshCustomer.cart.filter(ci => ci.menuItem);
             let total = 0;
 
-            // Build formatted text for all items
-            const itemLines = validItems.map((ci, idx) => {
+            // Build cart items as data-source array with images (like food type icons)
+            const cartItems = await Promise.all(validItems.map(async (ci, idx) => {
               const mi = ci.menuItem;
               let displayName = mi.name;
               let effectivePrice = mi.offerPrice || mi.price;
@@ -341,15 +342,31 @@ router.post('/', async (req, res) => {
               const subtotal = effectivePrice * ci.quantity;
               total += subtotal;
 
-              return `${idx + 1}. *${displayName}* (${unitInfo})\n   ${ci.quantity} × ₹${effectivePrice} = ₹${subtotal}`;
-            });
+              // Build item entry with image thumbnail
+              const entry = {
+                id: `item_${idx}`,
+                title: `${displayName} (${unitInfo})`,
+                description: `${ci.quantity} × ₹${effectivePrice} = ₹${subtotal}`
+              };
+
+              // Convert item image to base64 for thumbnail
+              if (mi.image) {
+                try {
+                  const thumbUrl = mi.image.replace('/upload/', '/upload/c_fill,w_100,h_100,q_70/');
+                  const b64 = await toBase64(thumbUrl);
+                  if (b64) entry.image = b64;
+                } catch (e) { /* skip image */ }
+              }
+
+              return entry;
+            }));
 
             response = {
               screen: 'ORDER_REVIEW',
               data: {
                 order_banner: images.orderReviewBanner || '',
-                order_items: itemLines.join('\n\n'),
-                order_total_text: `━━━━━━━━━━━━━━━\n💰 *Total: ₹${total}*`,
+                cart_items: cartItems,
+                order_total_text: `━━━━━━━━━━━━━━━\n💰 Total: ₹${total}`,
                 flow_token
               }
             };
