@@ -8686,15 +8686,6 @@ const chatbot = {
             phone, catalogId, '🛒 Your Cart', bodyText,
             cartSections.sections, 'Perivi Hotel'
           );
-          
-          // After catalog succeeds, send image-based cart message
-          const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
-          await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [
-            { id: 'review_pay', text: 'Place Order ' },
-            { id: 'add_more', text: 'Add More' },
-            { id: 'clear_cart', text: 'Clear Cart' }
-          ]);
-          return;
         } catch (sendErr) {
           // On Meta #131009 (invalid parameter), force re-sync items to Meta and retry once
           const errCode = sendErr.response?.data?.error?.code;
@@ -8713,15 +8704,6 @@ const chatbot = {
                   phone, catalogId, '🛒 Your Cart', bodyText,
                   cartSections.sections, 'Perivi Hotel'
                 );
-                
-                // After retry succeeds, send image-based cart message
-                const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
-                await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [
-                  { id: 'review_pay', text: 'Place Order ' },
-                  { id: 'add_more', text: 'Add More' },
-                  { id: 'clear_cart', text: 'Clear Cart' }
-                ]);
-                return;
               } catch (retryErr) {
                 logger.error('Product list retry also failed', { phone, error: retryErr.message });
               }
@@ -8733,7 +8715,32 @@ const chatbot = {
       }
     }
 
-    // Fallback: text-based cart (if catalog failed or not enabled)
+    // Send Cart Review Flow (dynamic cart items with images + Place Order / Add More / Clear Cart)
+    const cartReviewFlowId = catalogService.getCartReviewFlowId();
+    if (cartReviewFlowId) {
+      try {
+        const metaCloud = require('./metaCloud');
+        const flowToken = `cart_review_${phone}`;
+        const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
+        await metaCloud.sendFlowMessage(phone, {
+          flowId: cartReviewFlowId,
+          flowCta: 'View Cart',
+          headerImageUrl: viewCartImageUrl || undefined,
+          headerText: 'Your Cart',
+          bodyText: cartMsg,
+          footerText: 'Perivi Hotel',
+          flowToken,
+          flowAction: 'data_exchange',
+          mode: catalogService.getCartReviewFlowMode() || 'draft'
+        });
+        logger.info('Sent cart review flow', { phone, flowId: cartReviewFlowId });
+        return;
+      } catch (flowErr) {
+        logger.warn('Cart review flow failed, falling back to buttons', { phone, error: flowErr.message });
+      }
+    }
+
+    // Fallback: text-based cart with reply buttons (if flow not available)
     const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
     await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [
       { id: 'review_pay', text: 'Place Order ' },

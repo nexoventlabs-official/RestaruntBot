@@ -226,6 +226,20 @@ const connectMongoDB = async () => {
     } catch (flowErr) {
       logger.warn('WhatsApp Address Flow setup skipped', { error: flowErr.message });
     }
+
+    // Initialize WhatsApp Flows (cart review)
+    try {
+      const catalogService = require('./services/catalogService');
+      if (!catalogService.getCartReviewFlowId()) {
+        logger.info('Setting up WhatsApp Cart Review Flow...');
+        const result = await catalogService.setupCartReviewFlow();
+        logger.info('WhatsApp Cart Review Flow initialized', { flowId: result.flowId, status: result.status });
+      } else {
+        logger.info('WhatsApp Cart Review Flow already configured', { flowId: catalogService.getCartReviewFlowId() });
+      }
+    } catch (flowErr) {
+      logger.warn('WhatsApp Cart Review Flow setup skipped', { error: flowErr.message });
+    }
   } catch (err) {
     mongoRetryCount++;
     const delayMs = Math.min(MONGO_BASE_DELAY * Math.pow(2, Math.min(mongoRetryCount - 1, 5)), 160000);

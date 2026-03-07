@@ -490,6 +490,87 @@ router.post('/', async (req, res) => {
           response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'payment_init_error' } } } };
         }
       }
+      // Cart Review Flow — build CART_REVIEW screen from customer cart
+      else if (flow_token?.startsWith('cart_review_')) {
+        const phone = flow_token.replace('cart_review_', '');
+        try {
+          const CART_EXPIRY_MS = 30 * 60 * 1000;
+          const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
+          const now = Date.now();
+          const validItems = (freshCustomer?.cart || []).filter(ci => {
+            if (!ci.menuItem) return false;
+            if (ci.addedAt && (now - new Date(ci.addedAt).getTime()) > CART_EXPIRY_MS) return false;
+            return true;
+          });
+
+          if (!validItems.length) {
+            response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, cart_empty: 'true' } } } };
+          } else {
+            const images = await getFlowImages();
+            const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
+            let total = 0;
+
+            const cartItems = await Promise.all(validItems.map(async (ci, idx) => {
+              const mi = ci.menuItem;
+              let displayName = mi.name;
+              let effectivePrice = mi.offerPrice || mi.price;
+              let unitInfo = `${mi.quantity || 1} ${mi.unit || 'piece'}`;
+
+              if (ci.variantIndex != null && mi.variants?.[ci.variantIndex]) {
+                const variant = mi.variants[ci.variantIndex];
+                if (ci.quantityIndex != null && variant.quantities?.[ci.quantityIndex]) {
+                  const q = variant.quantities[ci.quantityIndex];
+                  effectivePrice = (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : q.price;
+                  displayName = variant.label;
+                  unitInfo = `${q.quantity} ${q.unit}`;
+                } else {
+                  effectivePrice = (variant.offerPrice && variant.offerPrice < variant.price) ? variant.offerPrice : variant.price;
+                  displayName = variant.label;
+                  unitInfo = `${variant.quantity || 1} ${variant.unit || mi.unit || 'piece'}`;
+                }
+              }
+
+              const subtotal = effectivePrice * ci.quantity;
+              total += subtotal;
+
+              const entry = {
+                id: `item_${idx}`,
+                title: `${displayName} (${unitInfo})`,
+                description: `${ci.quantity} × ₹${effectivePrice} = ₹${subtotal}`
+              };
+
+              // Variant image or item image
+              const imgUrl = (ci.variantIndex != null && mi.variants?.[ci.variantIndex]?.image) || mi.image;
+              if (imgUrl) {
+                try {
+                  const thumbUrl = imgUrl.replace('/upload/', '/upload/c_fill,w_100,h_100,q_70/');
+                  const b64 = await toBase64(thumbUrl);
+                  if (b64) entry.image = b64;
+                } catch (e) { /* skip */ }
+              }
+
+              return entry;
+            }));
+
+            // Calculate earliest expiry
+            const earliestAdded = Math.min(...validItems.map(ci => new Date(ci.addedAt).getTime()));
+            const expiresIn = Math.max(0, Math.round((earliestAdded + CART_EXPIRY_MS - now) / 60000));
+
+            response = {
+              screen: 'CART_REVIEW',
+              data: {
+                cart_banner: images.cartBanner || '',
+                cart_items: cartItems,
+                cart_summary: `━━━━━━━━━━━━━━━\n💰 Total: ₹${total}\n⏳ Cart expires in ${expiresIn} min`,
+                flow_token
+              }
+            };
+          }
+        } catch (err) {
+          logger.error('[FlowEndpoint] Cart review INIT error', { phone, error: err.message });
+          response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'cart_init_error' } } } };
+        }
+      }
       // Welcome Services Flow — default INIT
       else {
         const images = await getFlowImages();
@@ -1223,6 +1304,60 @@ router.post('/', async (req, res) => {
         } catch (err) {
           logger.error('[FlowEndpoint] Order confirm CHOOSE_SERVICE error', { phone, error: err.message });
           response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token: token, error: 'service_error' } } } };
+        }
+      }
+
+      // Cart Review Flow: CART_REVIEW → CART_ACTIONS
+      else if (data?.confirm_cart_review === 'true') {
+        const token = data?.flow_token || flow_token || '';
+        const phone = token.replace('cart_review_', '');
+        try {
+          const images = await getFlowImages();
+
+          const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
+          const CART_EXPIRY_MS = 30 * 60 * 1000;
+          const now = Date.now();
+          const validItems = (freshCustomer?.cart || []).filter(ci => {
+            if (!ci.menuItem) return false;
+            if (ci.addedAt && (now - new Date(ci.addedAt).getTime()) > CART_EXPIRY_MS) return false;
+            return true;
+          });
+
+          let total = 0;
+          validItems.forEach(ci => {
+            const mi = ci.menuItem;
+            let price = mi.offerPrice || mi.price;
+            if (ci.variantIndex != null && mi.variants?.[ci.variantIndex]) {
+              const v = mi.variants[ci.variantIndex];
+              if (ci.quantityIndex != null && v.quantities?.[ci.quantityIndex]) {
+                price = (v.quantities[ci.quantityIndex].offerPrice && v.quantities[ci.quantityIndex].offerPrice < v.quantities[ci.quantityIndex].price) ? v.quantities[ci.quantityIndex].offerPrice : v.quantities[ci.quantityIndex].price;
+              } else {
+                price = (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : v.price;
+              }
+            }
+            total += price * ci.quantity;
+          });
+
+          const cartActions = [
+            { id: 'place_order', title: 'Place Order', description: 'Proceed to checkout' },
+            { id: 'add_more', title: 'Add More', description: 'Browse menu for more items' },
+            { id: 'clear_cart', title: 'Clear Cart', description: 'Remove all items' }
+          ];
+          if (images.cartPlaceOrderImg) cartActions[0].image = images.cartPlaceOrderImg;
+          if (images.cartAddMoreImg) cartActions[1].image = images.cartAddMoreImg;
+          if (images.cartClearImg) cartActions[2].image = images.cartClearImg;
+
+          response = {
+            screen: 'CART_ACTIONS',
+            data: {
+              cart_actions: cartActions,
+              cart_info: `🛒 ${validItems.length} item${validItems.length !== 1 ? 's' : ''} • Total: ₹${total}`,
+              flow_token: token
+            }
+          };
+        } catch (err) {
+          logger.error('[FlowEndpoint] Cart review CART_ACTIONS error', { phone, error: err.message });
+          response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token: token, error: 'cart_actions_error' } } } };
         }
       }
 

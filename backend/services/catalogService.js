@@ -2997,6 +2997,233 @@ const catalogService = {
     };
   },
 
+  // ==================== CART REVIEW FLOW ====================
+
+  getCartReviewFlowId() {
+    return process.env.WHATSAPP_CART_REVIEW_FLOW_ID || null;
+  },
+
+  getCartReviewFlowMode() {
+    const status = process.env.WHATSAPP_CART_REVIEW_FLOW_STATUS || 'DRAFT';
+    if (status === 'BLOCKED') return null;
+    return status === 'PUBLISHED' ? 'published' : 'draft';
+  },
+
+  /**
+   * Build the Cart Review Flow JSON (WhatsApp Flows v7.3, Data API v3.0).
+   * 2 screens: CART_REVIEW (cart items with images) → CART_ACTIONS (Place Order / Add More / Clear Cart with images).
+   */
+  buildCartReviewFlowJSON() {
+    return {
+      version: '7.3',
+      data_api_version: '3.0',
+      routing_model: {
+        CART_REVIEW: ['CART_ACTIONS'],
+        CART_ACTIONS: []
+      },
+      screens: [
+        {
+          id: 'CART_REVIEW',
+          title: 'Your Cart',
+          data: {
+            cart_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
+            },
+            cart_items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'item_0', title: 'Butter Scotch (1 bowl)', description: '1 × ₹69 = ₹69', image: 'iVBORw0KGgo' }
+              ]
+            },
+            cart_summary: {
+              type: 'string',
+              __example__: '━━━━━━━━━━━━━━━\n💰 Total: ₹69\n⏳ Cart expires in 28 min'
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'cart_review_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'Image',
+                src: '${data.cart_banner}',
+                width: 1000,
+                height: 125,
+                'scale-type': 'cover',
+                'alt-text': 'Cart Banner'
+              },
+              {
+                type: 'TextHeading',
+                text: '🛒 Your Cart'
+              },
+              {
+                type: 'RadioButtonsGroup',
+                name: 'selected_cart_item',
+                label: 'Cart Items',
+                required: false,
+                'data-source': '${data.cart_items}'
+              },
+              {
+                type: 'TextBody',
+                text: '${data.cart_summary}'
+              },
+              {
+                type: 'Footer',
+                label: 'Continue',
+                'on-click-action': {
+                  name: 'data_exchange',
+                  payload: {
+                    confirm_cart_review: 'true',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: 'CART_ACTIONS',
+          title: 'Cart Options',
+          terminal: true,
+          success: true,
+          data: {
+            cart_actions: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'place_order', title: 'Place Order', description: 'Proceed to checkout', image: 'iVBORw0KGgo' },
+                { id: 'add_more', title: 'Add More', description: 'Browse menu for more items', image: 'iVBORw0KGgo' },
+                { id: 'clear_cart', title: 'Clear Cart', description: 'Remove all items', image: 'iVBORw0KGgo' }
+              ]
+            },
+            cart_info: {
+              type: 'string',
+              __example__: '🛒 1 item • Total: ₹69'
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'cart_review_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'TextHeading',
+                text: '✅ What would you like to do?'
+              },
+              {
+                type: 'TextBody',
+                text: '${data.cart_info}'
+              },
+              {
+                type: 'RadioButtonsGroup',
+                name: 'selected_cart_action',
+                label: 'Choose an option',
+                required: true,
+                'data-source': '${data.cart_actions}'
+              },
+              {
+                type: 'Footer',
+                label: 'Confirm',
+                'on-click-action': {
+                  name: 'complete',
+                  payload: {
+                    selected_cart_action: '${form.selected_cart_action}',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    };
+  },
+
+  /**
+   * Create and publish the Cart Review Flow.
+   */
+  async setupCartReviewFlow() {
+    const metaCloud = require('./metaCloud');
+
+    const flows = await metaCloud.getFlows();
+    const existing = flows.find(f => f.name === 'JRB Cart Review v1' && f.status === 'PUBLISHED');
+
+    if (existing) {
+      logger.info('Cart Review Flow already published', { flowId: existing.id });
+      process.env.WHATSAPP_CART_REVIEW_FLOW_ID = existing.id;
+      process.env.WHATSAPP_CART_REVIEW_FLOW_STATUS = 'PUBLISHED';
+      return { flowId: existing.id, status: 'already_published' };
+    }
+
+    const draft = flows.find(f => f.name === 'JRB Cart Review v1' && f.status === 'DRAFT');
+    if (draft) {
+      logger.info('Cart Review Flow exists as draft, updating and publishing', { flowId: draft.id });
+      try {
+        const flowJson = this.buildCartReviewFlowJSON();
+        await metaCloud.updateFlowJSON(draft.id, flowJson);
+        await metaCloud.publishFlow(draft.id);
+        process.env.WHATSAPP_CART_REVIEW_FLOW_ID = draft.id;
+        process.env.WHATSAPP_CART_REVIEW_FLOW_STATUS = 'PUBLISHED';
+        return { flowId: draft.id, status: 'published' };
+      } catch (pubErr) {
+        logger.warn('Could not publish Cart Review Flow draft', {
+          flowId: draft.id,
+          error: pubErr.response?.data?.error?.message || pubErr.message
+        });
+        process.env.WHATSAPP_CART_REVIEW_FLOW_ID = draft.id;
+        process.env.WHATSAPP_CART_REVIEW_FLOW_STATUS = 'DRAFT';
+        return { flowId: draft.id, status: 'draft' };
+      }
+    }
+
+    // Create new
+    const backendUrl = process.env.BACKEND_URL || 'https://restaruntbot.onrender.com';
+    const endpointUri = `${backendUrl}/api/whatsapp-flow`;
+    const createResult = await metaCloud.createFlow('JRB Cart Review v1', ['OTHER'], { endpointUri });
+    const flowId = createResult.id;
+    const flowJson = this.buildCartReviewFlowJSON();
+    await metaCloud.updateFlowJSON(flowId, flowJson);
+
+    try {
+      await metaCloud.publishFlow(flowId);
+      process.env.WHATSAPP_CART_REVIEW_FLOW_ID = flowId;
+      process.env.WHATSAPP_CART_REVIEW_FLOW_STATUS = 'PUBLISHED';
+      logger.info('Cart Review Flow created and published', { flowId });
+      return { flowId, status: 'created_and_published' };
+    } catch (pubErr) {
+      logger.warn('Cart Review Flow created but publish failed', {
+        flowId,
+        error: pubErr.response?.data?.error?.message || pubErr.message
+      });
+      process.env.WHATSAPP_CART_REVIEW_FLOW_ID = flowId;
+      process.env.WHATSAPP_CART_REVIEW_FLOW_STATUS = 'DRAFT';
+      return { flowId, status: 'created_as_draft' };
+    }
+  },
+
   // ==================== PAYMENT METHOD FLOW ====================
 
   getPaymentFlowId() {

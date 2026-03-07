@@ -464,6 +464,39 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       messageType = 'button';
                       logger.info('Payment flow: method selected', { phone, payment, serviceType, selectedId });
                     }
+                    // Cart Review flow — user chose Place Order / Add More / Clear Cart
+                    else if (responseData.flow_token?.startsWith('cart_review_') && responseData.selected_cart_action) {
+                      const userPhone = responseData.flow_token.replace('cart_review_', '');
+                      const action = responseData.selected_cart_action;
+
+                      if (action === 'place_order') {
+                        selectedId = 'cart_place_order';
+                        text = 'cart_place_order';
+                        messageType = 'button';
+                        logger.info('Cart review flow: place order', { phone: userPhone });
+                      } else if (action === 'add_more') {
+                        selectedId = 'order_food';
+                        text = 'order_food';
+                        messageType = 'button';
+                        logger.info('Cart review flow: add more', { phone: userPhone });
+                      } else if (action === 'clear_cart') {
+                        try {
+                          const Customer = require('../models/Customer');
+                          await Customer.findOneAndUpdate({ phone: userPhone }, { $set: { cart: [] } });
+                          await whatsapp.sendMessage(userPhone, '🗑️ *Cart Cleared!*\n\nAll items have been removed from your cart.\nType "menu" to start a new order.');
+                        } catch (clearErr) {
+                          logger.error('Cart review flow: clear cart failed', { error: clearErr.message, phone: userPhone });
+                          await whatsapp.sendMessage(userPhone, '❌ Failed to clear cart. Please try again.');
+                        }
+                        return res.sendStatus(200);
+                      }
+                    }
+                    // Cart Review flow — empty cart closed flow
+                    else if (responseData.flow_token?.startsWith('cart_review_') && responseData.cart_empty === 'true') {
+                      const userPhone = responseData.flow_token.replace('cart_review_', '');
+                      await whatsapp.sendMessage(userPhone, '🛒 *Your cart is empty!*\n\nBrowse our menu to add items.\nType "menu" or tap Order Food to get started.');
+                      return res.sendStatus(200);
+                    }
                     // Welcome service selection flow
                     else if (responseData.flow_token?.startsWith('welcome_service_') && responseData.selected_service) {
                       const service = responseData.selected_service;
