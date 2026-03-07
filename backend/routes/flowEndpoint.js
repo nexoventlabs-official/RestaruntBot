@@ -1034,6 +1034,138 @@ router.post('/', async (req, res) => {
         }
       }
 
+      // CART_ACTIONS screen: User chose place_order/add_more/clear_cart → navigate dynamically
+      else if (screen === 'CART_ACTIONS') {
+        const token = data?.flow_token || flow_token || 'welcome_service';
+        const phone = token.replace('welcome_service_', '');
+        const cartAction = data?.selected_cart_action;
+
+        if (cartAction === 'place_order') {
+          // Place Order → show CHOOSE_SERVICE with delivery/pickup options
+          try {
+            const images = await getFlowImages();
+            const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
+
+            const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
+            const CART_EXPIRY_MS = 30 * 60 * 1000;
+            const now = Date.now();
+            const validItems = (freshCustomer?.cart || []).filter(ci => {
+              if (!ci.menuItem) return false;
+              if (ci.addedAt && (now - new Date(ci.addedAt).getTime()) > CART_EXPIRY_MS) return false;
+              return true;
+            });
+
+            let total = 0;
+            validItems.forEach(ci => {
+              const mi = ci.menuItem;
+              let price = mi.offerPrice || mi.price;
+              if (ci.variantIndex != null && mi.variants?.[ci.variantIndex]) {
+                const v = mi.variants[ci.variantIndex];
+                if (ci.quantityIndex != null && v.quantities?.[ci.quantityIndex]) {
+                  const q = v.quantities[ci.quantityIndex];
+                  price = (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : q.price;
+                } else {
+                  price = (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : v.price;
+                }
+              }
+              total += price * ci.quantity;
+            });
+
+            const [deliveryB64, pickupB64] = await Promise.all([
+              toBase64(images.deliveryOptionImg).catch(() => ''),
+              toBase64(images.pickupOptionImg).catch(() => '')
+            ]);
+
+            const serviceOptions = [
+              { id: 'delivery', title: 'Delivery', description: 'To your doorstep' },
+              { id: 'pickup', title: 'Self-Pickup', description: 'From restaurant' }
+            ];
+            if (deliveryB64) serviceOptions[0].image = deliveryB64;
+            if (pickupB64) serviceOptions[1].image = pickupB64;
+
+            response = {
+              screen: 'CHOOSE_SERVICE',
+              data: {
+                service_banner: images.serviceTypeBanner || '',
+                order_summary: `${validItems.length} item${validItems.length > 1 ? 's' : ''} • Total: ₹${total}`,
+                service_options: serviceOptions,
+                flow_token: token
+              }
+            };
+          } catch (err) {
+            logger.error('[FlowEndpoint] Welcome CHOOSE_SERVICE error', { phone, error: err.message });
+            response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token: token, selected_service: 'my_cart', error: 'service_error' } } } };
+          }
+        } else if (cartAction === 'add_more') {
+          // Add More → show MENU_CATEGORIES with all available menu items
+          try {
+            const images = await getFlowImages();
+            const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
+
+            const allItems = await MenuItem.find({ available: true, isPaused: { $ne: true } })
+              .select('name image variants price offerPrice')
+              .lean();
+
+            const categoryItems = await Promise.all(allItems.slice(0, 10).map(async (item) => {
+              let desc;
+              if (item.variants && item.variants.length > 0) {
+                desc = `${item.variants.length} variant${item.variants.length > 1 ? 's' : ''}`;
+              } else {
+                desc = `₹${item.offerPrice || item.price}`;
+              }
+              const catItem = {
+                id: item._id.toString(),
+                title: item.name.substring(0, 30),
+                description: desc
+              };
+              if (item.image) {
+                const b64 = await toBase64(item.image).catch(() => '');
+                if (b64) catItem.image = b64;
+              }
+              return catItem;
+            }));
+
+            if (categoryItems.length > 0) {
+              response = {
+                screen: 'MENU_CATEGORIES',
+                data: {
+                  menu_banner: images.menuBanner || '',
+                  categories: categoryItems,
+                  selected_service: 'my_cart',
+                  selected_food_type: 'food_all',
+                  flow_token: token
+                }
+              };
+            } else {
+              response = {
+                screen: 'SUCCESS',
+                data: { extension_message_response: { params: { flow_token: token, selected_service: 'my_cart', selected_cart_action: 'add_more', no_items: 'true' } } }
+              };
+            }
+          } catch (err) {
+            logger.error('[FlowEndpoint] Welcome MENU_CATEGORIES error', { phone, error: err.message });
+            response = {
+              screen: 'SUCCESS',
+              data: { extension_message_response: { params: { flow_token: token, selected_service: 'my_cart', selected_cart_action: 'add_more' } } }
+            };
+          }
+        } else {
+          // clear_cart → close flow, webhook handles
+          response = {
+            screen: 'SUCCESS',
+            data: {
+              extension_message_response: {
+                params: {
+                  flow_token: token,
+                  selected_service: 'my_cart',
+                  selected_cart_action: cartAction
+                }
+              }
+            }
+          };
+        }
+      }
+
       // Screen 3: User selected an order on MY_ORDERS and tapped View Order → show ORDER_DETAILS
       else if (screen === 'MY_ORDERS') {
         const selectedOrderId = data?.selected_order;

@@ -2008,7 +2008,8 @@ const catalogService = {
         'MY_ORDERS': ['ORDER_DETAILS'],
         'ORDER_DETAILS': [],
         'MY_CART': ['CART_ACTIONS'],
-        'CART_ACTIONS': [],
+        'CART_ACTIONS': ['CHOOSE_SERVICE', 'MENU_CATEGORIES'],
+        'CHOOSE_SERVICE': [],
         'VIEW_OFFERS': [],
         'ACCOUNT_DETAILS': [],
         'VISIT_WEBSITE': [],
@@ -2476,8 +2477,6 @@ const catalogService = {
         {
           id: 'CART_ACTIONS',
           title: 'Cart Options',
-          terminal: true,
-          success: true,
           data: {
             cart_actions: {
               type: 'array',
@@ -2525,10 +2524,85 @@ const catalogService = {
                 type: 'Footer',
                 label: 'Confirm',
                 'on-click-action': {
+                  name: 'data_exchange',
+                  payload: {
+                    selected_cart_action: '${form.selected_cart_action}',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: 'CHOOSE_SERVICE',
+          title: 'Service Type',
+          terminal: true,
+          success: true,
+          data: {
+            service_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
+            },
+            order_summary: {
+              type: 'string',
+              __example__: '3 items • Total: ₹276'
+            },
+            service_options: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'delivery', title: 'Delivery', description: 'To your doorstep', image: 'iVBORw0KGgo' },
+                { id: 'pickup', title: 'Self-Pickup', description: 'From restaurant', image: 'iVBORw0KGgo' }
+              ]
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'welcome_service_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'Image',
+                src: '${data.service_banner}',
+                width: 1000,
+                height: 125,
+                'scale-type': 'cover',
+                'alt-text': 'Service Type Banner'
+              },
+              {
+                type: 'TextHeading',
+                text: '🚚 Choose Service Type'
+              },
+              {
+                type: 'TextBody',
+                text: '${data.order_summary}'
+              },
+              {
+                type: 'RadioButtonsGroup',
+                name: 'service_type',
+                label: 'Select Service Type',
+                required: true,
+                'data-source': '${data.service_options}'
+              },
+              {
+                type: 'Footer',
+                label: 'Place Order',
+                'on-click-action': {
                   name: 'complete',
                   payload: {
                     selected_service: 'my_cart',
-                    selected_cart_action: '${form.selected_cart_action}',
+                    selected_service_type: '${form.service_type}',
                     flow_token: '${data.flow_token}'
                   }
                 }

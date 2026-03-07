@@ -627,18 +627,21 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           return res.sendStatus(200);
                         }
                         
-                        if (responseData.selected_cart_action === 'place_order') {
-                          // Place Order → trigger service type selection (same as order_food checkout)
-                          selectedId = 'cart_place_order';
-                          text = 'cart_place_order';
+                        if (responseData.selected_service_type) {
+                          // CHOOSE_SERVICE completed → route to delivery/pickup
+                          const serviceType = responseData.selected_service_type;
+                          selectedId = serviceType === 'pickup' ? 'service_pickup' : 'service_delivery';
+                          text = selectedId;
                           messageType = 'button';
-                          logger.info('Flow: My Cart - place order', { phone: userPhone });
-                        } else if (responseData.selected_cart_action === 'add_more') {
-                          // Add More → trigger order food flow
-                          selectedId = 'order_food';
-                          text = 'order_food';
+                          logger.info('Flow: My Cart - service type selected', { phone: userPhone, serviceType });
+                        } else if (responseData.selected_category) {
+                          // MENU_CATEGORIES completed → route to menu item
+                          const menuItemId = responseData.selected_category;
+                          const foodPref = responseData.selected_food_type ? responseData.selected_food_type.replace('food_', '') : 'all';
+                          selectedId = `flow_order_${foodPref}_${menuItemId}`;
+                          text = selectedId;
                           messageType = 'button';
-                          logger.info('Flow: My Cart - add more items', { phone: userPhone });
+                          logger.info('Flow: My Cart - category selected for add more', { phone: userPhone, category: menuItemId });
                         } else if (responseData.selected_cart_action === 'clear_cart') {
                           // Clear Cart → clear customer cart and confirm
                           try {
