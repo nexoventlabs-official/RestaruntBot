@@ -132,6 +132,7 @@ async function getFlowImages() {
   // Fetch all image URLs (services + food types + order statuses + banners)
   const [
     orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, visitWebsiteImg, helpSupportImg,
+    myCartImg, cartBannerImg, cartPlaceOrderImg, cartAddMoreImg, cartClearImg,
     allFoodImg, vegImg, nonvegImg, eggImg,
     pendingImg, confirmedImg, preparingImg, readyImg, outForDeliveryImg, deliveredImg, cancelledImg,
     websiteBannerImg,
@@ -158,6 +159,11 @@ async function getFlowImages() {
     chatbotImagesService.getImageUrl('flow_account_details'),
     chatbotImagesService.getImageUrl('flow_visit_website'),
     chatbotImagesService.getImageUrl('flow_help_support'),
+    chatbotImagesService.getImageUrl('flow_my_cart'),
+    chatbotImagesService.getImageUrl('flow_cart_banner'),
+    chatbotImagesService.getImageUrl('flow_cart_place_order'),
+    chatbotImagesService.getImageUrl('flow_cart_add_more'),
+    chatbotImagesService.getImageUrl('flow_cart_clear'),
     chatbotImagesService.getImageUrl('flow_food_all'),
     chatbotImagesService.getImageUrl('flow_food_veg'),
     chatbotImagesService.getImageUrl('flow_food_nonveg'),
@@ -191,6 +197,7 @@ async function getFlowImages() {
   // Convert to base64
   const [
     orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, visitWebsiteB64, helpSupportB64,
+    myCartB64, cartBannerB64, cartPlaceOrderB64, cartAddMoreB64, cartClearB64,
     allFoodB64, vegB64, nonvegB64, eggB64,
     pendingB64, confirmedB64, preparingB64, readyB64, outForDeliveryB64, deliveredB64, cancelledB64,
     websiteBannerB64,
@@ -213,7 +220,9 @@ async function getFlowImages() {
   ] = await Promise.all([
     toBase64(orderFoodImg), toBase64(myOrdersImg), toBase64(viewOffersImg),
     toBase64(accountDetailsImg), toBase64(visitWebsiteImg),
-    toBase64(helpSupportImg), toBase64(allFoodImg), toBase64(vegImg), toBase64(nonvegImg), toBase64(eggImg),
+    toBase64(helpSupportImg), toBase64(myCartImg),
+    toBase64(cartBannerImg), toBase64(cartPlaceOrderImg), toBase64(cartAddMoreImg), toBase64(cartClearImg),
+    toBase64(allFoodImg), toBase64(vegImg), toBase64(nonvegImg), toBase64(eggImg),
     toBase64(pendingImg), toBase64(confirmedImg), toBase64(preparingImg),
     toBase64(readyImg), toBase64(outForDeliveryImg), toBase64(deliveredImg), toBase64(cancelledImg),
     toBase64(websiteBannerImg),
@@ -244,6 +253,7 @@ async function getFlowImages() {
   imageCache = {
     services: [
       buildItem('order_food', 'Order Food', 'Browse our menu and place an order', orderFoodB64),
+      buildItem('my_cart', 'My Cart', 'View your cart items', myCartB64),
       buildItem('my_orders', 'My Orders', 'Check order status & track delivery', myOrdersB64),
       buildItem('view_offers', 'View Offers', 'See current deals and discounts', viewOffersB64),
       buildItem('account_details', 'Account Details', 'View or update your profile info', accountDetailsB64),
@@ -283,6 +293,10 @@ async function getFlowImages() {
     payGpayImg: payGpayB64 || null,
     payPhonepeImg: payPhonepeB64 || null,
     payPaytmImg: payPaytmB64 || null,
+    cartBanner: cartBannerB64 || null,
+    cartPlaceOrderImg: cartPlaceOrderB64 || null,
+    cartAddMoreImg: cartAddMoreB64 || null,
+    cartClearImg: cartClearB64 || null,
     lastFetched: now
   };
 
@@ -747,6 +761,116 @@ router.post('/', async (req, res) => {
               flow_token: token
             }
           };
+        } else if (selectedService === 'my_cart') {
+          // My Cart → fetch cart items dynamically and show MY_CART screen
+          const images = await getFlowImages();
+          const phone = token.replace('welcome_service_', '');
+          const CART_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
+
+          try {
+            const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
+            // Filter expired items (older than 30 min) and items without menuItem
+            const now = Date.now();
+            const validItems = (freshCustomer?.cart || []).filter(ci => {
+              if (!ci.menuItem) return false;
+              if (ci.addedAt && (now - new Date(ci.addedAt).getTime()) > CART_EXPIRY_MS) return false;
+              return true;
+            });
+
+            if (validItems.length > 0) {
+              const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
+              let total = 0;
+
+              const cartItems = await Promise.all(validItems.map(async (ci, idx) => {
+                const mi = ci.menuItem;
+                let displayName = mi.name;
+                let effectivePrice = mi.offerPrice || mi.price;
+
+                // Resolve variant pricing and name
+                if (ci.variantIndex != null && mi.variants?.[ci.variantIndex]) {
+                  const variant = mi.variants[ci.variantIndex];
+                  displayName = `${mi.name} - ${variant.label || ci.variantLabel || 'Variant'}`;
+                  if (ci.quantityIndex != null && variant.quantities?.[ci.quantityIndex]) {
+                    const q = variant.quantities[ci.quantityIndex];
+                    effectivePrice = (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : q.price;
+                  } else {
+                    effectivePrice = (variant.offerPrice && variant.offerPrice < variant.price) ? variant.offerPrice : variant.price;
+                  }
+                }
+
+                const subtotal = effectivePrice * ci.quantity;
+                total += subtotal;
+
+                const entry = {
+                  id: `item_${idx}`,
+                  title: displayName.substring(0, 30),
+                  description: `${ci.quantity} × ₹${effectivePrice} = ₹${subtotal}`
+                };
+
+                // Convert item image to base64 for thumbnail (variant image if available)
+                let imgUrl = null;
+                if (ci.variantIndex != null && mi.variants?.[ci.variantIndex]?.image) {
+                  imgUrl = mi.variants[ci.variantIndex].image;
+                } else if (mi.image) {
+                  imgUrl = mi.image;
+                }
+                if (imgUrl) {
+                  try {
+                    const thumbUrl = imgUrl.replace('/upload/', '/upload/c_fill,w_100,h_100,q_70/');
+                    const b64 = await toBase64(thumbUrl);
+                    if (b64) entry.image = b64;
+                  } catch (e) { /* skip image */ }
+                }
+
+                return entry;
+              }));
+
+              // Calculate earliest expiry for display
+              const oldestItem = validItems.reduce((oldest, ci) => {
+                const addedAt = ci.addedAt ? new Date(ci.addedAt).getTime() : now;
+                return addedAt < oldest ? addedAt : oldest;
+              }, now);
+              const minutesLeft = Math.max(1, Math.round((CART_EXPIRY_MS - (now - oldestItem)) / 60000));
+
+              response = {
+                screen: 'MY_CART',
+                data: {
+                  cart_items: cartItems,
+                  cart_banner: images.cartBanner || '',
+                  cart_summary: `━━━━━━━━━━━━━━━\n💰 Total: ₹${total}\n⏳ Cart expires in ~${minutesLeft} min`,
+                  flow_token: token
+                }
+              };
+            } else {
+              // Cart empty or all items expired → close flow
+              response = {
+                screen: 'SUCCESS',
+                data: {
+                  extension_message_response: {
+                    params: {
+                      flow_token: token,
+                      selected_service: 'my_cart',
+                      cart_empty: 'true'
+                    }
+                  }
+                }
+              };
+            }
+          } catch (dbErr) {
+            logger.error('[FlowEndpoint] Failed to fetch cart', { phone, error: dbErr.message });
+            response = {
+              screen: 'SUCCESS',
+              data: {
+                extension_message_response: {
+                  params: {
+                    flow_token: token,
+                    selected_service: 'my_cart',
+                    cart_empty: 'true'
+                  }
+                }
+              }
+            };
+          }
         } else {
           // Any other service → close the flow and send result to webhook
           response = {
@@ -758,6 +882,72 @@ router.post('/', async (req, res) => {
                   selected_service: selectedService
                 }
               }
+            }
+          };
+        }
+      }
+
+      // MY_CART screen: User viewed cart items and tapped Continue → show CART_ACTIONS
+      else if (screen === 'MY_CART') {
+        const token = data?.flow_token || flow_token || 'welcome_service';
+        const phone = token.replace('welcome_service_', '');
+        const images = await getFlowImages();
+        const CART_EXPIRY_MS = 30 * 60 * 1000;
+
+        try {
+          const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
+          const now = Date.now();
+          const validItems = (freshCustomer?.cart || []).filter(ci => {
+            if (!ci.menuItem) return false;
+            if (ci.addedAt && (now - new Date(ci.addedAt).getTime()) > CART_EXPIRY_MS) return false;
+            return true;
+          });
+
+          let total = 0;
+          validItems.forEach(ci => {
+            const mi = ci.menuItem;
+            let price = mi.offerPrice || mi.price;
+            if (ci.variantIndex != null && mi.variants?.[ci.variantIndex]) {
+              const v = mi.variants[ci.variantIndex];
+              if (ci.quantityIndex != null && v.quantities?.[ci.quantityIndex]) {
+                const q = v.quantities[ci.quantityIndex];
+                price = (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : q.price;
+              } else {
+                price = (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : v.price;
+              }
+            }
+            total += price * ci.quantity;
+          });
+
+          const cartActions = [
+            { id: 'place_order', title: 'Place Order', description: 'Proceed to checkout' },
+            { id: 'add_more', title: 'Add More', description: 'Browse menu & add items' },
+            { id: 'clear_cart', title: 'Clear Cart', description: 'Remove all items from cart' }
+          ];
+          if (images.cartPlaceOrderImg) cartActions[0].image = images.cartPlaceOrderImg;
+          if (images.cartAddMoreImg) cartActions[1].image = images.cartAddMoreImg;
+          if (images.cartClearImg) cartActions[2].image = images.cartClearImg;
+
+          response = {
+            screen: 'CART_ACTIONS',
+            data: {
+              cart_actions: cartActions,
+              cart_info: `🛒 ${validItems.length} item${validItems.length !== 1 ? 's' : ''} • Total: ₹${total}`,
+              flow_token: token
+            }
+          };
+        } catch (dbErr) {
+          logger.error('[FlowEndpoint] Failed to build cart actions', { phone, error: dbErr.message });
+          response = {
+            screen: 'CART_ACTIONS',
+            data: {
+              cart_actions: [
+                { id: 'place_order', title: 'Place Order', description: 'Proceed to checkout' },
+                { id: 'add_more', title: 'Add More', description: 'Browse menu & add items' },
+                { id: 'clear_cart', title: 'Clear Cart', description: 'Remove all items from cart' }
+              ],
+              cart_info: '🛒 Your cart',
+              flow_token: token
             }
           };
         }

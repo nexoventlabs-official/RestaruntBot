@@ -582,6 +582,46 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                         // Skip further processing — we already sent the response
                         return res.sendStatus(200);
                       }
+                      // For My Cart — handle cart actions or empty cart
+                      else if (service === 'my_cart') {
+                        const userPhone = responseData.flow_token.replace('welcome_service_', '');
+                        
+                        if (responseData.cart_empty === 'true') {
+                          // Cart is empty — send message
+                          await whatsapp.sendMessage(userPhone, '🛒 *Your cart is empty!*\n\nBrowse our menu to add items.\nType "menu" or tap Order Food to get started.');
+                          return res.sendStatus(200);
+                        }
+                        
+                        if (responseData.selected_cart_action === 'place_order') {
+                          // Place Order → trigger service type selection (same as order_food checkout)
+                          selectedId = 'cart_place_order';
+                          text = 'cart_place_order';
+                          messageType = 'button';
+                          logger.info('Flow: My Cart - place order', { phone: userPhone });
+                        } else if (responseData.selected_cart_action === 'add_more') {
+                          // Add More → trigger order food flow
+                          selectedId = 'order_food';
+                          text = 'order_food';
+                          messageType = 'button';
+                          logger.info('Flow: My Cart - add more items', { phone: userPhone });
+                        } else if (responseData.selected_cart_action === 'clear_cart') {
+                          // Clear Cart → clear customer cart and confirm
+                          try {
+                            const Customer = require('../models/Customer');
+                            await Customer.findOneAndUpdate({ phone: userPhone }, { $set: { cart: [] } });
+                            await whatsapp.sendMessage(userPhone, '🗑️ *Cart Cleared!*\n\nAll items have been removed from your cart.\nType "menu" to start a new order.');
+                          } catch (clearErr) {
+                            logger.error('Flow: My Cart - clear cart failed', { error: clearErr.message, phone: userPhone });
+                            await whatsapp.sendMessage(userPhone, '❌ Failed to clear cart. Please try again.');
+                          }
+                          return res.sendStatus(200);
+                        } else {
+                          // Fallback
+                          selectedId = 'my_cart';
+                          text = 'my_cart';
+                          messageType = 'button';
+                        }
+                      }
                       // For other services - handle directly
                       else {
                         selectedId = service;

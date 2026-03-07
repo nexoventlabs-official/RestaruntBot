@@ -5227,7 +5227,7 @@ const chatbot = {
           state.currentStep = 'main_menu';
         }
       }
-      else if (selection === 'checkout' || selection === 'review_pay') {
+      else if (selection === 'checkout' || selection === 'review_pay' || selection === 'cart_place_order') {
         // Reset state if customer was in order_confirmed or order_placed state
         if (state.currentStep === 'order_confirmed' || state.currentStep === 'order_placed' || state.currentStep === 'awaiting_payment') {
           logger.info('Resetting state from previous order', { previousStep: state.currentStep });

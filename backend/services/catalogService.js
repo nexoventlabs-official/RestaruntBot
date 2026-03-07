@@ -2002,11 +2002,13 @@ const catalogService = {
       version: '7.3',
       data_api_version: '3.0',
       routing_model: {
-        'SERVICE_SELECT': ['FOOD_TYPE_SELECT', 'MY_ORDERS', 'VIEW_OFFERS', 'ACCOUNT_DETAILS', 'VISIT_WEBSITE', 'HELP_SUPPORT'],
+        'SERVICE_SELECT': ['FOOD_TYPE_SELECT', 'MY_ORDERS', 'MY_CART', 'VIEW_OFFERS', 'ACCOUNT_DETAILS', 'VISIT_WEBSITE', 'HELP_SUPPORT'],
         'FOOD_TYPE_SELECT': ['MENU_CATEGORIES'],
         'MENU_CATEGORIES': [],
         'MY_ORDERS': ['ORDER_DETAILS'],
         'ORDER_DETAILS': [],
+        'MY_CART': ['CART_ACTIONS'],
+        'CART_ACTIONS': [],
         'VIEW_OFFERS': [],
         'ACCOUNT_DETAILS': [],
         'VISIT_WEBSITE': [],
@@ -2397,6 +2399,142 @@ const catalogService = {
               }
             ]
           }
+        },
+        {
+          id: 'MY_CART',
+          title: 'My Cart',
+          data: {
+            cart_items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'item_0', title: 'Ice Creams - Butter Scotch', description: '1 × ₹69 = ₹69', image: 'iVBORw0KGgo' }
+              ]
+            },
+            cart_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
+            },
+            cart_summary: {
+              type: 'string',
+              __example__: '━━━━━━━━━━━━━━━\n💰 Total: ₹69\n⏳ Cart expires in 30 min'
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'welcome_service_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'Image',
+                src: '${data.cart_banner}',
+                width: 1000,
+                height: 125,
+                'scale-type': 'cover',
+                'alt-text': 'My Cart Banner'
+              },
+              {
+                type: 'TextSubheading',
+                text: 'Your Cart Items'
+              },
+              {
+                type: 'RadioButtonsGroup',
+                name: 'selected_cart_item',
+                label: 'Cart Items',
+                required: true,
+                'data-source': '${data.cart_items}'
+              },
+              {
+                type: 'TextBody',
+                text: '${data.cart_summary}'
+              },
+              {
+                type: 'Footer',
+                label: 'Continue',
+                'on-click-action': {
+                  name: 'data_exchange',
+                  payload: {
+                    selected_service: 'my_cart',
+                    selected_cart_item: '${form.selected_cart_item}',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: 'CART_ACTIONS',
+          title: 'Cart Options',
+          terminal: true,
+          success: true,
+          data: {
+            cart_actions: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'place_order', title: 'Place Order', description: 'Proceed to checkout', image: 'iVBORw0KGgo' }
+              ]
+            },
+            cart_info: {
+              type: 'string',
+              __example__: '🛒 2 items • Total: ₹138'
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'welcome_service_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'TextSubheading',
+                text: 'What would you like to do?'
+              },
+              {
+                type: 'TextBody',
+                text: '${data.cart_info}'
+              },
+              {
+                type: 'RadioButtonsGroup',
+                name: 'selected_cart_action',
+                label: 'Choose an Action',
+                required: true,
+                'data-source': '${data.cart_actions}'
+              },
+              {
+                type: 'Footer',
+                label: 'Confirm',
+                'on-click-action': {
+                  name: 'complete',
+                  payload: {
+                    selected_service: 'my_cart',
+                    selected_cart_action: '${form.selected_cart_action}',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
         }
       ]
     };
@@ -2434,13 +2572,14 @@ const catalogService = {
     const chatbotImagesService = require('./chatbotImages');
 
     // Fetch all service icons + food type icons from admin-configured chatbot images
-    const [orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, visitWebsiteImg, helpSupportImg, vegImg, nonvegImg, eggImg] = await Promise.all([
+    const [orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, visitWebsiteImg, helpSupportImg, myCartImg, vegImg, nonvegImg, eggImg] = await Promise.all([
       chatbotImagesService.getImageUrl('flow_order_food'),
       chatbotImagesService.getImageUrl('flow_my_orders'),
       chatbotImagesService.getImageUrl('flow_view_offers'),
       chatbotImagesService.getImageUrl('flow_account_details'),
       chatbotImagesService.getImageUrl('flow_visit_website'),
       chatbotImagesService.getImageUrl('flow_help_support'),
+      chatbotImagesService.getImageUrl('flow_my_cart'),
       chatbotImagesService.getImageUrl('flow_food_veg'),
       chatbotImagesService.getImageUrl('flow_food_nonveg'),
       chatbotImagesService.getImageUrl('flow_food_egg')
@@ -2448,13 +2587,14 @@ const catalogService = {
 
     // Convert Cloudinary URLs to raw base64 (WhatsApp Flows require raw base64, not data URIs)
     const toBase64 = (url) => this._imageUrlToRawBase64(url);
-    const [orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, visitWebsiteB64, helpSupportB64, vegB64, nonvegB64, eggB64] = await Promise.all([
+    const [orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, visitWebsiteB64, helpSupportB64, myCartB64, vegB64, nonvegB64, eggB64] = await Promise.all([
       toBase64(orderFoodImg),
       toBase64(myOrdersImg),
       toBase64(viewOffersImg),
       toBase64(accountDetailsImg),
       toBase64(visitWebsiteImg),
       toBase64(helpSupportImg),
+      toBase64(myCartImg),
       toBase64(vegImg),
       toBase64(nonvegImg),
       toBase64(eggImg)
@@ -2469,6 +2609,7 @@ const catalogService = {
 
     const services = [
       buildItem('order_food', 'Order Food', 'Browse our menu and place an order', orderFoodB64),
+      buildItem('my_cart', 'My Cart', 'View your cart items', myCartB64),
       buildItem('my_orders', 'My Orders', 'Check order status & track delivery', myOrdersB64),
       buildItem('view_offers', 'View Offers', 'See current deals and discounts', viewOffersB64),
       buildItem('account_details', 'Account Details', 'View or update your profile info', accountDetailsB64),

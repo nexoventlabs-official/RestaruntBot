@@ -62,7 +62,12 @@ const FLOW_IMAGE_KEYS = [
   'flow_pay_hotel',
   'flow_pay_gpay',
   'flow_pay_phonepe',
-  'flow_pay_paytm'
+  'flow_pay_paytm',
+  'flow_my_cart',
+  'flow_cart_banner',
+  'flow_cart_place_order',
+  'flow_cart_add_more',
+  'flow_cart_clear'
 ];
 
 // Determine Cloudinary crop dimensions based on image type

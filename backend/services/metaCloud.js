@@ -1761,7 +1761,7 @@ const metaCloud = {
       const { accessToken, wabaId } = getConfig();
       const data = { name, categories };
       if (options.endpointUri) {
-        data.data_channel_uri = options.endpointUri;
+        data.endpoint_uri = options.endpointUri;
       }
       if (options.flowJson) {
         data.flow_json = options.flowJson;
