@@ -464,17 +464,20 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       messageType = 'button';
                       logger.info('Payment flow: method selected', { phone, payment, serviceType, selectedId });
                     }
-                    // Cart Review flow — user chose Place Order / Add More / Clear Cart
+                    // Cart Review flow — user chose service type (delivery/pickup) after Place Order
+                    else if (responseData.flow_token?.startsWith('cart_review_') && responseData.selected_service_type) {
+                      const serviceType = responseData.selected_service_type;
+                      selectedId = serviceType === 'pickup' ? 'service_pickup' : 'service_delivery';
+                      text = selectedId;
+                      messageType = 'button';
+                      logger.info('Cart review flow: service type selected', { phone, serviceType, selectedId });
+                    }
+                    // Cart Review flow — user chose Add More / Clear Cart
                     else if (responseData.flow_token?.startsWith('cart_review_') && responseData.selected_cart_action) {
                       const userPhone = responseData.flow_token.replace('cart_review_', '');
                       const action = responseData.selected_cart_action;
 
-                      if (action === 'place_order') {
-                        selectedId = 'cart_place_order';
-                        text = 'cart_place_order';
-                        messageType = 'button';
-                        logger.info('Cart review flow: place order', { phone: userPhone });
-                      } else if (action === 'add_more') {
+                      if (action === 'add_more') {
                         selectedId = 'order_food';
                         text = 'order_food';
                         messageType = 'button';

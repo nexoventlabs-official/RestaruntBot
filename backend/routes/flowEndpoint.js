@@ -1361,6 +1361,83 @@ router.post('/', async (req, res) => {
         }
       }
 
+      // Cart Review Flow: CART_ACTIONS → CHOOSE_SERVICE (place_order) or close flow (add_more/clear_cart)
+      else if (data?.selected_cart_action && flow_token?.startsWith('cart_review_')) {
+        const token = data?.flow_token || flow_token || '';
+        const phone = token.replace('cart_review_', '');
+        const cartAction = data.selected_cart_action;
+
+        if (cartAction === 'place_order') {
+          // Place Order → show CHOOSE_SERVICE with delivery/pickup options
+          try {
+            const images = await getFlowImages();
+            const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
+
+            const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
+            const CART_EXPIRY_MS = 30 * 60 * 1000;
+            const now = Date.now();
+            const validItems = (freshCustomer?.cart || []).filter(ci => {
+              if (!ci.menuItem) return false;
+              if (ci.addedAt && (now - new Date(ci.addedAt).getTime()) > CART_EXPIRY_MS) return false;
+              return true;
+            });
+
+            let total = 0;
+            validItems.forEach(ci => {
+              const mi = ci.menuItem;
+              let price = mi.offerPrice || mi.price;
+              if (ci.variantIndex != null && mi.variants?.[ci.variantIndex]) {
+                const v = mi.variants[ci.variantIndex];
+                if (ci.quantityIndex != null && v.quantities?.[ci.quantityIndex]) {
+                  price = (v.quantities[ci.quantityIndex].offerPrice && v.quantities[ci.quantityIndex].offerPrice < v.quantities[ci.quantityIndex].price) ? v.quantities[ci.quantityIndex].offerPrice : v.quantities[ci.quantityIndex].price;
+                } else {
+                  price = (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : v.price;
+                }
+              }
+              total += price * ci.quantity;
+            });
+
+            const [deliveryB64, pickupB64] = await Promise.all([
+              toBase64(images.deliveryOptionImg).catch(() => ''),
+              toBase64(images.pickupOptionImg).catch(() => '')
+            ]);
+
+            const serviceOptions = [
+              { id: 'delivery', title: 'Delivery', description: 'To your doorstep' },
+              { id: 'pickup', title: 'Self-Pickup', description: 'From restaurant' }
+            ];
+            if (deliveryB64) serviceOptions[0].image = deliveryB64;
+            if (pickupB64) serviceOptions[1].image = pickupB64;
+
+            response = {
+              screen: 'CHOOSE_SERVICE',
+              data: {
+                service_banner: images.serviceTypeBanner || '',
+                order_summary: `${validItems.length} item${validItems.length > 1 ? 's' : ''} • Total: ₹${total}`,
+                service_options: serviceOptions,
+                flow_token: token
+              }
+            };
+          } catch (err) {
+            logger.error('[FlowEndpoint] Cart review CHOOSE_SERVICE error', { phone, error: err.message });
+            response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token: token, error: 'service_error' } } } };
+          }
+        } else {
+          // add_more / clear_cart → close flow, webhook handles the action
+          response = {
+            screen: 'SUCCESS',
+            data: {
+              extension_message_response: {
+                params: {
+                  flow_token: token,
+                  selected_cart_action: cartAction
+                }
+              }
+            }
+          };
+        }
+      }
+
       // Fallback for any other screen data_exchange
       else {
         const token = data?.flow_token || flow_token || 'welcome_service';
