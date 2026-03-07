@@ -1422,8 +1422,59 @@ router.post('/', async (req, res) => {
             logger.error('[FlowEndpoint] Cart review CHOOSE_SERVICE error', { phone, error: err.message });
             response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token: token, error: 'service_error' } } } };
           }
+        } else if (cartAction === 'add_more') {
+          // Add More → show MENU_CATEGORIES with available menu items
+          try {
+            const images = await getFlowImages();
+            const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
+
+            const allItems = await MenuItem.find({ available: true, isPaused: { $ne: true } })
+              .select('name image variants price offerPrice')
+              .lean();
+
+            const categoryItems = await Promise.all(allItems.slice(0, 10).map(async (item) => {
+              let desc;
+              if (item.variants && item.variants.length > 0) {
+                desc = `${item.variants.length} variant${item.variants.length > 1 ? 's' : ''}`;
+              } else {
+                desc = `₹${item.offerPrice || item.price}`;
+              }
+              const catItem = {
+                id: item._id.toString(),
+                title: item.name.substring(0, 30),
+                description: desc
+              };
+              if (item.image) {
+                const b64 = await toBase64(item.image).catch(() => '');
+                if (b64) catItem.image = b64;
+              }
+              return catItem;
+            }));
+
+            if (categoryItems.length > 0) {
+              response = {
+                screen: 'MENU_CATEGORIES',
+                data: {
+                  menu_banner: images.menuBanner || '',
+                  categories: categoryItems,
+                  flow_token: token
+                }
+              };
+            } else {
+              response = {
+                screen: 'SUCCESS',
+                data: { extension_message_response: { params: { flow_token: token, selected_cart_action: 'add_more', no_items: 'true' } } }
+              };
+            }
+          } catch (err) {
+            logger.error('[FlowEndpoint] Cart review MENU_CATEGORIES error', { phone, error: err.message });
+            response = {
+              screen: 'SUCCESS',
+              data: { extension_message_response: { params: { flow_token: token, selected_cart_action: 'add_more' } } }
+            };
+          }
         } else {
-          // add_more / clear_cart → close flow, webhook handles the action
+          // clear_cart → close flow, webhook handles the action
           response = {
             screen: 'SUCCESS',
             data: {

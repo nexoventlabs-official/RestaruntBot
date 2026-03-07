@@ -464,6 +464,14 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       messageType = 'button';
                       logger.info('Payment flow: method selected', { phone, payment, serviceType, selectedId });
                     }
+                    // Cart Review flow — user picked a menu item from Add More categories
+                    else if (responseData.flow_token?.startsWith('cart_review_') && responseData.selected_category) {
+                      const menuItemId = responseData.selected_category;
+                      selectedId = `flow_order_all_${menuItemId}`;
+                      text = selectedId;
+                      messageType = 'button';
+                      logger.info('Cart review flow: category selected for add more', { phone: responseData.flow_token.replace('cart_review_', ''), category: menuItemId });
+                    }
                     // Cart Review flow — user chose service type (delivery/pickup) after Place Order
                     else if (responseData.flow_token?.startsWith('cart_review_') && responseData.selected_service_type) {
                       const serviceType = responseData.selected_service_type;
@@ -472,27 +480,18 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       messageType = 'button';
                       logger.info('Cart review flow: service type selected', { phone, serviceType, selectedId });
                     }
-                    // Cart Review flow — user chose Add More / Clear Cart
-                    else if (responseData.flow_token?.startsWith('cart_review_') && responseData.selected_cart_action) {
+                    // Cart Review flow — user chose Clear Cart
+                    else if (responseData.flow_token?.startsWith('cart_review_') && responseData.selected_cart_action === 'clear_cart') {
                       const userPhone = responseData.flow_token.replace('cart_review_', '');
-                      const action = responseData.selected_cart_action;
-
-                      if (action === 'add_more') {
-                        selectedId = 'order_food';
-                        text = 'order_food';
-                        messageType = 'button';
-                        logger.info('Cart review flow: add more', { phone: userPhone });
-                      } else if (action === 'clear_cart') {
-                        try {
-                          const Customer = require('../models/Customer');
-                          await Customer.findOneAndUpdate({ phone: userPhone }, { $set: { cart: [] } });
-                          await whatsapp.sendMessage(userPhone, '🗑️ *Cart Cleared!*\n\nAll items have been removed from your cart.\nType "menu" to start a new order.');
-                        } catch (clearErr) {
-                          logger.error('Cart review flow: clear cart failed', { error: clearErr.message, phone: userPhone });
-                          await whatsapp.sendMessage(userPhone, '❌ Failed to clear cart. Please try again.');
-                        }
-                        return res.sendStatus(200);
+                      try {
+                        const Customer = require('../models/Customer');
+                        await Customer.findOneAndUpdate({ phone: userPhone }, { $set: { cart: [] } });
+                        await whatsapp.sendMessage(userPhone, '🗑️ *Cart Cleared!*\n\nAll items have been removed from your cart.\nType "menu" to start a new order.');
+                      } catch (clearErr) {
+                        logger.error('Cart review flow: clear cart failed', { error: clearErr.message, phone: userPhone });
+                        await whatsapp.sendMessage(userPhone, '❌ Failed to clear cart. Please try again.');
                       }
+                      return res.sendStatus(200);
                     }
                     // Cart Review flow — empty cart closed flow
                     else if (responseData.flow_token?.startsWith('cart_review_') && responseData.cart_empty === 'true') {

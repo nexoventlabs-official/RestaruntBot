@@ -3019,8 +3019,9 @@ const catalogService = {
       data_api_version: '3.0',
       routing_model: {
         CART_REVIEW: ['CART_ACTIONS'],
-        CART_ACTIONS: ['CHOOSE_SERVICE'],
-        CHOOSE_SERVICE: []
+        CART_ACTIONS: ['CHOOSE_SERVICE', 'MENU_CATEGORIES'],
+        CHOOSE_SERVICE: [],
+        MENU_CATEGORIES: []
       },
       screens: [
         {
@@ -3231,6 +3232,72 @@ const catalogService = {
               }
             ]
           }
+        },
+        {
+          id: 'MENU_CATEGORIES',
+          title: 'Menu Items',
+          terminal: true,
+          success: true,
+          data: {
+            menu_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
+            },
+            categories: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: '507f1f77bcf86cd799439011', title: 'Ice Creams', description: '3 variants', image: 'iVBORw0KGgo' }
+              ]
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'cart_review_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'Image',
+                src: '${data.menu_banner}',
+                width: 1000,
+                height: 125,
+                'scale-type': 'cover',
+                'alt-text': 'Menu Categories Banner'
+              },
+              {
+                type: 'TextSubheading',
+                text: 'Select a Category'
+              },
+              {
+                type: 'RadioButtonsGroup',
+                name: 'selected_category',
+                label: 'Menu Items',
+                required: true,
+                'data-source': '${data.categories}'
+              },
+              {
+                type: 'Footer',
+                label: 'View Item',
+                'on-click-action': {
+                  name: 'complete',
+                  payload: {
+                    selected_category: '${form.selected_category}',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
         }
       ]
     };
@@ -3241,7 +3308,7 @@ const catalogService = {
    */
   async setupCartReviewFlow() {
     const metaCloud = require('./metaCloud');
-    const FLOW_NAME = 'JRB Cart Review v2';
+    const FLOW_NAME = 'JRB Cart Review v3';
 
     const flows = await metaCloud.getFlows();
     const existing = flows.find(f => f.name === FLOW_NAME && f.status === 'PUBLISHED');
