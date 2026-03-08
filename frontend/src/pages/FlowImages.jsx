@@ -80,10 +80,12 @@ export default function FlowImages() {
   };
 
   const isBanner = (key) => key.endsWith('_banner');
+  const isOptionImage = (key) => ['flow_delivery_option', 'flow_pickup_option'].includes(key);
 
-  // Separate banner and service icons
+  // Separate into banners, option images, and service icons
   const bannerImages = images.filter(img => isBanner(img.key));
-  const iconImages = images.filter(img => !isBanner(img.key));
+  const optionImages = images.filter(img => isOptionImage(img.key));
+  const iconImages = images.filter(img => !isBanner(img.key) && !isOptionImage(img.key));
 
   if (loading) {
     return (
@@ -245,6 +247,19 @@ export default function FlowImages() {
         </div>
       )}
 
+      {/* Option Images Section */}
+      {optionImages.length > 0 && (
+        <div>
+          <h2 className="text-lg font-semibold text-dark-800 mb-3">Service Type Options</h2>
+          <p className="text-sm text-dark-400 mb-4">Images for delivery/pickup options in service type selection. Recommended: 800 × 400px (2:1 ratio)</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {optionImages.map(img => (
+              <ImageCard key={img.key} image={img} aspectClass="aspect-[2/1]" sizeLabel="800 × 400px (2:1)" />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Info Box */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
         <div className="flex items-start gap-3">
@@ -252,8 +267,9 @@ export default function FlowImages() {
           <div>
             <h4 className="font-medium text-blue-900">Flow Image Guidelines</h4>
             <ul className="text-sm text-blue-700 mt-2 space-y-1">
-              <li>• <strong>Banner:</strong> 1000 × 125px (8:1 landscape) with rounded corners — auto-cropped on upload</li>
+              <li>• <strong>Banners:</strong> 1000 × 125px (8:1 landscape) — auto-cropped on upload</li>
               <li>• <strong>Service Icons:</strong> 600 × 600px (1:1 square) — auto-cropped on upload</li>
+              <li>• <strong>Option Images:</strong> 800 × 400px (2:1 landscape) — auto-cropped on upload</li>
               <li>• Supported formats: JPG, PNG, WebP</li>
               <li>• Max file size: 10MB</li>
               <li>• Images are optimized via Cloudinary for fast delivery</li>
