@@ -357,7 +357,7 @@ router.post('/', async (req, res) => {
             response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'empty_cart' } } } };
           } else {
             const images = await getFlowImages();
-            const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
+            const toBase64 = (url, opts) => catalogService._imageUrlToRawBase64(url, opts);
             const validItems = freshCustomer.cart.filter(ci => ci.menuItem);
             let total = 0;
 
@@ -396,8 +396,7 @@ router.post('/', async (req, res) => {
               // Convert item image to base64 for thumbnail
               if (mi.image) {
                 try {
-                  const thumbUrl = mi.image.replace('/upload/', '/upload/c_fill,w_100,h_100,q_70/');
-                  const b64 = await toBase64(thumbUrl);
+                  const b64 = await toBase64(mi.image, { width: 100, height: 100 });
                   if (b64) entry.image = b64;
                 } catch (e) { /* skip image */ }
               }
@@ -507,7 +506,7 @@ router.post('/', async (req, res) => {
             response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, cart_empty: 'true' } } } };
           } else {
             const images = await getFlowImages();
-            const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
+            const toBase64 = (url, opts) => catalogService._imageUrlToRawBase64(url, opts);
             let total = 0;
 
             const cartItems = await Promise.all(validItems.map(async (ci, idx) => {
@@ -543,8 +542,7 @@ router.post('/', async (req, res) => {
               const imgUrl = (ci.variantIndex != null && mi.variants?.[ci.variantIndex]?.image) || mi.image;
               if (imgUrl) {
                 try {
-                  const thumbUrl = imgUrl.replace('/upload/', '/upload/c_fill,w_100,h_100,q_70/');
-                  const b64 = await toBase64(thumbUrl);
+                  const b64 = await toBase64(imgUrl, { width: 100, height: 100 });
                   if (b64) entry.image = b64;
                 } catch (e) { /* skip */ }
               }
@@ -859,7 +857,7 @@ router.post('/', async (req, res) => {
             });
 
             if (validItems.length > 0) {
-              const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
+              const toBase64 = (url, opts) => catalogService._imageUrlToRawBase64(url, opts);
               let total = 0;
 
               const cartItems = await Promise.all(validItems.map(async (ci, idx) => {
@@ -897,8 +895,7 @@ router.post('/', async (req, res) => {
                 }
                 if (imgUrl) {
                   try {
-                    const thumbUrl = imgUrl.replace('/upload/', '/upload/c_fill,w_100,h_100,q_70/');
-                    const b64 = await toBase64(thumbUrl);
+                    const b64 = await toBase64(imgUrl, { width: 100, height: 100 });
                     if (b64) entry.image = b64;
                   } catch (e) { /* skip image */ }
                 }
@@ -1100,7 +1097,7 @@ router.post('/', async (req, res) => {
           // Add More → show MENU_CATEGORIES with all available menu items
           try {
             const images = await getFlowImages();
-            const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
+            const toBase64Thumb = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
 
             const allItems = await MenuItem.find({ available: true, isPaused: { $ne: true } })
               .select('name image variants price offerPrice')
@@ -1119,7 +1116,7 @@ router.post('/', async (req, res) => {
                 description: desc
               };
               if (item.image) {
-                const b64 = await toBase64(item.image).catch(() => '');
+                const b64 = await toBase64Thumb(item.image).catch(() => '');
                 if (b64) catItem.image = b64;
               }
               return catItem;
@@ -1205,7 +1202,7 @@ router.post('/', async (req, res) => {
             const hasStatusImage = !!statusImg;
 
             // Build item list with images
-            const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
+            const toBase64 = (url, opts) => catalogService._imageUrlToRawBase64(url, opts);
             const orderItems = await Promise.all((order.items || []).map(async (item, idx) => {
               const entry = {
                 id: `item_${idx}`,
@@ -1213,7 +1210,7 @@ router.post('/', async (req, res) => {
                 description: `₹${item.price} each${item.variantLabel ? ' • ' + item.variantLabel : ''}`
               };
               if (item.image) {
-                const b64 = await toBase64(item.image);
+                const b64 = await toBase64(item.image, { width: 100, height: 100 });
                 if (b64) entry.image = b64;
               }
               return entry;
@@ -1314,7 +1311,7 @@ router.post('/', async (req, res) => {
           }
 
           if (filteredItems.length > 0) {
-            const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
+            const toBase64Thumb = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
 
             // Build category items (max 10 for RadioButtonsGroup)
             const categoryItems = await Promise.all(filteredItems.slice(0, 10).map(async (item) => {
@@ -1333,7 +1330,7 @@ router.post('/', async (req, res) => {
               };
 
               if (item.image) {
-                const b64 = await toBase64(item.image);
+                const b64 = await toBase64Thumb(item.image);
                 if (b64) catItem.image = b64;
               }
 
@@ -1558,7 +1555,7 @@ router.post('/', async (req, res) => {
           // Add More → show MENU_CATEGORIES with available menu items
           try {
             const images = await getFlowImages();
-            const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
+            const toBase64Thumb = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
 
             const allItems = await MenuItem.find({ available: true, isPaused: { $ne: true } })
               .select('name image variants price offerPrice')
@@ -1577,7 +1574,7 @@ router.post('/', async (req, res) => {
                 description: desc
               };
               if (item.image) {
-                const b64 = await toBase64(item.image).catch(() => '');
+                const b64 = await toBase64Thumb(item.image).catch(() => '');
                 if (b64) catItem.image = b64;
               }
               return catItem;

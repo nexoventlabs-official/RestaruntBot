@@ -2620,11 +2620,21 @@ const catalogService = {
    * @param {string} url - Cloudinary or any image URL
    * @returns {Promise<string|null>} Raw base64 string or null on failure
    */
-  async _imageUrlToRawBase64(url) {
+  async _imageUrlToRawBase64(url, { width, height } = {}) {
     if (!url) return null;
     try {
       const axios = require('axios');
-      const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 15000 });
+      let fetchUrl = url;
+      // Apply Cloudinary transformations to reduce payload size for WhatsApp Flows
+      if (url.includes('/upload/')) {
+        if (width && height) {
+          fetchUrl = url.replace('/upload/', `/upload/w_${width},h_${height},c_fill,q_70,f_jpg/`);
+        } else {
+          // Just optimize quality/format without resizing
+          fetchUrl = url.replace('/upload/', '/upload/q_70,f_jpg/');
+        }
+      }
+      const response = await axios.get(fetchUrl, { responseType: 'arraybuffer', timeout: 15000 });
       const base64 = Buffer.from(response.data).toString('base64');
       // Strip any data URI prefix just in case (safety)
       return base64.replace(/^data:image\/[^;]+;base64,/, '');
