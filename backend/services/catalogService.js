@@ -1918,7 +1918,7 @@ const catalogService = {
         type: 'Footer',
         label: 'View Offer',
         'on-click-action': {
-          name: 'complete',
+          name: 'data_exchange',
           payload: {
             selected_service: 'view_offers',
             selected_offer: '${form.selected_offer}',
@@ -1998,7 +1998,7 @@ const catalogService = {
         'MY_CART': ['CART_ACTIONS', 'MENU_CATEGORIES'],
         'CART_ACTIONS': ['CHOOSE_SERVICE', 'MENU_CATEGORIES'],
         'CHOOSE_SERVICE': [],
-        'VIEW_OFFERS': [],
+        'VIEW_OFFERS': ['MENU_CATEGORIES'],
         'ACCOUNT_DETAILS': [],
         'VISIT_WEBSITE': [],
         'HELP_SUPPORT': []
@@ -2188,8 +2188,6 @@ const catalogService = {
         {
           id: 'VIEW_OFFERS',
           title: 'Offers',
-          terminal: true,
-          success: true,
           data: {
             offers: {
               type: 'array',

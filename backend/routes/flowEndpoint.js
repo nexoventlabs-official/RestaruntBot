@@ -1409,6 +1409,68 @@ router.post('/', async (req, res) => {
         }
       }
 
+      // VIEW_OFFERS screen: User selected an offer → show offer's applied menu items
+      else if (screen === 'VIEW_OFFERS') {
+        const token = data?.flow_token || flow_token || 'welcome_service';
+        const selectedOffer = data?.selected_offer;
+
+        try {
+          const offer = await Offer.findById(selectedOffer)
+            .select('appliedItems title')
+            .populate('appliedItems', 'name image variants price offerPrice available isPaused')
+            .lean();
+
+          const images = await getFlowImages();
+          const toBase64Thumb = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
+
+          // Get items from the offer's appliedItems, filter to available ones
+          let menuItems = (offer?.appliedItems || []).filter(item => item.available && !item.isPaused);
+
+          // If offer has no applied items, show all available items as fallback
+          if (menuItems.length === 0) {
+            menuItems = await MenuItem.find({ available: true, isPaused: { $ne: true } })
+              .select('name image variants price offerPrice')
+              .lean();
+          }
+
+          const categoryItems = await Promise.all(menuItems.slice(0, 10).map(async (item) => {
+            let desc;
+            if (item.variants && item.variants.length > 0) {
+              desc = `${item.variants.length} variant${item.variants.length > 1 ? 's' : ''} available`;
+            } else {
+              desc = item.offerPrice ? `₹${item.offerPrice} (was ₹${item.price})` : `₹${item.price}`;
+            }
+            const catItem = {
+              id: item._id.toString(),
+              title: item.name.substring(0, 30),
+              description: desc
+            };
+            if (item.image) {
+              const b64 = await toBase64Thumb(item.image).catch(() => '');
+              if (b64) catItem.image = b64;
+            }
+            return catItem;
+          }));
+
+          if (categoryItems.length > 0) {
+            response = {
+              screen: 'MENU_CATEGORIES',
+              data: {
+                categories: categoryItems,
+                menu_banner: images.menuBanner || '',
+                selected_service: 'order_food',
+                flow_token: token
+              }
+            };
+          } else {
+            response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token: token, selected_service: 'view_offers', no_items: 'true' } } } };
+          }
+        } catch (err) {
+          logger.error('[FlowEndpoint] VIEW_OFFERS item fetch error', { offerId: selectedOffer, error: err.message });
+          response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token: token, selected_service: 'view_offers' } } } };
+        }
+      }
+
       // Order Confirmation Flow: ORDER_REVIEW → CHOOSE_SERVICE
       else if (data?.confirm_order_review === 'true') {
         const token = data?.flow_token || flow_token || '';
