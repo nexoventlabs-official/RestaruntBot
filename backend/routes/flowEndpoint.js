@@ -950,32 +950,26 @@ router.post('/', async (req, res) => {
                 }
               };
             } else {
-              // Cart empty or all items expired → close flow
+              // Cart empty → show MY_CART with placeholder so user can browse menu
               response = {
-                screen: 'SUCCESS',
+                screen: 'MY_CART',
                 data: {
-                  extension_message_response: {
-                    params: {
-                      flow_token: token,
-                      selected_service: 'my_cart',
-                      cart_empty: 'true'
-                    }
-                  }
+                  cart_items: [{ id: 'browse_menu', title: 'No items in your cart', description: 'Tap Continue to browse the menu' }],
+                  cart_banner: images.cartBanner || '',
+                  cart_summary: '🛒 Your cart is empty.\nBrowse the menu to add delicious items!',
+                  flow_token: token
                 }
               };
             }
           } catch (dbErr) {
             logger.error('[FlowEndpoint] Failed to fetch cart', { phone, error: dbErr.message });
             response = {
-              screen: 'SUCCESS',
+              screen: 'MY_CART',
               data: {
-                extension_message_response: {
-                  params: {
-                    flow_token: token,
-                    selected_service: 'my_cart',
-                    cart_empty: 'true'
-                  }
-                }
+                cart_items: [{ id: 'browse_menu', title: 'No items in your cart', description: 'Tap Continue to browse the menu' }],
+                cart_banner: images.cartBanner || '',
+                cart_summary: '🛒 Your cart is empty.\nBrowse the menu to add delicious items!',
+                flow_token: token
               }
             };
           }
@@ -999,7 +993,55 @@ router.post('/', async (req, res) => {
       else if (screen === 'MY_CART') {
         const token = data?.flow_token || flow_token || 'welcome_service';
         const phone = token.replace('welcome_service_', '');
+        const selectedCartItem = data?.selected_cart_item;
         const images = await getFlowImages();
+
+        // Empty cart placeholder → navigate to MENU_CATEGORIES
+        if (selectedCartItem === 'browse_menu') {
+          try {
+            const toBase64Thumb = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
+            const allItems = await MenuItem.find({ available: true, isPaused: { $ne: true } })
+              .select('name image variants price offerPrice')
+              .lean();
+
+            const categoryItems = await Promise.all(allItems.slice(0, 10).map(async (item) => {
+              let desc;
+              if (item.variants && item.variants.length > 0) {
+                desc = `${item.variants.length} variant${item.variants.length > 1 ? 's' : ''} available`;
+              } else {
+                desc = `₹${item.offerPrice || item.price}`;
+              }
+              const catItem = {
+                id: item._id.toString(),
+                title: item.name.substring(0, 30),
+                description: desc
+              };
+              if (item.image) {
+                const b64 = await toBase64Thumb(item.image).catch(() => '');
+                if (b64) catItem.image = b64;
+              }
+              return catItem;
+            }));
+
+            if (categoryItems.length > 0) {
+              response = {
+                screen: 'MENU_CATEGORIES',
+                data: {
+                  categories: categoryItems,
+                  menu_banner: images.menuBanner || '',
+                  selected_service: 'order_food',
+                  flow_token: token
+                }
+              };
+            } else {
+              response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token: token, selected_service: 'my_cart', no_items: 'true' } } } };
+            }
+          } catch (err) {
+            logger.error('[FlowEndpoint] MY_CART browse_menu error', { phone, error: err.message });
+            response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token: token, selected_service: 'my_cart' } } } };
+          }
+        } else {
+        // Cart has items → show CART_ACTIONS
         const CART_EXPIRY_MS = 30 * 60 * 1000;
 
         try {
@@ -1059,6 +1101,7 @@ router.post('/', async (req, res) => {
             }
           };
         }
+        } // close else (cart has items)
       }
 
       // CART_ACTIONS screen: User chose place_order/add_more/clear_cart → navigate dynamically

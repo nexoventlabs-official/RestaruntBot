@@ -1970,7 +1970,7 @@ const catalogService = {
         'MENU_CATEGORIES': [],
         'MY_ORDERS': ['ORDER_DETAILS'],
         'ORDER_DETAILS': [],
-        'MY_CART': ['CART_ACTIONS'],
+        'MY_CART': ['CART_ACTIONS', 'MENU_CATEGORIES'],
         'CART_ACTIONS': ['CHOOSE_SERVICE', 'MENU_CATEGORIES'],
         'CHOOSE_SERVICE': [],
         'VIEW_OFFERS': [],
