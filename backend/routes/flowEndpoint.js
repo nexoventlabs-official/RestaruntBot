@@ -129,15 +129,13 @@ async function getFlowImages() {
 
   const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
 
-  // Fetch all image URLs (services + food types + order statuses + banners)
+  // Fetch all image URLs (services + order statuses + banners)
   const [
     orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, visitWebsiteImg, helpSupportImg,
     myCartImg, cartBannerImg, cartPlaceOrderImg, cartAddMoreImg, cartClearImg,
-    allFoodImg, vegImg, nonvegImg, eggImg,
     pendingImg, confirmedImg, preparingImg, readyImg, outForDeliveryImg, deliveredImg, cancelledImg,
     websiteBannerImg,
     offersBannerImg,
-    foodtypeBannerImg,
     menuBannerImg,
     ordersBannerImg,
     accountBannerImg,
@@ -164,10 +162,6 @@ async function getFlowImages() {
     chatbotImagesService.getImageUrl('flow_cart_place_order'),
     chatbotImagesService.getImageUrl('flow_cart_add_more'),
     chatbotImagesService.getImageUrl('flow_cart_clear'),
-    chatbotImagesService.getImageUrl('flow_food_all'),
-    chatbotImagesService.getImageUrl('flow_food_veg'),
-    chatbotImagesService.getImageUrl('flow_food_nonveg'),
-    chatbotImagesService.getImageUrl('flow_food_egg'),
     chatbotImagesService.getImageUrl('flow_status_pending'),
     chatbotImagesService.getImageUrl('flow_status_confirmed'),
     chatbotImagesService.getImageUrl('flow_status_preparing'),
@@ -177,7 +171,6 @@ async function getFlowImages() {
     chatbotImagesService.getImageUrl('flow_status_cancelled'),
     chatbotImagesService.getImageUrl('flow_website_banner'),
     chatbotImagesService.getImageUrl('flow_offers_banner'),
-    chatbotImagesService.getImageUrl('flow_foodtype_banner'),
     chatbotImagesService.getImageUrl('flow_menu_banner'),
     chatbotImagesService.getImageUrl('flow_orders_banner'),
     chatbotImagesService.getImageUrl('flow_account_banner'),
@@ -198,11 +191,9 @@ async function getFlowImages() {
   const [
     orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, visitWebsiteB64, helpSupportB64,
     myCartB64, cartBannerB64, cartPlaceOrderB64, cartAddMoreB64, cartClearB64,
-    allFoodB64, vegB64, nonvegB64, eggB64,
     pendingB64, confirmedB64, preparingB64, readyB64, outForDeliveryB64, deliveredB64, cancelledB64,
     websiteBannerB64,
     offersBannerB64,
-    foodtypeBannerB64,
     menuBannerB64,
     ordersBannerB64,
     accountBannerB64,
@@ -222,12 +213,10 @@ async function getFlowImages() {
     toBase64(accountDetailsImg), toBase64(visitWebsiteImg),
     toBase64(helpSupportImg), toBase64(myCartImg),
     toBase64(cartBannerImg), toBase64(cartPlaceOrderImg), toBase64(cartAddMoreImg), toBase64(cartClearImg),
-    toBase64(allFoodImg), toBase64(vegImg), toBase64(nonvegImg), toBase64(eggImg),
     toBase64(pendingImg), toBase64(confirmedImg), toBase64(preparingImg),
     toBase64(readyImg), toBase64(outForDeliveryImg), toBase64(deliveredImg), toBase64(cancelledImg),
     toBase64(websiteBannerImg),
     toBase64(offersBannerImg),
-    toBase64(foodtypeBannerImg),
     toBase64(menuBannerImg),
     toBase64(ordersBannerImg),
     toBase64(accountBannerImg),
@@ -260,12 +249,6 @@ async function getFlowImages() {
       buildItem('open_website', 'Visit Website', 'View our full website', visitWebsiteB64),
       buildItem('help', 'Help & Support', 'Get assistance with your queries', helpSupportB64)
     ],
-    foodTypes: [
-      buildItem('food_all', 'All', 'All dishes (Veg, Non-Veg & Egg)', allFoodB64),
-      buildItem('food_veg', 'Veg', 'Pure vegetarian dishes', vegB64),
-      buildItem('food_nonveg', 'Non-Veg', 'Non-vegetarian dishes', nonvegB64),
-      buildItem('food_egg', 'Egg', 'Egg-based dishes', eggB64)
-    ],
     statusImages: {
       pending: pendingB64,
       confirmed: confirmedB64,
@@ -278,7 +261,6 @@ async function getFlowImages() {
     banner: null,
     websiteBanner: websiteBannerB64 || null,
     offersBanner: offersBannerB64 || null,
-    foodtypeBanner: foodtypeBannerB64 || null,
     menuBanner: menuBannerB64 || null,
     ordersBanner: ordersBannerB64 || null,
     accountBanner: accountBannerB64 || null,
@@ -592,17 +574,65 @@ router.post('/', async (req, res) => {
         const token = data?.flow_token || flow_token || 'welcome_service';
 
         if (selectedService === 'order_food') {
-          // Order Food → navigate to food type selection screen
+          // Order Food → directly show menu categories (all items)
           const images = await getFlowImages();
-          response = {
-            screen: 'FOOD_TYPE_SELECT',
-            data: {
-              food_types: images.foodTypes,
-              foodtype_banner: images.foodtypeBanner || '',
-              selected_service: selectedService,
-              flow_token: token
+          try {
+            const allItems = await MenuItem.find({ available: true, isPaused: { $ne: true } })
+              .select('name image foodType variants price offerPrice')
+              .lean();
+
+            if (allItems.length > 0) {
+              const toBase64Thumb = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
+              const categoryItems = await Promise.all(allItems.slice(0, 10).map(async (item) => {
+                let desc;
+                if (item.variants && item.variants.length > 0) {
+                  const vCount = item.variants.length;
+                  desc = `${vCount} variant${vCount > 1 ? 's' : ''} available`;
+                } else {
+                  desc = `₹${item.offerPrice || item.price}`;
+                }
+                const catItem = {
+                  id: item._id.toString(),
+                  title: item.name.substring(0, 30),
+                  description: desc
+                };
+                if (item.image) {
+                  const b64 = await toBase64Thumb(item.image);
+                  if (b64) catItem.image = b64;
+                }
+                return catItem;
+              }));
+
+              response = {
+                screen: 'MENU_CATEGORIES',
+                data: {
+                  categories: categoryItems,
+                  menu_banner: images.menuBanner || '',
+                  selected_service: selectedService,
+                  flow_token: token
+                }
+              };
+            } else {
+              response = {
+                screen: 'SUCCESS',
+                data: {
+                  extension_message_response: {
+                    params: {
+                      flow_token: token,
+                      selected_service: 'order_food',
+                      no_items: 'true'
+                    }
+                  }
+                }
+              };
             }
-          };
+          } catch (dbErr) {
+            logger.error('[FlowEndpoint] Failed to fetch menu items', { error: dbErr.message });
+            response = {
+              screen: 'SUCCESS',
+              data: { extension_message_response: { params: { flow_token: token, selected_service: 'order_food' } } }
+            };
+          }
         } else if (selectedService === 'my_orders') {
           // My Orders → fetch recent orders and show MY_ORDERS screen
           const images = await getFlowImages();
@@ -1129,7 +1159,6 @@ router.post('/', async (req, res) => {
                   menu_banner: images.menuBanner || '',
                   categories: categoryItems,
                   selected_service: 'my_cart',
-                  selected_food_type: 'food_all',
                   flow_token: token
                 }
               };
@@ -1268,112 +1297,6 @@ router.post('/', async (req, res) => {
                   selected_service: 'my_orders',
                   selected_order: selectedOrderId || '',
                   order_viewed: 'true'
-                }
-              }
-            }
-          };
-        }
-      }
-
-      // Screen 2: User selected a food type and tapped Confirm → show menu categories
-      else if (screen === 'FOOD_TYPE_SELECT') {
-        const selectedFoodType = data?.selected_food_type; // e.g. food_veg, food_nonveg, food_egg, food_all
-        const token = data?.flow_token || flow_token || 'welcome_service';
-        const foodPref = selectedFoodType ? selectedFoodType.replace('food_', '') : 'all';
-        const images = await getFlowImages();
-
-        try {
-          // Fetch available menu items filtered by food type
-          const query = { available: true, isPaused: { $ne: true } };
-          const allItems = await MenuItem.find(query)
-            .select('name image foodType variants price offerPrice')
-            .lean();
-
-          // Filter by food type preference
-          const matchesFoodType = (ft, pref) => {
-            if (!ft || ft === 'none') return true;
-            if (pref === 'veg') return ft === 'veg';
-            if (pref === 'nonveg') return ft === 'nonveg' || ft === 'egg';
-            if (pref === 'egg') return ft === 'egg';
-            return true;
-          };
-
-          let filteredItems;
-          if (foodPref === 'all') {
-            filteredItems = allItems;
-          } else {
-            filteredItems = allItems.filter(item => {
-              if (item.variants && item.variants.length > 0) {
-                return item.variants.some(v => matchesFoodType(v.foodType || item.foodType, foodPref));
-              }
-              return matchesFoodType(item.foodType, foodPref);
-            });
-          }
-
-          if (filteredItems.length > 0) {
-            const toBase64Thumb = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
-
-            // Build category items (max 10 for RadioButtonsGroup)
-            const categoryItems = await Promise.all(filteredItems.slice(0, 10).map(async (item) => {
-              let desc;
-              if (item.variants && item.variants.length > 0) {
-                const vCount = item.variants.length;
-                desc = `${vCount} variant${vCount > 1 ? 's' : ''} available`;
-              } else {
-                desc = `₹${item.offerPrice || item.price}`;
-              }
-
-              const catItem = {
-                id: item._id.toString(),
-                title: item.name.substring(0, 30),
-                description: desc
-              };
-
-              if (item.image) {
-                const b64 = await toBase64Thumb(item.image);
-                if (b64) catItem.image = b64;
-              }
-
-              return catItem;
-            }));
-
-            response = {
-              screen: 'MENU_CATEGORIES',
-              data: {
-                categories: categoryItems,
-                menu_banner: images.menuBanner || '',
-                selected_service: 'order_food',
-                selected_food_type: selectedFoodType,
-                flow_token: token
-              }
-            };
-          } else {
-            // No items found for this food type → close flow
-            response = {
-              screen: 'SUCCESS',
-              data: {
-                extension_message_response: {
-                  params: {
-                    flow_token: token,
-                    selected_service: 'order_food',
-                    selected_food_type: selectedFoodType,
-                    no_items: 'true'
-                  }
-                }
-              }
-            };
-          }
-        } catch (dbErr) {
-          logger.error('[FlowEndpoint] Failed to fetch menu items', { error: dbErr.message });
-          response = {
-            screen: 'SUCCESS',
-            data: {
-              extension_message_response: {
-                params: {
-                  flow_token: token,
-                  selected_service: 'order_food',
-                  selected_food_type: selectedFoodType,
-                  no_items: 'true'
                 }
               }
             }

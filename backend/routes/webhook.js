@@ -503,31 +503,24 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                     else if (responseData.flow_token?.startsWith('welcome_service_') && responseData.selected_service) {
                       const service = responseData.selected_service;
                       
-                      // For Order Food - check if category was selected (3-screen flow) or just food type (2-screen)
+                      // For Order Food - category selected directly from MENU_CATEGORIES
                       if (service === 'order_food') {
                         const phone = responseData.flow_token.replace('welcome_service_', '');
                         if (responseData.selected_category) {
-                          // 3-screen flow: food type + category selected → route to catalog for this item
-                          const foodPref = responseData.selected_food_type ? responseData.selected_food_type.replace('food_', '') : 'all';
-                          selectedId = `flow_order_${foodPref}_${responseData.selected_category}`;
-                          text = `flow_order_${foodPref}_${responseData.selected_category}`;
+                          // Category selected → route to catalog for this item
+                          selectedId = `flow_order_all_${responseData.selected_category}`;
+                          text = `flow_order_all_${responseData.selected_category}`;
                           messageType = 'button';
-                          logger.info('Flow: Order Food with category selected', { phone, service, foodType: foodPref, category: responseData.selected_category });
-                        } else if (responseData.selected_food_type) {
-                          // 2-screen flow: food type already chosen (e.g., food_veg, food_nonveg, food_egg)
-                          selectedId = responseData.selected_food_type;
-                          text = responseData.selected_food_type;
-                          messageType = 'button';
-                          logger.info('Flow: Order Food with food type selected', { phone, service, foodType: responseData.selected_food_type });
+                          logger.info('Flow: Order Food with category selected', { phone, service, category: responseData.selected_category });
                         } else if (responseData.no_items === 'true') {
-                          // No menu items for this food type
+                          // No menu items available
                           messageType = 'flow_trigger';
                           text = JSON.stringify({ type: 'no_menu_items', phone, service });
-                          logger.info('Flow: Order Food - no items found', { phone, foodType: responseData.selected_food_type });
+                          logger.info('Flow: Order Food - no items found', { phone });
                         } else {
                           messageType = 'flow_trigger';
-                          text = JSON.stringify({ type: 'food_type_selection', phone, service });
-                          logger.info('Flow: Order Food selected, triggering food type selection', { phone, service });
+                          text = JSON.stringify({ type: 'order_food_selection', phone, service });
+                          logger.info('Flow: Order Food selected', { phone, service });
                         }
                       }
                       // For My Orders — endpoint flow handles screen navigation;
@@ -637,8 +630,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                         } else if (responseData.selected_category) {
                           // MENU_CATEGORIES completed → route to menu item
                           const menuItemId = responseData.selected_category;
-                          const foodPref = responseData.selected_food_type ? responseData.selected_food_type.replace('food_', '') : 'all';
-                          selectedId = `flow_order_${foodPref}_${menuItemId}`;
+                          selectedId = `flow_order_all_${menuItemId}`;
                           text = selectedId;
                           messageType = 'button';
                           logger.info('Flow: My Cart - category selected for add more', { phone: userPhone, category: menuItemId });
