@@ -79,7 +79,7 @@ export default function FlowImages() {
     }
   };
 
-  const isBanner = (key) => key === 'flow_welcome_banner';
+  const isBanner = (key) => key.endsWith('_banner');
 
   // Separate banner and service icons
   const bannerImages = images.filter(img => isBanner(img.key));
@@ -222,9 +222,9 @@ export default function FlowImages() {
       {/* Banner Section */}
       {bannerImages.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold text-dark-800 mb-3">Welcome Banner</h2>
-          <p className="text-sm text-dark-400 mb-4">Displayed at the top of the welcome flow. Recommended: 1000 × 125px (8:1 ratio). Auto-resized to fit (no cropping) with rounded corners.</p>
-          <div className="max-w-2xl">
+          <h2 className="text-lg font-semibold text-dark-800 mb-3">Flow Banners</h2>
+          <p className="text-sm text-dark-400 mb-4">Banner images displayed at the top of flow screens. Recommended: 1000 × 125px (8:1 ratio). Auto-resized to fit.</p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {bannerImages.map(img => (
               <ImageCard key={img.key} image={img} aspectClass="aspect-[8/1]" sizeLabel="1000 × 125px (8:1)" />
             ))}

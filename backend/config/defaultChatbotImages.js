@@ -85,7 +85,12 @@ const defaultImages = [
   { key: 'flow_pay_hotel', name: 'Flow: Pay at Hotel Icon', description: 'Icon for Pay at Hotel payment option for self-pickup (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_pay_gpay', name: 'Flow: Google Pay Icon', description: 'Icon for Google Pay payment option (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_pay_phonepe', name: 'Flow: PhonePe Icon', description: 'Icon for PhonePe payment option (square aspect ratio recommended)', imageUrl: '' },
-  { key: 'flow_pay_paytm', name: 'Flow: Paytm Icon', description: 'Icon for Paytm payment option (square aspect ratio recommended)', imageUrl: '' }
+  { key: 'flow_pay_paytm', name: 'Flow: Paytm Icon', description: 'Icon for Paytm payment option (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_my_cart', name: 'Flow: My Cart Icon', description: 'Icon shown in welcome Flow service list for My Cart option (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_cart_banner', name: 'Flow: Cart Banner', description: 'Banner image at top of Cart Review screen (8:1 ratio, 1000x125px)', imageUrl: '' },
+  { key: 'flow_cart_place_order', name: 'Flow: Place Order Icon', description: 'Icon for Place Order action in Cart Actions (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_cart_add_more', name: 'Flow: Add More Icon', description: 'Icon for Add More action in Cart Actions (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_cart_clear', name: 'Flow: Clear Cart Icon', description: 'Icon for Clear Cart action in Cart Actions (square aspect ratio recommended)', imageUrl: '' }
 ];
 
 module.exports = defaultImages;
