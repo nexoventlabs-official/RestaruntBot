@@ -1242,36 +1242,95 @@ router.post('/', async (req, res) => {
 
         try {
           const order = await Order.findOne({ orderId: selectedOrderId })
-            .select('orderId status items totalAmount itemsTotal deliveryCharge discountAmount serviceType paymentMethod createdAt')
+            .select('orderId status items totalAmount itemsTotal deliveryCharge discountAmount serviceType paymentMethod paymentStatus cancellationReason deliveryPartnerName trackingUpdates assignedTo createdAt deliveredAt')
+            .populate('assignedTo', 'name phone')
             .lean();
 
           if (order) {
             const images = await getFlowImages();
 
             const STATUS_LABELS = {
-              pending: 'Pending',
-              confirmed: 'Confirmed',
-              preparing: 'Preparing',
-              ready: 'Ready',
-              out_for_delivery: 'Out for Delivery',
-              delivered: 'Delivered',
-              cancelled: 'Cancelled'
+              pending: '⏳ Pending',
+              confirmed: '✅ Confirmed',
+              preparing: '👨‍🍳 Preparing',
+              ready: '📦 Ready',
+              out_for_delivery: '🚚 Out for Delivery',
+              delivered: '✅ Delivered',
+              cancelled: '❌ Cancelled'
             };
 
             const SERVICE_LABELS = {
-              delivery: 'Delivery',
-              pickup: 'Pickup',
-              dine_in: 'Dine In'
+              delivery: '🚚 Delivery',
+              pickup: '🏪 Self-Pickup',
+              dine_in: '🍽️ Dine In'
+            };
+
+            const PAYMENT_STATUS_LABELS = {
+              pending: '⏳ Pending',
+              paid: '✅ Paid',
+              failed: '❌ Failed',
+              cancelled: '❌ Cancelled'
             };
 
             const statusLabel = STATUS_LABELS[order.status] || order.status;
             const serviceLabel = SERVICE_LABELS[order.serviceType] || order.serviceType;
+            const paymentLabel = order.paymentMethod === 'cod'
+              ? (order.serviceType === 'pickup' ? 'Pay at Hotel' : 'Cash on Delivery')
+              : 'UPI';
+            const paymentStatusLabel = PAYMENT_STATUS_LABELS[order.paymentStatus] || order.paymentStatus;
             const date = new Date(order.createdAt);
             const dateStr = date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+            const timeStr = date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
             // Status image
             const statusImg = images.statusImages?.[order.status];
             const hasStatusImage = !!statusImg;
+
+            // Build order info
+            const orderInfoLines = [
+              `📋 Status: ${statusLabel}`,
+              `🏷️ Service: ${serviceLabel}`,
+              `💳 Payment: ${paymentLabel} (${paymentStatusLabel})`,
+              `📅 Date: ${dateStr}, ${timeStr}`
+            ];
+            const orderInfo = orderInfoLines.join('\n');
+
+            // Cancellation info
+            let cancelInfo = '';
+            const hasCancelInfo = order.status === 'cancelled';
+            if (hasCancelInfo) {
+              const reason = order.cancellationReason || 'No reason provided';
+              cancelInfo = `📝 Reason: ${reason}`;
+            }
+
+            // Delivery partner info
+            let deliveryInfo = '';
+            const hasDeliveryInfo = order.serviceType === 'delivery' && (order.assignedTo || order.deliveryPartnerName);
+            if (hasDeliveryInfo) {
+              const partnerName = order.assignedTo?.name || order.deliveryPartnerName || 'Assigned';
+              const partnerPhone = order.assignedTo?.phone || '';
+              deliveryInfo = `🧑‍💼 Partner: ${partnerName}`;
+              if (partnerPhone) deliveryInfo += `\n📞 Phone: ${partnerPhone}`;
+            }
+
+            // Tracking timeline
+            let trackingInfo = '';
+            const hasTrackingInfo = order.trackingUpdates && order.trackingUpdates.length > 0;
+            if (hasTrackingInfo) {
+              const fmtTime = (d) => new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+              const fmtDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+              const timelineLines = order.trackingUpdates.map(tu => {
+                const label = STATUS_LABELS[tu.status] || tu.status || tu.message;
+                return `${fmtDate(tu.timestamp)} ${fmtTime(tu.timestamp)} — ${label}`;
+              });
+              trackingInfo = timelineLines.join('\n');
+            }
+            if (order.deliveredAt) {
+              const dDate = new Date(order.deliveredAt);
+              const dStr = dDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+              const dTime = dDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+              trackingInfo += (trackingInfo ? '\n' : '') + `${dStr} ${dTime} — ✅ Delivered`;
+            }
 
             // Build item list with images
             const toBase64 = (url, opts) => catalogService._imageUrlToRawBase64(url, opts);
@@ -1294,13 +1353,8 @@ router.post('/', async (req, res) => {
             summaryLines.push(`Items Total: ₹${itemsTotal}`);
             if (order.deliveryCharge > 0) summaryLines.push(`Delivery: ₹${order.deliveryCharge}`);
             if (order.discountAmount > 0) summaryLines.push(`Discount: -₹${order.discountAmount}`);
-            summaryLines.push('─────────');
+            summaryLines.push('─────────────────');
             summaryLines.push(`Total: ₹${order.totalAmount}`);
-
-            const paymentLabel = order.paymentMethod === 'cod'
-              ? (order.serviceType === 'pickup' ? 'Pay at Hotel' : 'Cash on Delivery')
-              : 'UPI';
-            const orderInfo = `Status: ${statusLabel}\nService: ${serviceLabel}\nPayment: ${paymentLabel}\nDate: ${dateStr}`;
 
             response = {
               screen: 'ORDER_DETAILS',
@@ -1309,6 +1363,12 @@ router.post('/', async (req, res) => {
                 has_status_image: hasStatusImage,
                 order_heading: `Order #${order.orderId}`,
                 order_info: orderInfo,
+                has_cancel_info: hasCancelInfo,
+                cancel_info: cancelInfo || ' ',
+                has_delivery_info: !!hasDeliveryInfo,
+                delivery_info: deliveryInfo || ' ',
+                has_tracking_info: !!(hasTrackingInfo || order.deliveredAt),
+                tracking_info: trackingInfo || ' ',
                 order_items: orderItems.length > 0 ? orderItems : [{ id: 'no_items', title: 'No items', description: 'Order has no items' }],
                 order_summary: summaryLines.join('\n'),
                 order_id: order.orderId,

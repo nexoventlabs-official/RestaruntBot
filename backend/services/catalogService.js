@@ -1839,8 +1839,33 @@ const catalogService = {
         text: '${data.order_info}'
       },
       {
+        type: 'TextCaption',
+        text: '${data.cancel_info}',
+        visible: '${data.has_cancel_info}'
+      },
+      {
         type: 'TextSubheading',
-        text: 'Items'
+        text: '🚚 Delivery Partner',
+        visible: '${data.has_delivery_info}'
+      },
+      {
+        type: 'TextBody',
+        text: '${data.delivery_info}',
+        visible: '${data.has_delivery_info}'
+      },
+      {
+        type: 'TextSubheading',
+        text: '📍 Order Timeline',
+        visible: '${data.has_tracking_info}'
+      },
+      {
+        type: 'TextCaption',
+        text: '${data.tracking_info}',
+        visible: '${data.has_tracking_info}'
+      },
+      {
+        type: 'TextSubheading',
+        text: '🛒 Items'
       },
       {
         type: 'RadioButtonsGroup',
@@ -2101,7 +2126,31 @@ const catalogService = {
             },
             order_info: {
               type: 'string',
-              __example__: 'Status: Preparing\nService: Delivery\nDate: 6 Mar'
+              __example__: '📋 Status: ⏳ Pending\n🏷️ Service: 🚚 Delivery\n💳 Payment: Cash on Delivery (⏳ Pending)\n📅 Date: 6 Mar 2026, 10:30 am'
+            },
+            has_cancel_info: {
+              type: 'boolean',
+              __example__: false
+            },
+            cancel_info: {
+              type: 'string',
+              __example__: '📝 Reason: Payment timed out'
+            },
+            has_delivery_info: {
+              type: 'boolean',
+              __example__: false
+            },
+            delivery_info: {
+              type: 'string',
+              __example__: '🧑‍💼 Partner: Ravi Kumar\n📞 Phone: 9876543210'
+            },
+            has_tracking_info: {
+              type: 'boolean',
+              __example__: false
+            },
+            tracking_info: {
+              type: 'string',
+              __example__: '6 Mar 10:30 am — ✅ Confirmed\n6 Mar 10:45 am — 👨‍🍳 Preparing'
             },
             order_items: {
               type: 'array',
