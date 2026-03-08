@@ -71,24 +71,17 @@ const FLOW_IMAGE_KEYS = [
 ];
 
 // Determine Cloudinary crop dimensions based on image type
-const OPTION_KEYS = ['flow_delivery_option', 'flow_pickup_option'];
-
 function getCropDimensions(key) {
   if (key.endsWith('_banner')) {
     // Banner: 8:1 ratio
     return { width: 1000, height: 125 };
   }
-  if (OPTION_KEYS.includes(key)) {
-    // Service type options: 2:1 ratio
-    return { width: 800, height: 400 };
-  }
-  // Service/payment icons: 1:1 square ratio
+  // All other icons: 1:1 square ratio
   return { width: 600, height: 600 };
 }
 
 function getAspectRatio(key) {
   if (key.endsWith('_banner')) return '8:1';
-  if (OPTION_KEYS.includes(key)) return '2:1';
   return '1:1';
 }
 
