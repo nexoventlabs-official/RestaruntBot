@@ -55,7 +55,7 @@ const defaultImages = [
   { key: 'flow_view_offers', name: 'Flow: View Offers Icon', description: 'Icon shown in welcome Flow service list for View Offers option (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_visit_website', name: 'Flow: Visit Website Icon', description: 'Icon shown in welcome Flow service list for Visit Website option (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_help_support', name: 'Flow: Help & Support Icon', description: 'Icon shown in welcome Flow service list for Help & Support option (square aspect ratio recommended)', imageUrl: '' },
-  { key: 'flow_welcome_banner', name: 'Flow: Welcome Banner', description: 'Banner image at top of welcome Flow (8:1 ratio, 1000x125px)', imageUrl: '' },
+  { key: 'flow_welcome_banner', name: 'Flow: Welcome Banner', description: 'Banner image at top of welcome Flow (5:1 ratio, 1000x200px, rounded corners applied automatically)', imageUrl: '' },
   { key: 'flow_website_banner', name: 'Flow: Website Banner', description: 'Banner image at top of Visit Website screen (8:1 ratio, 1000x125px)', imageUrl: '' },
   { key: 'flow_offers_banner', name: 'Flow: Offers Banner', description: 'Banner image at top of View Offers screen (8:1 ratio, 1000x125px)', imageUrl: '' },
   { key: 'flow_foodtype_banner', name: 'Flow: Food Type Banner', description: 'Banner image at top of Food Type Selection screen (8:1 ratio, 1000x125px)', imageUrl: '' },
