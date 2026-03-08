@@ -1297,7 +1297,9 @@ router.post('/', async (req, res) => {
             summaryLines.push('─────────');
             summaryLines.push(`Total: ₹${order.totalAmount}`);
 
-            const paymentLabel = order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'UPI';
+            const paymentLabel = order.paymentMethod === 'cod'
+              ? (order.serviceType === 'pickup' ? 'Pay at Hotel' : 'Cash on Delivery')
+              : 'UPI';
             const orderInfo = `Status: ${statusLabel}\nService: ${serviceLabel}\nPayment: ${paymentLabel}\nDate: ${dateStr}`;
 
             response = {
