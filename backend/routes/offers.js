@@ -698,7 +698,7 @@ router.post('/:id/retry-template', auth, async (req, res) => {
     });
   } catch (err) {
     const errMsg = err.response?.data?.error?.message || err.message;
-    return logRouteError(res, 'Retry template failed', error);
+    return logRouteError(res, errMsg || 'Retry template failed', err);
   }
 });
 
