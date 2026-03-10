@@ -638,46 +638,58 @@ export default function Offers() {
                     <div className="flex flex-wrap gap-1">{detailOffer.appliedCategories.map(c => <span key={c} className="px-2 py-0.5 bg-primary-50 text-primary-700 rounded text-xs font-medium">{c}</span>)}</div>
                   </div>
                 )}
-                <div><p className="text-xs text-dark-400">Applied Items</p><p className="text-sm font-semibold text-dark-900">{detailOffer.appliedItems?.length || 0} items, {detailOffer.appliedVariants?.length || 0} variants</p></div>
-                {/* Applied Items with names */}
-                {detailOffer.appliedItems?.length > 0 && detailOffer.appliedVariants?.length === 0 && (
-                  <div>
-                    <p className="text-xs text-dark-400 mb-2">Items</p>
-                    <div className="space-y-2 max-h-52 overflow-y-auto">
-                      {detailOffer.appliedItems.map((item, idx) => {
-                        const name = typeof item === 'object' ? item.name : item;
-                        const img = typeof item === 'object' ? item.image : null;
-                        return (
-                          <div key={idx} className="flex items-center gap-3 p-2.5 bg-dark-50 rounded-xl">
-                            {img ? <img src={img} alt="" className="w-10 h-10 rounded-lg object-cover bg-dark-200 flex-shrink-0" onError={e => { e.target.style.display = 'none'; }} /> : <div className="w-10 h-10 rounded-lg bg-dark-200 flex items-center justify-center flex-shrink-0"><span className="text-dark-400 text-lg">🍽</span></div>}
-                            <p className="text-sm font-semibold text-dark-900 truncate">{name || 'Unknown Item'}</p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-                {/* Variant Details */}
-                {detailOffer.appliedVariants?.length > 0 && (() => {
-                  const variantDetails = detailOffer.appliedVariants.map(v => {
+                {/* Applied Items & Variants */}
+                {(() => {
+                  const items = (detailOffer.appliedItems || []).filter(i => typeof i === 'object' && i.name);
+                  const variantIds = new Set((detailOffer.appliedVariants || []).map(v => v.split('_')[0]));
+                  // Items that are directly applied (not just parents of variants)
+                  const directItems = items.filter(i => !variantIds.has((i._id || i).toString()) || (detailOffer.appliedVariants || []).length === 0);
+                  // Resolve variant details
+                  const variantDetails = (detailOffer.appliedVariants || []).map(v => {
                     const [itemId, vIdx] = v.split('_');
-                    const item = (detailOffer.appliedItems || []).find(i => ((i._id || i).toString()) === itemId);
+                    const item = items.find(i => (i._id || i).toString() === itemId);
                     if (!item || !item.variants) return null;
                     const variant = item.variants[parseInt(vIdx)];
                     if (!variant) return null;
-                    return { ...variant, itemName: item.name, itemImage: item.image, key: v };
+                    return { ...variant, itemName: item.name, itemImage: item.image, foodType: variant.foodType || item.foodType, key: v };
                   }).filter(Boolean);
-                  if (variantDetails.length === 0) return null;
+                  const totalCount = directItems.length + variantDetails.length;
+                  if (totalCount === 0) return <div><p className="text-xs text-dark-400">Applied Items</p><p className="text-sm text-dark-500">No items selected</p></div>;
                   return (
                     <div>
-                      <p className="text-xs text-dark-400 mb-2">Applied Variants</p>
-                      <div className="space-y-2 max-h-52 overflow-y-auto">
+                      <p className="text-xs text-dark-400 mb-2">Applied Items & Variants <span className="text-dark-300">({totalCount})</span></p>
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {directItems.map((item, idx) => (
+                          <div key={`item-${idx}`} className="flex items-center gap-3 p-2.5 bg-dark-50 rounded-xl">
+                            {item.image ? (
+                              <img src={item.image} alt="" className="w-11 h-11 rounded-lg object-cover bg-dark-200 flex-shrink-0" onError={e => { e.target.style.display = 'none'; }} />
+                            ) : (
+                              <div className="w-11 h-11 rounded-lg bg-dark-200 flex items-center justify-center flex-shrink-0"><span className="text-dark-400 text-lg">🍽</span></div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${foodDot(item.foodType)}`} />
+                                <p className="text-sm font-semibold text-dark-900 truncate">{item.name}</p>
+                              </div>
+                              {item.category && <p className="text-xs text-dark-500 mt-0.5">{Array.isArray(item.category) ? item.category.join(', ') : item.category}</p>}
+                              <p className="text-xs font-medium text-dark-700 mt-0.5">₹{item.price}</p>
+                            </div>
+                            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-bold flex-shrink-0">Item</span>
+                          </div>
+                        ))}
                         {variantDetails.map(vd => (
                           <div key={vd.key} className="flex items-center gap-3 p-2.5 bg-dark-50 rounded-xl">
-                            {(vd.image || vd.itemImage) ? <img src={vd.image || vd.itemImage} alt="" className="w-11 h-11 rounded-lg object-cover bg-dark-200 flex-shrink-0" onError={e => { e.target.style.display = 'none'; }} /> : <div className="w-11 h-11 rounded-lg bg-dark-200 flex items-center justify-center flex-shrink-0"><span className="text-dark-400 text-lg">🍽</span></div>}
+                            {(vd.image || vd.itemImage) ? (
+                              <img src={vd.image || vd.itemImage} alt="" className="w-11 h-11 rounded-lg object-cover bg-dark-200 flex-shrink-0" onError={e => { e.target.style.display = 'none'; }} />
+                            ) : (
+                              <div className="w-11 h-11 rounded-lg bg-dark-200 flex items-center justify-center flex-shrink-0"><span className="text-dark-400 text-lg">🍽</span></div>
+                            )}
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-dark-900 truncate">{vd.label}</p>
-                              <p className="text-xs text-dark-500">{vd.itemName}</p>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${foodDot(vd.foodType)}`} />
+                                <p className="text-sm font-semibold text-dark-900 truncate">{vd.label}</p>
+                              </div>
+                              <p className="text-xs text-dark-500 mt-0.5">{vd.itemName}</p>
                               {vd.quantities?.length > 0 ? (
                                 <div className="flex flex-wrap gap-1 mt-1">
                                   {vd.quantities.map((q, qi) => (
@@ -687,9 +699,10 @@ export default function Offers() {
                                   ))}
                                 </div>
                               ) : (
-                                <p className="text-xs text-dark-500 mt-0.5">₹{vd.price}</p>
+                                <p className="text-xs font-medium text-dark-700 mt-0.5">₹{vd.price}</p>
                               )}
                             </div>
+                            <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded text-[10px] font-bold flex-shrink-0">Variant</span>
                           </div>
                         ))}
                       </div>
