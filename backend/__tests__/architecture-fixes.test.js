@@ -586,8 +586,8 @@ describe('R5: defaultChatbotImages config', () => {
     expect(Array.isArray(defaultImages)).toBe(true);
   });
 
-  it('should have 56 image slot definitions', () => {
-    expect(defaultImages.length).toBe(56);
+  it('should have 81 image slot definitions', () => {
+    expect(defaultImages.length).toBe(81);
   });
 
   it('each entry should have key and name properties', () => {
