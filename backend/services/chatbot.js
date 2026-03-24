@@ -9005,13 +9005,28 @@ const chatbot = {
 
         // Only use native payment if ALL items have catalog mappings
         if (retailerMappings.length === items.length) {
-          const orderItems = items.map(item => ({
-            retailerId: retailerMap.get(item.menuItem.toString()),
-            name: item.name,
-            priceAmount: item.originalPrice || item.price,
-            saleAmount: item.price !== item.originalPrice ? item.price : undefined,
-            quantity: item.quantity
-          }));
+          const orderItems = items.map(item => {
+            // Build variant-specific retailer_id to match catalog product
+            // Format must match syncProductToMeta: {id}_v{vIdx}_q{qIdx} or {id}_v{vIdx} or {id}
+            const baseId = item.menuItem.toString();
+            let retailerId;
+            if (item.variantIndex !== null && item.variantIndex !== undefined) {
+              if (item.quantityIndex !== null && item.quantityIndex !== undefined) {
+                retailerId = `${baseId}_v${item.variantIndex}_q${item.quantityIndex}`;
+              } else {
+                retailerId = `${baseId}_v${item.variantIndex}`;
+              }
+            } else {
+              retailerId = retailerMap.get(baseId) || baseId;
+            }
+            return {
+              retailerId,
+              name: item.name,
+              priceAmount: item.originalPrice || item.price,
+              saleAmount: item.price !== item.originalPrice ? item.price : undefined,
+              quantity: item.quantity
+            };
+          });
 
           const orderDetailsImg = await chatbotImagesService.getImageUrl('order_details');
           try {
