@@ -1397,14 +1397,17 @@ const metaCloud = {
     try {
       const { baseUrl, accessToken } = getConfig();
       const to = phone.replace('@c.us', '').replace(/\D/g, '');
-      const catalogId = process.env.META_CATALOG_ID;
       const paymentConfig = process.env.WHATSAPP_PAYMENT_CONFIG || process.env.RAZORPAY_CONFIG_ID;
 
-      if (!catalogId) throw new Error('META_CATALOG_ID not configured');
       if (!paymentConfig) throw new Error('WHATSAPP_PAYMENT_CONFIG / RAZORPAY_CONFIG_ID not configured');
 
       // Convert rupees to paise offset (offset 100 → value in paise)
       const toPaise = (rupees) => Math.round(Number(rupees) * 100);
+
+      // Non-catalog mode: omit catalog_id so WhatsApp doesn't try to fetch
+      // (broken) catalog images. Instead, provide country_of_origin + importer fields.
+      const businessName = process.env.BUSINESS_NAME || 'Restaurant';
+      const businessAddress = process.env.BUSINESS_ADDRESS || 'India';
 
       const orderItems = items.map(item => {
         const obj = {
@@ -1414,7 +1417,10 @@ const metaCloud = {
             value: toPaise(item.priceAmount),
             offset: 100
           },
-          quantity: item.quantity
+          quantity: item.quantity,
+          country_of_origin: 'IN',
+          importer_name: businessName,
+          importer_address: businessAddress
         };
         // If sale/discounted price differs from original, add sale_amount
         if (item.saleAmount != null && item.saleAmount !== item.priceAmount) {
@@ -1470,7 +1476,6 @@ const metaCloud = {
               },
               order: {
                 status: 'pending',
-                catalog_id: catalogId,
                 expiration: {
                   timestamp: Math.floor(Date.now() / 1000) + 900, // 15 min expiry
                   description: 'Order expires in 15 minutes'
