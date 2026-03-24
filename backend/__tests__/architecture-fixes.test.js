@@ -73,7 +73,7 @@ describe('C3: processCheckout sets paymentMethod', () => {
       src.indexOf(marker),
       src.indexOf(marker) + 10000
     );
-    expect(checkoutSection).toContain("paymentMethod: 'online'");
+    expect(checkoutSection).toContain("paymentMethod: 'upi'");
   });
 });
 
