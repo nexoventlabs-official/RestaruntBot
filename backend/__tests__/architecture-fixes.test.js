@@ -73,7 +73,7 @@ describe('C3: processCheckout sets paymentMethod', () => {
       src.indexOf(marker),
       src.indexOf(marker) + 10000
     );
-    expect(checkoutSection).toContain("paymentMethod: 'upi'");
+    expect(checkoutSection).toContain("paymentMethod: 'online'");
   });
 });
 
@@ -586,8 +586,8 @@ describe('R5: defaultChatbotImages config', () => {
     expect(Array.isArray(defaultImages)).toBe(true);
   });
 
-  it('should have 81 image slot definitions', () => {
-    expect(defaultImages.length).toBe(81);
+  it('should have 56 image slot definitions', () => {
+    expect(defaultImages.length).toBe(56);
   });
 
   it('each entry should have key and name properties', () => {

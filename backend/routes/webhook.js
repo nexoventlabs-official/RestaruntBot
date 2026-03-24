@@ -484,6 +484,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                     else if (responseData.flow_token?.startsWith('cart_review_') && responseData.selected_cart_action === 'clear_cart') {
                       const userPhone = responseData.flow_token.replace('cart_review_', '');
                       try {
+                        const Customer = require('../models/Customer');
                         await Customer.findOneAndUpdate({ phone: userPhone }, { $set: { cart: [] } });
                         await whatsapp.sendMessage(userPhone, '🗑️ *Cart Cleared!*\n\nAll items have been removed from your cart.\nType "menu" to start a new order.');
                       } catch (clearErr) {
@@ -636,6 +637,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                         } else if (responseData.selected_cart_action === 'clear_cart') {
                           // Clear Cart → clear customer cart and confirm
                           try {
+                            const Customer = require('../models/Customer');
                             await Customer.findOneAndUpdate({ phone: userPhone }, { $set: { cart: [] } });
                             await whatsapp.sendMessage(userPhone, '🗑️ *Cart Cleared!*\n\nAll items have been removed from your cart.\nType "menu" to start a new order.');
                           } catch (clearErr) {
