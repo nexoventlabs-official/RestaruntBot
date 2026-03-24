@@ -9029,17 +9029,12 @@ const chatbot = {
           });
 
           const orderDetailsImg = await chatbotImagesService.getImageUrl('order_details');
-          try {
-            await whatsapp.sendOrderDetails(phone, orderId, orderItems, total, {
-              tax: 0,
-              shipping: deliveryCharge,
-              discount: totalDiscount,
-              headerImageUrl: orderDetailsImg || null
-            });
-          } catch (sendErr) {
-            // Meta API may have already delivered the message even if post-send tracking failed
-            logger.warn('sendOrderDetails post-processing error', { orderId, error: sendErr.message });
-          }
+          await whatsapp.sendOrderDetails(phone, orderId, orderItems, total, {
+            tax: 0,
+            shipping: deliveryCharge,
+            discount: totalDiscount,
+            headerImageUrl: orderDetailsImg || null
+          });
 
           // Don't send admin push yet — wait for payment confirmation webhook
           logger.info('Native WhatsApp payment sent', { orderId, total });
