@@ -1404,8 +1404,9 @@ const metaCloud = {
       // Convert rupees to paise offset (offset 100 → value in paise)
       const toPaise = (rupees) => Math.round(Number(rupees) * 100);
 
-      // Non-catalog mode: omit catalog_id so WhatsApp doesn't try to fetch
-      // (broken) catalog images. Instead, provide country_of_origin + importer fields.
+      // Use catalog_id so WhatsApp fetches product images from the Meta Commerce Catalog.
+      // Also provide country_of_origin + importer fields as required fallback.
+      const catalogId = process.env.META_CATALOG_ID;
       const businessName = process.env.BUSINESS_NAME || 'Restaurant';
       const businessAddress = process.env.BUSINESS_ADDRESS || 'India';
 
@@ -1476,6 +1477,7 @@ const metaCloud = {
               },
               order: {
                 status: 'pending',
+                ...(catalogId && { catalog_id: catalogId }),
                 expiration: {
                   timestamp: Math.floor(Date.now() / 1000) + 900, // 15 min expiry
                   description: 'Order expires in 15 minutes'
@@ -1506,7 +1508,11 @@ const metaCloud = {
         }
       };
 
-      logger.info('Sending order_details for native payment', { to, referenceId, totalAmount, itemCount: items.length });
+      logger.info('Sending order_details for native payment', { 
+        to, referenceId, totalAmount, itemCount: items.length,
+        catalogId: catalogId || 'none',
+        retailerIds: orderItems.map(i => i.retailer_id)
+      });
       const response = await metaApi.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
