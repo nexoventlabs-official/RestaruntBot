@@ -436,6 +436,14 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       messageType = 'button'; // Treat as button press for chatbot routing
                       logger.info('Flow category selected', { category: responseData.selected_category, selectedId, isOrderFlow });
                     }
+                    // Reorder flow — user selected a category after payment timeout
+                    else if (responseData.flow_token?.startsWith('reorder_') && responseData.selected_category) {
+                      const menuItemId = responseData.selected_category;
+                      selectedId = `flow_order_all_${menuItemId}`;
+                      text = selectedId;
+                      messageType = 'button';
+                      logger.info('Flow: Reorder category selected', { category: menuItemId });
+                    }
                     // Order Confirmation flow — user chose delivery/pickup
                     else if (responseData.flow_token?.startsWith('order_confirm_') && responseData.selected_service_type) {
                       const serviceType = responseData.selected_service_type; // 'delivery' or 'pickup'

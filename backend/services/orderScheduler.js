@@ -101,6 +101,26 @@ const orderScheduler = {
           { id: 'help', text: 'Help' }
         ]);
       }
+
+      // Send Reorder Flow (category selection with images) if available
+      const reorderFlowId = process.env.WHATSAPP_REORDER_FLOW_ID;
+      if (reorderFlowId) {
+        try {
+          const metaCloud = require('./metaCloud');
+          const phone = order.customer.phone;
+          const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
+          await metaCloud.sendFlowMessage(phone, {
+            flowId: reorderFlowId,
+            flowCta: 'Browse Menu',
+            bodyText: '🍽️ Ready to order again? Browse our menu below!',
+            flowToken: `reorder_${cleanPhone}`,
+            flowAction: 'data_exchange'
+          });
+          logger.info('Reorder flow sent after payment timeout', { orderId: order.orderId, phone });
+        } catch (flowErr) {
+          logger.warn('Reorder flow send failed, buttons already sent', { error: flowErr.message });
+        }
+      }
       
       // Emit event for real-time updates
       const dataEvents = require('./eventEmitter');

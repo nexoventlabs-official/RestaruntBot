@@ -557,6 +557,55 @@ router.post('/', async (req, res) => {
           response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'cart_init_error' } } } };
         }
       }
+      // Reorder Flow — show menu categories with images (after payment timeout)
+      else if (flow_token?.startsWith('reorder_')) {
+        const phone = flow_token.replace('reorder_', '');
+        try {
+          const images = await getFlowImages();
+          const toBase64Thumb = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
+          const allItems = await MenuItem.find({ available: true, isPaused: { $ne: true } })
+            .select('name image variants price offerPrice')
+            .lean();
+
+          const categoryItems = await Promise.all(allItems.slice(0, 10).map(async (item) => {
+            let desc;
+            if (item.variants && item.variants.length > 0) {
+              desc = `${item.variants.length} variant${item.variants.length > 1 ? 's' : ''} available`;
+            } else {
+              desc = `₹${item.offerPrice || item.price}`;
+            }
+            const catItem = {
+              id: item._id.toString(),
+              title: item.name.substring(0, 30),
+              description: desc
+            };
+            if (item.image) {
+              const b64 = await toBase64Thumb(item.image);
+              if (b64) catItem.image = b64;
+            }
+            return catItem;
+          }));
+
+          if (categoryItems.length > 0) {
+            response = {
+              screen: 'CATEGORY_SELECT',
+              data: {
+                categories: categoryItems,
+                menu_banner: images.menuBanner || '',
+                flow_token
+              }
+            };
+          } else {
+            response = {
+              screen: 'SUCCESS',
+              data: { extension_message_response: { params: { flow_token, no_items: 'true' } } }
+            };
+          }
+        } catch (err) {
+          logger.error('[FlowEndpoint] Reorder INIT error', { phone, error: err.message });
+          response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'reorder_init_error' } } } };
+        }
+      }
       // Welcome Services Flow — default INIT
       else {
         const images = await getFlowImages();
