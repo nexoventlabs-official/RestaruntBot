@@ -86,7 +86,12 @@ const chatbotImageSchema = new mongoose.Schema({
       'flow_cart_banner',
       'flow_cart_place_order',
       'flow_cart_add_more',
-      'flow_cart_clear'
+      'flow_cart_clear',
+      'flow_order_actions_banner',
+      'flow_action_track',
+      'flow_action_cancel',
+      'flow_action_order_food',
+      'flow_action_main_menu'
     ]
   },
   name: {
