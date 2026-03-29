@@ -1867,11 +1867,22 @@ router.post('/', async (req, res) => {
                 }).join('\n');
               }
 
-              // Build items list
-              const orderItems = (order.items || []).map((item, idx) => ({
-                id: `item_${idx}`,
-                title: `${item.name} x${item.quantity}`,
-                description: `₹${item.price} each`
+              // Build items list with variant images
+              const toBase64Thumb = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
+              const orderItems = await Promise.all((order.items || []).map(async (item, idx) => {
+                const entry = {
+                  id: `item_${idx}`,
+                  title: `${item.name} x${item.quantity}`,
+                  description: `₹${item.price} each`
+                };
+                // Use stored item image (variant image or parent image)
+                if (item.image) {
+                  try {
+                    const b64 = await toBase64Thumb(item.image);
+                    if (b64) entry.image = b64;
+                  } catch (e) { /* skip image */ }
+                }
+                return entry;
               }));
 
               response = {

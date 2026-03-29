@@ -118,11 +118,12 @@ function buildOrderActionsFlowJSON() {
               properties: {
                 id: { type: 'string' },
                 title: { type: 'string' },
-                description: { type: 'string' }
+                description: { type: 'string' },
+                image: { type: 'string' }
               }
             },
             __example__: [
-              { id: 'item1', title: 'Chicken Biryani x2', description: '₹250 each' }
+              { id: 'item1', title: 'Chicken Biryani x2', description: '₹250 each', image: 'iVBORw0KGgo' }
             ]
           },
           order_total: { type: 'string', __example__: '💰 Total: ₹500' },
@@ -280,7 +281,7 @@ async function createOrderActionsFlow() {
     const backendUrl = process.env.BACKEND_URL;
     const endpointUri = `${backendUrl}/api/whatsapp-flow`;
 
-    const FLOW_NAME = 'JRB Order Actions v2';
+    const FLOW_NAME = 'JRB Order Actions v3';
     logger.info('Creating Order Actions flow...', { name: FLOW_NAME });
 
     const createResult = await metaCloud.createFlow(FLOW_NAME, ['OTHER'], { endpointUri });
