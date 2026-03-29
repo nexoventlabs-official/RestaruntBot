@@ -34,15 +34,20 @@ function buildOrderActionsFlowJSON() {
               properties: {
                 id: { type: 'string' },
                 title: { type: 'string' },
-                description: { type: 'string' }
+                description: { type: 'string' },
+                image: { type: 'string' }
               }
             },
             __example__: [
-              { id: 'track_order', title: '📍 Track Order', description: 'View order status' },
-              { id: 'cancel_order', title: '❌ Cancel Order', description: 'Cancel this order' },
-              { id: 'order_food', title: '🍽️ Order Food', description: 'Browse menu' },
-              { id: 'main_menu', title: '🏠 Main Menu', description: 'Go to main menu' }
+              { id: 'track_order', title: 'Track Order', description: 'View order status', image: 'iVBORw0KGgo' },
+              { id: 'cancel_order', title: 'Cancel Order', description: 'Cancel this order', image: 'iVBORw0KGgo' },
+              { id: 'order_food', title: 'Order Food', description: 'Browse menu', image: 'iVBORw0KGgo' },
+              { id: 'main_menu', title: 'Main Menu', description: 'Go to main menu', image: 'iVBORw0KGgo' }
             ]
+          },
+          actions_banner: {
+            type: 'string',
+            __example__: 'iVBORw0KGgo'
           },
           order_info: {
             type: 'string',
@@ -56,6 +61,14 @@ function buildOrderActionsFlowJSON() {
         layout: {
           type: 'SingleColumnLayout',
           children: [
+            {
+              type: 'Image',
+              src: '${data.actions_banner}',
+              width: 1000,
+              height: 125,
+              'scale-type': 'cover',
+              'alt-text': 'Order Actions Banner'
+            },
             {
               type: 'TextBody',
               text: '${data.order_info}'
@@ -267,7 +280,7 @@ async function createOrderActionsFlow() {
     const backendUrl = process.env.BACKEND_URL;
     const endpointUri = `${backendUrl}/api/whatsapp-flow`;
 
-    const FLOW_NAME = 'JRB Order Actions v1';
+    const FLOW_NAME = 'JRB Order Actions v2';
     logger.info('Creating Order Actions flow...', { name: FLOW_NAME });
 
     const createResult = await metaCloud.createFlow(FLOW_NAME, ['OTHER'], { endpointUri });

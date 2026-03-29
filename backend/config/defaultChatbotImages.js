@@ -85,7 +85,12 @@ const defaultImages = [
   { key: 'flow_cart_banner', name: 'Flow: Cart Banner', description: 'Banner image at top of Cart Review screen (8:1 ratio, 1000x125px)', imageUrl: '' },
   { key: 'flow_cart_place_order', name: 'Flow: Place Order Icon', description: 'Icon for Place Order action in Cart Actions (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_cart_add_more', name: 'Flow: Add More Icon', description: 'Icon for Add More action in Cart Actions (square aspect ratio recommended)', imageUrl: '' },
-  { key: 'flow_cart_clear', name: 'Flow: Clear Cart Icon', description: 'Icon for Clear Cart action in Cart Actions (square aspect ratio recommended)', imageUrl: '' }
+  { key: 'flow_cart_clear', name: 'Flow: Clear Cart Icon', description: 'Icon for Clear Cart action in Cart Actions (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_order_actions_banner', name: 'Flow: Order Actions Banner', description: 'Banner image at top of Order Actions screen (8:1 ratio, 1000x125px)', imageUrl: '' },
+  { key: 'flow_action_track', name: 'Flow: Track Order Icon', description: 'Icon for Track Order option in Order Actions flow (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_action_cancel', name: 'Flow: Cancel Order Icon', description: 'Icon for Cancel Order option in Order Actions flow (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_action_order_food', name: 'Flow: Order Food Icon (Actions)', description: 'Icon for Order Food option in Order Actions flow (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_action_main_menu', name: 'Flow: Main Menu Icon', description: 'Icon for Main Menu option in Order Actions flow (square aspect ratio recommended)', imageUrl: '' }
 ];
 
 module.exports = defaultImages;

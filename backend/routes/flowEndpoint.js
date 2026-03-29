@@ -565,13 +565,32 @@ router.post('/', async (req, res) => {
         const phone = tokenParts.substring(0, lastUnderscore);
         const orderId = tokenParts.substring(lastUnderscore + 1);
         try {
+          const images = await getFlowImages();
+          const toBase64Icon = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
+
+          // Fetch action icons from chatbot images
+          const [trackImg, cancelImg, orderFoodImg, mainMenuImg] = await Promise.all([
+            chatbotImagesService.getImageUrl('flow_action_track').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
+            chatbotImagesService.getImageUrl('flow_action_cancel').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
+            chatbotImagesService.getImageUrl('flow_action_order_food').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
+            chatbotImagesService.getImageUrl('flow_action_main_menu').then(u => u ? toBase64Icon(u) : '').catch(() => '')
+          ]);
+
+          // Fetch banner
+          const bannerUrl = await chatbotImagesService.getImageUrl('flow_order_actions_banner');
+          const bannerB64 = bannerUrl ? await catalogService._imageUrlToRawBase64(bannerUrl).catch(() => '') : '';
+
           const order = await Order.findOne({ orderId });
           const actions = [
-            { id: 'track_order', title: '📍 Track Order', description: 'View current order status' },
-            { id: 'cancel_order', title: '❌ Cancel Order', description: 'Cancel this order' },
-            { id: 'order_food', title: '🍽️ Order Food', description: 'Browse menu & order more' },
-            { id: 'main_menu', title: '🏠 Main Menu', description: 'Go to main menu' }
+            { id: 'track_order', title: 'Track Order', description: 'View current order status' },
+            { id: 'cancel_order', title: 'Cancel Order', description: 'Cancel this order' },
+            { id: 'order_food', title: 'Order Food', description: 'Browse menu & order more' },
+            { id: 'main_menu', title: 'Main Menu', description: 'Go to main menu' }
           ];
+          // Add images to actions
+          const iconMap = { track_order: trackImg, cancel_order: cancelImg, order_food: orderFoodImg, main_menu: mainMenuImg };
+          actions.forEach(a => { if (iconMap[a.id]) a.image = iconMap[a.id]; });
+
           // Remove cancel option if order can't be cancelled
           if (order && ['delivered', 'cancelled', 'out_for_delivery'].includes(order.status)) {
             const idx = actions.findIndex(a => a.id === 'cancel_order');
@@ -584,6 +603,7 @@ router.post('/', async (req, res) => {
             screen: 'ORDER_ACTIONS',
             data: {
               actions,
+              actions_banner: bannerB64 || '',
               order_info: orderInfo,
               flow_token
             }
