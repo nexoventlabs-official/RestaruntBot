@@ -90,19 +90,7 @@ const orderScheduler = {
         cancelledImageUrl = await chatbotImagesService.getImageUrl('order_cancelled');
       }
       
-      if (cancelledImageUrl) {
-        await whatsapp.sendImageWithButtons(order.customer.phone, cancelledImageUrl, message, [
-          { id: 'place_order', text: 'New Order' },
-          { id: 'help', text: 'Help' }
-        ]);
-      } else {
-        await whatsapp.sendButtons(order.customer.phone, message, [
-          { id: 'place_order', text: 'New Order' },
-          { id: 'help', text: 'Help' }
-        ]);
-      }
-
-      // Send Reorder Flow (category selection with images) if available
+      // Send as a single flow message with "Browse Menu" CTA (cancellation info + reorder)
       const reorderFlowId = process.env.WHATSAPP_REORDER_FLOW_ID;
       if (reorderFlowId) {
         try {
@@ -112,13 +100,40 @@ const orderScheduler = {
           await metaCloud.sendFlowMessage(phone, {
             flowId: reorderFlowId,
             flowCta: 'Browse Menu',
-            bodyText: '🍽️ Ready to order again? Browse our menu below!',
+            headerImageUrl: cancelledImageUrl || undefined,
+            headerText: cancelledImageUrl ? undefined : 'Order Cancelled',
+            bodyText: message,
             flowToken: `reorder_${cleanPhone}`,
             flowAction: 'data_exchange'
           });
           logger.info('Reorder flow sent after payment timeout', { orderId: order.orderId, phone });
         } catch (flowErr) {
-          logger.warn('Reorder flow send failed, buttons already sent', { error: flowErr.message });
+          // Fallback to regular buttons if flow fails
+          logger.warn('Reorder flow failed, falling back to buttons', { error: flowErr.message });
+          if (cancelledImageUrl) {
+            await whatsapp.sendImageWithButtons(order.customer.phone, cancelledImageUrl, message, [
+              { id: 'place_order', text: 'New Order' },
+              { id: 'help', text: 'Help' }
+            ]);
+          } else {
+            await whatsapp.sendButtons(order.customer.phone, message, [
+              { id: 'place_order', text: 'New Order' },
+              { id: 'help', text: 'Help' }
+            ]);
+          }
+        }
+      } else {
+        // No reorder flow configured — use regular buttons
+        if (cancelledImageUrl) {
+          await whatsapp.sendImageWithButtons(order.customer.phone, cancelledImageUrl, message, [
+            { id: 'place_order', text: 'New Order' },
+            { id: 'help', text: 'Help' }
+          ]);
+        } else {
+          await whatsapp.sendButtons(order.customer.phone, message, [
+            { id: 'place_order', text: 'New Order' },
+            { id: 'help', text: 'Help' }
+          ]);
         }
       }
       
