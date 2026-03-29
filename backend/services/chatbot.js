@@ -9005,13 +9005,28 @@ const chatbot = {
 
         // Only use native payment if ALL items have catalog mappings
         if (retailerMappings.length === items.length) {
-          const orderItems = items.map(item => ({
-            retailerId: retailerMap.get(item.menuItem.toString()),
-            name: item.name,
-            priceAmount: item.originalPrice || item.price,
-            saleAmount: item.price !== item.originalPrice ? item.price : undefined,
-            quantity: item.quantity
-          }));
+          const orderItems = items.map(item => {
+            const baseId = item.menuItem.toString();
+            // Build the correct retailer_id for variant/quantity items
+            // so WhatsApp can match the exact catalog product (with its image)
+            let retailerId;
+            if (item.variantIndex != null) {
+              if (item.quantityIndex != null) {
+                retailerId = `${baseId}_v${item.variantIndex}_q${item.quantityIndex}`;
+              } else {
+                retailerId = `${baseId}_v${item.variantIndex}`;
+              }
+            } else {
+              retailerId = retailerMap.get(baseId) || baseId;
+            }
+            return {
+              retailerId,
+              name: item.name,
+              priceAmount: item.originalPrice || item.price,
+              saleAmount: item.price !== item.originalPrice ? item.price : undefined,
+              quantity: item.quantity
+            };
+          });
 
           const orderDetailsImg = await chatbotImagesService.getImageUrl('order_details');
           try {
