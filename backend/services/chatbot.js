@@ -9022,6 +9022,7 @@ const chatbot = {
             return {
               retailerId,
               name: item.name,
+              imageUrl: item.image || null,
               priceAmount: item.originalPrice || item.price,
               saleAmount: item.price !== item.originalPrice ? item.price : undefined,
               quantity: item.quantity
