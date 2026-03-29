@@ -444,6 +444,33 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       messageType = 'button';
                       logger.info('Flow: Reorder category selected', { category: menuItemId });
                     }
+                    // Order Actions flow — user completed an action
+                    else if (responseData.flow_token?.startsWith('order_actions_')) {
+                      const actionResult = responseData.action_result;
+                      if (actionResult === 'order_food' && responseData.selected_category) {
+                        // User browsed menu and selected a category
+                        selectedId = `flow_order_all_${responseData.selected_category}`;
+                        text = selectedId;
+                        messageType = 'button';
+                        logger.info('Flow: Order actions - category selected', { category: responseData.selected_category });
+                      } else if (actionResult === 'main_menu') {
+                        selectedId = 'home';
+                        text = 'hi';
+                        messageType = 'button';
+                        logger.info('Flow: Order actions - main menu');
+                      } else if (actionResult === 'order_cancelled') {
+                        // Cancellation already handled in flow endpoint, just log
+                        logger.info('Flow: Order actions - order cancelled via flow');
+                        return res.sendStatus(200);
+                      } else if (actionResult === 'track_order') {
+                        // Tracking already shown in flow, just log
+                        logger.info('Flow: Order actions - order tracked via flow');
+                        return res.sendStatus(200);
+                      } else {
+                        logger.info('Flow: Order actions - unknown result', { actionResult });
+                        return res.sendStatus(200);
+                      }
+                    }
                     // Order Confirmation flow — user chose delivery/pickup
                     else if (responseData.flow_token?.startsWith('order_confirm_') && responseData.selected_service_type) {
                       const serviceType = responseData.selected_service_type; // 'delivery' or 'pickup'

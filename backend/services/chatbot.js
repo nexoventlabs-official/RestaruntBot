@@ -8438,11 +8438,35 @@ const chatbot = {
 
     const confirmedImageUrl = await chatbotImagesService.getImageUrl('order_confirmed');
     
-    await sendWithOptionalImage(phone, confirmedImageUrl, confirmMsg, [
-      { id: 'track_order', text: 'Track Order' },
-      { id: `cancel_${orderId}`, text: 'Cancel Order' },
-      { id: 'home', text: 'Main Menu' }
-    ]);
+    // Send as flow with "Order Details" CTA if order actions flow is available
+    const orderActionsFlowId = process.env.WHATSAPP_ORDER_ACTIONS_FLOW_ID;
+    if (orderActionsFlowId) {
+      try {
+        const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
+        await metaCloud.sendFlowMessage(phone, {
+          flowId: orderActionsFlowId,
+          flowCta: 'Order Details',
+          headerImageUrl: confirmedImageUrl || undefined,
+          headerText: confirmedImageUrl ? undefined : 'Order Confirmed',
+          bodyText: confirmMsg,
+          flowToken: `order_actions_${cleanPhone}_${orderId}`,
+          flowAction: 'data_exchange'
+        });
+      } catch (flowErr) {
+        logger.warn('Order actions flow failed on COD confirm, falling back to buttons', { error: flowErr.message });
+        await sendWithOptionalImage(phone, confirmedImageUrl, confirmMsg, [
+          { id: 'track_order', text: 'Track Order' },
+          { id: `cancel_${orderId}`, text: 'Cancel Order' },
+          { id: 'home', text: 'Main Menu' }
+        ]);
+      }
+    } else {
+      await sendWithOptionalImage(phone, confirmedImageUrl, confirmMsg, [
+        { id: 'track_order', text: 'Track Order' },
+        { id: `cancel_${orderId}`, text: 'Cancel Order' },
+        { id: 'home', text: 'Main Menu' }
+      ]);
+    }
 
     // Mark WhatsApp confirmation sent for reconciliation
     order.whatsappConfirmationSent = true;
@@ -9810,13 +9834,37 @@ const chatbot = {
         msg += 'Please complete the payment to confirm your order.';
       }
 
-      // Get pickup order requested image and send with buttons
+      // Get pickup order requested image and send with flow CTA or buttons
       const pickupOrderRequestedImageUrl = await chatbotImagesService.getImageUrl('pickup_order_requested');
-      await sendWithOptionalImage(phone, pickupOrderRequestedImageUrl, msg, [
-        { id: 'track_order', text: 'Track Order' },
-        { id: `cancel_${orderId}`, text: 'Cancel Order' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      const orderActionsFlowId = process.env.WHATSAPP_ORDER_ACTIONS_FLOW_ID;
+      if (orderActionsFlowId) {
+        try {
+          const metaCloud = require('./metaCloud');
+          const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
+          await metaCloud.sendFlowMessage(phone, {
+            flowId: orderActionsFlowId,
+            flowCta: 'Order Details',
+            headerImageUrl: pickupOrderRequestedImageUrl || undefined,
+            headerText: pickupOrderRequestedImageUrl ? undefined : 'Order Request',
+            bodyText: msg,
+            flowToken: `order_actions_${cleanPhone}_${orderId}`,
+            flowAction: 'data_exchange'
+          });
+        } catch (flowErr) {
+          logger.warn('Order actions flow failed on pickup confirm, falling back to buttons', { error: flowErr.message });
+          await sendWithOptionalImage(phone, pickupOrderRequestedImageUrl, msg, [
+            { id: 'track_order', text: 'Track Order' },
+            { id: `cancel_${orderId}`, text: 'Cancel Order' },
+            { id: 'home', text: 'Main Menu' }
+          ]);
+        }
+      } else {
+        await sendWithOptionalImage(phone, pickupOrderRequestedImageUrl, msg, [
+          { id: 'track_order', text: 'Track Order' },
+          { id: `cancel_${orderId}`, text: 'Cancel Order' },
+          { id: 'home', text: 'Main Menu' }
+        ]);
+      }
 
       // Mark WhatsApp confirmation sent for reconciliation
       order.whatsappConfirmationSent = true;

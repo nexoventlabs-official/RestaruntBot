@@ -557,6 +557,42 @@ router.post('/', async (req, res) => {
           response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'cart_init_error' } } } };
         }
       }
+      // Order Actions Flow — show action options for a specific order
+      else if (flow_token?.startsWith('order_actions_')) {
+        // flow_token format: order_actions_{phone}_{orderId}
+        const tokenParts = flow_token.replace('order_actions_', '');
+        const lastUnderscore = tokenParts.lastIndexOf('_');
+        const phone = tokenParts.substring(0, lastUnderscore);
+        const orderId = tokenParts.substring(lastUnderscore + 1);
+        try {
+          const order = await Order.findOne({ orderId });
+          const actions = [
+            { id: 'track_order', title: '📍 Track Order', description: 'View current order status' },
+            { id: 'cancel_order', title: '❌ Cancel Order', description: 'Cancel this order' },
+            { id: 'order_food', title: '🍽️ Order Food', description: 'Browse menu & order more' },
+            { id: 'main_menu', title: '🏠 Main Menu', description: 'Go to main menu' }
+          ];
+          // Remove cancel option if order can't be cancelled
+          if (order && ['delivered', 'cancelled', 'out_for_delivery'].includes(order.status)) {
+            const idx = actions.findIndex(a => a.id === 'cancel_order');
+            if (idx >= 0) actions.splice(idx, 1);
+          }
+          const orderInfo = order
+            ? `📦 *Order #${orderId}*\n💰 Total: ₹${order.totalAmount}\n🍽️ Service: ${order.serviceType || 'delivery'}\n📋 Status: ${order.status}`
+            : `📦 Order #${orderId}`;
+          response = {
+            screen: 'ORDER_ACTIONS',
+            data: {
+              actions,
+              order_info: orderInfo,
+              flow_token
+            }
+          };
+        } catch (err) {
+          logger.error('[FlowEndpoint] Order actions INIT error', { orderId, error: err.message });
+          response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'order_actions_init_error' } } } };
+        }
+      }
       // Reorder Flow — show menu categories with images (after payment timeout)
       else if (flow_token?.startsWith('reorder_')) {
         const phone = flow_token.replace('reorder_', '');
@@ -1760,6 +1796,136 @@ router.post('/', async (req, res) => {
               }
             }
           };
+        }
+      }
+
+      // ORDER_ACTIONS screen: User selected an action (track/cancel/order_food/main_menu)
+      else if (screen === 'ORDER_ACTIONS') {
+        const selectedAction = data?.selected_action;
+        const token = data?.flow_token || flow_token || '';
+        // Parse orderId from flow_token: order_actions_{phone}_{orderId}
+        const tokenParts = token.replace('order_actions_', '');
+        const lastUnderscore = tokenParts.lastIndexOf('_');
+        const phone = tokenParts.substring(0, lastUnderscore);
+        const orderId = tokenParts.substring(lastUnderscore + 1);
+
+        if (selectedAction === 'track_order') {
+          try {
+            const order = await Order.findOne({ orderId }).lean();
+            if (!order) {
+              response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Order Not Found', cancel_info: `Order #${orderId} was not found.`, flow_token: token } };
+            } else {
+              const images = await getFlowImages();
+              // Status image mapping
+              const statusImageMap = {
+                pending: images.statusPending,
+                confirmed: images.statusConfirmed,
+                preparing: images.statusPreparing,
+                ready: images.statusReady,
+                out_for_delivery: images.statusOutForDelivery,
+                delivered: images.statusDelivered,
+                cancelled: images.statusCancelled
+              };
+              const statusImage = statusImageMap[order.status] || '';
+              const statusEmoji = { pending: '⏳', confirmed: '✅', preparing: '👨‍🍳', ready: '📦', out_for_delivery: '🛵', delivered: '✅', cancelled: '❌' };
+              const emoji = statusEmoji[order.status] || '📋';
+
+              let orderInfo = `📋 Status: ${emoji} ${order.status.replace('_', ' ')}\n🍽️ Service: ${order.serviceType || 'delivery'}\n💳 Payment: ${order.paymentMethod || 'N/A'}`;
+              if (order.deliveryAddress?.address) {
+                orderInfo += `\n📍 Address: ${order.deliveryAddress.address}`;
+              }
+
+              // Build tracking timeline
+              let hasTracking = false;
+              let trackingInfo = '';
+              if (order.trackingUpdates && order.trackingUpdates.length > 0) {
+                hasTracking = true;
+                trackingInfo = order.trackingUpdates.map(t => {
+                  const d = new Date(t.timestamp || t.createdAt);
+                  const time = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+                  return `${time} — ${t.message || t.status}`;
+                }).join('\n');
+              }
+
+              // Build items list
+              const orderItems = (order.items || []).map((item, idx) => ({
+                id: `item_${idx}`,
+                title: `${item.name} x${item.quantity}`,
+                description: `₹${item.price} each`
+              }));
+
+              response = {
+                screen: 'ORDER_STATUS',
+                data: {
+                  status_image: statusImage || '',
+                  has_status_image: !!statusImage,
+                  order_heading: `Order #${orderId}`,
+                  order_info: orderInfo,
+                  has_tracking_info: hasTracking,
+                  tracking_info: trackingInfo || 'No updates yet',
+                  order_items: orderItems.length > 0 ? orderItems : [{ id: 'none', title: 'No items', description: '' }],
+                  order_total: `💰 Total: ₹${order.totalAmount}`,
+                  flow_token: token
+                }
+              };
+            }
+          } catch (err) {
+            logger.error('[FlowEndpoint] Order actions track error', { orderId, error: err.message });
+            response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Error', cancel_info: 'Could not load order details.', flow_token: token } };
+          }
+        } else if (selectedAction === 'cancel_order') {
+          try {
+            const order = await Order.findOne({ orderId });
+            if (!order) {
+              response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Not Found', cancel_info: `Order #${orderId} was not found.`, flow_token: token } };
+            } else if (['delivered', 'cancelled'].includes(order.status)) {
+              response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Cannot Cancel', cancel_info: `Order is already ${order.status}.`, flow_token: token } };
+            } else if (['out_for_delivery', 'preparing'].includes(order.status)) {
+              response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Cannot Cancel', cancel_info: `Order is already being ${order.status.replace('_', ' ')}. Please contact support.`, flow_token: token } };
+            } else {
+              const { transitionStatus } = require('../services/orderStateMachine');
+              const result = transitionStatus(order, 'cancelled', 'Cancelled by customer via flow');
+              if (result.success) {
+                order.cancellationReason = 'Cancelled by customer';
+                await order.save();
+                const googleSheets = require('../services/googleSheets');
+                googleSheets.updateOrderStatus(orderId, 'cancelled', order.status).catch(() => {});
+                const dataEvents = require('../services/eventEmitter');
+                dataEvents.emit('orders');
+                dataEvents.emit('dashboard');
+                response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '✅ Order Cancelled', cancel_info: `Order #${orderId} has been cancelled successfully.`, flow_token: token } };
+              } else {
+                response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Cannot Cancel', cancel_info: result.reason || 'Order cannot be cancelled at this stage.', flow_token: token } };
+              }
+            }
+          } catch (err) {
+            logger.error('[FlowEndpoint] Order actions cancel error', { orderId, error: err.message });
+            response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Error', cancel_info: 'Could not cancel order. Please try again.', flow_token: token } };
+          }
+        } else if (selectedAction === 'order_food') {
+          try {
+            const images = await getFlowImages();
+            const toBase64Thumb = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
+            const allItems = await MenuItem.find({ available: true, isPaused: { $ne: true } })
+              .select('name image variants price offerPrice').lean();
+            const categoryItems = await Promise.all(allItems.slice(0, 10).map(async (item) => {
+              let desc = item.variants?.length > 0 ? `${item.variants.length} variant${item.variants.length > 1 ? 's' : ''} available` : `₹${item.offerPrice || item.price}`;
+              const catItem = { id: item._id.toString(), title: item.name.substring(0, 30), description: desc };
+              if (item.image) { const b64 = await toBase64Thumb(item.image).catch(() => ''); if (b64) catItem.image = b64; }
+              return catItem;
+            }));
+            if (categoryItems.length > 0) {
+              response = { screen: 'MENU_CATEGORIES', data: { categories: categoryItems, menu_banner: images.menuBanner || '', flow_token: token } };
+            } else {
+              response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token: token, action_result: 'no_items' } } } };
+            }
+          } catch (err) {
+            logger.error('[FlowEndpoint] Order actions menu error', { error: err.message });
+            response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token: token, action_result: 'order_food' } } } };
+          }
+        } else {
+          // main_menu or unknown → complete flow, webhook handles it
+          response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token: token, action_result: selectedAction || 'main_menu' } } } };
         }
       }
 
