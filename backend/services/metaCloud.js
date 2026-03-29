@@ -1400,15 +1400,18 @@ const metaCloud = {
       const catalogId = process.env.META_CATALOG_ID;
       const paymentConfig = process.env.WHATSAPP_PAYMENT_CONFIG || process.env.RAZORPAY_CONFIG_ID;
 
-      if (!catalogId) throw new Error('META_CATALOG_ID not configured');
       if (!paymentConfig) throw new Error('WHATSAPP_PAYMENT_CONFIG / RAZORPAY_CONFIG_ID not configured');
 
       // Convert rupees to paise offset (offset 100 → value in paise)
       const toPaise = (rupees) => Math.round(Number(rupees) * 100);
 
+      // Check if any item has a direct image URL — if so, use image-based mode (no catalog)
+      // Meta API: "image" field cannot be used with retailer_id or catalog_id
+      const hasDirectImages = items.some(item => item.imageUrl);
+      const businessName = process.env.MERCHANT_NAME || process.env.BUSINESS_NAME || 'Restaurant';
+
       const orderItems = items.map(item => {
         const obj = {
-          retailer_id: item.retailerId,
           name: item.name,
           amount: {
             value: toPaise(item.priceAmount),
@@ -1416,6 +1419,27 @@ const metaCloud = {
           },
           quantity: item.quantity
         };
+
+        if (hasDirectImages) {
+          // Image-based mode: use direct image links, no retailer_id/catalog_id
+          if (item.imageUrl) {
+            obj.image = { link: item.imageUrl };
+          }
+          // Required fields when catalog_id is not present
+          obj.country_of_origin = 'India';
+          obj.importer_name = businessName;
+          obj.importer_address = {
+            address_line1: businessName,
+            city: 'Local',
+            zone_code: 'AP',
+            postal_code: '500001',
+            country_code: 'IN'
+          };
+        } else {
+          // Catalog-based mode: use retailer_id
+          obj.retailer_id = item.retailerId;
+        }
+
         // If sale/discounted price differs from original, add sale_amount
         if (item.saleAmount != null && item.saleAmount !== item.priceAmount) {
           obj.sale_amount = {
@@ -1430,6 +1454,40 @@ const metaCloud = {
         const price = i.saleAmount != null ? i.saleAmount : i.priceAmount;
         return sum + price * i.quantity;
       }, 0);
+
+      // Build order object — include catalog_id only when NOT using direct images
+      const orderObj = {
+        status: 'pending',
+        expiration: {
+          timestamp: Math.floor(Date.now() / 1000) + 900, // 15 min expiry
+          description: 'Order expires in 15 minutes'
+        },
+        items: orderItems,
+        subtotal: {
+          value: toPaise(subtotal),
+          offset: 100
+        },
+        tax: {
+          value: toPaise(tax),
+          offset: 100,
+          description: 'Tax'
+        },
+        shipping: {
+          value: toPaise(shipping),
+          offset: 100,
+          description: 'Delivery charge'
+        },
+        discount: {
+          value: toPaise(discount),
+          offset: 100,
+          description: 'Discount'
+        }
+      };
+
+      // Only include catalog_id when using catalog-based mode (no direct images)
+      if (!hasDirectImages && catalogId) {
+        orderObj.catalog_id = catalogId;
+      }
 
       const payload = {
         messaging_product: 'whatsapp',
@@ -1468,40 +1526,13 @@ const metaCloud = {
                 value: toPaise(totalAmount),
                 offset: 100
               },
-              order: {
-                status: 'pending',
-                catalog_id: catalogId,
-                expiration: {
-                  timestamp: Math.floor(Date.now() / 1000) + 900, // 15 min expiry
-                  description: 'Order expires in 15 minutes'
-                },
-                items: orderItems,
-                subtotal: {
-                  value: toPaise(subtotal),
-                  offset: 100
-                },
-                tax: {
-                  value: toPaise(tax),
-                  offset: 100,
-                  description: 'Tax'
-                },
-                shipping: {
-                  value: toPaise(shipping),
-                  offset: 100,
-                  description: 'Delivery charge'
-                },
-                discount: {
-                  value: toPaise(discount),
-                  offset: 100,
-                  description: 'Discount'
-                }
-              }
+              order: orderObj
             }
           }
         }
       };
 
-      logger.info('Sending order_details for native payment', { to, referenceId, totalAmount, itemCount: items.length });
+      logger.info('Sending order_details for native payment', { to, referenceId, totalAmount, itemCount: items.length, imageMode: hasDirectImages ? 'direct' : 'catalog' });
       const response = await metaApi.post(`${baseUrl}/messages`, payload, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
