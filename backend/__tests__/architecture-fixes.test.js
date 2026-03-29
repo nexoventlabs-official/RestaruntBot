@@ -67,13 +67,13 @@ describe('C3: processCheckout sets paymentMethod', () => {
     const src = require('fs').readFileSync(
       path.join(__dirname, '..', 'services', 'chatbot.js'), 'utf8'
     );
-    // Find processCheckout method – it should contain paymentMethod: 'online'
+    // Find processCheckout method – it should contain paymentMethod: 'upi'
     const marker = 'async processCheckout(phone';
     const checkoutSection = src.substring(
       src.indexOf(marker),
       src.indexOf(marker) + 10000
     );
-    expect(checkoutSection).toContain("paymentMethod: 'online'");
+    expect(checkoutSection).toContain("paymentMethod: 'upi'");
   });
 });
 
@@ -586,8 +586,8 @@ describe('R5: defaultChatbotImages config', () => {
     expect(Array.isArray(defaultImages)).toBe(true);
   });
 
-  it('should have 56 image slot definitions', () => {
-    expect(defaultImages.length).toBe(56);
+  it('should have 81 image slot definitions', () => {
+    expect(defaultImages.length).toBe(81);
   });
 
   it('each entry should have key and name properties', () => {
