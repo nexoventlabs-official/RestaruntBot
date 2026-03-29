@@ -9388,10 +9388,34 @@ const chatbot = {
     const imageKey = isPickup ? 'pickup_cancelled' : 'order_cancelled';
     const cancelledImageUrl = await chatbotImagesService.getImageUrl(imageKey);
     
-    await sendWithOptionalImage(phone, cancelledImageUrl, msg, [
-      { id: 'place_order', text: 'New Order' },
-      { id: 'home', text: 'Main Menu' }
-    ]);
+    // Send as flow with "Browse Menu" CTA if reorder flow is available
+    const reorderFlowId = process.env.WHATSAPP_REORDER_FLOW_ID;
+    if (reorderFlowId) {
+      try {
+        const metaCloud = require('./metaCloud');
+        const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
+        await metaCloud.sendFlowMessage(phone, {
+          flowId: reorderFlowId,
+          flowCta: 'Browse Menu',
+          headerImageUrl: cancelledImageUrl || undefined,
+          headerText: cancelledImageUrl ? undefined : 'Order Cancelled',
+          bodyText: msg,
+          flowToken: `reorder_${cleanPhone}`,
+          flowAction: 'data_exchange'
+        });
+      } catch (flowErr) {
+        logger.warn('Reorder flow failed on cancel, falling back to buttons', { error: flowErr.message });
+        await sendWithOptionalImage(phone, cancelledImageUrl, msg, [
+          { id: 'place_order', text: 'New Order' },
+          { id: 'home', text: 'Main Menu' }
+        ]);
+      }
+    } else {
+      await sendWithOptionalImage(phone, cancelledImageUrl, msg, [
+        { id: 'place_order', text: 'New Order' },
+        { id: 'home', text: 'Main Menu' }
+      ]);
+    }
   },
 
   // ============ HELP ============

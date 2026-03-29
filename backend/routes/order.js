@@ -17,6 +17,7 @@ const DeliveryBoy = require('../models/DeliveryBoy');
 const DashboardStats = require('../models/DashboardStats');
 const User = require('../models/User');
 const pushNotification = require('../services/pushNotification');
+const metaCloud = require('../services/metaCloud');
 const dataEvents = require('../services/eventEmitter');
 const router = express.Router();
 
@@ -500,49 +501,47 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             'Tap to track your order'
           );
         } else if (status === 'cancelled') {
-          // Use pickup-specific cancelled by restaurant image for pay-at-hotel pickup orders
+          // Determine the right image for this cancellation type
+          let cancelledImageUrl;
+          let cancelMsg;
           if (isPickupOrder && order.paymentMethod === 'cod') {
-            // Pickup order cancelled by restaurant (pay at hotel)
-            const cancelledByRestaurantImageUrl = await chatbotImagesService.getImageUrl('pickup_cancelled_by_restaurant');
-            const cancelMsg = `❌ *Order Cancelled by Restaurant*\n\nOrder ID: *${order.orderId}*\n\nWe're sorry, but your self-pickup order has been cancelled by the restaurant.\n\nIf you have any questions, please contact us.`;
-            
-            await sendWithOptionalImage(
-              order.customer.phone,
-              cancelledByRestaurantImageUrl,
-              cancelMsg,
-              [
-                { id: 'view_menu', text: 'Menu' },
-                { id: 'help', text: 'Help' }
-              ]
-            );
+            cancelledImageUrl = await chatbotImagesService.getImageUrl('pickup_cancelled_by_restaurant');
+            cancelMsg = `❌ *Order Cancelled by Restaurant*\n\nOrder ID: *${order.orderId}*\n\nWe're sorry, but your self-pickup order has been cancelled by the restaurant.\n\nIf you have any questions, please contact us.`;
           } else if (!isPickupOrder && order.paymentMethod === 'cod') {
-            // Delivery COD order cancelled by restaurant
-            const cancelledByRestaurantImageUrl = await chatbotImagesService.getImageUrl('order_cancelled_by_restaurant');
-            const cancelMsg = `❌ *Order Cancelled by Restaurant*\n\nOrder ID: *${order.orderId}*\n\nWe're sorry, but your order has been cancelled by the restaurant.\n\nIf you have any questions, please contact us.`;
-            
-            await sendWithOptionalImage(
-              order.customer.phone,
-              cancelledByRestaurantImageUrl,
-              cancelMsg,
-              [
-                { id: 'view_menu', text: 'Menu' },
-                { id: 'help', text: 'Help' }
-              ]
-            );
+            cancelledImageUrl = await chatbotImagesService.getImageUrl('order_cancelled_by_restaurant');
+            cancelMsg = `❌ *Order Cancelled by Restaurant*\n\nOrder ID: *${order.orderId}*\n\nWe're sorry, but your order has been cancelled by the restaurant.\n\nIf you have any questions, please contact us.`;
           } else {
-            // Use regular cancelled image for other orders (UPI cancelled, etc.)
             const cancelledImageKey = isPickupOrder ? 'pickup_cancelled' : 'order_cancelled';
-            const cancelledImageUrl = await chatbotImagesService.getImageUrl(cancelledImageKey);
-            
-            await sendWithOptionalImage(
-              order.customer.phone,
-              cancelledImageUrl,
-              msg,
-              [
+            cancelledImageUrl = await chatbotImagesService.getImageUrl(cancelledImageKey);
+            cancelMsg = msg;
+          }
+
+          // Send as flow with "Browse Menu" CTA if reorder flow is available
+          const reorderFlowId = process.env.WHATSAPP_REORDER_FLOW_ID;
+          if (reorderFlowId) {
+            try {
+              const cleanPhone = order.customer.phone.replace('@c.us', '').replace(/\D/g, '');
+              await metaCloud.sendFlowMessage(order.customer.phone, {
+                flowId: reorderFlowId,
+                flowCta: 'Browse Menu',
+                headerImageUrl: cancelledImageUrl || undefined,
+                headerText: cancelledImageUrl ? undefined : 'Order Cancelled',
+                bodyText: cancelMsg,
+                flowToken: `reorder_${cleanPhone}`,
+                flowAction: 'data_exchange'
+              });
+            } catch (flowErr) {
+              logger.warn('Reorder flow failed on admin cancel, falling back to buttons', { error: flowErr.message });
+              await sendWithOptionalImage(order.customer.phone, cancelledImageUrl, cancelMsg, [
                 { id: 'view_menu', text: 'Menu' },
                 { id: 'help', text: 'Help' }
-              ]
-            );
+              ]);
+            }
+          } else {
+            await sendWithOptionalImage(order.customer.phone, cancelledImageUrl, cancelMsg, [
+              { id: 'view_menu', text: 'Menu' },
+              { id: 'help', text: 'Help' }
+            ]);
           }
         } else {
           // Other statuses (confirmed, etc.)
