@@ -375,16 +375,10 @@ router.post('/', async (req, res) => {
                 description: `${ci.quantity} × ₹${effectivePrice} = ₹${subtotal}`
               };
 
-              // Convert item image to base64 for thumbnail (variant image if available)
-              let imgUrl = null;
-              if (ci.variantIndex != null && mi.variants?.[ci.variantIndex]?.image) {
-                imgUrl = mi.variants[ci.variantIndex].image;
-              } else if (mi.image) {
-                imgUrl = mi.image;
-              }
-              if (imgUrl) {
+              // Convert item image to base64 for thumbnail
+              if (mi.image) {
                 try {
-                  const b64 = await toBase64(imgUrl, { width: 100, height: 100 });
+                  const b64 = await toBase64(mi.image, { width: 100, height: 100 });
                   if (b64) entry.image = b64;
                 } catch (e) { /* skip image */ }
               }
