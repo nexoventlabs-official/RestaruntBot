@@ -531,17 +531,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
                 flowAction: 'data_exchange'
               });
             } catch (flowErr) {
-              logger.warn('Reorder flow failed on admin cancel, falling back to buttons', { error: flowErr.message });
-              await sendWithOptionalImage(order.customer.phone, cancelledImageUrl, cancelMsg, [
-                { id: 'view_menu', text: 'Menu' },
-                { id: 'help', text: 'Help' }
-              ]);
+              logger.error('Reorder flow failed on admin cancel', { error: flowErr.message });
             }
-          } else {
-            await sendWithOptionalImage(order.customer.phone, cancelledImageUrl, cancelMsg, [
-              { id: 'view_menu', text: 'Menu' },
-              { id: 'help', text: 'Help' }
-            ]);
           }
         } else {
           // Other statuses (confirmed, etc.)

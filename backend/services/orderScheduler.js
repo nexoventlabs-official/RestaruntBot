@@ -108,32 +108,7 @@ const orderScheduler = {
           });
           logger.info('Reorder flow sent after payment timeout', { orderId: order.orderId, phone });
         } catch (flowErr) {
-          // Fallback to regular buttons if flow fails
-          logger.warn('Reorder flow failed, falling back to buttons', { error: flowErr.message });
-          if (cancelledImageUrl) {
-            await whatsapp.sendImageWithButtons(order.customer.phone, cancelledImageUrl, message, [
-              { id: 'place_order', text: 'New Order' },
-              { id: 'help', text: 'Help' }
-            ]);
-          } else {
-            await whatsapp.sendButtons(order.customer.phone, message, [
-              { id: 'place_order', text: 'New Order' },
-              { id: 'help', text: 'Help' }
-            ]);
-          }
-        }
-      } else {
-        // No reorder flow configured — use regular buttons
-        if (cancelledImageUrl) {
-          await whatsapp.sendImageWithButtons(order.customer.phone, cancelledImageUrl, message, [
-            { id: 'place_order', text: 'New Order' },
-            { id: 'help', text: 'Help' }
-          ]);
-        } else {
-          await whatsapp.sendButtons(order.customer.phone, message, [
-            { id: 'place_order', text: 'New Order' },
-            { id: 'help', text: 'Help' }
-          ]);
+          logger.error('Reorder flow failed after payment timeout', { error: flowErr.message });
         }
       }
       

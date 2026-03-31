@@ -76,13 +76,6 @@ async function getCachedActiveOffers(phone) {
   return filtered;
 }
 
-// ============ TRANSLATION CACHE for Groq AI ============
-// Caches AI translation results to avoid repeated API calls for the same text.
-// 5-minute TTL, max 200 entries. Huge win for repeated searches.
-const _translationCache = new Map();
-const TRANSLATION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const TRANSLATION_CACHE_MAX = 200;
-
 const generateOrderId = (serviceType = 'delivery') => {
   const prefix = serviceType === 'pickup' ? 'S' : 'O';
   const random = crypto.randomBytes(4).toString('hex').toUpperCase();
@@ -577,61 +570,15 @@ const calculateOfferDiscount = (menuItem, activeOffers) => {
 
 const chatbot = {
   // Helper to detect cancel order intent from text/voice
-  // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
-  // Enhanced with voice recognition alternatives
   isCancelIntent(text) {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     const cancelPatterns = [
-      // ========== ENGLISH - Primary patterns ==========
       /\bcancel\b/, /\bcancel order\b/, /\bcancel my order\b/, /\bcancel the order\b/, /\bcancel item\b/,
       /\bremove order\b/, /\bstop order\b/, /\bdon'?t want\b/, /\bdont want\b/, /\bno need\b/,
       /\bcancel it\b/, /\bcancel this\b/, /\bcancel that\b/, /\bplease cancel\b/,
-      /\bi want to cancel\b/, /\bi want cancel\b/, /\bwant to cancel\b/, /\bwant cancel\b/,
-      /\bneed to cancel\b/, /\bhave to cancel\b/, /\bcan you cancel\b/, /\bcould you cancel\b/,
+      /\bi want to cancel\b/, /\bwant to cancel\b/, /\bneed to cancel\b/, /\bcan you cancel\b/,
       /\bcancel please\b/, /\bcancel pls\b/, /\bcancel plz\b/,
-      // Voice recognition alternatives for "cancel"
-      /\bkansil\b/, /\bkancel\b/, /\bcancil\b/, /\bcancal\b/, /\bcansal\b/, /\bcansil\b/,
-      /\bkensel\b/, /\bkencel\b/, /\bcancel\b/, /\bcancell\b/,
-      // "cancel my order" voice alternatives
-      /\bcancel my\b/, /\bkansil my\b/, /\bcansal my\b/, /\bcancil my\b/,
-      /\bcancel mai\b/, /\bcancel meri\b/, /\bcancel mera\b/,
-      // ========== HINDI ==========
-      /\bcancel karo\b/, /\bcancel kar do\b/, /\border cancel\b/, /\bcancel करो\b/,
-      /\bऑर्डर कैंसल\b/, /\bकैंसल\b/, /\bरद्द करो\b/, /\bरद्द कर दो\b/,
-      /\bcancel karna hai\b/, /\bcancel karna\b/, /\bcancel chahiye\b/,
-      /\border cancel karo\b/, /\border cancel kar do\b/, /\bmera order cancel\b/,
-      /\bcancel kar dijiye\b/, /\bcancel karwa do\b/, /\bcancel karwao\b/,
-      /\bband karo\b/, /\bband kar do\b/, /\border band karo\b/,
-      // ========== TELUGU ==========
-      /\bcancel cheyyi\b/, /\bcancel cheyyandi\b/, /\border cancel cheyyi\b/,
-      /\bక్యాన్సల్\b/, /\bఆర్డర్ క్యాన్సల్\b/, /\bరద్దు చేయండి\b/, /\bరద్దు\b/,
-      /\bcancel chey\b/, /\bcancel chesko\b/, /\bcancel cheyali\b/,
-      /\bnaa order cancel\b/, /\border cancel cheyyandi\b/,
-      // ========== TAMIL ==========
-      /\bcancel pannunga\b/, /\bcancel pannu\b/, /\border cancel\b/,
-      /\bகேன்சல்\b/, /\bஆர்டர் கேன்சல்\b/, /\bரத்து செய்\b/, /\bரத்து\b/,
-      /\bcancel panna\b/, /\bcancel pannanum\b/, /\bcancel pannunga\b/,
-      /\ben order cancel\b/, /\border cancel pannunga\b/,
-      // ========== KANNADA ==========
-      /\bcancel maadi\b/, /\border cancel maadi\b/,
-      /\bಕ್ಯಾನ್ಸಲ್\b/, /\bಆರ್ಡರ್ ಕ್ಯಾನ್ಸಲ್\b/, /\bರದ್ದು\b/,
-      /\bcancel madu\b/, /\bcancel madbeku\b/, /\bnanna order cancel\b/,
-      // ========== MALAYALAM ==========
-      /\bcancel cheyyuka\b/, /\bക്യാൻസൽ\b/, /\bഓർഡർ ക്യാൻസൽ\b/, /\bറദ്ദാക്കുക\b/,
-      /\bcancel cheyyu\b/, /\bcancel cheyyane\b/, /\bente order cancel\b/,
-      // ========== BENGALI ==========
-      /\bcancel koro\b/, /\bক্যান্সেল\b/, /\bঅর্ডার ক্যান্সেল\b/, /\bবাতিল করো\b/,
-      /\bcancel kore dao\b/, /\bcancel korte chai\b/, /\bamar order cancel\b/,
-      // ========== MARATHI ==========
-      /\bcancel kara\b/, /\bकॅन्सल करा\b/, /\bऑर्डर कॅन्सल\b/, /\bरद्द करा\b/,
-      /\bcancel karaycha\b/, /\bcancel karun dya\b/, /\bmaza order cancel\b/,
-      // ========== GUJARATI ==========
-      /\bcancel karo\b/, /\bકેન્સલ\b/, /\bઓર્ડર કેન્સલ\b/, /\bરદ કરો\b/,
-      /\bcancel karvu\b/, /\bcancel kari do\b/, /\bmaru order cancel\b/,
-      // ========== MIXED PATTERNS ==========
-      /\bcancel krdo\b/, /\bcancel krna\b/, /\bcancel krne\b/,
-      /\border ko cancel\b/, /\border cancel krdo\b/, /\border cancel krna\b/,
       /\bplz cancel\b/, /\bpls cancel\b/, /\bplease cancel order\b/,
       /\bi dont want order\b/, /\bi don't want order\b/, /\bi dont want this order\b/
     ];
@@ -639,8 +586,6 @@ const chatbot = {
   },
 
   // Helper to detect cart intent from text/voice
-  // Handles voice recognition mistakes like "card", "cut", "kart", "cot", "caught", "cat", "court" instead of "cart"
-  // Also handles "items" variations in all languages
   isCartIntent(text) {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
@@ -651,454 +596,64 @@ const chatbot = {
     }
     
     const cartPatterns = [
-      // ========== ENGLISH - ALL VOICE MISTAKES ==========
-      // Cart variations (cart, card, cut, kart, cot, caught, cat, court, art, heart, part, curt, coat, cart)
       /\bmy cart\b/, /\bview cart\b/, /\bshow cart\b/, /\bsee cart\b/, /\bcheck cart\b/, /\bopen cart\b/,
-      /\bmy card\b/, /\bview card\b/, /\bshow card\b/, /\bsee card\b/, /\bcheck card\b/, /\bopen card\b/,
-      /\bmy cut\b/, /\bview cut\b/, /\bshow cut\b/, /\bsee cut\b/, /\bcheck cut\b/,
-      /\bmy kart\b/, /\bview kart\b/, /\bshow kart\b/, /\bsee kart\b/, /\bcheck kart\b/,
-      /\bmy cot\b/, /\bview cot\b/, /\bshow cot\b/, /\bsee cot\b/,
-      /\bmy caught\b/, /\bview caught\b/, /\bshow caught\b/, /\bsee caught\b/,
-      /\bmy cat\b/, /\bview cat\b/, /\bshow cat\b/, /\bsee cat\b/,
-      /\bmy court\b/, /\bview court\b/, /\bshow court\b/, /\bsee court\b/,
-      // "art" - very common voice mistake for "cart" (view my art = view my cart)
-      /\bmy art\b/, /\bview art\b/, /\bshow art\b/, /\bsee art\b/, /\bcheck art\b/, /\bopen art\b/,
-      /\bview my art\b/, /\bshow my art\b/, /\bsee my art\b/, /\bcheck my art\b/,
-      // "heart" - voice mistake for "cart"
-      /\bmy heart\b/, /\bview heart\b/, /\bshow heart\b/, /\bsee heart\b/,
-      /\bview my heart\b/, /\bshow my heart\b/, /\bsee my heart\b/,
-      // "part" - voice mistake for "cart"
-      /\bmy part\b/, /\bview part\b/, /\bshow part\b/, /\bsee part\b/,
-      /\bview my part\b/, /\bshow my part\b/, /\bsee my part\b/,
-      // "curt" - voice mistake for "cart"
-      /\bmy curt\b/, /\bview curt\b/, /\bshow curt\b/, /\bsee curt\b/,
-      // "coat" - voice mistake for "cart"
-      /\bmy coat\b/, /\bview coat\b/, /\bshow coat\b/, /\bsee coat\b/,
-      // "cart" with extra letters (cartt, carrt, caart)
-      /\bmy cartt\b/, /\bview cartt\b/, /\bmy caart\b/, /\bview caart\b/,
-      // "got" - voice mistake for "cart" (view my got)
-      /\bview my got\b/, /\bshow my got\b/, /\bsee my got\b/,
-      // "guard" - voice mistake for "cart"
-      /\bmy guard\b/, /\bview guard\b/, /\bshow guard\b/, /\bview my guard\b/,
-      // Items variations (but NOT "cancel my order" type patterns)
       /\bmy items\b/, /\bshow items\b/, /\bview items\b/, /\bsee items\b/, /\bcheck items\b/,
       /\bshow my items\b/, /\bview my items\b/, /\bsee my items\b/, /\bcheck my items\b/,
-      /\bmy order items\b/,
-      // Basket variations
       /\bmy basket\b/, /\bshow basket\b/, /\bview basket\b/, /\bsee basket\b/,
-      // What's in cart
-      /\bwhat'?s in my cart\b/, /\bwhats in cart\b/, /\bwhat'?s in cart\b/,
-      /\bwhat'?s in my card\b/, /\bwhats in card\b/, /\bwhat in cart\b/, /\bwhat in card\b/,
-      /\bwhat'?s in my art\b/, /\bwhats in art\b/, /\bwhat in art\b/,
-      // "view" misheard as "you", "few", "v", "vew", "veiw", "viu"
-      /\byou cart\b/, /\byou my cart\b/, /\byou card\b/, /\byou my card\b/,
-      /\bfew cart\b/, /\bfew my cart\b/, /\bfew card\b/,
-      /\bvew cart\b/, /\bvew my cart\b/, /\bveiw cart\b/, /\bveiw my cart\b/,
-      /\bviu cart\b/, /\bviu my cart\b/, /\bvu cart\b/, /\bvu my cart\b/,
-      /\byou art\b/, /\byou my art\b/, /\bfew art\b/, /\bfew my art\b/,
-      /\bvew art\b/, /\bvew my art\b/, /\bveiw art\b/, /\bveiw my art\b/,
-      // "view cart" without space or with typos
-      /\bviewcart\b/, /\bviewcard\b/, /\bviewart\b/, /\bshowcart\b/, /\bshowcard\b/,
-      // Standalone words (only match if short message)
-      /^cart$/, /^card$/, /^kart$/, /^items$/, /^basket$/, /^art$/,
-      // Short phrases that mean "view cart"
-      /^view cart$/, /^view my cart$/, /^show cart$/, /^show my cart$/,
-      /^view card$/, /^view my card$/, /^show card$/, /^show my card$/,
-      /^view art$/, /^view my art$/, /^show art$/, /^show my art$/,
-      /^my cart$/, /^my card$/, /^my art$/,
-      
-      // ========== HINDI ==========
-      /\bcart me kya hai\b/, /\bcart dikhao\b/, /\bcart dekho\b/, /\bmera cart\b/, /\bcart dekhao\b/,
-      /\bcard me kya hai\b/, /\bcard dikhao\b/, /\bcard dekho\b/, /\bmera card\b/, /\bcard dekhao\b/,
-      /\bमेरा कार्ट\b/, /\bकार्ट\b/, /\bकार्ट दिखाओ\b/, /\bकार्ट में क्या है\b/, /\bकार्ट देखो\b/,
-      /\bआइटम दिखाओ\b/, /\bमेरे आइटम\b/, /\bसामान दिखाओ\b/, /\bमेरा सामान\b/, /\bआइटम्स दिखाओ\b/,
-      /\bitems dikhao\b/, /\bmere items\b/, /\bsaman dikhao\b/, /\bmera saman\b/,
-      
-      // ========== TELUGU ==========
-      /\bcart chupinchu\b/, /\bnaa cart\b/, /\bcart chudu\b/, /\bcart choodu\b/,
-      /\bcard chupinchu\b/, /\bnaa card\b/, /\bcard chudu\b/,
-      /\bకార్ట్\b/, /\bనా కార్ట్\b/, /\bకార్ట్ చూపించు\b/, /\bకార్ట్ చూడు\b/,
-      /\bనా ఐటమ్స్\b/, /\bఐటమ్స్ చూపించు\b/, /\bఐటమ్స్ చూడు\b/, /\bసామాన్లు చూపించు\b/,
-      /\bitems chupinchu\b/, /\bnaa items\b/, /\bsamanlu chupinchu\b/,
-      
-      // ========== TAMIL ==========
-      /\bcart kaattu\b/, /\ben cart\b/, /\bcart paaru\b/, /\bcart kaatu\b/,
-      /\bcard kaattu\b/, /\ben card\b/, /\bcard paaru\b/,
-      /\bகார்ட்\b/, /\bஎன் கார்ட்\b/, /\bகார்ட் காட்டு\b/, /\bகார்ட் பாரு\b/,
-      /\bஎன் ஐட்டம்ஸ்\b/, /\bஐட்டம்ஸ் காட்டு\b/, /\bபொருட்கள் காட்டு\b/,
-      /\bitems kaattu\b/, /\ben items\b/, /\bporulgal kaattu\b/,
-      
-      // ========== KANNADA ==========
-      /\bcart toorisu\b/, /\bnanna cart\b/, /\bcart nodu\b/, /\bcart thoorisu\b/,
-      /\bcard toorisu\b/, /\bnanna card\b/, /\bcard nodu\b/,
-      /\bಕಾರ್ಟ್\b/, /\bನನ್ನ ಕಾರ್ಟ್\b/, /\bಕಾರ್ಟ್ ತೋರಿಸು\b/, /\bಕಾರ್ಟ್ ನೋಡು\b/,
-      /\bನನ್ನ ಐಟಮ್ಸ್\b/, /\bಐಟಮ್ಸ್ ತೋರಿಸು\b/, /\bಸಾಮಾನು ತೋರಿಸು\b/,
-      /\bitems toorisu\b/, /\bnanna items\b/, /\bsamanu toorisu\b/,
-      
-      // ========== MALAYALAM ==========
-      /\bcart kaanikkuka\b/, /\bente cart\b/, /\bcart kaanu\b/, /\bcart kanikkuka\b/,
-      /\bcard kaanikkuka\b/, /\bente card\b/, /\bcard kaanu\b/,
-      /\bകാർട്ട്\b/, /\bഎന്റെ കാർട്ട്\b/, /\bകാർട്ട് കാണിക്കുക\b/, /\bകാർട്ട് കാണു\b/,
-      /\bഎന്റെ ഐറ്റംസ്\b/, /\bഐറ്റംസ് കാണിക്കുക\b/, /\bസാധനങ്ങൾ കാണിക്കുക\b/,
-      /\bitems kaanikkuka\b/, /\bente items\b/, /\bsadhanangal kaanikkuka\b/,
-      
-      // ========== BENGALI ==========
-      /\bcart dekho\b/, /\bamar cart\b/, /\bcart dekhao\b/, /\bcart dao\b/,
-      /\bcard dekho\b/, /\bamar card\b/, /\bcard dekhao\b/,
-      /\bকার্ট\b/, /\bআমার কার্ট\b/, /\bকার্ট দেখো\b/, /\bকার্ট দেখাও\b/,
-      /\bআমার আইটেম\b/, /\bআইটেম দেখো\b/, /\bজিনিস দেখো\b/,
-      /\bitems dekho\b/, /\bamar items\b/, /\bjinis dekho\b/,
-      
-      // ========== MARATHI ==========
-      /\bcart dakhva\b/, /\bmaza cart\b/, /\bcart bagha\b/, /\bcart dakhava\b/,
-      /\bcard dakhva\b/, /\bmaza card\b/, /\bcard bagha\b/,
-      /\bकार्ट\b/, /\bमाझा कार्ट\b/, /\bकार्ट दाखवा\b/, /\bकार्ट बघा\b/,
-      /\bमाझे आइटम\b/, /\bआइटम दाखवा\b/, /\bसामान दाखवा\b/,
-      /\bitems dakhva\b/, /\bmaze items\b/, /\bsaman dakhva\b/,
-      
-      // ========== GUJARATI ==========
-      /\bcart batavo\b/, /\bmaru cart\b/, /\bcart juo\b/, /\bcart batao\b/,
-      /\bcard batavo\b/, /\bmaru card\b/, /\bcard juo\b/,
-      /\bકાર્ટ\b/, /\bમારું કાર્ટ\b/, /\bકાર્ટ બતાવો\b/, /\bકાર્ટ જુઓ\b/,
-      /\bમારા આઇટમ્સ\b/, /\bઆઇટમ્સ બતાવો\b/, /\bસામાન બતાવો\b/,
-      /\bitems batavo\b/, /\bmara items\b/, /\bsaman batavo\b/,
-      
-      // ========== MIXED LANGUAGE PATTERNS (Hinglish/Tanglish/etc.) ==========
-      // "dekhna hai" / "dekhna" style (want to see)
-      /\bcart dekhna hai\b/, /\bcart dekhna\b/, /\bcard dekhna hai\b/, /\bcard dekhna\b/,
-      /\bitems dekhna hai\b/, /\bitems dekhna\b/, /\bsaman dekhna hai\b/,
-      // "chahiye" / "chai" style (want/need)
-      /\bcart dekhna chahiye\b/, /\bcart chahiye\b/, /\bcard chahiye\b/,
-      /\bitems dekhna chahiye\b/, /\bitems chahiye\b/, /\bmy items chahiye\b/,
-      /\bcart show chai\b/, /\bitems show chai\b/, /\bcart dikhao chai\b/,
-      // "karo" / "kar do" / "do" style (please do)
-      /\bcart show karo\b/, /\bcart show kar do\b/, /\bcard show karo\b/,
-      /\bitems show karo\b/, /\bitems show kar do\b/, /\bitems dikhao na\b/,
-      /\bcart dikha do\b/, /\bcard dikha do\b/, /\bitems dikha do\b/,
-      // "mujhe" / "mera" / "mere" style (my/mine)
-      /\bmujhe cart dikhao\b/, /\bmujhe items dikhao\b/, /\bmujhe cart show karo\b/,
-      /\bmera cart dikhao\b/, /\bmera cart show\b/, /\bmera card dikhao\b/,
-      /\bmere items dikhao\b/, /\bmere items show\b/, /\bmere saman dikhao\b/,
-      // Telugu mixed (chupinchu/chudu at end)
-      /\bcart show chupinchu\b/, /\bitems show chupinchu\b/, /\bcart chudu\b/,
-      /\bitems chudu\b/, /\bnaa cart chudu\b/, /\bnaa items chudu\b/,
-      // Tamil mixed (kaattu/paaru at end)
-      /\bcart show kaattu\b/, /\bitems show kaattu\b/, /\bcart paaru\b/,
-      /\bitems paaru\b/, /\ben cart paaru\b/, /\ben items paaru\b/,
-      // Kannada mixed (toorisu/nodu at end)
-      /\bcart show toorisu\b/, /\bitems show toorisu\b/, /\bcart nodu\b/,
-      /\bitems nodu\b/, /\bnanna cart nodu\b/, /\bnanna items nodu\b/,
-      // Bengali mixed (dekho/dekhao at end)
-      /\bcart show dekho\b/, /\bitems show dekho\b/, /\bcart dekhao na\b/,
-      /\bitems dekhao na\b/, /\bamar cart dekho\b/, /\bamar items dekho\b/,
-      // Marathi mixed (dakhva/bagha at end)
-      /\bcart show dakhva\b/, /\bitems show dakhva\b/, /\bcart bagha na\b/,
-      /\bitems bagha na\b/, /\bmaza cart bagha\b/, /\bmaze items bagha\b/,
-      // Gujarati mixed (batavo/juo at end)
-      /\bcart show batavo\b/, /\bitems show batavo\b/, /\bcart juo na\b/,
-      /\bitems juo na\b/, /\bmaru cart juo\b/, /\bmara items juo\b/,
-      // "please" mixed patterns
+      /\bwhat'?s in my cart\b/, /\bwhats in cart\b/, /\bwhat'?s in cart\b/, /\bwhat in cart\b/,
+      /^cart$/, /^items$/, /^basket$/,
+      /^view cart$/, /^view my cart$/, /^show cart$/, /^show my cart$/, /^my cart$/,
       /\bplease show cart\b/, /\bplease show items\b/, /\bplease show my cart\b/,
-      /\bcart show please\b/, /\bitems show please\b/, /\bmy cart please\b/,
-      // "want to" patterns
       /\bwant to see cart\b/, /\bwant to see items\b/, /\bwant to view cart\b/,
-      /\bi want see cart\b/, /\bi want see items\b/, /\bi want my cart\b/,
-      // Short forms
-      /\bshw cart\b/, /\bshw items\b/, /\bvw cart\b/, /\bvw items\b/
+      /\bi want see cart\b/, /\bi want my cart\b/
     ];
     return cartPatterns.some(pattern => pattern.test(lowerText));
   },
 
-  // Helper to detect simple/standalone cart keyword (e.g., just "cart" without "my", "view", "show", etc.)
-  // When user types just "cart", we show cart options menu instead of directly showing cart
+  // Helper to detect simple/standalone cart keyword
   isSimpleCartKeyword(text) {
     if (!text) return false;
     const trimmed = text.trim().toLowerCase();
-    // Match standalone cart-related words (no verbs like "view", "show", "my", etc.)
-    const simpleCartPatterns = [
-      /^cart$/,
-      /^card$/,
-      /^kart$/,
-      /^cot$/,
-      /^caught$/,
-      /^cat$/,
-      /^court$/,
-      /^art$/,
-      /^cartt$/,
-      /^caart$/,
-      /^कार्ट$/,
-      /^కార్ట్$/,
-      /^கார்ட்$/,
-      /^ಕಾರ್ಟ್$/,
-      /^കാർട്ട്$/,
-      /^কার্ট$/
-    ];
+    const simpleCartPatterns = [/^cart$/, /^items$/, /^basket$/];
     return simpleCartPatterns.some(pattern => pattern.test(trimmed));
   },
 
   // Helper to detect clear/empty cart intent from text/voice
-  // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
-  // Handles voice recognition mistakes like "card", "cut", "kart", "cot", "caught", "cat", "court" instead of "cart"
-  // Also handles "items" variations in all languages
   isClearCartIntent(text) {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     const clearCartPatterns = [
-      // ========== ENGLISH - ALL VOICE MISTAKES ==========
-      // Clear variations - cart/card/cut/kart/cot/caught/cat/court
       /\bclear cart\b/, /\bclear my cart\b/, /\bclear the cart\b/, /\bempty cart\b/, /\bempty my cart\b/,
-      /\bclear card\b/, /\bclear my card\b/, /\bclear the card\b/, /\bempty card\b/, /\bempty my card\b/,
-      /\bclear cut\b/, /\bclear my cut\b/, /\bclear the cut\b/, /\bempty cut\b/, /\bempty my cut\b/,
-      /\bclear kart\b/, /\bclear my kart\b/, /\bclear the kart\b/, /\bempty kart\b/, /\bempty my kart\b/,
-      /\bclear cot\b/, /\bclear my cot\b/, /\bclear the cot\b/, /\bempty cot\b/, /\bempty my cot\b/,
-      /\bclear caught\b/, /\bclear my caught\b/, /\bclear the caught\b/, /\bempty caught\b/,
-      /\bclear cat\b/, /\bclear my cat\b/, /\bclear the cat\b/, /\bempty cat\b/,
-      /\bclear court\b/, /\bclear my court\b/, /\bclear the court\b/, /\bempty court\b/,
-      // Remove variations - ALL voice mistakes for cart/card/cut/kart/cot/caught/cat/court
       /\bremove cart\b/, /\bremove my cart\b/, /\bremove the cart\b/, /\bremove all from cart\b/,
-      /\bremove card\b/, /\bremove my card\b/, /\bremove the card\b/, /\bremove all from card\b/,
-      /\bremove cut\b/, /\bremove my cut\b/, /\bremove the cut\b/,
-      /\bremove kart\b/, /\bremove my kart\b/, /\bremove the kart\b/,
-      /\bremove cot\b/, /\bremove my cot\b/, /\bremove the cot\b/,
-      /\bremove caught\b/, /\bremove my caught\b/, /\bremove the caught\b/,
-      /\bremove cat\b/, /\bremove my cat\b/, /\bremove the cat\b/,
-      /\bremove court\b/, /\bremove my court\b/, /\bremove the court\b/,
-      /\bremove all\b/, /\bremove items\b/, /\bremove all items\b/, /\bremove my items\b/, /\bremove the items\b/,
-      /\bremove everything\b/, /\bremove from cart\b/, /\bremove from card\b/,
-      // Delete variations - ALL voice mistakes for cart/card/cut/kart/cot/caught/cat/court
+      /\bremove all\b/, /\bremove items\b/, /\bremove all items\b/, /\bremove my items\b/, /\bremove everything\b/,
       /\bdelete cart\b/, /\bdelete my cart\b/, /\bdelete the cart\b/,
-      /\bdelete card\b/, /\bdelete my card\b/, /\bdelete the card\b/,
-      /\bdelete cut\b/, /\bdelete my cut\b/, /\bdelete the cut\b/,
-      /\bdelete kart\b/, /\bdelete my kart\b/, /\bdelete the kart\b/,
-      /\bdelete cot\b/, /\bdelete my cot\b/, /\bdelete the cot\b/,
-      /\bdelete caught\b/, /\bdelete my caught\b/, /\bdelete the caught\b/,
-      /\bdelete cat\b/, /\bdelete my cat\b/, /\bdelete the cat\b/,
-      /\bdelete court\b/, /\bdelete my court\b/, /\bdelete the court\b/,
-      /\bdelete all\b/, /\bdelete items\b/, /\bdelete my items\b/, /\bdelete the items\b/, /\bdelete all items\b/, /\bdelete everything\b/,
-      // Clean/Reset/Cancel variations - ALL voice mistakes
-      /\bclean cart\b/, /\bclean my cart\b/, /\bclean card\b/, /\bclean my card\b/,
-      /\bclean cut\b/, /\bclean my cut\b/, /\bclean kart\b/, /\bclean my kart\b/,
-      /\bclean items\b/, /\bclean my items\b/, /\bclean the items\b/,
-      /\breset cart\b/, /\breset my cart\b/, /\breset card\b/, /\breset my card\b/,
-      /\breset cut\b/, /\breset my cut\b/, /\breset kart\b/, /\breset my kart\b/,
-      /\breset items\b/, /\breset my items\b/, /\breset the items\b/,
-      // Cancel variations - ALL voice mistakes
-      /\bcancel cart\b/, /\bcancel my cart\b/, /\bcancel the cart\b/,
-      /\bcancel card\b/, /\bcancel my card\b/, /\bcancel the card\b/,
-      /\bcancel cut\b/, /\bcancel my cut\b/, /\bcancel the cut\b/,
-      /\bcancel kart\b/, /\bcancel my kart\b/, /\bcancel the kart\b/,
-      /\bcancel cot\b/, /\bcancel my cot\b/, /\bcancel caught\b/, /\bcancel my caught\b/,
-      /\bcancel cat\b/, /\bcancel my cat\b/, /\bcancel court\b/, /\bcancel my court\b/,
-      /\bcancel items\b/, /\bcancel my items\b/, /\bcancel the items\b/, /\bcancel all items\b/, /\bcancel all\b/,
-      // Other English patterns
+      /\bdelete all\b/, /\bdelete items\b/, /\bdelete my items\b/, /\bdelete all items\b/, /\bdelete everything\b/,
+      /\bclean cart\b/, /\bclean my cart\b/, /\breset cart\b/, /\breset my cart\b/,
+      /\bcancel cart\b/, /\bcancel my cart\b/, /\bcancel items\b/, /\bcancel my items\b/, /\bcancel all\b/,
       /\bclear basket\b/, /\bempty basket\b/, /\bremove basket\b/, /\bdelete basket\b/,
-      /\bclear all\b/, /\bclear items\b/, /\bclear my items\b/, /\bclear the items\b/, /\bclear all items\b/,
+      /\bclear all\b/, /\bclear items\b/, /\bclear my items\b/, /\bclear all items\b/,
       /\bstart fresh\b/, /\bstart over\b/, /\bfresh start\b/,
-      // ========== HINDI ==========
-      // Cart variations with voice mistakes
-      /\bcart khali karo\b/, /\bcart saaf karo\b/, /\bcart clear karo\b/, /\bcart hatao\b/,
-      /\bcard khali karo\b/, /\bcard saaf karo\b/, /\bcard clear karo\b/, /\bcard hatao\b/,
-      /\bcut khali karo\b/, /\bcut saaf karo\b/, /\bkart khali karo\b/, /\bkart saaf karo\b/,
-      // Items variations
-      /\bitems hatao\b/, /\bitems clear karo\b/, /\bitems delete karo\b/, /\bitems remove karo\b/,
-      /\bsab items hatao\b/, /\bsab items clear karo\b/, /\bsab items delete karo\b/,
-      /\bsab hatao\b/, /\bsab remove karo\b/, /\bsab delete karo\b/, /\bsab clear karo\b/,
-      /\bsaman hatao\b/, /\bsaman clear karo\b/, /\bsab saman hatao\b/,
-      // Hindi script
-      /\bकार्ट खाली करो\b/, /\bकार्ट साफ करो\b/, /\bकार्ट क्लियर\b/, /\bकार्ट हटाओ\b/,
-      /\bसब हटाओ\b/, /\bसब कुछ हटाओ\b/, /\bसब क्लियर करो\b/, /\bसब डिलीट करो\b/,
-      /\bआइटम हटाओ\b/, /\bआइटम्स हटाओ\b/, /\bसब आइटम हटाओ\b/, /\bआइटम्स क्लियर\b/,
-      /\bसामान हटाओ\b/, /\bसब सामान हटाओ\b/, /\bसामान क्लियर करो\b/,
-      // ========== TELUGU ==========
-      // Cart variations with voice mistakes
-      /\bcart clear cheyyi\b/, /\bcart khali cheyyi\b/, /\bcart teeseyyi\b/, /\bcart delete cheyyi\b/,
-      /\bcard clear cheyyi\b/, /\bcard khali cheyyi\b/, /\bcard teeseyyi\b/, /\bcard delete cheyyi\b/,
-      /\bcut clear cheyyi\b/, /\bkart clear cheyyi\b/, /\bkart khali cheyyi\b/,
-      // Items variations
-      /\bitems teeseyyi\b/, /\bitems clear cheyyi\b/, /\bitems delete cheyyi\b/, /\bitems remove cheyyi\b/,
-      /\banni items teeseyyi\b/, /\banni items clear cheyyi\b/,
-      /\banni teeseyyi\b/, /\banni clear cheyyi\b/, /\banni delete cheyyi\b/,
-      /\bsamanlu teeseyyi\b/, /\bsamanlu clear cheyyi\b/, /\banni samanlu teeseyyi\b/,
-      // Telugu script
-      /\bకార్ట్ క్లియర్\b/, /\bకార్ట్ ఖాళీ చేయి\b/, /\bకార్ట్ తీసేయి\b/, /\bకార్ట్ డిలీట్\b/,
-      /\bఅన్నీ తీసేయి\b/, /\bఅన్నీ క్లియర్\b/, /\bఅన్నీ డిలీట్\b/,
-      /\bఐటమ్స్ తీసేయి\b/, /\bఐటమ్స్ క్లియర్\b/, /\bఐటమ్స్ డిలీట్\b/, /\bఅన్ని ఐటమ్స్ తీసేయి\b/,
-      /\bసామాన్లు తీసేయి\b/, /\bసామాన్లు క్లియర్\b/, /\bఅన్ని సామాన్లు తీసేయి\b/,
-      // ========== TAMIL ==========
-      // Cart variations with voice mistakes
-      /\bcart clear pannu\b/, /\bcart kaali pannu\b/, /\bcart neekku\b/, /\bcart delete pannu\b/,
-      /\bcard clear pannu\b/, /\bcard kaali pannu\b/, /\bcard neekku\b/, /\bcard delete pannu\b/,
-      /\bcut clear pannu\b/, /\bkart clear pannu\b/, /\bkart kaali pannu\b/,
-      // Items variations
-      /\bitems neekku\b/, /\bitems clear pannu\b/, /\bitems delete pannu\b/, /\bitems remove pannu\b/,
-      /\bella items neekku\b/, /\bella items clear pannu\b/,
-      /\bellam eduthudu\b/, /\bellam neekku\b/, /\bellam clear pannu\b/, /\bellam delete pannu\b/,
-      /\bporulgal neekku\b/, /\bporulgal clear pannu\b/, /\bella porulgal neekku\b/,
-      // Tamil script
-      /\bகார்ட் கிளியர்\b/, /\bகார்ட் காலி\b/, /\bகார்ட் நீக்கு\b/, /\bகார்ட் டெலிட்\b/,
-      /\bஎல்லாம் எடுத்துடு\b/, /\bஎல்லாம் நீக்கு\b/, /\bஎல்லாம் கிளியர்\b/,
-      /\bஐட்டம்ஸ் நீக்கு\b/, /\bஐட்டம்ஸ் கிளியர்\b/, /\bஐட்டம்ஸ் டெலிட்\b/, /\bஎல்லா ஐட்டம்ஸ் நீக்கு\b/,
-      /\bபொருட்கள் நீக்கு\b/, /\bபொருட்கள் கிளியர்\b/, /\bஎல்லா பொருட்கள் நீக்கு\b/,
-      // ========== KANNADA ==========
-      // Cart variations with voice mistakes
-      /\bcart clear maadi\b/, /\bcart khali maadi\b/, /\bcart tegedu\b/, /\bcart delete maadi\b/,
-      /\bcard clear maadi\b/, /\bcard khali maadi\b/, /\bcard tegedu\b/, /\bcard delete maadi\b/,
-      /\bcut clear maadi\b/, /\bkart clear maadi\b/, /\bkart khali maadi\b/,
-      // Items variations
-      /\bitems tegedu\b/, /\bitems clear maadi\b/, /\bitems delete maadi\b/, /\bitems remove maadi\b/,
-      /\bella items tegedu\b/, /\bella items clear maadi\b/,
-      /\bella tegedu\b/, /\bella clear maadi\b/, /\bella delete maadi\b/,
-      /\bsamanu tegedu\b/, /\bsamanu clear maadi\b/, /\bella samanu tegedu\b/,
-      // Kannada script
-      /\bಕಾರ್ಟ್ ಕ್ಲಿಯರ್\b/, /\bಕಾರ್ಟ್ ಖಾಲಿ\b/, /\bಕಾರ್ಟ್ ತೆಗೆದು\b/, /\bಕಾರ್ಟ್ ಡಿಲೀಟ್\b/,
-      /\bಎಲ್ಲಾ ತೆಗೆದು\b/, /\bಎಲ್ಲಾ ಕ್ಲಿಯರ್\b/, /\bಎಲ್ಲಾ ಡಿಲೀಟ್\b/,
-      /\bಐಟಮ್ಸ್ ತೆಗೆದು\b/, /\bಐಟಮ್ಸ್ ಕ್ಲಿಯರ್\b/, /\bಐಟಮ್ಸ್ ಡಿಲೀಟ್\b/, /\bಎಲ್ಲಾ ಐಟಮ್ಸ್ ತೆಗೆದು\b/,
-      /\bಸಾಮಾನು ತೆಗೆದು\b/, /\bಸಾಮಾನು ಕ್ಲಿಯರ್\b/, /\bಎಲ್ಲಾ ಸಾಮಾನು ತೆಗೆದು\b/,
-      // ========== MALAYALAM ==========
-      // Cart variations with voice mistakes
-      /\bcart clear cheyyuka\b/, /\bcart kaali aakkuka\b/, /\bcart maarruka\b/, /\bcart delete cheyyuka\b/,
-      /\bcard clear cheyyuka\b/, /\bcard kaali aakkuka\b/, /\bcard maarruka\b/, /\bcard delete cheyyuka\b/,
-      /\bcut clear cheyyuka\b/, /\bkart clear cheyyuka\b/, /\bkart kaali aakkuka\b/,
-      // Items variations
-      /\bitems maarruka\b/, /\bitems clear cheyyuka\b/, /\bitems delete cheyyuka\b/, /\bitems remove cheyyuka\b/,
-      /\bellam items maarruka\b/, /\bellam items clear cheyyuka\b/,
-      /\bellam maarruka\b/, /\bellam clear cheyyuka\b/, /\bellam delete cheyyuka\b/,
-      /\bsadhanangal maarruka\b/, /\bsadhanangal clear cheyyuka\b/, /\bellam sadhanangal maarruka\b/,
-      // Malayalam script
-      /\bകാർട്ട് ക്ലിയർ\b/, /\bകാർട്ട് കാലി\b/, /\bകാർട്ട് മാറ്റുക\b/, /\bകാർട്ട് ഡിലീറ്റ്\b/,
-      /\bഎല്ലാം മാറ്റുക\b/, /\bഎല്ലാം ക്ലിയർ\b/, /\bഎല്ലാം ഡിലീറ്റ്\b/,
-      /\bഐറ്റംസ് മാറ്റുക\b/, /\bഐറ്റംസ് ക്ലിയർ\b/, /\bഐറ്റംസ് ഡിലീറ്റ്\b/, /\bഎല്ലാ ഐറ്റംസ് മാറ്റുക\b/,
-      /\bസാധനങ്ങൾ മാറ്റുക\b/, /\bസാധനങ്ങൾ ക്ലിയർ\b/, /\bഎല്ലാ സാധനങ്ങൾ മാറ്റുക\b/,
-      // ========== BENGALI ==========
-      // Cart variations with voice mistakes
-      /\bcart clear koro\b/, /\bcart khali koro\b/, /\bcart soriyo\b/, /\bcart delete koro\b/,
-      /\bcard clear koro\b/, /\bcard khali koro\b/, /\bcard soriyo\b/, /\bcard delete koro\b/,
-      /\bcut clear koro\b/, /\bkart clear koro\b/, /\bkart khali koro\b/,
-      // Items variations
-      /\bitems soriyo\b/, /\bitems clear koro\b/, /\bitems delete koro\b/, /\bitems remove koro\b/,
-      /\bsob items soriyo\b/, /\bsob items clear koro\b/,
-      /\bsob soriyo\b/, /\bsob clear koro\b/, /\bsob delete koro\b/,
-      /\bjinis soriyo\b/, /\bjinis clear koro\b/, /\bsob jinis soriyo\b/,
-      // Bengali script
-      /\bকার্ট ক্লিয়ার\b/, /\bকার্ট খালি করো\b/, /\bকার্ট সরিয়ে দাও\b/, /\bকার্ট ডিলিট\b/,
-      /\bসব সরিয়ে দাও\b/, /\bসব ক্লিয়ার করো\b/, /\bসব ডিলিট করো\b/,
-      /\bআইটেম সরিয়ে দাও\b/, /\bআইটেম ক্লিয়ার\b/, /\bআইটেম ডিলিট\b/, /\bসব আইটেম সরিয়ে দাও\b/,
-      /\bজিনিস সরিয়ে দাও\b/, /\bজিনিস ক্লিয়ার\b/, /\bসব জিনিস সরিয়ে দাও\b/,
-      // ========== MARATHI ==========
-      // Cart variations with voice mistakes
-      /\bcart clear kara\b/, /\bcart khali kara\b/, /\bcart kadhun taka\b/, /\bcart delete kara\b/,
-      /\bcard clear kara\b/, /\bcard khali kara\b/, /\bcard kadhun taka\b/, /\bcard delete kara\b/,
-      /\bcut clear kara\b/, /\bkart clear kara\b/, /\bkart khali kara\b/,
-      // Items variations
-      /\bitems kadhun taka\b/, /\bitems clear kara\b/, /\bitems delete kara\b/, /\bitems remove kara\b/,
-      /\bsagla items kadhun taka\b/, /\bsagla items clear kara\b/,
-      /\bsagla kadhun taka\b/, /\bsagla clear kara\b/, /\bsagla delete kara\b/,
-      /\bsaman kadhun taka\b/, /\bsaman clear kara\b/, /\bsagla saman kadhun taka\b/,
-      // Marathi script
-      /\bकार्ट क्लियर करा\b/, /\bकार्ट खाली करा\b/, /\bकार्ट काढून टाका\b/, /\bकार्ट डिलीट करा\b/,
-      /\bसगळं काढून टाका\b/, /\bसगळं क्लियर करा\b/, /\bसगळं डिलीट करा\b/,
-      /\bआइटम काढून टाका\b/, /\bआइटम क्लियर करा\b/, /\bआइटम डिलीट करा\b/, /\bसगळे आइटम काढून टाका\b/,
-      /\bसामान काढून टाका\b/, /\bसामान क्लियर करा\b/, /\bसगळं सामान काढून टाका\b/,
-      // ========== GUJARATI ==========
-      // Cart variations with voice mistakes
-      /\bcart clear karo\b/, /\bcart khali karo\b/, /\bcart kaadhi nakho\b/, /\bcart delete karo\b/,
-      /\bcard clear karo\b/, /\bcard khali karo\b/, /\bcard kaadhi nakho\b/, /\bcard delete karo\b/,
-      /\bcut clear karo\b/, /\bkart clear karo\b/, /\bkart khali karo\b/,
-      // Items variations
-      /\bitems kaadhi nakho\b/, /\bitems clear karo\b/, /\bitems delete karo\b/, /\bitems remove karo\b/,
-      /\bbadha items kaadhi nakho\b/, /\bbadha items clear karo\b/,
-      /\bbadhu kaadhi nakho\b/, /\bbadhu clear karo\b/, /\bbadhu delete karo\b/,
-      /\bsaman kaadhi nakho\b/, /\bsaman clear karo\b/, /\bbadhu saman kaadhi nakho\b/,
-      // Gujarati script
-      /\bકાર્ટ ક્લિયર\b/, /\bકાર્ટ ખાલી કરો\b/, /\bકાર્ટ કાઢી નાખો\b/, /\bકાર્ટ ડિલીટ\b/,
-      /\bબધું કાઢી નાખો\b/, /\bબધું ક્લિયર કરો\b/, /\bબધું ડિલીટ કરો\b/,
-      /\bઆઇટમ્સ કાઢી નાખો\b/, /\bઆઇટમ્સ ક્લિયર\b/, /\bઆઇટમ્સ ડિલીટ\b/, /\bબધા આઇટમ્સ કાઢી નાખો\b/,
-      /\bસામાન કાઢી નાખો\b/, /\bસામાન ક્લિયર\b/, /\bબધું સામાન કાઢી નાખો\b/,
-      
-      // ========== MIXED LANGUAGE PATTERNS (Hinglish/Tanglish/etc.) ==========
-      // "items remove chai" style - action word at end (Hindi style in English)
-      /\bitems remove chai\b/, /\bitems delete chai\b/, /\bitems clear chai\b/, /\bitems hatao chai\b/,
-      /\bcart remove chai\b/, /\bcart delete chai\b/, /\bcart clear chai\b/, /\bcart hatao chai\b/,
-      /\bcard remove chai\b/, /\bcard delete chai\b/, /\bcard clear chai\b/,
-      /\bsab remove chai\b/, /\bsab delete chai\b/, /\bsab clear chai\b/,
-      // "chai" variations (chahiye/chaiye - want to)
-      /\bitems remove chahiye\b/, /\bitems delete chahiye\b/, /\bitems clear chahiye\b/,
-      /\bcart remove chahiye\b/, /\bcart delete chahiye\b/, /\bcart clear chahiye\b/,
-      /\bcart empty chahiye\b/, /\bcart khali chahiye\b/, /\bcard khali chahiye\b/,
-      // "karna hai" / "karna" style (want to do)
-      /\bitems remove karna\b/, /\bitems delete karna\b/, /\bitems clear karna\b/,
-      /\bcart remove karna\b/, /\bcart delete karna\b/, /\bcart clear karna\b/, /\bcart empty karna\b/,
-      /\bitems remove karna hai\b/, /\bitems delete karna hai\b/, /\bcart clear karna hai\b/,
-      /\bcart khali karna\b/, /\bcart khali karna hai\b/, /\bcard khali karna\b/,
-      // "do" / "kar do" / "de do" style (please do)
-      /\bitems remove kar do\b/, /\bitems delete kar do\b/, /\bitems clear kar do\b/,
-      /\bcart remove kar do\b/, /\bcart delete kar do\b/, /\bcart clear kar do\b/,
-      /\bcart khali kar do\b/, /\bcard khali kar do\b/, /\bcart empty kar do\b/,
-      /\bitems hata do\b/, /\bcart hata do\b/, /\bsab hata do\b/,
-      // "please" mixed patterns
       /\bplease clear cart\b/, /\bplease remove cart\b/, /\bplease delete cart\b/,
       /\bplease clear items\b/, /\bplease remove items\b/, /\bplease delete items\b/,
-      /\bcart clear please\b/, /\bitems clear please\b/, /\bcart remove please\b/,
-      // Telugu mixed (cheyyi/cheyyandi at end)
-      /\bitems remove cheyyi\b/, /\bitems delete cheyyi\b/, /\bcart remove cheyyi\b/,
-      /\bitems clear cheyyandi\b/, /\bcart clear cheyyandi\b/, /\bcart remove cheyyandi\b/,
-      // Tamil mixed (pannu/pannunga at end)
-      /\bitems remove pannu\b/, /\bitems delete pannu\b/, /\bcart remove pannu\b/,
-      /\bitems clear pannunga\b/, /\bcart clear pannunga\b/, /\bcart remove pannunga\b/,
-      // Kannada mixed (maadi at end)
-      /\bitems remove maadi\b/, /\bitems delete maadi\b/, /\bcart remove maadi\b/,
-      /\bitems clear maadi\b/, /\bcart clear maadiri\b/,
-      // Bengali mixed (koro at end)
-      /\bitems remove koro\b/, /\bitems delete koro\b/, /\bcart remove koro\b/,
-      // Marathi mixed (kara at end)
-      /\bitems remove kara\b/, /\bitems delete kara\b/, /\bcart remove kara\b/,
-      // Gujarati mixed (karo at end)
-      /\bitems remove karo\b/, /\bitems delete karo\b/, /\bcart remove karo\b/,
-      // "mujhe" / "mera" / "mere" style (my/mine)
-      /\bmujhe cart clear\b/, /\bmujhe items clear\b/, /\bmujhe cart remove\b/,
-      /\bmera cart clear\b/, /\bmera cart remove\b/, /\bmera cart delete\b/,
-      /\bmere items clear\b/, /\bmere items remove\b/, /\bmere items delete\b/,
-      // "nahi chahiye" / "nahi chaiye" (don't want)
-      /\bcart nahi chahiye\b/, /\bitems nahi chahiye\b/, /\bsab nahi chahiye\b/,
-      /\bcart nahi chaiye\b/, /\bitems nahi chaiye\b/,
-      // Short forms and typos
-      /\bclr cart\b/, /\bclr card\b/, /\bclr items\b/, /\brmv cart\b/, /\brmv items\b/,
-      /\bdel cart\b/, /\bdel card\b/, /\bdel items\b/,
-      // "want to" patterns
       /\bwant to clear cart\b/, /\bwant to remove cart\b/, /\bwant to delete cart\b/,
-      /\bwant to clear items\b/, /\bwant to remove items\b/, /\bwant to delete items\b/,
-      /\bi want clear cart\b/, /\bi want remove items\b/, /\bi want delete cart\b/
+      /\bwant to clear items\b/, /\bwant to remove items\b/, /\bwant to delete items\b/
     ];
     return clearCartPatterns.some(pattern => pattern.test(lowerText));
   },
 
   // Helper to detect "add to cart" intent from text/voice
   // Returns: { itemName: string } or null
-  // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
   isAddToCartIntent(text) {
     if (!text) return null;
     const lowerText = text.toLowerCase().trim();
     
     // Patterns to extract item name from "add X to cart" style messages
     const addPatterns = [
-      // English
-      /add\s+(.+?)\s+to\s+(?:cart|card|kart)/i,
-      /add\s+(.+?)\s+(?:to\s+)?(?:my\s+)?(?:cart|card|kart)/i,
-      /(?:i\s+)?want\s+(?:to\s+)?add\s+(.+?)\s+(?:to\s+)?(?:cart|card)/i,
-      /put\s+(.+?)\s+in\s+(?:cart|card|kart)/i,
-      /(.+?)\s+add\s+(?:to\s+)?(?:cart|card|kart)/i,
-      /(.+?)\s+(?:cart|card)\s+(?:me|mein|mai)\s+(?:add|daal|dal)/i,
-      // Hindi
-      /(.+?)\s+(?:cart|card)\s+(?:me|mein|mai)\s+(?:daalo|dalo|add\s+karo)/i,
-      /(.+?)\s+(?:add|daal|dal)\s+(?:karo|do|kar\s+do)/i,
-      /(.+?)\s+(?:कार्ट|कार्ड)\s+(?:में|मे)\s+(?:डालो|ऐड\s+करो)/i,
-      // Telugu
-      /(.+?)\s+(?:cart|card)\s+(?:lo|ki)\s+(?:add|pettandi|pettu)/i,
-      /(.+?)\s+(?:కార్ట్|కార్డ్)\s+(?:లో|కి)\s+(?:పెట్టు|యాడ్)/i,
-      // Tamil
-      /(.+?)\s+(?:cart|card)\s+(?:la|le)\s+(?:add|podungal|podu)/i,
-      /(.+?)\s+(?:கார்ட்|கார்ட்)\s+(?:ல|லே)\s+(?:போடு|ஆட்)/i,
-      // Simple patterns - just item name followed by "add"
+      /add\s+(.+?)\s+to\s+cart/i,
+      /add\s+(.+?)\s+(?:to\s+)?(?:my\s+)?cart/i,
+      /(?:i\s+)?want\s+(?:to\s+)?add\s+(.+?)\s+(?:to\s+)?cart/i,
+      /put\s+(.+?)\s+in\s+cart/i,
+      /(.+?)\s+add\s+(?:to\s+)?cart/i,
       /^(.+?)\s+add$/i,
       /^add\s+(.+)$/i,
     ];
@@ -1342,235 +897,107 @@ const chatbot = {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   },
 
-  // Helper to detect show menu/items intent from text/voice
+  // Helper to detect show menu/items intent from text
   // Returns: { showMenu: true, foodType: 'veg'|'nonveg'|'both'|null, searchTerm: string|null }
-  // Supports: English, Hindi, Telugu, Tamil, Kannada, Malayalam, Bengali, Marathi, Gujarati
   isShowMenuIntent(text) {
     if (!text) return null;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     
     // Patterns for showing menu/items
     const menuPatterns = [
-      // English - "all menu", "all items", "full menu", etc.
       /\bshow\s+(?:me\s+)?(?:the\s+)?menu\b/, /\bshow\s+(?:me\s+)?(?:all\s+)?items\b/,
       /\bshow\s+(?:me\s+)?(?:the\s+)?food\b/, /\bwhat\s+(?:do\s+you\s+have|items|food)\b/,
       /\blist\s+(?:all\s+)?(?:items|menu|food)\b/, /\bdisplay\s+(?:menu|items)\b/,
       /\bsee\s+(?:the\s+)?(?:menu|items|food)\b/, /\bview\s+(?:all\s+)?(?:items|food)\b/,
       /\ball\s+items\b/, /\bfull\s+menu\b/, /\bentire\s+menu\b/,
       /\ball\s+menu\b/, /\bshow\s+all\s+menu\b/, /\bview\s+all\s+menu\b/, /\bsee\s+all\s+menu\b/,
-      /\bcomplete\s+menu\b/, /\bwhole\s+menu\b/, /\btotal\s+menu\b/,
-      /\ball\s+food\b/, /\bshow\s+all\s+food\b/, /\bfull\s+items\b/,
-      // Browse menu patterns
-      /\bbrowse\s+(?:the\s+)?menu\b/, /\bbrowse\s+(?:the\s+)?items\b/, /\bbrowse\s+(?:the\s+)?food\b/,
-      /\bbrowse\s+(?:our\s+)?menu\b/, /\bbrowse\s+(?:your\s+)?menu\b/,
-      /\bexplore\s+(?:the\s+)?menu\b/, /\bexplore\s+(?:the\s+)?items\b/, /\bexplore\s+(?:the\s+)?food\b/,
-      /\bcheck\s+(?:the\s+)?menu\b/, /\bcheck\s+(?:out\s+)?(?:the\s+)?menu\b/,
-      /\bopen\s+(?:the\s+)?menu\b/, /\bopen\s+menu\b/,
-      /\bview\s+(?:the\s+)?menu\b/, /\bview\s+menu\b/,
-      // Hindi - "sab menu", "pura menu", "all menu dikhao"
-      /\bmenu\s+dikhao\b/, /\bsab\s+items\s+dikhao\b/, /\bkhana\s+dikhao\b/,
-      /\bमेन्यू\s+दिखाओ\b/, /\bसब\s+आइटम\b/, /\bखाना\s+दिखाओ\b/, /\bक्या\s+है\b/,
-      /\bsab\s+menu\b/, /\bsab\s+menu\s+dikhao\b/, /\bpura\s+menu\b/, /\bpura\s+menu\s+dikhao\b/,
-      /\ball\s+menu\s+dikhao\b/, /\bfull\s+menu\s+dikhao\b/, /\bsara\s+menu\b/,
-      /\bसब\s+मेन्यू\b/, /\bपूरा\s+मेन्यू\b/, /\bसारा\s+मेन्यू\b/, /\bपूरा\s+मेन्यू\s+दिखाओ\b/,
-      // Telugu - "antha menu", "motham menu", "all menu chupinchu"
-      /\bmenu\s+chupinchu\b/, /\banni\s+items\s+chupinchu\b/, /\bమెనూ\s+చూపించు\b/,
-      /\bఅన్ని\s+ఐటమ్స్\b/, /\bఏమి\s+ఉంది\b/,
-      /\bantha\s+menu\b/, /\bmotham\s+menu\b/, /\ball\s+menu\s+chupinchu\b/, /\bfull\s+menu\s+chupinchu\b/,
-      /\banni\s+menu\b/, /\banni\s+menu\s+chupinchu\b/,
-      /\bఅంతా\s+మెనూ\b/, /\bమొత్తం\s+మెనూ\b/, /\bఅన్ని\s+మెనూ\b/,
-      // Tamil - "ella menu", "muzhu menu", "all menu kaattu"
-      /\bmenu\s+kaattu\b/, /\bella\s+items\s+kaattu\b/, /\bமெனு\s+காட்டு\b/,
-      /\bஎல்லா\s+ஐட்டம்ஸ்\b/, /\bஎன்ன\s+இருக்கு\b/,
-      /\bella\s+menu\b/, /\bmuzhu\s+menu\b/, /\ball\s+menu\s+kaattu\b/, /\bfull\s+menu\s+kaattu\b/,
-      /\bella\s+menu\s+kaattu\b/,
-      /\bஎல்லா\s+மெனு\b/, /\bமுழு\s+மெனு\b/,
-      // Kannada - "ella menu", "puri menu", "all menu toorisu"
-      /\bmenu\s+toorisu\b/, /\bella\s+items\s+toorisu\b/, /\bಮೆನು\s+ತೋರಿಸು\b/,
-      /\bಎಲ್ಲಾ\s+ಐಟಮ್ಸ್\b/, /\bಏನು\s+ಇದೆ\b/,
-      /\bella\s+menu\b/, /\bella\s+menu\s+toorisu\b/, /\bpuri\s+menu\b/, /\ball\s+menu\s+toorisu\b/,
-      /\bಎಲ್ಲಾ\s+ಮೆನು\b/, /\bಪೂರ್ಣ\s+ಮೆನು\b/,
-      // Malayalam - "ellam menu", "muzhuvan menu", "all menu kaanikkuka"
-      /\bmenu\s+kaanikkuka\b/, /\bellam\s+kaanikkuka\b/, /\bമെനു\s+കാണിക്കുക\b/,
-      /\bഎല്ലാം\s+കാണിക്കുക\b/, /\bഎന്താണ്\s+ഉള്ളത്\b/,
-      /\bellam\s+menu\b/, /\bmuzhuvan\s+menu\b/, /\ball\s+menu\s+kaanikkuka\b/, /\bfull\s+menu\s+kaanikkuka\b/,
-      /\bഎല്ലാം\s+മെനു\b/, /\bമുഴുവൻ\s+മെനു\b/,
-      // Bengali - "sob menu", "puro menu", "all menu dekho"
-      /\bmenu\s+dekho\b/, /\bsob\s+items\s+dekho\b/, /\bমেনু\s+দেখো\b/,
-      /\bসব\s+আইটেম\b/, /\bকি\s+আছে\b/,
-      /\bsob\s+menu\b/, /\bpuro\s+menu\b/, /\ball\s+menu\s+dekho\b/, /\bfull\s+menu\s+dekho\b/,
-      /\bসব\s+মেনু\b/, /\bপুরো\s+মেনু\b/,
-      // Marathi - "sagla menu", "purn menu", "all menu dakhva"
-      /\bmenu\s+dakhva\b/, /\bsagla\s+dakhva\b/, /\bमेन्यू\s+दाखवा\b/,
-      /\bसगळे\s+आइटम\b/, /\bकाय\s+आहे\b/,
-      /\bsagla\s+menu\b/, /\bpurn\s+menu\b/, /\ball\s+menu\s+dakhva\b/, /\bfull\s+menu\s+dakhva\b/,
-      /\bसगळा\s+मेन्यू\b/, /\bपूर्ण\s+मेन्यू\b/,
-      // Gujarati - "badhu menu", "puru menu", "all menu batavo"
-      /\bmenu\s+batavo\b/, /\bbadha\s+items\s+batavo\b/, /\bમેનુ\s+બતાવો\b/,
-      /\bબધા\s+આઇટમ્સ\b/, /\bશું\s+છે\b/,
-      /\bbadhu\s+menu\b/, /\bbadha\s+menu\b/, /\bpuru\s+menu\b/, /\ball\s+menu\s+batavo\b/, /\bfull\s+menu\s+batavo\b/,
-      /\bબધું\s+મેનુ\b/, /\bબધા\s+મેનુ\b/, /\bપૂરું\s+મેનુ\b/
+      /\bcomplete\s+menu\b/, /\bwhole\s+menu\b/, /\ball\s+food\b/, /\bshow\s+all\s+food\b/,
+      /\bbrowse\s+(?:the\s+)?menu\b/, /\bbrowse\s+(?:the\s+)?items\b/,
+      /\bexplore\s+(?:the\s+)?menu\b/, /\bcheck\s+(?:the\s+)?menu\b/,
+      /\bopen\s+(?:the\s+)?menu\b/, /\bview\s+(?:the\s+)?menu\b/
     ];
     
-    // Patterns specifically for veg items - compound patterns only (standalone handled separately)
+    // Patterns specifically for veg items
     const vegPatterns = [
-      // English - compound patterns only
       /\bveg\s+(?:items?|menu|food|dishes?)\b/, /\bvegetarian\s+(?:items?|menu|food|dishes?)\b/,
-      /\bshow\s+(?:me\s+)?veg\b/, /\bonly\s+veg\b/, /\bpure\s+veg\b/,
-      /\bveggie\s+(?:items?|menu|food)\b/,
-      // Hindi
-      /\bveg\s+(?:items?|khana)\s+dikhao\b/, /\bवेज\s+आइटम\b/,
-      /\bवेज\s+खाना\b/, /\bसिर्फ\s+वेज\b/,
-      // Telugu
-      /\bveg\s+items\s+chupinchu\b/, /\bవెజ్\s+ఐటమ్స్\b/,
-      // Tamil
-      /\bveg\s+items\s+kaattu\b/, /\bவெஜ்\s+ஐட்டம்ஸ்\b/,
-      // Kannada
-      /\bveg\s+items\s+toorisu\b/, /\bವೆಜ್\s+ಐಟಮ್ಸ್\b/,
-      // Malayalam
-      /\bveg\s+items\s+kaanikkuka\b/, /\bവെജ്\s+ഐറ്റംസ്\b/,
-      // Bengali
-      /\bveg\s+items\s+dekho\b/, /\bভেজ\s+আইটেম\b/,
-      // Marathi
-      /\bveg\s+items\s+dakhva\b/, /\bवेज\s+आइटम\b/,
-      // Gujarati
-      /\bveg\s+items\s+batavo\b/, /\bવેજ\s+આઇટમ્સ\b/
+      /\bshow\s+(?:me\s+)?veg\b/, /\bonly\s+veg\b/, /\bpure\s+veg\b/
     ];
     
-    // Patterns specifically for egg items - compound patterns only (standalone handled separately)
+    // Patterns specifically for egg items
     const eggPatterns = [
-      // English - compound patterns only
       /\begg\s+(?:items?|menu|food|dishes?)\b/,
       /\bshow\s+(?:me\s+)?egg\b/, /\bonly\s+egg\b/
     ];
     
-    // Patterns specifically for non-veg items - compound patterns only (standalone handled separately)
+    // Patterns specifically for non-veg items
     const nonvegPatterns = [
-      // English - compound patterns only
       /\bnon[\s-]?veg\s+(?:items?|menu|food|dishes?)\b/, /\bnonveg\s+(?:items?|menu|food|dishes?)\b/,
       /\bshow\s+(?:me\s+)?non[\s-]?veg\b/, /\bonly\s+non[\s-]?veg\b/,
-      /\bmeat\s+(?:items?|menu|dishes?)\b/,
-      // Hindi
-      /\bnon[\s-]?veg\s+(?:items?|khana)\s+dikhao\b/, /\bनॉन\s*वेज\s+आइटम\b/,
-      /\bनॉन\s*वेज\s+खाना\b/, /\bसिर्फ\s+नॉन\s*वेज\b/,
-      // Telugu
-      /\bnon[\s-]?veg\s+items\s+chupinchu\b/, /\bనాన్\s*వెజ్\s+ఐటమ్స్\b/,
-      // Tamil
-      /\bnon[\s-]?veg\s+items\s+kaattu\b/, /\bநான்\s*வெஜ்\s+ஐட்டம்ஸ்\b/,
-      // Kannada
-      /\bnon[\s-]?veg\s+items\s+toorisu\b/, /\bನಾನ್\s*ವೆಜ್\s+ಐಟಮ್ಸ್\b/,
-      // Malayalam
-      /\bnon[\s-]?veg\s+items\s+kaanikkuka\b/, /\bനോൺ\s*വെജ്\s+ഐറ്റംസ്\b/,
-      // Bengali
-      /\bnon[\s-]?veg\s+items\s+dekho\b/, /\bনন\s*ভেজ\s+আইটেম\b/,
-      // Marathi
-      /\bnon[\s-]?veg\s+items\s+dakhva\b/, /\bनॉन\s*वेज\s+आइटम\b/,
-      // Gujarati
-      /\bnon[\s-]?veg\s+items\s+batavo\b/, /\bનોન\s*વેજ\s+આઇટમ્સ\b/
+      /\bmeat\s+(?:items?|menu|dishes?)\b/
     ];
     
-    // Helper to check if text is ONLY the food type keyword (standalone)
-    // This prevents "egg curry" from matching as egg menu intent
     const trimmedText = text.toLowerCase().trim();
     const words = trimmedText.split(/\s+/).filter(w => w.length > 0);
-    const menuWords = ['menu', 'items', 'item', 'food', 'dishes', 'dish', 'dikhao', 'show', 'batavo', 'dakhva', 'dekho', 'me', 'the', 'all', 'only'];
+    const menuWords = ['menu', 'items', 'item', 'food', 'dishes', 'dish', 'show', 'me', 'the', 'all', 'only'];
     
     const isStandaloneKeyword = (keywords) => {
-      // Check if all words are either the keyword or menu-related words
       const nonMenuWords = words.filter(w => !keywords.includes(w) && !menuWords.includes(w));
       return nonMenuWords.length === 0 && words.some(w => keywords.includes(w));
     };
     
-    // Standalone keywords for each food type
-    const standaloneEggKeywords = ['egg', 'eggs', 'anda', 'अंडा', 'अंडे', 'గుడ్డు', 'కోడిగుడ్డు', 'முட்டை', 'ಮೊಟ್ಟೆ', 'മുട്ട', 'ডিম', 'ઈંડા'];
-    const standaloneVegKeywords = ['veg', 'vegetarian', 'veggie', 'वेज', 'శాకాహారం', 'వెజ్', 'சைவம்', 'வெஜ்', 'ಸಸ್ಯಾಹಾರ', 'ವೆಜ್', 'സസ്യാഹാരം', 'വെജ്', 'নিরামিষ', 'ভেজ', 'शाकाहारी', 'શાકાહારી'];
-    const standaloneNonvegKeywords = ['nonveg', 'non-veg', 'मांसाहारी', 'नॉनवेज', 'మాంసాహారం', 'నాన్వెజ్', 'அசைவம்', 'நான்வெஜ்', 'ಮಾಂಸಾಹಾರ', 'നാന്വെജ്', 'മാംസാഹാരം', 'আমিষ', 'নন ভেজ', 'માંસાહારી'];
-    
-    // Check for egg-specific intent - only if standalone or with menu words
-    // Compound patterns like "egg items" or "show egg" are fine
-    const isEggCompound = eggPatterns.some(pattern => pattern.test(lowerText) && pattern.source.includes('\\s+'));
-    const isEggStandalone = isStandaloneKeyword(standaloneEggKeywords);
+    // Check for egg-specific intent
+    const isEggCompound = eggPatterns.some(pattern => pattern.test(lowerText));
+    const isEggStandalone = isStandaloneKeyword(['egg', 'eggs']);
     if (isEggCompound || isEggStandalone) {
       return { showMenu: true, foodType: 'egg', searchTerm: null };
     }
     
-    // Check for non-veg-specific intent (before veg, since "non veg" contains "veg")
-    // But first verify the text actually contains "non" to avoid false matches
+    // Check for non-veg-specific intent
     const hasNonPrefix = /\bnon[\s-]?veg/i.test(lowerText) || /\bnonveg/i.test(lowerText);
     const isNonvegCompound = hasNonPrefix && nonvegPatterns.some(pattern => pattern.test(lowerText));
-    const isNonvegStandalone = isStandaloneKeyword(standaloneNonvegKeywords) || (hasNonPrefix && words.filter(w => !menuWords.includes(w) && w !== 'non' && w !== 'veg' && w !== 'nonveg' && w !== 'non-veg').length === 0);
+    const isNonvegStandalone = isStandaloneKeyword(['nonveg', 'non-veg']) || (hasNonPrefix && words.filter(w => !menuWords.includes(w) && w !== 'non' && w !== 'veg' && w !== 'nonveg' && w !== 'non-veg').length === 0);
     if (isNonvegCompound || isNonvegStandalone) {
       return { showMenu: true, foodType: 'nonveg', searchTerm: null };
     }
     
-    // Check for veg-specific intent (only if not non-veg) - only standalone or compound
-    const isVegCompound = vegPatterns.some(pattern => pattern.test(lowerText) && pattern.source.includes('\\s+'));
-    const isVegStandalone = !hasNonPrefix && isStandaloneKeyword(standaloneVegKeywords);
+    // Check for veg-specific intent
+    const isVegCompound = vegPatterns.some(pattern => pattern.test(lowerText));
+    const isVegStandalone = !hasNonPrefix && isStandaloneKeyword(['veg', 'vegetarian', 'veggie']);
     if (isVegCompound || isVegStandalone) {
       return { showMenu: true, foodType: 'veg', searchTerm: null };
     }
     
     // Check for general menu intent
-    const isMenuIntent = menuPatterns.some(pattern => pattern.test(lowerText));
-    if (isMenuIntent) {
+    if (menuPatterns.some(pattern => pattern.test(lowerText))) {
       return { showMenu: true, foodType: 'both', searchTerm: null };
     }
     
-    // Check for standalone menu keywords (trimmed text without added spaces)
-    const trimmedLower = text.toLowerCase().trim();
+    // Check for standalone menu keywords
     const standaloneMenuPatterns = [
       /^menu$/, /^browse menu$/, /^view menu$/, /^show menu$/, /^see menu$/,
       /^check menu$/, /^open menu$/, /^explore menu$/, /^the menu$/,
-      /^browse the menu$/, /^view the menu$/, /^show the menu$/, /^see the menu$/,
-      /^check the menu$/, /^open the menu$/, /^explore the menu$/,
       /^food menu$/, /^our menu$/, /^your menu$/
     ];
-    const isStandaloneMenu = standaloneMenuPatterns.some(pattern => pattern.test(trimmedLower));
-    if (isStandaloneMenu) {
+    if (standaloneMenuPatterns.some(pattern => pattern.test(trimmedText))) {
       return { showMenu: true, foodType: 'both', searchTerm: null };
     }
     
     return null;
   },
 
-  // Helper to detect track order intent from text/voice
+  // Helper to detect track order intent from text
   isTrackIntent(text) {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
     const trackPatterns = [
-      // English
       /\btrack\b/, /\btrack order\b/, /\btrack my order\b/, /\btracking\b/,
       /\bwhere is my order\b/, /\bwhere'?s my order\b/, /\border location\b/,
-      /\bdelivery status\b/, /\bwhen will.+arrive\b/, /\bwhere is.+order\b/,
-      // Hindi
-      /\bkahan hai\b/, /\bkab aayega\b/, /\border kahan\b/, /\btrack karo\b/,
-      /\bट्रैक\b/, /\bकहां है\b/, /\bऑर्डर कहां है\b/, /\bकब आएगा\b/, /\bमेरा ऑर्डर कहां\b/,
-      // Telugu
-      /\bekkada undi\b/, /\border ekkada\b/, /\beppudu vastundi\b/, /\btrack cheyyi\b/,
-      /\bట్రాక్\b/, /\bఎక్కడ ఉంది\b/, /\bనా ఆర్డర్ ఎక్కడ\b/, /\bఎప్పుడు వస్తుంది\b/,
-      // Tamil
-      /\benga irukku\b/, /\border enga\b/, /\bepppo varum\b/, /\btrack pannu\b/,
-      /\bட்ராக்\b/, /\bஎங்கே இருக்கு\b/, /\bஆர்டர் எங்கே\b/, /\bஎப்போ வரும்\b/,
-      // Kannada
-      /\belli ide\b/, /\border elli\b/, /\byavaga baratte\b/, /\btrack maadi\b/,
-      /\bಟ್ರ್ಯಾಕ್\b/, /\bಎಲ್ಲಿ ಇದೆ\b/, /\bಆರ್ಡರ್ ಎಲ್ಲಿ\b/,
-      // Malayalam
-      /\bevide und\b/, /\border evide\b/, /\beppol varum\b/, /\btrack cheyyuka\b/,
-      /\bട്രാക്ക്\b/, /\bഎവിടെ ഉണ്ട്\b/, /\bഓർഡർ എവിടെ\b/,
-      // Bengali
-      /\bkothay ache\b/, /\border kothay\b/, /\bkokhon ashbe\b/, /\btrack koro\b/,
-      /\bট্র্যাক\b/, /\bকোথায় আছে\b/, /\bঅর্ডার কোথায়\b/,
-      // Marathi
-      /\bkuthe aahe\b/, /\border kuthe\b/, /\bkevha yeil\b/, /\btrack kara\b/,
-      /\bट्रॅक\b/, /\bकुठे आहे\b/, /\bऑर्डर कुठे\b/,
-      // Gujarati
-      /\bkya che\b/, /\border kya\b/, /\bkyare avshe\b/, /\btrack karo\b/,
-      /\bટ્રેક\b/, /\bક્યાં છે\b/, /\bઓર્ડર ક્યાં\b/
+      /\bdelivery status\b/, /\bwhen will.+arrive\b/, /\bwhere is.+order\b/
     ];
     return trackPatterns.some(pattern => pattern.test(lowerText));
   },
 
-  // Helper to detect order status intent from text/voice
+  // Helper to detect order status intent from text
   isOrderStatusIntent(text) {
     if (!text) return false;
     const lowerText = ' ' + text.toLowerCase() + ' ';
@@ -1581,48 +1008,10 @@ const chatbot = {
     }
     
     const statusPatterns = [
-      // English - singular and plural
       /\border status\b/, /\bcheck order\b/, /\border history\b/, /\bprevious order\b/,
       /\bpast order\b/, /\bshow order\b/, /\bview order\b/, /\border details\b/,
       /\bmy orders\b/, /\bmy order\b/, /\bstatus\b/,
-      // Voice recognition variations for "my order" / "my orders"
-      /\bmai order\b/, /\bmai orders\b/, /\bmay order\b/, /\bmay orders\b/,
-      /\bmy oder\b/, /\bmy oders\b/, /\bmy orda\b/, /\bmy ordas\b/,
-      // "order" standalone and variations
-      /^order$/, /^orders$/, /^oder$/, /^oders$/, /^orda$/, /^ordas$/,
-      // Hindi
-      /\bmera order\b/, /\bmere order\b/, /\bmere orders\b/, /\bmera orders\b/,
-      /\border kya hua\b/, /\border status kya hai\b/, /\border ka status\b/,
-      /\border dikhao\b/, /\border batao\b/, /\bमेरा ऑर्डर\b/, /\bमेरे ऑर्डर\b/,
-      /\bऑर्डर स्टेटस\b/, /\bऑर्डर क्या हुआ\b/, /\bस्टेटस\b/, /\bऑर्डर दिखाओ\b/,
-      // Telugu
-      /\bnaa order\b/, /\bnaa orders\b/, /\border chupinchu\b/, /\border chudu\b/,
-      /\border status enti\b/, /\border em aindi\b/, /\bనా ఆర్డర్\b/, /\bఆర్డర్ చూపించు\b/,
-      /\bఆర్డర్ స్టేటస్\b/, /\bస్టేటస్\b/,
-      // Tamil
-      /\ben order\b/, /\ben orders\b/, /\border kaattu\b/, /\border paaru\b/,
-      /\border status enna\b/, /\border enna achu\b/, /\bஎன் ஆர்டர்\b/, /\bஆர்டர் காட்டு\b/,
-      /\bஆர்டர் ஸ்டேட்டஸ்\b/, /\bஸ்டேட்டஸ்\b/,
-      // Kannada
-      /\bnanna order\b/, /\bnanna orders\b/, /\border toorisu\b/, /\border nodu\b/,
-      /\border status enu\b/, /\border enu aaytu\b/, /\bನನ್ನ ಆರ್ಡರ್\b/, /\bಆರ್ಡರ್ ತೋರಿಸು\b/,
-      /\bಆರ್ಡರ್ ಸ್ಟೇಟಸ್\b/, /\bಸ್ಟೇಟಸ್\b/,
-      // Malayalam
-      /\bente order\b/, /\bente orders\b/, /\border kaanikkuka\b/, /\border kaanu\b/,
-      /\border status enthaanu\b/, /\border entha\b/, /\bഎന്റെ ഓർഡർ\b/, /\bഓർഡർ കാണിക്കുക\b/,
-      /\bഓർഡർ സ്റ്റാറ്റസ്\b/, /\bസ്റ്റാറ്റസ്\b/,
-      // Bengali
-      /\bamar order\b/, /\bamar orders\b/, /\border dekho\b/, /\border dekhao\b/,
-      /\border status ki\b/, /\border ki holo\b/, /\bআমার অর্ডার\b/, /\bঅর্ডার দেখো\b/,
-      /\bঅর্ডার স্ট্যাটাস\b/, /\bস্ট্যাটাস\b/,
-      // Marathi
-      /\bmaza order\b/, /\bmaza orders\b/, /\border dakhva\b/, /\border bagha\b/,
-      /\border status kay\b/, /\border kay jhala\b/, /\bमाझा ऑर्डर\b/, /\bऑर्डर दाखवा\b/,
-      /\bऑर्डर स्टेटस\b/, /\bस्टेटस\b/,
-      // Gujarati
-      /\bmaru order\b/, /\bmaru orders\b/, /\border batavo\b/, /\border juo\b/,
-      /\border status shu\b/, /\border shu thyu\b/, /\bમારું ઓર્ડર\b/, /\bઓર્ડર બતાવો\b/,
-      /\bઓર્ડર સ્ટેટસ\b/, /\bસ્ટેટસ\b/
+      /^order$/, /^orders$/
     ];
     return statusPatterns.some(pattern => pattern.test(lowerText));
   },
@@ -1647,47 +1036,17 @@ const chatbot = {
     });
     if (exactMatch) return exactMatch;
     
-    // Try fuzzy matching with typo tolerance for ANY category (lowered threshold to 0.55)
+    // Try fuzzy matching for category
     let bestMatch = null;
     let bestScore = 0;
     
     for (const cat of categories) {
       const catLower = cat.toLowerCase();
-      // Split into words and check each
-      const catWords = catLower.split(/\s+/);
-      const searchWords = lowerText.split(/\s+/);
-      
-      for (const searchWord of searchWords) {
-        if (searchWord.length < 2) continue;
-        
-        // Check against full category name with typo tolerance
-        const fullScore = this.similarityWithTypoTolerance(searchWord, catLower);
-        if (fullScore > bestScore && fullScore >= 0.55) {
-          bestScore = fullScore;
-          bestMatch = cat;
-        }
-        
-        // Check against each word in category
-        for (const catWord of catWords) {
-          if (catWord.length < 2) continue;
-          const wordScore = this.similarityWithTypoTolerance(searchWord, catWord);
-          if (wordScore > bestScore && wordScore >= 0.55) {
-            bestScore = wordScore;
-            bestMatch = cat;
-          }
-        }
-      }
-      
-      // Also check full text against category
-      const fullTextScore = this.similarityWithTypoTolerance(lowerText, catLower);
-      if (fullTextScore > bestScore && fullTextScore >= 0.55) {
-        bestScore = fullTextScore;
+      const score = this.similarityRatio(lowerText, catLower);
+      if (score > bestScore && score >= 0.6) {
+        bestScore = score;
         bestMatch = cat;
       }
-    }
-    
-    if (bestMatch) {
-      logger.info('Category fuzzy match', { text, bestMatch, score: Math.round(bestScore * 100) });
     }
     
     return bestMatch;
@@ -1734,389 +1093,6 @@ const chatbot = {
     return 1 - (distance / maxLen);
   },
 
-  // Common phonetic equivalents for fuzzy matching
-  // Handles common misspellings like "brekfast" → "breakfast", "coffe" → "coffee"
-  phoneticEquivalents: {
-    'f': ['ph', 'ff'],
-    'ph': ['f'],
-    'k': ['c', 'ck', 'ch', 'q'],
-    'c': ['k', 's'],
-    's': ['c', 'z', 'ss'],
-    'z': ['s', 'zz'],
-    'i': ['y', 'ee', 'e'],
-    'y': ['i', 'ie', 'ey'],
-    'ee': ['i', 'ea', 'e'],
-    'ea': ['ee', 'e'],
-    'a': ['e', 'ah'],
-    'e': ['a', 'i'],
-    'o': ['u', 'oo'],
-    'u': ['o', 'oo'],
-    'oo': ['u', 'o'],
-    'th': ['t', 'd'],
-    'ch': ['c', 'tch'],
-    'sh': ['s', 'sch'],
-    'ge': ['j'],
-    'j': ['g', 'dg'],
-    'x': ['ks', 'cks'],
-    'tion': ['sion', 'shun'],
-    'sion': ['tion', 'shun'],
-  },
-
-  // Common food-related typos and their corrections
-  // Helps match "brekfast" → "breakfast", "coffe" → "coffee", etc.
-  commonFoodTypos: {
-    // Breakfast variations
-    'brekfast': 'breakfast', 'breakfst': 'breakfast', 'brekfst': 'breakfast',
-    'breakast': 'breakfast', 'brakfast': 'breakfast', 'breaksfast': 'breakfast',
-    'beakfast': 'breakfast', 'brekfest': 'breakfast', 'breakfeast': 'breakfast',
-    'beak fasr': 'breakfast', 'beak fast': 'breakfast', 'break fast': 'breakfast',
-    // Coffee/Tea
-    'coffe': 'coffee', 'cofee': 'coffee', 'cofe': 'coffee', 'coffie': 'coffee',
-    'caffe': 'coffee', 'koffee': 'coffee', 'coffy': 'coffee',
-    'tee': 'tea', 'tae': 'tea', 'chai': 'tea',
-    // Common foods - Biryani variations (very common typos)
-    'biryni': 'biryani', 'biriyani': 'biryani', 'birani': 'biryani', 'bryani': 'biryani',
-    'briyani': 'biryani', 'biriani': 'biryani', 'biriany': 'biryani',
-    'biyani': 'biryani', 'biyrani': 'biryani', 'byrani': 'biryani', 'byriani': 'biryani',
-    'birynai': 'biryani', 'biryain': 'biryani', 'biryanai': 'biryani', 'beryani': 'biryani',
-    'beriyani': 'biryani', 'briynai': 'biryani', 'biryan': 'biryani', 'biryanii': 'biryani',
-    'biriyanai': 'biryani', 'biriyni': 'biryani', 'briani': 'biryani', 'birni': 'biryani',
-    'dosa': 'dosa', 'dosai': 'dosa', 'dhosa': 'dosa', 'thosai': 'dosa',
-    'idli': 'idly', 'idly': 'idli', 'iddly': 'idli', 'idlee': 'idli',
-    'samosa': 'samosa', 'samsa': 'samosa', 'samossa': 'samosa',
-    'paratha': 'paratha', 'paratta': 'paratha', 'pratha': 'paratha', 'parantha': 'paratha',
-    'chapathi': 'chapati', 'chapti': 'chapati', 'chapatti': 'chapati', 'roti': 'chapati',
-    'puri': 'poori', 'poori': 'puri', 'pooris': 'puri',
-    'naan': 'naan', 'nan': 'naan', 'naaan': 'naan',
-    'pulao': 'pulav', 'pulav': 'pulao', 'pilaf': 'pulao', 'pilau': 'pulao',
-    'paneer': 'paneer', 'panner': 'paneer', 'pannir': 'paneer', 'panir': 'paneer',
-    'chicken': 'chicken', 'chiken': 'chicken', 'chickan': 'chicken', 'chikken': 'chicken',
-    'mutton': 'mutton', 'muton': 'mutton', 'mutan': 'mutton',
-    'manchurian': 'manchurian', 'manchuri': 'manchurian', 'manchuryan': 'manchurian',
-    'manchuriyan': 'manchurian', 'manchuya': 'manchurian', 'manchuria': 'manchurian',
-    'noodles': 'noodles', 'noodels': 'noodles', 'noodle': 'noodles', 'nudels': 'noodles',
-    'pasta': 'pasta', 'psta': 'pasta', 'paasta': 'pasta',
-    'pizza': 'pizza', 'piza': 'pizza', 'pizzza': 'pizza', 'pieza': 'pizza',
-    'burger': 'burger', 'burgar': 'burger', 'burgur': 'burger', 'berger': 'burger',
-    'sandwich': 'sandwich', 'sandwhich': 'sandwich', 'sandwitch': 'sandwich', 'sanwich': 'sandwich',
-    'fries': 'fries', 'frys': 'fries', 'friez': 'fries', 'french fries': 'fries',
-    'shake': 'shake', 'shaek': 'shake', 'milkshake': 'shake',
-    'juice': 'juice', 'juce': 'juice', 'jucie': 'juice', 'jus': 'juice',
-    'smoothie': 'smoothie', 'smoothe': 'smoothie', 'smoothy': 'smoothie',
-    'curry': 'curry', 'curri': 'curry', 'kurry': 'curry', 'currie': 'curry',
-    'gravy': 'gravy', 'gravey': 'gravy', 'gravi': 'gravy',
-    'masala': 'masala', 'masla': 'masala', 'massala': 'masala', 'msala': 'masala',
-    'tikka': 'tikka', 'tika': 'tikka', 'tikah': 'tikka',
-    'kebab': 'kebab', 'kabab': 'kebab', 'kebap': 'kebab', 'kabob': 'kebab',
-    'tandoori': 'tandoori', 'tandori': 'tandoori', 'thandoori': 'tandoori',
-    'dessert': 'dessert', 'desert': 'dessert', 'desrt': 'dessert', 'dessrt': 'dessert',
-    'icecream': 'ice cream', 'ice creem': 'ice cream', 'icecrem': 'ice cream',
-    'sweets': 'sweets', 'sweet': 'sweets', 'swets': 'sweets',
-    'beverages': 'beverages', 'beverges': 'beverages', 'beverage': 'beverages', 'bevrages': 'beverages',
-    'snacks': 'snacks', 'snaks': 'snacks', 'snack': 'snacks', 'snax': 'snacks',
-    'starter': 'starters', 'starters': 'starters', 'strters': 'starters',
-    'appetizer': 'appetizer', 'apetizer': 'appetizer', 'appetiser': 'appetizer',
-    'lunch': 'lunch', 'luch': 'lunch', 'lanch': 'lunch',
-    'dinner': 'dinner', 'diner': 'dinner', 'dinnar': 'dinner',
-    'thali': 'thali', 'thaali': 'thali', 'thaly': 'thali',
-    'combo': 'combo', 'combi': 'combo', 'cumbo': 'combo',
-    'meal': 'meals', 'meals': 'meals', 'mealz': 'meals',
-    'special': 'special', 'spacial': 'special', 'speshal': 'special',
-    'veg': 'veg', 'vege': 'veg', 'veggie': 'veg',
-    'nonveg': 'nonveg', 'non veg': 'nonveg', 'non-veg': 'nonveg',
-    // South Indian - Curd/Thayir variations (common typos)
-    'thayir': 'curd', 'thaiyr': 'curd', 'tayir': 'curd', 'thair': 'curd', 
-    'thayr': 'curd', 'thyir': 'curd', 'thayri': 'curd', 'thayeer': 'curd',
-    'thaiir': 'curd', 'thaiyir': 'curd', 'thaiyar': 'curd', 'tayeer': 'curd',
-    'perugu': 'curd', 'peruug': 'curd', 'perugu': 'curd', 'perguu': 'curd',
-    'mosaru': 'curd', 'mosuru': 'curd', 'mosru': 'curd',
-    'dahi': 'curd', 'dhahi': 'curd', 'dahee': 'curd',
-    'curd': 'curd', 'curd rice': 'curd rice', 'curds': 'curd',
-    'thayir sadam': 'curd rice', 'thaiyr sadam': 'curd rice', 'tayir sadam': 'curd rice',
-    'thayir rice': 'curd rice', 'perugu annam': 'curd rice', 'mosaru anna': 'curd rice',
-    'dahi chawal': 'curd rice', 'dahi rice': 'curd rice',
-    // South Indian - Other items
-    'uttapam': 'uttapam', 'utapam': 'uttapam', 'uthappam': 'uttapam', 'utappam': 'uttapam',
-    'vada': 'vada', 'vadai': 'vada', 'wada': 'vada', 'bada': 'vada', 'vadaa': 'vada',
-    'upma': 'upma', 'uppma': 'upma', 'upuma': 'upma', 'uppuma': 'upma', 'uppit': 'upma',
-    'pongal': 'pongal', 'pongel': 'pongal', 'pongl': 'pongal', 'pongali': 'pongal',
-    'rasam': 'rasam', 'rasaam': 'rasam', 'russam': 'rasam', 'rasamu': 'rasam',
-    'sambar': 'sambar', 'sambhar': 'sambar', 'samber': 'sambar', 'saambar': 'sambar',
-    'chutney': 'chutney', 'chatni': 'chutney', 'chutnee': 'chutney', 'chatney': 'chutney',
-    'pesarattu': 'pesarattu', 'pesarat': 'pesarattu', 'pesaratu': 'pesarattu', 'pesarathu': 'pesarattu',
-    'pulihora': 'tamarind rice', 'pulihoura': 'tamarind rice', 'pulihara': 'tamarind rice',
-    'gongura': 'gongura', 'gongora': 'gongura', 'gangura': 'gongura', 'gonguru': 'gongura',
-    // Rice varieties
-    'sadam': 'rice', 'annam': 'rice', 'anna': 'rice', 'chawal': 'rice', 'rice': 'rice',
-    'lemon rice': 'lemon rice', 'nimbu rice': 'lemon rice', 'nimmakaya annam': 'lemon rice',
-    'tomato rice': 'tomato rice', 'tomato annam': 'tomato rice',
-    'coconut rice': 'coconut rice', 'kobbari annam': 'coconut rice',
-    // North Indian
-    'roti': 'roti', 'rotis': 'roti', 'rooti': 'roti', 'rotti': 'roti',
-    'dal': 'dal', 'daal': 'dal', 'dhal': 'dal', 'dhall': 'dal',
-    'rajma': 'rajma', 'rajmah': 'rajma', 'razma': 'rajma', 'rajmaa': 'rajma',
-    'chole': 'chole', 'choley': 'chole', 'chhole': 'chole', 'chana': 'chole', 'chholey': 'chole',
-    'aloo': 'aloo', 'alu': 'aloo', 'aaloo': 'aloo', 'allu': 'aloo',
-    'gobi': 'gobi', 'gobhi': 'gobi', 'ghobi': 'gobi', 'gobhee': 'gobi',
-    'palak': 'palak', 'paalak': 'palak', 'spinach': 'palak', 'paalak': 'palak',
-    // Chinese
-    'fried rice': 'fried rice', 'friedrice': 'fried rice', 'fry rice': 'fried rice', 'fryrice': 'fried rice',
-    'chowmein': 'chow mein', 'chowmin': 'chow mein', 'chawmein': 'chow mein', 'chowmine': 'chow mein',
-    'hakka': 'hakka', 'haka': 'hakka', 'hakaa': 'hakka', 'hakka noodles': 'hakka noodles',
-    'schezwan': 'schezwan', 'szechuan': 'schezwan', 'schewan': 'schezwan', 'sichuan': 'schezwan', 'schezuan': 'schezwan',
-  },
-
-  // Get corrected food term if it's a common typo
-  correctFoodTypo(text) {
-    const lowerText = text.toLowerCase().trim();
-    return this.commonFoodTypos[lowerText] || text;
-  },
-
-  // Keyboard adjacent keys for typo tolerance
-  keyboardAdjacent: {
-    'q': ['w', 'a'], 'w': ['q', 'e', 's', 'a'], 'e': ['w', 'r', 'd', 's'],
-    'r': ['e', 't', 'f', 'd'], 't': ['r', 'y', 'g', 'f'], 'y': ['t', 'u', 'h', 'g'],
-    'u': ['y', 'i', 'j', 'h'], 'i': ['u', 'o', 'k', 'j'], 'o': ['i', 'p', 'l', 'k'],
-    'p': ['o', 'l'], 'a': ['q', 'w', 's', 'z'], 's': ['a', 'w', 'e', 'd', 'x', 'z'],
-    'd': ['s', 'e', 'r', 'f', 'c', 'x'], 'f': ['d', 'r', 't', 'g', 'v', 'c'],
-    'g': ['f', 't', 'y', 'h', 'b', 'v'], 'h': ['g', 'y', 'u', 'j', 'n', 'b'],
-    'j': ['h', 'u', 'i', 'k', 'm', 'n'], 'k': ['j', 'i', 'o', 'l', 'm'],
-    'l': ['k', 'o', 'p'], 'z': ['a', 's', 'x'], 'x': ['z', 's', 'd', 'c'],
-    'c': ['x', 'd', 'f', 'v'], 'v': ['c', 'f', 'g', 'b'], 'b': ['v', 'g', 'h', 'n'],
-    'n': ['b', 'h', 'j', 'm'], 'm': ['n', 'j', 'k']
-  },
-
-  // Check if two characters are keyboard-adjacent (common typo)
-  isKeyboardAdjacent(char1, char2) {
-    const c1 = char1.toLowerCase();
-    const c2 = char2.toLowerCase();
-    return this.keyboardAdjacent[c1]?.includes(c2) || this.keyboardAdjacent[c2]?.includes(c1);
-  },
-
-  // Calculate similarity with keyboard typo tolerance
-  // Gives partial credit for keyboard-adjacent character substitutions
-  // Also handles common typo patterns: missing letters, swapped letters, extra letters
-  similarityWithTypoTolerance(str1, str2) {
-    const s1 = str1.toLowerCase();
-    const s2 = str2.toLowerCase();
-    
-    // Exact match
-    if (s1 === s2) return 1;
-    
-    // One is prefix of other (e.g., "biryan" vs "biryani")
-    if (s1.startsWith(s2) || s2.startsWith(s1)) {
-      const shorter = Math.min(s1.length, s2.length);
-      const longer = Math.max(s1.length, s2.length);
-      // High score if only 1-2 chars difference
-      if (longer - shorter <= 2) {
-        return 0.85 + (shorter / longer) * 0.1;
-      }
-    }
-    
-    // Standard Levenshtein for base score
-    const baseScore = this.similarityRatio(s1, s2);
-    
-    // Calculate bonus for keyboard-adjacent typos
-    let typoBonus = 0;
-    const minLen = Math.min(s1.length, s2.length);
-    const maxLen = Math.max(s1.length, s2.length);
-    
-    // Only give bonus if lengths are similar (within 2 chars)
-    if (Math.abs(s1.length - s2.length) <= 2) {
-      let adjacentTypos = 0;
-      let swappedChars = 0;
-      
-      for (let i = 0; i < minLen; i++) {
-        if (s1[i] !== s2[i]) {
-          // Check for keyboard-adjacent typos
-          if (this.isKeyboardAdjacent(s1[i], s2[i])) {
-            adjacentTypos++;
-          }
-          // Check for swapped adjacent characters (e.g., "teh" vs "the")
-          if (i < minLen - 1 && s1[i] === s2[i + 1] && s1[i + 1] === s2[i]) {
-            swappedChars++;
-          }
-        }
-      }
-      // Each keyboard-adjacent typo adds a small bonus (max 0.15 bonus)
-      typoBonus = Math.min(0.20, adjacentTypos * 0.05 + swappedChars * 0.08);
-    }
-    
-    // Check for single missing vowel (common typo: "biyani" vs "biryani")
-    const vowelBonus = this.checkMissingVowelSimilarity(s1, s2);
-    
-    return Math.min(1, baseScore + typoBonus + vowelBonus);
-  },
-
-  // Check if strings are similar with a single missing/extra vowel
-  checkMissingVowelSimilarity(s1, s2) {
-    const vowels = 'aeiou';
-    const lenDiff = Math.abs(s1.length - s2.length);
-    
-    // Only check if exactly 1 character difference
-    if (lenDiff !== 1) return 0;
-    
-    const longer = s1.length > s2.length ? s1 : s2;
-    const shorter = s1.length > s2.length ? s2 : s1;
-    
-    // Try removing each character from longer and check if it matches shorter
-    for (let i = 0; i < longer.length; i++) {
-      const charRemoved = longer.slice(0, i) + longer.slice(i + 1);
-      if (charRemoved === shorter) {
-        // Extra bonus if the missing char is a vowel (common typo)
-        if (vowels.includes(longer[i])) {
-          return 0.12;
-        }
-        return 0.08;
-      }
-    }
-    
-    return 0;
-  },
-
-  // Normalize common typos and phonetic variations
-  normalizeTypos(text) {
-    let normalized = text.toLowerCase();
-    
-    // Common typo patterns: doubled letters → single, missing letters
-    const typoPatterns = [
-      [/(.)(\1)+/g, '$1'],  // Remove repeated letters: "cofffee" → "cofee"
-      [/([aeiou])\1/g, '$1'], // Reduce doubled vowels: "breead" → "bread"
-      [/ck/g, 'k'],  // "breakckfast" → "breakast"
-      [/kk/g, 'k'],  // "breakkfast" → "breakfast"
-      [/ff/g, 'f'],  // "cofffee" → "cofee"
-      [/ss/g, 's'],  // "classs" → "class"
-    ];
-    
-    for (const [pattern, replacement] of typoPatterns) {
-      normalized = normalized.replace(pattern, replacement);
-    }
-    
-    return normalized;
-  },
-
-  // Generate phonetic variations of a word for matching
-  generatePhoneticVariations(word) {
-    const variations = [word];
-    const wordLower = word.toLowerCase();
-    
-    // Add normalized typo version
-    const normalized = this.normalizeTypos(wordLower);
-    if (normalized !== wordLower) variations.push(normalized);
-    
-    // Generate phonetic variations
-    for (const [sound, equivalents] of Object.entries(this.phoneticEquivalents)) {
-      if (wordLower.includes(sound)) {
-        for (const equiv of equivalents) {
-          const variant = wordLower.replace(sound, equiv);
-          if (variant !== wordLower) variations.push(variant);
-        }
-      }
-    }
-    
-    return [...new Set(variations)];
-  },
-
-  // Dynamic typo correction - finds best matching item/tag for any search term
-  // Works for ANY menu item, not just hardcoded ones
-  // IMPORTANT: Only corrects if search term doesn't already match something in menu
-  findBestMatchingTerm(searchTerm, menuItems) {
-    if (!searchTerm || searchTerm.length < 2) return null;
-    
-    const searchLower = searchTerm.toLowerCase().trim();
-    let bestMatch = null;
-    let bestScore = 0;
-    // Dynamic threshold based on word length - shorter words need higher similarity
-    // "dal" (3 chars) needs 60%+, "biryani" (7 chars) needs 50%+
-    const threshold = searchLower.length <= 3 ? 0.60 : 
-                      searchLower.length <= 5 ? 0.50 : 0.45;
-    
-    // Collect all possible targets from menu items
-    const targets = new Set();
-    
-    for (const item of menuItems) {
-      // Add item name and its words
-      targets.add(item.name.toLowerCase());
-      item.name.toLowerCase().split(/\s+/).forEach(w => w.length >= 3 && targets.add(w));
-      
-      // Add all tags and their words
-      if (item.tags) {
-        item.tags.forEach(tag => {
-          targets.add(tag.toLowerCase());
-          tag.toLowerCase().split(/\s+/).forEach(w => w.length >= 3 && targets.add(w));
-        });
-      }
-      
-      // Add categories
-      const cats = Array.isArray(item.category) ? item.category : [item.category];
-      cats.forEach(cat => cat && targets.add(cat.toLowerCase()));
-    }
-    
-    // ========== CHECK IF SEARCH TERM ALREADY MATCHES SOMETHING ==========
-    // Don't "correct" valid search terms that already exist in the menu
-    // e.g., "sapota" should NOT be corrected to "apple" if "sapota" exists as a tag
-    const searchWords = searchLower.split(/\s+/).filter(w => w.length >= 2);
-    for (const word of searchWords) {
-      for (const target of targets) {
-        // Check if any search word exactly matches a target, or target contains the word
-        if (target === word || target.includes(word) || word.includes(target)) {
-          logger.info('Search term already matches', { term: word });
-          return null; // Don't correct, the term is valid
-        }
-      }
-    }
-    
-    // Find the best matching target for the search term
-    for (const target of targets) {
-      // Skip very short targets
-      if (target.length < 2) continue;
-      
-      // Calculate similarity with typo tolerance
-      const score = this.similarityWithTypoTolerance(searchLower, target);
-      
-      // Also try with normalized versions
-      const normalizedSearch = this.normalizeTypos(searchLower);
-      const normalizedTarget = this.normalizeTypos(target);
-      const normalizedScore = this.similarityWithTypoTolerance(normalizedSearch, normalizedTarget);
-      
-      const finalScore = Math.max(score, normalizedScore);
-      
-      if (finalScore > bestScore && finalScore >= threshold) {
-        bestScore = finalScore;
-        bestMatch = target;
-      }
-    }
-    
-    // If we found a match better than the original, return it
-    if (bestMatch && bestMatch !== searchLower && bestScore >= threshold) {
-      logger.info('Dynamic typo match', { searchTerm, bestMatch });
-      return bestMatch;
-    }
-    
-    return null;
-  },
-
-  // Get corrected food term - checks both hardcoded dictionary AND dynamic menu matching
-  correctFoodTypoDynamic(text, menuItems) {
-    const lowerText = text.toLowerCase().trim();
-    
-    // First check hardcoded common typos (fast lookup)
-    const hardcodedCorrection = this.commonFoodTypos[lowerText];
-    if (hardcodedCorrection && hardcodedCorrection !== lowerText) {
-      return hardcodedCorrection;
-    }
-    
-    // Then try dynamic matching against actual menu items
-    if (menuItems && menuItems.length > 0) {
-      const dynamicMatch = this.findBestMatchingTerm(lowerText, menuItems);
-      if (dynamicMatch) {
-        return dynamicMatch;
-      }
-    }
-    
-    return text;
-  },
-
   // Helper to check if search query is gibberish (random characters with no meaning)
   isGibberishSearch(query) {
     if (!query || query.length < 2) return true;
@@ -2151,10 +1127,8 @@ const chatbot = {
   },
 
   // Helper to find fuzzy matches for a search term
-  // Returns items where name or tags have similarity >= threshold (default 0.45 = 45% similar)
-  // Enhanced with: keyboard typo tolerance, phonetic matching, word reordering, dynamic menu matching
-  // Works for ANY menu item - not just hardcoded foods
-  fuzzySearchItems(searchTerm, menuItems, threshold = 0.45) {
+  // Returns items where name or tags have similarity >= threshold
+  fuzzySearchItems(searchTerm, menuItems, threshold = 0.5) {
     if (!searchTerm || searchTerm.length < 2) return [];
     
     // Skip fuzzy search for gibberish queries
@@ -2164,159 +1138,48 @@ const chatbot = {
     }
     
     const searchLower = searchTerm.toLowerCase().trim();
-    
-    // First check hardcoded typos, then try dynamic matching
-    let correctedSearch = this.correctFoodTypo(searchLower);
-    if (correctedSearch === searchLower) {
-      // No hardcoded match, try dynamic matching
-      const dynamicMatch = this.findBestMatchingTerm(searchLower, menuItems);
-      if (dynamicMatch) {
-        correctedSearch = dynamicMatch;
-      }
-    }
-    
-    const searchTerms = correctedSearch !== searchLower 
-      ? [correctedSearch, searchLower]  // Search with both corrected and original
-      : [searchLower];
-    
-    // Also check individual words for typos (e.g., "beak fasr" → check "beak" and "fasr")
     const searchWords = searchLower.split(/\s+/).filter(w => w.length >= 2);
-    for (const word of searchWords) {
-      // Check hardcoded first
-      let correctedWord = this.correctFoodTypo(word);
-      // Then try dynamic matching
-      if (correctedWord === word) {
-        const dynamicWordMatch = this.findBestMatchingTerm(word, menuItems);
-        if (dynamicWordMatch) {
-          correctedWord = dynamicWordMatch;
-        }
-      }
-      if (correctedWord !== word && !searchTerms.includes(correctedWord)) {
-        searchTerms.push(correctedWord);
-      }
-    }
-    
-    // Combined words check (e.g., "break fast" → "breakfast")
-    if (searchWords.length >= 2) {
-      const combined = searchWords.join('');
-      const correctedCombined = this.correctFoodTypo(combined);
-      if (!searchTerms.includes(combined)) searchTerms.push(combined);
-      if (correctedCombined !== combined && !searchTerms.includes(correctedCombined)) {
-        searchTerms.push(correctedCombined);
-      }
-    }
-    
-    const searchNormalized = this.normalizeTypos(searchLower);
-    const searchPhoneticVariants = this.generatePhoneticVariations(searchLower);
-    // Add corrected terms to phonetic variants
-    for (const term of searchTerms) {
-      searchPhoneticVariants.push(...this.generatePhoneticVariations(term));
-    }
-    
     const fuzzyMatches = [];
     
     for (const item of menuItems) {
       let bestScore = 0;
       let matchedOn = null;
       
-      // Helper to check all variations of search against a target
-      const checkAllVariations = (target) => {
-        const targetLower = target.toLowerCase();
-        const targetNormalized = this.normalizeTypos(targetLower);
-        let maxScore = 0;
-        
-        // Check corrected search terms (including common food typo corrections)
-        for (const term of searchTerms) {
-          maxScore = Math.max(maxScore, this.similarityWithTypoTolerance(term, targetLower));
-          maxScore = Math.max(maxScore, this.similarityRatio(term, targetLower));
-        }
-        
-        // Check direct similarity with typo tolerance
-        maxScore = Math.max(maxScore, this.similarityWithTypoTolerance(searchLower, targetLower));
-        maxScore = Math.max(maxScore, this.similarityWithTypoTolerance(searchNormalized, targetNormalized));
-        
-        // Check phonetic variations
-        for (const variant of searchPhoneticVariants) {
-          maxScore = Math.max(maxScore, this.similarityRatio(variant, targetLower));
-        }
-        
-        // Check if search words match parts of target (handles word reordering)
-        if (searchWords.length > 1) {
-          const targetWords = targetLower.split(/\s+/);
-          let matchedWords = 0;
-          for (const sw of searchWords) {
-            // Check both original and corrected word
-            const correctedSw = this.correctFoodTypo(sw);
-            for (const tw of targetWords) {
-              if (this.similarityWithTypoTolerance(sw, tw) >= 0.65 || 
-                  this.similarityWithTypoTolerance(correctedSw, tw) >= 0.65) {
-                matchedWords++;
-                break;
-              }
-            }
-          }
-          const wordMatchRatio = matchedWords / searchWords.length;
-          maxScore = Math.max(maxScore, wordMatchRatio);
-        }
-        
-        // Check individual search words against target
-        for (const word of searchWords) {
-          if (word.length >= 2) {
-            const correctedWord = this.correctFoodTypo(word);
-            maxScore = Math.max(maxScore, this.similarityWithTypoTolerance(word, targetLower));
-            maxScore = Math.max(maxScore, this.similarityWithTypoTolerance(correctedWord, targetLower));
-            // Check against target words
-            const targetWords = targetLower.split(/\s+/);
-            for (const tw of targetWords) {
-              if (tw.length >= 2) {
-                maxScore = Math.max(maxScore, this.similarityWithTypoTolerance(word, tw));
-                maxScore = Math.max(maxScore, this.similarityWithTypoTolerance(correctedWord, tw));
-              }
-            }
-          }
-        }
-        
-        return maxScore;
-      };
-      
       // Check item name
-      const nameScore = checkAllVariations(item.name);
+      const nameLower = item.name.toLowerCase();
+      let nameScore = this.similarityRatio(searchLower, nameLower);
+      // Also check if search matches a word in the name
+      const nameWords = nameLower.split(/\s+/);
+      for (const nw of nameWords) {
+        if (nw.length >= 2) {
+          nameScore = Math.max(nameScore, this.similarityRatio(searchLower, nw));
+          for (const sw of searchWords) {
+            nameScore = Math.max(nameScore, this.similarityRatio(sw, nw));
+          }
+        }
+      }
       if (nameScore > bestScore) {
         bestScore = nameScore;
         matchedOn = 'name';
       }
       
-      // Check individual words in name
-      const nameWords = item.name.toLowerCase().split(/\s+/);
-      for (const word of nameWords) {
-        if (word.length >= 3) {
-          const wordScore = checkAllVariations(word);
-          if (wordScore > bestScore) {
-            bestScore = wordScore;
-            matchedOn = 'name';
-          }
-        }
-      }
-      
       // Check tags
       if (item.tags && item.tags.length > 0) {
         for (const tag of item.tags) {
-          const tagScore = checkAllVariations(tag);
+          const tagLower = tag.toLowerCase();
+          let tagScore = this.similarityRatio(searchLower, tagLower);
+          const tagWords = tagLower.split(/\s+/);
+          for (const tw of tagWords) {
+            if (tw.length >= 2) {
+              tagScore = Math.max(tagScore, this.similarityRatio(searchLower, tw));
+              for (const sw of searchWords) {
+                tagScore = Math.max(tagScore, this.similarityRatio(sw, tw));
+              }
+            }
+          }
           if (tagScore > bestScore) {
             bestScore = tagScore;
             matchedOn = 'tag';
-          }
-          
-          // Check individual words in tag
-          const tagWords = tag.toLowerCase().split(/\s+/);
-          for (const word of tagWords) {
-            if (word.length >= 3) {
-              const wordScore = checkAllVariations(word);
-              if (wordScore > bestScore) {
-                bestScore = wordScore;
-                matchedOn = 'tag';
-              }
-            }
           }
         }
       }
@@ -2325,7 +1188,7 @@ const chatbot = {
       const categories = Array.isArray(item.category) ? item.category : [item.category];
       for (const cat of categories) {
         if (cat) {
-          const catScore = checkAllVariations(cat);
+          const catScore = this.similarityRatio(searchLower, cat.toLowerCase());
           if (catScore > bestScore) {
             bestScore = catScore;
             matchedOn = 'category';
@@ -2333,35 +1196,24 @@ const chatbot = {
         }
       }
       
-      // Check variant labels (variant names like "Chicken Biryani", "Mutton Biryani")
+      // Check variant labels
       if (item.variants && item.variants.length > 0) {
         for (const variant of item.variants) {
           if (variant.label) {
-            const variantLabelScore = checkAllVariations(variant.label);
-            if (variantLabelScore > bestScore) {
-              bestScore = variantLabelScore;
-              matchedOn = 'variant';
-            }
-            // Check individual words in variant label
-            const variantWords = variant.label.toLowerCase().split(/\s+/);
-            for (const word of variantWords) {
-              if (word.length >= 3) {
-                const wordScore = checkAllVariations(word);
-                if (wordScore > bestScore) {
-                  bestScore = wordScore;
-                  matchedOn = 'variant';
+            const variantLower = variant.label.toLowerCase();
+            let variantScore = this.similarityRatio(searchLower, variantLower);
+            const variantWords = variantLower.split(/\s+/);
+            for (const vw of variantWords) {
+              if (vw.length >= 3) {
+                variantScore = Math.max(variantScore, this.similarityRatio(searchLower, vw));
+                for (const sw of searchWords) {
+                  variantScore = Math.max(variantScore, this.similarityRatio(sw, vw));
                 }
               }
             }
-          }
-          // Check variant tags
-          if (variant.tags && variant.tags.length > 0) {
-            for (const tag of variant.tags) {
-              const vTagScore = checkAllVariations(tag);
-              if (vTagScore > bestScore) {
-                bestScore = vTagScore;
-                matchedOn = 'variant_tag';
-              }
+            if (variantScore > bestScore) {
+              bestScore = variantScore;
+              matchedOn = 'variant';
             }
           }
         }
@@ -2383,7 +1235,7 @@ const chatbot = {
       .map(m => m.item);
   },
 
-  // Helper to find item by name (with dynamic fuzzy fallback - works for ANY item)
+  // Helper to find item by name
   findItem(text, menuItems) {
     const lowerText = text.toLowerCase().trim();
     
@@ -2400,30 +1252,12 @@ const chatbot = {
     );
     if (smartMatch) return smartMatch;
     
-    // Try dynamic typo correction first
-    const corrected = this.findBestMatchingTerm(lowerText, menuItems);
-    if (corrected && corrected !== lowerText) {
-      const correctedMatch = menuItems.find(item => 
-        this.smartIncludes(corrected, item.name) || 
-        item.name.toLowerCase() === corrected
-      );
-      if (correctedMatch) return correctedMatch;
-    }
-    
-    // Fuzzy fallback for typos (lowered threshold to 0.55)
+    // Fuzzy fallback
     if (lowerText.length >= 2) {
       for (const item of menuItems) {
         const nameLower = item.name.toLowerCase();
-        // Check full name similarity
-        if (this.similarityWithTypoTolerance(lowerText, nameLower) >= 0.55) {
+        if (this.similarityRatio(lowerText, nameLower) >= 0.6) {
           return item;
-        }
-        // Check each word in name
-        const nameWords = nameLower.split(/\s+/);
-        for (const word of nameWords) {
-          if (word.length >= 2 && this.similarityWithTypoTolerance(lowerText, word) >= 0.6) {
-            return item;
-          }
         }
       }
     }
@@ -2431,7 +1265,7 @@ const chatbot = {
     return null;
   },
 
-  // Helper to find items by tag keyword (with dynamic fuzzy matching - works for ANY tag)
+  // Helper to find items by tag keyword
   findItemsByTag(text, menuItems) {
     const lowerText = text.toLowerCase().trim();
     if (lowerText.length < 2) return null;
@@ -2451,31 +1285,12 @@ const chatbot = {
       );
     }
     
-    // Try dynamic typo correction
-    if (matchingItems.length === 0) {
-      const corrected = this.findBestMatchingTerm(lowerText, menuItems);
-      if (corrected && corrected !== lowerText) {
-        matchingItems = menuItems.filter(item => 
-          item.tags?.some(tag => 
-            tag.toLowerCase().includes(corrected) || 
-            corrected.includes(tag.toLowerCase())
-          )
-        );
-      }
-    }
-    
-    // Fuzzy fallback if no exact matches (lowered threshold to 0.5)
+    // Fuzzy fallback if no exact matches
     if (matchingItems.length === 0 && lowerText.length >= 2) {
       matchingItems = menuItems.filter(item => {
         return item.tags?.some(tag => {
           const tagLower = tag.toLowerCase();
-          // Check tag similarity
-          if (this.similarityWithTypoTolerance(lowerText, tagLower) >= 0.5) return true;
-          // Check tag words
-          const tagWords = tagLower.split(/\s+/);
-          return tagWords.some(word => 
-            word.length >= 2 && this.similarityWithTypoTolerance(lowerText, word) >= 0.55
-          );
+          return this.similarityRatio(lowerText, tagLower) >= 0.6;
         });
       });
     }
@@ -2641,419 +1456,10 @@ const chatbot = {
     return normalizedWords.join(' ');
   },
 
-  // Food synonyms - regional/local names mapped to common English equivalents
-  // Used to expand search terms for better matching
-  foodSynonyms: {
-    // ========== MEAL TIME SYNONYMS ==========
-    // Breakfast/Morning/Tiffin - all should match each other (including spelling variations)
-    'breakfast': ['breakfast', 'tiffin', 'tiffins', 'tifin', 'tifins', 'morning', 'nashta', 'naashta', 'subah'],
-    'tiffin': ['tiffin', 'tiffins', 'tifin', 'tifins', 'breakfast', 'morning', 'nashta', 'naashta'],
-    'tiffins': ['tiffins', 'tiffin', 'tifin', 'tifins', 'breakfast', 'morning'],
-    'tifin': ['tifin', 'tifins', 'tiffin', 'tiffins', 'breakfast', 'morning', 'nashta'],
-    'tifins': ['tifins', 'tifin', 'tiffin', 'tiffins', 'breakfast', 'morning'],
-    'morning': ['morning', 'breakfast', 'tiffin', 'tiffins', 'tifin', 'tifins', 'nashta', 'subah'],
-    'nashta': ['nashta', 'naashta', 'breakfast', 'tiffin', 'tifin', 'morning'],
-    'naashta': ['naashta', 'nashta', 'breakfast', 'tiffin', 'tifin', 'morning'],
-    // Lunch/Dinner/Meals
-    'lunch': ['lunch', 'meals', 'meal', 'thali', 'afternoon', 'bhojan', 'khana'],
-    'dinner': ['dinner', 'meals', 'meal', 'thali', 'night', 'raat', 'bhojan'],
-    'meals': ['meals', 'meal', 'lunch', 'dinner', 'thali', 'bhojan'],
-    'meal': ['meal', 'meals', 'lunch', 'dinner', 'thali'],
-    'thali': ['thali', 'meals', 'meal', 'lunch', 'dinner'],
-    // Snacks/Evening
-    'snacks': ['snacks', 'snack', 'starters', 'appetizer', 'evening', 'tea time', 'chat', 'chaat'],
-    'starters': ['starters', 'snacks', 'appetizer', 'appetizers'],
-    'evening': ['evening', 'snacks', 'tea time'],
-    // ========== BREAD/ROTI SYNONYMS ==========
-    // Pulka, Phulka, Chapathi, Roti - all are similar flatbreads
-    'pulka': ['chapati', 'chapathi', 'roti', 'phulka', 'fulka', 'rotla', 'rotta'],
-    'phulka': ['chapati', 'chapathi', 'roti', 'pulka', 'fulka', 'rotla', 'rotta'],
-    'fulka': ['chapati', 'chapathi', 'roti', 'pulka', 'phulka', 'rotla', 'rotta'],
-    'chapati': ['chapati', 'chapathi', 'roti', 'pulka', 'phulka', 'fulka', 'rotta'],
-    'chapathi': ['chapathi', 'chapati', 'roti', 'pulka', 'phulka', 'fulka', 'rotta'],
-    'roti': ['roti', 'chapati', 'chapathi', 'pulka', 'phulka', 'fulka', 'rotta'],
-    'rotta': ['roti', 'chapati', 'chapathi', 'pulka', 'phulka', 'rotla'],
-    'rotla': ['roti', 'chapati', 'chapathi', 'pulka', 'phulka', 'rotta'],
-    // Parotta/Paratha variations
-    'parotta': ['parotta', 'paratha', 'barotta', 'porotta', 'kerala parotta'],
-    'paratha': ['paratha', 'parotta', 'barotta', 'prantha'],
-    'barotta': ['parotta', 'paratha', 'barotta', 'porotta'],
-    // Naan variations
-    'naan': ['naan', 'nan', 'tandoori naan', 'butter naan'],
-    'nan': ['naan', 'nan', 'tandoori naan'],
-    // Poori/Puri variations
-    'poori': ['poori', 'puri', 'pooree'],
-    'puri': ['puri', 'poori', 'pooree'],
-    // ========== FOOD TYPE SYNONYMS ==========
-    // Telugu/South Indian curry terms
-    'pulusu': ['curry', 'gravy', 'pulusu'],
-    'kura': ['curry', 'sabji', 'vegetable'],
-    'koora': ['curry', 'sabji', 'vegetable'],
-    'iguru': ['fry', 'dry curry', 'roast'],
-    'vepudu': ['fry', 'stir fry'],
-    'perugu': ['curd', 'yogurt', 'dahi'],
-    'pappu': ['dal', 'lentils'],
-    'charu': ['rasam', 'soup'],
-    'pachadi': ['chutney', 'raita'],
-    'pulihora': ['tamarind rice', 'puliyogare'],
-    'annam': ['rice', 'chawal'],
-    // Tamil terms
-    'kuzhambu': ['curry', 'gravy', 'kulambu'],
-    'kozhi': ['chicken', 'kodi'],
-    'meen': ['fish', 'chepa'],
-    'kari': ['curry', 'meat curry'],
-    'varuval': ['fry', 'roast'],
-    'poriyal': ['stir fry', 'vegetable fry'],
-    'kootu': ['curry', 'mixed vegetable'],
-    'thokku': ['pickle', 'chutney'],
-    // Hindi terms
-    'sabzi': ['curry', 'vegetable', 'sabji'],
-    'rassa': ['curry', 'gravy'],
-    'bhaji': ['fry', 'vegetable fry'],
-    'tarkari': ['curry', 'vegetable'],
-    // Common variations
-    'curry': ['curry', 'gravy', 'kura', 'pulusu', 'kuzhambu'],
-    'gravy': ['curry', 'gravy', 'rassa'],
-    'fry': ['fry', 'vepudu', 'varuval', 'roast'],
-    'biryani': ['biryani', 'biriyani', 'briyani', 'birani', 'biriani', 'byriani', 'bryani'],
-    'rice': ['rice', 'annam', 'chawal', 'bhat'],
-    // Chinese/Indo-Chinese items with common misspellings
-    'manchurian': ['manchurian', 'manchuriya', 'manchuria', 'manchuya', 'manchurya', 'manchuri', 'manchu', 'manchoorian'],
-    'manchuriya': ['manchurian', 'manchuriya', 'manchuria', 'manchuya', 'manchurya', 'manchuri'],
-    'manchuya': ['manchurian', 'manchuriya', 'manchuria', 'manchuya', 'manchurya'],
-    'noodles': ['noodles', 'noodels', 'nodles', 'nudels', 'nuddles'],
-    'chowmein': ['chowmein', 'chowmin', 'chow mein', 'chow min', 'chowmain', 'chawmin'],
-    'momos': ['momos', 'momo', 'momu', 'mamus'],
-    'schezwan': ['schezwan', 'szechuan', 'schezuan', 'shezwan', 'sezwan', 'schezwan'],
-    'hakka': ['hakka', 'haka', 'hakaa'],
-    'fried rice': ['fried rice', 'friedrice', 'fry rice', 'fryrice'],
-    // South Indian items
-    'idli': ['idli', 'idly', 'idle', 'undi'],
-    'idly': ['idly', 'idli', 'idle', 'undi'],
-    'undi': ['idli', 'idly', 'idle', 'undi'],
-    'dosa': ['dosa', 'dosai', 'dhosha', 'dose', 'attu'],
-    'dosai': ['dosai', 'dosa', 'dose', 'attu'],
-    'attu': ['dosa', 'dosai', 'attu'],
-    'vada': ['vada', 'vadai', 'wade', 'medu vada', 'wada', 'garelu'],
-    'vadai': ['vadai', 'vada', 'wade', 'wada', 'garelu'],
-    'wada': ['vada', 'vadai', 'wade', 'wada', 'garelu'],
-    'garelu': ['vada', 'vadai', 'garelu', 'medu vada'],
-    'upma': ['upma', 'uppuma', 'uppit', 'uppittu'],
-    'uppit': ['upma', 'uppuma', 'uppit', 'uppittu'],
-    'uppittu': ['upma', 'uppuma', 'uppit', 'uppittu'],
-    'pongal': ['pongal', 'pongali', 'ven pongal'],
-    'uttapam': ['uttapam', 'uthappam', 'utappam'],
-    'pesarattu': ['pesarattu', 'pesaratu', 'pesarat', 'pesara dosa'],
-    'pesarat': ['pesarattu', 'pesaratu', 'pesarat'],
-    // Poha/Avalakki
-    'poha': ['poha', 'pohe', 'avalakki', 'atukulu', 'chivda'],
-    'avalakki': ['poha', 'avalakki', 'atukulu'],
-    'atukulu': ['poha', 'avalakki', 'atukulu'],
-    // Common misspellings for popular items
-    'paneer': ['paneer', 'paner', 'panir', 'panner'],
-    'samosa': ['samosa', 'samsa', 'samoza', 'sumosa'],
-    'pakora': ['pakora', 'pakoda', 'pakodi', 'bhajji', 'bhaji'],
-    'pakoda': ['pakoda', 'pakora', 'pakodi', 'bhajji', 'bhaji'],
-    'chutney': ['chutney', 'chatni', 'chutni', 'chatney'],
-    'korma': ['korma', 'kurma', 'qorma'],
-    'kebab': ['kebab', 'kabab', 'kabob', 'kebob'],
-    'tikka': ['tikka', 'tika', 'tikaa'],
-    'tandoori': ['tandoori', 'tanduri', 'tandoor', 'tandori'],
-    'masala': ['masala', 'masalla', 'massala'],
-    'paratha': ['paratha', 'parotta', 'parantha', 'pratha', 'prantha'],
-    'kulcha': ['kulcha', 'kulca', 'kulchaa'],
-    'lassi': ['lassi', 'lasi', 'lasee', 'lassy'],
-    'raita': ['raita', 'raitha', 'rayta'],
-    'kheer': ['kheer', 'khir', 'keer', 'payasam'],
-    'halwa': ['halwa', 'halva', 'halwaa', 'sheera'],
-    'jalebi': ['jalebi', 'jilebi', 'jaleebi'],
-    'gulab jamun': ['gulab jamun', 'gulabjamun', 'gulab jamoon', 'jamun'],
-    'rasmalai': ['rasmalai', 'ras malai', 'rasmallai', 'rasmalae'],
-    'burger': ['burger', 'burgar', 'berger', 'burgur'],
-    'pizza': ['pizza', 'piza', 'pizzza', 'pezza'],
-    'sandwich': ['sandwich', 'sandwitch', 'sandwhich', 'sanwich'],
-    'shake': ['shake', 'shak', 'shaik', 'milk shake', 'milkshake'],
-    'juice': ['juice', 'juce', 'joos', 'juise'],
-    'coffee': ['coffee', 'coffe', 'cofee', 'koffee', 'kaafi'],
-    'tea': ['tea', 'chai', 'chay', 'tee'],
-    'omelette': ['omelette', 'omlet', 'omelet', 'omlette', 'omlete']
-  },
-
-  // Get synonyms for a search term
-  getSynonyms(term) {
-    const lowerTerm = term.toLowerCase();
-    const synonyms = [lowerTerm];
-    
-    // Check if term has synonyms
-    if (this.foodSynonyms[lowerTerm]) {
-      synonyms.push(...this.foodSynonyms[lowerTerm]);
-    }
-    
-    // Also check if term is a synonym of something else
-    for (const [key, values] of Object.entries(this.foodSynonyms)) {
-      if (values.includes(lowerTerm) && !synonyms.includes(key)) {
-        synonyms.push(key);
-      }
-    }
-    
-    return [...new Set(synonyms)];
-  },
-
-  // Helper to transliterate regional language words to English equivalents (basic mapping)
-  transliterate(text) {
-    const transliterationMap = {
-      // Hindi to English - Common food items
-      'ब्रेड': 'bread', 'रोटी': 'roti', 'चावल': 'rice', 'दाल': 'dal',
-      'सब्जी': 'sabji', 'पनीर': 'paneer', 'चिकन': 'chicken', 'मटन': 'mutton',
-      'बिरयानी': 'biryani', 'पुलाव': 'pulao', 'नान': 'naan', 'पराठा': 'paratha',
-      'समोसा': 'samosa', 'पकोड़ा': 'pakoda', 'चाय': 'tea', 'कॉफी': 'coffee',
-      'लस्सी': 'lassi', 'जूस': 'juice', 'पानी': 'water', 'कोल्ड ड्रिंक': 'cold drink',
-      'आइसक्रीम': 'ice cream', 'केक': 'cake', 'मिठाई': 'sweet', 'गुलाब जामुन': 'gulab jamun',
-      'पिज़्ज़ा': 'pizza', 'बर्गर': 'burger', 'सैंडविच': 'sandwich', 'मोमो': 'momo',
-      'नूडल्स': 'noodles', 'फ्राइड राइस': 'fried rice', 'मंचूरियन': 'manchurian',
-      'सूप': 'soup', 'सलाद': 'salad', 'फ्राइज़': 'fries', 'चिप्स': 'chips',
-      'अंडा': 'egg', 'आमलेट': 'omelette', 'मछली': 'fish', 'झींगा': 'prawn',
-      'तंदूरी': 'tandoori', 'कबाब': 'kabab', 'टिक्का': 'tikka', 'कोरमा': 'korma',
-      'करी': 'curry', 'मसाला': 'masala', 'फ्राइड': 'fried', 'ग्रिल्ड': 'grilled',
-      'दही': 'curd', 'पेरुगु': 'curd', 'छाछ': 'buttermilk', 'खीर': 'kheer',
-      'तंदूरी चिकन': 'tandoori chicken', 'चिकन टिक्का': 'chicken tikka', 'मटन करी': 'mutton curry',
-      'पनीर टिक्का': 'paneer tikka', 'दाल मखनी': 'dal makhani', 'बटर चिकन': 'butter chicken',
-      'चिकन बिरयानी': 'chicken biryani', 'मटन बिरयानी': 'mutton biryani', 'थाली': 'thali',
-      'चिकन थाली': 'chicken thali', 'वेज थाली': 'veg thali', 'स्पेशल थाली': 'special thali',
-      // Telugu to English
-      'బ్రెడ్': 'bread', 'అన్నం': 'rice', 'చికెన్': 'chicken', 'మటన్': 'mutton',
-      'బిర్యానీ': 'biryani', 'కేక్': 'cake', 'పిజ్జా': 'pizza', 'బర్గర్': 'burger',
-      'నూడుల్స్': 'noodles', 'ఐస్ క్రీమ్': 'ice cream', 'టీ': 'tea', 'కాఫీ': 'coffee',
-      'పెరుగు': 'curd', 'పెరుగు అన్నం': 'curd rice', 'సాంబార్': 'sambar', 'రసం': 'rasam',
-      'పప్పు': 'dal', 'కూర': 'curry', 'పచ్చడి': 'chutney', 'అప్పడం': 'papad',
-      'పూరీ': 'poori', 'ఇడ్లీ': 'idli', 'దోశ': 'dosa', 'ఉప్మా': 'upma', 'వడ': 'vada',
-      'కోడి': 'chicken', 'కోడి బిర్యానీ': 'chicken biryani', 'గుడ్డు': 'egg', 'చేప': 'fish',
-      'రొయ్యలు': 'prawns', 'మటన్ బిర్యానీ': 'mutton biryani', 'పులావ్': 'pulao',
-      'ఫ్రైడ్ రైస్': 'fried rice', 'నూడిల్స్': 'noodles', 'మంచూరియన్': 'manchurian',
-      'పులిహోర': 'pulihora', 'పులిహోర': 'tamarind rice', 'దద్దోజనం': 'curd rice',
-      'చిత్రాన్నం': 'chitranna', 'లెమన్ రైస్': 'lemon rice', 'టమాటో రైస్': 'tomato rice',
-      'కొబ్బరి అన్నం': 'coconut rice', 'పొంగల్': 'pongal', 'అట్టు': 'dosa',
-      'పెసరట్టు': 'pesarattu', 'మసాలా దోశ': 'masala dosa', 'రవ్వ దోశ': 'rava dosa',
-      'మైసూర్ బజ్జి': 'mysore bajji', 'మిర్చి బజ్జి': 'mirchi bajji', 'ఆలూ బజ్జి': 'aloo bajji',
-      'గారెలు': 'garelu', 'బొబ్బట్లు': 'bobbatlu', 'పాయసం': 'payasam', 'కేసరి': 'kesari',
-      // Telugu - Gongura and other Andhra dishes
-      'గొంగూర': 'gongura', 'గొంగూర చికెన్': 'gongura chicken', 'గొంగూర మటన్': 'gongura mutton',
-      'గొంగూర పచ్చడి': 'gongura chutney', 'గొంగూర పప్పు': 'gongura dal',
-      'గుత్తి వంకాయ': 'gutti vankaya', 'వంకాయ': 'brinjal', 'బెండకాయ': 'okra',
-      'ఆలూ': 'potato', 'టమాటో': 'tomato', 'ఉల్లి': 'onion', 'వెల్లుల్లి': 'garlic',
-      'అల్లం': 'ginger', 'మిరపకాయ': 'chilli', 'కరివేపాకు': 'curry leaves',
-      'చికెన్ కర్రీ': 'chicken curry', 'మటన్ కర్రీ': 'mutton curry', 'చేప కర్రీ': 'fish curry',
-      'చికెన్ ఫ్రై': 'chicken fry', 'మటన్ ఫ్రై': 'mutton fry', 'చేప ఫ్రై': 'fish fry',
-      'చికెన్ 65': 'chicken 65', 'చికెన్ లాలీపాప్': 'chicken lollipop',
-      'పరోటా': 'parotta', 'కొత్తు పరోటా': 'kothu parotta', 'చిల్లీ పరోటా': 'chilli parotta',
-      'చపాతీ': 'chapati', 'నాన్': 'naan', 'రొట్టె': 'roti',
-      'తందూరి': 'tandoori', 'తందూరి చికెన్': 'tandoori chicken', 'కబాబ్': 'kabab',
-      'పులుసు': 'pulusu', 'చేపల పులుసు': 'fish pulusu', 'రొయ్యల పులుసు': 'prawn pulusu',
-      'ఆవకాయ': 'avakaya', 'మామిడికాయ': 'raw mango',
-      // Tamil to English
-      'பிரெட்': 'bread', 'சோறு': 'rice', 'சிக்கன்': 'chicken', 'மட்டன்': 'mutton',
-      'பிரியாணி': 'biryani', 'கேக்': 'cake', 'பீட்சா': 'pizza', 'பர்கர்': 'burger',
-      'தயிர்': 'curd', 'தயிர் சாதம்': 'curd rice', 'சாம்பார்': 'sambar', 'ரசம்': 'rasam',
-      'இட்லி': 'idli', 'தோசை': 'dosa', 'உப்புமா': 'upma', 'வடை': 'vada', 'பூரி': 'poori',
-      'கோழி': 'chicken', 'கோழி பிரியாணி': 'chicken biryani', 'முட்டை': 'egg', 'மீன்': 'fish',
-      'புளியோதரை': 'puliyodharai', 'எலுமிச்சை சாதம்': 'lemon rice', 'தக்காளி சாதம்': 'tomato rice',
-      'தேங்காய் சாதம்': 'coconut rice', 'பொங்கல்': 'pongal', 'மசாலா தோசை': 'masala dosa',
-      'இறால்': 'prawns', 'ஆட்டு இறைச்சி': 'mutton',
-      // Tamil - Gongura and other South Indian dishes
-      'கொங்கூரா': 'gongura', 'கொங்கூரா சிக்கன்': 'gongura chicken', 'கொங்கூரா மட்டன்': 'gongura mutton',
-      'கொங்கூரா கோழி': 'gongura chicken', 'கொங்கூரா ஆட்டு': 'gongura mutton',
-      'கத்திரிக்காய்': 'brinjal', 'வெண்டைக்காய்': 'okra', 'உருளைக்கிழங்கு': 'potato',
-      'தக்காளி': 'tomato', 'வெங்காயம்': 'onion', 'பூண்டு': 'garlic', 'இஞ்சி': 'ginger',
-      'கறி': 'curry', 'குழம்பு': 'curry', 'கூட்டு': 'kootu', 'பொரியல்': 'poriyal',
-      'அவியல்': 'avial', 'கூட்டு': 'kootu', 'வறுவல்': 'fry', 'பொடிமாஸ்': 'podimas',
-      'சிக்கன் கறி': 'chicken curry', 'மட்டன் கறி': 'mutton curry', 'மீன் கறி': 'fish curry',
-      'சிக்கன் வறுவல்': 'chicken fry', 'மட்டன் வறுவல்': 'mutton fry', 'மீன் வறுவல்': 'fish fry',
-      'சிக்கன் 65': 'chicken 65', 'சிக்கன் லாலிபாப்': 'chicken lollipop',
-      'பரோட்டா': 'parotta', 'கொத்து பரோட்டா': 'kothu parotta', 'சில்லி பரோட்டா': 'chilli parotta',
-      'நூடுல்ஸ்': 'noodles', 'ஃப்ரைட் ரைஸ்': 'fried rice', 'மஞ்சூரியன்': 'manchurian',
-      'பனீர்': 'paneer', 'பனீர் பட்டர் மசாலா': 'paneer butter masala',
-      'சப்பாத்தி': 'chapati', 'நான்': 'naan', 'ரொட்டி': 'roti',
-      'பிரியாணி சிக்கன்': 'chicken biryani', 'பிரியாணி மட்டன்': 'mutton biryani',
-      'தந்தூரி': 'tandoori', 'தந்தூரி சிக்கன்': 'tandoori chicken', 'கபாப்': 'kabab',
-      'சாதம்': 'rice', 'அன்னம்': 'rice', 'சாதம் சாம்பார்': 'sambar rice',
-      // Kannada to English
-      'ಬ್ರೆಡ್': 'bread', 'ಅನ್ನ': 'rice', 'ಚಿಕನ್': 'chicken', 'ಮಟನ್': 'mutton',
-      'ಬಿರಿಯಾನಿ': 'biryani', 'ಕೇಕ್': 'cake', 'ಪಿಜ್ಜಾ': 'pizza',
-      'ಮೊಸರು': 'curd', 'ಮೊಸರನ್ನ': 'curd rice', 'ಸಾಂಬಾರ್': 'sambar', 'ರಸಂ': 'rasam',
-      'ಇಡ್ಲಿ': 'idli', 'ದೋಸೆ': 'dosa', 'ಉಪ್ಪಿಟ್ಟು': 'upma', 'ವಡೆ': 'vada',
-      'ಕೋಳಿ': 'chicken', 'ಮೊಟ್ಟೆ': 'egg', 'ಮೀನು': 'fish',
-      // Bengali to English
-      'রুটি': 'bread', 'ভাত': 'rice', 'মুরগি': 'chicken', 'মাংস': 'mutton',
-      'বিরিয়ানি': 'biryani', 'কেক': 'cake', 'পিৎজা': 'pizza',
-      'ডিম': 'egg', 'মাছ': 'fish', 'চিংড়ি': 'prawns',
-      'দই': 'curd', 'দই ভাত': 'curd rice',
-      'চিকেন': 'chicken', 'চিকেন থালি': 'chicken thali', 'চিকেন বিরিয়ানি': 'chicken biryani',
-      'মাটন': 'mutton', 'থালি': 'thali', 'তন্দুরি': 'tandoori', 'তন্দুরি চিকেন': 'tandoori chicken',
-      // Malayalam to English
-      'ബ്രെഡ്': 'bread', 'ചോറ്': 'rice', 'ചിക്കൻ': 'chicken', 'മട്ടൻ': 'mutton',
-      'ബിരിയാണി': 'biryani', 'കേക്ക്': 'cake', 'പിസ്സ': 'pizza',
-      'തൈര്': 'curd', 'തൈര് സാദം': 'curd rice', 'സാമ്പാർ': 'sambar', 'രസം': 'rasam',
-      'താലി': 'thali', 'ചിക്കൻ താലി': 'chicken thali',
-      // Common transliterations (romanized regional food names)
-      'chawal': 'rice', 'roti': 'roti', 'daal': 'dal', 'sabzi': 'sabji',
-      'chai': 'tea', 'doodh': 'milk', 'pani': 'water', 'anda': 'egg',
-      'gosht': 'mutton', 'murgh': 'chicken', 'machli': 'fish',
-      'dahi': 'curd', 'perugu': 'curd', 'thayir': 'curd', 'mosaru': 'curd',
-      'tandoori': 'tandoori', 'tikka': 'tikka', 'thali': 'thali', 'korma': 'korma',
-      // Telugu romanized
-      'pulihora': 'tamarind rice', 'pulihoura': 'tamarind rice', 'pulihara': 'tamarind rice',
-      'perugu annam': 'curd rice', 'perugu anna': 'curd rice', 'perugannam': 'curd rice',
-      'daddojanam': 'curd rice', 'dadhojanam': 'curd rice',
-      'pesarattu': 'pesarattu', 'pesaratu': 'pesarattu',
-      'mirchi bajji': 'mirchi bajji', 'mirchi pakoda': 'mirchi bajji',
-      'aloo bajji': 'aloo bajji', 'punugulu': 'punugulu',
-      'garelu': 'vada', 'gaarelu': 'vada', 'medu vada': 'vada',
-      'bobbatlu': 'bobbatlu', 'bobatlu': 'bobbatlu', 'puran poli': 'bobbatlu',
-      'payasam': 'payasam', 'kheer': 'kheer', 'kesari': 'kesari',
-      'pongal': 'pongal', 'ven pongal': 'pongal',
-      'chitranna': 'lemon rice', 'chitrannam': 'lemon rice',
-      'tomato rice': 'tomato rice', 'tomato bath': 'tomato rice',
-      'coconut rice': 'coconut rice', 'kobbari annam': 'coconut rice',
-      'lemon rice': 'lemon rice', 'nimma kaya annam': 'lemon rice',
-      // Gongura and Andhra romanized
-      'gongura': 'gongura', 'gongura chicken': 'gongura chicken', 'gongura mutton': 'gongura mutton',
-      'gongura pachadi': 'gongura chutney', 'gongura pappu': 'gongura dal',
-      'gutti vankaya': 'stuffed brinjal', 'vankaya': 'brinjal', 'bendakaya': 'okra',
-      'pulusu': 'pulusu', 'chepala pulusu': 'fish pulusu', 'royyala pulusu': 'prawn pulusu',
-      'avakaya': 'avakaya pickle', 'mamidikaya': 'raw mango',
-      'koora': 'curry', 'kura': 'curry', 'fry': 'fry', 'iguru': 'dry curry',
-      // Tamil romanized
-      'puliyodharai': 'tamarind rice', 'puliyodarai': 'tamarind rice',
-      'thayir sadam': 'curd rice', 'thayir sadham': 'curd rice', 'curd rice': 'curd rice',
-      'sambar rice': 'sambar rice', 'sambar sadam': 'sambar rice',
-      'rasam rice': 'rasam rice', 'rasam sadam': 'rasam rice',
-      // Common South Indian
-      'idli': 'idli', 'idly': 'idli', 'idle': 'idli',
-      'dosa': 'dosa', 'dosai': 'dosa', 'dhosha': 'dosa',
-      'masala dosa': 'masala dosa', 'masale dose': 'masala dosa',
-      'rava dosa': 'rava dosa', 'ravva dosa': 'rava dosa',
-      'uttapam': 'uttapam', 'uthappam': 'uttapam',
-      'upma': 'upma', 'uppuma': 'upma', 'uppit': 'upma',
-      'vada': 'vada', 'vadai': 'vada', 'wade': 'vada',
-      'poori': 'poori', 'puri': 'poori', 'luchi': 'poori',
-      'chapati': 'chapati', 'chapathi': 'chapati', 'roti': 'roti', 'phulka': 'roti',
-      'paratha': 'paratha', 'parotta': 'paratha', 'paratha': 'paratha',
-      'naan': 'naan', 'nan': 'naan',
-      'biryani': 'biryani', 'biriyani': 'biryani', 'briyani': 'biryani',
-      'pulao': 'pulao', 'pulav': 'pulao', 'pilaf': 'pulao',
-      'fried rice': 'fried rice', 'friedrice': 'fried rice',
-      'noodles': 'noodles', 'noodels': 'noodles',
-      'manchurian': 'manchurian', 'manchuria': 'manchurian',
-      'gobi': 'gobi', 'gobhi': 'gobi', 'cauliflower': 'gobi',
-      'paneer': 'paneer', 'panner': 'paneer',
-      'chicken': 'chicken', 'chiken': 'chicken', 'chikken': 'chicken',
-      'mutton': 'mutton', 'muttom': 'mutton',
-      'fish': 'fish', 'fis': 'fish',
-      'prawns': 'prawns', 'prawn': 'prawns', 'shrimp': 'prawns',
-      'egg': 'egg', 'eggs': 'egg', 'anda': 'egg'
-    };
-    
-    let result = text;
-    for (const [regional, english] of Object.entries(transliterationMap)) {
-      if (text.toLowerCase().includes(regional.toLowerCase())) {
-        result = result.replace(new RegExp(regional, 'gi'), english);
-      }
-    }
-    return result;
-  },
-
-  // Translate text using Groq AI (for languages not in basic map)
-  // Returns object with primary translation and all variations for better search
+  // Simple pass-through for search text (no translation)
   async translateWithAI(text) {
-    // Check translation cache first (avoids repeated Groq API calls)
-    const cacheKey = text.toLowerCase().trim();
-    const cached = _translationCache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < TRANSLATION_CACHE_TTL) {
-      return cached.result;
-    }
-
-    const _cacheAndReturn = (result) => {
-      if (_translationCache.size >= TRANSLATION_CACHE_MAX) {
-        const oldestKey = _translationCache.keys().next().value;
-        _translationCache.delete(oldestKey);
-      }
-      _translationCache.set(cacheKey, { result, ts: Date.now() });
-      return result;
-    };
-
-    // Check if text contains non-English characters
-    const hasNonEnglish = /[^\x00-\x7F]/.test(text);
-    
-    if (hasNonEnglish) {
-      // For non-English text, use Groq AI to get multiple translation variations
-      try {
-        const result = await groqAi.translateToEnglish(text);
-        
-        // If we got valid variations, return them
-        if (result.variations && result.variations.length > 0 && !/[^\x00-\x7F]/.test(result.primary)) {
-          return _cacheAndReturn(result);
-        }
-        
-        // If AI translation failed, try word-by-word
-        const words = text.split(/\s+/).filter(w => w.length > 0);
-        if (words.length > 1) {
-          const allVariations = [];
-          const translatedWords = [];
-          
-          for (const word of words) {
-            if (/[^\x00-\x7F]/.test(word)) {
-              const wordResult = await groqAi.translateToEnglish(word);
-              if (wordResult.variations && wordResult.variations.length > 0) {
-                translatedWords.push(wordResult.primary);
-                allVariations.push(...wordResult.variations);
-              } else {
-                // Fallback to basic map
-                const basicWord = this.transliterate(word);
-                translatedWords.push(basicWord);
-                allVariations.push(basicWord);
-              }
-            } else {
-              translatedWords.push(word);
-              allVariations.push(word);
-            }
-          }
-          
-          const combinedTranslation = translatedWords.join(' ');
-          allVariations.push(combinedTranslation);
-          
-          // Remove duplicates and non-English
-          const cleanVariations = [...new Set(allVariations)].filter(v => !/[^\x00-\x7F]/.test(v));
-          
-          logger.info('Word-by-word translation', { text });
-          return _cacheAndReturn({ primary: combinedTranslation, variations: cleanVariations });
-        }
-        
-        // Last resort: try basic transliteration
-        const basicTranslated = this.transliterate(text);
-        return _cacheAndReturn({ primary: basicTranslated, variations: [basicTranslated] });
-      } catch (error) {
-        logger.error('AI translation failed', { error: error.message });
-        const basicTranslated = this.transliterate(text);
-        return _cacheAndReturn({ primary: basicTranslated, variations: [basicTranslated] });
-      }
-    }
-    
-    // For English/romanized text, first try basic transliteration
-    const basicTranslated = this.transliterate(text);
-    const variations = [text.toLowerCase()];
-    
-    // If basic translation changed the text, add it
-    if (basicTranslated.toLowerCase() !== text.toLowerCase()) {
-      variations.push(basicTranslated.toLowerCase());
-    }
-    
-    // Skip AI for romanized English text - rely on tag-based matching instead
-    // This reduces API calls and makes search faster
-    
-    // Remove duplicates
-    const cleanVariations = [...new Set(variations)];
-    
-    return _cacheAndReturn({ primary: cleanVariations[0], variations: cleanVariations });
+    const lowerText = text.toLowerCase().trim();
+    return { primary: lowerText, variations: [lowerText] };
   },
 
   // Smart search - detects food type and searches by name/tag (async for AI translation)
@@ -3111,7 +1517,7 @@ const chatbot = {
       searchVariations.unshift(primarySearchTerm);
     }
     
-    // Expand search terms with synonyms (e.g., "pulusu" → ["pulusu", "curry", "gravy"])
+    // Expand search terms with normalized plurals
     const expandedTerms = [];
     for (const term of searchVariations) {
       expandedTerms.push(term);
@@ -3120,22 +1526,18 @@ const chatbot = {
       if (normalizedTerm !== term) {
         expandedTerms.push(normalizedTerm);
       }
-      // Get synonyms for each word in the term
+      // Also add normalized plural of each word
       const words = term.split(/\s+/).filter(w => w.length >= 2);
       for (const word of words) {
-        const synonyms = this.getSynonyms(word);
-        expandedTerms.push(...synonyms);
-        // Also add normalized plural of each word
+        expandedTerms.push(word);
         const normalizedWord = this.normalizePlural(word);
         if (normalizedWord !== word) {
           expandedTerms.push(normalizedWord);
-          const wordSynonyms = this.getSynonyms(normalizedWord);
-          expandedTerms.push(...wordSynonyms);
         }
       }
     }
     
-    // Add unique variations (including synonyms)
+    // Add unique variations
     let uniqueSearchTerms = [...new Set(expandedTerms)];
     
     // ========== AI-POWERED TAG MATCHING ==========
@@ -3160,7 +1562,7 @@ const chatbot = {
       }
     }
     
-    logger.info('Search terms with synonyms', { text });
+    logger.info('Search terms expanded', { text });
     
     // If search term is too short after removing keywords, search by ingredient/type only
     const hasSearchTerm = primarySearchTerm.length >= 2;
@@ -4274,13 +2676,7 @@ const chatbot = {
 
           if (!parsed.items.length) {
             const helpImg = await chatbotImagesService.getImageUrl('help_support');
-            await sendWithOptionalImage(phone, helpImg,
-              '❌ Sorry, we couldn\'t process your cart. Please try again.',
-              [
-                { id: 'order_food', text: 'Order Food' },
-                { id: 'home', text: 'Main Menu' }
-              ]
-            );
+            await whatsapp.sendMessage(phone, '❌ Sorry, we couldn\'t process your cart. Please try again.');
             state.currentStep = 'main_menu';
             customer.conversationState = state;
             await customer.save();
@@ -4335,13 +2731,7 @@ const chatbot = {
         } catch (catalogOrderErr) {
           logger.error('Catalog order processing error', { phone, error: catalogOrderErr.message });
           const helpImg = await chatbotImagesService.getImageUrl('help_support');
-          await sendWithOptionalImage(phone, helpImg,
-            '❌ Something went wrong processing your cart. Please try again.',
-            [
-              { id: 'order_food', text: 'Order Food' },
-              { id: 'home', text: 'Main Menu' }
-            ]
-          );
+          await whatsapp.sendMessage(phone, '❌ Something went wrong processing your cart. Please try again.');
           state.currentStep = 'main_menu';
           customer.conversationState = state;
           await customer.save();
@@ -4355,14 +2745,6 @@ const chatbot = {
         const locationData = typeof message === 'object' ? message : {};
         
         logger.info('Location received', { location: locationData });
-
-        // ========== SPECIAL: Location shared for address saving (not order delivery) ==========
-        if (state.currentStep === 'awaiting_address_location') {
-          await this.handleLocationForAddress(phone, customer, locationData, state);
-          customer.conversationState = state;
-          await customer.save();
-          return;
-        }
         
         // Get proper address - prefer WhatsApp's address, only geocode if no address provided
         let formattedAddress = null;
@@ -4408,11 +2790,7 @@ const chatbot = {
             const outOfRangeImg = await chatbotImagesService.getImageUrl('out_of_delivery_range');
             const message = `❌ *Delivery Not Available*\n\n${deliveryResult.message}\n\nWould you like to try a different address or opt for self-pickup?`;
             
-            await sendWithOptionalImage(phone, outOfRangeImg, message, [
-              { id: 'service_pickup', text: 'Self-Pickup' },
-              { id: 'share_location', text: 'New Location' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
+            await whatsapp.sendMessage(phone, message);
             state.currentStep = 'awaiting_location';
             customer.conversationState = state;
             await customer.save();
@@ -4424,11 +2802,7 @@ const chatbot = {
             const outOfRangeImg = await chatbotImagesService.getImageUrl('out_of_delivery_range');
             const message = `❌ *Delivery Not Available*\n\n${deliveryResult.message}\n\nWould you like to try a different address or opt for self-pickup?`;
             
-            await sendWithOptionalImage(phone, outOfRangeImg, message, [
-              { id: 'service_pickup', text: 'Self-Pickup' },
-              { id: 'share_location', text: 'New Location' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
+            await whatsapp.sendMessage(phone, message);
             state.currentStep = 'awaiting_location';
             customer.conversationState = state;
             await customer.save();
@@ -4458,17 +2832,11 @@ const chatbot = {
         } else {
           // No cart items, just confirm location saved
           const deliveryLocationImg = await chatbotImagesService.getImageUrl('delivery_location');
-          await sendWithOptionalImage(phone, deliveryLocationImg,
-            `📍 Location saved!\n\n${formattedAddress}\n\nStart ordering to use this address.`,
-            [
-              { id: 'place_order', text: 'Start Order' },
-              { id: 'home', text: 'Main Menu' }
-            ]
-          );
+          await whatsapp.sendMessage(phone, `📍 Location saved!\n\n${formattedAddress}\n\nStart ordering to use this address.`);
           state.currentStep = 'main_menu';
         }
       }
-      // ========== FLOW REPLY: Account Form / Address Form / View Order / Flow Triggers ==========
+      // ========== FLOW REPLY: Account Form / View Order / Flow Triggers ==========
       else if (messageType === 'flow_reply' || messageType === 'flow_trigger') {
         let flowData = {};
         try { flowData = typeof message === 'string' ? JSON.parse(message) : message; } catch (e) { /* ignore */ }
@@ -4476,13 +2844,6 @@ const chatbot = {
         if (flowData.type === 'account_form') {
           await this.handleAccountFormResponse(phone, customer, flowData);
           state.currentStep = 'main_menu';
-        } else if (flowData.type === 'address_form') {
-          await this.handleAddressFormResponse(phone, customer, flowData);
-          state.currentStep = 'main_menu';
-        } else if (flowData.type === 'address_share_location') {
-          // User chose "Use Current Location" from the address flow
-          await whatsapp.sendMessage(phone, '📍 *Share Your Location*\n\nPlease share your current location now:\n\n1️⃣ Tap the 📎 attachment button below\n2️⃣ Select *Location*\n3️⃣ Tap *Send Your Current Location*\n\nYour address will be automatically filled from your location.');
-          state.currentStep = 'awaiting_address_location';
         } else if (flowData.type === 'view_order') {
           // User selected an order from My Orders flow
           await this.handleViewOrderDetails(phone, customer, flowData.orderId);
@@ -4588,11 +2949,7 @@ const chatbot = {
           ineligibleMsg += `\nYou can still order at regular prices, or browse other offers!`;
           
           const offerNotEligibleImg = await chatbotImagesService.getImageUrl('offer_not_eligible');
-          await sendWithOptionalImage(phone, offerNotEligibleImg, ineligibleMsg, [
-            { id: 'proceed_without_offer', text: 'Order Anyway' },
-            { id: 'view_menu', text: 'Browse Menu' },
-            { id: 'home', text: 'Main Menu' }
-          ]);
+          await whatsapp.sendMessage(phone, ineligibleMsg);
           
           // Store cart order in state for "proceed_without_offer"
           state.pendingCartOrder = cartOrder;
@@ -4737,10 +3094,7 @@ const chatbot = {
         } else {
           // No items were added
           const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-          await sendWithOptionalImage(phone, itemNotAvailableImg, `❌ Sorry, we couldn't find the items in your order.\n\nPlease browse our menu to add items.`, [
-            { id: 'view_menu', text: 'View Menu' },
-            { id: 'home', text: 'Main Menu' }
-          ]);
+          await whatsapp.sendMessage(phone, `❌ Sorry, we couldn't find the items in your order.\n\nPlease browse our menu to add items.`);
           state.currentStep = 'main_menu';
         }
       }
@@ -4880,20 +3234,14 @@ const chatbot = {
             // No match found
             logger.info('No match found for', { match: websiteOrder.itemName });
             const itemNotAvailableImageUrl = await chatbotImagesService.getImageUrl('item_not_available');
-            await sendWithOptionalImage(phone, itemNotAvailableImageUrl, `❌ Sorry, "${websiteOrder.itemName}" is not available.\n\nPlease browse our menu!`, [
-              { id: 'view_menu', text: 'View Menu' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
+            await whatsapp.sendMessage(phone, `❌ Sorry, "${websiteOrder.itemName}" is not available.\n\nPlease browse our menu!`);
             state.currentStep = 'main_menu';
           }
         } else {
           // Item ID provided but not found in menu
           logger.info('Website order item not found by ID', { itemId: websiteOrder.itemId });
           const itemNotAvailableImageUrl = await chatbotImagesService.getImageUrl('item_not_available');
-          await sendWithOptionalImage(phone, itemNotAvailableImageUrl, `❌ Sorry, this item is currently not available.\n\nPlease browse our menu!`, [
-            { id: 'view_menu', text: 'View Menu' },
-            { id: 'home', text: 'Main Menu' }
-          ]);
+          await whatsapp.sendMessage(phone, `❌ Sorry, this item is currently not available.\n\nPlease browse our menu!`);
           state.currentStep = 'main_menu';
         }
       }
@@ -4915,7 +3263,7 @@ const chatbot = {
       }
       // ========== CART COMMANDS (check CLEAR first, then VIEW - order matters!) ==========
       // Clear cart must be checked BEFORE view cart because "clear my cart" contains "my cart"
-      else if (selection === 'clear_cart' || (!selectedId && this.isClearCartIntent(msg))) {
+      else if (selection === 'clear_cart') {
         const itemCount = customer.cart?.length || 0;
         customer.cart = [];
         await customer.save();
@@ -4929,10 +3277,7 @@ const chatbot = {
         message += `🛒 Your cart is now empty and ready for a fresh start!\n\n`;
         message += `🍽️ Browse our delicious menu and discover your favorites! 😋`;
         
-        await sendWithOptionalImage(phone, cartClearedImageUrl, message, [
-          { id: 'view_menu', text: 'View Menu' },
-          { id: 'home', text: 'Main Menu' }
-        ]);
+        await whatsapp.sendMessage(phone, message);
         state.currentStep = 'main_menu';
       }
       else if (selection === 'view_cart') {
@@ -4975,10 +3320,7 @@ const chatbot = {
             state.currentStep = 'viewing_cart';
           } else {
             const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-            await sendWithOptionalImage(phone, itemNotAvailableImg, `❌ Sorry, we couldn't find the items.\n\nPlease browse our menu to add items.`, [
-              { id: 'view_menu', text: 'View Menu' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
+            await whatsapp.sendMessage(phone, `❌ Sorry, we couldn't find the items.\n\nPlease browse our menu to add items.`);
             state.currentStep = 'main_menu';
           }
         } else {
@@ -4986,17 +3328,17 @@ const chatbot = {
           state.currentStep = 'main_menu';
         }
       }
-      // Handle simple cart keyword (just "cart") - show cart options menu
+      // Handle simple cart keyword (just "cart") - show welcome flow
       else if (!selectedId && this.isSimpleCartKeyword(msg)) {
-        await this.sendCartOptionsMenu(phone);
-        state.currentStep = 'cart_options';
+        await this.sendWelcome(phone);
+        state.currentStep = 'main_menu';
       }
-      // Handle full cart intent ("view cart", "my cart", etc.) - show cart directly
+      // Handle full cart intent ("view cart", "my cart", etc.) - show welcome flow
       else if (!selectedId && this.isCartIntent(msg)) {
-        await this.sendCart(phone, customer);
-        state.currentStep = 'viewing_cart';
+        await this.sendWelcome(phone);
+        state.currentStep = 'main_menu';
       }
-      else if (selection === 'view_menu' || msg === 'menu') {
+      else if (selection === 'view_menu') {
         await this.sendFoodTypeSelection(phone);
         state.currentStep = 'select_food_type';
       }
@@ -5018,65 +3360,14 @@ const chatbot = {
           }
         } else {
           const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-          await sendWithOptionalImage(phone, itemNotAvailableImg, `❌ No ${labelMap[selection]} items available right now.`, [
-            { id: 'view_menu', text: 'View All Menu' },
-            { id: 'home', text: 'Main Menu' }
-          ]);
+          await whatsapp.sendMessage(phone, `❌ No ${labelMap[selection]} items available right now.`);
           state.currentStep = 'main_menu';
         }
       }
-      // Handle text/voice menu intent with food type detection (only for text messages, not button clicks)
+      // Handle text/voice menu intent — redirect to welcome flow
       else if (!selectedId && this.isShowMenuIntent(msg)) {
-        const menuIntent = this.isShowMenuIntent(msg);
-        logger.info('Menu intent detected', { data: menuIntent });
-        
-        if (menuIntent.foodType === 'veg') {
-          state.foodTypePreference = 'veg';
-          const filteredItems = this.filterByFoodType(menuItems, 'veg');
-          if (filteredItems.length > 0) {
-            await this.sendMenuCategoriesWithLabel(phone, filteredItems, '🌿 Veg Menu');
-            state.currentStep = 'select_category';
-          } else {
-            const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-            await sendWithOptionalImage(phone, itemNotAvailableImg, '🌿 No veg items available right now.', [
-              { id: 'view_menu', text: 'View All Menu' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
-            state.currentStep = 'main_menu';
-          }
-        } else if (menuIntent.foodType === 'egg') {
-          state.foodTypePreference = 'egg';
-          const filteredItems = this.filterByFoodType(menuItems, 'egg');
-          if (filteredItems.length > 0) {
-            await this.sendMenuCategoriesWithLabel(phone, filteredItems, '🥚 Egg Menu');
-            state.currentStep = 'select_category';
-          } else {
-            const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-            await sendWithOptionalImage(phone, itemNotAvailableImg, '🥚 No egg items available right now.', [
-              { id: 'view_menu', text: 'View All Menu' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
-            state.currentStep = 'main_menu';
-          }
-        } else if (menuIntent.foodType === 'nonveg') {
-          state.foodTypePreference = 'nonveg';
-          const filteredItems = this.filterByFoodType(menuItems, 'nonveg');
-          if (filteredItems.length > 0) {
-            await this.sendMenuCategoriesWithLabel(phone, filteredItems, '🍗 Non-Veg Menu');
-            state.currentStep = 'select_category';
-          } else {
-            const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-            await sendWithOptionalImage(phone, itemNotAvailableImg, '🍗 No non-veg items available right now.', [
-              { id: 'view_menu', text: 'View All Menu' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
-            state.currentStep = 'main_menu';
-          }
-        } else {
-          // Show food type selection (Browse Menu screen with Veg/Non-Veg/All options)
-          await this.sendFoodTypeSelection(phone);
-          state.currentStep = 'select_food_type';
-        }
+        await this.sendWelcome(phone);
+        state.currentStep = 'main_menu';
       }
       else if (selection === 'food_all' || selection === 'food_veg' || selection === 'food_nonveg' || selection === 'food_egg') {
         state.foodTypePreference = selection.replace('food_', '');
@@ -5099,26 +3390,26 @@ const chatbot = {
           state.currentStep = 'select_category';
         }
       }
-      else if (selection === 'place_order' || selection === 'order_now' || (!selectedId && msg === 'order')) {
+      else if (selection === 'place_order' || selection === 'order_now') {
         // Skip service type selection and go directly to food type selection
         await this.sendFoodTypeSelection(phone);
         state.currentStep = 'select_food_type_order';
       }
       // Check cancel/track BEFORE order status (they're more specific)
-      // Only check text-based intents when there's no selectedId (button click)
-      else if (selection === 'cancel_order' || (!selectedId && this.isCancelIntent(msg))) {
+      // Only button selections — text-based intents redirect to welcome flow below
+      else if (selection === 'cancel_order') {
         await this.sendCancelOptions(phone);
         state.currentStep = 'select_cancel';
       }
-      else if (selection === 'track_order' || (!selectedId && (msg === 'track' || this.isTrackIntent(msg)))) {
+      else if (selection === 'track_order') {
         await this.sendTrackingOptions(phone);
         state.currentStep = 'select_track';
       }
-      else if (selection === 'order_status' || (!selectedId && (msg === 'status' || this.isOrderStatusIntent(msg)))) {
+      else if (selection === 'order_status') {
         await this.sendOrderStatus(phone);
         state.currentStep = 'main_menu';
       }
-      else if (selection === 'help' || (!selectedId && msg === 'help')) {
+      else if (selection === 'help') {
         await this.sendHelp(phone);
         state.currentStep = 'main_menu';
       }
@@ -5153,30 +3444,10 @@ const chatbot = {
         await this.handleOfferClaim(phone, offerId, customer);
         state.currentStep = 'main_menu';
       }
-      // ========== ACCOUNT DETAILS (from welcome flow) ==========
-      else if (selection === 'account_details') {
-        await this.sendAccountDetails(phone, customer);
-        state.currentStep = 'main_menu';
-      }
-      // ========== DELIVERY ADDRESS (from welcome flow) ==========
-      else if (selection === 'delivery_address') {
-        await this.sendDeliveryAddressOptions(phone, customer);
-        state.currentStep = 'awaiting_address_method';
-      }
-      // ========== ENTER ADDRESS MANUALLY (sends address form flow) ==========
-      else if (selection === 'enter_address_manual') {
-        await this.sendAddressFormFlow(phone, customer);
-        state.currentStep = 'main_menu';
-      }
       // ========== SHARE LOCATION FOR ADDRESS ==========
       else if (selection === 'share_location_address') {
         await whatsapp.sendMessage(phone, '📍 Please share your current location using the attachment (📎) button → Location.\n\nWe\'ll automatically fill your address from your location.');
         state.currentStep = 'awaiting_address_location';
-      }
-      // ========== EDIT ACCOUNT (re-open form with existing data) ==========
-      else if (selection === 'edit_account') {
-        await this.sendAccountFormFlow(phone, customer);
-        state.currentStep = 'main_menu';
       }
       // ========== TEXT-BASED ADD TO CART (e.g., "add biryani to cart") ==========
       else if (!selectedId && this.isAddToCartIntent(msg)) {
@@ -5220,10 +3491,7 @@ const chatbot = {
         } else {
           // No match found
           const searchNoResultsImg = await chatbotImagesService.getImageUrl('search_no_results');
-          await sendWithOptionalImage(phone, searchNoResultsImg, `❌ No items found matching "${addIntent.itemName}"\n\nTry browsing our menu!`, [
-            { id: 'view_menu', text: 'View Menu' },
-            { id: 'home', text: 'Main Menu' }
-          ]);
+          await whatsapp.sendMessage(phone, `❌ No items found matching "${addIntent.itemName}"\n\nTry browsing our menu!`);
           state.currentStep = 'main_menu';
         }
       }
@@ -5262,10 +3530,7 @@ const chatbot = {
         
         if (!customer.cart?.length) {
           const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-          await sendWithOptionalImage(phone, cartEmptyImg, 'Your cart is empty! Please add items first.', [
-            { id: 'view_menu', text: 'View Menu' },
-            { id: 'home', text: 'Main Menu' }
-          ]);
+          await whatsapp.sendMessage(phone, 'Your cart is empty! Please add items first.');
           state.currentStep = 'main_menu';
         } else {
           // Check if cart items are still available
@@ -5278,11 +3543,7 @@ const chatbot = {
             
             const msg = `😔 *Sorry!*\n\nSome items in your cart are currently unavailable:\n\n❌ ${unavailableNames}\n\nPlease remove these items from your cart and try again.`;
             
-            await sendWithOptionalImage(phone, itemNotAvailableImageUrl, msg, [
-              { id: 'view_cart', text: 'View Cart' },
-              { id: 'clear_cart', text: 'Clear Cart' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
+            await whatsapp.sendMessage(phone, msg);
             state.currentStep = 'viewing_cart';
           } else {
             // All items available — launch order confirmation flow (or fallback to buttons)
@@ -5306,9 +3567,8 @@ const chatbot = {
                 state.currentStep = 'order_confirm_flow';
                 logger.info('Sent order confirmation flow', { phone, flowId: orderFlowId });
               } catch (flowErr) {
-                logger.warn('Order confirm flow failed, falling back to buttons', { error: flowErr.message });
-                await this.sendServiceTypeSelection(phone);
-                state.currentStep = 'select_service_type';
+                logger.error('Order confirm flow failed', { error: flowErr.message });
+                await whatsapp.sendMessage(phone, '⚠️ Unable to load order confirmation. Please try again.');
               }
             } else {
               // No order confirm flow configured — use original buttons
@@ -5365,9 +3625,7 @@ const chatbot = {
       else if (selection === 'pay_upi') {
         if (!customer.cart?.length) {
           const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-          await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
-            { id: 'view_menu', text: 'View Menu' }
-          ]);
+          await whatsapp.sendMessage(phone, '🛒 Your cart is empty!');
           state.currentStep = 'main_menu';
         } else {
           // Check if cart items are still available before payment
@@ -5379,11 +3637,7 @@ const chatbot = {
             
             const msg = `😔 *Sorry!*\n\nSome items in your cart are currently unavailable:\n\n❌ ${unavailableNames}\n\nPlease remove these items from your cart and try again.`;
             
-            await sendWithOptionalImage(phone, itemNotAvailableImageUrl, msg, [
-              { id: 'view_cart', text: 'View Cart' },
-              { id: 'clear_cart', text: 'Clear Cart' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
+            await whatsapp.sendMessage(phone, msg);
             state.currentStep = 'viewing_cart';
           } else {
             state.paymentMethod = 'upi';
@@ -5395,9 +3649,7 @@ const chatbot = {
       else if (selection === 'pay_cod') {
         if (!customer.cart?.length) {
           const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-          await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
-            { id: 'view_menu', text: 'View Menu' }
-          ]);
+          await whatsapp.sendMessage(phone, '🛒 Your cart is empty!');
           state.currentStep = 'main_menu';
         } else {
           // Check if cart items are still available before COD order
@@ -5409,11 +3661,7 @@ const chatbot = {
             
             const msg = `😔 *Sorry!*\n\nSome items in your cart are currently unavailable:\n\n❌ ${unavailableNames}\n\nPlease remove these items from your cart and try again.`;
             
-            await sendWithOptionalImage(phone, itemNotAvailableImageUrl, msg, [
-              { id: 'view_cart', text: 'View Cart' },
-              { id: 'clear_cart', text: 'Clear Cart' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
+            await whatsapp.sendMessage(phone, msg);
             state.currentStep = 'viewing_cart';
           } else {
             state.paymentMethod = 'cod';
@@ -5426,9 +3674,7 @@ const chatbot = {
         // Self-pickup with payment at hotel
         if (!customer.cart?.length) {
           const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-          await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
-            { id: 'view_menu', text: 'View Menu' }
-          ]);
+          await whatsapp.sendMessage(phone, '🛒 Your cart is empty!');
           state.currentStep = 'main_menu';
         } else {
           state.paymentMethod = 'cod'; // Use COD for at-hotel payment
@@ -5441,9 +3687,7 @@ const chatbot = {
         // Self-pickup with UPI/App payment
         if (!customer.cart?.length) {
           const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-          await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
-            { id: 'view_menu', text: 'View Menu' }
-          ]);
+          await whatsapp.sendMessage(phone, '🛒 Your cart is empty!');
           state.currentStep = 'main_menu';
         } else {
           // Check if cart items are still available before payment
@@ -5455,11 +3699,7 @@ const chatbot = {
             
             const msg = `😔 *Sorry!*\n\nSome items in your cart are currently unavailable:\n\n❌ ${unavailableNames}\n\nPlease remove these items from your cart and try again.`;
             
-            await sendWithOptionalImage(phone, itemNotAvailableImageUrl, msg, [
-              { id: 'view_cart', text: 'View Cart' },
-              { id: 'clear_cart', text: 'Clear Cart' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
+            await whatsapp.sendMessage(phone, msg);
             state.currentStep = 'viewing_cart';
           } else {
             state.paymentMethod = 'upi';
@@ -5472,9 +3712,7 @@ const chatbot = {
       else if (selection === 'confirm_order' || selection === 'pay_now') {
         if (!customer.cart?.length) {
           const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-          await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
-            { id: 'view_menu', text: 'View Menu' }
-          ]);
+          await whatsapp.sendMessage(phone, '🛒 Your cart is empty!');
           state.currentStep = 'main_menu';
         } else {
           const result = await this.processCheckout(phone, customer, state);
@@ -5590,10 +3828,7 @@ const chatbot = {
           }
         } else {
           const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-          await sendWithOptionalImage(phone, itemNotAvailableImg, '❌ Variant not found.', [
-            { id: 'order_food', text: 'Order Food' },
-            { id: 'home', text: 'Main Menu' }
-          ]);
+          await whatsapp.sendMessage(phone, '❌ Variant not found.');
         }
       }
       // User selected a quantity for a variant (from add_variant flow)
@@ -5628,10 +3863,7 @@ const chatbot = {
           state.currentStep = 'item_added';
         } else {
           const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-          await sendWithOptionalImage(phone, itemNotAvailableImg, '❌ Option not found.', [
-            { id: 'order_food', text: 'Order Food' },
-            { id: 'home', text: 'Main Menu' }
-          ]);
+          await whatsapp.sendMessage(phone, '❌ Option not found.');
         }
       }
       else if (selection.startsWith('order_cat_')) {
@@ -5753,13 +3985,7 @@ const chatbot = {
         } else {
           logger.info('Item not found for add_', { items: itemId });
           const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-          await sendWithOptionalImage(phone, itemNotAvailableImg,
-            '⚠️ This item is no longer available. Please select another item.',
-            [
-              { id: 'place_order', text: 'View Menu' },
-              { id: 'home', text: 'Main Menu' }
-            ]
-          );
+          await whatsapp.sendMessage(phone, '⚠️ This item is no longer available. Please select another item.');
           state.currentStep = 'main_menu';
         }
       }
@@ -5776,13 +4002,7 @@ const chatbot = {
         } else {
           logger.info('Item not found for confirm_add_', { items: itemId });
           const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-          await sendWithOptionalImage(phone, itemNotAvailableImg,
-            '⚠️ This item is no longer available. Please select another item.',
-            [
-              { id: 'place_order', text: 'View Menu' },
-              { id: 'home', text: 'Main Menu' }
-            ]
-          );
+          await whatsapp.sendMessage(phone, '⚠️ This item is no longer available. Please select another item.');
           state.currentStep = 'main_menu';
         }
       }
@@ -5815,14 +4035,7 @@ const chatbot = {
           // Item not found - maybe state was lost, show menu again
           logger.info('Item not found for qty selection, selectedItem', { items: state.selectedItem });
           const helpImg = await chatbotImagesService.getImageUrl('help_support');
-          await sendWithOptionalImage(phone, helpImg,
-            '⚠️ Something went wrong. Please select an item again.',
-            [
-              { id: 'place_order', text: 'Order Again' },
-              { id: 'view_menu', text: 'View Menu' },
-              { id: 'home', text: 'Main Menu' }
-            ]
-          );
+          await whatsapp.sendMessage(phone, '⚠️ Something went wrong. Please select an item again.');
           state.currentStep = 'main_menu';
         }
       }
@@ -5892,9 +4105,7 @@ const chatbot = {
           }
         } else {
           const helpImg = await chatbotImagesService.getImageUrl('help_support');
-          await sendWithOptionalImage(phone, helpImg, `❌ Invalid number. Please enter 0 for All Items or 1-${categories.length} for a category.`, [
-            { id: 'home', text: 'Main Menu' }
-          ]);
+          await whatsapp.sendMessage(phone, `❌ Invalid number. Please enter 0 for All Items or 1-${categories.length} for a category.`);
         }
       }
 
@@ -5919,188 +4130,41 @@ const chatbot = {
           state.currentStep = 'viewing_item_details';
         } else {
           const helpImg = await chatbotImagesService.getImageUrl('help_support');
-          await sendWithOptionalImage(phone, helpImg, `❌ Invalid number. Please enter a number between 1 and ${itemsList.length}.`, [
-            { id: 'home', text: 'Main Menu' }
-          ]);
+          await whatsapp.sendMessage(phone, `❌ Invalid number. Please enter a number between 1 and ${itemsList.length}.`);
         }
       }
 
-      // ========== NATURAL LANGUAGE FALLBACKS ==========
-      // Smart search FIRST - detects food type (veg/nonveg/egg/specific) and searches by name/tag
-      // This takes priority when user specifies food type like "veg cake" or "chicken biryani"
-      // Priority: search tags first, then name. If nothing matches, show menu.
-      // Also translates local language searches to English using AI
+      // ========== TEXT-BASED INTENT → WELCOME FLOW ==========
+      // When user types commands like "cancel", "track", "status", "help", "menu", "cart", "order", "offers"
+      // redirect them to the welcome flow instead of handling individually
+      else if (!selectedId && (
+        this.isCancelIntent(msg) || this.isTrackIntent(msg) || this.isOrderStatusIntent(msg) ||
+        this.isClearCartIntent(msg) ||
+        msg === 'help' || msg === 'menu' || msg === 'order' || msg === 'status' || msg === 'track' ||
+        msg === 'offers' || msg === 'offer'
+      )) {
+        await this.sendWelcome(phone);
+        state.currentStep = 'main_menu';
+      }
+
+      // ========== FALLBACK ==========
       else {
-        const searchResult = await this.smartSearch(msg, menuItems);
-        
-        if (searchResult && searchResult.items && searchResult.items.length > 0) {
-          const matchingItems = searchResult.items;
-          const isExactMatch = searchResult.exactMatch === true;
-          
-          // If NOT an exact match, show "Item Not Available" message and browse menu options
-          if (!isExactMatch) {
-            const itemNotAvailableImg = await chatbotImagesService.getImageUrl(options.isVoiceMessage ? 'voice_error' : 'item_not_available');
-            const notFoundMessage = `❌ *Item Not Available*\n\nSorry, we couldn't find "${msg}" in our menu.\n\nWould you like to browse our menu?`;
-            
-            // Send "Browse Menu" message with image and buttons
-            const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
-            
-            if (itemNotAvailableImg) {
-              await whatsapp.sendImage(phone, itemNotAvailableImg, notFoundMessage);
-            } else {
-              await whatsapp.sendText(phone, notFoundMessage);
-            }
-            
-            // Send Browse Menu options
-            const browseMessage = `🍽️ *Browse Menu*\n\nExplore our delicious menu and select your favorite items.\n\nWhat would you like to see?`;
-            
-            await sendWithOptionalImage(phone, browseMenuImg, browseMessage, [
-              { id: 'veg_only', text: 'Veg Only' },
-              { id: 'nonveg_only', text: 'Non-Veg Only' },
-              { id: 'show_all', text: 'Show All' }
-            ]);
-            
-            state.currentStep = 'main_menu';
-          } else {
-            // Exact match found - show items
-            // Use pre-built label or construct one
-            const displayLabel = searchResult.label 
-              ? (searchResult.searchTerm ? `${searchResult.label} "${searchResult.searchTerm}"` : searchResult.label)
-              : (searchResult.searchTerm ? `"${searchResult.searchTerm}"` : 'Search Results');
-            
-            // If only 1 item matches, show item details directly
-            if (matchingItems.length === 1) {
-              const item = matchingItems[0];
-              state.selectedItem = item._id.toString();
-              // Pass matched variant index if available (from variant-level search)
-              const matchedVariantIdx = searchResult.matchedVariants?.[item._id.toString()] ?? null;
-              await this.sendItemDetails(phone, menuItems, item._id.toString(), matchedVariantIdx);
-              state.currentStep = 'viewing_item_details';
-            } else if (matchingItems.length <= 5) {
-              // 2-5 items: show each as a rich catalog card with image, rating, price, buttons
-              state.searchTag = msg.trim();
-              state.tagSearchResults = matchingItems.map(i => i._id.toString());
-              await this.sendSearchResultCards(phone, matchingItems, displayLabel, searchResult.matchedVariants || null);
-              state.currentStep = 'viewing_tag_results';
-            } else {
-              // Multiple items - show list
-              state.searchTag = msg.trim();
-              state.tagSearchResults = matchingItems.map(i => i._id.toString());
-              await this.sendItemsByTag(phone, matchingItems, displayLabel, 0, searchResult.matchedVariants || null);
-              state.currentStep = 'viewing_tag_results';
-            }
-          }
-        }
-        // If user typed something with food type keyword but no search results
-        // e.g., "veg xyz" where xyz doesn't match anything -> show item not found
-        else if (this.detectFoodTypeFromMessage(msg)) {
-          const detected = this.detectFoodTypeFromMessage(msg);
-          const searchTerm = this.removeFoodTypeKeywords(msg.toLowerCase().trim());
-          
-          // If there's a specific search term that didn't match, show "not found" with browse option
-          if (searchTerm.length >= 2) {
-            // Send "Item not found" message with buttons
-            const itemNotAvailableImg = await chatbotImagesService.getImageUrl(options.isVoiceMessage ? 'voice_error' : 'item_not_available');
-            const notFoundMessage = `❌ *Item Not Found*\n\nSorry, we couldn't find "${searchTerm}" in our menu.\n\nTry a different search or browse our menu.`;
-            
-            await sendWithOptionalImage(phone, itemNotAvailableImg, notFoundMessage, [
-              { id: 'view_menu', text: 'Browse Menu' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
-            state.currentStep = 'main_menu';
-          } else {
-            // Only food type keyword (e.g., just "veg" or "nonveg") - show that menu
-            let foodType = 'both';
-            let label = '🍽️ All Menu';
-            
-            if (detected.type === 'veg') {
-              foodType = 'veg';
-              label = '🌿 Veg Menu';
-            } else if (detected.type === 'egg') {
-              foodType = 'egg';
-              label = '🥚 Egg Menu';
-            } else if (detected.type === 'nonveg' || detected.type === 'specific') {
-              foodType = 'nonveg';
-              label = '🍗 Non-Veg Menu';
-            }
-            
-            state.foodTypePreference = foodType;
-            const filteredItems = this.filterByFoodType(menuItems, foodType);
-            
-            if (filteredItems.length > 0) {
-              await this.sendMenuCategoriesWithLabel(phone, filteredItems, label);
-              state.currentStep = 'select_category';
-            } else {
-              const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-              await sendWithOptionalImage(phone, itemNotAvailableImg,
-                `❌ No ${label.replace(/[🌿🥚🍗🍽️]\s*/, '')} items available right now.`,
-                [
-                  { id: 'view_menu', text: 'View All Menu' },
-                  { id: 'home', text: 'Main Menu' }
-                ]
-              );
-              state.currentStep = 'main_menu';
-            }
-          }
-        }
-        // Category search - only if no food type specified and matches a category
-        else if (this.findCategory(msg, menuItems)) {
-          const category = this.findCategory(msg, menuItems);
-          const filteredItems = this.filterByFoodType(menuItems, state.foodTypePreference || 'both');
-          if (state.currentStep === 'browsing_menu' || state.currentStep === 'selecting_item') {
-            await this.sendItemsForOrder(phone, filteredItems, category);
-            state.selectedCategory = category;
-            state.currentStep = 'selecting_item';
-          } else {
-            await this.sendCategoryItems(phone, filteredItems, category);
-            state.selectedCategory = category;
-            state.currentStep = 'viewing_items';
-          }
-        }
-        // ========== WELCOME FOR NEW/UNKNOWN STATE ==========
-        else if (state.currentStep === 'welcome' || !state.currentStep) {
+        // Welcome for new/unknown state
+        if (state.currentStep === 'welcome' || !state.currentStep) {
           await this.sendWelcome(phone);
           state.currentStep = 'main_menu';
-        }
-        // ========== GENERAL SEARCH FALLBACK ==========
-        // If user typed something that looks like a search (2+ chars), show item not found
-        // Don't show all menu - let user choose to browse if they want
-        else if (msg.length >= 2 && /^[a-zA-Z\u0900-\u097F\u0C00-\u0C7F\u0B80-\u0BFF\u0C80-\u0CFF\u0D00-\u0D7F\u0980-\u09FF\u0A80-\u0AFF\s]+$/.test(msg)) {
-          // Looks like a search term (letters only, including Indian languages)
-          // Already tried smartSearch above (including fuzzy matching), item not found
-          
-          // Send "Item not found" message with buttons to browse menu
-          const itemNotAvailableImg = await chatbotImagesService.getImageUrl(options.isVoiceMessage ? 'voice_error' : 'item_not_available');
-          const notFoundMessage = `❌ *Item Not Found*\n\nSorry, we couldn't find "${msg}" in our menu.\n\nTry a different search or browse our menu.`;
-          
-          await sendWithOptionalImage(phone, itemNotAvailableImg, notFoundMessage, [
-            { id: 'view_menu', text: 'Browse Menu' },
-            { id: 'home', text: 'Main Menu' }
-          ]);
-          state.currentStep = 'main_menu';
-        }
-        // ========== FALLBACK ==========
-        else {
+        } else {
+          // Default fallback
           const fallbackImg = await chatbotImagesService.getImageUrl(options.isVoiceMessage ? 'voice_error' : 'help_support');
-          await sendWithOptionalImage(phone, fallbackImg,
-            options.isVoiceMessage
+          await whatsapp.sendMessage(phone, options.isVoiceMessage
               ? `🎤 Sorry, I couldn't understand your voice message.\n\nPlease try again or select an option:`
-              : `🤔 I didn't understand that.\n\nPlease select an option:`,
-            [
-              { id: 'home', text: 'Main Menu' },
-              { id: 'view_cart', text: 'View Cart' },
-              { id: 'help', text: 'Help' }
-            ]
-          );
+              : `🤔 I didn't understand that.\n\nPlease select an option:`);
         }
       }
     } catch (error) {
       logger.error('Chatbot error', { error: error.message });
       const helpImg = await chatbotImagesService.getImageUrl('help_support');
-      await sendWithOptionalImage(phone, helpImg, '❌ Something went wrong. Please try again.', [
-        { id: 'home', text: 'Main Menu' },
-        { id: 'help', text: 'Help' }
-      ]);
+      await whatsapp.sendMessage(phone, '❌ Something went wrong. Please try again.');
     }
 
     // Refresh customer from DB to avoid version conflicts, then update state
@@ -6124,10 +4188,7 @@ const chatbot = {
       
       if (!offer) {
         const offerNotEligibleImg = await chatbotImagesService.getImageUrl('offer_not_eligible');
-        await sendWithOptionalImage(phone, offerNotEligibleImg, '❌ This offer is no longer available.', [
-          { id: 'view_menu', text: 'Browse Menu' },
-          { id: 'home', text: 'Main Menu' }
-        ]);
+        await whatsapp.sendMessage(phone, '❌ This offer is no longer available.');
         return;
       }
       
@@ -6135,19 +4196,13 @@ const chatbot = {
       const now = new Date();
       if (!offer.isActive) {
         const offerNotEligibleImg = await chatbotImagesService.getImageUrl('offer_not_eligible');
-        await sendWithOptionalImage(phone, offerNotEligibleImg, '❌ This offer is no longer active.', [
-          { id: 'view_menu', text: 'Browse Menu' },
-          { id: 'home', text: 'Main Menu' }
-        ]);
+        await whatsapp.sendMessage(phone, '❌ This offer is no longer active.');
         return;
       }
       
       if (offer.validUntil && new Date(offer.validUntil) < now) {
         const offerNotEligibleImg = await chatbotImagesService.getImageUrl('offer_not_eligible');
-        await sendWithOptionalImage(phone, offerNotEligibleImg, '⏰ This offer has expired.', [
-          { id: 'view_menu', text: 'Browse Menu' },
-          { id: 'home', text: 'Main Menu' }
-        ]);
+        await whatsapp.sendMessage(phone, '⏰ This offer has expired.');
         return;
       }
       
@@ -6181,16 +4236,10 @@ const chatbot = {
             `Keep ordering to unlock more exclusive offers! 🍽️`;
           
           if (notEligibleImage) {
-            await whatsapp.sendImageWithButtons(phone, notEligibleImage, message, [
-              { id: 'view_menu', text: 'Browse Menu' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
+            await whatsapp.sendMessage(phone, message);
           } else {
             const offerFallbackImg = await chatbotImagesService.getImageUrl('offer_not_eligible');
-            await sendWithOptionalImage(phone, offerFallbackImg, message, [
-              { id: 'view_menu', text: 'Browse Menu' },
-              { id: 'home', text: 'Main Menu' }
-            ]);
+            await whatsapp.sendMessage(phone, message);
           }
           return;
         }
@@ -6204,70 +4253,49 @@ const chatbot = {
         `Browse our menu to claim your offer. 🍽️`;
       
       if (offer.image) {
-        await whatsapp.sendImageWithButtons(phone, offer.image, successMessage, [
-          { id: 'view_menu', text: 'Browse Menu' },
-          { id: 'view_cart', text: 'View Cart' }
-        ]);
+        await whatsapp.sendMessage(phone, successMessage);
       } else {
         const offerAppliedImg = await chatbotImagesService.getImageUrl('offer_applied');
-        await sendWithOptionalImage(phone, offerAppliedImg, successMessage, [
-          { id: 'view_menu', text: 'Browse Menu' },
-          { id: 'view_cart', text: 'View Cart' }
-        ]);
+        await whatsapp.sendMessage(phone, successMessage);
       }
     } catch (error) {
       logger.error('Error handling offer claim', { error: error.message });
       const helpImg = await chatbotImagesService.getImageUrl('help_support');
-      await sendWithOptionalImage(phone, helpImg, '❌ Something went wrong. Please try again.', [
-        { id: 'view_menu', text: 'Browse Menu' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '❌ Something went wrong. Please try again.');
     }
   },
 
   // ============ WELCOME & MAIN MENU ============
   async sendWelcome(phone) {
-    // Step 1: Send restaurant image with welcome message
     const welcomeImageUrl = await chatbotImagesService.getImageUrl('welcome');
     const welcomeMessage = `🏨 *Perivi Hotel*\n\n` +
       `Welcome! 🙏\n\n` +
       `We're delighted to serve you delicious food. How can we help you today?`;
 
-    // Step 2: Try sending WhatsApp Flow for service selection (single combined message)
     try {
+      const metaCloud = require('./metaCloud');
       const flowId = catalogService.getWelcomeFlowId();
       const flowMode = catalogService.getWelcomeFlowMode();
-      if (flowId && flowMode) {
-        const metaCloud = require('./metaCloud');
-        const flowData = await catalogService.buildWelcomeFlowData(`welcome_service_${phone}`, phone);
+      const flowData = await catalogService.buildWelcomeFlowData(`welcome_service_${phone}`, phone);
 
-        // Send single Flow message with welcome image as header + service list in body
-        await metaCloud.sendFlowMessage(phone, {
-          flowId,
-          flowCta: 'Choose Service',
-          headerImageUrl: welcomeImageUrl || undefined,
-          headerText: 'Perivi Hotel',
-          bodyText: welcomeMessage,
-          footerText: 'Powered by JRB Gold',
-          screenName: 'SERVICE_SELECT',
-          screenData: flowData,
-          flowToken: `welcome_service_${phone}`,
-          mode: flowMode
-        });
+      await metaCloud.sendFlowMessage(phone, {
+        flowId,
+        flowCta: 'Choose Service',
+        headerImageUrl: welcomeImageUrl || undefined,
+        headerText: 'Perivi Hotel',
+        bodyText: welcomeMessage,
+        footerText: 'Powered by JRB Gold',
+        screenName: 'SERVICE_SELECT',
+        screenData: flowData,
+        flowToken: `welcome_service_${phone}`,
+        mode: flowMode
+      });
 
-        logger.info('Sent Welcome Flow service selector', { phone, flowId, mode: flowMode });
-        return;
-      }
-    } catch (flowErr) {
-      logger.info('Welcome Flow fallback to buttons', { error: flowErr.message });
+      logger.info('Sent Welcome Flow service selector', { phone, flowId, mode: flowMode });
+    } catch (err) {
+      logger.error('Welcome Flow failed', { phone, error: err.message });
+      await whatsapp.sendMessage(phone, '⚠️ Something went wrong loading our services. Please try again by sending *Hi*.');
     }
-
-    // Fallback: Send with quick reply buttons (original behavior)
-    await sendWithOptionalImage(phone, welcomeImageUrl, welcomeMessage, [
-      { id: 'order_food', text: 'Order Food' },
-      { id: 'my_orders', text: 'My Orders' },
-      { id: 'open_website', text: 'Website' }
-    ], 'Perivi Hotel');
   },
 
   // ============ ORDER FOOD MENU ============
@@ -6282,11 +4310,7 @@ const chatbot = {
     const myOrdersMessage = `📦 *My Orders*\n\n` +
       `Check your order status, track delivery, or cancel an order:`;
     
-    await sendWithOptionalImage(phone, myOrdersImageUrl, myOrdersMessage, [
-      { id: 'order_status', text: 'Order Status' },
-      { id: 'track_order', text: 'Track Delivery' },
-      { id: 'cancel_order', text: 'Cancel Order' }
-    ], 'Perivi Hotel');
+    await whatsapp.sendMessage(phone, myOrdersMessage);
   },
 
   /**
@@ -6331,23 +4355,12 @@ const chatbot = {
         if (order.deliveryAddress.landmark) orderMsg += `\nLandmark: ${order.deliveryAddress.landmark}`;
       }
 
-      // Send order details with action buttons
-      const buttons = [];
-      if (order.status === 'pending' || order.status === 'confirmed') {
-        buttons.push({ id: 'cancel_order', text: 'Cancel Order' });
-      }
-      if (order.status === 'out_for_delivery' || order.status === 'ready') {
-        buttons.push({ id: 'track_order', text: 'Track Order' });
-      }
-      buttons.push({ id: 'home', text: 'Main Menu' });
-
-      await whatsapp.sendButtons(phone, orderMsg, buttons, 'Perivi Hotel');
+      await whatsapp.sendMessage(phone, orderMsg);
       
       logger.info('Order details sent from flow', { phone, orderId, orderNumber: order.orderNumber });
     } catch (error) {
       logger.error('Error fetching order details', { phone, orderId, error: error.message });
       await whatsapp.sendMessage(phone, '❌ Unable to fetch order details. Please try again later.');
-      await this.sendMyOrdersMenu(phone);
     }
   },
 
@@ -6372,11 +4385,7 @@ const chatbot = {
         .select('orderNumber totalAmount status createdAt items');
 
       if (orders.length === 0) {
-        await whatsapp.sendMessage(phone, '📦 *My Orders*\n\nYou haven\'t placed any orders yet.\n\nWould you like to order something now?');
-        await whatsapp.sendButtons(phone, 'Start ordering:', [
-          { id: 'order_food', text: 'Order Food' },
-          { id: 'home', text: 'Main Menu' }
-        ], 'Perivi Hotel');
+        await whatsapp.sendMessage(phone, '📦 *My Orders*\n\nYou haven\'t placed any orders yet.');
         return;
       }
 
@@ -6405,34 +4414,18 @@ const chatbot = {
         ordersMsg += `   ${itemCount} items • ${date}\n\n`;
       });
 
-      ordersMsg += `\nSelect an option:`;
-
-      // Send with buttons to view specific orders or track
-      await whatsapp.sendButtons(phone, ordersMsg, [
-        { id: 'order_status', text: 'View Order Status' },
-        { id: 'track_order', text: 'Track Delivery' },
-        { id: 'home', text: 'Main Menu' }
-      ], 'Perivi Hotel');
+      await whatsapp.sendMessage(phone, ordersMsg);
 
       logger.info('Recent orders list sent', { phone, orderCount: orders.length });
     } catch (error) {
       logger.error('Error fetching recent orders', { phone, error: error.message });
       await whatsapp.sendMessage(phone, '❌ Unable to fetch your orders. Please try again later.');
-      await this.sendMyOrdersMenu(phone);
     }
   },
 
   // ============ MENU BROWSING ============
   async sendFoodTypeSelection(phone) {
-    const browseMenuImageUrl = await chatbotImagesService.getImageUrl('browse_menu');
-    await sendWithOptionalImage(phone, browseMenuImageUrl,
-      '🍽️ *Browse Menu*\n\nWhat would you like to see?',
-      [
-        { id: 'food_veg', text: 'Veg' },
-        { id: 'food_nonveg', text: 'Non-Veg' },
-        { id: 'food_egg', text: 'Egg' }
-      ]
-    );
+    await whatsapp.sendMessage(phone, '🍽️ *Browse Menu*\n\nWhat would you like to see?\n\n1. 🟢 Veg\n2. 🔴 Non-Veg\n3. 🟡 Egg\n\nReply with your choice.');
   },
 
   async sendMenuCategories(phone, menuItems, label = 'Our Menu', page = 0) {
@@ -6440,10 +4433,7 @@ const chatbot = {
     const categories = [...new Set(menuItems.flatMap(m => Array.isArray(m.category) ? m.category : [m.category]))];
     
     if (!categories.length) {
-      const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
-      await sendWithOptionalImage(phone, browseMenuImg, '📋 No menu items available right now.', [
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '📋 No menu items available right now.');
       return;
     }
 
@@ -6475,69 +4465,9 @@ const chatbot = {
         }
       }
     } catch (flowErr) {
-      logger.info('Flow category fallback', { error: flowErr.message });
+      logger.error('Flow category send failed', { error: flowErr.message });
+      await whatsapp.sendMessage(phone, '⚠️ Unable to load menu categories. Please try again.');
     }
-
-    // ===== FALLBACK: TEXT LIST OF CATEGORY NAMES =====
-
-    // If 9 or fewer categories (+ All Items = 10), use WhatsApp list without pagination
-    if (categories.length <= 9) {
-      const totalWithVariants = countItemsWithVariants(menuItems);
-      const rows = [
-        { rowId: 'cat_all', title: '📋 All Items', description: `${totalWithVariants} items - View everything` }
-      ];
-      
-      categories.forEach(cat => {
-        const catItems = menuItems.filter(m => Array.isArray(m.category) ? m.category.includes(cat) : m.category === cat);
-        const count = countItemsWithVariants(catItems);
-        const safeId = cat.replace(/[^a-zA-Z0-9_]/g, '_');
-        rows.push({ rowId: `cat_${safeId}`, title: cat.substring(0, 24), description: `${count} items available` });
-      });
-
-      await whatsapp.sendList(phone, label, 'Select a category to browse items', 'View Categories',
-        [{ title: 'Menu Categories', rows }], 'Fresh & Delicious!');
-      return;
-    }
-
-    // More than 9 categories - use pagination with WhatsApp list
-    const CATS_PER_PAGE = 9; // 9 categories + 1 "All Items" = 10 rows max
-    const totalPages = Math.ceil(categories.length / CATS_PER_PAGE);
-    const startIdx = page * CATS_PER_PAGE;
-    const pageCats = categories.slice(startIdx, startIdx + CATS_PER_PAGE);
-
-    // Build rows for the list
-    const rows = [];
-    
-    // Add "All Items" option on first page only
-    if (page === 0) {
-      const totalWithVariants = countItemsWithVariants(menuItems);
-      rows.push({ rowId: 'cat_all', title: '📋 All Items', description: `${totalWithVariants} items - View everything` });
-    }
-    
-    pageCats.forEach(cat => {
-      const catItems = menuItems.filter(m => Array.isArray(m.category) ? m.category.includes(cat) : m.category === cat);
-      const count = countItemsWithVariants(catItems);
-      const safeId = cat.replace(/[^a-zA-Z0-9_]/g, '_');
-      rows.push({ rowId: `cat_${safeId}`, title: cat.substring(0, 24), description: `${count} items available` });
-    });
-
-    await whatsapp.sendList(
-      phone,
-      `📋 ${label}`,
-      `Page ${page + 1}/${totalPages} • ${categories.length} categories\nTap to select a category`,
-      'View Categories',
-      [{ title: 'Menu Categories', rows }],
-      'Select a category'
-    );
-
-    // Send navigation buttons
-    const buttons = [];
-    if (page > 0) buttons.push({ id: `menucat_page_${page - 1}`, text: 'Previous' });
-    if (page < totalPages - 1) buttons.push({ id: `menucat_page_${page + 1}`, text: 'Next' });
-    buttons.push({ id: 'home', text: 'Menu' });
-
-    const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
-    await sendWithOptionalImage(phone, browseMenuImg, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
   },
 
   async sendMenuCategoriesWithLabel(phone, menuItems, label, page = 0) {
@@ -6551,10 +4481,7 @@ const chatbot = {
     
     if (!items.length) {
       const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-      await sendWithOptionalImage(phone, itemNotAvailableImg, `📋 No items in ${category} right now.`, [
-        { id: 'view_menu', text: 'Back to Menu' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, `📋 No items in ${category} right now.`);
       return;
     }
 
@@ -6574,62 +4501,16 @@ const chatbot = {
         return;
       }
     } catch (catalogErr) {
-      logger.info('Catalog fallback for category items', { category, error: catalogErr.message });
-    }
-
-    // Fallback: existing list-based flow
-    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
-    const activeOffers = await getCachedActiveOffers(phone);
-
-    const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
-    const ITEMS_PER_PAGE = 10;
-    const totalPages = Math.ceil(items.length / ITEMS_PER_PAGE);
-    const startIdx = page * ITEMS_PER_PAGE;
-    const pageItems = items.slice(startIdx, startIdx + ITEMS_PER_PAGE);
-
-    // Build rows for the list
-    const rows = pageItems.map(item => {
-      const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
-      const priceDisplay = formatPriceWithActiveOffers(item, activeOffers);
-      return {
-        rowId: `view_${item._id}`,
-        title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
-        description: `${ratingStr} • ${priceDisplay} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
-      };
-    });
-
-    // Only items in the list, no navigation rows
-    const sections = [{ title: `${category} (${items.length} items)`, rows }];
-
-    await whatsapp.sendList(
-      phone,
-      `📋 ${category}`,
-      `Page ${page + 1}/${totalPages} • ${items.length} items total\nTap an item to view details`,
-      'View Items',
-      sections,
-      'Select an item'
-    );
-
-    // Send navigation buttons if multiple pages
-    if (totalPages > 1) {
-      const safeCat = category.replace(/[^a-zA-Z0-9]/g, '_');
-      const buttons = [];
-      if (page > 0) buttons.push({ id: `catpage_${safeCat}_${page - 1}`, text: 'Previous' });
-      if (page < totalPages - 1) buttons.push({ id: `catpage_${safeCat}_${page + 1}`, text: 'Next' });
-      buttons.push({ id: 'view_menu', text: 'Menu' });
-      const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
-      await sendWithOptionalImage(phone, browseMenuImg, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
+      logger.error('Catalog failed for category items', { category, error: catalogErr.message });
+      await whatsapp.sendMessage(phone, `⚠️ Unable to load ${category} items. Please try again.`);
     }
   },
 
-  // Send all items (for browsing) - always use WhatsApp list with pagination
+  // Send all items (for browsing)
   async sendAllItems(phone, menuItems, page = 0) {
     if (!menuItems.length) {
       const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
-      await sendWithOptionalImage(phone, browseMenuImg, '📋 No items available right now.', [
-        { id: 'view_menu', text: 'Back to Menu' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '📋 No items available right now.');
       return;
     }
 
@@ -6670,49 +4551,8 @@ const chatbot = {
         }
       }
     } catch (catalogErr) {
-      logger.info('Catalog fallback for all items', { error: catalogErr.message });
-    }
-
-    // Fallback: existing list-based flow
-    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
-    const activeOffers = await getCachedActiveOffers(phone);
-
-    const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
-    const ITEMS_PER_PAGE = 10;
-    const totalPages = Math.ceil(menuItems.length / ITEMS_PER_PAGE);
-    const startIdx = page * ITEMS_PER_PAGE;
-    const pageItems = menuItems.slice(startIdx, startIdx + ITEMS_PER_PAGE);
-
-    // Build rows for the list
-    const rows = pageItems.map(item => {
-      const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
-      const priceDisplay = formatPriceWithActiveOffers(item, activeOffers);
-      return {
-        rowId: `view_${item._id}`,
-        title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
-        description: `${ratingStr} • ${priceDisplay} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
-      };
-    });
-
-    const sections = [{ title: `All Items (${menuItems.length})`, rows }];
-
-    await whatsapp.sendList(
-      phone,
-      '📋 All Items',
-      `Page ${page + 1}/${totalPages} • ${menuItems.length} items total\nTap an item to view details`,
-      'View Items',
-      sections,
-      'Select an item'
-    );
-
-    // Send navigation buttons if multiple pages
-    if (totalPages > 1) {
-      const buttons = [];
-      if (page > 0) buttons.push({ id: `allitems_page_${page - 1}`, text: 'Previous' });
-      if (page < totalPages - 1) buttons.push({ id: `allitems_page_${page + 1}`, text: 'Next' });
-      buttons.push({ id: 'view_menu', text: 'Menu' });
-      const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
-      await sendWithOptionalImage(phone, browseMenuImg, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
+      logger.error('Catalog failed for all items', { error: catalogErr.message });
+      await whatsapp.sendMessage(phone, '⚠️ Unable to load menu items. Please try again.');
     }
   },
 
@@ -6720,10 +4560,7 @@ const chatbot = {
   async sendItemsByTag(phone, items, tagKeyword, page = 0, matchedVariants = null) {
     if (!items.length) {
       const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-      await sendWithOptionalImage(phone, itemNotAvailableImg, `🔍 No items found for "${tagKeyword}".`, [
-        { id: 'view_menu', text: 'Browse Menu' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, `🔍 No items found for "${tagKeyword}".`);
       return;
     }
 
@@ -6810,63 +4647,12 @@ const chatbot = {
         return;
       }
     } catch (catalogErr) {
-      logger.info('Catalog fallback for search results', { tagKeyword, error: catalogErr.message });
-    }
-
-    // Fallback: existing list-based flow
-    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
-    const activeOffers = await getCachedActiveOffers(phone);
-
-    const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
-    const ITEMS_PER_PAGE = 10;
-    const totalPages = Math.ceil(items.length / ITEMS_PER_PAGE);
-    const startIdx = page * ITEMS_PER_PAGE;
-    const pageItems = items.slice(startIdx, startIdx + ITEMS_PER_PAGE);
-
-    // Build rows for the list - use view_ prefix so user can see details first
-    const rows = pageItems.map(item => {
-      const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
-      const priceDisplay = formatPriceWithActiveOffers(item, activeOffers);
-      // Show matched variant name in description if available
-      const vi = matchedVariants?.[item._id.toString()];
-      let variantInfo = '';
-      if (Array.isArray(vi)) {
-        const matchedLabels = vi.map(idx => item.variants?.[idx]?.label).filter(Boolean);
-        if (matchedLabels.length > 0) variantInfo = `🔖 ${matchedLabels.join(', ')} • `;
-      } else if (typeof vi === 'number' && item.variants?.[vi]?.label) {
-        variantInfo = `🔖 ${item.variants[vi].label} • `;
-      }
-      return {
-        rowId: `view_${item._id}`,
-        title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
-        description: `${variantInfo}${ratingStr} • ${priceDisplay} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
-      };
-    });
-
-    const sections = [{ title: `"${tagKeyword}" Items (${items.length})`, rows }];
-
-    await whatsapp.sendList(
-      phone,
-      `🏷️ ${tagKeyword}`,
-      `Found ${items.length} items matching "${tagKeyword}"\nTap an item to view details & add to cart`,
-      'View Items',
-      sections,
-      'Select an item'
-    );
-
-    // Send navigation buttons if multiple pages
-    if (totalPages > 1) {
-      const safeTag = tagKeyword.replace(/[^a-zA-Z0-9]/g, '_');
-      const buttons = [];
-      if (page > 0) buttons.push({ id: `tagpage_${safeTag}_${page - 1}`, text: 'Previous' });
-      if (page < totalPages - 1) buttons.push({ id: `tagpage_${safeTag}_${page + 1}`, text: 'Next' });
-      buttons.push({ id: 'view_menu', text: 'Menu' });
-      const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
-      await sendWithOptionalImage(phone, browseMenuImg, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
+      logger.error('Catalog failed for search results', { tagKeyword, error: catalogErr.message });
+      await whatsapp.sendMessage(phone, `⚠️ Unable to load search results for "${tagKeyword}". Please try again.`);
     }
   },
 
-  // Send products with images (fallback for catalog)
+  // Send products with images
   async sendProductsWithImages(phone, items) {
     const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
     
@@ -6877,17 +4663,11 @@ const chatbot = {
       const msg = `${icon} *${item.name}*\n💰 ₹${item.price}\n\n${item.description || 'Delicious!'}`;
       
       const itemImg = (item.image && !item.image.startsWith('data:')) ? item.image : null;
-      await sendWithOptionalImage(phone, itemImg, msg, [
-        { id: `add_${item._id}`, text: 'Add to Cart' }
-      ]);
+      await whatsapp.sendMessage(phone, msg);
     }
     
     const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
-    await sendWithOptionalImage(phone, browseMenuImg, 'Want to see more items?', [
-      { id: 'food_both', text: 'Full Menu' },
-      { id: 'view_cart', text: 'View Cart' },
-      { id: 'home', text: 'Home' }
-    ]);
+    await whatsapp.sendMessage(phone, 'Want to see more items?');
   },
 
   // Build a rich catalog-style card message for a single item (reusable)
@@ -7015,51 +4795,8 @@ const chatbot = {
         return;
       }
     } catch (catalogErr) {
-      logger.info('Catalog fallback for search result cards', { searchLabel, error: catalogErr.message });
-    }
-
-    // Fallback: individual rich cards with image + buttons
-    const activeOffers = await getCachedActiveOffers(phone);
-    
-    // Header message
-    await whatsapp.sendMessage(phone, `🔍 Found *${items.length} items* matching ${searchLabel}\n\nSwipe through the results below 👇`);
-    
-    // Send each item as a rich card with image + buttons
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      let msg = this.buildItemCardMessage(item, activeOffers);
-      
-      // Highlight matched variant in fallback card
-      const vi = matchedVariants?.[item._id.toString()];
-      if (Array.isArray(vi)) {
-        // Show matched variant names
-        const matchedLabels = vi.map(idx => item.variants?.[idx]?.label).filter(Boolean);
-        if (matchedLabels.length > 0) {
-          msg = `🔖 *Matched: ${matchedLabels.join(', ')}*\n\n${msg}`;
-        }
-      } else if (typeof vi === 'number' && item.variants?.[vi]?.label) {
-        const mv = item.variants[vi];
-        const mvPrice = mv.offerPrice && mv.offerPrice < mv.price ? `~₹${mv.price}~ ₹${mv.offerPrice}` : `₹${mv.price}`;
-        msg = `🔖 *Matched: ${mv.label}* (${mvPrice})\n\n${msg}`;
-      }
-      
-      const buttons = [
-        { id: `confirm_add_${item._id}`, text: 'Add to Cart' },
-        { id: `view_${item._id}`, text: 'View Details' }
-      ];
-      // Add "Review & Order" only on last card
-      if (i === items.length - 1) {
-        buttons.push({ id: 'review_pay', text: 'Review & Order' });
-      } else {
-        buttons.push({ id: 'view_menu', text: 'Back to Menu' });
-      }
-      
-      if (item.image) {
-        await whatsapp.sendImageWithButtons(phone, item.image, msg, buttons);
-      } else {
-        const browseImg = await chatbotImagesService.getImageUrl('browse_menu');
-        await sendWithOptionalImage(phone, browseImg, msg, buttons);
-      }
+      logger.error('Catalog failed for search result cards', { searchLabel, error: catalogErr.message });
+      await whatsapp.sendMessage(phone, `⚠️ Unable to load results for ${searchLabel}. Please try again.`);
     }
   },
 
@@ -7067,9 +4804,7 @@ const chatbot = {
     const item = menuItems.find(m => m._id.toString() === itemId);
     if (!item) {
       const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-      await sendWithOptionalImage(phone, itemNotAvailableImg, '❌ Item not found.', [
-        { id: 'view_menu', text: 'View Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '❌ Item not found.');
       return;
     }
 
@@ -7204,85 +4939,8 @@ const chatbot = {
         }
       }
     } catch (catalogErr) {
-      logger.info('Catalog fallback for item details', { itemId, error: catalogErr.message });
-    }
-
-    // Fallback: rich card with image + buttons
-    const activeOffers = await getCachedActiveOffers(phone);
-    let msg = this.buildItemCardMessage(item, activeOffers);
-    // Highlight matched variant(s) in fallback card
-    const singleViFallback = isSingleMatch ? matchedVariantIndex : (isArrayMatch && matchedVariantIndex.length === 1 ? matchedVariantIndex[0] : null);
-    if (singleViFallback !== null && item.variants?.[singleViFallback]?.label) {
-      const mv = item.variants[singleViFallback];
-      if (mv.quantities && mv.quantities.length > 1) {
-        const sizeLines = mv.quantities.map((q, qi) => {
-          const qPrice = q.offerPrice && q.offerPrice < q.price ? `~₹${q.price}~ ₹${q.offerPrice}` : `₹${q.price}`;
-          const sizeLabel = q.quantity ? `${q.quantity} ${q.unit || ''}`.trim() : `Option ${qi + 1}`;
-          return `  ${qi + 1}. ${sizeLabel} - ${qPrice}`;
-        });
-        msg = `🔖 *${mv.label}* - ${mv.quantities.length} sizes:\n${sizeLines.join('\n')}\n\n${msg}`;
-      } else {
-        const mvPrice = mv.offerPrice && mv.offerPrice < mv.price ? `~₹${mv.price}~ ₹${mv.offerPrice}` : `₹${mv.price}`;
-        msg = `🔖 *Matched: ${mv.label}* (${mvPrice})\n\n${msg}`;
-      }
-    } else if (isArrayMatch && matchedVariantIndex.length > 1) {
-      // Show matched variants in fallback (show unavailable as locked)
-      const variantLines = [];
-      for (const vi of matchedVariantIndex) {
-        const v = item.variants?.[vi];
-        if (!v) continue;
-        const isLocked = v.available === false;
-        const lockPrefix = isLocked ? '🔒 ' : '';
-        const lockSuffix = isLocked ? ' • Out of stock' : '';
-        if (v.quantities && v.quantities.length > 0) {
-          v.quantities.forEach((q) => {
-            const qPrice = q.offerPrice && q.offerPrice < q.price ? `~₹${q.price}~ ₹${q.offerPrice}` : `₹${q.price}`;
-            const label = v.label ? `${v.label} - ${q.quantity || ''} ${q.unit || ''}`.trim() : `${q.quantity} ${q.unit || ''}`;
-            variantLines.push(`  ${variantLines.length + 1}. ${lockPrefix}${label.trim()} - ${qPrice}${lockSuffix}`);
-          });
-        } else if (v.label) {
-          const vPrice = v.offerPrice && v.offerPrice < v.price ? `~₹${v.price}~ ₹${v.offerPrice}` : `₹${v.price}`;
-          variantLines.push(`  ${variantLines.length + 1}. ${lockPrefix}${v.label} - ${vPrice}${lockSuffix}`);
-        }
-      }
-      if (variantLines.length > 0) {
-        msg = `🔖 *${variantLines.length} Matching Options:*\n${variantLines.join('\n')}\n\n${msg}`;
-      }
-    } else if (matchedVariantIndex === null && item.variants && item.variants.length > 0) {
-      // Show all variants/sizes in fallback text (show unavailable as locked)
-      const variantLines = [];
-      item.variants.forEach((v, vi) => {
-        const isLocked = v.available === false;
-        const lockPrefix = isLocked ? '🔒 ' : '';
-        const lockSuffix = isLocked ? ' • Out of stock' : '';
-        if (v.quantities && v.quantities.length > 0) {
-          // Show each quantity/size option (all locked if variant is off)
-          v.quantities.forEach((q, qi) => {
-            const qPrice = q.offerPrice && q.offerPrice < q.price ? `~₹${q.price}~ ₹${q.offerPrice}` : `₹${q.price}`;
-            const label = v.label ? `${v.label} - ${q.label || q.quantity + ' ' + (q.unit || '')}` : (q.label || `${q.quantity} ${q.unit || ''}`);
-            variantLines.push(`  ${variantLines.length + 1}. ${lockPrefix}${label.trim()} - ${qPrice}${lockSuffix}`);
-          });
-        } else if (v.label) {
-          const vPrice = v.offerPrice && v.offerPrice < v.price ? `~₹${v.price}~ ₹${v.offerPrice}` : `₹${v.price}`;
-          variantLines.push(`  ${variantLines.length + 1}. ${lockPrefix}${v.label} - ${vPrice}${lockSuffix}`);
-        }
-      });
-      if (variantLines.length > 1) {
-        msg = `🔖 *${variantLines.length} Options Available:*\n${variantLines.join('\n')}\n\n${msg}`;
-      }
-    }
-
-    const buttons = [
-      { id: `confirm_add_${item._id}`, text: 'Add to Cart' },
-      { id: 'view_menu', text: 'Back to Menu' },
-      { id: 'review_pay', text: 'Review & Order' }
-    ];
-
-    if (item.image) {
-      await whatsapp.sendImageWithButtons(phone, item.image, msg, buttons);
-    } else {
-      const browseImg = await chatbotImagesService.getImageUrl('browse_menu');
-      await sendWithOptionalImage(phone, browseImg, msg, buttons);
+      logger.error('Catalog failed for item details', { itemId, error: catalogErr.message });
+      await whatsapp.sendMessage(phone, '⚠️ Unable to load item details. Please try again.');
     }
   },
 
@@ -7331,38 +4989,15 @@ const chatbot = {
         }
       }
     } catch (catalogErr) {
-      logger.info('Catalog fallback for order item details', { itemId: item._id, error: catalogErr.message });
-    }
-
-    // Fallback: rich card with image + buttons
-    const activeOffers = await getCachedActiveOffers(phone);
-    const msg = this.buildItemCardMessage(item, activeOffers);
-
-    const buttons = [
-      { id: `confirm_add_${item._id}`, text: 'Add to Cart' },
-      { id: 'add_more', text: 'Back to Menu' },
-      { id: 'review_pay', text: 'Review & Order' }
-    ];
-
-    if (item.image) {
-      await whatsapp.sendImageWithButtons(phone, item.image, msg, buttons);
-    } else {
-      const browseImg = await chatbotImagesService.getImageUrl('browse_menu');
-      await sendWithOptionalImage(phone, browseImg, msg, buttons);
+      logger.error('Catalog failed for order item details', { itemId: item._id, error: catalogErr.message });
+      await whatsapp.sendMessage(phone, '⚠️ Unable to load item details. Please try again.');
     }
   },
 
   // ============ ORDERING ============
   async sendServiceType(phone) {
     const checkoutImg = await chatbotImagesService.getImageUrl('checkout');
-    await sendWithOptionalImage(phone, checkoutImg,
-      '🛒 *Place Order*\n\nHow would you like to receive your order?',
-      [
-        { id: 'delivery', text: 'Delivery' },
-        { id: 'pickup', text: 'Pickup' },
-        { id: 'dine_in', text: 'Dine-in' }
-      ]
-    );
+    await whatsapp.sendMessage(phone, '🛒 *Place Order*\n\nHow would you like to receive your order?');
   },
 
   async sendMenuForOrder(phone, menuItems, label = 'Select Items', page = 0) {
@@ -7371,9 +5006,7 @@ const chatbot = {
     
     if (!categories.length) {
       const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
-      await sendWithOptionalImage(phone, browseMenuImg, '📋 No menu items available.', [
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '📋 No menu items available.');
       return;
     }
 
@@ -7439,65 +5072,9 @@ const chatbot = {
         }
       }
     } catch (flowErr) {
-      logger.info('Flow category fallback (order)', { error: flowErr.message });
+      logger.error('Flow category send failed (order)', { error: flowErr.message });
+      await whatsapp.sendMessage(phone, '⚠️ Unable to load menu categories. Please try again.');
     }
-
-    // ===== FALLBACK: TEXT LIST OF CATEGORY NAMES =====
-
-    // If 9 or fewer categories (+ All Items = 10), use WhatsApp list without pagination
-    if (categories.length <= 9) {
-      const rows = [
-        { rowId: 'order_cat_all', title: '📋 All Items', description: `${menuItems.length} items - View everything` }
-      ];
-      
-      categories.forEach(cat => {
-        const count = menuItems.filter(m => Array.isArray(m.category) ? m.category.includes(cat) : m.category === cat).length;
-        const safeId = cat.replace(/[^a-zA-Z0-9_]/g, '_');
-        rows.push({ rowId: `order_cat_${safeId}`, title: cat.substring(0, 24), description: `${count} items` });
-      });
-
-      await whatsapp.sendList(phone, label, 'Choose a category to add items to your cart', 'View Categories',
-        [{ title: 'Categories', rows }], 'Tap to browse');
-      return;
-    }
-
-    // More than 9 categories - use pagination with WhatsApp list
-    const CATS_PER_PAGE = 9; // 9 categories + 1 "All Items" = 10 rows max
-    const totalPages = Math.ceil(categories.length / CATS_PER_PAGE);
-    const startIdx = page * CATS_PER_PAGE;
-    const pageCats = categories.slice(startIdx, startIdx + CATS_PER_PAGE);
-
-    // Build rows for the list
-    const rows = [];
-    
-    // Add "All Items" option on first page only
-    if (page === 0) {
-      rows.push({ rowId: 'order_cat_all', title: '📋 All Items', description: `${menuItems.length} items - View everything` });
-    }
-    
-    pageCats.forEach(cat => {
-      const count = menuItems.filter(m => Array.isArray(m.category) ? m.category.includes(cat) : m.category === cat).length;
-      const safeId = cat.replace(/[^a-zA-Z0-9_]/g, '_');
-      rows.push({ rowId: `order_cat_${safeId}`, title: cat.substring(0, 24), description: `${count} items` });
-    });
-
-    await whatsapp.sendList(
-      phone,
-      `🛒 ${label}`,
-      `Page ${page + 1}/${totalPages} • ${categories.length} categories\nTap to select a category`,
-      'View Categories',
-      [{ title: 'Categories', rows }],
-      'Select a category'
-    );
-
-    // Send navigation buttons
-    const buttons = [];
-    if (page > 0) buttons.push({ id: `ordercat_page_${page - 1}`, text: 'Previous' });
-    if (page < totalPages - 1) buttons.push({ id: `ordercat_page_${page + 1}`, text: 'Next' });
-    buttons.push({ id: 'home', text: 'Menu' });
-
-    const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
-    await sendWithOptionalImage(phone, browseMenuImg, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
   },
 
   async sendMenuForOrderWithLabel(phone, menuItems, label, page = 0) {
@@ -7541,10 +5118,7 @@ const chatbot = {
 
     if (!matchingItems.length) {
       const searchNoResultsImg = await chatbotImagesService.getImageUrl('search_no_results');
-      await sendWithOptionalImage(phone, searchNoResultsImg, '📋 No matching items found.', [
-        { id: 'order_food', text: 'Order Food' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '📋 No matching items found.');
       return;
     }
 
@@ -7600,10 +5174,7 @@ const chatbot = {
 
     if (!menuItem) {
       const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-      await sendWithOptionalImage(phone, itemNotAvailableImg, '📋 Item not found.', [
-        { id: 'order_food', text: 'Order Food' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '📋 Item not found.');
       return;
     }
 
@@ -7627,10 +5198,7 @@ const chatbot = {
 
     if (!matchingVariants.length) {
       const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-      await sendWithOptionalImage(phone, itemNotAvailableImg, `📋 No matching variants in ${menuItem.name}.`, [
-        { id: 'order_food', text: 'Order Food' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, `📋 No matching variants in ${menuItem.name}.`);
       return;
     }
 
@@ -7653,38 +5221,8 @@ const chatbot = {
         }
       }
     } catch (catalogErr) {
-      logger.info('Catalog fallback for title variants', { error: catalogErr.message });
-    }
-
-    // Only send a WhatsApp list fallback if catalog message was NOT sent.
-    // When catalog is sent, users can tap products directly from the catalog card.
-    if (!catalogSent) {
-      const itemId = menuItem._id.toString();
-      const rows = matchingVariants.slice(0, 10).map(v => {
-        const icon = getFoodTypeIcon(v.foodType || menuItem.foodType);
-        let price;
-        if (v.quantities && v.quantities.length > 0) {
-          const cheapest = Math.min(...v.quantities.map(q => q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price));
-          price = `from ₹${cheapest}`;
-        } else {
-          price = `₹${v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price}`;
-        }
-        const sizeInfo = (v.quantity && v.unit) ? ` (${v.quantity} ${v.unit})` : '';
-        return {
-          rowId: `add_variant_${itemId}_${v.originalIndex}`,
-          title: `${icon} ${v.label}${sizeInfo}`.substring(0, 24),
-          description: price
-        };
-      });
-
-      await whatsapp.sendList(
-        phone,
-        menuItem.name.substring(0, 24),
-        `📋 *${menuItem.name}*\nSelect a variant to add to cart:`,
-        'Choose Variant',
-        [{ title: 'Variants', rows }],
-        'Select a variant'
-      );
+      logger.error('Catalog failed for title variants', { error: catalogErr.message });
+      await whatsapp.sendMessage(phone, '⚠️ Unable to load variant options. Please try again.');
     }
   },
 
@@ -7694,10 +5232,7 @@ const chatbot = {
     
     if (!items.length) {
       const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
-      await sendWithOptionalImage(phone, itemNotAvailableImg, `📋 No items in ${category}.`, [
-        { id: 'add_more', text: 'Other Categories' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, `📋 No items in ${category}.`);
       return;
     }
 
@@ -7717,50 +5252,8 @@ const chatbot = {
         return;
       }
     } catch (catalogErr) {
-      logger.info('Catalog fallback for order items', { category, error: catalogErr.message });
-    }
-
-    // Fallback: existing list-based flow
-    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
-    const activeOffers = await getCachedActiveOffers(phone);
-
-    const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
-    const ITEMS_PER_PAGE = 10;
-    const totalPages = Math.ceil(items.length / ITEMS_PER_PAGE);
-    const startIdx = page * ITEMS_PER_PAGE;
-    const pageItems = items.slice(startIdx, startIdx + ITEMS_PER_PAGE);
-
-    // Build rows for the list
-    const rows = pageItems.map(item => {
-      const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
-      const priceDisplay = formatPriceWithActiveOffers(item, activeOffers);
-      return {
-        rowId: `add_${item._id}`,
-        title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
-        description: `${ratingStr} • ${priceDisplay} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
-      };
-    });
-
-    const sections = [{ title: `${category} (${items.length} items)`, rows }];
-
-    await whatsapp.sendList(
-      phone,
-      `📋 ${category}`,
-      `Page ${page + 1}/${totalPages} • ${items.length} items total\nTap an item to add to cart`,
-      'View Items',
-      sections,
-      'Select an item'
-    );
-
-    // Send navigation buttons if multiple pages
-    if (totalPages > 1) {
-      const safeCat = category.replace(/[^a-zA-Z0-9]/g, '_');
-      const buttons = [];
-      if (page > 0) buttons.push({ id: `ordercatpage_${safeCat}_${page - 1}`, text: 'Previous' });
-      if (page < totalPages - 1) buttons.push({ id: `ordercatpage_${safeCat}_${page + 1}`, text: 'Next' });
-      buttons.push({ id: 'home', text: 'Menu' });
-      const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
-      await sendWithOptionalImage(phone, browseMenuImg, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
+      logger.error('Catalog failed for order items', { category, error: catalogErr.message });
+      await whatsapp.sendMessage(phone, `⚠️ Unable to load ${category} items. Please try again.`);
     }
   },
 
@@ -7768,10 +5261,7 @@ const chatbot = {
   async sendAllItemsForOrder(phone, menuItems, page = 0) {
     if (!menuItems.length) {
       const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
-      await sendWithOptionalImage(phone, browseMenuImg, '📋 No items available.', [
-        { id: 'add_more', text: 'Other Categories' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '📋 No items available.');
       return;
     }
 
@@ -7808,49 +5298,8 @@ const chatbot = {
         }
       }
     } catch (catalogErr) {
-      logger.info('Catalog fallback for all order items', { error: catalogErr.message });
-    }
-
-    // Fallback: existing list-based flow
-    // Get customer's activeOffers (cached per-request — avoids redundant DB calls)
-    const activeOffers = await getCachedActiveOffers(phone);
-
-    const getFoodTypeIcon = (type) => type === 'veg' ? '🟢' : type === 'nonveg' ? '🔴' : type === 'egg' ? '🟡' : '';
-    const ITEMS_PER_PAGE = 10;
-    const totalPages = Math.ceil(menuItems.length / ITEMS_PER_PAGE);
-    const startIdx = page * ITEMS_PER_PAGE;
-    const pageItems = menuItems.slice(startIdx, startIdx + ITEMS_PER_PAGE);
-
-    // Build rows for the list
-    const rows = pageItems.map(item => {
-      const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating}` : '☆';
-      const priceDisplay = formatPriceWithActiveOffers(item, activeOffers);
-      return {
-        rowId: `add_${item._id}`,
-        title: `${getFoodTypeIcon(item.foodType)} ${item.name}`.substring(0, 24),
-        description: `${ratingStr} • ${priceDisplay} • ${item.quantity || 1} ${item.unit || 'piece'}`.substring(0, 72)
-      };
-    });
-
-    const sections = [{ title: `All Items (${menuItems.length})`, rows }];
-
-    await whatsapp.sendList(
-      phone,
-      '📋 All Items',
-      `Page ${page + 1}/${totalPages} • ${menuItems.length} items total\nTap an item to add to cart`,
-      'View Items',
-      sections,
-      'Select an item'
-    );
-
-    // Send navigation buttons if multiple pages
-    if (totalPages > 1) {
-      const buttons = [];
-      if (page > 0) buttons.push({ id: `orderitems_page_${page - 1}`, text: 'Previous' });
-      if (page < totalPages - 1) buttons.push({ id: `orderitems_page_${page + 1}`, text: 'Next' });
-      buttons.push({ id: 'home', text: 'Menu' });
-      const browseMenuImg = await chatbotImagesService.getImageUrl('browse_menu');
-      await sendWithOptionalImage(phone, browseMenuImg, `Page ${page + 1} of ${totalPages}`, buttons.slice(0, 3));
+      logger.error('Catalog failed for all order items', { error: catalogErr.message });
+      await whatsapp.sendMessage(phone, '⚠️ Unable to load menu items. Please try again.');
     }
   },
 
@@ -7931,14 +5380,7 @@ const chatbot = {
     
     const addedToCartImageUrl = await chatbotImagesService.getImageUrl('added_to_cart');
     
-    await sendWithOptionalImage(phone, addedToCartImageUrl,
-      `✅ *Added to Cart!*\n\n*${item.name}* (${unitInfo})\nQty: ${qty} × ₹${effectivePrice} = ₹${effectivePrice * qty}\n\n🛒 Cart: ${cartCount} items`,
-      [
-        { id: 'add_more', text: 'Add More' },
-        { id: 'view_cart', text: 'View Cart' },
-        { id: 'review_pay', text: 'Review & Order' }
-      ]
-    );
+    await whatsapp.sendMessage(phone, `✅ *Added to Cart!*\n\n*${item.name}* (${unitInfo})\nQty: ${qty} × ₹${effectivePrice} = ₹${effectivePrice * qty}\n\n🛒 Cart: ${cartCount} items`);
   },
 
   // ============ CART & CHECKOUT ============
@@ -7948,10 +5390,7 @@ const chatbot = {
     
     if (!freshCustomer?.cart?.length) {
       const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
-        { id: 'view_menu', text: 'View Menu' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '🛒 Your cart is empty!');
       return;
     }
 
@@ -8004,10 +5443,7 @@ const chatbot = {
       await freshCustomer.save();
       
       const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
-        { id: 'view_menu', text: 'View Menu' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '🛒 Your cart is empty!');
       return;
     }
     
@@ -8016,11 +5452,7 @@ const chatbot = {
 
     // Show Review & Order, Add More, Cancel buttons
     const viewCartImg = await chatbotImagesService.getImageUrl('view_cart');
-    await sendWithOptionalImage(phone, viewCartImg, cartMsg, [
-      { id: 'review_pay', text: 'Review & Order' },
-      { id: 'add_more', text: 'Add More' },
-      { id: 'clear_cart', text: 'Cancel' }
-    ]);
+    await whatsapp.sendMessage(phone, cartMsg);
   },
 
   async requestLocation(phone) {
@@ -8058,7 +5490,8 @@ const chatbot = {
         logger.info('Sent payment method flow', { phone, serviceType, flowId: paymentFlowId });
         return true;
       } catch (flowErr) {
-        logger.warn('Payment flow failed, falling back to buttons', { error: flowErr.message });
+        logger.error('Payment flow failed', { error: flowErr.message });
+        await whatsapp.sendMessage(phone, '⚠️ Unable to load payment options. Please try again.');
       }
     }
     return false;
@@ -8070,10 +5503,7 @@ const chatbot = {
     
     if (!freshCustomer?.cart?.length) {
       const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
-        { id: 'view_menu', text: 'View Menu' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '🛒 Your cart is empty!');
       return;
     }
 
@@ -8124,10 +5554,7 @@ const chatbot = {
       await freshCustomer.save();
       
       const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
-        { id: 'view_menu', text: 'View Menu' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '🛒 Your cart is empty!');
       return;
     }
     
@@ -8172,11 +5599,7 @@ const chatbot = {
     cartMsg += `💳 Select payment method:`;
 
     const orderSummaryImageUrl = await chatbotImagesService.getImageUrl('order_summary');
-    await sendWithOptionalImage(phone, orderSummaryImageUrl, cartMsg, [
-      { id: 'pay_upi', text: 'UPI/APP' },
-      { id: 'pay_cod', text: 'COD' },
-      { id: 'clear_cart', text: 'Cancel' }
-    ]);
+    await whatsapp.sendMessage(phone, cartMsg);
   },
 
   async processCODOrder(phone, customer, state) {
@@ -8195,10 +5618,7 @@ const chatbot = {
     
     if (!freshCustomer?.cart?.length) {
       const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
-        { id: 'view_menu', text: 'View Menu' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '🛒 Your cart is empty!');
       return { success: false };
     }
 
@@ -8283,10 +5703,7 @@ const chatbot = {
 
     if (!items.length) {
       const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
-        { id: 'view_menu', text: 'View Menu' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '🛒 Your cart is empty!');
       return { success: false };
     }
 
@@ -8453,19 +5870,8 @@ const chatbot = {
           flowAction: 'data_exchange'
         });
       } catch (flowErr) {
-        logger.warn('Order actions flow failed on COD confirm, falling back to buttons', { error: flowErr.message });
-        await sendWithOptionalImage(phone, confirmedImageUrl, confirmMsg, [
-          { id: 'track_order', text: 'Track Order' },
-          { id: `cancel_${orderId}`, text: 'Cancel Order' },
-          { id: 'home', text: 'Main Menu' }
-        ]);
+        logger.error('Order actions flow failed on COD confirm', { error: flowErr.message });
       }
-    } else {
-      await sendWithOptionalImage(phone, confirmedImageUrl, confirmMsg, [
-        { id: 'track_order', text: 'Track Order' },
-        { id: `cancel_${orderId}`, text: 'Cancel Order' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
     }
 
     // Mark WhatsApp confirmation sent for reconciliation
@@ -8481,10 +5887,7 @@ const chatbot = {
     
     if (!freshCustomer?.cart?.length) {
       const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
-        { id: 'view_menu', text: 'View Menu' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '🛒 Your cart is empty!');
       return;
     }
 
@@ -8540,10 +5943,7 @@ const chatbot = {
       await freshCustomer.save();
       
       const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
-        { id: 'view_menu', text: 'View Menu' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '🛒 Your cart is empty!');
       return;
     }
     
@@ -8552,11 +5952,7 @@ const chatbot = {
     reviewMsg += `Please confirm your order to proceed with payment.`;
 
     const orderSummaryImg = await chatbotImagesService.getImageUrl('order_summary');
-    await sendWithOptionalImage(phone, orderSummaryImg, reviewMsg, [
-      { id: 'confirm_order', text: 'Confirm & Pay' },
-      { id: 'add_more', text: 'Add More' },
-      { id: 'clear_cart', text: 'Cancel' }
-    ]);
+    await whatsapp.sendMessage(phone, reviewMsg);
   },
 
   // Send cart options menu when user types just "cart"
@@ -8564,11 +5960,7 @@ const chatbot = {
     const cartOptionsImageUrl = await chatbotImagesService.getImageUrl('cart_options');
     const message = `🛒 *Cart Options*\n\nWhat would you like to do?`;
     
-    await sendWithOptionalImage(phone, cartOptionsImageUrl, message, [
-      { id: 'view_cart', text: 'My Cart' },
-      { id: 'clear_cart', text: 'Clear Cart' },
-      { id: 'view_menu', text: 'Menu' }
-    ]);
+    await whatsapp.sendMessage(phone, message);
   },
 
   async sendCart(phone, customer) {
@@ -8577,14 +5969,7 @@ const chatbot = {
     
     if (!freshCustomer?.cart?.length) {
       const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-      await sendWithOptionalImage(phone, cartEmptyImg,
-        '🛒 *Your Cart is Empty*\n\nTap the 🛒 cart icon at the top right to view your WhatsApp cart, or browse our menu to add items!',
-        [
-          { id: 'view_menu', text: 'View Menu' },
-          { id: 'order_food', text: 'Order Food' },
-          { id: 'home', text: 'Main Menu' }
-        ]
-      );
+      await whatsapp.sendMessage(phone, '🛒 *Your Cart is Empty*\n\nTap the 🛒 cart icon at the top right to view your WhatsApp cart, or browse our menu to add items!');
       return;
     }
 
@@ -8668,14 +6053,7 @@ const chatbot = {
       await freshCustomer.save();
       
       const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-      await sendWithOptionalImage(phone, cartEmptyImg,
-        '🛒 *Your Cart is Empty*\n\nTap the 🛒 cart icon at the top right to view your WhatsApp cart, or browse our menu to add items!',
-        [
-          { id: 'view_menu', text: 'View Menu' },
-          { id: 'order_food', text: 'Order Food' },
-          { id: 'home', text: 'Main Menu' }
-        ]
-      );
+      await whatsapp.sendMessage(phone, '🛒 *Your Cart is Empty*\n\nTap the 🛒 cart icon at the top right to view your WhatsApp cart, or browse our menu to add items!');
       return;
     }
 
@@ -8760,17 +6138,10 @@ const chatbot = {
         logger.info('Sent cart review flow', { phone, flowId: cartReviewFlowId });
         return;
       } catch (flowErr) {
-        logger.warn('Cart review flow failed, falling back to buttons', { phone, error: flowErr.message });
+        logger.error('Cart review flow failed', { phone, error: flowErr.message });
+        await whatsapp.sendMessage(phone, '⚠️ Unable to load cart review. Please try again.');
       }
     }
-
-    // Fallback: text-based cart with reply buttons (if flow not available)
-    const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
-    await sendWithOptionalImage(phone, viewCartImageUrl, cartMsg, [
-      { id: 'review_pay', text: 'Place Order ' },
-      { id: 'add_more', text: 'Add More' },
-      { id: 'clear_cart', text: 'Clear Cart' }
-    ]);
   },
 
   async processCheckout(phone, customer, state) {
@@ -8789,10 +6160,7 @@ const chatbot = {
     
     if (!freshCustomer?.cart?.length) {
       const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
-        { id: 'view_menu', text: 'View Menu' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '🛒 Your cart is empty!');
       return { success: false };
     }
 
@@ -8879,10 +6247,7 @@ const chatbot = {
 
     if (!items.length) {
       const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
-        { id: 'view_menu', text: 'View Menu' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '🛒 Your cart is empty!');
       return { success: false };
     }
 
@@ -9084,30 +6449,10 @@ const chatbot = {
       }
     }
 
-    // ===== FALLBACK: CTA URL PAYMENT (Razorpay payment page) =====
-    // Send admin push immediately for CTA-based payment
+    // Native payment failed — notify user
     await sendAdminPush();
-
-    try {
-      // Generate payment page URL (UPI app selection page)
-      const frontendUrl = process.env.FRONTEND_URL || process.env.WEBSITE_URL || 'https://restarunt-bot.vercel.app';
-      const paymentPageUrl = `${frontendUrl}/pay/${orderId}`;
-
-      const orderDetailsImageUrl = await chatbotImagesService.getImageUrl('order_details');
-      await whatsapp.sendOrder(phone, order, items, paymentPageUrl, orderDetailsImageUrl);
-      return { success: true };
-    } catch (err) {
-      logger.error('Payment page error', { error: err.message });
-      const paymentFailedImg = await chatbotImagesService.getImageUrl('payment_failed');
-      await sendWithOptionalImage(phone, paymentFailedImg,
-        `✅ *Order Created!*\n\nOrder ID: ${orderId}\nTotal: ₹${total}\n\n⚠️ Payment link unavailable.\nPlease contact us.`,
-        [
-          { id: 'order_status', text: 'Check Status' },
-          { id: 'home', text: 'Main Menu' }
-        ]
-      );
-      return { success: true };
-    }
+    await whatsapp.sendMessage(phone, `⚠️ Unable to process payment. Please try again.`);
+    return { success: false };
   },
 
 
@@ -9117,10 +6462,7 @@ const chatbot = {
     
     if (!orders.length) {
       const noOrdersFoundImageUrl = await chatbotImagesService.getImageUrl('no_orders_found');
-      await sendWithOptionalImage(phone, noOrdersFoundImageUrl,
-        '📋 *No Orders Found*\n\nYou haven\'t placed any orders yet.',
-        [{ id: 'place_order', text: 'Order Now' }, { id: 'home', text: 'Main Menu' }]
-      );
+      await whatsapp.sendMessage(phone, '📋 *No Orders Found*\n\nYou haven\'t placed any orders yet.');
       return;
     }
 
@@ -9156,10 +6498,7 @@ const chatbot = {
     });
 
     const yourOrdersImageUrl = await chatbotImagesService.getImageUrl('your_orders');
-    await sendWithOptionalImage(phone, yourOrdersImageUrl, msg, [
-      { id: 'track_order', text: 'Track Order' },
-      { id: 'home', text: 'Main Menu' }
-    ]);
+    await whatsapp.sendMessage(phone, msg);
   },
 
   async sendTrackingOptions(phone) {
@@ -9170,10 +6509,7 @@ const chatbot = {
 
     if (!orders.length) {
       const noActiveOrdersImageUrl = await chatbotImagesService.getImageUrl('no_active_orders');
-      await sendWithOptionalImage(phone, noActiveOrdersImageUrl,
-        '📍 *No Active Orders*\n\nNo orders to track right now.',
-        [{ id: 'place_order', text: 'Order Now' }, { id: 'home', text: 'Main Menu' }]
-      );
+      await whatsapp.sendMessage(phone, '📍 *No Active Orders*\n\nNo orders to track right now.');
       return;
     }
 
@@ -9207,7 +6543,7 @@ const chatbot = {
     
     if (!order) {
       const noOrdersImg = await chatbotImagesService.getImageUrl('no_orders_found');
-      await sendWithOptionalImage(phone, noOrdersImg, '❌ Order not found.', [{ id: 'home', text: 'Main Menu' }]);
+      await whatsapp.sendMessage(phone, '❌ Order not found.');
       return;
     }
 
@@ -9252,10 +6588,7 @@ const chatbot = {
     const imageKey = isPickup ? 'pickup_tracking' : 'order_tracking';
     const trackingImageUrl = await chatbotImagesService.getImageUrl(imageKey);
     
-    await sendWithOptionalImage(phone, trackingImageUrl, msg, [
-      { id: 'order_status', text: 'All Orders' },
-      { id: 'home', text: 'Main Menu' }
-    ]);
+    await whatsapp.sendMessage(phone, msg);
   },
 
   async sendCancelOptions(phone) {
@@ -9280,10 +6613,7 @@ const chatbot = {
 
     if (cancellableOrders.length === 0) {
       const noOrdersImageUrl = await chatbotImagesService.getImageUrl('no_orders_found');
-      await sendWithOptionalImage(phone, noOrdersImageUrl,
-        '❌ *No Orders to Cancel*\n\nNo cancellable orders found.\n\n_Note: Only Cash on Delivery orders can be cancelled. Pickup orders can only be cancelled before confirmation._',
-        [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
-      );
+      await whatsapp.sendMessage(phone, '❌ *No Orders to Cancel*\n\nNo cancellable orders found.\n\n_Note: Only Cash on Delivery orders can be cancelled. Pickup orders can only be cancelled before confirmation._');
       return;
     }
 
@@ -9314,27 +6644,21 @@ const chatbot = {
     
     if (!order) {
       const noOrdersImg = await chatbotImagesService.getImageUrl('no_orders_found');
-      await sendWithOptionalImage(phone, noOrdersImg, '❌ Order not found.', [{ id: 'home', text: 'Main Menu' }]);
+      await whatsapp.sendMessage(phone, '❌ Order not found.');
       return;
     }
 
     // Cannot cancel delivered or already cancelled orders
     if (['delivered', 'cancelled'].includes(order.status)) {
       const orderCancelledImg = await chatbotImagesService.getImageUrl('order_cancelled');
-      await sendWithOptionalImage(phone, orderCancelledImg,
-        `❌ *Cannot Cancel*\n\nOrder is already ${order.status.replace('_', ' ')}.`,
-        [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
-      );
+      await whatsapp.sendMessage(phone, `❌ *Cannot Cancel*\n\nOrder is already ${order.status.replace('_', ' ')}.`);
       return;
     }
 
     // Pickup orders can only be cancelled if status is 'pending' (before confirmation)
     if (order.serviceType === 'pickup' && order.status !== 'pending') {
       const pickupCancelRestrictedImageUrl = await chatbotImagesService.getImageUrl('pickup_cancel_restricted');
-      await sendWithOptionalImage(phone, pickupCancelRestrictedImageUrl,
-        `❌ *Cannot Cancel Pickup Order*\n\nOrder ${orderId} has already been confirmed and is being prepared.\n\n🏪 Pickup orders can only be cancelled before confirmation.\n\nPlease contact the restaurant if you need assistance.`,
-        [{ id: 'order_status', text: 'View Orders' }, { id: 'home', text: 'Main Menu' }]
-      );
+      await whatsapp.sendMessage(phone, `❌ *Cannot Cancel Pickup Order*\n\nOrder ${orderId} has already been confirmed and is being prepared.\n\n🏪 Pickup orders can only be cancelled before confirmation.\n\nPlease contact the restaurant if you need assistance.`);
       return;
     }
 
@@ -9428,17 +6752,8 @@ const chatbot = {
           flowAction: 'data_exchange'
         });
       } catch (flowErr) {
-        logger.warn('Reorder flow failed on cancel, falling back to buttons', { error: flowErr.message });
-        await sendWithOptionalImage(phone, cancelledImageUrl, msg, [
-          { id: 'place_order', text: 'New Order' },
-          { id: 'home', text: 'Main Menu' }
-        ]);
+        logger.error('Reorder flow failed on cancel', { error: flowErr.message });
       }
-    } else {
-      await sendWithOptionalImage(phone, cancelledImageUrl, msg, [
-        { id: 'place_order', text: 'New Order' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
     }
   },
 
@@ -9489,10 +6804,7 @@ const chatbot = {
     const activeOffers = await Offer.find({ isActive: true }).lean();
 
     if (activeOffers.length === 0) {
-      await sendWithOptionalImage(phone, null, '🏷️ *No Active Offers*\n\nThere are no special offers right now.\n\nCheck back later for exciting deals!', [
-        { id: 'order_food', text: 'Order Food' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '🏷️ *No Active Offers*\n\nThere are no special offers right now.\n\nCheck back later for exciting deals!');
       return;
     }
 
@@ -9511,23 +6823,13 @@ const chatbot = {
 
     offerMessage += `Tap 'Order Food' to start ordering!`;
 
-    await sendWithOptionalImage(phone, null, offerMessage, [
-      { id: 'order_food', text: 'Order Food' },
-      { id: 'home', text: 'Main Menu' }
-    ]);
+    await whatsapp.sendMessage(phone, offerMessage);
   },
 
   // ============ SERVICE TYPE SELECTION ============
   async sendServiceTypeSelection(phone) {
     const checkoutImg = await chatbotImagesService.getImageUrl('checkout');
-    await sendWithOptionalImage(phone, checkoutImg,
-      '🚚 *Choose Service Type*\n\nHow would you like to receive your order?',
-      [
-        { id: 'service_delivery', text: 'Delivery' },
-        { id: 'service_pickup', text: 'Self-Pickup' }
-      ],
-      'Select your preferred option'
-    );
+    await whatsapp.sendMessage(phone, '🚚 *Choose Service Type*\n\nHow would you like to receive your order?');
   },
 
   // ============ PICKUP PAYMENT METHOD ============
@@ -9536,9 +6838,7 @@ const chatbot = {
     const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
     if (!freshCustomer || !freshCustomer.cart?.length) {
       const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-      await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
-        { id: 'view_menu', text: 'View Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '🛒 Your cart is empty!');
       return;
     }
 
@@ -9617,10 +6917,7 @@ const chatbot = {
 
     // Get pickup order summary image
     const pickupOrderSummaryImageUrl = await chatbotImagesService.getImageUrl('pickup_order_summary');
-    await sendWithOptionalImage(phone, pickupOrderSummaryImageUrl, msg, [
-      { id: 'pickup_pay_hotel', text: 'Pay at Hotel' },
-      { id: 'pickup_pay_upi', text: 'UPI/App' }
-    ]);
+    await whatsapp.sendMessage(phone, msg);
   },
 
   // ============ PROCESS PICKUP CHECKOUT ============
@@ -9640,9 +6937,7 @@ const chatbot = {
       const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
       if (!freshCustomer || !freshCustomer.cart?.length) {
         const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
-        await sendWithOptionalImage(phone, cartEmptyImg, '🛒 Your cart is empty!', [
-          { id: 'view_menu', text: 'View Menu' }
-        ]);
+        await whatsapp.sendMessage(phone, '🛒 Your cart is empty!');
         return { success: false };
       }
 
@@ -9851,19 +7146,8 @@ const chatbot = {
             flowAction: 'data_exchange'
           });
         } catch (flowErr) {
-          logger.warn('Order actions flow failed on pickup confirm, falling back to buttons', { error: flowErr.message });
-          await sendWithOptionalImage(phone, pickupOrderRequestedImageUrl, msg, [
-            { id: 'track_order', text: 'Track Order' },
-            { id: `cancel_${orderId}`, text: 'Cancel Order' },
-            { id: 'home', text: 'Main Menu' }
-          ]);
+          logger.error('Order actions flow failed on pickup confirm', { error: flowErr.message });
         }
-      } else {
-        await sendWithOptionalImage(phone, pickupOrderRequestedImageUrl, msg, [
-          { id: 'track_order', text: 'Track Order' },
-          { id: `cancel_${orderId}`, text: 'Cancel Order' },
-          { id: 'home', text: 'Main Menu' }
-        ]);
       }
 
       // Mark WhatsApp confirmation sent for reconciliation
@@ -9913,89 +7197,12 @@ const chatbot = {
     } catch (error) {
       logger.error('Pickup checkout error', { error: error.message });
       const helpImg = await chatbotImagesService.getImageUrl('help_support');
-      await sendWithOptionalImage(phone, helpImg, '❌ Failed to process your order. Please try again.', [
-        { id: 'view_cart', text: 'View Cart' },
-        { id: 'home', text: 'Main Menu' }
-      ]);
+      await whatsapp.sendMessage(phone, '❌ Failed to process your order. Please try again.');
       return { success: false };
     }
   },
 
   // ==================== ACCOUNT DETAILS METHODS ====================
-
-  /**
-   * Send account details to user.
-   * If profile exists → show details with Edit button.
-   * If no profile → send Account Details form flow.
-   */
-  async sendAccountDetails(phone, customer) {
-    if (customer.name) {
-      // Customer has profile — show their details
-      const displayPhone = phone.length > 10 ? phone.slice(-10) : phone;
-      let detailsMsg = `👤 *Your Account Details*\n\n`;
-      detailsMsg += `📛 *Name:* ${customer.name}\n`;
-      detailsMsg += `📱 *Mobile:* ${displayPhone}\n`;
-      if (customer.email) {
-        detailsMsg += `📧 *Email:* ${customer.email}\n`;
-      }
-      detailsMsg += `\n📅 *Member since:* ${customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}\n`;
-      detailsMsg += `🛒 *Total Orders:* ${customer.totalOrders || 0}\n`;
-      detailsMsg += `💰 *Total Spent:* ₹${customer.totalSpent || 0}\n`;
-
-      if (customer.addresses && customer.addresses.length > 0) {
-        const defaultAddr = customer.addresses.find(a => a.isDefault) || customer.addresses[0];
-        detailsMsg += `\n📍 *Saved Address:* ${defaultAddr.address || ''}`;
-        if (defaultAddr.landmark) detailsMsg += `, ${defaultAddr.landmark}`;
-        if (defaultAddr.district) detailsMsg += `, ${defaultAddr.district}`;
-        if (defaultAddr.state) detailsMsg += `, ${defaultAddr.state}`;
-        if (defaultAddr.pincode) detailsMsg += ` - ${defaultAddr.pincode}`;
-        detailsMsg += `\n`;
-      }
-
-      await whatsapp.sendButtons(phone, detailsMsg, [
-        { id: 'edit_account', text: 'Edit Profile' },
-        { id: 'delivery_address', text: 'My Address' },
-        { id: 'home', text: 'Main Menu' }
-      ], 'Perivi Hotel');
-    } else {
-      // No profile — send form flow
-      await this.sendAccountFormFlow(phone, customer);
-    }
-  },
-
-  /**
-   * Send the Account Details form Flow to the user.
-   */
-  async sendAccountFormFlow(phone, customer) {
-    try {
-      const flowId = catalogService.getAccountFlowId();
-      const flowMode = catalogService.getAccountFlowMode();
-
-      if (flowId && flowMode) {
-        const metaCloud = require('./metaCloud');
-        const flowData = catalogService.buildAccountFormData(customer, phone);
-
-        await metaCloud.sendFlowMessage(phone, {
-          flowId,
-          flowCta: 'Fill Details',
-          headerText: 'Account Details',
-          bodyText: 'Please fill in your account details. Your WhatsApp number is auto-filled.',
-          footerText: 'Perivi Hotel',
-          screenName: 'ACCOUNT_FORM',
-          screenData: flowData,
-          flowToken: `account_form_${phone}`,
-          mode: flowMode
-        });
-        logger.info('Sent Account Details Flow', { phone, flowId });
-        return;
-      }
-    } catch (flowErr) {
-      logger.warn('Account Flow not available, fallback to text', { error: flowErr.message });
-    }
-
-    // Fallback: ask via text messages
-    await whatsapp.sendMessage(phone, '📝 *Account Setup*\n\nPlease send your *full name* to create your account.');
-  },
 
   /**
    * Handle the Account Details form response from the Flow.
@@ -10020,244 +7227,10 @@ const chatbot = {
     }
     confirmMsg += `\nYour profile has been updated. You can view or edit it anytime from the welcome menu.`;
 
-    await whatsapp.sendButtons(phone, confirmMsg, [
-      { id: 'order_food', text: 'Order Food' },
-      { id: 'home', text: 'Main Menu' }
-    ], 'Perivi Hotel');
-  },
+    await whatsapp.sendMessage(phone, confirmMsg);
 
-  // ==================== DELIVERY ADDRESS METHODS ====================
-
-  /**
-   * Show delivery address options: Enter manually or Share location.
-   * If user already has a saved address, show it with edit option.
-   */
-  async sendDeliveryAddressOptions(phone, customer) {
-    const savedAddr = customer.addresses?.find(a => a.isDefault) || customer.addresses?.[0];
-
-    if (savedAddr && savedAddr.address) {
-      // Show existing address with options
-      let addrMsg = `📍 *Your Delivery Address*\n\n`;
-      addrMsg += `🏠 ${savedAddr.address}`;
-      if (savedAddr.landmark) addrMsg += `\n📌 *Landmark:* ${savedAddr.landmark}`;
-      if (savedAddr.district) addrMsg += `\n🏙️ *District:* ${savedAddr.district}`;
-      if (savedAddr.state) addrMsg += `\n🗺️ *State:* ${savedAddr.state}`;
-      if (savedAddr.pincode) addrMsg += `\n📮 *Pincode:* ${savedAddr.pincode}`;
-      addrMsg += `\n\nWould you like to update your address?`;
-
-      await whatsapp.sendButtons(phone, addrMsg, [
-        { id: 'enter_address_manual', text: 'Edit Address' },
-        { id: 'share_location_address', text: 'Share Location' },
-        { id: 'home', text: 'Main Menu' }
-      ], 'Perivi Hotel');
-    } else {
-      // No saved address — show options
-      await whatsapp.sendButtons(phone,
-        '📍 *Set Delivery Address*\n\nChoose how you\'d like to add your delivery address:',
-        [
-          { id: 'enter_address_manual', text: 'Enter Manually' },
-          { id: 'share_location_address', text: 'Share Location' },
-          { id: 'home', text: 'Main Menu' }
-        ], 'Perivi Hotel');
-    }
-  },
-
-  /**
-   * Send the Delivery Address form Flow to the user.
-   */
-  async sendAddressFormFlow(phone, customer) {
-    try {
-      const flowId = catalogService.getAddressFlowId();
-      const flowMode = catalogService.getAddressFlowMode();
-
-      if (flowId && flowMode) {
-        const metaCloud = require('./metaCloud');
-        const flowData = catalogService.buildAddressFormData(customer, phone);
-
-        await metaCloud.sendFlowMessage(phone, {
-          flowId,
-          flowCta: 'Fill Address',
-          headerText: 'Delivery Address',
-          bodyText: 'Enter your delivery address details. If you know your pincode, state and district will be auto-detected.',
-          footerText: 'Perivi Hotel',
-          screenName: 'ADDRESS_FORM',
-          screenData: flowData,
-          flowToken: `address_form_${phone}`,
-          mode: flowMode
-        });
-        logger.info('Sent Delivery Address Flow', { phone, flowId });
-        return;
-      }
-    } catch (flowErr) {
-      logger.warn('Address Flow not available, fallback to text', { error: flowErr.message });
-    }
-
-    // Fallback: ask via text
-    await whatsapp.sendMessage(phone, '📍 *Delivery Address*\n\nPlease send your full delivery address (including landmark, city, state, and pincode).');
-  },
-
-  /**
-   * Handle the Address form response from the Flow.
-   * Uses pincode API to validate/enrich state and district.
-   */
-  async handleAddressFormResponse(phone, customer, flowData) {
-    const { address_line, landmark, pincode, selected_state, district } = flowData;
-    const { getStateName } = require('../config/indianStates');
-    const pincodeService = require('./pincodeService');
-
-    // Resolve state name from dropdown ID
-    let stateName = getStateName(selected_state) || selected_state || '';
-    let districtName = district || '';
-
-    // If pincode is provided, try to auto-detect/validate state & district
-    if (pincode && /^\d{6}$/.test(pincode.trim())) {
-      try {
-        const pincodeResult = await pincodeService.lookupPincode(pincode.trim());
-        if (pincodeResult.success) {
-          // If user left state/district empty or we can enrich from pincode
-          if (pincodeResult.state) stateName = pincodeResult.state;
-          if (pincodeResult.district) districtName = pincodeResult.district;
-          logger.info('Address enriched from pincode', { pincode, state: stateName, district: districtName });
-        }
-      } catch (pinErr) {
-        logger.warn('Pincode lookup failed, using user-provided values', { error: pinErr.message });
-      }
-    }
-
-    // Build address entry
-    const newAddress = {
-      label: 'Home',
-      address: address_line?.trim() || '',
-      landmark: landmark?.trim() || '',
-      state: stateName,
-      district: districtName,
-      pincode: pincode?.trim() || '',
-      isDefault: true
-    };
-
-    // Replace default address or add new one
-    if (!customer.addresses) customer.addresses = [];
-
-    const existingDefaultIdx = customer.addresses.findIndex(a => a.isDefault);
-    if (existingDefaultIdx >= 0) {
-      customer.addresses[existingDefaultIdx] = newAddress;
-    } else {
-      // Mark all existing as non-default
-      customer.addresses.forEach(a => { a.isDefault = false; });
-      customer.addresses.push(newAddress);
-    }
-
-    await customer.save();
-
-    logger.info('Address saved from Flow', { phone, address: newAddress.address, state: stateName, district: districtName });
-
-    // Confirm
-    let confirmMsg = `✅ *Address Saved!*\n\n`;
-    confirmMsg += `🏠 ${newAddress.address}\n`;
-    if (newAddress.landmark) confirmMsg += `📌 *Landmark:* ${newAddress.landmark}\n`;
-    if (newAddress.district) confirmMsg += `🏙️ *District:* ${newAddress.district}\n`;
-    if (newAddress.state) confirmMsg += `🗺️ *State:* ${newAddress.state}\n`;
-    if (newAddress.pincode) confirmMsg += `📮 *Pincode:* ${newAddress.pincode}\n`;
-    confirmMsg += `\nYour delivery address has been updated.`;
-
-    await whatsapp.sendButtons(phone, confirmMsg, [
-      { id: 'order_food', text: 'Order Food' },
-      { id: 'home', text: 'Main Menu' }
-    ], 'Perivi Hotel');
-  },
-
-  /**
-   * Handle location shared for address saving (not during order).
-   * Reverse geocodes coordinate and saves as delivery address.
-   */
-  async handleLocationForAddress(phone, customer, locationData, state) {
-    const pincodeService = require('./pincodeService');
-
-    // Get formatted address from location
-    let formattedAddress = '';
-    if (locationData.address && locationData.address.trim() && locationData.address !== 'undefined') {
-      formattedAddress = locationData.address.trim();
-      if (locationData.name && locationData.name.trim() && locationData.name !== locationData.address) {
-        formattedAddress = `${locationData.name.trim()}, ${formattedAddress}`;
-      }
-    }
-
-    // Reverse geocode if no address provided
-    if (!formattedAddress && locationData.latitude && locationData.longitude) {
-      const geocoded = await this.reverseGeocode(locationData.latitude, locationData.longitude);
-      if (geocoded) formattedAddress = geocoded;
-    }
-
-    if (!formattedAddress) {
-      formattedAddress = `Location: ${locationData.latitude?.toFixed(6)}, ${locationData.longitude?.toFixed(6)}`;
-    }
-
-    // Try to extract pincode and get state/district from reverse-geocoded address
-    let extractedState = '';
-    let extractedDistrict = '';
-    let extractedPincode = '';
-
-    // Try pincode from formatted address
-    const pincodeMatch = formattedAddress.match(/\b(\d{6})\b/);
-    if (pincodeMatch) {
-      extractedPincode = pincodeMatch[1];
-      try {
-        const pincodeResult = await pincodeService.lookupPincode(extractedPincode);
-        if (pincodeResult.success) {
-          extractedState = pincodeResult.state || '';
-          extractedDistrict = pincodeResult.district || '';
-        }
-      } catch (e) { /* ignore */ }
-    }
-
-    // Build and save address
-    const newAddress = {
-      label: 'Home',
-      address: formattedAddress,
-      landmark: '',
-      state: extractedState,
-      district: extractedDistrict,
-      pincode: extractedPincode,
-      latitude: locationData.latitude,
-      longitude: locationData.longitude,
-      isDefault: true
-    };
-
-    if (!customer.addresses) customer.addresses = [];
-    const existingDefaultIdx = customer.addresses.findIndex(a => a.isDefault);
-    if (existingDefaultIdx >= 0) {
-      customer.addresses[existingDefaultIdx] = newAddress;
-    } else {
-      customer.addresses.forEach(a => { a.isDefault = false; });
-      customer.addresses.push(newAddress);
-    }
-
-    // Also update deliveryAddress for order flow compatibility
-    customer.deliveryAddress = {
-      latitude: locationData.latitude,
-      longitude: locationData.longitude,
-      address: formattedAddress,
-      updatedAt: new Date()
-    };
-
-    await customer.save();
-
-    logger.info('Address saved from location', { phone, address: formattedAddress, state: extractedState, district: extractedDistrict });
-
-    let confirmMsg = `✅ *Address Saved from Location!*\n\n`;
-    confirmMsg += `🏠 ${formattedAddress}\n`;
-    if (extractedDistrict) confirmMsg += `🏙️ *District:* ${extractedDistrict}\n`;
-    if (extractedState) confirmMsg += `🗺️ *State:* ${extractedState}\n`;
-    if (extractedPincode) confirmMsg += `📮 *Pincode:* ${extractedPincode}\n`;
-    confirmMsg += `\nYour delivery address has been updated.`;
-
-    await whatsapp.sendButtons(phone, confirmMsg, [
-      { id: 'order_food', text: 'Order Food' },
-      { id: 'delivery_address', text: 'View Address' },
-      { id: 'home', text: 'Main Menu' }
-    ], 'Perivi Hotel');
-
-    state.currentStep = 'main_menu';
+    // Send welcome flow so user can browse menu
+    await this.sendWelcome(phone);
   }
 };
 
