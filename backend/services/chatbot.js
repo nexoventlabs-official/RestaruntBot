@@ -4147,18 +4147,49 @@ const chatbot = {
         state.currentStep = 'main_menu';
       }
 
-      // ========== FALLBACK ==========
+      // ========== FALLBACK: SMART SEARCH ==========
       else {
         // Welcome for new/unknown state
         if (state.currentStep === 'welcome' || !state.currentStep) {
           await this.sendWelcome(phone);
           state.currentStep = 'main_menu';
+        } else if (!selectedId && msg && msg.length >= 2) {
+          // Try smart search — match user text against item names, tags, variant labels
+          const searchResult = await this.smartSearch(msg, menuItems);
+
+          if (searchResult && searchResult.items && searchResult.items.length > 0) {
+            const items = searchResult.items;
+            const matchedVariants = searchResult.matchedVariants || {};
+            const searchLabel = searchResult.label
+              ? (searchResult.searchTerm ? `${searchResult.label} "${searchResult.searchTerm}"` : searchResult.label)
+              : `"${msg}"`;
+
+            logger.info('Smart search found items', { query: msg, count: items.length });
+
+            // Cache search result IDs for pagination
+            state.tagSearchResults = items.map(i => i._id.toString());
+            state.searchTag = msg;
+
+            if (items.length <= 5) {
+              // Small result set — show as catalog cards
+              await this.sendSearchResultCards(phone, items, searchLabel, matchedVariants);
+            } else {
+              // Larger result set — show as catalog list
+              await this.sendItemsByTag(phone, items, searchLabel, 0, matchedVariants);
+            }
+            state.currentStep = 'viewing_tag_results';
+          } else {
+            // No items found — send message + welcome flow
+            logger.info('Smart search no results', { query: msg });
+            await whatsapp.sendMessage(phone, `🔍 No items found for "${msg}".`);
+            await this.sendWelcome(phone);
+            state.currentStep = 'main_menu';
+          }
         } else {
           // Default fallback
-          const fallbackImg = await chatbotImagesService.getImageUrl(options.isVoiceMessage ? 'voice_error' : 'help_support');
           await whatsapp.sendMessage(phone, options.isVoiceMessage
-              ? `🎤 Sorry, I couldn't understand your voice message.\n\nPlease try again or select an option:`
-              : `🤔 I didn't understand that.\n\nPlease select an option:`);
+              ? `🎤 Sorry, I couldn't understand your voice message.\n\nPlease try again or send *Hi* to start.`
+              : `🤔 I didn't understand that.\n\nSend *Hi* to see our services.`);
         }
       }
     } catch (error) {
@@ -4559,8 +4590,8 @@ const chatbot = {
   // Send items matching a tag keyword (for tag-based search)
   async sendItemsByTag(phone, items, tagKeyword, page = 0, matchedVariants = null) {
     if (!items.length) {
-      const itemNotAvailableImg = await chatbotImagesService.getImageUrl('item_not_available');
       await whatsapp.sendMessage(phone, `🔍 No items found for "${tagKeyword}".`);
+      await this.sendWelcome(phone);
       return;
     }
 
