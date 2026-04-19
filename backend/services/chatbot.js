@@ -6099,79 +6099,29 @@ const chatbot = {
     
     cartMsg += `*Total: ₹${total}*`;
 
-    // Try showing cart items as WhatsApp Catalog product_list (native cart with images/prices/Place Order)
-    if (catalogService.isEnabled()) {
-      const validCartItems = freshCustomer.cart.filter(item => item.menuItem);
+    // Send cart summary as image + body + reply buttons (Delivery / Self-Pickup)
+    // (Replaces previous WhatsApp catalog product_list + Cart Review Flow combo)
+    const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
+    const serviceButtons = [
+      { id: 'service_delivery', text: 'Delivery' },
+      { id: 'service_pickup', text: 'Self-Pickup' }
+    ];
 
-      // Build discount info for body text
-      let bodyText = `${validItems} items • Total: ₹${total}`;
-      if (totalDiscount > 0) {
-        bodyText += ` (Save ₹${totalDiscount})`;
+    // WhatsApp interactive body text limit is 1024 chars — truncate gracefully if needed
+    const bodyText = cartMsg.length > 1000 ? cartMsg.substring(0, 997) + '...' : cartMsg;
+
+    try {
+      if (viewCartImageUrl) {
+        await whatsapp.sendImageWithButtons(phone, viewCartImageUrl, bodyText, serviceButtons, 'Perivi Hotel');
+      } else {
+        await whatsapp.sendButtons(phone, bodyText, serviceButtons, 'Perivi Hotel');
       }
-      bodyText += '\nTap "View items" to modify quantities';
-
-      const catalogId = catalogService.getCatalogId();
-      let cartSections = await catalogService.buildCartSections(validCartItems);
-
-      if (cartSections && cartSections.sections.length > 0) {
-        try {
-          await whatsapp.sendProductList(
-            phone, catalogId, '🛒 Your Cart', bodyText,
-            cartSections.sections, 'Perivi Hotel'
-          );
-        } catch (sendErr) {
-          // On Meta #131009 (invalid parameter), force re-sync items to Meta and retry once
-          const errCode = sendErr.response?.data?.error?.code;
-          if (errCode === 131009) {
-            logger.info('Product list #131009 — forcing re-sync and retry', { phone });
-            for (const item of validCartItems) {
-              if (item.menuItem) {
-                await catalogService.syncProductToMeta(item.menuItem);
-              }
-            }
-            catalogService.clearCache();
-            cartSections = await catalogService.buildCartSections(validCartItems);
-            if (cartSections && cartSections.sections.length > 0) {
-              try {
-                await whatsapp.sendProductList(
-                  phone, catalogId, '🛒 Your Cart', bodyText,
-                  cartSections.sections, 'Perivi Hotel'
-                );
-              } catch (retryErr) {
-                logger.error('Product list retry also failed', { phone, error: retryErr.message });
-              }
-            }
-          } else {
-            logger.error('sendProductList non-131009 error', { phone, code: errCode, error: sendErr.message });
-          }
-        }
-      }
-    }
-
-    // Send Cart Review Flow (dynamic cart items with images + Place Order / Add More / Clear Cart)
-    const cartReviewFlowId = catalogService.getCartReviewFlowId();
-    if (cartReviewFlowId) {
-      try {
-        const metaCloud = require('./metaCloud');
-        const flowToken = `cart_review_${phone}`;
-        const viewCartImageUrl = await chatbotImagesService.getImageUrl('view_cart');
-        await metaCloud.sendFlowMessage(phone, {
-          flowId: cartReviewFlowId,
-          flowCta: 'View Cart',
-          headerImageUrl: viewCartImageUrl || undefined,
-          headerText: 'Your Cart',
-          bodyText: cartMsg,
-          footerText: 'Perivi Hotel',
-          flowToken,
-          flowAction: 'data_exchange',
-          mode: catalogService.getCartReviewFlowMode() || 'draft'
-        });
-        logger.info('Sent cart review flow', { phone, flowId: cartReviewFlowId });
-        return;
-      } catch (flowErr) {
-        logger.error('Cart review flow failed', { phone, error: flowErr.message });
-        await whatsapp.sendMessage(phone, '⚠️ Unable to load cart review. Please try again.');
-      }
+      logger.info('Sent cart summary with delivery/pickup buttons', { phone, items: validItems, total });
+    } catch (err) {
+      logger.error('Cart summary buttons failed', { phone, error: err.message });
+      // Fallback: send plain text + simple buttons
+      await whatsapp.sendMessage(phone, cartMsg);
+      await whatsapp.sendButtons(phone, '🛍️ How would you like to receive your order?', serviceButtons);
     }
   },
 
