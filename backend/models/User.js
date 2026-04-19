@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  role: { type: String, enum: ['admin', 'staff'], default: 'admin' },
+  role: { type: String, enum: ['superadmin', 'admin', 'staff'], default: 'admin' },
   // Push notification token for Expo
   pushToken: { type: String, default: null },
   createdAt: { type: Date, default: Date.now }

@@ -52,29 +52,30 @@ router.post('/login',
   try {
     const { username, password } = req.body;
     
-    // Check env credentials first
+    // Check env credentials first → SUPERADMIN role
     if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
-      // Find or create admin user in database for push token storage
-      let adminUser = await User.findOne({ username });
-      if (!adminUser) {
-        // Create admin user in database (password won't be used since we check env first)
-        adminUser = new User({ 
-          username, 
+      // Find or create superadmin user in database for push token storage
+      let superAdminUser = await User.findOne({ username });
+      if (!superAdminUser) {
+        superAdminUser = new User({
+          username,
           password: crypto.randomBytes(32).toString('hex'),
-          role: 'admin' 
+          role: 'superadmin'
         });
-        await adminUser.save();
-        logger.info('📱 Created admin user in database for push notifications');
+        await superAdminUser.save();
+        logger.info('📱 Created superadmin user in database');
+      } else if (superAdminUser.role !== 'superadmin') {
+        // Upgrade existing record to superadmin (migration from older accounts)
+        superAdminUser.role = 'superadmin';
+        await superAdminUser.save();
       }
-      
-      // Issue short-lived access token + refresh token pair
-      const tokens = generateTokenPair(adminUser._id.toString(), 'admin');
-      // Also issue a legacy-compatible 'token' field (short-lived access token)
+
+      const tokens = generateTokenPair(superAdminUser._id.toString(), 'superadmin');
       return res.json({
         token: tokens.accessToken,
         refreshToken: tokens.refreshToken,
         expiresIn: tokens.accessTokenExpiresIn,
-        user: { username, role: 'admin' }
+        user: { username, role: 'superadmin' }
       });
     }
 
@@ -108,6 +109,57 @@ router.get('/verify', (req, res) => {
     res.status(401).json({ error: 'Invalid token' });
   }
 });
+
+// Change own password (authenticated admins only; superadmin credentials are env-based)
+router.patch('/change-password',
+  authRateLimiter,
+  body('currentPassword').trim().notEmpty().withMessage('Current password is required').isLength({ max: 128 }),
+  body('newPassword').trim().notEmpty().withMessage('New password is required').isLength({ min: 6, max: 128 }).withMessage('New password must be at least 6 characters'),
+  handleValidation,
+  async (req, res) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ error: 'Authentication required' });
+
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+      // Block superadmin — their credentials live in .env and can't be changed via API
+      if (decoded.role === 'superadmin') {
+        return res.status(403).json({
+          error: 'Super admin password is managed via environment variables and cannot be changed here'
+        });
+      }
+
+      const { currentPassword, newPassword } = req.body;
+
+      if (currentPassword === newPassword) {
+        return res.status(400).json({ error: 'New password must be different from current password' });
+      }
+
+      const user = await User.findById(decoded.id);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const isValid = await user.comparePassword(currentPassword);
+      if (!isValid) {
+        return res.status(401).json({ error: 'Current password is incorrect' });
+      }
+
+      user.password = newPassword; // will be hashed by pre-save hook
+      await user.save();
+
+      logger.info('Admin changed their own password', { userId: user._id, username: user.username });
+
+      res.json({ message: 'Password changed successfully' });
+    } catch (error) {
+      if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+        return res.status(401).json({ error: 'Invalid or expired token' });
+      }
+      return logRouteError(res, 'Failed to change password', error);
+    }
+  }
+);
 
 // Refresh access token using refresh token
 router.post('/refresh',

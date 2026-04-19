@@ -19,6 +19,7 @@ import OfferFormScreen from '../screens/admin/OfferFormScreen';
 import ReportDetailScreen from '../screens/admin/ReportDetailScreen';
 import NotificationsScreen from '../screens/admin/NotificationsScreen';
 import OrderHistoryScreen from '../screens/admin/OrderHistoryScreen';
+import ChangePasswordScreen from '../screens/admin/ChangePasswordScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -42,6 +43,7 @@ function HomeStack() {
       <Stack.Screen name="HomeMain" component={AdminHomeScreen} />
       <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
     </Stack.Navigator>
   );
 }
@@ -115,7 +117,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
   }
   
   // Hide tab bar on these screens
-  const hideOnScreens = ['ReportDetail', 'OrderDetail', 'OfferForm', 'DeliveryForm', 'Notifications'];
+  const hideOnScreens = ['ReportDetail', 'OrderDetail', 'OfferForm', 'DeliveryForm', 'Notifications', 'ChangePassword'];
   if (hideOnScreens.includes(focusedRouteName)) {
     return null;
   }

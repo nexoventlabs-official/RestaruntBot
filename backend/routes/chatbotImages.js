@@ -63,8 +63,28 @@ router.get('/', auth, async (req, res) => {
       }
       images = await ChatbotImage.find().sort('name');
     } else {
-      // Check for missing images and add them
       const existingKeys = images.map(img => img.key);
+      const validKeys = defaultImages.map(img => img.key);
+      
+      // Remove stale images no longer in defaults
+      const staleKeys = existingKeys.filter(k => !validKeys.includes(k));
+      if (staleKeys.length > 0) {
+        logger.info('[Chatbot Images] Removing stale images...', { keys: staleKeys });
+        for (const key of staleKeys) {
+          try {
+            const stale = await ChatbotImage.findOne({ key });
+            if (stale?.cloudinaryPublicId) {
+              await cloudinaryService.deleteImage(stale.cloudinaryPublicId).catch(() => {});
+            }
+            await ChatbotImage.deleteOne({ key });
+            logger.info('[Chatbot Images] Removed stale image', { key });
+          } catch (delErr) {
+            logger.error('[Chatbot Images] Error removing stale image', delErr.message);
+          }
+        }
+      }
+      
+      // Check for missing images and add them
       const missingImages = defaultImages.filter(img => !existingKeys.includes(img.key));
       
       if (missingImages.length > 0) {
@@ -78,6 +98,9 @@ router.get('/', auth, async (req, res) => {
             // Continue with other images even if one fails
           }
         }
+      }
+      
+      if (staleKeys.length > 0 || missingImages.length > 0) {
         images = await ChatbotImage.find().sort('name');
       }
     }

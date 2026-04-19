@@ -230,7 +230,7 @@ function AppNavigator({ navigationRef }) {
           <Stack.Screen name="AdminLogin" component={AdminLoginScreen} />
           <Stack.Screen name="DeliveryLogin" component={DeliveryLoginScreen} />
         </>
-      ) : role === 'admin' ? (
+      ) : (role === 'admin' || role === 'superadmin') ? (
         <Stack.Screen name="AdminMain" component={AdminTabs} />
       ) : (
         <Stack.Screen name="DeliveryMain" component={DeliveryTabs} />

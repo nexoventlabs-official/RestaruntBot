@@ -27,7 +27,7 @@ const IMAGES = {
 };
 
 export default function AdminHomeScreen({ navigation }) {
-  const { user, logout } = useAuth();
+  const { user, role, logout } = useAuth();
   const { unreadCount, checkForUpdates } = useNotifications();
   const [stats, setStats] = useState(null);
   const [reportData, setReportData] = useState(null);
@@ -269,6 +269,14 @@ export default function AdminHomeScreen({ navigation }) {
                     </View>
                   )}
                 </TouchableOpacity>
+                {role !== 'superadmin' && (
+                  <TouchableOpacity
+                    style={styles.headerButton}
+                    onPress={() => navigation.navigate('ChangePassword')}
+                  >
+                    <Ionicons name="key-outline" size={22} color="#fff" />
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity style={styles.headerButton} onPress={logout}>
                   <Ionicons name="log-out-outline" size={22} color="#fff" />
                 </TouchableOpacity>

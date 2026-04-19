@@ -16,7 +16,10 @@ api.interceptors.response.use(
   err => {
     if (err.response?.status === 401) {
       localStorage.removeItem('token');
-      window.location.href = '/admin/login';
+      // Redirect to the appropriate login page based on current URL
+      const path = window.location.pathname;
+      const loginPath = path.startsWith('/admin') ? '/admin/login' : '/super-admin/login';
+      window.location.href = loginPath;
     }
     return Promise.reject(err);
   }

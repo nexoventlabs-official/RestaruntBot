@@ -15,6 +15,7 @@ const logger = require('./services/logger');
 const { swaggerUi, swaggerSpec } = require('./swagger');
 
 const authRoutes = require('./routes/auth');
+const adminsRoutes = require('./routes/admins');
 const menuRoutes = require('./routes/menu');
 const orderRoutes = require('./routes/order');
 const webhookRoutes = require('./routes/webhook');
@@ -281,6 +282,7 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 app.use('/api/auth', authRoutes);
+app.use('/api/admins', adminsRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/webhook', webhookRoutes);

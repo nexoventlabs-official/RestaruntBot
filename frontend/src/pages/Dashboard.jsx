@@ -1,5 +1,6 @@
 /* eslint-disable no-alert, react/prop-types */
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   IndianRupee, TrendingUp, TrendingDown, ShoppingBag, Clock, Users, UtensilsCrossed,
   Bell, Truck, ChefHat, Package, RefreshCw, Sun, ArrowRight, CheckCircle, XCircle,
@@ -56,6 +57,10 @@ function StorageBar({ used, limit, label, icon: Icon, percentage }) {
 }
 
 export default function Dashboard() {
+  /* ═══ role-aware base path (works for /super-admin and /admin) ═══ */
+  const location = useLocation();
+  const basePath = location.pathname.startsWith('/super-admin') ? '/super-admin' : '/admin';
+
   /* ═══ state ═══ */
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
@@ -316,7 +321,7 @@ export default function Dashboard() {
             <div className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center"><BarChart3 className="w-4 h-4 text-red-500" /></div>
             <h2 className="text-lg font-bold text-dark-900">Live Status</h2>
           </div>
-          <a href="/admin/orders" className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700">
+          <a href={`${basePath}/orders`} className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700">
             View All <ArrowRight className="w-3 h-3" />
           </a>
         </div>
@@ -326,7 +331,7 @@ export default function Dashboard() {
             { label: 'Preparing', value: stats?.preparingOrders || 0, gradient: 'from-violet-500 to-violet-700', icon: ChefHat },
             { label: 'Delivery', value: stats?.deliveryOrders || 0, gradient: 'from-blue-500 to-blue-700', icon: Truck },
           ].map(c => (
-            <a key={c.label} href="/admin/orders"
+            <a key={c.label} href={`${basePath}/orders`}
               className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${c.gradient} p-4 text-white shadow-lg hover:scale-[1.02] transition-transform`}>
               <div className="absolute -bottom-2 -right-2 pointer-events-none"><c.icon className="w-14 h-14 text-white/[0.12]" /></div>
               <div className="relative">
@@ -348,7 +353,7 @@ export default function Dashboard() {
             <div className="w-7 h-7 rounded-lg bg-violet-50 flex items-center justify-center"><UtensilsCrossed className="w-4 h-4 text-violet-500" /></div>
             <h2 className="text-lg font-bold text-dark-900">Menu Stats</h2>
           </div>
-          <a href="/admin/menu" className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700">
+          <a href={`${basePath}/menu`} className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700">
             View Menu <ArrowRight className="w-3 h-3" />
           </a>
         </div>
@@ -399,7 +404,7 @@ export default function Dashboard() {
               <div className="w-7 h-7 rounded-lg bg-green-50 flex items-center justify-center"><BarChart3 className="w-4 h-4 text-green-500" /></div>
               <h2 className="text-lg font-bold text-dark-900">Today&apos;s Report</h2>
             </div>
-            <a href="/admin/reports" className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700">
+            <a href={`${basePath}/reports`} className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700">
               Details <ArrowRight className="w-3 h-3" />
             </a>
           </div>
@@ -500,7 +505,7 @@ export default function Dashboard() {
             <h2 className="text-lg font-bold text-dark-900">Recent Orders</h2>
             <p className="text-dark-400 text-sm">Latest order activity</p>
           </div>
-          <a href="/admin/orders" className="text-primary-600 text-sm font-medium hover:text-primary-700 flex items-center gap-1">
+          <a href={`${basePath}/orders`} className="text-primary-600 text-sm font-medium hover:text-primary-700 flex items-center gap-1">
             View All <ArrowRight className="w-4 h-4" />
           </a>
         </div>

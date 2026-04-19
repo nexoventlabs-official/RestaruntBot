@@ -35,9 +35,6 @@ const chatbotImageSchema = new mongoose.Schema({
       'pickup_confirmed',
       'pickup_order_requested',
       'pickup_ready',
-      'pickup_completed',
-      'pickup_tracking',
-      'pickup_cancelled',
       'pickup_cancel_restricted',
       'pickup_order_summary',
       'pickup_cancelled_by_restaurant',
@@ -68,7 +65,6 @@ const chatbotImageSchema = new mongoose.Schema({
       'flow_delivery_option',
       'flow_pickup_option',
       'flow_account_details',
-      'flow_delivery_address',
       'flow_status_pending',
       'flow_status_confirmed',
       'flow_status_preparing',
@@ -91,7 +87,13 @@ const chatbotImageSchema = new mongoose.Schema({
       'flow_action_track',
       'flow_action_cancel',
       'flow_action_order_food',
-      'flow_action_main_menu'
+      'flow_action_main_menu',
+      'cart_options',
+      'flow_food_egg',
+      'flow_food_nonveg',
+      'flow_food_veg',
+      'offer_applied',
+      'payment_confirmed'
     ]
   },
   name: {

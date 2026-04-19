@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { 
   Settings as SettingsIcon, 
   MapPin, 
@@ -11,15 +12,35 @@ import {
   CheckCircle,
   Info,
   Sun,
-  Moon
+  Moon,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Lock
 } from 'lucide-react';
 import api from '../api';
 
 export default function Settings() {
+  const location = useLocation();
+  // Change-password UI is only meaningful for DB-backed admin users.
+  // Super admin credentials come from .env and cannot be changed here.
+  const isAdmin = !location.pathname.startsWith('/super-admin');
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+
+  // Change password state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [pwError, setPwError] = useState(null);
+  const [pwSuccess, setPwSuccess] = useState(null);
   
   // Settings state
   const [settings, setSettings] = useState({
@@ -191,6 +212,44 @@ export default function Settings() {
     }
   };
 
+  // Change password
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPwError(null);
+    setPwSuccess(null);
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPwError('All password fields are required');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPwError('New password must be at least 6 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError('New password and confirm password do not match');
+      return;
+    }
+    if (currentPassword === newPassword) {
+      setPwError('New password must be different from current password');
+      return;
+    }
+
+    try {
+      setChangingPassword(true);
+      await api.patch('/auth/change-password', { currentPassword, newPassword });
+      setPwSuccess('Password changed successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setPwSuccess(null), 4000);
+    } catch (err) {
+      setPwError(err.response?.data?.error || 'Failed to change password');
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -234,6 +293,124 @@ export default function Settings() {
         <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl text-green-700">
           <CheckCircle className="w-5 h-5 flex-shrink-0" />
           <p>{success}</p>
+        </div>
+      )}
+
+      {/* Change Password (admins only — superadmin password is env-based) */}
+      {isAdmin && (
+        <div className="bg-white rounded-2xl shadow-card p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+              <KeyRound className="w-6 h-6 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-dark-900">Change Password</h2>
+              <p className="text-dark-500 text-sm">Update your admin account password</p>
+            </div>
+          </div>
+
+          {pwError && (
+            <div className="mb-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <p>{pwError}</p>
+            </div>
+          )}
+          {pwSuccess && (
+            <div className="mb-4 flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm">
+              <CheckCircle className="w-4 h-4 flex-shrink-0" />
+              <p>{pwSuccess}</p>
+            </div>
+          )}
+
+          <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
+            {/* Current Password */}
+            <div>
+              <label className="block text-sm font-medium text-dark-700 mb-2">Current Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
+                <input
+                  type={showCurrent ? 'text' : 'password'}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="w-full pl-10 pr-12 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all outline-none"
+                  disabled={changingPassword}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrent(!showCurrent)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-400 hover:text-dark-600"
+                  tabIndex={-1}
+                >
+                  {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* New Password */}
+            <div>
+              <label className="block text-sm font-medium text-dark-700 mb-2">New Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
+                <input
+                  type={showNew ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="At least 6 characters"
+                  className="w-full pl-10 pr-12 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all outline-none"
+                  disabled={changingPassword}
+                  minLength={6}
+                  maxLength={128}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNew(!showNew)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-400 hover:text-dark-600"
+                  tabIndex={-1}
+                >
+                  {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Confirm Password */}
+            <div>
+              <label className="block text-sm font-medium text-dark-700 mb-2">Confirm New Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
+                <input
+                  type={showConfirm ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                  className="w-full pl-10 pr-12 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:border-primary-500 focus:bg-white transition-all outline-none"
+                  disabled={changingPassword}
+                  minLength={6}
+                  maxLength={128}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirm(!showConfirm)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-400 hover:text-dark-600"
+                  tabIndex={-1}
+                >
+                  {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={changingPassword}
+              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50"
+            >
+              {changingPassword ? <RefreshCw className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+              {changingPassword ? 'Updating...' : 'Update Password'}
+            </button>
+          </form>
         </div>
       )}
 

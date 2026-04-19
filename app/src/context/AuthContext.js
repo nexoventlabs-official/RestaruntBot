@@ -8,6 +8,9 @@ const AuthContext = createContext({});
 
 export const useAuth = () => useContext(AuthContext);
 
+// Helper: treat admin and superadmin the same for navigation/endpoints
+const isAdminRole = (r) => r === 'admin' || r === 'superadmin';
+
 // Key for tracking if permission has been granted
 const NOTIFICATION_PERMISSION_GRANTED_KEY = 'notification_permission_granted';
 
@@ -76,7 +79,7 @@ export const AuthProvider = ({ children }) => {
           
           // Also tell the backend to reset badge count
           try {
-            if (storedRole === 'admin') {
+            if (isAdminRole(storedRole)) {
               await api.post('/auth/reset-badge');
             } else {
               await api.post('/delivery/reset-badge');
@@ -119,10 +122,10 @@ export const AuthProvider = ({ children }) => {
         
         // Verify token is still valid
         try {
-          if (storedRole === 'admin') {
+          if (isAdminRole(storedRole)) {
             await api.get('/auth/verify');
-            // Check and register push token for admin
-            checkAndPromptNotificationPermission('admin');
+            // Check and register push token for admin/superadmin
+            checkAndPromptNotificationPermission(storedRole);
           } else {
             await api.get('/delivery/verify');
             // Check and register push token for delivery partner
@@ -155,7 +158,7 @@ export const AuthProvider = ({ children }) => {
           await SecureStore.setItemAsync('user', JSON.stringify(updatedUser));
           return updatedUser;
         }
-      } else if (storedRole === 'admin') {
+      } else if (isAdminRole(storedRole)) {
         response = await api.get('/auth/verify');
         if (response?.data?.user) {
           const updatedUser = response.data.user;
@@ -186,9 +189,9 @@ export const AuthProvider = ({ children }) => {
         await SecureStore.setItemAsync(NOTIFICATION_PERMISSION_GRANTED_KEY, 'true');
         
         // Send to appropriate endpoint based on role
-        if (userRole === 'admin') {
+        if (isAdminRole(userRole)) {
           await api.post('/auth/push-token', { pushToken });
-          console.log('📱 Admin push token registered');
+          console.log('📱 Admin/superadmin push token registered');
         } else {
           await pushNotifications.updatePushToken(pushToken);
           console.log('📱 Delivery push token registered');
@@ -204,20 +207,23 @@ export const AuthProvider = ({ children }) => {
   const loginAdmin = async (username, password) => {
     const response = await api.post('/auth/login', { username, password });
     const { token, refreshToken, user: userData } = response.data;
-    
+
+    // Backend returns role as 'admin' or 'superadmin' — preserve the actual value
+    const actualRole = userData?.role === 'superadmin' ? 'superadmin' : 'admin';
+
     await SecureStore.setItemAsync('token', token);
     if (refreshToken) {
       await SecureStore.setItemAsync('refreshToken', refreshToken);
     }
     await SecureStore.setItemAsync('user', JSON.stringify(userData));
-    await SecureStore.setItemAsync('role', 'admin');
-    
+    await SecureStore.setItemAsync('role', actualRole);
+
     setUser(userData);
-    setRole('admin');
-    
-    // Register push notifications for admin with force prompt
-    registerPushToken('admin', true);
-    
+    setRole(actualRole);
+
+    // Register push notifications with force prompt
+    registerPushToken(actualRole, true);
+
     return userData;
   };
 

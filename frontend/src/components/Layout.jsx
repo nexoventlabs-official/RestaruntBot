@@ -1,4 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
 import { 
   LayoutDashboard, 
   ShoppingBag, 
@@ -10,28 +11,45 @@ import {
   Layers,
   Bike,
   Tag,
-  Settings
+  Settings,
+  Shield
 } from 'lucide-react';
 
-const navItems = [
-  { path: '/admin', icon: LayoutDashboard, label: 'Dashboard', description: 'Overview & stats' },
-  { path: '/admin/orders', icon: ShoppingBag, label: 'Orders', description: 'Manage orders' },
-  { path: '/admin/menu', icon: UtensilsCrossed, label: 'Menu', description: 'Food items' },
-  { path: '/admin/offers', icon: Tag, label: 'Offers', description: 'Promotions & deals' },
-  { path: '/admin/delivery-persons', icon: Bike, label: 'Delivery', description: 'Delivery partners' },
-  { path: '/admin/reports', icon: BarChart3, label: 'Reports', description: 'Analytics & reports' },
-  { path: '/admin/chatbot-images', icon: Image, label: 'Bot Images', description: 'WhatsApp images' },
-  { path: '/admin/flow-images', icon: Layers, label: 'Flow Images', description: 'Flow icons & banner' },
-  { path: '/admin/settings', icon: Settings, label: 'Settings', description: 'Restaurant settings' },
+// Nav items keyed by relative segment; built dynamically based on role
+const BASE_ITEMS = [
+  { segment: '', icon: LayoutDashboard, label: 'Dashboard', description: 'Overview & stats' },
+  { segment: 'orders', icon: ShoppingBag, label: 'Orders', description: 'Manage orders' },
+  { segment: 'menu', icon: UtensilsCrossed, label: 'Menu', description: 'Food items' },
+  { segment: 'offers', icon: Tag, label: 'Offers', description: 'Promotions & deals' },
+  { segment: 'delivery-persons', icon: Bike, label: 'Delivery', description: 'Delivery partners' },
+  { segment: 'reports', icon: BarChart3, label: 'Reports', description: 'Analytics & reports' },
+  { segment: 'chatbot-images', icon: Image, label: 'Bot Images', description: 'WhatsApp images', superAdminOnly: true },
+  { segment: 'flow-images', icon: Layers, label: 'Flow Images', description: 'Flow icons & banner', superAdminOnly: true },
+  { segment: 'admins', icon: Shield, label: 'Admins', description: 'Manage admin accounts', superAdminOnly: true },
+  { segment: 'settings', icon: Settings, label: 'Settings', description: 'Restaurant settings' },
 ];
 
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Derive role & basePath from the URL so the same Layout works for both panels
+  const isSuperAdmin = location.pathname.startsWith('/super-admin');
+  const basePath = isSuperAdmin ? '/super-admin' : '/admin';
+
+  const navItems = useMemo(() => {
+    return BASE_ITEMS
+      .filter(item => !item.superAdminOnly || isSuperAdmin)
+      .map(item => ({
+        ...item,
+        path: item.segment ? `${basePath}/${item.segment}` : basePath
+      }));
+  }, [basePath, isSuperAdmin]);
+
   const logout = () => {
     localStorage.removeItem('token');
-    navigate('/admin/login');
+    localStorage.removeItem('role');
+    navigate(`${basePath}/login`);
   };
 
   const currentPage = navItems.find(item => item.path === location.pathname);
@@ -89,8 +107,8 @@ export default function Layout() {
                 A
               </div>
               <div className="flex-1">
-                <p className="font-medium text-white text-sm">Admin</p>
-                <p className="text-xs text-dark-400">Restaurant Owner</p>
+                <p className="font-medium text-white text-sm">{isSuperAdmin ? 'Super Admin' : 'Admin'}</p>
+                <p className="text-xs text-dark-400">{isSuperAdmin ? 'Full Access' : 'Restaurant Owner'}</p>
               </div>
               <button 
                 onClick={logout} 

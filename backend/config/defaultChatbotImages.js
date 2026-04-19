@@ -34,9 +34,6 @@ const defaultImages = [
   { key: 'pickup_confirmed', name: 'Pickup Order Confirmed', description: 'Shown when pickup order is confirmed by admin from dashboard', imageUrl: '' },
   { key: 'pickup_order_requested', name: 'Pickup Order Requested', description: 'Shown when customer places a self-pickup pay-at-hotel order request', imageUrl: '' },
   { key: 'pickup_ready', name: 'Pickup Order Ready', description: 'Shown when pickup order is ready for collection at restaurant', imageUrl: '' },
-  { key: 'pickup_completed', name: 'Pickup Order Completed', description: 'Shown when customer has picked up their order (with bill and order details)', imageUrl: '' },
-  { key: 'pickup_tracking', name: 'Pickup Order Tracking', description: 'Shown when customer tracks their pickup order status', imageUrl: '' },
-  { key: 'pickup_cancelled', name: 'Pickup Order Cancelled', description: 'Shown when pickup order is successfully cancelled', imageUrl: '' },
   { key: 'pickup_cancel_restricted', name: 'Pickup Cancel Restricted', description: 'Shown when customer tries to cancel pickup order after confirmation', imageUrl: '' },
   { key: 'pickup_order_summary', name: 'Pickup Order Summary', description: 'Shown when displaying order summary for self-pickup before payment selection', imageUrl: '' },
   { key: 'pickup_cancelled_by_restaurant', name: 'Pickup Order Cancelled by Restaurant', description: 'Shown when admin cancels a self-pickup pay-at-hotel order from the app', imageUrl: '' },
@@ -67,7 +64,6 @@ const defaultImages = [
   { key: 'flow_delivery_option', name: 'Flow: Delivery Option', description: 'Image for Delivery option in service type selection (4:2 ratio, 800x400px)', imageUrl: '' },
   { key: 'flow_pickup_option', name: 'Flow: Pickup Option', description: 'Image for Self-Pickup option in service type selection (4:2 ratio, 800x400px)', imageUrl: '' },
   { key: 'flow_account_details', name: 'Flow: Account Details Icon', description: 'Icon shown in welcome Flow service list for Account Details option (square aspect ratio recommended)', imageUrl: '' },
-  { key: 'flow_delivery_address', name: 'Flow: Delivery Address Icon', description: 'Icon shown in welcome Flow service list for Delivery Address option (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_status_pending', name: 'Flow: Pending Status Icon', description: 'Icon shown for orders with Pending status in My Orders list (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_status_confirmed', name: 'Flow: Confirmed Status Icon', description: 'Icon shown for orders with Confirmed status in My Orders list (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_status_preparing', name: 'Flow: Preparing Status Icon', description: 'Icon shown for orders with Preparing status in My Orders list (square aspect ratio recommended)', imageUrl: '' },
@@ -90,7 +86,13 @@ const defaultImages = [
   { key: 'flow_action_track', name: 'Flow: Track Order Icon', description: 'Icon for Track Order option in Order Actions flow (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_action_cancel', name: 'Flow: Cancel Order Icon', description: 'Icon for Cancel Order option in Order Actions flow (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_action_order_food', name: 'Flow: Order Food Icon (Actions)', description: 'Icon for Order Food option in Order Actions flow (square aspect ratio recommended)', imageUrl: '' },
-  { key: 'flow_action_main_menu', name: 'Flow: Main Menu Icon', description: 'Icon for Main Menu option in Order Actions flow (square aspect ratio recommended)', imageUrl: '' }
+  { key: 'flow_action_main_menu', name: 'Flow: Main Menu Icon', description: 'Icon for Main Menu option in Order Actions flow (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'cart_options', name: 'Cart Options', description: 'Shown when displaying cart action options (add more, clear, checkout)', imageUrl: '' },
+  { key: 'flow_food_egg', name: 'Flow: Egg Food Icon', description: 'Icon for Egg food type filter in menu flow (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_food_nonveg', name: 'Flow: Non-Veg Food Icon', description: 'Icon for Non-Veg food type filter in menu flow (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_food_veg', name: 'Flow: Veg Food Icon', description: 'Icon for Veg food type filter in menu flow (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'offer_applied', name: 'Offer Applied', description: 'Shown when a promotional offer is successfully applied to the order', imageUrl: '' },
+  { key: 'payment_confirmed', name: 'Payment Confirmed', description: 'Shown when online payment is confirmed and order is placed', imageUrl: '' }
 ];
 
 module.exports = defaultImages;

@@ -19,6 +19,7 @@ import Payment from './pages/Payment';
 import PaymentSuccess from './pages/PaymentSuccess';
 import ChatbotImages from './pages/ChatbotImages';
 import FlowImages from './pages/FlowImages';
+import Admins from './pages/Admins';
 import DeliveryPersons from './pages/DeliveryPersons';
 import DeliveryLogin from './pages/DeliveryLogin';
 import DeliveryDashboard from './pages/DeliveryDashboard';
@@ -93,9 +94,17 @@ function App() {
           <Route path="/pay/:orderId" element={<Payment />} />
           <Route path="/payment-success/:orderId" element={<PaymentSuccess />} />
           
-          {/* Admin Routes */}
-          <Route path="/admin/login" element={auth ? <Navigate to="/admin" /> : <Login setAuth={setAuth} />} />
-          <Route path="/admin" element={auth ? <Layout /> : <Navigate to="/admin/login" />}>
+          {/* Super-Admin Routes (full access + admin management) */}
+          <Route path="/super-admin/login" element={
+            auth
+              ? <Navigate to={auth.role === 'superadmin' ? '/super-admin' : '/admin'} replace />
+              : <Login setAuth={setAuth} />
+          } />
+          <Route path="/super-admin" element={
+            auth && auth.role === 'superadmin'
+              ? <Layout />
+              : <Navigate to={auth ? '/admin' : '/super-admin/login'} replace />
+          }>
             <Route index element={<Dashboard />} />
             <Route path="orders" element={<Orders />} />
             <Route path="menu" element={<Menu />} />
@@ -103,16 +112,37 @@ function App() {
             <Route path="reports" element={<Reports />} />
             <Route path="chatbot-images" element={<ChatbotImages />} />
             <Route path="flow-images" element={<FlowImages />} />
+            <Route path="admins" element={<Admins />} />
             <Route path="delivery-persons" element={<DeliveryPersons />} />
             <Route path="settings" element={<Settings />} />
           </Route>
-          
+
+          {/* Admin Routes (restricted: no bot images, flow images, admins) */}
+          <Route path="/admin/login" element={
+            auth
+              ? <Navigate to={auth.role === 'superadmin' ? '/super-admin' : '/admin'} replace />
+              : <Login setAuth={setAuth} />
+          } />
+          <Route path="/admin" element={
+            auth && auth.role === 'admin'
+              ? <Layout />
+              : <Navigate to={auth ? '/super-admin' : '/admin/login'} replace />
+          }>
+            <Route index element={<Dashboard />} />
+            <Route path="orders" element={<Orders />} />
+            <Route path="menu" element={<Menu />} />
+            <Route path="offers" element={<Offers />} />
+            <Route path="reports" element={<Reports />} />
+            <Route path="delivery-persons" element={<DeliveryPersons />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
+
           {/* Delivery Boy Routes */}
           <Route path="/delivery/login" element={<DeliveryLogin />} />
           <Route path="/delivery" element={<DeliveryDashboard />} />
-          
-          {/* Legacy redirect - old login to new admin login */}
-          <Route path="/login" element={<Navigate to="/admin/login" />} />
+
+          {/* Legacy redirects */}
+          <Route path="/login" element={<Navigate to="/super-admin/login" replace />} />
           
           <Route path="*" element={<NotFound />} />
         </Routes>
