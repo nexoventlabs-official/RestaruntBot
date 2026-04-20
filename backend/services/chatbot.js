@@ -5885,8 +5885,11 @@ const chatbot = {
     confirmMsg += `🙏 Thank you for your order!\nPlease keep ₹${total} ready for payment.`;
 
     const confirmedImageUrl = await chatbotImagesService.getImageUrl('order_confirmed');
-    
-    // Send as flow with "Order Details" CTA if order actions flow is available
+
+    // Send order confirmation message to customer
+    let confirmationSent = false;
+
+    // Try sending as flow with "Order Details" CTA if order actions flow is available
     const orderActionsFlowId = process.env.WHATSAPP_ORDER_ACTIONS_FLOW_ID;
     if (orderActionsFlowId) {
       try {
@@ -5900,8 +5903,29 @@ const chatbot = {
           flowToken: `order_actions_${cleanPhone}_${orderId}`,
           flowAction: 'data_exchange'
         });
+        confirmationSent = true;
       } catch (flowErr) {
-        logger.error('Order actions flow failed on COD confirm', { error: flowErr.message });
+        logger.error('Order actions flow failed on COD confirm, falling back to buttons', { error: flowErr.message });
+      }
+    }
+
+    // Fallback: send confirmation as image+buttons or plain buttons
+    if (!confirmationSent) {
+      try {
+        const confirmButtons = [
+          { id: 'track_order', text: 'Track Order' },
+          { id: `cancel_${orderId}`, text: 'Cancel Order' },
+          { id: 'home', text: 'Main Menu' }
+        ];
+        if (confirmedImageUrl) {
+          await whatsapp.sendImageWithButtons(phone, confirmedImageUrl, confirmMsg, confirmButtons, 'Perivi Hotel');
+        } else {
+          await whatsapp.sendButtons(phone, confirmMsg, confirmButtons, 'Perivi Hotel');
+        }
+      } catch (msgErr) {
+        logger.error('COD confirmation message failed', { phone, error: msgErr.message });
+        // Last resort: plain text
+        await whatsapp.sendMessage(phone, confirmMsg);
       }
     }
 

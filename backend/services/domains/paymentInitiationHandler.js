@@ -725,18 +725,29 @@ async function processCODOrder(customer, phone, params = {}) {
   
   const confirmedImageUrl = await chatbotImagesService.getImageUrl('order_confirmed');
   
-  if (confirmedImageUrl) {
-    await whatsapp.sendImage(phone, confirmedImageUrl, confirmMsg, [
-      { id: 'track_order', text: 'Track Order' },
-      { id: `cancel_${orderId}`, text: 'Cancel Order' },
-      { id: 'home', text: 'Main Menu' }
-    ]);
-  } else {
-    await whatsapp.sendButtons(phone, confirmMsg, [
-      { id: 'track_order', text: 'Track Order' },
-      { id: `cancel_${orderId}`, text: 'Cancel Order' },
-      { id: 'home', text: 'Main Menu' }
-    ]);
+  const confirmButtons = [
+    { id: 'track_order', text: 'Track Order' },
+    { id: `cancel_${orderId}`, text: 'Cancel Order' },
+    { id: 'home', text: 'Main Menu' }
+  ];
+
+  // Truncate body to WhatsApp interactive body limit (1024 chars)
+  const bodyText = confirmMsg.length > 1000 ? confirmMsg.substring(0, 997) + '...' : confirmMsg;
+
+  try {
+    if (confirmedImageUrl) {
+      await whatsapp.sendImageWithButtons(phone, confirmedImageUrl, bodyText, confirmButtons, 'Perivi Hotel');
+    } else {
+      await whatsapp.sendButtons(phone, bodyText, confirmButtons, 'Perivi Hotel');
+    }
+  } catch (msgErr) {
+    logger.error('COD confirmation message failed', { phone, orderId, error: msgErr.message });
+    // Last resort: plain text
+    try {
+      await whatsapp.sendMessage(phone, confirmMsg);
+    } catch (fallbackErr) {
+      logger.error('COD confirmation fallback also failed', { phone, orderId, error: fallbackErr.message });
+    }
   }
   
   conversationState.transitionTo(customer, 'order_confirmed');
