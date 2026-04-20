@@ -33,6 +33,7 @@ const idempotencyService = require('../idempotencyService');
 const transactionManager = require('../transactionManager');
 const { logger } = require('../correlationContext');
 const dataEvents = require('../eventEmitter');
+const metaCloud = require('../metaCloud');
 
 // Payment method constants
 const PAYMENT_METHODS = {
@@ -725,18 +726,51 @@ async function processCODOrder(customer, phone, params = {}) {
   
   const confirmedImageUrl = await chatbotImagesService.getImageUrl('order_confirmed');
   
-  if (confirmedImageUrl) {
-    await whatsapp.sendImage(phone, confirmedImageUrl, confirmMsg, [
-      { id: 'track_order', text: 'Track Order' },
-      { id: `cancel_${orderId}`, text: 'Cancel Order' },
-      { id: 'home', text: 'Main Menu' }
-    ]);
+  // Send as flow with "Order Details" CTA if order actions flow is available
+  const orderActionsFlowId = process.env.WHATSAPP_ORDER_ACTIONS_FLOW_ID;
+  if (orderActionsFlowId) {
+    try {
+      const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
+      await metaCloud.sendFlowMessage(phone, {
+        flowId: orderActionsFlowId,
+        flowCta: 'Order Details',
+        headerImageUrl: confirmedImageUrl || undefined,
+        headerText: confirmedImageUrl ? undefined : 'Order Confirmed',
+        bodyText: confirmMsg,
+        flowToken: `order_actions_${cleanPhone}_${orderId}`,
+        flowAction: 'data_exchange'
+      });
+    } catch (flowErr) {
+      logger.error('Order actions flow failed on COD confirm', { error: flowErr.message });
+      // Fallback to regular buttons if flow fails
+      if (confirmedImageUrl) {
+        await whatsapp.sendImage(phone, confirmedImageUrl, confirmMsg, [
+          { id: 'track_order', text: 'Track Order' },
+          { id: `cancel_${orderId}`, text: 'Cancel Order' },
+          { id: 'home', text: 'Main Menu' }
+        ]);
+      } else {
+        await whatsapp.sendButtons(phone, confirmMsg, [
+          { id: 'track_order', text: 'Track Order' },
+          { id: `cancel_${orderId}`, text: 'Cancel Order' },
+          { id: 'home', text: 'Main Menu' }
+        ]);
+      }
+    }
   } else {
-    await whatsapp.sendButtons(phone, confirmMsg, [
-      { id: 'track_order', text: 'Track Order' },
-      { id: `cancel_${orderId}`, text: 'Cancel Order' },
-      { id: 'home', text: 'Main Menu' }
-    ]);
+    if (confirmedImageUrl) {
+      await whatsapp.sendImage(phone, confirmedImageUrl, confirmMsg, [
+        { id: 'track_order', text: 'Track Order' },
+        { id: `cancel_${orderId}`, text: 'Cancel Order' },
+        { id: 'home', text: 'Main Menu' }
+      ]);
+    } else {
+      await whatsapp.sendButtons(phone, confirmMsg, [
+        { id: 'track_order', text: 'Track Order' },
+        { id: `cancel_${orderId}`, text: 'Cancel Order' },
+        { id: 'home', text: 'Main Menu' }
+      ]);
+    }
   }
   
   conversationState.transitionTo(customer, 'order_confirmed');
