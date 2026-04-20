@@ -24,7 +24,6 @@ const DashboardStats = require('../../models/DashboardStats');
 const User = require('../../models/User');
 const conversationState = require('../conversationState');
 const whatsapp = require('../whatsapp');
-const metaCloud = require('../metaCloud');
 const razorpayService = require('../razorpay');
 const googleSheets = require('../googleSheets');
 const pushNotification = require('../pushNotification');
@@ -707,19 +706,10 @@ async function processCODOrder(customer, phone, params = {}) {
   conversationState.setContext(customer, 'pendingOrderId', orderId);
   await customer.save();
   
-  // Build confirmation message (differs for delivery vs pickup)
-  const isPickup = serviceType === 'pickup';
-  let confirmMsg = isPickup
-    ? `✅ *Order Request Successful!*\n\n`
-    : `✅ *Order Confirmed!*\n\n`;
+  // Send confirmation
+  let confirmMsg = `✅ *Order Confirmed!*\n\n`;
   confirmMsg += `📦 Order ID: *${orderId}*\n`;
-  if (isPickup) {
-    confirmMsg += `🏪 Service: *Self-Pickup*\n`;
-    confirmMsg += `💰 Total: *₹${itemsTotal}*\n`;
-    confirmMsg += `� Payment: *Pay at Hotel*\n\n`;
-  } else {
-    confirmMsg += `�💵 Payment: *Cash on Delivery*\n\n`;
-  }
+  confirmMsg += `💵 Payment: *Cash on Delivery*\n\n`;
   confirmMsg += `━━━━━━━━━━━━━━━\n`;
   confirmMsg += `*Items:*\n`;
   items.forEach((item, i) => {
@@ -731,72 +721,22 @@ async function processCODOrder(customer, phone, params = {}) {
     confirmMsg += `*Delivery Charge:* ₹${deliveryCharge}\n`;
   }
   confirmMsg += `*Grand Total:* ₹${total}\n\n`;
-  if (isPickup) {
-    confirmMsg += `📍 Please come to the restaurant to pick up your order.\n`;
-    confirmMsg += `💵 Payment will be collected at the hotel.\n`;
-    confirmMsg += `⏰ We will notify you when your order is ready!\n\n`;
-    confirmMsg += `Thank you for your order! 🙏`;
-  } else {
-    confirmMsg += `🙏 Thank you for your order!\nPlease keep ₹${total} ready for payment.`;
-  }
-
-  const headerImageKey = isPickup ? 'pickup_order_requested' : 'order_confirmed';
-  const confirmedImageUrl = await chatbotImagesService.getImageUrl(headerImageKey);
-
-  // Try Order Actions Flow first (single "Order Details" button that opens a flow with track/cancel/reorder/main menu)
-  let confirmationSent = false;
-  const orderActionsFlowId = process.env.WHATSAPP_ORDER_ACTIONS_FLOW_ID;
-  if (orderActionsFlowId) {
-    try {
-      const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
-      await metaCloud.sendFlowMessage(phone, {
-        flowId: orderActionsFlowId,
-        flowCta: 'Order Details',
-        headerImageUrl: confirmedImageUrl || undefined,
-        headerText: confirmedImageUrl ? undefined : (isPickup ? 'Order Request' : 'Order Confirmed'),
-        bodyText: confirmMsg,
-        flowToken: `order_actions_${cleanPhone}_${orderId}`,
-        flowAction: 'data_exchange'
-      });
-      confirmationSent = true;
-    } catch (flowErr) {
-      logger.error('Order actions flow failed on order confirm, falling back to buttons', {
-        phone, orderId, serviceType, error: flowErr.message
-      });
-    }
-  }
-
-  // Fallback: image+buttons (used only if flow is not configured or failed)
-  if (!confirmationSent) {
-    const confirmButtons = [
+  confirmMsg += `🙏 Thank you for your order!\nPlease keep ₹${total} ready for payment.`;
+  
+  const confirmedImageUrl = await chatbotImagesService.getImageUrl('order_confirmed');
+  
+  if (confirmedImageUrl) {
+    await whatsapp.sendImage(phone, confirmedImageUrl, confirmMsg, [
       { id: 'track_order', text: 'Track Order' },
       { id: `cancel_${orderId}`, text: 'Cancel Order' },
       { id: 'home', text: 'Main Menu' }
-    ];
-    // Truncate body to WhatsApp interactive body limit (1024 chars)
-    const bodyText = confirmMsg.length > 1000 ? confirmMsg.substring(0, 997) + '...' : confirmMsg;
-    try {
-      if (confirmedImageUrl) {
-        await whatsapp.sendImageWithButtons(phone, confirmedImageUrl, bodyText, confirmButtons, 'Perivi Hotel');
-      } else {
-        await whatsapp.sendButtons(phone, bodyText, confirmButtons, 'Perivi Hotel');
-      }
-    } catch (msgErr) {
-      logger.error('Order confirmation message failed', { phone, orderId, error: msgErr.message });
-      try {
-        await whatsapp.sendMessage(phone, confirmMsg);
-      } catch (fallbackErr) {
-        logger.error('Order confirmation fallback also failed', { phone, orderId, error: fallbackErr.message });
-      }
-    }
-  }
-
-  // Mark WhatsApp confirmation sent for reconciliation
-  try {
-    order.whatsappConfirmationSent = true;
-    await order.save();
-  } catch (saveErr) {
-    logger.error('Could not mark whatsappConfirmationSent', { orderId, error: saveErr.message });
+    ]);
+  } else {
+    await whatsapp.sendButtons(phone, confirmMsg, [
+      { id: 'track_order', text: 'Track Order' },
+      { id: `cancel_${orderId}`, text: 'Cancel Order' },
+      { id: 'home', text: 'Main Menu' }
+    ]);
   }
   
   conversationState.transitionTo(customer, 'order_confirmed');
