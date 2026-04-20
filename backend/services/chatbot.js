@@ -5888,8 +5888,10 @@ const chatbot = {
     
     // Send as flow with "Order Details" CTA if order actions flow is available
     const orderActionsFlowId = process.env.WHATSAPP_ORDER_ACTIONS_FLOW_ID;
+    let confirmSent = false;
     if (orderActionsFlowId) {
       try {
+        const metaCloud = require('./metaCloud');
         const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
         await metaCloud.sendFlowMessage(phone, {
           flowId: orderActionsFlowId,
@@ -5900,8 +5902,17 @@ const chatbot = {
           flowToken: `order_actions_${cleanPhone}_${orderId}`,
           flowAction: 'data_exchange'
         });
+        confirmSent = true;
       } catch (flowErr) {
         logger.error('Order actions flow failed on COD confirm', { error: flowErr.message });
+      }
+    }
+    // Fallback: send regular message if flow was not available or failed
+    if (!confirmSent) {
+      if (confirmedImageUrl) {
+        await whatsapp.sendImage(phone, confirmedImageUrl, confirmMsg);
+      } else {
+        await whatsapp.sendMessage(phone, confirmMsg);
       }
     }
 
