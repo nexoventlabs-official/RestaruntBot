@@ -34,11 +34,10 @@ router.get('/offers', async (req, res) => {
     
     const offers = await Offer.find({ 
       isActive: true,
-      $or: [
-        { validUntil: null },
-        { validUntil: { $gte: now } }
-      ],
-      validFrom: { $lte: now }
+      $and: [
+        { $or: [{ validUntil: null }, { validUntil: { $gte: now } }] },
+        { $or: [{ validFrom: null }, { validFrom: { $lte: now } }] }
+      ]
     }).sort({ createdAt: -1 });
     
     // Filter out targeted offers - they are only accessible via direct link (/offer/:offerId)
@@ -67,11 +66,10 @@ router.get('/popup-offers', async (req, res) => {
     let offers = await Offer.find({ 
       isActive: true,
       showAsPopup: true,
-      $or: [
-        { validUntil: null },
-        { validUntil: { $gte: now } }
-      ],
-      validFrom: { $lte: now }
+      $and: [
+        { $or: [{ validUntil: null }, { validUntil: { $gte: now } }] },
+        { $or: [{ validFrom: null }, { validFrom: { $lte: now } }] }
+      ]
     }).sort({ createdAt: -1 });
     
     // Filter out targeted offers - they are only accessible via direct link (/offer/:offerId)
