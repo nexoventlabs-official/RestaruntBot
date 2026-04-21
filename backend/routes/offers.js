@@ -661,7 +661,7 @@ router.post('/:id/retry-template', auth, async (req, res) => {
       return res.status(400).json({ error: 'META_WABA_ID not configured in .env' });
     }
 
-    // Delete old template if exists
+    // Delete old template if exists (best effort; Meta won't allow name reuse for 4 weeks after delete)
     if (offer.templateName) {
       try {
         await whatsapp.deleteMessageTemplate(offer.templateName);
@@ -670,7 +670,8 @@ router.post('/:id/retry-template', auth, async (req, res) => {
       }
     }
 
-    const tplName = `offer_${offer._id.toString()}`;
+    // Use a fresh unique name on retry — Meta blocks reuse of deleted/rejected template names for ~4 weeks
+    const tplName = `offer_${offer._id.toString()}_${Date.now()}`;
     const headerImg = offer.imageWhatsApp || offer.imageDesktop || offer.imageTablet || offer.imageMobile || offer.image;
     const bodyText = `🎉 *{{1}}*\n\n{{2}}\n\nOrder now and enjoy this amazing deal! 🍽️`;
     const footerTxt = 'Tap below to order';
