@@ -3085,9 +3085,14 @@ const chatbot = {
         await customer.save();
         
         if (addedCount > 0) {
+          // Acknowledge website cart order first
+          const notFoundNote = notFoundItems.length > 0 
+            ? `\n\n⚠️ Could not find: ${notFoundItems.join(', ')}` 
+            : '';
+          await whatsapp.sendMessage(phone, `✅ *${addedCount} item${addedCount > 1 ? 's' : ''} added from website!*${notFoundNote}\n\nHere's your cart summary:`);
           // Show cart summary with offer discount info
           if (totalDiscount > 0) {
-            await whatsapp.sendText(phone, `🎁 *Offer Applied!*\n\nYou've saved ₹${totalDiscount} with ${eligibleOffers.map(o => o.title || o.offerType).join(', ')}!`);
+            await whatsapp.sendMessage(phone, `🎁 *Offer Applied!*\n\nYou've saved ₹${totalDiscount} with ${eligibleOffers.map(o => o.title || o.offerType).join(', ')}!`);
           }
           await this.sendCart(phone, customer);
           state.currentStep = 'viewing_cart';
