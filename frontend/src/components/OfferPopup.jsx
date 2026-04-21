@@ -4,6 +4,22 @@ import axios from 'axios';
 import { X } from 'lucide-react';
 
 const API_URL = 'https://restaruntbot.onrender.com/api/public';
+const SSE_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api') + '/public/events';
+const SEEN_OFFERS_KEY = 'seenOfferIds';
+
+const getSeenOfferIds = () => {
+  try {
+    return JSON.parse(sessionStorage.getItem(SEEN_OFFERS_KEY) || '[]');
+  } catch {
+    return [];
+  }
+};
+
+const markOffersSeen = (ids) => {
+  const seen = new Set(getSeenOfferIds());
+  ids.forEach(id => seen.add(id));
+  sessionStorage.setItem(SEEN_OFFERS_KEY, JSON.stringify(Array.from(seen)));
+};
 
 export default function OfferPopup() {
   const navigate = useNavigate();
@@ -19,10 +35,22 @@ export default function OfferPopup() {
   const minSwipeDistance = 50;
 
   useEffect(() => {
-    const hasSeenOffers = sessionStorage.getItem('hasSeenAllOffers');
-    if (!hasSeenOffers) {
-      loadPopupOffers();
-    }
+    loadPopupOffers();
+
+    // Listen for offer changes via SSE - refresh popup when admin creates/activates offers
+    let es;
+    try {
+      es = new EventSource(SSE_URL);
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'offers') {
+            loadPopupOffers();
+          }
+        } catch {}
+      };
+    } catch {}
+    return () => { if (es) es.close(); };
   }, []);
 
   // Auto-rotate offers every 3 seconds
@@ -51,8 +79,11 @@ export default function OfferPopup() {
       const res = await axios.get(`${API_URL}/offers`);
       // Get all active offers, sorted by most recent first
       const activeOffers = res.data.filter(o => o.isActive);
-      if (activeOffers.length > 0) {
-        setOffers(activeOffers);
+      // Only show offers that haven't been seen yet in this session
+      const seenIds = getSeenOfferIds();
+      const unseenOffers = activeOffers.filter(o => !seenIds.includes(o._id));
+      if (unseenOffers.length > 0) {
+        setOffers(unseenOffers);
         setCurrentIndex(0);
         setTimeout(() => setIsVisible(true), 1500);
       }
@@ -62,12 +93,13 @@ export default function OfferPopup() {
   };
 
   const handleClose = () => {
-    // Close popup and mark as seen
+    // Close popup and mark currently-loaded offers as seen
     setIsClosing(true);
+    const idsToMark = offers.map(o => o._id);
     setTimeout(() => {
       setIsVisible(false);
       setOffers([]);
-      sessionStorage.setItem('hasSeenAllOffers', 'true');
+      markOffersSeen(idsToMark);
     }, 300);
   };
 
@@ -105,10 +137,11 @@ export default function OfferPopup() {
 
   const handleImageClick = () => {
     setIsClosing(true);
+    const idsToMark = offers.map(o => o._id);
     setTimeout(() => {
       setIsVisible(false);
       setOffers([]);
-      sessionStorage.setItem('hasSeenAllOffers', 'true');
+      markOffersSeen(idsToMark);
       // Redirect to offers page with filter if offerType exists
       if (currentOffer.offerType) {
         navigate(`/offers?offerType=${encodeURIComponent(currentOffer.offerType)}`);
