@@ -19,7 +19,7 @@ export default function Contact() {
       `📋 Subject: ${formData.subject}\n\n` +
       `💬 Message:\n${formData.message}`
     );
-    window.open(`https://wa.me/9440203095?text=${msg}`, '_blank');
+    window.open(`https://wa.me/8328602215?text=${msg}`, '_blank');
     setSubmitted(true);
     setFormData({ name: '', email: '', subject: '', message: '' });
     setTimeout(() => setSubmitted(false), 3000);

@@ -1,6 +1,6 @@
 import { WhatsAppIcon } from './Icons';
 
-const WHATSAPP_NUMBER = '9440203095';
+const WHATSAPP_NUMBER = '8328602215';
 
 export default function WhatsAppFloat() {
   const handleClick = () => {
