@@ -280,7 +280,7 @@ export default function Home() {
   const handleDialogWhatsApp = () => {
     if (!selectedItem) return;
     const item = selectedItem;
-    const WHATSAPP_NUMBER = '8328602215';
+    const WHATSAPP_NUMBER = '918328602215';
     
     const foodTypeLabel = item.foodType === 'veg' ? '🌿 Veg' : 
                           item.foodType === 'nonveg' ? '🍗 Non-Veg' : 
