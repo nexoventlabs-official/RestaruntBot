@@ -3,6 +3,7 @@ const logger = require('./logger');
 const MenuItem = require('../models/MenuItem');
 const cron = require('node-cron');
 const whatsapp = require('./whatsapp');
+const metaCloud = require('./metaCloud');
 const chatbotImagesService = require('./chatbotImages');
 const { initContext, runWithContext } = require('./correlationContext');
 
@@ -70,10 +71,7 @@ const sendExpiryWarnings = async () => {
         message += `━━━━━━━━━━━━━━━\n`;
         message += `💰 Total Value: *₹${totalAmount}*\n`;
         message += `━━━━━━━━━━━━━━━\n\n`;
-        message += `🚀 *Quick Actions:*\n`;
-        message += `• Checkout now to save your items\n`;
-        message += `• View cart to update quantities\n`;
-        message += `• Or let them expire if you changed your mind\n\n`;
+        message += `🛍️ *Select the service to checkout:*\n\n`;
         message += `⏱️ *Hurry! Only 10 minutes left!*`;
         
         // Send warning message with action buttons and image
@@ -81,9 +79,8 @@ const sendExpiryWarnings = async () => {
           const cartExpiryImageUrl = await chatbotImagesService.getImageUrl('cart_expiry_warning');
           
           const buttons = [
-            { id: 'review_pay', text: 'Checkout Now' },
-            { id: 'view_cart', text: 'View Cart' },
-            { id: 'add_more', text: 'Add More' }
+            { id: 'service_delivery', text: 'Delivery' },
+            { id: 'service_pickup', text: 'Self-Pickup' }
           ];
           
           if (cartExpiryImageUrl) {
@@ -193,21 +190,61 @@ const cleanupExpiredCartItems = async () => {
           try {
             const cartRemovedImageUrl = await chatbotImagesService.getImageUrl('cart_items_removed');
             
-            const buttons = customer.cart.length > 0 
-              ? [
-                  { id: 'review_pay', text: 'Checkout Now' },
-                  { id: 'view_cart', text: 'View Cart' },
-                  { id: 'add_more', text: 'Add More' }
-                ]
-              : [
-                  { id: 'view_menu', text: 'View Menu' },
-                  { id: 'home', text: 'Main Menu' }
-                ];
-            
-            if (cartRemovedImageUrl) {
-              await whatsapp.sendImageWithButtons(customer.phone, cartRemovedImageUrl, message, buttons);
+            if (customer.cart.length > 0) {
+              // Still has items - show delivery/pickup buttons
+              const buttons = [
+                { id: 'service_delivery', text: 'Delivery' },
+                { id: 'service_pickup', text: 'Self-Pickup' }
+              ];
+              if (cartRemovedImageUrl) {
+                await whatsapp.sendImageWithButtons(customer.phone, cartRemovedImageUrl, message, buttons);
+              } else {
+                await whatsapp.sendButtons(customer.phone, message, buttons);
+              }
             } else {
-              await whatsapp.sendButtons(customer.phone, message, buttons);
+              // Cart empty - send Browse Menu flow button
+              const browseFlowId = process.env.WHATSAPP_REORDER_FLOW_ID;
+              if (browseFlowId) {
+                try {
+                  const cleanPhone = customer.phone.replace('@c.us', '').replace(/\D/g, '');
+                  await metaCloud.sendFlowMessage(customer.phone, {
+                    flowId: browseFlowId,
+                    flowCta: 'Browse Menu',
+                    headerImageUrl: cartRemovedImageUrl || undefined,
+                    headerText: cartRemovedImageUrl ? undefined : 'Cart Expired',
+                    bodyText: message,
+                    flowToken: `browse_${cleanPhone}`,
+                    flowAction: 'data_exchange'
+                  });
+                } catch (flowErr) {
+                  logger.error('[Cart Cleanup] Browse menu flow failed', flowErr.message);
+                  // Fallback to regular buttons
+                  if (cartRemovedImageUrl) {
+                    await whatsapp.sendImageWithButtons(customer.phone, cartRemovedImageUrl, message, [
+                      { id: 'view_menu', text: 'Browse Menu' },
+                      { id: 'home', text: 'Main Menu' }
+                    ]);
+                  } else {
+                    await whatsapp.sendButtons(customer.phone, message, [
+                      { id: 'view_menu', text: 'Browse Menu' },
+                      { id: 'home', text: 'Main Menu' }
+                    ]);
+                  }
+                }
+              } else {
+                // No flow ID - fallback to regular buttons
+                if (cartRemovedImageUrl) {
+                  await whatsapp.sendImageWithButtons(customer.phone, cartRemovedImageUrl, message, [
+                    { id: 'view_menu', text: 'Browse Menu' },
+                    { id: 'home', text: 'Main Menu' }
+                  ]);
+                } else {
+                  await whatsapp.sendButtons(customer.phone, message, [
+                    { id: 'view_menu', text: 'Browse Menu' },
+                    { id: 'home', text: 'Main Menu' }
+                  ]);
+                }
+              }
             }
             
             logger.info('[Cart Cleanup] Notified about removed items', { phone: customer.phone, count: itemsToRemove.length });
