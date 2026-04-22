@@ -27,6 +27,7 @@ export default function AdminOffersScreen({ navigation }) {
   const [pollingIds, setPollingIds] = useState(new Set()); // Track offers being polled for template status
   const [retryingTemplate, setRetryingTemplate] = useState(null); // Track which offer template is being retried
   const [togglingOffer, setTogglingOffer] = useState(null); // Track which offer is being toggled
+  const [deletingOffer, setDeletingOffer] = useState(null); // Track which offer is being deleted
   const [detailOffer, setDetailOffer] = useState(null); // Offer detail modal
   const { offerTemplateAlert, clearOfferTemplateAlert } = useNotifications();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -114,12 +115,12 @@ export default function AdminOffersScreen({ navigation }) {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try { 
-          setLoading(true);
+          setDeletingOffer(offer._id);
           await api.delete(`/offers/${offer._id}`); 
           setOffers(offers.filter(o => o._id !== offer._id)); 
         }
         catch (error) { Alert.alert('Error', 'Failed to delete offer'); }
-        finally { setLoading(false); }
+        finally { setDeletingOffer(null); }
       }},
     ]);
   };
@@ -365,13 +366,24 @@ export default function AdminOffersScreen({ navigation }) {
             <TouchableOpacity 
               style={styles.deleteButton} 
               onPress={(e) => { e.stopPropagation(); deleteOffer(item); }}
+              disabled={deletingOffer === item._id}
             >
-              <Ionicons name="trash-outline" size={20} color="#EF4444" />
+              {deletingOffer === item._id ? (
+                <ActivityIndicator size="small" color="#EF4444" />
+              ) : (
+                <Ionicons name="trash-outline" size={20} color="#EF4444" />
+              )}
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Toggle loading overlay */}
+        {deletingOffer === item._id && (
+          <View style={styles.toggleOverlay}>
+            <ActivityIndicator size="large" color="#fff" />
+            <Text style={{ color: '#fff', marginTop: 8, fontWeight: '600' }}>Deleting...</Text>
+          </View>
+        )}
         {togglingOffer === item._id && (
           <View style={styles.toggleOverlay}>
             <ActivityIndicator size="large" color="#fff" />

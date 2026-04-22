@@ -531,6 +531,12 @@ export default function OfferFormScreen({ route, navigation }) {
       return;
     }
 
+    // At least one item/variant/quantity must be selected
+    if (selectedItems.length === 0 && selectedVariants.length === 0 && selectedQuantities.length === 0) {
+      Alert.alert('Error', 'Please select at least one item to apply the offer to');
+      return;
+    }
+
     setLoading(true);
     try {
       const formData = new FormData();
@@ -842,7 +848,7 @@ export default function OfferFormScreen({ route, navigation }) {
               <View style={styles.applySection}>
                 <View style={styles.applySectionHeader}>
                   <Ionicons name="pricetag" size={20} color={ZOMATO_RED} />
-                  <Text style={styles.applySectionTitle}>Apply Offer To</Text>
+                  <Text style={styles.applySectionTitle}>Apply Offer To <Text style={{ color: '#EF4444' }}>*</Text></Text>
                 </View>
                 <Text style={styles.applySectionHint}>
                   {percentage && percentage.trim() 

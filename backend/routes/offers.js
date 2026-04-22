@@ -277,6 +277,11 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       parsedAppliedQuantities = typeof appliedQuantities === 'string' ? JSON.parse(appliedQuantities) : appliedQuantities;
     }
 
+    // At least one item, variant, or quantity must be selected
+    if (parsedAppliedItems.length === 0 && parsedAppliedVariants.length === 0 && parsedAppliedQuantities.length === 0) {
+      return res.status(400).json({ error: 'Please select at least one item to apply the offer to' });
+    }
+
     // Handle targeting - we'll fetch customers in background after saving offer
     const finalTargetType = targetType || 'all';
     const finalTargetPercentage = parseInt(targetPercentage) || 100;

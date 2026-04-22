@@ -1029,37 +1029,6 @@ export default function OffersPage() {
             </div>
           )}
 
-          {/* Special Offer Banner - For targeted offers accessed via direct link */}
-          {specificOffer && specificOffer.isTargeted && (
-            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
-              <div className="flex items-start gap-4">
-                <div className="bg-white/20 rounded-full p-3">
-                  <Gift className="w-8 h-8" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold mb-2">🎁 Exclusive Offer For You!</h3>
-                  <p className="text-white/90 mb-3">
-                    {specificOffer.description || 'You have been selected for this special offer. Add items to your cart and order via WhatsApp to claim your discount!'}
-                  </p>
-                  <div className="flex flex-wrap gap-2 text-sm">
-                    <span className="bg-white/20 px-3 py-1 rounded-full flex items-center gap-1">
-                      <Tag className="w-4 h-4" />
-                      {specificOffer.offerType}
-                    </span>
-                    {specificOffer.validUntil && (
-                      <span className="bg-white/20 px-3 py-1 rounded-full flex items-center gap-1">
-                        <Clock className="w-4 h-4" />
-                        Valid until {new Date(specificOffer.validUntil).toLocaleDateString()}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-white/70 text-sm mt-3 italic">
-                    💡 Tip: Order via WhatsApp after adding items to cart. Your eligibility will be verified automatically.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Items Grid - Same style as Menu Page */}
