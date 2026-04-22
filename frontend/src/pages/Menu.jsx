@@ -63,6 +63,7 @@ export default function Menu() {
   const [categorySchedule, setCategorySchedule] = useState({ enabled: false, type: 'daily', startTime: '09:00', endTime: '22:00', days: [] });
 
   const [deleting, setDeleting] = useState(false);
+  const initialFormRef = useRef(null);
   const [toast, setToast] = useState(null); // { message, type: 'info'|'success'|'error' }
   const toastTimer = useRef(null);
   const initialLoadDone = useRef(false);
@@ -358,7 +359,7 @@ export default function Menu() {
   const openModal = (item = null) => {
     if (item) {
       setEditing(item);
-      setForm({
+      const editForm = {
         name: item.name || '',
         category: Array.isArray(item.category) ? item.category : [item.category].filter(Boolean),
         variants: (item.variants || []).map((v, i) => ({
@@ -366,7 +367,9 @@ export default function Menu() {
           quantities: v.quantities || [],
         })),
         available: item.available !== false,
-      });
+      };
+      setForm(editForm);
+      initialFormRef.current = JSON.stringify({ name: editForm.name, category: editForm.category, variants: editForm.variants.map(v => { const { _uid, _collapsed, ...rest } = v; return rest; }), available: editForm.available, image: item.image || '' });
       setImagePreview(item.image || '');
       const previews = {};
       (item.variants || []).forEach((v, i) => { if (v.image) previews[`v_${i}_${Date.now()}`] = v.image; });
@@ -374,6 +377,7 @@ export default function Menu() {
       setEditing(null);
       setForm({ name: '', category: [], variants: [], available: true });
       setImagePreview('');
+      initialFormRef.current = null;
     }
     setImageFile(null);
     setVariantImageFiles({});
@@ -910,7 +914,7 @@ export default function Menu() {
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => { setShowModal(false); setEditing(null); }}
                   className="flex-1 px-4 py-3 border border-dark-200 rounded-xl font-medium text-dark-700 hover:bg-dark-50">Cancel</button>
-                <button type="submit" disabled={saving}
+                <button type="submit" disabled={saving || form.variants.length === 0 || (editing && initialFormRef.current && initialFormRef.current === JSON.stringify({ name: form.name, category: form.category, variants: form.variants.map(v => { const { _uid, _collapsed, ...rest } = v; return rest; }), available: form.available, image: imagePreview }) && Object.keys(variantImageFiles).length === 0 && !imageFile)}
                   className="flex-1 px-4 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center justify-center gap-2">
                   {saving ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving...</> : editing ? 'Update Item' : 'Add Item'}
                 </button>

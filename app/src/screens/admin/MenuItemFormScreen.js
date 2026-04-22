@@ -94,6 +94,25 @@ export default function MenuItemFormScreen({ route, navigation }) {
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
+  const initialFormRef = useRef(null);
+
+  // Snapshot helper for change detection
+  const getFormSnapshot = useCallback(() => {
+    return JSON.stringify({
+      name, description, selectedCategories, foodType, available, tags, image: image || '',
+      variants: variants.map(v => ({ label: v.label, price: v.price, quantity: v.quantity, unit: v.unit, description: v.description, foodType: v.foodType, tags: v.tags, available: v.available, image: v.image || '', quantities: v.quantities || [] }))
+    });
+  }, [name, description, selectedCategories, foodType, available, tags, image, variants]);
+
+  // Set initial snapshot after first render for editing
+  useEffect(() => {
+    if (isEditing && !initialFormRef.current) {
+      initialFormRef.current = getFormSnapshot();
+    }
+  }, [isEditing, getFormSnapshot]);
+
+  const hasChanges = !isEditing || !initialFormRef.current || initialFormRef.current !== getFormSnapshot() || variants.some(v => v.newImageFile) || (!!newImage);
+  const isButtonDisabled = loading || variants.length === 0 || (isEditing && !hasChanges);
 
   useEffect(() => {
     Animated.parallel([
@@ -1048,9 +1067,9 @@ export default function MenuItemFormScreen({ route, navigation }) {
       {/* Footer */}
       <View style={styles.footer}>
         <TouchableOpacity
-          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+          style={[styles.submitButton, isButtonDisabled && styles.submitButtonDisabled]}
           onPress={handleSubmit}
-          disabled={loading}
+          disabled={isButtonDisabled}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
