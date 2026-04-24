@@ -1703,26 +1703,25 @@ const catalogService = {
    *
    * @returns {object} Flow JSON definition
    */
-  buildWelcomeFlowJSON(bannerBase64 = null) {
+  buildWelcomeFlowJSON() {
     // Endpoint-mode Flow JSON (Data API).
     // WhatsApp calls our endpoint for INIT (screen data) and data_exchange (interactions).
-    // Banner is embedded in flow JSON; all other data served dynamically by endpoint.
+    // ALL banners and data are served dynamically from the backend — uploading a new banner
+    // no longer requires creating a new flow. Same flow ID is reused forever.
     // Two screens: SERVICE_SELECT → FOOD_TYPE_SELECT (conditionally, only for Order Food)
 
     // ─── Screen 1: Service Selection ───
-    const screen1Children = [];
-
-    // Banner image at top — 8:1 ratio (1000×125)
-    if (bannerBase64) {
-      screen1Children.push({
+    const screen1Children = [
+      {
         type: 'Image',
-        src: bannerBase64,
+        src: '${data.welcome_banner}',
         width: 1000,
         height: 125,
         'scale-type': 'cover',
-        'alt-text': 'Perivi Hotel Welcome Banner'
-      });
-    }
+        'alt-text': 'Welcome Banner',
+        visible: '${data.has_welcome_banner}'
+      }
+    ];
 
     screen1Children.push(
       {
@@ -2023,6 +2022,14 @@ const catalogService = {
                 { id: 'order_food', title: 'Order Food', description: 'Browse our menu', image: 'iVBORw0KGgo' },
                 { id: 'my_orders', title: 'My Orders', description: 'Track delivery', image: 'iVBORw0KGgo' }
               ]
+            },
+            welcome_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
+            },
+            has_welcome_banner: {
+              type: 'boolean',
+              __example__: true
             },
             flow_token: {
               type: 'string',
@@ -2725,10 +2732,16 @@ const catalogService = {
       ];
     }
 
+    // Fetch welcome banner as base64 (dynamic — changes without flow republish)
+    const welcomeBannerUrl = await chatbotImagesService.getImageUrl('flow_welcome_banner');
+    const welcomeBannerB64 = await this._imageUrlToRawBase64(welcomeBannerUrl);
+
     return {
       services,
       food_types,
       recent_orders,
+      welcome_banner: welcomeBannerB64 || '',
+      has_welcome_banner: !!welcomeBannerB64,
       flow_token: flowToken
     };
   },
@@ -2736,6 +2749,7 @@ const catalogService = {
   /**
    * Create and publish the Welcome Service Selection Flow.
    * Stores the Flow ID in process.env.WHATSAPP_WELCOME_FLOW_ID.
+   * Banner is dynamic — no need to republish on banner change.
    * @returns {Promise<{flowId: string, status: string}>}
    */
   async setupWelcomeFlow() {
@@ -2769,11 +2783,8 @@ const catalogService = {
     const createResult = await metaCloud.createFlow(FLOW_NAME, ['OTHER'], { endpointUri });
     const flowId = createResult.id;
 
-    // Step 2: Upload the Flow JSON with banner image (raw base64)
-    const chatbotImagesService = require('./chatbotImages');
-    const bannerUrl = await chatbotImagesService.getImageUrl('flow_welcome_banner');
-    const bannerBase64 = await this._imageUrlToRawBase64(bannerUrl);
-    const flowJson = this.buildWelcomeFlowJSON(bannerBase64);
+    // Step 2: Upload the Flow JSON (banner is dynamic — no base64 embedded)
+    const flowJson = this.buildWelcomeFlowJSON();
     await metaCloud.updateFlowJSON(flowId, flowJson);
 
     // Step 3: Try to publish the Flow

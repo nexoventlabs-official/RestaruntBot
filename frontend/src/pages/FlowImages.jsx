@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Upload, RefreshCw, Image as ImageIcon, Check, X, Loader2, RotateCcw } from 'lucide-react';
+import { Upload, RefreshCw, Image as ImageIcon, Check, X, Loader2 } from 'lucide-react';
 import api from '../api';
 
 export default function FlowImages() {
@@ -8,7 +8,6 @@ export default function FlowImages() {
   const [uploading, setUploading] = useState(null);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [republishing, setRepublishing] = useState(false);
   const fileInputRefs = useRef({});
 
   useEffect(() => {
@@ -59,23 +58,6 @@ export default function FlowImages() {
       setError(err.response?.data?.error || 'Reset failed');
     } finally {
       setUploading(null);
-    }
-  };
-
-  const handleRepublish = async () => {
-    if (!confirm('Create a new version of the Welcome Flow? The old flow will be deprecated.')) return;
-    setRepublishing(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      const res = await api.post('/catalog/republish-welcome-flow');
-      setSuccess(`New Welcome Flow version created! Flow ID: ${res.data.flowId} (${res.data.status})`);
-      setTimeout(() => setSuccess(null), 8000);
-    } catch (err) {
-      const serverMsg = err.response?.data?.error || err.response?.data?.message || '';
-      setError(serverMsg ? `Failed to republish: ${serverMsg}` : 'Failed to republish welcome flow. Check server logs.');
-    } finally {
-      setRepublishing(false);
     }
   };
 
@@ -177,23 +159,6 @@ export default function FlowImages() {
         <div>
           <h1 className="text-2xl font-bold text-dark-900">Flow Images</h1>
           <p className="text-dark-500 mt-1">Manage WhatsApp Flow images (banner &amp; service icons)</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleRepublish}
-            disabled={republishing}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-colors disabled:opacity-50"
-          >
-            {republishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-            {republishing ? 'Creating...' : 'New Flow Version'}
-          </button>
-          <button
-            onClick={fetchImages}
-            className="flex items-center gap-2 px-4 py-2 bg-dark-100 hover:bg-dark-200 rounded-xl transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
-          </button>
         </div>
       </div>
 

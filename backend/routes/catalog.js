@@ -142,27 +142,7 @@ router.post('/republish-welcome-flow', authMiddleware, async (req, res) => {
   try {
     const oldFlowId = catalogService.getWelcomeFlowId();
     const result = await catalogService.republishWelcomeFlow();
-    
-    // Persist new flow ID to .env file so it survives restarts
-    if (result.flowId) {
-      try {
-        const fs = require('fs');
-        const path = require('path');
-        const envPath = path.join(__dirname, '..', '.env');
-        let envContent = fs.readFileSync(envPath, 'utf8');
-        envContent = envContent.replace(
-          /WHATSAPP_WELCOME_FLOW_ID=.*/,
-          `WHATSAPP_WELCOME_FLOW_ID=${result.flowId}`
-        );
-        envContent = envContent.replace(
-          /WHATSAPP_WELCOME_FLOW_STATUS=.*/,
-          `WHATSAPP_WELCOME_FLOW_STATUS=${result.status === 'created_and_published' ? 'PUBLISHED' : 'DRAFT'}`
-        );
-        fs.writeFileSync(envPath, envContent);
-      } catch (envErr) {
-        // .env update is best-effort; in-memory env is already updated
-      }
-    }
+    // Flow ID is persisted to MongoDB Settings inside republishWelcomeFlow — survives restarts.
 
     res.json({
       success: true,
