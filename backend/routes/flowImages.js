@@ -148,11 +148,11 @@ router.put('/:key', auth, upload.single('image'), async (req, res) => {
           public_id: `flow_${key}_${Date.now()}`,
           transformation: [
             // Banner: pad to 8:1 (no crop, full image preserved); Icons: fill to square
-            key === 'flow_welcome_banner'
+            key.endsWith('_banner')
               ? { width, height, crop: 'pad', background: 'auto', gravity: 'center' }
               : { width, height, crop: 'fill', gravity: 'center' },
             // Rounded corners for banner (matching AP Government flow style)
-            ...(key === 'flow_welcome_banner' ? [{ radius: 20 }] : []),
+            ...(key.endsWith('_banner') ? [{ radius: 20 }] : []),
             { quality: 'auto:best', fetch_format: 'png' }
           ]
         },
