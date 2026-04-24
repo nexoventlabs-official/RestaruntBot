@@ -1255,7 +1255,8 @@ router.delete('/:id', auth, async (req, res) => {
       deleteImage(offer.image),
       deleteImage(offer.imageMobile),
       deleteImage(offer.imageTablet),
-      deleteImage(offer.imageDesktop)
+      deleteImage(offer.imageDesktop),
+      deleteImage(offer.imageWhatsApp)
     ]);
     
     // Remove this offer type from all menu items and recalculate offer prices
