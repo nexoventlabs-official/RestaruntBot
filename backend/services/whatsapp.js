@@ -167,6 +167,16 @@ const whatsapp = {
     );
   },
 
+  async sendDocument(phone, documentUrl, filename, caption = '') {
+    return trackOutbound(phone, 'document', {
+      url: documentUrl.substring(0, 100),
+      filename: filename.substring(0, 80),
+      caption: (caption || '').substring(0, 100)
+    },
+      () => metaCloud.sendDocument(phone, documentUrl, filename, caption)
+    );
+  },
+
   async sendImageWithButtons(phone, imageUrl, message, buttons, footer = '') {
     return trackOutbound(phone, 'image', { 
       imageUrl: imageUrl.substring(0, 100),

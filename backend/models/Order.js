@@ -62,6 +62,7 @@ const orderSchema = new mongoose.Schema({
   }],
   estimatedDeliveryTime: { type: Date },
   deliveredAt: { type: Date },
+  invoiceUrl: { type: String }, // Cloudinary URL of the generated invoice PDF (cached after first delivery)
   whatsappConfirmationSent: { type: Boolean, default: false }, // Track if customer was notified
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }

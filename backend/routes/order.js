@@ -341,50 +341,59 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     if (messages[status]) {
       try {
         let msg = `*Order Update*\n\nOrder: ${order.orderId}\n${messages[status]}`;
-        
-        // Add order details and bill for delivered/completed orders
+
+        // ─── DELIVERED / COMPLETED — 3-message sequence ─────────────
+        // 1. Short status update (banner image + thank-you)
+        // 2. Invoice PDF document attachment
+        // 3. Leave-a-Review CTA card
         if (status === 'delivered') {
-          msg += `\n\n━━━━━━━━━━━━━━━\n📋 *Order Details*\n━━━━━━━━━━━━━━━\n`;
-          
-          // Add each item
-          order.items.forEach((item, index) => {
-            const itemTotal = item.price * item.quantity;
-            msg += `${index + 1}. *${item.name}*\n`;
-            msg += `   Qty: ${item.quantity} × ₹${item.price} = ₹${itemTotal}\n\n`;
-          });
-          
-          msg += `\n━━━━━━━━━━━━━━━\n`;
-          msg += `💰 *Total Bill: ₹${order.totalAmount}*\n`;
-          
-          if (isPickupOrder) {
-            msg += `🏪 Service: Self-Pickup\n`;
-            msg += `💳 Payment: ${order.paymentMethod === 'cod' ? 'Paid at Hotel' : 'UPI'} (${order.paymentStatus === 'paid' ? '✅ Paid' : '⏳ Pending'})\n`;
-          } else {
-            msg += `💳 Payment: ${order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'UPI'} (${order.paymentStatus === 'paid' ? '✅ Paid' : '⏳ Pending'})\n`;
-          }
-          
-          msg += `━━━━━━━━━━━━━━━\n`;
-          msg += `\n🙏 Thank you for ordering!\nWe hope you enjoy your meal! 🍽️`;
-          
-          // Add review request message
-          if (isPickupOrder) {
-            msg += `\n\n⭐ *Rate your food!*\nTap below to rate the items you ordered.`;
-          } else {
-            msg += `\n\n⭐ *How was your order?*\nTap below to share your feedback.`;
-          }
-          
-          // Send combined message with image and review CTA button
           const frontendUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
           const reviewUrl = `${frontendUrl}/review/${order.customer.phone}/${order.orderId}`;
-          
-          // Use pickup_completed image for pickup orders, delivered image for delivery orders
           const deliveredImageKey = isPickupOrder ? 'pickup_completed' : 'delivered';
           const deliveredImageUrl = await chatbotImagesService.getImageUrl(deliveredImageKey);
-          
+
+          // ── Message 1 — short status update with banner image ───
+          const statusMsg =
+            `${msg}\n\n` +
+            `🙏 Thank you for ordering!\n` +
+            `We hope you enjoy your meal! 🍽️\n\n` +
+            `� Your invoice is attached below.`;
+
+          if (deliveredImageUrl) {
+            await whatsapp.sendImage(order.customer.phone, deliveredImageUrl, statusMsg);
+          } else {
+            await whatsapp.sendMessage(order.customer.phone, statusMsg);
+          }
+
+          // ── Message 2 — invoice PDF (best-effort) ────────────────
+          try {
+            const { getOrCreateInvoiceUrl, getInvoiceFilename } = require('../services/invoiceService');
+            const invoiceUrl = await getOrCreateInvoiceUrl(order);
+            if (invoiceUrl) {
+              await whatsapp.sendDocument(
+                order.customer.phone,
+                invoiceUrl,
+                getInvoiceFilename(order),
+                `Invoice for Order #${order.orderId}`
+              );
+            } else {
+              logger.warn('Invoice unavailable for delivered order', { orderId: order.orderId });
+            }
+          } catch (invoiceErr) {
+            logger.error('Invoice send failed', {
+              orderId: order.orderId,
+              error: invoiceErr.message
+            });
+          }
+
+          // ── Message 3 — Leave a Review CTA ───────────────────────
+          const reviewMsg = isPickupOrder
+            ? `⭐ *Rate your food!*\n\nTap below to rate the items you ordered.`
+            : `⭐ *How was your order?*\n\nTap below to share your feedback.`;
           await sendWithOptionalImageCta(
             order.customer.phone,
             deliveredImageUrl,
-            msg,
+            reviewMsg,
             isPickupOrder ? 'Rate Your Food ⭐' : 'Leave a Review ⭐',
             reviewUrl,
             isPickupOrder ? 'Help us improve by rating your food items' : 'Your feedback helps us improve!'

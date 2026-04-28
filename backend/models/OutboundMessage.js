@@ -25,7 +25,9 @@ const outboundMessageSchema = new mongoose.Schema({
       'cta_url', 'cta_phone', 'image_cta_phone',
       'product', 'product_list',
       // WhatsApp Native Payment (review_and_pay / order_status)
-      'order_details', 'order_status'
+      'order_details', 'order_status',
+      // Document attachments (e.g. invoice PDFs)
+      'document'
     ],
     required: true
   },

@@ -323,6 +323,48 @@ const metaCloud = {
     }
   },
 
+  /**
+   * Send a document (e.g. an invoice PDF) to a WhatsApp user.
+   *
+   * @param {string} phone - Recipient phone (any format; cleaned internally)
+   * @param {string} documentUrl - Public HTTPS URL Meta can fetch
+   * @param {string} filename - Filename shown to the recipient (must include extension)
+   * @param {string} [caption] - Optional caption shown above the document tile
+   */
+  async sendDocument(phone, documentUrl, filename, caption = '') {
+    const endTimer = startTimer('meta.sendDocument');
+
+    try {
+      const { baseUrl, accessToken } = getConfig();
+      const to = phone.replace('@c.us', '').replace(/\D/g, '');
+
+      const payload = {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'document',
+        document: {
+          link: documentUrl,
+          filename
+        }
+      };
+      if (caption) payload.document.caption = caption;
+
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      logger.info('Meta sendDocument success', { to, filename });
+      endTimer({ success: true });
+      return response.data;
+    } catch (error) {
+      endTimer({ success: false, error: error.message });
+      logger.error('Meta sendDocument error', {
+        error: error.response?.data || error.message,
+        filename
+      });
+      throw error;
+    }
+  },
+
   async sendImage(phone, imageUrl, caption = '') {
     const endTimer = startTimer('meta.sendImage');
 
