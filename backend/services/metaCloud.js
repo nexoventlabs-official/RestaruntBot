@@ -365,6 +365,58 @@ const metaCloud = {
     }
   },
 
+  /**
+   * Send an interactive cta_url message with a DOCUMENT header — packs three
+   * things into a single chat bubble:
+   *   • PDF / file tile (header.document)
+   *   • Body text
+   *   • CTA URL button (e.g. "Leave a Review")
+   *
+   * Falls back to a plain text + CTA card if Meta rejects the document header.
+   */
+  async sendDocumentWithCtaUrl(phone, documentUrl, filename, message, buttonText, url, footer = '') {
+    const endTimer = startTimer('meta.sendDocumentWithCtaUrl');
+
+    try {
+      const { baseUrl, accessToken } = getConfig();
+      const to = phone.replace('@c.us', '').replace(/\D/g, '');
+
+      const payload = {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'cta_url',
+          header: {
+            type: 'document',
+            document: { link: documentUrl, filename }
+          },
+          body: { text: message },
+          footer: footer ? { text: footer } : undefined,
+          action: {
+            name: 'cta_url',
+            parameters: { display_text: buttonText, url }
+          }
+        }
+      };
+
+      const response = await metaApi.post(`${baseUrl}/messages`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      logger.info('Meta sendDocumentWithCtaUrl success', { to, filename });
+      endTimer({ success: true });
+      return response.data;
+    } catch (error) {
+      endTimer({ success: false, error: error.message });
+      logger.error('Meta sendDocumentWithCtaUrl error', {
+        error: error.response?.data || error.message,
+        filename
+      });
+      // Fallback — plain CTA URL card without the document tile.
+      return this.sendCtaUrl(phone, message, buttonText, url, footer);
+    }
+  },
+
   async sendImage(phone, imageUrl, caption = '') {
     const endTimer = startTimer('meta.sendImage');
 

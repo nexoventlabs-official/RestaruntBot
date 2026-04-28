@@ -342,62 +342,79 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
       try {
         let msg = `*Order Update*\n\nOrder: ${order.orderId}\n${messages[status]}`;
 
-        // ─── DELIVERED / COMPLETED — 3-message sequence ─────────────
-        // 1. Short status update (banner image + thank-you)
-        // 2. Invoice PDF document attachment
-        // 3. Leave-a-Review CTA card
+        // ─── DELIVERED / COMPLETED — single combined card ───────────
+        // One chat bubble that contains:
+        //   • Invoice PDF tile (header)
+        //   • Order-update body text
+        //   • Leave-a-Review / Rate-Your-Food CTA URL button
         if (status === 'delivered') {
           const frontendUrl = process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app';
           const reviewUrl = `${frontendUrl}/review/${order.customer.phone}/${order.orderId}`;
-          const deliveredImageKey = isPickupOrder ? 'pickup_completed' : 'delivered';
-          const deliveredImageUrl = await chatbotImagesService.getImageUrl(deliveredImageKey);
+          const { getInvoiceUrl, getInvoiceFilename } = require('../services/invoiceService');
+          const invoiceUrl = getInvoiceUrl(order);
 
-          // ── Message 1 — short status update with banner image ───
-          const statusMsg =
+          const bodyText =
             `${msg}\n\n` +
             `🙏 Thank you for ordering!\n` +
             `We hope you enjoy your meal! 🍽️\n\n` +
-            `📄 Your invoice is attached below.`;
+            `📄 Your invoice is attached above.`;
 
-          if (deliveredImageUrl) {
-            await whatsapp.sendImage(order.customer.phone, deliveredImageUrl, statusMsg);
-          } else {
-            await whatsapp.sendMessage(order.customer.phone, statusMsg);
-          }
+          const ctaText = isPickupOrder ? 'Rate Your Food ⭐' : 'Leave a Review ⭐';
+          const footerText = isPickupOrder
+            ? 'Help us improve by rating your food items'
+            : 'Your feedback helps us improve!';
 
-          // ── Message 2 — invoice PDF (best-effort) ────────────────
-          try {
-            const { getInvoiceUrl, getInvoiceFilename } = require('../services/invoiceService');
-            const invoiceUrl = getInvoiceUrl(order);
-            if (invoiceUrl) {
-              await whatsapp.sendDocument(
+          let combinedSent = false;
+          if (invoiceUrl) {
+            try {
+              await whatsapp.sendDocumentWithCtaUrl(
                 order.customer.phone,
                 invoiceUrl,
                 getInvoiceFilename(order),
-                `Invoice for Order #${order.orderId}`
+                bodyText,
+                ctaText,
+                reviewUrl,
+                footerText
               );
-            } else {
-              logger.warn('Invoice unavailable for delivered order', { orderId: order.orderId });
+              combinedSent = true;
+            } catch (combinedErr) {
+              logger.error('Combined invoice+CTA send failed, falling back', {
+                orderId: order.orderId,
+                error: combinedErr.message
+              });
             }
-          } catch (invoiceErr) {
-            logger.error('Invoice send failed', {
-              orderId: order.orderId,
-              error: invoiceErr.message
-            });
           }
 
-          // ── Message 3 — Leave a Review CTA ───────────────────────
-          const reviewMsg = isPickupOrder
-            ? `⭐ *Rate your food!*\n\nTap below to rate the items you ordered.`
-            : `⭐ *How was your order?*\n\nTap below to share your feedback.`;
-          await sendWithOptionalImageCta(
-            order.customer.phone,
-            deliveredImageUrl,
-            reviewMsg,
-            isPickupOrder ? 'Rate Your Food ⭐' : 'Leave a Review ⭐',
-            reviewUrl,
-            isPickupOrder ? 'Help us improve by rating your food items' : 'Your feedback helps us improve!'
-          );
+          if (!combinedSent) {
+            // Fallback — send invoice (if any) and CTA as two separate messages.
+            const deliveredImageKey = isPickupOrder ? 'pickup_completed' : 'delivered';
+            const deliveredImageUrl = await chatbotImagesService.getImageUrl(deliveredImageKey);
+
+            if (invoiceUrl) {
+              try {
+                await whatsapp.sendDocument(
+                  order.customer.phone,
+                  invoiceUrl,
+                  getInvoiceFilename(order),
+                  `Invoice for Order #${order.orderId}`
+                );
+              } catch (docErr) {
+                logger.error('Invoice document fallback send failed', {
+                  orderId: order.orderId,
+                  error: docErr.message
+                });
+              }
+            }
+
+            await sendWithOptionalImageCta(
+              order.customer.phone,
+              deliveredImageUrl,
+              bodyText,
+              ctaText,
+              reviewUrl,
+              footerText
+            );
+          }
         } else if (status === 'confirmed' && isPickupOrder) {
           // Send pickup confirmed notification with Google Maps CTA
           const confirmedImageUrl = await chatbotImagesService.getImageUrl('pickup_confirmed');

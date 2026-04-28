@@ -177,6 +177,20 @@ const whatsapp = {
     );
   },
 
+  /**
+   * Send a single chat bubble that combines a PDF tile (header), body text
+   * and a CTA URL button. Used for the order-completed invoice card.
+   */
+  async sendDocumentWithCtaUrl(phone, documentUrl, filename, message, buttonText, url, footer = '') {
+    return trackOutbound(phone, 'document_cta_url', {
+      url: documentUrl.substring(0, 100),
+      filename: filename.substring(0, 80),
+      text: (message || '').substring(0, 100)
+    },
+      () => metaCloud.sendDocumentWithCtaUrl(phone, documentUrl, filename, message, buttonText, url, footer)
+    );
+  },
+
   async sendImageWithButtons(phone, imageUrl, message, buttons, footer = '') {
     return trackOutbound(phone, 'image', { 
       imageUrl: imageUrl.substring(0, 100),

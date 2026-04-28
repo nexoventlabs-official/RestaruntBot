@@ -351,11 +351,20 @@ async function generateInvoicePdf(order, meta = {}) {
       y += 38;
 
       // ─── PAYMENT BOX ─────────────────────────────────────────────────
+      // For COD / Pay-at-Hotel orders we honour `actualPaymentMethod` (set by
+      // the admin / delivery partner when collecting payment) so the invoice
+      // reflects whether the customer ultimately paid in cash or via UPI.
       const payMethod = (() => {
-        if (order.paymentMethod === 'cod' && isPickup) return 'Pay at Hotel';
-        if (order.paymentMethod === 'cod') return 'Cash on Delivery';
-        if (order.actualPaymentMethod === 'upi') return 'UPI (paid at delivery)';
-        if (order.actualPaymentMethod === 'cash') return 'Cash (paid at delivery)';
+        if (order.paymentMethod === 'cod' && isPickup) {
+          if (order.actualPaymentMethod === 'upi') return 'UPI (paid at hotel)';
+          if (order.actualPaymentMethod === 'cash') return 'Cash (paid at hotel)';
+          return 'Pay at Hotel';
+        }
+        if (order.paymentMethod === 'cod') {
+          if (order.actualPaymentMethod === 'upi') return 'UPI (paid at delivery)';
+          if (order.actualPaymentMethod === 'cash') return 'Cash (paid at delivery)';
+          return 'Cash on Delivery';
+        }
         return 'UPI / Online';
       })();
 
