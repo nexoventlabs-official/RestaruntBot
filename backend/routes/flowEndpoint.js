@@ -409,6 +409,78 @@ router.post('/', async (req, res) => {
           response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'init_error' } } } };
         }
       }
+      // Payment Retry Flow — build RETRY_OPTIONS screen for a failed online payment.
+      // Token format: payment_retry_{phone}_{orderId}
+      // (must be checked BEFORE the generic `payment_` branch below.)
+      else if (flow_token?.startsWith('payment_retry_')) {
+        const tokenBody = flow_token.replace('payment_retry_', '');
+        const lastUnderscore = tokenBody.lastIndexOf('_');
+        const phone = tokenBody.substring(0, lastUnderscore);
+        const orderIdFromToken = tokenBody.substring(lastUnderscore + 1);
+
+        try {
+          const order = await Order.findOne({ orderId: orderIdFromToken }).lean();
+          if (!order) {
+            logger.warn('[FlowEndpoint] Payment retry INIT — order not found', {
+              phone, orderId: orderIdFromToken
+            });
+            response = {
+              screen: 'SUCCESS',
+              data: { extension_message_response: { params: { flow_token, error: 'order_not_found' } } }
+            };
+          } else {
+            const images = await getFlowImages();
+            const isPickup = order.serviceType === 'pickup';
+
+            const retryOptions = [];
+            // Always offer Retry UPI first
+            retryOptions.push({
+              id: 'retry_upi',
+              title: 'Retry UPI',
+              description: 'Try paying again via UPI / GPay / PhonePe',
+              ...(images.payGpayImg ? { image: images.payGpayImg } : {})
+            });
+            // Second option depends on service type
+            if (isPickup) {
+              retryOptions.push({
+                id: 'pay_hotel',
+                title: 'Pay at Hotel',
+                description: 'Pay cash when you collect the order',
+                ...(images.payHotelImg ? { image: images.payHotelImg } : {})
+              });
+            } else {
+              retryOptions.push({
+                id: 'pay_cod',
+                title: 'Pay COD',
+                description: 'Pay cash when the order arrives',
+                ...(images.payCodImg ? { image: images.payCodImg } : {})
+              });
+            }
+
+            const summary = `Order #${order.orderId} • ₹${order.totalAmount}\nChoose how you would like to pay.`;
+
+            response = {
+              screen: 'RETRY_OPTIONS',
+              data: {
+                retry_banner: images.paymentBanner || '',
+                retry_heading: '❌ Payment Failed',
+                retry_info: summary,
+                retry_options: retryOptions,
+                order_id: order.orderId,
+                flow_token
+              }
+            };
+          }
+        } catch (err) {
+          logger.error('[FlowEndpoint] Payment retry INIT error', {
+            phone, orderId: orderIdFromToken, error: err.message
+          });
+          response = {
+            screen: 'SUCCESS',
+            data: { extension_message_response: { params: { flow_token, error: 'payment_retry_init_error' } } }
+          };
+        }
+      }
       // Payment Method Flow — build PAYMENT_SELECT screen
       else if (flow_token?.startsWith('payment_')) {
         // flow_token format: payment_{phone}_{serviceType}

@@ -330,30 +330,16 @@ async function sendPaymentConfirmation(order) {
 }
 
 /**
- * Send payment failure notification
+ * Send payment failure notification.
+ *
+ * Delegates to `services/paymentRetryHelpers.sendPaymentRetryMessage`, which
+ * sends the new "Try Again" Flow CTA (or falls back to a 3-button reply
+ * when the Flow ID is not configured).
  */
 async function sendPaymentFailureNotification(order) {
   try {
-    const phone = order.customer.phone;
-    
-    let message = `❌ *Payment Failed*\n\n`;
-    message += `📦 Order ID: ${order.orderId}\n`;
-    message += `💰 Amount: ₹${order.totalAmount}\n\n`;
-    message += `Your payment could not be processed.\n\n`;
-    message += `Please try again or choose a different payment method.`;
-    
-    const payFailImg = await chatbotImagesService.getImageUrl('payment_failed');
-    const buttons = [
-      { id: 'retry_payment', text: 'Retry Payment' },
-      { id: 'pay_cod', text: 'Pay COD' },
-      { id: 'home', text: 'Main Menu' }
-    ];
-    if (payFailImg) {
-      await whatsapp.sendImageWithButtons(phone, payFailImg, message, buttons);
-    } else {
-      await whatsapp.sendButtons(phone, message, buttons);
-    }
-    
+    const { sendPaymentRetryMessage } = require('../paymentRetryHelpers');
+    await sendPaymentRetryMessage(order, { reason: 'failed' });
     logger.info('Payment failure notification sent', { orderId: order.orderId });
   } catch (error) {
     logger.error('Failed to send payment failure notification', {

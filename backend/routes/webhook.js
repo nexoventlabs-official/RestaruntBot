@@ -306,19 +306,13 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           });
                           await order.save();
 
-                          // Notify customer
-                          const payFailMsg = `❌ *Payment ${paymentStatus === 'canceled' ? 'Cancelled' : 'Failed'}*\n\nOrder #${referenceId}\n\nPlease try again or choose a different payment method.`;
-                          const payFailBtns = [
-                              { id: 'pay_upi', text: 'Retry UPI' },
-                              { id: 'pay_cod', text: 'Pay COD' },
-                              { id: 'home', text: 'Main Menu' }
-                          ];
-                          const payFailImg = await chatbotImagesService.getImageUrl('payment_failed');
-                          if (payFailImg) {
-                            await whatsapp.sendImageWithButtons(recipientPhone, payFailImg, payFailMsg, payFailBtns);
-                          } else {
-                            await whatsapp.sendButtons(recipientPhone, payFailMsg, payFailBtns);
-                          }
+                          // Notify customer with the new "Try Again" Flow CTA
+                          // (falls back to legacy 3-button reply if the Flow ID
+                          // is not configured — see services/paymentRetryHelpers.js).
+                          const { sendPaymentRetryMessage } = require('../services/paymentRetryHelpers');
+                          await sendPaymentRetryMessage(order, {
+                            reason: paymentStatus === 'canceled' ? 'cancelled' : 'failed'
+                          });
 
                           logger.warn('WhatsApp payment failed/canceled', { orderId: referenceId, paymentStatus });
                         }
@@ -492,6 +486,76 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                         return res.sendStatus(200);
                       } else {
                         logger.info('Flow: Order actions - unknown result', { actionResult });
+                        return res.sendStatus(200);
+                      }
+                    }
+                    // Payment Retry flow — user chose Retry UPI / Pay COD / Pay at Hotel
+                    // (must be checked BEFORE the generic `payment_` branch below.)
+                    else if (responseData.flow_token?.startsWith('payment_retry_')) {
+                      const selectedOption = responseData.selected_option;
+                      const tokenBody = responseData.flow_token.replace('payment_retry_', '');
+                      const lastUnderscoreR = tokenBody.lastIndexOf('_');
+                      const orderIdFromToken = responseData.order_id
+                        || tokenBody.substring(lastUnderscoreR + 1);
+
+                      try {
+                        const order = await Order.findOne({ orderId: orderIdFromToken });
+                        if (!order) {
+                          await whatsapp.sendMessage(
+                            phone,
+                            `❓ *Order not found*\n\nWe could not find order #${orderIdFromToken}.`
+                          );
+                          logger.warn('Flow: Payment retry — order not found', {
+                            phone, orderId: orderIdFromToken
+                          });
+                          return res.sendStatus(200);
+                        }
+
+                        const {
+                          resendNativePayment,
+                          convertToCashPayment
+                        } = require('../services/paymentRetryHelpers');
+
+                        if (selectedOption === 'retry_upi') {
+                          const result = await resendNativePayment(order);
+                          if (!result.ok) {
+                            // Native payment unavailable — fall back to a friendly note
+                            await whatsapp.sendMessage(
+                              phone,
+                              '⚠️ Unable to re-send the payment request right now. Please try again or choose ' +
+                              (order.serviceType === 'pickup' ? 'Pay at Hotel' : 'Cash on Delivery') +
+                              '.'
+                            ).catch(() => {});
+                          }
+                          logger.info('Flow: Payment retry — retry_upi handled', {
+                            orderId: order.orderId, ok: result.ok, reason: result.reason
+                          });
+                          return res.sendStatus(200);
+                        }
+
+                        if (selectedOption === 'pay_cod' || selectedOption === 'pay_hotel') {
+                          await convertToCashPayment(order);
+                          logger.info('Flow: Payment retry — converted to cash', {
+                            orderId: order.orderId,
+                            serviceType: order.serviceType,
+                            selectedOption
+                          });
+                          return res.sendStatus(200);
+                        }
+
+                        logger.info('Flow: Payment retry — unknown option', { selectedOption });
+                        return res.sendStatus(200);
+                      } catch (retryErr) {
+                        logger.error('Flow: Payment retry — handler failed', {
+                          error: retryErr.message,
+                          phone,
+                          orderId: orderIdFromToken,
+                          selectedOption
+                        });
+                        await whatsapp.sendMessage(
+                          phone,
+                          '⚠️ Something went wrong while updating your payment. Please contact support.'
+                        ).catch(() => {});
                         return res.sendStatus(200);
                       }
                     }

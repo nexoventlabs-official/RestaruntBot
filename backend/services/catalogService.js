@@ -3086,6 +3086,206 @@ const catalogService = {
     return { ...result, oldFlowId };
   },
 
+  // ==================== PAYMENT RETRY FLOW ====================
+  //
+  // Sent when an online (UPI / Razorpay) payment fails or is cancelled. Replaces
+  // the old 3-button "Retry UPI / Pay COD / Main Menu" reply with a single
+  // "Try Again" CTA that opens this Flow. The Flow shows a RadioButtonsGroup
+  // with two visual options:
+  //   - delivery → "Retry UPI" + "Pay COD"
+  //   - pickup   → "Retry UPI" + "Pay at Hotel"
+  // On submit the Flow ends with `selected_option` ∈ {retry_upi, pay_cod, pay_hotel}
+  // plus the order id. The webhook then either:
+  //   - retry_upi → re-sends the WhatsApp Native Payment "Review and Pay" message
+  //                 (whatsapp.sendOrderDetails) for the same order
+  //   - pay_cod / pay_hotel → flips order.paymentMethod to 'cod', resets
+  //                 paymentStatus to 'pending', and sends a confirmation card.
+
+  getPaymentRetryFlowId() {
+    return process.env.WHATSAPP_PAYMENT_RETRY_FLOW_ID || null;
+  },
+
+  /**
+   * Build the Payment Retry Flow JSON (WhatsApp Flows v7.3, Data API v3.0).
+   * Single terminal screen `RETRY_OPTIONS`: banner + order summary + 2-option
+   * RadioButtonsGroup (driven by `data.retry_options`) + Footer that completes
+   * the flow with `{ selected_option, order_id, flow_token }`.
+   */
+  buildPaymentRetryFlowJSON() {
+    return {
+      version: '7.3',
+      data_api_version: '3.0',
+      routing_model: {
+        RETRY_OPTIONS: []
+      },
+      screens: [
+        {
+          id: 'RETRY_OPTIONS',
+          title: 'Try Again',
+          terminal: true,
+          success: true,
+          data: {
+            retry_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
+            },
+            retry_heading: {
+              type: 'string',
+              __example__: '❌ Payment Failed'
+            },
+            retry_info: {
+              type: 'string',
+              __example__: 'Order #ORD123 • ₹199\nChoose how you would like to pay.'
+            },
+            retry_options: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'retry_upi', title: 'Retry UPI', description: 'Try paying again via UPI', image: 'iVBORw0KGgo' },
+                { id: 'pay_cod', title: 'Pay COD', description: 'Pay cash when order arrives', image: 'iVBORw0KGgo' }
+              ]
+            },
+            order_id: {
+              type: 'string',
+              __example__: 'ORD123'
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'payment_retry_919999999999_ORD123'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'Image',
+                src: '${data.retry_banner}',
+                width: 1000,
+                height: 125,
+                'scale-type': 'cover',
+                'alt-text': 'Payment Failed Banner'
+              },
+              {
+                type: 'TextHeading',
+                text: '${data.retry_heading}'
+              },
+              {
+                type: 'TextBody',
+                text: '${data.retry_info}'
+              },
+              {
+                type: 'RadioButtonsGroup',
+                name: 'selected_option',
+                label: 'Choose an option',
+                required: true,
+                'data-source': '${data.retry_options}'
+              },
+              {
+                type: 'Footer',
+                label: 'Continue',
+                'on-click-action': {
+                  name: 'complete',
+                  payload: {
+                    selected_option: '${form.selected_option}',
+                    order_id: '${data.order_id}',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    };
+  },
+
+  /**
+   * Idempotently create + publish the Payment Retry Flow.
+   * Reuses an existing PUBLISHED flow with the same name if found.
+   */
+  async setupPaymentRetryFlow() {
+    const FLOW_NAME = 'JRB Payment Retry v1';
+    const metaCloud = require('./metaCloud');
+
+    const existingFlows = await metaCloud.getFlows();
+    const retryFlows = existingFlows.filter(f => f.name.startsWith('JRB Payment Retry'));
+    const published = retryFlows.find(f => f.status === 'PUBLISHED');
+    if (published) {
+      logger.info('Payment Retry Flow already published, reusing', { flowId: published.id, name: published.name });
+      process.env.WHATSAPP_PAYMENT_RETRY_FLOW_ID = published.id;
+      return { flowId: published.id, status: 'already_published' };
+    }
+
+    const endpointUri = process.env.WHATSAPP_FLOW_ENDPOINT_URI
+      || 'https://restaruntbot.onrender.com/api/whatsapp-flow';
+
+    const createResult = await metaCloud.createFlow(FLOW_NAME, ['OTHER'], { endpointUri });
+    const flowId = createResult.id;
+
+    const flowJson = this.buildPaymentRetryFlowJSON();
+    await metaCloud.updateFlowJSON(flowId, flowJson);
+
+    try {
+      await metaCloud.publishFlow(flowId);
+      process.env.WHATSAPP_PAYMENT_RETRY_FLOW_ID = flowId;
+      logger.info('Payment Retry Flow created and published', { flowName: FLOW_NAME, flowId });
+      return { flowId, status: 'created_and_published' };
+    } catch (pubErr) {
+      logger.warn('Payment Retry Flow created as DRAFT (publish failed)', {
+        flowName: FLOW_NAME,
+        flowId,
+        error: pubErr.response?.data?.error?.message || pubErr.message
+      });
+      process.env.WHATSAPP_PAYMENT_RETRY_FLOW_ID = flowId;
+      return { flowId, status: 'created_as_draft' };
+    }
+  },
+
+  /**
+   * Republish the Payment Retry Flow — deprecates all existing published versions
+   * and creates a fresh one. Mirrors `republishOrderActionsFlow()`.
+   */
+  async republishPaymentRetryFlow() {
+    const oldFlowId = process.env.WHATSAPP_PAYMENT_RETRY_FLOW_ID;
+    const metaCloud = require('./metaCloud');
+    const axios = require('axios');
+    const accessToken = process.env.META_ACCESS_TOKEN;
+
+    try {
+      const flows = await metaCloud.getFlows();
+      const publishedRetryFlows = flows.filter(
+        f => f.name.startsWith('JRB Payment Retry') && f.status === 'PUBLISHED'
+      );
+
+      for (const flow of publishedRetryFlows) {
+        try {
+          await axios.post(
+            `https://graph.facebook.com/v24.0/${flow.id}/deprecate`,
+            {},
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+          logger.info('Deprecated published payment retry flow for republish', { flowId: flow.id, name: flow.name });
+        } catch (depErr) {
+          logger.warn('Could not deprecate payment retry flow', { flowId: flow.id, error: depErr.message });
+        }
+      }
+    } catch (listErr) {
+      logger.warn('Could not list flows for deprecation, proceeding anyway', { error: listErr.message });
+    }
+
+    process.env.WHATSAPP_PAYMENT_RETRY_FLOW_ID = '';
+    const result = await this.setupPaymentRetryFlow();
+    return { ...result, oldFlowId };
+  },
+
   /**
    * Get the Order Confirmation Flow ID (from env).
    * @returns {string|null}
