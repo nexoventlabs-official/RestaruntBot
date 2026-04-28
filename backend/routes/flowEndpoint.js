@@ -132,7 +132,7 @@ async function getFlowImages() {
   // Fetch all image URLs (services + order statuses + banners)
   const [
     orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, visitWebsiteImg, helpSupportImg,
-    myCartImg, cartBannerImg, cartPlaceOrderImg, cartAddMoreImg, cartClearImg,
+    myCartImg, trackOrderImg, cartBannerImg, cartPlaceOrderImg, cartAddMoreImg, cartClearImg,
     pendingImg, confirmedImg, preparingImg, readyImg, outForDeliveryImg, deliveredImg, cancelledImg,
     websiteBannerImg,
     offersBannerImg,
@@ -158,6 +158,7 @@ async function getFlowImages() {
     chatbotImagesService.getImageUrl('flow_visit_website'),
     chatbotImagesService.getImageUrl('flow_help_support'),
     chatbotImagesService.getImageUrl('flow_my_cart'),
+    chatbotImagesService.getImageUrl('flow_track_order'),
     chatbotImagesService.getImageUrl('flow_cart_banner'),
     chatbotImagesService.getImageUrl('flow_cart_place_order'),
     chatbotImagesService.getImageUrl('flow_cart_add_more'),
@@ -190,7 +191,7 @@ async function getFlowImages() {
   // Convert to base64
   const [
     orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, visitWebsiteB64, helpSupportB64,
-    myCartB64, cartBannerB64, cartPlaceOrderB64, cartAddMoreB64, cartClearB64,
+    myCartB64, trackOrderB64, cartBannerB64, cartPlaceOrderB64, cartAddMoreB64, cartClearB64,
     pendingB64, confirmedB64, preparingB64, readyB64, outForDeliveryB64, deliveredB64, cancelledB64,
     websiteBannerB64,
     offersBannerB64,
@@ -211,7 +212,7 @@ async function getFlowImages() {
   ] = await Promise.all([
     toBase64(orderFoodImg), toBase64(myOrdersImg), toBase64(viewOffersImg),
     toBase64(accountDetailsImg), toBase64(visitWebsiteImg),
-    toBase64(helpSupportImg), toBase64(myCartImg),
+    toBase64(helpSupportImg), toBase64(myCartImg), toBase64(trackOrderImg),
     toBase64(cartBannerImg), toBase64(cartPlaceOrderImg), toBase64(cartAddMoreImg), toBase64(cartClearImg),
     toBase64(pendingImg), toBase64(confirmedImg), toBase64(preparingImg),
     toBase64(readyImg), toBase64(outForDeliveryImg), toBase64(deliveredImg), toBase64(cancelledImg),
@@ -242,8 +243,9 @@ async function getFlowImages() {
   imageCache = {
     services: [
       buildItem('order_food', 'Order Food', 'Browse our menu and place an order', orderFoodB64),
-      buildItem('my_cart', 'My Cart', 'View your cart items', myCartB64),
-      buildItem('my_orders', 'My Orders', 'Check order status & track delivery', myOrdersB64),
+      // "Track Order" replaces the old "My Cart" entry — shows live order status with a tracking link.
+      buildItem('track_order', 'Track Order', 'See latest status of your active orders', trackOrderB64 || myOrdersB64),
+      buildItem('my_orders', 'My Orders', 'View past orders & details', myOrdersB64),
       buildItem('view_offers', 'View Offers', 'See current deals and discounts', viewOffersB64),
       buildItem('account_details', 'Account Details', 'View or update your profile info', accountDetailsB64),
       buildItem('open_website', 'Visit Website', 'View our full website', visitWebsiteB64),
@@ -981,6 +983,89 @@ router.post('/', async (req, res) => {
               flow_token: token
             }
           };
+        } else if (selectedService === 'track_order') {
+          // Track Order → show currently active orders (not delivered/cancelled).
+          // The flow then `complete`s with the chosen order; webhook sends the
+          // status update message + tracking CTA URL.
+          const images = await getFlowImages();
+          const phone = token.replace('welcome_service_', '');
+
+          const STATUS_LABELS = {
+            pending: 'Pending',
+            confirmed: 'Confirmed',
+            preparing: 'Preparing',
+            ready: 'Ready',
+            out_for_delivery: 'Out for Delivery'
+          };
+
+          try {
+            const activeOrders = await Order.find({
+              'customer.phone': phone,
+              status: { $nin: ['cancelled', 'delivered'] }
+            })
+              .sort({ createdAt: -1 })
+              .limit(10)
+              .select('orderId status items totalAmount createdAt serviceType')
+              .lean();
+
+            if (activeOrders.length > 0) {
+              const orderItems = activeOrders.map(order => {
+                const itemCount = order.items ? order.items.length : 0;
+                const date = new Date(order.createdAt);
+                const dateStr = date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+                const statusLabel = STATUS_LABELS[order.status] || order.status;
+
+                const item = {
+                  id: order.orderId,
+                  title: `#${order.orderId} - ₹${order.totalAmount}`,
+                  description: `${statusLabel} • ${itemCount} item${itemCount !== 1 ? 's' : ''} • ${dateStr}`
+                };
+
+                // Status-based icon thumbnail (uses the same status images as MY_ORDERS)
+                const statusImg = images.statusImages?.[order.status];
+                if (statusImg) item.image = statusImg;
+
+                return item;
+              });
+
+              response = {
+                screen: 'TRACK_ORDER',
+                data: {
+                  active_orders: orderItems,
+                  track_banner: images.ordersBanner || '',
+                  flow_token: token
+                }
+              };
+            } else {
+              // No active orders → close flow with flag; webhook sends a friendly text.
+              response = {
+                screen: 'SUCCESS',
+                data: {
+                  extension_message_response: {
+                    params: {
+                      flow_token: token,
+                      selected_service: 'track_order',
+                      no_active_orders: 'true'
+                    }
+                  }
+                }
+              };
+            }
+          } catch (dbErr) {
+            logger.error('[FlowEndpoint] Failed to fetch active orders', { phone, error: dbErr.message });
+            response = {
+              screen: 'SUCCESS',
+              data: {
+                extension_message_response: {
+                  params: {
+                    flow_token: token,
+                    selected_service: 'track_order',
+                    no_active_orders: 'true'
+                  }
+                }
+              }
+            };
+          }
         } else if (selectedService === 'my_cart') {
           // My Cart → fetch cart items dynamically and show MY_CART screen
           const images = await getFlowImages();

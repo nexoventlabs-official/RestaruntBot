@@ -1990,13 +1990,11 @@ const catalogService = {
       version: '7.3',
       data_api_version: '3.0',
       routing_model: {
-        'SERVICE_SELECT': ['MENU_CATEGORIES', 'MY_ORDERS', 'MY_CART', 'VIEW_OFFERS', 'ACCOUNT_DETAILS', 'VISIT_WEBSITE', 'HELP_SUPPORT'],
+        'SERVICE_SELECT': ['MENU_CATEGORIES', 'MY_ORDERS', 'TRACK_ORDER', 'VIEW_OFFERS', 'ACCOUNT_DETAILS', 'VISIT_WEBSITE', 'HELP_SUPPORT'],
         'MENU_CATEGORIES': [],
         'MY_ORDERS': ['ORDER_DETAILS'],
         'ORDER_DETAILS': [],
-        'MY_CART': ['CART_ACTIONS', 'MENU_CATEGORIES'],
-        'CART_ACTIONS': ['CHOOSE_SERVICE', 'MENU_CATEGORIES'],
-        'CHOOSE_SERVICE': [],
+        'TRACK_ORDER': [],
         'VIEW_OFFERS': ['MENU_CATEGORIES'],
         'ACCOUNT_DETAILS': [],
         'VISIT_WEBSITE': [],
@@ -2378,153 +2376,18 @@ const catalogService = {
           }
         },
         {
-          id: 'MY_CART',
-          title: 'My Cart',
-          data: {
-            cart_items: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  title: { type: 'string' },
-                  description: { type: 'string' },
-                  image: { type: 'string' }
-                }
-              },
-              __example__: [
-                { id: 'item_0', title: 'Ice Creams - Butter Scotch', description: '1 × ₹69 = ₹69', image: 'iVBORw0KGgo' }
-              ]
-            },
-            cart_banner: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
-            cart_summary: {
-              type: 'string',
-              __example__: '━━━━━━━━━━━━━━━\n💰 Total: ₹69\n⏳ Cart expires in 30 min'
-            },
-            flow_token: {
-              type: 'string',
-              __example__: 'welcome_service_919999999999'
-            }
-          },
-          layout: {
-            type: 'SingleColumnLayout',
-            children: [
-              {
-                type: 'Image',
-                src: '${data.cart_banner}',
-                width: 1000,
-                height: 125,
-                'scale-type': 'cover',
-                'alt-text': 'My Cart Banner'
-              },
-              {
-                type: 'TextSubheading',
-                text: 'Your Cart Items'
-              },
-              {
-                type: 'RadioButtonsGroup',
-                name: 'selected_cart_item',
-                label: 'Cart Items',
-                required: true,
-                'data-source': '${data.cart_items}'
-              },
-              {
-                type: 'TextBody',
-                text: '${data.cart_summary}'
-              },
-              {
-                type: 'Footer',
-                label: 'Continue',
-                'on-click-action': {
-                  name: 'data_exchange',
-                  payload: {
-                    selected_service: 'my_cart',
-                    selected_cart_item: '${form.selected_cart_item}',
-                    flow_token: '${data.flow_token}'
-                  }
-                }
-              }
-            ]
-          }
-        },
-        {
-          id: 'CART_ACTIONS',
-          title: 'Cart Options',
-          data: {
-            cart_actions: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  title: { type: 'string' },
-                  description: { type: 'string' },
-                  image: { type: 'string' }
-                }
-              },
-              __example__: [
-                { id: 'place_order', title: 'Place Order', description: 'Proceed to checkout', image: 'iVBORw0KGgo' }
-              ]
-            },
-            cart_info: {
-              type: 'string',
-              __example__: '🛒 2 items • Total: ₹138'
-            },
-            flow_token: {
-              type: 'string',
-              __example__: 'welcome_service_919999999999'
-            }
-          },
-          layout: {
-            type: 'SingleColumnLayout',
-            children: [
-              {
-                type: 'TextSubheading',
-                text: 'What would you like to do?'
-              },
-              {
-                type: 'TextBody',
-                text: '${data.cart_info}'
-              },
-              {
-                type: 'RadioButtonsGroup',
-                name: 'selected_cart_action',
-                label: 'Choose an Action',
-                required: true,
-                'data-source': '${data.cart_actions}'
-              },
-              {
-                type: 'Footer',
-                label: 'Confirm',
-                'on-click-action': {
-                  name: 'data_exchange',
-                  payload: {
-                    selected_cart_action: '${form.selected_cart_action}',
-                    flow_token: '${data.flow_token}'
-                  }
-                }
-              }
-            ]
-          }
-        },
-        {
-          id: 'CHOOSE_SERVICE',
-          title: 'Service Type',
+          // ─── TRACK_ORDER (terminal) — replaces the old "My Cart" entry on SERVICE_SELECT ───
+          // Shows the customer's currently active orders (status not in delivered/cancelled).
+          // Tapping "Track Order" triggers the `complete` action; the webhook then sends
+          // a status-specific update message with a CTA URL button:
+          //   - delivery   → "Track Your Order 📍"  → /track/<orderId>
+          //   - pickup     → "📍 Navigate to Hotel" → Google Maps URL
+          id: 'TRACK_ORDER',
+          title: 'Track Order',
           terminal: true,
           success: true,
           data: {
-            service_banner: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
-            order_summary: {
-              type: 'string',
-              __example__: '3 items • Total: ₹276'
-            },
-            service_options: {
+            active_orders: {
               type: 'array',
               items: {
                 type: 'object',
@@ -2536,9 +2399,12 @@ const catalogService = {
                 }
               },
               __example__: [
-                { id: 'delivery', title: 'Delivery', description: 'To your doorstep', image: 'iVBORw0KGgo' },
-                { id: 'pickup', title: 'Self-Pickup', description: 'From restaurant', image: 'iVBORw0KGgo' }
+                { id: 'ORDMOI39IIM0CC235ED', title: '#ORDMOI39IIM0CC235ED - ₹99', description: 'Preparing • 1 item • 28 Apr', image: 'iVBORw0KGgo' }
               ]
+            },
+            track_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
             },
             flow_token: {
               type: 'string',
@@ -2550,35 +2416,35 @@ const catalogService = {
             children: [
               {
                 type: 'Image',
-                src: '${data.service_banner}',
+                src: '${data.track_banner}',
                 width: 1000,
                 height: 125,
                 'scale-type': 'cover',
-                'alt-text': 'Service Type Banner'
+                'alt-text': 'Track Order Banner'
               },
               {
-                type: 'TextHeading',
-                text: '🚚 Choose Service Type'
+                type: 'TextSubheading',
+                text: 'Your Active Orders'
               },
               {
                 type: 'TextBody',
-                text: '${data.order_summary}'
+                text: 'Pick an order — we\'ll send you the latest status with a tracking link.'
               },
               {
                 type: 'RadioButtonsGroup',
-                name: 'service_type',
-                label: 'Select Service Type',
+                name: 'selected_order',
+                label: 'Select an Order to Track',
                 required: true,
-                'data-source': '${data.service_options}'
+                'data-source': '${data.active_orders}'
               },
               {
                 type: 'Footer',
-                label: 'Place Order',
+                label: 'Track Order',
                 'on-click-action': {
                   name: 'complete',
                   payload: {
-                    selected_service: 'my_cart',
-                    selected_service_type: '${form.service_type}',
+                    selected_service: 'track_order',
+                    selected_order: '${form.selected_order}',
                     flow_token: '${data.flow_token}'
                   }
                 }

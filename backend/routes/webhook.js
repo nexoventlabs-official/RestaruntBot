@@ -18,6 +18,7 @@ const Customer = require('../models/Customer');
 const Offer = require('../models/Offer');
 const Order = require('../models/Order');
 const User = require('../models/User');
+const { sendOrderTrackMessage } = require('../services/orderTrackHelpers');
 const OutboundMessage = require('../models/OutboundMessage');
 const InboundMessage = require('../models/InboundMessage');
 const dataEvents = require('../services/eventEmitter');
@@ -642,6 +643,81 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           await whatsapp.sendMessage(userPhone, '📞 *Help & Support*\n\nCall us at: +91 94402 03095\n\nOur support team is happy to help!');
                         }
                         // Skip further processing — we already sent the response
+                        return res.sendStatus(200);
+                      }
+                      // For Track Order — webhook receives the chosen order id and
+                      // sends the status update message + tracking CTA URL.
+                      else if (service === 'track_order') {
+                        const userPhone = responseData.flow_token.replace('welcome_service_', '');
+
+                        if (responseData.no_active_orders === 'true') {
+                          // Endpoint detected no active orders → send a friendly message.
+                          try {
+                            const noActiveImg = await chatbotImagesService.getImageUrl('no_active_orders');
+                            const noActiveMsg =
+                              '📭 *No active orders right now*\n\nYou don\'t have any orders being prepared or out for delivery.\n\nType *menu* to place a new order!';
+                            if (noActiveImg) {
+                              await whatsapp.sendImageWithButtons(userPhone, noActiveImg, noActiveMsg, [
+                                { id: 'home', text: 'Main Menu' },
+                                { id: 'order_food', text: 'Order Food' }
+                              ]);
+                            } else {
+                              await whatsapp.sendButtons(userPhone, noActiveMsg, [
+                                { id: 'home', text: 'Main Menu' },
+                                { id: 'order_food', text: 'Order Food' }
+                              ]);
+                            }
+                          } catch (noActiveErr) {
+                            logger.error('Flow: Track Order - no_active_orders message failed', {
+                              error: noActiveErr.message, phone: userPhone
+                            });
+                          }
+                          return res.sendStatus(200);
+                        }
+
+                        if (!responseData.selected_order) {
+                          logger.warn('Flow: Track Order - missing selected_order', { phone: userPhone });
+                          return res.sendStatus(200);
+                        }
+
+                        // Look up the order and send the status-aware tracking message.
+                        try {
+                          const order = await Order.findOne({
+                            orderId: responseData.selected_order,
+                            'customer.phone': userPhone
+                          }).lean();
+
+                          if (!order) {
+                            await whatsapp.sendMessage(
+                              userPhone,
+                              '❓ *Order not found*\n\nWe could not find that order. It may have been delivered or cancelled.\n\nType *menu* to start a new order.'
+                            );
+                            return res.sendStatus(200);
+                          }
+
+                          // Don't track terminal-state orders — TRACK_ORDER screen
+                          // already filters them, but guard against stale Flow data.
+                          if (order.status === 'cancelled' || order.status === 'delivered') {
+                            await whatsapp.sendMessage(
+                              userPhone,
+                              `📦 *Order #${order.orderId}*\n\nThis order is already *${order.status}* — there's nothing left to track.`
+                            );
+                            return res.sendStatus(200);
+                          }
+
+                          await sendOrderTrackMessage(order);
+                          logger.info('Flow: Track Order - tracking message sent', {
+                            orderId: order.orderId, status: order.status, serviceType: order.serviceType, phone: userPhone
+                          });
+                        } catch (trackErr) {
+                          logger.error('Flow: Track Order - send failed', {
+                            error: trackErr.message, phone: userPhone, orderId: responseData.selected_order
+                          });
+                          await whatsapp.sendMessage(
+                            userPhone,
+                            '⚠️ Something went wrong while fetching your order status. Please try again or contact support.'
+                          ).catch(() => {});
+                        }
                         return res.sendStatus(200);
                       }
                       // For My Cart — handle cart actions or empty cart

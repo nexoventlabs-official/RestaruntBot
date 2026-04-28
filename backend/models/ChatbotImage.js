@@ -79,6 +79,7 @@ const chatbotImageSchema = new mongoose.Schema({
       'flow_pay_phonepe',
       'flow_pay_paytm',
       'flow_my_cart',
+      'flow_track_order',
       'flow_cart_banner',
       'flow_cart_place_order',
       'flow_cart_add_more',
