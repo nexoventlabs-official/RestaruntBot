@@ -5869,16 +5869,24 @@ const chatbot = {
 
     // Keep confirmation body short — full item list lives in the Order Actions
     // flow (ORDER_DETAILS screen) accessible via the "Order Details" CTA button.
-    let confirmMsg = `✅ *Order Confirmed!*\n\n`;
-    confirmMsg += `📦 Order ID: *${orderId}*\n`;
-    confirmMsg += `🛵 Service: *Delivery*\n`;
-    confirmMsg += `💵 Payment: *Cash on Delivery*\n`;
+    // Style intentionally mirrors the invoice card sent on completion so the
+    // customer journey reads consistently end-to-end.
+    const itemsOnly = Math.max(0, total - (deliveryCharge || 0));
+    let confirmMsg = `*Order Confirmation #${orderId}*\n\n`;
+    confirmMsg += `We have received your order. Below is a summary\n`;
+    confirmMsg += `for your reference.\n\n`;
+    confirmMsg += `Order ID         : ${orderId}\n`;
+    confirmMsg += `Service          : Home Delivery\n`;
+    confirmMsg += `Items Total      : Rs.${itemsOnly}\n`;
     if (deliveryCharge > 0) {
-      confirmMsg += `🚚 Delivery Charge: *₹${deliveryCharge}*\n`;
+      confirmMsg += `Delivery Charge  : Rs.${deliveryCharge}\n`;
     }
-    confirmMsg += `💰 Grand Total: *₹${total}*\n\n`;
-    confirmMsg += `🛒 Tap *Order Details* below to view your items.\n\n`;
-    confirmMsg += `🙏 Thank you for your order!\nPlease keep ₹${total} ready for payment.`;
+    confirmMsg += `Grand Total      : Rs.${total}\n`;
+    confirmMsg += `Payment          : Cash on Delivery\n\n`;
+    confirmMsg += `Please keep Rs.${total} ready for the delivery partner.\n\n`;
+    confirmMsg += `Tap *Order Details* below to view the items in\n`;
+    confirmMsg += `this order.\n\n`;
+    confirmMsg += `Thank you for choosing us.`;
 
     const confirmedImageUrl = await chatbotImagesService.getImageUrl('order_confirmed');
     
@@ -7091,23 +7099,31 @@ const chatbot = {
 
       // Send confirmation message — keep body short; full item list is shown
       // inside the Order Actions flow (ORDER_DETAILS screen) accessible via the
-      // "Order Details" CTA button below.
-      let msg = '✅ *Order Request Successful!*\n\n';
-      msg += `📦 Order ID: *${orderId}*\n`;
-      msg += `🏪 Service: *Self-Pickup*\n`;
-      msg += `💰 Total: *₹${itemsTotal}*\n`;
-      msg += `💳 Payment: *${state.paymentMethod === 'cod' ? 'Pay at Hotel' : 'UPI/App'}*\n\n`;
-
+      // "Order Details" CTA button below. Style mirrors the invoice card.
+      let msg;
       if (state.paymentMethod === 'cod') {
-        msg += '✨ Your order has been received!\n\n';
-        msg += '📍 Please come to the restaurant to pick up your order.\n';
-        msg += '💵 Payment will be collected at the hotel.\n\n';
-        msg += '⏰ We will notify you when your order is ready!\n\n';
-        msg += '🛒 Tap *Order Details* below to view your items.\n\n';
-        msg += 'Thank you for your order! 🙏';
+        msg  = `*Order Confirmation #${orderId}*\n\n`;
+        msg += `We have received your order. Below is a summary\n`;
+        msg += `for your reference.\n\n`;
+        msg += `Order ID    : ${orderId}\n`;
+        msg += `Service     : Self-Pickup\n`;
+        msg += `Items Total : Rs.${itemsTotal}\n`;
+        msg += `Payment     : Pay at Hotel\n\n`;
+        msg += `Tap *Order Details* below to view the items in\n`;
+        msg += `this order.\n\n`;
+        msg += `Thank you for choosing us.`;
       } else {
-        msg += '⏳ Waiting for payment confirmation...\n\n';
-        msg += 'Please complete the payment to confirm your order.';
+        msg  = `*Order Pending — Awaiting Payment*\n\n`;
+        msg += `We have received your order request, but the\n`;
+        msg += `payment has not been confirmed yet.\n\n`;
+        msg += `Order ID    : ${orderId}\n`;
+        msg += `Service     : Self-Pickup\n`;
+        msg += `Items Total : Rs.${itemsTotal}\n`;
+        msg += `Payment     : UPI (awaiting confirmation)\n\n`;
+        msg += `Please complete the payment using the link\n`;
+        msg += `sent in the previous message.\n\n`;
+        msg += `Once the payment is received, your order will\n`;
+        msg += `be confirmed automatically.`;
       }
 
       // Get pickup order requested image and send with flow CTA or buttons
