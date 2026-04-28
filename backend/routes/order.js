@@ -353,16 +353,38 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
           const { getInvoiceUrl, getInvoiceFilename } = require('../services/invoiceService');
           const invoiceUrl = getInvoiceUrl(order);
 
-          const bodyText =
-            `${msg}\n\n` +
-            `🙏 Thank you for ordering!\n` +
-            `We hope you enjoy your meal! 🍽️\n\n` +
-            `📄 Your invoice is attached above.`;
+          // Resolve a human-readable payment line that mirrors the invoice PDF.
+          const paymentLine = (() => {
+            const apm = order.actualPaymentMethod;
+            if (order.paymentMethod === 'cod' && isPickupOrder) {
+              if (apm === 'upi') return 'UPI (paid at hotel)';
+              if (apm === 'cash') return 'Cash (paid at hotel)';
+              return 'Pay at Hotel';
+            }
+            if (order.paymentMethod === 'cod') {
+              if (apm === 'upi') return 'UPI (paid at delivery)';
+              if (apm === 'cash') return 'Cash (paid at delivery)';
+              return 'Cash on Delivery';
+            }
+            return 'UPI (paid online)';
+          })();
 
-          const ctaText = isPickupOrder ? 'Rate Your Food ⭐' : 'Leave a Review ⭐';
-          const footerText = isPickupOrder
-            ? 'Help us improve by rating your food items'
-            : 'Your feedback helps us improve!';
+          const statusLine = isPickupOrder ? 'Completed (Self-Pickup)' : 'Delivered';
+          const totalPaid = `Rs.${Number(order.totalAmount || 0).toLocaleString('en-IN')}`;
+          const recordsLine = isPickupOrder
+            ? 'keep it for your records.'
+            : 'keep it for warranty, returns or accounting purposes.';
+
+          const bodyText =
+            `*Invoice for Order #${order.orderId}*\n\n` +
+            `Status      : ${statusLine}\n` +
+            `Total Paid  : ${totalPaid}\n` +
+            `Payment     : ${paymentLine}\n\n` +
+            `The detailed tax invoice is attached above. Please ${recordsLine}\n\n` +
+            `We appreciate your business.`;
+
+          const ctaText = 'Rate Your Order';
+          const footerText = 'Tap below to share your experience';
 
           let combinedSent = false;
           if (invoiceUrl) {
