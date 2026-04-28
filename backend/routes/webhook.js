@@ -798,14 +798,28 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       text = JSON.stringify({ type: 'account_form', ...responseData });
                       logger.info('Account form submitted', { phone, name: responseData.customer_name });
                     } else {
-                      // Generic flow response — pass as text
-                      messageType = 'flow_reply';
-                      text = JSON.stringify(responseData);
+                      // Unrecognised flow response — acknowledge silently. Feeding the
+                      // raw payload into chatbot.handleMessage would cause the smart
+                      // search fallback to reply with "No items found for ..." (the
+                      // nfm_reply.body for a completed Flow is the literal string
+                      // "Sent" — see screenshot). Just log and return 200.
+                      logger.info('Unrecognised Flow response — skipping chatbot routing', {
+                        phone,
+                        flowName: nfmReply.name,
+                        flowToken: responseData.flow_token,
+                        keys: Object.keys(responseData || {})
+                      });
+                      return res.sendStatus(200);
                     }
                   } catch (parseErr) {
-                    logger.error('Flow response parse error', { error: parseErr.message, raw: nfmReply.response_json });
-                    messageType = 'text';
-                    text = nfmReply.body || 'Flow response';
+                    // Same reasoning as above: never let an unparseable Flow payload
+                    // fall through to chatbot smart-search. Acknowledge and move on.
+                    logger.error('Flow response parse error — skipping chatbot routing', {
+                      error: parseErr.message,
+                      body: nfmReply.body,
+                      raw: nfmReply.response_json
+                    });
+                    return res.sendStatus(200);
                   }
                 }
               } else if (message.type === 'order') {
