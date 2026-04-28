@@ -534,12 +534,20 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                         }
 
                         if (selectedOption === 'pay_cod' || selectedOption === 'pay_hotel') {
-                          await convertToCashPayment(order);
+                          const cashResult = await convertToCashPayment(order);
                           logger.info('Flow: Payment retry — converted to cash', {
                             orderId: order.orderId,
                             serviceType: order.serviceType,
-                            selectedOption
+                            selectedOption,
+                            ok: cashResult.ok,
+                            reason: cashResult.reason
                           });
+                          if (!cashResult.ok) {
+                            await whatsapp.sendMessage(
+                              phone,
+                              '⚠️ Could not switch your payment method. Please contact support with your order id.'
+                            ).catch(() => {});
+                          }
                           return res.sendStatus(200);
                         }
 
@@ -548,6 +556,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       } catch (retryErr) {
                         logger.error('Flow: Payment retry — handler failed', {
                           error: retryErr.message,
+                          stack: retryErr.stack,
                           phone,
                           orderId: orderIdFromToken,
                           selectedOption
