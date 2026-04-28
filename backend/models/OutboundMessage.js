@@ -20,7 +20,13 @@ const outboundMessageSchema = new mongoose.Schema({
   // Message type
   messageType: {
     type: String,
-    enum: ['text', 'buttons', 'list', 'image', 'template', 'location', 'cta_url', 'cta_phone', 'product', 'product_list'],
+    enum: [
+      'text', 'buttons', 'list', 'image', 'template', 'location',
+      'cta_url', 'cta_phone', 'image_cta_phone',
+      'product', 'product_list',
+      // WhatsApp Native Payment (review_and_pay / order_status)
+      'order_details', 'order_status'
+    ],
     required: true
   },
   
