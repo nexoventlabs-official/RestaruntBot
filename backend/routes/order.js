@@ -357,7 +357,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             `${msg}\n\n` +
             `🙏 Thank you for ordering!\n` +
             `We hope you enjoy your meal! 🍽️\n\n` +
-            `� Your invoice is attached below.`;
+            `📄 Your invoice is attached below.`;
 
           if (deliveredImageUrl) {
             await whatsapp.sendImage(order.customer.phone, deliveredImageUrl, statusMsg);
@@ -367,8 +367,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
 
           // ── Message 2 — invoice PDF (best-effort) ────────────────
           try {
-            const { getOrCreateInvoiceUrl, getInvoiceFilename } = require('../services/invoiceService');
-            const invoiceUrl = await getOrCreateInvoiceUrl(order);
+            const { getInvoiceUrl, getInvoiceFilename } = require('../services/invoiceService');
+            const invoiceUrl = getInvoiceUrl(order);
             if (invoiceUrl) {
               await whatsapp.sendDocument(
                 order.customer.phone,

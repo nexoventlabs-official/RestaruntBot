@@ -18,6 +18,7 @@ const authRoutes = require('./routes/auth');
 const adminsRoutes = require('./routes/admins');
 const menuRoutes = require('./routes/menu');
 const orderRoutes = require('./routes/order');
+const invoiceRoutes = require('./routes/invoice');
 const webhookRoutes = require('./routes/webhook');
 const paymentRoutes = require('./routes/payment');
 const customerRoutes = require('./routes/customer');
@@ -285,6 +286,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/admins', adminsRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/orders', orderRoutes);
+// Public invoice PDFs (Meta fetches these to deliver document attachments)
+app.use('/api/invoice', invoiceRoutes);
 app.use('/api/webhook', webhookRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/customers', customerRoutes);

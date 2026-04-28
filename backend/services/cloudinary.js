@@ -119,40 +119,6 @@ const cloudinaryService = {
   },
 
   /**
-   * Upload a non-image (raw) file from a buffer — used for invoice PDFs.
-   * Returns the public secure URL Meta can fetch via WhatsApp document send.
-   *
-   * @param {Buffer} buffer - The raw file contents (e.g. a PDF)
-   * @param {string} folder - Cloudinary folder
-   * @param {string} publicId - Stable public id (no extension)
-   * @param {string} format - File extension without the dot (e.g. 'pdf')
-   * @returns {Promise<string>} secure URL ending with .{format}
-   */
-  async uploadRawFromBuffer(buffer, folder = 'restaurant-bot', publicId = null, format = 'pdf') {
-    return new Promise((resolve, reject) => {
-      const options = {
-        folder,
-        resource_type: 'raw',
-        format,
-        type: 'upload',
-        overwrite: true
-      };
-      if (publicId) options.public_id = publicId;
-
-      const uploadStream = cloudinary.uploader.upload_stream(options, (error, result) => {
-        if (error) {
-          logger.error('❌ Cloudinary raw upload error:', error.message);
-          reject(error);
-        } else {
-          logger.info('✅ Cloudinary raw upload success:', result.secure_url);
-          resolve(result.secure_url);
-        }
-      });
-      uploadStream.end(buffer);
-    });
-  },
-
-  /**
    * Get optimized URL for WhatsApp (transforms existing Cloudinary URL or external URL)
    * @param {string} imageUrl - Original image URL
    * @param {string} aspectRatio - Aspect ratio: '1:1' for menu items, '2:1' for chatbot banners
