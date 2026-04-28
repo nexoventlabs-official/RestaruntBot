@@ -65,10 +65,13 @@ const money = (val) => `Rs.${Number(val || 0).toLocaleString('en-IN')}`;
 const fmtDate = (d) => {
   if (!d) return '—';
   const date = new Date(d);
+  // Always render in Indian Standard Time so the printed invoice is consistent
+  // regardless of where the backend is hosted (Render is UTC).
   return date.toLocaleString('en-IN', {
     day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', hour12: true
-  });
+    hour: '2-digit', minute: '2-digit', hour12: true,
+    timeZone: 'Asia/Kolkata'
+  }) + ' IST';
 };
 
 const sanitize = (s) => String(s || '').replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}]/gu, '').trim();

@@ -234,21 +234,41 @@ export default function Orders() {
     const isCOD = order.paymentMethod === 'cod';
     const isDone = order.status === 'delivered';
     const isCancelled = order.status === 'cancelled';
+    const apm = order.actualPaymentMethod;
 
     const method = isCOD ? (isPickup ? 'Pay at Hotel' : 'COD') : 'UPI/App';
     let status = '';
     let statusColor = '';
 
-    if (isCancelled) { status = 'Cancelled'; statusColor = '#EF4444'; }
-    else if (isCOD) {
-      if (isDone) {
-        const apm = order.actualPaymentMethod;
-        if (apm === 'upi') { status = 'Paid (UPI)'; statusColor = '#22C55E'; }
-        else { status = 'Paid (Cash)'; statusColor = '#22C55E'; }
-      } else { status = 'Pending'; statusColor = '#F59E0B'; }
+    if (isCancelled) {
+      status = 'Cancelled';
+      statusColor = '#EF4444';
+    }
+    // Whenever an admin / delivery partner has stamped actualPaymentMethod
+    // (works for both COD and originally-online orders that were paid at
+    // the hotel after a failed online attempt) — trust that.
+    else if (isDone && apm === 'upi') {
+      status = 'Paid (UPI)';
+      statusColor = '#22C55E';
+    } else if (isDone && apm === 'cash') {
+      status = 'Paid (Cash)';
+      statusColor = '#22C55E';
+    } else if (order.paymentStatus === 'paid') {
+      status = 'Paid';
+      statusColor = '#22C55E';
+    }
+    // Pickup orders that are completed but somehow have no payment record —
+    // a delivered pickup order means the customer collected it, so treat it
+    // as paid (matches the mobile app's lenient fallthrough).
+    else if (isPickup && isDone) {
+      status = 'Paid';
+      statusColor = '#22C55E';
+    } else if (isCOD) {
+      status = 'Pending';
+      statusColor = '#F59E0B';
     } else {
-      if (order.paymentStatus === 'paid') { status = 'Paid'; statusColor = '#22C55E'; }
-      else { status = 'Unpaid'; statusColor = '#EF4444'; }
+      status = 'Unpaid';
+      statusColor = '#EF4444';
     }
     return { method, status, statusColor };
   }, []);
@@ -281,8 +301,13 @@ export default function Orders() {
       return;
     }
 
-    // Pickup + delivered + COD → ask payment method
-    if (order.serviceType === 'pickup' && nextStatus === 'delivered' && order.paymentMethod === 'cod') {
+    // Pickup + delivered → ask payment method (UPI / Cash) unless the order
+    // is already marked paid online. This covers two cases:
+    //   • paymentMethod === 'cod' (original Pay-at-Hotel orders)
+    //   • paymentMethod === 'upi' but paymentStatus !== 'paid' (the customer
+    //     selected UPI at checkout, the online payment didn't go through, and
+    //     they ended up paying at the hotel — we still need to record how).
+    if (order.serviceType === 'pickup' && nextStatus === 'delivered' && order.paymentStatus !== 'paid') {
       setShowPaymentMethodModal(true);
       return;
     }
@@ -573,12 +598,21 @@ export default function Orders() {
                     <div className="flex items-center justify-between pt-2 border-t border-dark-100">
                       <span className="text-sm font-bold text-dark-900">₹{order.totalAmount || 0}</span>
                       <div className="flex items-center gap-2">
-                        {order.paymentMethod === 'cod' ?
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded">{isPickup ? 'Pay at Hotel' : 'COD'}</span> :
-                          order.paymentStatus === 'paid' ?
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-green-100 text-green-700 rounded">Paid</span> :
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-red-100 text-red-700 rounded">Unpaid</span>
-                        }
+                        {(() => {
+                          // Same logic as getPaymentDisplay so the inline pill
+                          // and the order-detail PAYMENT box never disagree.
+                          const isDone = order.status === 'delivered';
+                          const apm = order.actualPaymentMethod;
+                          const paid = order.paymentStatus === 'paid' || (isPickup && isDone);
+                          if (order.paymentMethod === 'cod' && !isDone) {
+                            return <span className="text-[10px] font-bold px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded">{isPickup ? 'Pay at Hotel' : 'COD'}</span>;
+                          }
+                          if (paid) {
+                            const label = apm === 'upi' && isDone ? 'Paid (UPI)' : apm === 'cash' && isDone ? 'Paid (Cash)' : 'Paid';
+                            return <span className="text-[10px] font-bold px-1.5 py-0.5 bg-green-100 text-green-700 rounded">{label}</span>;
+                          }
+                          return <span className="text-[10px] font-bold px-1.5 py-0.5 bg-red-100 text-red-700 rounded">Unpaid</span>;
+                        })()}
                         <span className="text-[10px] text-dark-400">{fmtTime(order.createdAt)}</span>
                       </div>
                     </div>
