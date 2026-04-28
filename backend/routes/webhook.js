@@ -464,8 +464,31 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                         logger.info('Flow: Order actions - order cancelled via flow');
                         return res.sendStatus(200);
                       } else if (actionResult === 'track_order') {
-                        // Tracking already shown in flow, just log
-                        logger.info('Flow: Order actions - order tracked via flow');
+                        // User tapped "Track Order" inside Order Actions flow.
+                        // Lookup the order from flow_token (order_actions_{phone}_{orderId})
+                        // and send the status-aware tracking card.
+                        const tokenParts = responseData.flow_token.replace('order_actions_', '');
+                        const lastUnderscoreT = tokenParts.lastIndexOf('_');
+                        const orderIdFromToken = responseData.order_id || tokenParts.substring(lastUnderscoreT + 1);
+                        try {
+                          const order = await Order.findOne({ orderId: orderIdFromToken }).lean();
+                          if (!order) {
+                            await whatsapp.sendMessage(phone, `❓ *Order not found*\n\nWe could not find order #${orderIdFromToken}.`);
+                          } else {
+                            await sendOrderTrackMessage(order);
+                            logger.info('Flow: Order actions - track message sent', {
+                              orderId: order.orderId, status: order.status, serviceType: order.serviceType, phone
+                            });
+                          }
+                        } catch (trackErr) {
+                          logger.error('Flow: Order actions - track failed', {
+                            error: trackErr.message, phone, orderId: orderIdFromToken
+                          });
+                          await whatsapp.sendMessage(
+                            phone,
+                            '⚠️ Something went wrong while fetching your order status. Please try again.'
+                          ).catch(() => {});
+                        }
                         return res.sendStatus(200);
                       } else {
                         logger.info('Flow: Order actions - unknown result', { actionResult });

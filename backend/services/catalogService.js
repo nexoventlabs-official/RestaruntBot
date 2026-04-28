@@ -2754,6 +2754,338 @@ const catalogService = {
 
   // ==================== ORDER CONFIRMATION FLOW ====================
 
+  // ==================== ORDER ACTIONS FLOW ====================
+  // Sent immediately after a customer places an order (delivery COD or self-pickup).
+  // The flow opens to ORDER_DETAILS (item list + totals breakdown) — keeping the
+  // outer WhatsApp message body short and uncluttered. The user can tap a "Help"
+  // button on that screen to navigate to ORDER_ACTIONS, which exposes the
+  // existing dynamic actions: Track Order / Cancel Order / Order Food / Main Menu.
+  // Track Order completes the flow with `action_result: 'track_order'`; the
+  // webhook then sends the standard status-aware tracking card via
+  // `services/orderTrackHelpers.sendOrderTrackMessage`.
+
+  /**
+   * Build the Order Actions Flow JSON.
+   * Screens: ORDER_DETAILS → ORDER_ACTIONS → (ORDER_CANCELLED | MENU_CATEGORIES | terminal SUCCESS for track_order)
+   */
+  buildOrderActionsFlowJSON() {
+    return {
+      version: '7.3',
+      data_api_version: '3.0',
+      routing_model: {
+        ORDER_DETAILS: ['ORDER_ACTIONS'],
+        ORDER_ACTIONS: ['ORDER_CANCELLED', 'MENU_CATEGORIES'],
+        ORDER_CANCELLED: [],
+        MENU_CATEGORIES: []
+      },
+      screens: [
+        // ─── 1. ORDER_DETAILS (entry) ────────────────────────────────
+        // Shows the items the customer just ordered + totals breakdown.
+        // No long inline list in the WhatsApp message — that's now here.
+        {
+          id: 'ORDER_DETAILS',
+          title: 'Order Details',
+          data: {
+            details_banner: { type: 'string', __example__: 'iVBORw0KGgo' },
+            order_heading: { type: 'string', __example__: '📦 Order #ORD001' },
+            order_meta: { type: 'string', __example__: '🏪 Self-Pickup • 💳 Pay at Hotel' },
+            order_items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'item_0', title: 'Ice creams - gulabjamun (3 piece) × 1', description: '₹90 each • ₹90', image: 'iVBORw0KGgo' }
+              ]
+            },
+            totals_text: {
+              type: 'string',
+              __example__: 'Subtotal: ₹240\nDelivery: ₹0\n*Grand Total: ₹240*'
+            },
+            flow_token: { type: 'string', __example__: 'order_actions_919999999999_ORD001' }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'Image',
+                src: '${data.details_banner}',
+                width: 1000,
+                height: 125,
+                'scale-type': 'cover',
+                'alt-text': 'Order Details'
+              },
+              { type: 'TextHeading', text: '${data.order_heading}' },
+              { type: 'TextBody', text: '${data.order_meta}' },
+              { type: 'TextSubheading', text: '🛒 Items' },
+              {
+                type: 'RadioButtonsGroup',
+                name: 'item_view',
+                label: 'Your Items',
+                required: false,
+                'data-source': '${data.order_items}'
+              },
+              { type: 'TextBody', text: '${data.totals_text}' },
+              {
+                type: 'Footer',
+                label: 'Help',
+                'on-click-action': {
+                  name: 'data_exchange',
+                  payload: {
+                    selected_action: 'open_actions',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        },
+        // ─── 2. ORDER_ACTIONS — Track / Cancel / Order Food / Main Menu ───
+        {
+          id: 'ORDER_ACTIONS',
+          title: 'Help',
+          data: {
+            actions: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'track_order', title: 'Track Order', description: 'View order status', image: 'iVBORw0KGgo' },
+                { id: 'cancel_order', title: 'Cancel Order', description: 'Cancel this order', image: 'iVBORw0KGgo' },
+                { id: 'order_food', title: 'Order Food', description: 'Browse menu', image: 'iVBORw0KGgo' },
+                { id: 'main_menu', title: 'Main Menu', description: 'Go to main menu', image: 'iVBORw0KGgo' }
+              ]
+            },
+            actions_banner: { type: 'string', __example__: 'iVBORw0KGgo' },
+            order_info: { type: 'string', __example__: '📦 Order #ORD001\n📋 Status: Pending' },
+            flow_token: { type: 'string', __example__: 'order_actions_919999999999_ORD001' }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'Image',
+                src: '${data.actions_banner}',
+                width: 1000,
+                height: 125,
+                'scale-type': 'cover',
+                'alt-text': 'Order Actions Banner'
+              },
+              { type: 'TextBody', text: '${data.order_info}' },
+              { type: 'TextSubheading', text: 'How can we help?' },
+              {
+                type: 'RadioButtonsGroup',
+                name: 'selected_action',
+                label: 'Choose an option',
+                required: true,
+                'data-source': '${data.actions}'
+              },
+              {
+                type: 'Footer',
+                label: 'Continue',
+                'on-click-action': {
+                  name: 'data_exchange',
+                  payload: {
+                    selected_action: '${form.selected_action}',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        },
+        // ─── 3. ORDER_CANCELLED (terminal) ───
+        {
+          id: 'ORDER_CANCELLED',
+          title: 'Order Cancelled',
+          terminal: true,
+          success: true,
+          data: {
+            cancel_heading: { type: 'string', __example__: '✅ Order Cancelled' },
+            cancel_info: { type: 'string', __example__: 'Order #ORD001 has been cancelled.' },
+            flow_token: { type: 'string', __example__: 'order_actions_919999999999_ORD001' }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              { type: 'TextHeading', text: '${data.cancel_heading}' },
+              { type: 'TextBody', text: '${data.cancel_info}' },
+              {
+                type: 'Footer',
+                label: 'Close',
+                'on-click-action': {
+                  name: 'complete',
+                  payload: {
+                    action_result: 'order_cancelled',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        },
+        // ─── 4. MENU_CATEGORIES (terminal) — order food path ───
+        {
+          id: 'MENU_CATEGORIES',
+          title: 'Menu',
+          terminal: true,
+          success: true,
+          data: {
+            categories: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'cat_0', title: 'Ice Creams', description: '2 variants', image: 'iVBORw0KGgo' }
+              ]
+            },
+            menu_banner: { type: 'string', __example__: 'iVBORw0KGgo' },
+            flow_token: { type: 'string', __example__: 'order_actions_919999999999_ORD001' }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'Image',
+                src: '${data.menu_banner}',
+                width: 1000,
+                height: 125,
+                'scale-type': 'cover',
+                'alt-text': 'Menu Banner'
+              },
+              { type: 'TextSubheading', text: 'Select a Category' },
+              {
+                type: 'RadioButtonsGroup',
+                name: 'selected_category',
+                label: 'Menu Items',
+                required: true,
+                'data-source': '${data.categories}'
+              },
+              {
+                type: 'Footer',
+                label: 'View Item',
+                'on-click-action': {
+                  name: 'complete',
+                  payload: {
+                    action_result: 'order_food',
+                    selected_category: '${form.selected_category}',
+                    flow_token: '${data.flow_token}'
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    };
+  },
+
+  /**
+   * Setup (or reuse) the published Order Actions Flow.
+   * Auto-increments version from the latest "JRB Order Actions vN" flow.
+   */
+  async setupOrderActionsFlow() {
+    const metaCloud = require('./metaCloud');
+
+    const flows = await metaCloud.getFlows();
+    const orderActionsFlows = flows.filter(f => f.name.startsWith('JRB Order Actions'));
+
+    const published = orderActionsFlows.find(f => f.status === 'PUBLISHED');
+    if (published) {
+      logger.info('Order Actions Flow already published, reusing', { flowId: published.id, name: published.name });
+      process.env.WHATSAPP_ORDER_ACTIONS_FLOW_ID = published.id;
+      return { flowId: published.id, status: 'already_published' };
+    }
+
+    let maxVersion = 0;
+    orderActionsFlows.forEach(f => {
+      const match = f.name.match(/v(\d+)/);
+      if (match) maxVersion = Math.max(maxVersion, parseInt(match[1]));
+    });
+    const nextVersion = maxVersion + 1;
+    const FLOW_NAME = `JRB Order Actions v${nextVersion}`;
+
+    const backendUrl = process.env.BACKEND_URL || 'https://restaruntbot.onrender.com';
+    const endpointUri = `${backendUrl}/api/whatsapp-flow`;
+    const createResult = await metaCloud.createFlow(FLOW_NAME, ['OTHER'], { endpointUri });
+    const flowId = createResult.id;
+
+    const flowJson = this.buildOrderActionsFlowJSON();
+    await metaCloud.updateFlowJSON(flowId, flowJson);
+
+    try {
+      await metaCloud.publishFlow(flowId);
+      process.env.WHATSAPP_ORDER_ACTIONS_FLOW_ID = flowId;
+      logger.info('Order Actions Flow created and published', { flowName: FLOW_NAME, flowId });
+      return { flowId, status: 'created_and_published' };
+    } catch (pubErr) {
+      logger.warn('Order Actions Flow created but publish failed', {
+        flowName: FLOW_NAME,
+        flowId,
+        error: pubErr.response?.data?.error?.message || pubErr.message
+      });
+      process.env.WHATSAPP_ORDER_ACTIONS_FLOW_ID = flowId;
+      return { flowId, status: 'created_as_draft' };
+    }
+  },
+
+  /**
+   * Republish the Order Actions Flow — deprecates all existing published versions
+   * and creates a fresh one. Mirrors `republishWelcomeFlow()`.
+   */
+  async republishOrderActionsFlow() {
+    const oldFlowId = process.env.WHATSAPP_ORDER_ACTIONS_FLOW_ID;
+    const metaCloud = require('./metaCloud');
+    const axios = require('axios');
+    const accessToken = process.env.META_ACCESS_TOKEN;
+
+    try {
+      const flows = await metaCloud.getFlows();
+      const publishedOrderActionFlows = flows.filter(
+        f => f.name.startsWith('JRB Order Actions') && f.status === 'PUBLISHED'
+      );
+
+      for (const flow of publishedOrderActionFlows) {
+        try {
+          await axios.post(
+            `https://graph.facebook.com/v24.0/${flow.id}/deprecate`,
+            {},
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+          logger.info('Deprecated published order actions flow for republish', { flowId: flow.id, name: flow.name });
+        } catch (depErr) {
+          logger.warn('Could not deprecate order actions flow', { flowId: flow.id, error: depErr.message });
+        }
+      }
+    } catch (listErr) {
+      logger.warn('Could not list flows for deprecation, proceeding anyway', { error: listErr.message });
+    }
+
+    process.env.WHATSAPP_ORDER_ACTIONS_FLOW_ID = '';
+    const result = await this.setupOrderActionsFlow();
+    return { ...result, oldFlowId };
+  },
+
   /**
    * Get the Order Confirmation Flow ID (from env).
    * @returns {string|null}

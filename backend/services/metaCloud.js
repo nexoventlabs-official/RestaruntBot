@@ -1947,20 +1947,31 @@ const metaCloud = {
   },
 
   /**
-   * Get list of Flows under the WABA.
+   * Get list of Flows under the WABA. Auto-paginates via Graph API cursor
+   * `paging.next` so callers always receive the full list (Meta returns only
+   * a single page by default — without pagination, deprecate/republish flows
+   * silently miss flows on later pages and version-bumping collides).
    */
   async getFlows() {
     const endTimer = startTimer('meta.getFlows');
 
     try {
       const { accessToken, wabaId } = getConfig();
-      const response = await metaApi.get(
-        `https://graph.facebook.com/v24.0/${wabaId}/flows`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
+      const headers = { Authorization: `Bearer ${accessToken}` };
+      const all = [];
+
+      // Request a generous page size + ask for the fields we actually use.
+      let url = `https://graph.facebook.com/v24.0/${wabaId}/flows?fields=id,name,status,categories&limit=100`;
+      // Hard cap on pages to prevent runaway loops on a misbehaving API.
+      for (let page = 0; page < 20 && url; page++) {
+        const response = await metaApi.get(url, { headers });
+        const data = response.data?.data || [];
+        all.push(...data);
+        url = response.data?.paging?.next || null;
+      }
 
       endTimer({ success: true });
-      return response.data?.data || [];
+      return all;
     } catch (error) {
       endTimer({ success: false, error: error.message });
       logger.error('getFlows error', { error: error.response?.data?.error?.message || error.message });

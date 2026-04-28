@@ -559,57 +559,77 @@ router.post('/', async (req, res) => {
           response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'cart_init_error' } } } };
         }
       }
-      // Order Actions Flow — show action options for a specific order
+      // Order Actions Flow — opens to ORDER_DETAILS (item list + totals).
+      // The user can tap the "Help" footer button to navigate to ORDER_ACTIONS
+      // where the dynamic actions (Track / Cancel / Order Food / Main Menu)
+      // are shown. Track Order completes the flow → webhook sends the
+      // status-aware tracking card via sendOrderTrackMessage.
       else if (flow_token?.startsWith('order_actions_')) {
         // flow_token format: order_actions_{phone}_{orderId}
         const tokenParts = flow_token.replace('order_actions_', '');
         const lastUnderscore = tokenParts.lastIndexOf('_');
-        const phone = tokenParts.substring(0, lastUnderscore);
         const orderId = tokenParts.substring(lastUnderscore + 1);
         try {
-          const images = await getFlowImages();
-          const toBase64Icon = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
+          const order = await Order.findOne({ orderId }).lean();
+          if (!order) {
+            response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'order_not_found' } } } };
+          } else {
+            // Fetch banner image for ORDER_DETAILS screen
+            const detailsBannerUrl = await chatbotImagesService.getImageUrl('flow_order_actions_banner');
+            const detailsBannerB64 = detailsBannerUrl
+              ? await catalogService._imageUrlToRawBase64(detailsBannerUrl).catch(() => '')
+              : '';
 
-          // Fetch action icons from chatbot images
-          const [trackImg, cancelImg, orderFoodImg, mainMenuImg] = await Promise.all([
-            chatbotImagesService.getImageUrl('flow_action_track').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
-            chatbotImagesService.getImageUrl('flow_action_cancel').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
-            chatbotImagesService.getImageUrl('flow_action_order_food').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
-            chatbotImagesService.getImageUrl('flow_action_main_menu').then(u => u ? toBase64Icon(u) : '').catch(() => '')
-          ]);
+            // Build per-item rows with variant/parent images
+            const toBase64Thumb = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
+            const orderItems = await Promise.all((order.items || []).map(async (item, idx) => {
+              const lineTotal = (item.price || 0) * (item.quantity || 0);
+              const titleParts = [item.name];
+              if (item.unitQty && item.unit) titleParts.push(`(${item.unitQty} ${item.unit})`);
+              const entry = {
+                id: `item_${idx}`,
+                title: `${titleParts.join(' ')} × ${item.quantity || 0}`.substring(0, 80),
+                description: `₹${item.price} each • ₹${lineTotal}`
+              };
+              if (item.image) {
+                try {
+                  const b64 = await toBase64Thumb(item.image);
+                  if (b64) entry.image = b64;
+                } catch { /* ignore image errors — still render text */ }
+              }
+              return entry;
+            }));
 
-          // Fetch banner
-          const bannerUrl = await chatbotImagesService.getImageUrl('flow_order_actions_banner');
-          const bannerB64 = bannerUrl ? await catalogService._imageUrlToRawBase64(bannerUrl).catch(() => '') : '';
+            // Build totals breakdown — always show delivery line (₹0 if none)
+            const itemsTotal = (order.items || []).reduce((s, it) => s + ((it.price || 0) * (it.quantity || 0)), 0);
+            const deliveryCharge = Number(order.deliveryCharge || 0);
+            const grandTotal = order.totalAmount || (itemsTotal + deliveryCharge);
+            const totalsLines = [
+              `Subtotal: ₹${itemsTotal}`,
+              `Delivery: ₹${deliveryCharge}`,
+              `*Grand Total: ₹${grandTotal}*`
+            ];
 
-          const order = await Order.findOne({ orderId });
-          const actions = [
-            { id: 'track_order', title: 'Track Order', description: 'View current order status' },
-            { id: 'cancel_order', title: 'Cancel Order', description: 'Cancel this order' },
-            { id: 'order_food', title: 'Order Food', description: 'Browse menu & order more' },
-            { id: 'main_menu', title: 'Main Menu', description: 'Go to main menu' }
-          ];
-          // Add images to actions
-          const iconMap = { track_order: trackImg, cancel_order: cancelImg, order_food: orderFoodImg, main_menu: mainMenuImg };
-          actions.forEach(a => { if (iconMap[a.id]) a.image = iconMap[a.id]; });
+            // Header lines
+            const serviceLabel = order.serviceType === 'pickup' ? 'Self-Pickup' : 'Delivery';
+            const paymentLabel = order.paymentMethod === 'cod'
+              ? (order.serviceType === 'pickup' ? 'Pay at Hotel' : 'Cash on Delivery')
+              : (order.paymentMethod || 'Online');
 
-          // Remove cancel option if order can't be cancelled
-          if (order && ['delivered', 'cancelled', 'out_for_delivery'].includes(order.status)) {
-            const idx = actions.findIndex(a => a.id === 'cancel_order');
-            if (idx >= 0) actions.splice(idx, 1);
+            response = {
+              screen: 'ORDER_DETAILS',
+              data: {
+                details_banner: detailsBannerB64 || '',
+                order_heading: `📦 Order #${orderId}`,
+                order_meta: `🏪 ${serviceLabel} • 💳 ${paymentLabel}`,
+                order_items: orderItems.length > 0
+                  ? orderItems
+                  : [{ id: 'none', title: 'No items', description: '' }],
+                totals_text: totalsLines.join('\n'),
+                flow_token
+              }
+            };
           }
-          const orderInfo = order
-            ? `📦 *Order #${orderId}*\n💰 Total: ₹${order.totalAmount}\n🍽️ Service: ${order.serviceType || 'delivery'}\n📋 Status: ${order.status}`
-            : `📦 Order #${orderId}`;
-          response = {
-            screen: 'ORDER_ACTIONS',
-            data: {
-              actions,
-              actions_banner: bannerB64 || '',
-              order_info: orderInfo,
-              flow_token
-            }
-          };
         } catch (err) {
           logger.error('[FlowEndpoint] Order actions INIT error', { orderId, error: err.message });
           response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'order_actions_init_error' } } } };
@@ -1904,6 +1924,64 @@ router.post('/', async (req, res) => {
         }
       }
 
+      // ORDER_DETAILS screen: user tapped "Help" footer → show ORDER_ACTIONS
+      // (Track / Cancel / Order Food / Main Menu) with action icons.
+      else if (screen === 'ORDER_DETAILS') {
+        const token = data?.flow_token || flow_token || '';
+        const tokenParts = token.replace('order_actions_', '');
+        const lastUnderscoreD = tokenParts.lastIndexOf('_');
+        const orderIdD = tokenParts.substring(lastUnderscoreD + 1);
+        try {
+          const toBase64Icon = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
+
+          const [trackImg, cancelImg, orderFoodImg, mainMenuImg, bannerUrl] = await Promise.all([
+            chatbotImagesService.getImageUrl('flow_action_track').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
+            chatbotImagesService.getImageUrl('flow_action_cancel').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
+            chatbotImagesService.getImageUrl('flow_action_order_food').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
+            chatbotImagesService.getImageUrl('flow_action_main_menu').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
+            chatbotImagesService.getImageUrl('flow_order_actions_banner')
+          ]);
+          const bannerB64 = bannerUrl ? await catalogService._imageUrlToRawBase64(bannerUrl).catch(() => '') : '';
+
+          const order = await Order.findOne({ orderId: orderIdD }).lean();
+
+          const actions = [
+            { id: 'track_order', title: 'Track Order', description: 'View current order status' },
+            { id: 'cancel_order', title: 'Cancel Order', description: 'Cancel this order' },
+            { id: 'order_food', title: 'Order Food', description: 'Browse menu & order more' },
+            { id: 'main_menu', title: 'Main Menu', description: 'Go to main menu' }
+          ];
+          const iconMap = { track_order: trackImg, cancel_order: cancelImg, order_food: orderFoodImg, main_menu: mainMenuImg };
+          actions.forEach(a => { if (iconMap[a.id]) a.image = iconMap[a.id]; });
+
+          // Hide cancel option once the order can no longer be cancelled.
+          if (order && ['delivered', 'cancelled', 'out_for_delivery'].includes(order.status)) {
+            const idx = actions.findIndex(a => a.id === 'cancel_order');
+            if (idx >= 0) actions.splice(idx, 1);
+          }
+
+          const orderInfo = order
+            ? `📦 *Order #${orderIdD}*\n📋 Status: ${(order.status || '').replace('_', ' ')}\n🍽️ Service: ${order.serviceType || 'delivery'}`
+            : `📦 Order #${orderIdD}`;
+
+          response = {
+            screen: 'ORDER_ACTIONS',
+            data: {
+              actions,
+              actions_banner: bannerB64 || '',
+              order_info: orderInfo,
+              flow_token: token
+            }
+          };
+        } catch (err) {
+          logger.error('[FlowEndpoint] ORDER_DETAILS → ORDER_ACTIONS error', { orderId: orderIdD, error: err.message });
+          response = {
+            screen: 'SUCCESS',
+            data: { extension_message_response: { params: { flow_token: token, action_result: 'main_menu' } } }
+          };
+        }
+      }
+
       // ORDER_ACTIONS screen: User selected an action (track/cancel/order_food/main_menu)
       else if (screen === 'ORDER_ACTIONS') {
         const selectedAction = data?.selected_action;
@@ -1915,80 +1993,20 @@ router.post('/', async (req, res) => {
         const orderId = tokenParts.substring(lastUnderscore + 1);
 
         if (selectedAction === 'track_order') {
-          try {
-            const order = await Order.findOne({ orderId }).lean();
-            if (!order) {
-              response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Order Not Found', cancel_info: `Order #${orderId} was not found.`, flow_token: token } };
-            } else {
-              const images = await getFlowImages();
-              // Status image mapping
-              const statusImageMap = {
-                pending: images.statusPending,
-                confirmed: images.statusConfirmed,
-                preparing: images.statusPreparing,
-                ready: images.statusReady,
-                out_for_delivery: images.statusOutForDelivery,
-                delivered: images.statusDelivered,
-                cancelled: images.statusCancelled
-              };
-              const statusImage = statusImageMap[order.status] || '';
-              const statusEmoji = { pending: '⏳', confirmed: '✅', preparing: '👨‍🍳', ready: '📦', out_for_delivery: '🛵', delivered: '✅', cancelled: '❌' };
-              const emoji = statusEmoji[order.status] || '📋';
-
-              let orderInfo = `📋 Status: ${emoji} ${order.status.replace('_', ' ')}\n🍽️ Service: ${order.serviceType || 'delivery'}\n💳 Payment: ${order.paymentMethod || 'N/A'}`;
-              if (order.deliveryAddress?.address) {
-                orderInfo += `\n📍 Address: ${order.deliveryAddress.address}`;
-              }
-
-              // Build tracking timeline
-              let hasTracking = false;
-              let trackingInfo = '';
-              if (order.trackingUpdates && order.trackingUpdates.length > 0) {
-                hasTracking = true;
-                trackingInfo = order.trackingUpdates.map(t => {
-                  const d = new Date(t.timestamp || t.createdAt);
-                  const time = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-                  return `${time} — ${t.message || t.status}`;
-                }).join('\n');
-              }
-
-              // Build items list with variant images
-              const toBase64Thumb = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
-              const orderItems = await Promise.all((order.items || []).map(async (item, idx) => {
-                const entry = {
-                  id: `item_${idx}`,
-                  title: `${item.name} x${item.quantity}`,
-                  description: `₹${item.price} each`
-                };
-                // Use stored item image (variant image or parent image)
-                if (item.image) {
-                  try {
-                    const b64 = await toBase64Thumb(item.image);
-                    if (b64) entry.image = b64;
-                  } catch (e) { /* skip image */ }
+          // Close the flow — webhook will look up the order and send the
+          // status-aware "Order Update" card (sendOrderTrackMessage).
+          response = {
+            screen: 'SUCCESS',
+            data: {
+              extension_message_response: {
+                params: {
+                  flow_token: token,
+                  action_result: 'track_order',
+                  order_id: orderId
                 }
-                return entry;
-              }));
-
-              response = {
-                screen: 'ORDER_STATUS',
-                data: {
-                  status_image: statusImage || '',
-                  has_status_image: !!statusImage,
-                  order_heading: `Order #${orderId}`,
-                  order_info: orderInfo,
-                  has_tracking_info: hasTracking,
-                  tracking_info: trackingInfo || 'No updates yet',
-                  order_items: orderItems.length > 0 ? orderItems : [{ id: 'none', title: 'No items', description: '' }],
-                  order_total: `💰 Total: ₹${order.totalAmount}`,
-                  flow_token: token
-                }
-              };
+              }
             }
-          } catch (err) {
-            logger.error('[FlowEndpoint] Order actions track error', { orderId, error: err.message });
-            response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Error', cancel_info: 'Could not load order details.', flow_token: token } };
-          }
+          };
         } else if (selectedAction === 'cancel_order') {
           try {
             const order = await Order.findOne({ orderId });

@@ -5867,21 +5867,17 @@ const chatbot = {
     
     state.pendingOrderId = orderId;
 
+    // Keep confirmation body short — full item list lives in the Order Actions
+    // flow (ORDER_DETAILS screen) accessible via the "Order Details" CTA button.
     let confirmMsg = `✅ *Order Confirmed!*\n\n`;
     confirmMsg += `📦 Order ID: *${orderId}*\n`;
-    confirmMsg += `💵 Payment: *Cash on Delivery*\n\n`;
-    confirmMsg += `━━━━━━━━━━━━━━━\n`;
-    confirmMsg += `*Items:*\n`;
-    items.forEach((item, i) => {
-      confirmMsg += `${i + 1}. *${item.name}* (${item.unitQty} ${item.unit})\n`;
-      confirmMsg += `   Qty: ${item.quantity} × ₹${item.price} = ₹${item.price * item.quantity}\n\n`;
-    });
-    confirmMsg += `━━━━━━━━━━━━━━━\n`;
-    confirmMsg += `*Items Total:* ₹${itemsTotal}\n`;
+    confirmMsg += `🛵 Service: *Delivery*\n`;
+    confirmMsg += `💵 Payment: *Cash on Delivery*\n`;
     if (deliveryCharge > 0) {
-      confirmMsg += `*Delivery Charge:* ₹${deliveryCharge}\n`;
+      confirmMsg += `🚚 Delivery Charge: *₹${deliveryCharge}*\n`;
     }
-    confirmMsg += `*Grand Total:* ₹${total}\n\n`;
+    confirmMsg += `💰 Grand Total: *₹${total}*\n\n`;
+    confirmMsg += `🛒 Tap *Order Details* below to view your items.\n\n`;
     confirmMsg += `🙏 Thank you for your order!\nPlease keep ₹${total} ready for payment.`;
 
     const confirmedImageUrl = await chatbotImagesService.getImageUrl('order_confirmed');
@@ -7093,28 +7089,21 @@ const chatbot = {
       freshCustomer.cart = [];
       freshCustomer.conversationState = { currentStep: 'order_placed' };
 
-      // Send confirmation message
+      // Send confirmation message — keep body short; full item list is shown
+      // inside the Order Actions flow (ORDER_DETAILS screen) accessible via the
+      // "Order Details" CTA button below.
       let msg = '✅ *Order Request Successful!*\n\n';
       msg += `📦 Order ID: *${orderId}*\n`;
       msg += `🏪 Service: *Self-Pickup*\n`;
       msg += `💰 Total: *₹${itemsTotal}*\n`;
       msg += `💳 Payment: *${state.paymentMethod === 'cod' ? 'Pay at Hotel' : 'UPI/App'}*\n\n`;
-      
-      // Add order items details
-      msg += `━━━━━━━━━━━━━━━\n`;
-      msg += `📋 *Order Details*\n`;
-      msg += `━━━━━━━━━━━━━━━\n`;
-      items.forEach((item, index) => {
-        msg += `${index + 1}. *${item.name}*\n`;
-        msg += `   Qty: ${item.quantity} × ₹${item.price} = ₹${item.price * item.quantity}\n\n`;
-      });
-      msg += `━━━━━━━━━━━━━━━\n\n`;
-      
+
       if (state.paymentMethod === 'cod') {
         msg += '✨ Your order has been received!\n\n';
         msg += '📍 Please come to the restaurant to pick up your order.\n';
         msg += '💵 Payment will be collected at the hotel.\n\n';
         msg += '⏰ We will notify you when your order is ready!\n\n';
+        msg += '🛒 Tap *Order Details* below to view your items.\n\n';
         msg += 'Thank you for your order! 🙏';
       } else {
         msg += '⏳ Waiting for payment confirmation...\n\n';
