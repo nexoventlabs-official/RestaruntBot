@@ -2498,14 +2498,14 @@ const catalogService = {
     const chatbotImagesService = require('./chatbotImages');
 
     // Fetch all service icons + food type icons from admin-configured chatbot images
-    const [orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, visitWebsiteImg, helpSupportImg, myCartImg, vegImg, nonvegImg, eggImg] = await Promise.all([
+    const [orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, visitWebsiteImg, helpSupportImg, trackOrderImg, vegImg, nonvegImg, eggImg] = await Promise.all([
       chatbotImagesService.getImageUrl('flow_order_food'),
       chatbotImagesService.getImageUrl('flow_my_orders'),
       chatbotImagesService.getImageUrl('flow_view_offers'),
       chatbotImagesService.getImageUrl('flow_account_details'),
       chatbotImagesService.getImageUrl('flow_visit_website'),
       chatbotImagesService.getImageUrl('flow_help_support'),
-      chatbotImagesService.getImageUrl('flow_my_cart'),
+      chatbotImagesService.getImageUrl('flow_track_order'),
       chatbotImagesService.getImageUrl('flow_food_veg'),
       chatbotImagesService.getImageUrl('flow_food_nonveg'),
       chatbotImagesService.getImageUrl('flow_food_egg')
@@ -2513,14 +2513,14 @@ const catalogService = {
 
     // Convert Cloudinary URLs to raw base64 (WhatsApp Flows require raw base64, not data URIs)
     const toBase64 = (url) => this._imageUrlToRawBase64(url);
-    const [orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, visitWebsiteB64, helpSupportB64, myCartB64, vegB64, nonvegB64, eggB64] = await Promise.all([
+    const [orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, visitWebsiteB64, helpSupportB64, trackOrderB64, vegB64, nonvegB64, eggB64] = await Promise.all([
       toBase64(orderFoodImg),
       toBase64(myOrdersImg),
       toBase64(viewOffersImg),
       toBase64(accountDetailsImg),
       toBase64(visitWebsiteImg),
       toBase64(helpSupportImg),
-      toBase64(myCartImg),
+      toBase64(trackOrderImg),
       toBase64(vegImg),
       toBase64(nonvegImg),
       toBase64(eggImg)
@@ -2535,8 +2535,9 @@ const catalogService = {
 
     const services = [
       buildItem('order_food', 'Order Food', 'Browse our menu and place an order', orderFoodB64),
-      buildItem('my_cart', 'My Cart', 'View your cart items', myCartB64),
-      buildItem('my_orders', 'My Orders', 'Check order status & track delivery', myOrdersB64),
+      // "Track Order" replaces the old "My Cart" entry — shows live order status with a tracking link.
+      buildItem('track_order', 'Track Order', 'See latest status of your active orders', trackOrderB64 || myOrdersB64),
+      buildItem('my_orders', 'My Orders', 'View past orders & details', myOrdersB64),
       buildItem('view_offers', 'View Offers', 'See current deals and discounts', viewOffersB64),
       buildItem('account_details', 'Account Details', 'View or update your profile info', accountDetailsB64),
       buildItem('open_website', 'Visit Website', 'View our full website', visitWebsiteB64),
