@@ -1879,13 +1879,57 @@ const catalogService = {
       },
       {
         type: 'Footer',
-        label: 'Close',
+        label: 'Help',
+        'on-click-action': {
+          name: 'data_exchange',
+          payload: {
+            selected_service: 'my_orders',
+            order_id: '${data.order_id}',
+            flow_token: '${data.flow_token}'
+          }
+        }
+      }
+    ];
+
+    // ─── Screen 3c: Order Help (Track / Cancel / Contact for an order picked
+    // from My Orders). Reached when the customer taps the "Help" footer on
+    // ORDER_DETAILS. Order Food / Main Menu are intentionally omitted here —
+    // those exist on the post-checkout Order Actions flow but make no sense
+    // when reviewing an existing order. ───
+    const screenOrderHelpChildren = [
+      {
+        type: 'Image',
+        src: '${data.actions_banner}',
+        width: 1000,
+        height: 125,
+        'scale-type': 'cover',
+        'alt-text': 'Order Help Banner',
+        visible: '${data.has_actions_banner}'
+      },
+      {
+        type: 'TextBody',
+        text: '${data.order_info}'
+      },
+      {
+        type: 'TextSubheading',
+        text: 'How can we help?'
+      },
+      {
+        type: 'RadioButtonsGroup',
+        name: 'selected_action',
+        label: 'Choose an option',
+        required: true,
+        'data-source': '${data.actions}'
+      },
+      {
+        type: 'Footer',
+        label: 'Continue',
         'on-click-action': {
           name: 'complete',
           payload: {
             selected_service: 'my_orders',
             selected_order: '${data.order_id}',
-            order_viewed: 'true',
+            action_result: '${form.selected_action}',
             flow_token: '${data.flow_token}'
           }
         }
@@ -1993,7 +2037,8 @@ const catalogService = {
         'SERVICE_SELECT': ['MENU_CATEGORIES', 'MY_ORDERS', 'TRACK_ORDER', 'VIEW_OFFERS', 'ACCOUNT_DETAILS', 'VISIT_WEBSITE', 'HELP_SUPPORT'],
         'MENU_CATEGORIES': [],
         'MY_ORDERS': ['ORDER_DETAILS'],
-        'ORDER_DETAILS': [],
+        'ORDER_DETAILS': ['ORDER_HELP'],
+        'ORDER_HELP': [],
         'TRACK_ORDER': [],
         'VIEW_OFFERS': ['MENU_CATEGORIES'],
         'ACCOUNT_DETAILS': [],
@@ -2114,8 +2159,6 @@ const catalogService = {
         {
           id: 'ORDER_DETAILS',
           title: 'Order Details',
-          terminal: true,
-          success: true,
           data: {
             status_image: {
               type: 'string',
@@ -2188,6 +2231,55 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: screenOrderDetailsChildren
+          }
+        },
+        {
+          id: 'ORDER_HELP',
+          title: 'Help',
+          terminal: true,
+          success: true,
+          data: {
+            actions: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
+              __example__: [
+                { id: 'track_order', title: 'Track Order', description: 'View current order status', image: 'iVBORw0KGgo' },
+                { id: 'cancel_order', title: 'Cancel Order', description: 'Cancel this order', image: 'iVBORw0KGgo' },
+                { id: 'contact_us', title: 'Contact Us', description: 'Talk to the restaurant', image: 'iVBORw0KGgo' }
+              ]
+            },
+            actions_banner: {
+              type: 'string',
+              __example__: 'iVBORw0KGgo'
+            },
+            has_actions_banner: {
+              type: 'boolean',
+              __example__: false
+            },
+            order_info: {
+              type: 'string',
+              __example__: '📦 *Order #JRB001*\n📋 Status: confirmed\n🍽️ Service: pickup'
+            },
+            order_id: {
+              type: 'string',
+              __example__: 'JRB001'
+            },
+            flow_token: {
+              type: 'string',
+              __example__: 'welcome_service_919999999999'
+            }
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: screenOrderHelpChildren
           }
         },
         {

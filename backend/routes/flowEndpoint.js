@@ -1996,13 +1996,29 @@ router.post('/', async (req, res) => {
         }
       }
 
-      // ORDER_DETAILS screen: user tapped "Help" footer → show ORDER_ACTIONS
-      // (Track / Cancel / Order Food / Main Menu) with action icons.
+      // ORDER_DETAILS screen: user tapped "Help" footer.
+      //   • Order Actions flow (post-checkout, flow_token starts with
+      //     `order_actions_`) → show full action list (Track / Cancel /
+      //     Order Food / Contact / Main Menu) on the ORDER_ACTIONS screen.
+      //   • Welcome flow → My Orders → Order Details (flow_token starts with
+      //     `welcome_service_`) → show only Track / Cancel / Contact on the
+      //     ORDER_HELP screen. Order Food / Main Menu are intentionally
+      //     omitted here because the customer is reviewing an existing order,
+      //     not just placed one.
       else if (screen === 'ORDER_DETAILS') {
         const token = data?.flow_token || flow_token || '';
-        const tokenParts = token.replace('order_actions_', '');
-        const lastUnderscoreD = tokenParts.lastIndexOf('_');
-        const orderIdD = tokenParts.substring(lastUnderscoreD + 1);
+        const isWelcomeContext = token.startsWith('welcome_service_');
+        // For order_actions tokens the orderId is encoded as the suffix.
+        // For welcome_service tokens the orderId comes via data.order_id
+        // (set by the ORDER_DETAILS Footer payload).
+        let orderIdD;
+        if (isWelcomeContext) {
+          orderIdD = data?.order_id || '';
+        } else {
+          const tokenParts = token.replace('order_actions_', '');
+          const lastUnderscoreD = tokenParts.lastIndexOf('_');
+          orderIdD = tokenParts.substring(lastUnderscoreD + 1);
+        }
         try {
           const toBase64Icon = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
 
@@ -2018,10 +2034,9 @@ router.post('/', async (req, res) => {
 
           const order = await Order.findOne({ orderId: orderIdD }).lean();
 
-          // Build action list. Cancel Order is shown only for orders that are
-          // still cancel-eligible — at the moment that means COD / Pay-at-Hotel
-          // orders that are still in the initial `pending` state (i.e. the
-          // restaurant hasn't accepted them yet). Once the order is confirmed
+          // Cancel Order is shown only for orders that are still cancel-eligible
+          // — COD / Pay-at-Hotel orders still in the initial `pending` state
+          // (i.e. the restaurant hasn't accepted them yet). Once confirmed
           // (or anything beyond), the customer must call us instead.
           const isCancellable = !!order
             && order.paymentMethod === 'cod'
@@ -2033,9 +2048,16 @@ router.post('/', async (req, res) => {
           if (isCancellable) {
             actions.push({ id: 'cancel_order', title: 'Cancel Order', description: 'Cancel this order' });
           }
-          actions.push({ id: 'order_food', title: 'Order Food', description: 'Browse menu & order more' });
+          if (!isWelcomeContext) {
+            // Order Food / Main Menu only make sense in the post-checkout
+            // Order Actions flow — not when the user is reviewing an old
+            // order through "My Orders" in the welcome flow.
+            actions.push({ id: 'order_food', title: 'Order Food', description: 'Browse menu & order more' });
+          }
           actions.push({ id: 'contact_us', title: 'Contact Us', description: 'Talk to the restaurant' });
-          actions.push({ id: 'main_menu', title: 'Main Menu', description: 'Go to main menu' });
+          if (!isWelcomeContext) {
+            actions.push({ id: 'main_menu', title: 'Main Menu', description: 'Go to main menu' });
+          }
 
           const iconMap = {
             track_order: trackImg,
@@ -2050,20 +2072,34 @@ router.post('/', async (req, res) => {
             ? `📦 *Order #${orderIdD}*\n📋 Status: ${(order.status || '').replace('_', ' ')}\n🍽️ Service: ${order.serviceType || 'delivery'}`
             : `📦 Order #${orderIdD}`;
 
-          response = {
-            screen: 'ORDER_ACTIONS',
-            data: {
-              actions,
-              actions_banner: bannerB64 || '',
-              order_info: orderInfo,
-              flow_token: token
-            }
-          };
+          if (isWelcomeContext) {
+            response = {
+              screen: 'ORDER_HELP',
+              data: {
+                actions,
+                actions_banner: bannerB64 || '',
+                has_actions_banner: !!bannerB64,
+                order_info: orderInfo,
+                order_id: orderIdD,
+                flow_token: token
+              }
+            };
+          } else {
+            response = {
+              screen: 'ORDER_ACTIONS',
+              data: {
+                actions,
+                actions_banner: bannerB64 || '',
+                order_info: orderInfo,
+                flow_token: token
+              }
+            };
+          }
         } catch (err) {
-          logger.error('[FlowEndpoint] ORDER_DETAILS → ORDER_ACTIONS error', { orderId: orderIdD, error: err.message });
+          logger.error('[FlowEndpoint] ORDER_DETAILS → ORDER_ACTIONS/HELP error', { orderId: orderIdD, error: err.message, isWelcomeContext });
           response = {
             screen: 'SUCCESS',
-            data: { extension_message_response: { params: { flow_token: token, action_result: 'main_menu' } } }
+            data: { extension_message_response: { params: { flow_token: token, action_result: isWelcomeContext ? 'my_orders' : 'main_menu' } } }
           };
         }
       }

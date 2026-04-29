@@ -690,6 +690,82 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       // webhook receives completed flow with selected_order or no_orders flag
                       else if (service === 'my_orders') {
                         const phone = responseData.flow_token.replace('welcome_service_', '');
+                        // ORDER_HELP completion — user picked Track / Cancel / Contact for an
+                        // order they were reviewing. Each branch performs its side-effect and
+                        // returns 200 directly (no further chatbot routing needed).
+                        if (responseData.action_result && responseData.selected_order) {
+                          const helpAction = responseData.action_result;
+                          const helpOrderId = responseData.selected_order;
+                          if (helpAction === 'track_order') {
+                            try {
+                              const order = await Order.findOne({ orderId: helpOrderId }).lean();
+                              if (!order) {
+                                await whatsapp.sendMessage(phone, `❓ *Order not found*\n\nWe could not find order #${helpOrderId}.`);
+                              } else {
+                                await sendOrderTrackMessage(order);
+                                logger.info('Flow: My Orders - track from help', { orderId: helpOrderId, status: order.status, phone });
+                              }
+                            } catch (trackErr) {
+                              logger.error('Flow: My Orders - track from help failed', { error: trackErr.message, phone, orderId: helpOrderId });
+                              await whatsapp.sendMessage(phone, '⚠️ Something went wrong while fetching your order status. Please try again.').catch(() => {});
+                            }
+                            return res.sendStatus(200);
+                          }
+                          if (helpAction === 'contact_us') {
+                            try {
+                              const supportPhone = process.env.RESTAURANT_PHONE || process.env.SUPPORT_PHONE || '+919440203095';
+                              const contactImg = await chatbotImagesService.getImageUrl('help_support').catch(() => null);
+                              const body =
+                                `*Need a hand with your order?*\n\n` +
+                                `Order: ${helpOrderId}\n\n` +
+                                `Tap the button below to call the restaurant. ` +
+                                `Our team is happy to help with anything related ` +
+                                `to your order, items or delivery.`;
+                              const buttonText = 'Call Restaurant';
+                              const footer = 'We typically answer within a minute';
+                              if (contactImg) {
+                                await whatsapp.sendImageWithCtaPhone(phone, contactImg, body, buttonText, supportPhone, footer);
+                              } else {
+                                await whatsapp.sendCtaPhone(phone, body, buttonText, supportPhone, footer);
+                              }
+                              logger.info('Flow: My Orders - contact CTA sent', { phone, orderId: helpOrderId, supportPhone });
+                            } catch (contactErr) {
+                              logger.error('Flow: My Orders - contact CTA failed', { error: contactErr.message, phone });
+                              await whatsapp.sendMessage(phone, 'You can reach us on +91 94402 03095. We are happy to help!').catch(() => {});
+                            }
+                            return res.sendStatus(200);
+                          }
+                          if (helpAction === 'cancel_order') {
+                            try {
+                              const order = await Order.findOne({ orderId: helpOrderId });
+                              if (!order) {
+                                await whatsapp.sendMessage(phone, `❓ *Order not found*\n\nWe could not find order #${helpOrderId}.`);
+                              } else if (['delivered', 'cancelled'].includes(order.status)) {
+                                await whatsapp.sendMessage(phone, `⚠️ *Cannot cancel*\n\nOrder #${helpOrderId} is already ${order.status}.`);
+                              } else if (order.status !== 'pending' || order.paymentMethod !== 'cod') {
+                                await whatsapp.sendMessage(phone, `⚠️ *Cannot cancel*\n\nOrder #${helpOrderId} can no longer be cancelled from here. Please call us to cancel.`);
+                              } else {
+                                const t = transitionStatus(order, 'cancelled', 'Cancelled by customer via flow', 'customer');
+                                if (!t.success) {
+                                  await whatsapp.sendMessage(phone, `⚠️ *Cannot cancel*\n\n${t.reason || 'Order is no longer cancellable.'}`);
+                                } else {
+                                  order.cancellationReason = 'Cancelled by customer via flow';
+                                  await order.save();
+                                  try { dataEvents.emit('orders'); dataEvents.emit('dashboard'); } catch (_) {}
+                                  await whatsapp.sendMessage(phone, `✅ *Order Cancelled*\n\nYour order #${helpOrderId} has been cancelled.\n\nIf you have any questions, please contact us.`);
+                                  logger.info('Flow: My Orders - order cancelled via help', { orderId: helpOrderId, phone });
+                                }
+                              }
+                            } catch (cancelErr) {
+                              logger.error('Flow: My Orders - cancel from help failed', { error: cancelErr.message, phone, orderId: helpOrderId });
+                              await whatsapp.sendMessage(phone, '⚠️ Could not cancel the order right now. Please try again or call us.').catch(() => {});
+                            }
+                            return res.sendStatus(200);
+                          }
+                          // Unknown action — fall through to default routing below.
+                          logger.info('Flow: My Orders - unknown help action', { helpAction, helpOrderId });
+                          return res.sendStatus(200);
+                        }
                         if (responseData.order_viewed === 'true' && responseData.selected_order) {
                           // User viewed order details on ORDER_DETAILS screen then closed
                           selectedId = `view_order_${responseData.selected_order}`;
