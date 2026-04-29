@@ -89,6 +89,7 @@ const chatbotImageSchema = new mongoose.Schema({
       'flow_action_cancel',
       'flow_action_order_food',
       'flow_action_main_menu',
+      'flow_action_contact',
       'cart_options',
       'flow_food_egg',
       'flow_food_nonveg',

@@ -457,6 +457,38 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                         // Cancellation already handled in flow endpoint, just log
                         logger.info('Flow: Order actions - order cancelled via flow');
                         return res.sendStatus(200);
+                      } else if (actionResult === 'contact_us') {
+                        // User tapped "Contact Us" inside Order Actions flow.
+                        // Send a Call CTA card so they can dial the restaurant
+                        // straight from WhatsApp.
+                        try {
+                          const supportPhone = process.env.RESTAURANT_PHONE || process.env.SUPPORT_PHONE || '+919440203095';
+                          const tokenParts = responseData.flow_token.replace('order_actions_', '');
+                          const lastUnderscoreC = tokenParts.lastIndexOf('_');
+                          const orderIdContact = responseData.order_id || tokenParts.substring(lastUnderscoreC + 1);
+                          const contactImg = await chatbotImagesService.getImageUrl('help_support').catch(() => null);
+                          const body =
+                            `*Need a hand with your order?*\n\n` +
+                            `Order: ${orderIdContact}\n\n` +
+                            `Tap the button below to call the restaurant. ` +
+                            `Our team is happy to help with anything related ` +
+                            `to your order, items or delivery.`;
+                          const buttonText = 'Call Restaurant';
+                          const footer = 'We typically answer within a minute';
+                          if (contactImg) {
+                            await whatsapp.sendImageWithCtaPhone(phone, contactImg, body, buttonText, supportPhone, footer);
+                          } else {
+                            await whatsapp.sendCtaPhone(phone, body, buttonText, supportPhone, footer);
+                          }
+                          logger.info('Flow: Order actions - contact CTA sent', { phone, orderId: orderIdContact, supportPhone });
+                        } catch (contactErr) {
+                          logger.error('Flow: Order actions - contact CTA failed', { error: contactErr.message, phone });
+                          await whatsapp.sendMessage(
+                            phone,
+                            'You can reach us on +91 94402 03095. We are happy to help!'
+                          ).catch(() => {});
+                        }
+                        return res.sendStatus(200);
                       } else if (actionResult === 'track_order') {
                         // User tapped "Track Order" inside Order Actions flow.
                         // Lookup the order from flow_token (order_actions_{phone}_{orderId})

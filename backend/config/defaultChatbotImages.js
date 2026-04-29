@@ -88,6 +88,7 @@ const defaultImages = [
   { key: 'flow_action_cancel', name: 'Flow: Cancel Order Icon', description: 'Icon for Cancel Order option in Order Actions flow (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_action_order_food', name: 'Flow: Order Food Icon (Actions)', description: 'Icon for Order Food option in Order Actions flow (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_action_main_menu', name: 'Flow: Main Menu Icon', description: 'Icon for Main Menu option in Order Actions flow (square aspect ratio recommended)', imageUrl: '' },
+  { key: 'flow_action_contact', name: 'Flow: Contact Us Icon', description: 'Icon for Contact Us option in Order Actions flow (square aspect ratio recommended)', imageUrl: '' },
   { key: 'cart_options', name: 'Cart Options', description: 'Shown when displaying cart action options (add more, clear, checkout)', imageUrl: '' },
   { key: 'flow_food_egg', name: 'Flow: Egg Food Icon', description: 'Icon for Egg food type filter in menu flow (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_food_nonveg', name: 'Flow: Non-Veg Food Icon', description: 'Icon for Non-Veg food type filter in menu flow (square aspect ratio recommended)', imageUrl: '' },

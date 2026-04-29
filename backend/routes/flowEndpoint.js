@@ -2006,31 +2006,45 @@ router.post('/', async (req, res) => {
         try {
           const toBase64Icon = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
 
-          const [trackImg, cancelImg, orderFoodImg, mainMenuImg, bannerUrl] = await Promise.all([
+          const [trackImg, cancelImg, orderFoodImg, mainMenuImg, contactImg, bannerUrl] = await Promise.all([
             chatbotImagesService.getImageUrl('flow_action_track').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
             chatbotImagesService.getImageUrl('flow_action_cancel').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
             chatbotImagesService.getImageUrl('flow_action_order_food').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
             chatbotImagesService.getImageUrl('flow_action_main_menu').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
+            chatbotImagesService.getImageUrl('flow_action_contact').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
             chatbotImagesService.getImageUrl('flow_order_actions_banner')
           ]);
           const bannerB64 = bannerUrl ? await catalogService._imageUrlToRawBase64(bannerUrl).catch(() => '') : '';
 
           const order = await Order.findOne({ orderId: orderIdD }).lean();
 
-          const actions = [
-            { id: 'track_order', title: 'Track Order', description: 'View current order status' },
-            { id: 'cancel_order', title: 'Cancel Order', description: 'Cancel this order' },
-            { id: 'order_food', title: 'Order Food', description: 'Browse menu & order more' },
-            { id: 'main_menu', title: 'Main Menu', description: 'Go to main menu' }
-          ];
-          const iconMap = { track_order: trackImg, cancel_order: cancelImg, order_food: orderFoodImg, main_menu: mainMenuImg };
-          actions.forEach(a => { if (iconMap[a.id]) a.image = iconMap[a.id]; });
+          // Build action list. Cancel Order is shown only for orders that are
+          // still cancel-eligible — at the moment that means COD / Pay-at-Hotel
+          // orders that are still in the initial `pending` state (i.e. the
+          // restaurant hasn't accepted them yet). Once the order is confirmed
+          // (or anything beyond), the customer must call us instead.
+          const isCancellable = !!order
+            && order.paymentMethod === 'cod'
+            && order.status === 'pending';
 
-          // Hide cancel option once the order can no longer be cancelled.
-          if (order && ['delivered', 'cancelled', 'out_for_delivery'].includes(order.status)) {
-            const idx = actions.findIndex(a => a.id === 'cancel_order');
-            if (idx >= 0) actions.splice(idx, 1);
+          const actions = [
+            { id: 'track_order', title: 'Track Order', description: 'View current order status' }
+          ];
+          if (isCancellable) {
+            actions.push({ id: 'cancel_order', title: 'Cancel Order', description: 'Cancel this order' });
           }
+          actions.push({ id: 'order_food', title: 'Order Food', description: 'Browse menu & order more' });
+          actions.push({ id: 'contact_us', title: 'Contact Us', description: 'Talk to the restaurant' });
+          actions.push({ id: 'main_menu', title: 'Main Menu', description: 'Go to main menu' });
+
+          const iconMap = {
+            track_order: trackImg,
+            cancel_order: cancelImg,
+            order_food: orderFoodImg,
+            contact_us: contactImg,
+            main_menu: mainMenuImg
+          };
+          actions.forEach(a => { if (iconMap[a.id]) a.image = iconMap[a.id]; });
 
           const orderInfo = order
             ? `📦 *Order #${orderIdD}*\n📋 Status: ${(order.status || '').replace('_', ' ')}\n🍽️ Service: ${order.serviceType || 'delivery'}`
