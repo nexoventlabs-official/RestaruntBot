@@ -1870,7 +1870,7 @@ const catalogService = {
         type: 'RadioButtonsGroup',
         name: 'selected_item',
         label: 'Order Items',
-        required: true,
+        required: false,
         'data-source': '${data.order_items}'
       },
       {
