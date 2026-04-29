@@ -158,7 +158,7 @@ export default function FlowImages() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-dark-900">Flow Images</h1>
-          <p className="text-dark-500 mt-1">Manage WhatsApp Flow images (banner &amp; service icons)</p>
+          <p className="text-dark-500 mt-1">Manage WhatsApp Flow images (welcome banner &amp; service icons)</p>
         </div>
       </div>
 
@@ -184,11 +184,11 @@ export default function FlowImages() {
         </div>
       )}
 
-      {/* Banner Section */}
+      {/* Welcome Banner Section */}
       {bannerImages.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold text-dark-800 mb-3">Flow Banners</h2>
-          <p className="text-sm text-dark-400 mb-4">Banner images displayed at the top of flow screens. Recommended: 1000 × 125px (8:1 ratio). Auto-resized to fit.</p>
+          <h2 className="text-lg font-semibold text-dark-800 mb-3">Welcome Banner</h2>
+          <p className="text-sm text-dark-400 mb-4">Banner shown at the top of the welcome screen (Service Selection). Recommended: 1000 × 125px (8:1 ratio). Auto-resized to fit.</p>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {bannerImages.map(img => (
               <ImageCard key={img.key} image={img} aspectClass="aspect-[8/1]" sizeLabel="1000 × 125px (8:1)" />
@@ -217,7 +217,7 @@ export default function FlowImages() {
           <div>
             <h4 className="font-medium text-blue-900">Flow Image Guidelines</h4>
             <ul className="text-sm text-blue-700 mt-2 space-y-1">
-              <li>• <strong>Banners:</strong> 1000 × 125px (8:1 landscape) — auto-cropped on upload</li>
+              <li>• <strong>Welcome Banner:</strong> 1000 × 125px (8:1 landscape) — auto-cropped on upload</li>
               <li>• <strong>Service Icons:</strong> 600 × 600px (1:1 square) — auto-cropped on upload</li>
               <li>• Supported formats: JPG, PNG, WebP</li>
               <li>• Max file size: 10MB</li>
