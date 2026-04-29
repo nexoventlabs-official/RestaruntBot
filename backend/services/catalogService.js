@@ -1751,14 +1751,6 @@ const catalogService = {
     // ─── Screen 2: Menu Categories (items loaded dynamically when Order Food is selected) ───
     const screenMenuCategoriesChildren = [
       {
-        type: 'Image',
-        src: '${data.menu_banner}',
-        width: 1000,
-        height: 125,
-        'scale-type': 'cover',
-        'alt-text': 'Menu Categories Banner'
-      },
-      {
         type: 'TextSubheading',
         text: 'Select a Category'
       },
@@ -1785,14 +1777,6 @@ const catalogService = {
 
     // ─── Screen 3: My Orders (shown when My Orders is selected — orders loaded dynamically) ───
     const screen3Children = [
-      {
-        type: 'Image',
-        src: '${data.orders_banner}',
-        width: 1000,
-        height: 125,
-        'scale-type': 'cover',
-        'alt-text': 'My Orders Banner'
-      },
       {
         type: 'TextSubheading',
         text: 'Your Recent Orders'
@@ -1898,15 +1882,6 @@ const catalogService = {
     // when reviewing an existing order. ───
     const screenOrderHelpChildren = [
       {
-        type: 'Image',
-        src: '${data.actions_banner}',
-        width: 1000,
-        height: 125,
-        'scale-type': 'cover',
-        'alt-text': 'Order Help Banner',
-        visible: '${data.has_actions_banner}'
-      },
-      {
         type: 'TextBody',
         text: '${data.order_info}'
       },
@@ -1939,14 +1914,6 @@ const catalogService = {
     // ─── Screen 4: View Offers (shown when View Offers is selected — offers loaded dynamically) ───
     const screen4Children = [
       {
-        type: 'Image',
-        src: '${data.offers_banner}',
-        width: 1000,
-        height: 125,
-        'scale-type': 'cover',
-        'alt-text': 'View Offers Banner'
-      },
-      {
         type: 'TextSubheading',
         text: 'Available Offers for You'
       },
@@ -1973,14 +1940,6 @@ const catalogService = {
 
     // ─── Screen 5: Account Details (shown when Account Details is selected — pre-filled dynamically) ───
     const screenAccountDetailsChildren = [
-      {
-        type: 'Image',
-        src: '${data.account_banner}',
-        width: 1000,
-        height: 125,
-        'scale-type': 'cover',
-        'alt-text': 'Account Details Banner'
-      },
       {
         type: 'TextSubheading',
         text: 'Your Profile'
@@ -2105,10 +2064,6 @@ const catalogService = {
                 { id: '507f1f77bcf86cd799439011', title: 'Ice Creams', description: '3 variants', image: 'iVBORw0KGgo' }
               ]
             },
-            menu_banner: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
             selected_service: {
               type: 'string',
               __example__: 'order_food'
@@ -2141,10 +2096,6 @@ const catalogService = {
               __example__: [
                 { id: 'ORD001', title: 'Order #JRB001 - ₹250', description: 'Preparing • 2 items', image: 'iVBORw0KGgo' }
               ]
-            },
-            orders_banner: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
             },
             flow_token: {
               type: 'string',
@@ -2256,14 +2207,6 @@ const catalogService = {
                 { id: 'contact_us', title: 'Contact Us', description: 'Talk to the restaurant', image: 'iVBORw0KGgo' }
               ]
             },
-            actions_banner: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
-            has_actions_banner: {
-              type: 'boolean',
-              __example__: false
-            },
             order_info: {
               type: 'string',
               __example__: '📦 *Order #JRB001*\n📋 Status: confirmed\n🍽️ Service: pickup'
@@ -2301,10 +2244,6 @@ const catalogService = {
                 { id: 'offer1', title: '50% Off Biryani', description: 'Use code BIRYANI50', image: 'iVBORw0KGgo' }
               ]
             },
-            offers_banner: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
             flow_token: {
               type: 'string',
               __example__: 'welcome_service_919999999999'
@@ -2324,10 +2263,6 @@ const catalogService = {
             account_info: {
               type: 'string',
               __example__: 'Member since: 1 Jan 2025 • Orders: 5 • Spent: ₹1200'
-            },
-            account_banner: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
             },
             init_name: {
               type: 'string',
@@ -2361,10 +2296,6 @@ const catalogService = {
               type: 'string',
               __example__: 'https://restarunt-bot.vercel.app/'
             },
-            website_banner: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
             flow_token: {
               type: 'string',
               __example__: 'welcome_service_919999999999'
@@ -2373,14 +2304,6 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: [
-              {
-                type: 'Image',
-                src: '${data.website_banner}',
-                width: 1000,
-                height: 125,
-                'scale-type': 'cover',
-                'alt-text': 'Visit Our Website'
-              },
               {
                 type: 'TextHeading',
                 text: 'Visit Our Website'
@@ -2417,10 +2340,6 @@ const catalogService = {
           terminal: true,
           success: true,
           data: {
-            help_banner: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
             flow_token: {
               type: 'string',
               __example__: 'welcome_service_919999999999'
@@ -2429,14 +2348,6 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: [
-              {
-                type: 'Image',
-                src: '${data.help_banner}',
-                width: 1000,
-                height: 125,
-                'scale-type': 'cover',
-                'alt-text': 'Help & Support Banner'
-              },
               {
                 type: 'TextHeading',
                 text: 'Help & Support'
@@ -2494,10 +2405,6 @@ const catalogService = {
                 { id: 'ORDMOI39IIM0CC235ED', title: '#ORDMOI39IIM0CC235ED - ₹99', description: 'Preparing • 1 item • 28 Apr', image: 'iVBORw0KGgo' }
               ]
             },
-            track_banner: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
             flow_token: {
               type: 'string',
               __example__: 'welcome_service_919999999999'
@@ -2506,14 +2413,6 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: [
-              {
-                type: 'Image',
-                src: '${data.track_banner}',
-                width: 1000,
-                height: 125,
-                'scale-type': 'cover',
-                'alt-text': 'Track Order Banner'
-              },
               {
                 type: 'TextSubheading',
                 text: 'Your Active Orders'
@@ -2878,7 +2777,6 @@ const catalogService = {
           id: 'ORDER_DETAILS',
           title: 'Order Details',
           data: {
-            details_banner: { type: 'string', __example__: 'iVBORw0KGgo' },
             order_heading: { type: 'string', __example__: '📦 Order #ORD001' },
             order_meta: { type: 'string', __example__: '🏪 Self-Pickup • 💳 Pay at Hotel' },
             order_items: {
@@ -2905,14 +2803,6 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: [
-              {
-                type: 'Image',
-                src: '${data.details_banner}',
-                width: 1000,
-                height: 125,
-                'scale-type': 'cover',
-                'alt-text': 'Order Details'
-              },
               { type: 'TextHeading', text: '${data.order_heading}' },
               { type: 'TextBody', text: '${data.order_meta}' },
               { type: 'TextSubheading', text: '🛒 Items' },
@@ -2961,21 +2851,12 @@ const catalogService = {
                 { id: 'main_menu', title: 'Main Menu', description: 'Go to main menu', image: 'iVBORw0KGgo' }
               ]
             },
-            actions_banner: { type: 'string', __example__: 'iVBORw0KGgo' },
             order_info: { type: 'string', __example__: '📦 Order #ORD001\n📋 Status: Pending' },
             flow_token: { type: 'string', __example__: 'order_actions_919999999999_ORD001' }
           },
           layout: {
             type: 'SingleColumnLayout',
             children: [
-              {
-                type: 'Image',
-                src: '${data.actions_banner}',
-                width: 1000,
-                height: 125,
-                'scale-type': 'cover',
-                'alt-text': 'Order Actions Banner'
-              },
               { type: 'TextBody', text: '${data.order_info}' },
               { type: 'TextSubheading', text: 'How can we help?' },
               {
@@ -3051,20 +2932,11 @@ const catalogService = {
                 { id: 'cat_0', title: 'Ice Creams', description: '2 variants', image: 'iVBORw0KGgo' }
               ]
             },
-            menu_banner: { type: 'string', __example__: 'iVBORw0KGgo' },
             flow_token: { type: 'string', __example__: 'order_actions_919999999999_ORD001' }
           },
           layout: {
             type: 'SingleColumnLayout',
             children: [
-              {
-                type: 'Image',
-                src: '${data.menu_banner}',
-                width: 1000,
-                height: 125,
-                'scale-type': 'cover',
-                'alt-text': 'Menu Banner'
-              },
               { type: 'TextSubheading', text: 'Select a Category' },
               {
                 type: 'RadioButtonsGroup',
@@ -3217,10 +3089,6 @@ const catalogService = {
           terminal: true,
           success: true,
           data: {
-            retry_banner: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
             retry_heading: {
               type: 'string',
               __example__: '❌ Payment Failed'
@@ -3257,14 +3125,6 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: [
-              {
-                type: 'Image',
-                src: '${data.retry_banner}',
-                width: 1000,
-                height: 125,
-                'scale-type': 'cover',
-                'alt-text': 'Payment Failed Banner'
-              },
               {
                 type: 'TextHeading',
                 text: '${data.retry_heading}'
@@ -3404,10 +3264,6 @@ const catalogService = {
           id: 'ORDER_REVIEW',
           title: 'Your Order',
           data: {
-            order_banner: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
             cart_items: {
               type: 'array',
               items: {
@@ -3436,14 +3292,6 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: [
-              {
-                type: 'Image',
-                src: '${data.order_banner}',
-                width: 1000,
-                height: 125,
-                'scale-type': 'cover',
-                'alt-text': 'Order Review Banner'
-              },
               {
                 type: 'TextHeading',
                 text: '📋 Your Order'
@@ -3479,10 +3327,6 @@ const catalogService = {
           terminal: true,
           success: true,
           data: {
-            service_banner: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
             order_summary: {
               type: 'string',
               __example__: '3 items • Total: ₹276'
@@ -3511,14 +3355,6 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: [
-              {
-                type: 'Image',
-                src: '${data.service_banner}',
-                width: 1000,
-                height: 125,
-                'scale-type': 'cover',
-                'alt-text': 'Service Type Banner'
-              },
               {
                 type: 'TextHeading',
                 text: '🚚 Choose Service Type'
@@ -3583,10 +3419,6 @@ const catalogService = {
           id: 'CART_REVIEW',
           title: 'Your Cart',
           data: {
-            cart_banner: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
             cart_items: {
               type: 'array',
               items: {
@@ -3614,14 +3446,6 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: [
-              {
-                type: 'Image',
-                src: '${data.cart_banner}',
-                width: 1000,
-                height: 125,
-                'scale-type': 'cover',
-                'alt-text': 'Cart Banner'
-              },
               {
                 type: 'TextHeading',
                 text: '🛒 Your Cart'
@@ -3719,10 +3543,6 @@ const catalogService = {
           terminal: true,
           success: true,
           data: {
-            service_banner: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
             order_summary: {
               type: 'string',
               __example__: '3 items • Total: ₹276'
@@ -3751,14 +3571,6 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: [
-              {
-                type: 'Image',
-                src: '${data.service_banner}',
-                width: 1000,
-                height: 125,
-                'scale-type': 'cover',
-                'alt-text': 'Service Type Banner'
-              },
               {
                 type: 'TextHeading',
                 text: '🚚 Choose Service Type'
@@ -3794,10 +3606,6 @@ const catalogService = {
           terminal: true,
           success: true,
           data: {
-            menu_banner: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
             categories: {
               type: 'array',
               items: {
@@ -3821,14 +3629,6 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: [
-              {
-                type: 'Image',
-                src: '${data.menu_banner}',
-                width: 1000,
-                height: 125,
-                'scale-type': 'cover',
-                'alt-text': 'Menu Categories Banner'
-              },
               {
                 type: 'TextSubheading',
                 text: 'Select a Category'
@@ -3946,10 +3746,6 @@ const catalogService = {
           terminal: true,
           success: true,
           data: {
-            payment_banner: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
             order_summary_text: {
               type: 'string',
               __example__: '🛒 1 item • Total: ₹69\n📍 Delivery: FREE'
@@ -3978,14 +3774,6 @@ const catalogService = {
           layout: {
             type: 'SingleColumnLayout',
             children: [
-              {
-                type: 'Image',
-                src: '${data.payment_banner}',
-                width: 1000,
-                height: 125,
-                'scale-type': 'cover',
-                'alt-text': 'Payment Banner'
-              },
               {
                 type: 'TextHeading',
                 text: '💳 Select Payment Method'

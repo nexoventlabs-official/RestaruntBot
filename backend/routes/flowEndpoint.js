@@ -116,7 +116,7 @@ function encryptResponse(responseObj, aesKeyBuffer, initialVectorBuffer) {
 }
 
 // ─── Cache for base64 images (avoid re-downloading on every request) ───
-let imageCache = { services: null, foodTypes: null, statusImages: null, banner: null, websiteBanner: null, offersBanner: null, foodtypeBanner: null, menuBanner: null, ordersBanner: null, accountBanner: null, helpBanner: null, orderReviewBanner: null, serviceTypeBanner: null, deliveryOptionImg: null, pickupOptionImg: null, lastFetched: 0 };
+let imageCache = { services: null, foodTypes: null, statusImages: null, deliveryOptionImg: null, pickupOptionImg: null, lastFetched: 0 };
 const IMAGE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 async function getFlowImages() {
@@ -129,22 +129,14 @@ async function getFlowImages() {
 
   const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
 
-  // Fetch all image URLs (services + order statuses + banners)
+  // Fetch all image URLs (services + order statuses + service-icons + payment icons).
+  // All `_banner` images except the welcome banner have been removed.
   const [
     orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, visitWebsiteImg, helpSupportImg,
-    myCartImg, trackOrderImg, cartBannerImg, cartPlaceOrderImg, cartAddMoreImg, cartClearImg,
+    myCartImg, trackOrderImg, cartPlaceOrderImg, cartAddMoreImg, cartClearImg,
     pendingImg, confirmedImg, preparingImg, readyImg, outForDeliveryImg, deliveredImg, cancelledImg,
-    websiteBannerImg,
-    offersBannerImg,
-    menuBannerImg,
-    ordersBannerImg,
-    accountBannerImg,
-    helpBannerImg,
-    orderReviewBannerImg,
-    serviceTypeBannerImg,
     deliveryOptionImgUrl,
     pickupOptionImgUrl,
-    paymentBannerImg,
     payCodImg,
     payHotelImg,
     payGpayImg,
@@ -159,7 +151,6 @@ async function getFlowImages() {
     chatbotImagesService.getImageUrl('flow_help_support'),
     chatbotImagesService.getImageUrl('flow_my_cart'),
     chatbotImagesService.getImageUrl('flow_track_order'),
-    chatbotImagesService.getImageUrl('flow_cart_banner'),
     chatbotImagesService.getImageUrl('flow_cart_place_order'),
     chatbotImagesService.getImageUrl('flow_cart_add_more'),
     chatbotImagesService.getImageUrl('flow_cart_clear'),
@@ -170,17 +161,8 @@ async function getFlowImages() {
     chatbotImagesService.getImageUrl('flow_status_out_for_delivery'),
     chatbotImagesService.getImageUrl('flow_status_delivered'),
     chatbotImagesService.getImageUrl('flow_status_cancelled'),
-    chatbotImagesService.getImageUrl('flow_website_banner'),
-    chatbotImagesService.getImageUrl('flow_offers_banner'),
-    chatbotImagesService.getImageUrl('flow_menu_banner'),
-    chatbotImagesService.getImageUrl('flow_orders_banner'),
-    chatbotImagesService.getImageUrl('flow_account_banner'),
-    chatbotImagesService.getImageUrl('flow_help_banner'),
-    chatbotImagesService.getImageUrl('flow_order_review_banner'),
-    chatbotImagesService.getImageUrl('flow_service_type_banner'),
     chatbotImagesService.getImageUrl('flow_delivery_option'),
     chatbotImagesService.getImageUrl('flow_pickup_option'),
-    chatbotImagesService.getImageUrl('flow_payment_banner'),
     chatbotImagesService.getImageUrl('flow_pay_cod'),
     chatbotImagesService.getImageUrl('flow_pay_hotel'),
     chatbotImagesService.getImageUrl('flow_pay_gpay'),
@@ -191,19 +173,10 @@ async function getFlowImages() {
   // Convert to base64
   const [
     orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, visitWebsiteB64, helpSupportB64,
-    myCartB64, trackOrderB64, cartBannerB64, cartPlaceOrderB64, cartAddMoreB64, cartClearB64,
+    myCartB64, trackOrderB64, cartPlaceOrderB64, cartAddMoreB64, cartClearB64,
     pendingB64, confirmedB64, preparingB64, readyB64, outForDeliveryB64, deliveredB64, cancelledB64,
-    websiteBannerB64,
-    offersBannerB64,
-    menuBannerB64,
-    ordersBannerB64,
-    accountBannerB64,
-    helpBannerB64,
-    orderReviewBannerB64,
-    serviceTypeBannerB64,
     deliveryOptionB64,
     pickupOptionB64,
-    paymentBannerB64,
     payCodB64,
     payHotelB64,
     payGpayB64,
@@ -213,20 +186,11 @@ async function getFlowImages() {
     toBase64(orderFoodImg), toBase64(myOrdersImg), toBase64(viewOffersImg),
     toBase64(accountDetailsImg), toBase64(visitWebsiteImg),
     toBase64(helpSupportImg), toBase64(myCartImg), toBase64(trackOrderImg),
-    toBase64(cartBannerImg), toBase64(cartPlaceOrderImg), toBase64(cartAddMoreImg), toBase64(cartClearImg),
+    toBase64(cartPlaceOrderImg), toBase64(cartAddMoreImg), toBase64(cartClearImg),
     toBase64(pendingImg), toBase64(confirmedImg), toBase64(preparingImg),
     toBase64(readyImg), toBase64(outForDeliveryImg), toBase64(deliveredImg), toBase64(cancelledImg),
-    toBase64(websiteBannerImg),
-    toBase64(offersBannerImg),
-    toBase64(menuBannerImg),
-    toBase64(ordersBannerImg),
-    toBase64(accountBannerImg),
-    toBase64(helpBannerImg),
-    toBase64(orderReviewBannerImg),
-    toBase64(serviceTypeBannerImg),
     toBase64(deliveryOptionImgUrl),
     toBase64(pickupOptionImgUrl),
-    toBase64(paymentBannerImg),
     toBase64(payCodImg),
     toBase64(payHotelImg),
     toBase64(payGpayImg),
@@ -260,24 +224,13 @@ async function getFlowImages() {
       delivered: deliveredB64,
       cancelled: cancelledB64
     },
-    banner: null,
-    websiteBanner: websiteBannerB64 || null,
-    offersBanner: offersBannerB64 || null,
-    menuBanner: menuBannerB64 || null,
-    ordersBanner: ordersBannerB64 || null,
-    accountBanner: accountBannerB64 || null,
-    helpBanner: helpBannerB64 || null,
-    orderReviewBanner: orderReviewBannerB64 || null,
-    serviceTypeBanner: serviceTypeBannerB64 || null,
     deliveryOptionImg: deliveryOptionImgUrl || null,
     pickupOptionImg: pickupOptionImgUrl || null,
-    paymentBanner: paymentBannerB64 || null,
     payCodImg: payCodB64 || null,
     payHotelImg: payHotelB64 || null,
     payGpayImg: payGpayB64 || null,
     payPhonepeImg: payPhonepeB64 || null,
     payPaytmImg: payPaytmB64 || null,
-    cartBanner: cartBannerB64 || null,
     cartPlaceOrderImg: cartPlaceOrderB64 || null,
     cartAddMoreImg: cartAddMoreB64 || null,
     cartClearImg: cartClearB64 || null,
@@ -397,7 +350,6 @@ router.post('/', async (req, res) => {
             response = {
               screen: 'ORDER_REVIEW',
               data: {
-                order_banner: images.orderReviewBanner || '',
                 cart_items: cartItems,
                 order_total_text: `━━━━━━━━━━━━━━━\n💰 Total: ₹${total}`,
                 flow_token
@@ -462,7 +414,6 @@ router.post('/', async (req, res) => {
             response = {
               screen: 'RETRY_OPTIONS',
               data: {
-                retry_banner: images.paymentBanner || '',
                 retry_heading: '❌ Payment Failed',
                 retry_info: summary,
                 retry_options: retryOptions,
@@ -540,7 +491,6 @@ router.post('/', async (req, res) => {
           response = {
             screen: 'PAYMENT_SELECT',
             data: {
-              payment_banner: images.paymentBanner || '',
               order_summary_text: summaryText,
               payment_methods: paymentMethods,
               flow_token
@@ -619,7 +569,6 @@ router.post('/', async (req, res) => {
             response = {
               screen: 'CART_REVIEW',
               data: {
-                cart_banner: images.cartBanner || '',
                 cart_items: cartItems,
                 cart_summary: `━━━━━━━━━━━━━━━\n💰 Total: ₹${total}\n⏳ Cart expires in ${expiresIn} min`,
                 flow_token
@@ -646,11 +595,6 @@ router.post('/', async (req, res) => {
           if (!order) {
             response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'order_not_found' } } } };
           } else {
-            // Fetch banner image for ORDER_DETAILS screen
-            const detailsBannerUrl = await chatbotImagesService.getImageUrl('flow_order_actions_banner');
-            const detailsBannerB64 = detailsBannerUrl
-              ? await catalogService._imageUrlToRawBase64(detailsBannerUrl).catch(() => '')
-              : '';
 
             // Build per-item rows with variant/parent images
             const toBase64Thumb = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
@@ -691,7 +635,6 @@ router.post('/', async (req, res) => {
             response = {
               screen: 'ORDER_DETAILS',
               data: {
-                details_banner: detailsBannerB64 || '',
                 order_heading: `📦 Order #${orderId}`,
                 order_meta: `🏪 ${serviceLabel} • 💳 ${paymentLabel}`,
                 order_items: orderItems.length > 0
@@ -741,7 +684,6 @@ router.post('/', async (req, res) => {
               screen: 'CATEGORY_SELECT',
               data: {
                 categories: categoryItems,
-                menu_banner: images.menuBanner || '',
                 flow_token
               }
             };
@@ -812,7 +754,6 @@ router.post('/', async (req, res) => {
                 screen: 'MENU_CATEGORIES',
                 data: {
                   categories: categoryItems,
-                  menu_banner: images.menuBanner || '',
                   selected_service: selectedService,
                   flow_token: token
                 }
@@ -885,7 +826,6 @@ router.post('/', async (req, res) => {
                 screen: 'MY_ORDERS',
                 data: {
                   orders: orderItems,
-                  orders_banner: images.ordersBanner || '',
                   flow_token: token
                 }
               };
@@ -975,7 +915,6 @@ router.post('/', async (req, res) => {
                 screen: 'VIEW_OFFERS',
                 data: {
                   offers: offerItems,
-                  offers_banner: images.offersBanner || '',
                   flow_token: token
                 }
               };
@@ -1033,7 +972,6 @@ router.post('/', async (req, res) => {
               screen: 'ACCOUNT_DETAILS',
               data: {
                 account_info: accountInfo,
-                account_banner: images.accountBanner || '',
                 init_name: customer?.name || '',
                 init_email: customer?.email || '',
                 init_phone: displayPhone,
@@ -1046,7 +984,6 @@ router.post('/', async (req, res) => {
               screen: 'ACCOUNT_DETAILS',
               data: {
                 account_info: 'Fill in your details below',
-                account_banner: images.accountBanner || '',
                 init_name: '',
                 init_email: '',
                 init_phone: phone.length > 10 ? phone.slice(-10) : phone,
@@ -1061,7 +998,6 @@ router.post('/', async (req, res) => {
             screen: 'VISIT_WEBSITE',
             data: {
               website_url: 'https://restarunt-bot.vercel.app/',
-              website_banner: images.websiteBanner || '',
               flow_token: token
             }
           };
@@ -1071,7 +1007,6 @@ router.post('/', async (req, res) => {
           response = {
             screen: 'HELP_SUPPORT',
             data: {
-              help_banner: images.helpBanner || '',
               flow_token: token
             }
           };
@@ -1124,7 +1059,6 @@ router.post('/', async (req, res) => {
                 screen: 'TRACK_ORDER',
                 data: {
                   active_orders: orderItems,
-                  track_banner: images.ordersBanner || '',
                   flow_token: token
                 }
               };
@@ -1232,7 +1166,6 @@ router.post('/', async (req, res) => {
                 screen: 'MY_CART',
                 data: {
                   cart_items: cartItems,
-                  cart_banner: images.cartBanner || '',
                   cart_summary: `━━━━━━━━━━━━━━━\n💰 Total: ₹${total}\n⏳ Cart expires in ~${minutesLeft} min`,
                   flow_token: token
                 }
@@ -1243,7 +1176,6 @@ router.post('/', async (req, res) => {
                 screen: 'MY_CART',
                 data: {
                   cart_items: [{ id: 'browse_menu', title: 'No items in your cart', description: 'Tap Continue to browse the menu' }],
-                  cart_banner: images.cartBanner || '',
                   cart_summary: '🛒 Your cart is empty.\nBrowse the menu to add delicious items!',
                   flow_token: token
                 }
@@ -1255,7 +1187,6 @@ router.post('/', async (req, res) => {
               screen: 'MY_CART',
               data: {
                 cart_items: [{ id: 'browse_menu', title: 'No items in your cart', description: 'Tap Continue to browse the menu' }],
-                cart_banner: images.cartBanner || '',
                 cart_summary: '🛒 Your cart is empty.\nBrowse the menu to add delicious items!',
                 flow_token: token
               }
@@ -1316,7 +1247,6 @@ router.post('/', async (req, res) => {
                 screen: 'MENU_CATEGORIES',
                 data: {
                   categories: categoryItems,
-                  menu_banner: images.menuBanner || '',
                   selected_service: 'order_food',
                   flow_token: token
                 }
@@ -1444,7 +1374,6 @@ router.post('/', async (req, res) => {
             response = {
               screen: 'CHOOSE_SERVICE',
               data: {
-                service_banner: images.serviceTypeBanner || '',
                 order_summary: `${validItems.length} item${validItems.length > 1 ? 's' : ''} • Total: ₹${total}`,
                 service_options: serviceOptions,
                 flow_token: token
@@ -1487,7 +1416,6 @@ router.post('/', async (req, res) => {
               response = {
                 screen: 'MENU_CATEGORIES',
                 data: {
-                  menu_banner: images.menuBanner || '',
                   categories: categoryItems,
                   selected_service: 'my_cart',
                   flow_token: token
@@ -1745,7 +1673,6 @@ router.post('/', async (req, res) => {
               screen: 'MENU_CATEGORIES',
               data: {
                 categories: categoryItems,
-                menu_banner: images.menuBanner || '',
                 selected_service: 'order_food',
                 flow_token: token
               }
@@ -1802,7 +1729,6 @@ router.post('/', async (req, res) => {
           response = {
             screen: 'CHOOSE_SERVICE',
             data: {
-              service_banner: images.serviceTypeBanner || '',
               order_summary: `${validItems.length} item${validItems.length > 1 ? 's' : ''} • Total: ₹${total}`,
               service_options: serviceOptions,
               flow_token: token
@@ -1919,7 +1845,6 @@ router.post('/', async (req, res) => {
             response = {
               screen: 'CHOOSE_SERVICE',
               data: {
-                service_banner: images.serviceTypeBanner || '',
                 order_summary: `${validItems.length} item${validItems.length > 1 ? 's' : ''} • Total: ₹${total}`,
                 service_options: serviceOptions,
                 flow_token: token
@@ -1962,7 +1887,6 @@ router.post('/', async (req, res) => {
               response = {
                 screen: 'MENU_CATEGORIES',
                 data: {
-                  menu_banner: images.menuBanner || '',
                   categories: categoryItems,
                   flow_token: token
                 }
@@ -2022,15 +1946,13 @@ router.post('/', async (req, res) => {
         try {
           const toBase64Icon = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
 
-          const [trackImg, cancelImg, orderFoodImg, mainMenuImg, contactImg, bannerUrl] = await Promise.all([
+          const [trackImg, cancelImg, orderFoodImg, mainMenuImg, contactImg] = await Promise.all([
             chatbotImagesService.getImageUrl('flow_action_track').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
             chatbotImagesService.getImageUrl('flow_action_cancel').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
             chatbotImagesService.getImageUrl('flow_action_order_food').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
             chatbotImagesService.getImageUrl('flow_action_main_menu').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
-            chatbotImagesService.getImageUrl('flow_action_contact').then(u => u ? toBase64Icon(u) : '').catch(() => ''),
-            chatbotImagesService.getImageUrl('flow_order_actions_banner')
+            chatbotImagesService.getImageUrl('flow_action_contact').then(u => u ? toBase64Icon(u) : '').catch(() => '')
           ]);
-          const bannerB64 = bannerUrl ? await catalogService._imageUrlToRawBase64(bannerUrl).catch(() => '') : '';
 
           const order = await Order.findOne({ orderId: orderIdD }).lean();
 
@@ -2077,8 +1999,6 @@ router.post('/', async (req, res) => {
               screen: 'ORDER_HELP',
               data: {
                 actions,
-                actions_banner: bannerB64 || '',
-                has_actions_banner: !!bannerB64,
                 order_info: orderInfo,
                 order_id: orderIdD,
                 flow_token: token
@@ -2089,7 +2009,6 @@ router.post('/', async (req, res) => {
               screen: 'ORDER_ACTIONS',
               data: {
                 actions,
-                actions_banner: bannerB64 || '',
                 order_info: orderInfo,
                 flow_token: token
               }
@@ -2171,7 +2090,7 @@ router.post('/', async (req, res) => {
               return catItem;
             }));
             if (categoryItems.length > 0) {
-              response = { screen: 'MENU_CATEGORIES', data: { categories: categoryItems, menu_banner: images.menuBanner || '', flow_token: token } };
+              response = { screen: 'MENU_CATEGORIES', data: { categories: categoryItems, flow_token: token } };
             } else {
               response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token: token, action_result: 'no_items' } } } };
             }
