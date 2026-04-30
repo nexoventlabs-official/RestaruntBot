@@ -642,13 +642,21 @@ export default function Offers() {
                     <div className="flex flex-wrap gap-1">{detailOffer.appliedCategories.map(c => <span key={c} className="px-2 py-0.5 bg-primary-50 text-primary-700 rounded text-xs font-medium">{c}</span>)}</div>
                   </div>
                 )}
-                {/* Applied Items & Variants */}
+                {/* Applied Items & Variants & Quantities */}
                 {(() => {
                   const items = (detailOffer.appliedItems || []).filter(i => typeof i === 'object' && i.name);
-                  const variantIds = new Set((detailOffer.appliedVariants || []).map(v => v.split('_')[0]));
-                  // Items that are directly applied (not just parents of variants)
-                  const directItems = items.filter(i => !variantIds.has((i._id || i).toString()) || (detailOffer.appliedVariants || []).length === 0);
-                  // Resolve variant details
+                  // Parent item ids that have any variant/quantity scope set
+                  const variantParentIds = new Set((detailOffer.appliedVariants || []).map(v => v.split('_')[0]));
+                  const quantityParentIds = new Set((detailOffer.appliedQuantities || []).map(q => q.split('_')[0]));
+                  const scopedParentIds = new Set([...variantParentIds, ...quantityParentIds]);
+                  // Items directly applied (not just parents of variants/quantities). When
+                  // there's no variant/quantity scope at all, every populated item counts
+                  // as a direct selection.
+                  const directItems = items.filter(i => {
+                    const id = (i._id || i).toString();
+                    return scopedParentIds.size === 0 || !scopedParentIds.has(id);
+                  });
+                  // Resolve variant-level details
                   const variantDetails = (detailOffer.appliedVariants || []).map(v => {
                     const [itemId, vIdx] = v.split('_');
                     const item = items.find(i => (i._id || i).toString() === itemId);
@@ -657,7 +665,29 @@ export default function Offers() {
                     if (!variant) return null;
                     return { ...variant, itemName: item.name, itemImage: item.image, foodType: variant.foodType || item.foodType, key: v };
                   }).filter(Boolean);
-                  const totalCount = directItems.length + variantDetails.length;
+                  // Resolve quantity-level details — admin selected a specific quantity
+                  // option of a specific variant, e.g. "Egg Biryani / 750 ml — ₹149".
+                  const quantityDetails = (detailOffer.appliedQuantities || []).map(q => {
+                    const [itemId, vIdx, qIdx] = q.split('_');
+                    const item = items.find(i => (i._id || i).toString() === itemId);
+                    if (!item || !item.variants) return null;
+                    const variant = item.variants[parseInt(vIdx)];
+                    if (!variant || !variant.quantities) return null;
+                    const qty = variant.quantities[parseInt(qIdx)];
+                    if (!qty) return null;
+                    return {
+                      itemName: item.name,
+                      itemImage: variant.image || item.image,
+                      variantLabel: variant.label,
+                      foodType: variant.foodType || item.foodType,
+                      quantity: qty.quantity,
+                      unit: qty.unit,
+                      price: qty.price,
+                      offerPrice: qty.offerPrice,
+                      key: q,
+                    };
+                  }).filter(Boolean);
+                  const totalCount = directItems.length + variantDetails.length + quantityDetails.length;
                   if (totalCount === 0) return <div><p className="text-xs text-dark-400">Applied Items</p><p className="text-sm text-dark-500">No items selected</p></div>;
                   return (
                     <div>
@@ -707,6 +737,29 @@ export default function Offers() {
                               )}
                             </div>
                             <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded text-[10px] font-bold flex-shrink-0">Variant</span>
+                          </div>
+                        ))}
+                        {quantityDetails.map(qd => (
+                          <div key={qd.key} className="flex items-center gap-3 p-2.5 bg-dark-50 rounded-xl">
+                            {qd.itemImage ? (
+                              <img src={qd.itemImage} alt="" className="w-11 h-11 rounded-lg object-cover bg-dark-200 flex-shrink-0" onError={e => { e.target.style.display = 'none'; }} />
+                            ) : (
+                              <div className="w-11 h-11 rounded-lg bg-dark-200 flex items-center justify-center flex-shrink-0"><span className="text-dark-400 text-lg">🍽</span></div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${foodDot(qd.foodType)}`} />
+                                <p className="text-sm font-semibold text-dark-900 truncate">{qd.variantLabel}</p>
+                              </div>
+                              <p className="text-xs text-dark-500 mt-0.5">{qd.itemName}</p>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                <span className="px-1.5 py-0.5 bg-white border border-dark-200 rounded text-[10px] font-medium text-dark-600">
+                                  {qd.quantity} {qd.unit} — ₹{qd.price}
+                                  {qd.offerPrice && qd.offerPrice < qd.price ? <span className="ml-1 text-amber-600 font-semibold">→ ₹{qd.offerPrice}</span> : null}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded text-[10px] font-bold flex-shrink-0">Size</span>
                           </div>
                         ))}
                       </div>

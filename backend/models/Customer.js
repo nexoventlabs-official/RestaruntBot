@@ -40,6 +40,12 @@ const customerSchema = new mongoose.Schema({
     percentage: Number,
     appliedItems: [{ type: mongoose.Schema.Types.ObjectId, ref: 'MenuItem' }],
     appliedCategories: [String],
+    // Specific variants this offer applies to, e.g. ["itemId_0"] (means: only
+    // variant index 0 of itemId — applies to all quantities of that variant)
+    appliedVariants: [String],
+    // Specific variant+quantity combos this offer applies to, e.g.
+    // ["itemId_0_1"] (means: only variant 0, quantity option 1 of itemId)
+    appliedQuantities: [String],
     validUntil: Date,
     appliedAt: { type: Date, default: Date.now }
   }],

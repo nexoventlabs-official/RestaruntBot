@@ -1704,6 +1704,14 @@ router.post('/', async (req, res) => {
                     percentage: offer.percentage,
                     appliedItems: (offer.appliedItems || []).map(it => it._id || it),
                     appliedCategories: offer.appliedCategories || [],
+                    // Persist variant/quantity-level scope so cart pricing can
+                    // restrict the discount to only the specific variants /
+                    // quantity options the admin selected. Without these, a
+                    // variant-only offer would either apply to nothing or — if
+                    // the cart helper has a "no scope" fallback — to every
+                    // single cart item (BUG: see chatbot.findApplicableOffer).
+                    appliedVariants: offer.appliedVariants || [],
+                    appliedQuantities: offer.appliedQuantities || [],
                     validUntil: offer.validUntil,
                     appliedAt: new Date()
                   });

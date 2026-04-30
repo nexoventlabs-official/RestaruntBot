@@ -99,15 +99,21 @@ router.get('/', auth, async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    // Also fetch parent items referenced in appliedVariants (may not be in appliedItems)
+    // Also fetch parent items referenced in appliedVariants AND appliedQuantities
+    // (these reference parent items by id but may not be in appliedItems —
+    // happens when admin scopes the offer to a specific variant or specific
+    // variant+quantity option only). Without merging them, the frontend's
+    // Offer Details modal shows "No items selected" for quantity-only offers.
     const allVariantItemIds = new Set();
     offers.forEach(offer => {
-      if (offer.appliedVariants && offer.appliedVariants.length > 0) {
-        offer.appliedVariants.forEach(v => {
-          const itemId = v.split('_')[0];
-          if (itemId) allVariantItemIds.add(itemId);
-        });
-      }
+      (offer.appliedVariants || []).forEach(v => {
+        const itemId = v.split('_')[0];
+        if (itemId) allVariantItemIds.add(itemId);
+      });
+      (offer.appliedQuantities || []).forEach(q => {
+        const itemId = q.split('_')[0];
+        if (itemId) allVariantItemIds.add(itemId);
+      });
     });
 
     if (allVariantItemIds.size > 0) {
@@ -119,23 +125,28 @@ router.get('/', auth, async (req, res) => {
       const itemMap = {};
       variantItems.forEach(item => { itemMap[item._id.toString()] = item; });
 
-      // Merge variant-parent items into appliedItems so frontend can resolve variant details
+      // Merge variant/quantity parent items into appliedItems so the frontend
+      // can resolve variant + quantity details. Items added here are flagged
+      // implicitly via _directItemCount so the UI knows which were direct
+      // selections vs. just parent references.
       offers.forEach(offer => {
-        if (offer.appliedVariants && offer.appliedVariants.length > 0) {
-          const existingIds = new Set((offer.appliedItems || []).map(i => (i._id || i).toString()));
-          const additionalItems = [];
-          offer.appliedVariants.forEach(v => {
-            const itemId = v.split('_')[0];
-            if (!existingIds.has(itemId) && itemMap[itemId]) {
-              additionalItems.push(itemMap[itemId]);
-              existingIds.add(itemId);
-            }
-          });
-          // Store original count before merging
-          offer._directItemCount = offer.appliedItems ? offer.appliedItems.length : 0;
-          if (additionalItems.length > 0) {
-            offer.appliedItems = [...(offer.appliedItems || []), ...additionalItems];
+        const hasVariantOrQty = (offer.appliedVariants?.length > 0) || (offer.appliedQuantities?.length > 0);
+        if (!hasVariantOrQty) return;
+        const existingIds = new Set((offer.appliedItems || []).map(i => (i._id || i).toString()));
+        const additionalItems = [];
+        const collectParent = (str) => {
+          const itemId = str.split('_')[0];
+          if (itemId && !existingIds.has(itemId) && itemMap[itemId]) {
+            additionalItems.push(itemMap[itemId]);
+            existingIds.add(itemId);
           }
+        };
+        (offer.appliedVariants || []).forEach(collectParent);
+        (offer.appliedQuantities || []).forEach(collectParent);
+        // Store original count before merging
+        offer._directItemCount = offer.appliedItems ? offer.appliedItems.length : 0;
+        if (additionalItems.length > 0) {
+          offer.appliedItems = [...(offer.appliedItems || []), ...additionalItems];
         }
       });
     }

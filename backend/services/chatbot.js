@@ -6041,21 +6041,35 @@ const chatbot = {
       return true;
     });
 
-    // Helper: pick the first activeOffer that applies to a given menu item.
-    // Match by appliedItems, by appliedCategories (handles array categories
-    // correctly — the legacy calculateOfferDiscount used `.includes` against
-    // a string which broke for array categories), or treat as global if the
-    // offer has no scope.
-    const findApplicableOffer = (menuItem) => {
+    // Helper: pick the first activeOffer that applies to a SPECIFIC cart line
+    // (item + variantIndex + quantityIndex). Scope precedence:
+    //   1. appliedItems       → applies to all variants/quantities of that item
+    //   2. appliedCategories  → applies to all items in those categories
+    //   3. appliedVariants    → applies only to specific "<itemId>_<vIdx>" combos
+    //   4. appliedQuantities  → applies only to specific "<itemId>_<vIdx>_<qIdx>" combos
+    //
+    // CRITICAL: An offer with NO scope at all (none of the four arrays
+    // populated) is treated as "applies to nothing". Previously this branch
+    // matched everything, which meant a variant-only offer (which leaves
+    // appliedItems/appliedCategories empty on the customer's activeOffers if
+    // those scope fields weren't persisted) discounted EVERY cart line.
+    const findApplicableOffer = (cartItem, menuItem) => {
       if (!menuItem || activeOffers.length === 0) return null;
       const itemIdStr = menuItem._id?.toString();
       const cats = Array.isArray(menuItem.category) ? menuItem.category : (menuItem.category ? [menuItem.category] : []);
+      const vIdx = (cartItem?.variantIndex !== undefined) ? cartItem.variantIndex : null;
+      const qIdx = (cartItem?.quantityIndex !== undefined) ? cartItem.quantityIndex : null;
+
       return activeOffers.find(o => {
-        const byItem = (o.appliedItems || []).some(id => id?.toString() === itemIdStr);
-        const byCat = (o.appliedCategories || []).some(c => cats.includes(c));
-        const noScope = (!o.appliedItems || o.appliedItems.length === 0) &&
-                        (!o.appliedCategories || o.appliedCategories.length === 0);
-        return byItem || byCat || noScope;
+        // Whole-item scope
+        if ((o.appliedItems || []).some(id => id?.toString() === itemIdStr)) return true;
+        // Category scope
+        if ((o.appliedCategories || []).some(c => cats.includes(c))) return true;
+        // Variant-specific scope: must match BOTH item id and variant index
+        if (vIdx !== null && (o.appliedVariants || []).some(v => v === `${itemIdStr}_${vIdx}`)) return true;
+        // Variant+quantity-specific scope: must match item id, variant index AND quantity index
+        if (vIdx !== null && qIdx !== null && (o.appliedQuantities || []).some(q => q === `${itemIdStr}_${vIdx}_${qIdx}`)) return true;
+        return false;
       }) || null;
     };
 
@@ -6115,7 +6129,7 @@ const chatbot = {
         // no built-in offerPrice already (avoid stacking two discounts). Apply
         // against the actual variant/quantity originalPrice, not menuItem.price.
         if (effectivePrice === originalPrice) {
-          const applicableOffer = findApplicableOffer(item.menuItem);
+          const applicableOffer = findApplicableOffer(item, item.menuItem);
           if (applicableOffer) {
             const discounted = computeDiscountedPrice(originalPrice, applicableOffer);
             if (discounted !== null) {
