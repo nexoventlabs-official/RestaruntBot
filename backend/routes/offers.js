@@ -1291,7 +1291,12 @@ router.delete('/:id', auth, async (req, res) => {
               return vObj;
             });
           }
-          await MenuItem.findByIdAndUpdate(item._id, clearFields);
+          const updatedItem = await MenuItem.findByIdAndUpdate(item._id, clearFields, { new: true });
+          if (updatedItem) {
+            catalogService.syncProductToMeta(updatedItem).catch(err => {
+              logger.warn('Meta catalog sync skipped after offer delete', { itemId: item._id.toString(), error: err.message });
+            });
+          }
         } else {
           // Still has other offers, recalculate offerPrice based on remaining offers
           const remainingOffers = await Offer.find({ 
@@ -1345,11 +1350,21 @@ router.delete('/:id', auth, async (req, res) => {
                 return vObj;
               });
             }
-            await MenuItem.findByIdAndUpdate(item._id, clearFields);
+            const clearedItem = await MenuItem.findByIdAndUpdate(item._id, clearFields, { new: true });
+            if (clearedItem) {
+              catalogService.syncProductToMeta(clearedItem).catch(err => {
+                logger.warn('Meta catalog sync skipped after offer delete', { itemId: item._id.toString(), error: err.message });
+              });
+            }
             continue;
           }
           
-          await MenuItem.findByIdAndUpdate(item._id, updateFields);
+          const recalcItem = await MenuItem.findByIdAndUpdate(item._id, updateFields, { new: true });
+          if (recalcItem) {
+            catalogService.syncProductToMeta(recalcItem).catch(err => {
+              logger.warn('Meta catalog sync skipped after offer delete', { itemId: item._id.toString(), error: err.message });
+            });
+          }
         }
       }
       
