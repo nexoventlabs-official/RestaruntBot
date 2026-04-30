@@ -1467,14 +1467,14 @@ router.post('/', async (req, res) => {
             const statusImg = images.statusImages?.[order.status];
             const hasStatusImage = !!statusImg;
 
-            // Build order info
-            const orderInfoLines = [
-              `📋 Status: ${statusLabel}`,
-              `🏷️ Service: ${serviceLabel}`,
-              `💳 Payment: ${paymentLabel} (${paymentStatusLabel})`,
-              `📅 Date: ${dateStr}, ${timeStr}`
+            // Status accent line (subheading) + 3-line meta block
+            const statusLine = statusLabel;
+            const metaBlockLines = [
+              `${serviceLabel}`,
+              `💳  ${paymentLabel} (${paymentStatusLabel})`,
+              `📅  ${dateStr} · ${timeStr}`
             ];
-            const orderInfo = orderInfoLines.join('\n');
+            const metaBlock = metaBlockLines.join('\n');
 
             // Cancellation info
             let cancelInfo = '';
@@ -1528,14 +1528,14 @@ router.post('/', async (req, res) => {
               return entry;
             }));
 
-            // Build summary text
-            const summaryLines = [];
+            // Totals block — column-aligned with padded labels so amounts line up
             const itemsTotal = order.itemsTotal || order.totalAmount;
-            summaryLines.push(`Items Total: ₹${itemsTotal}`);
-            if (order.deliveryCharge > 0) summaryLines.push(`Delivery: ₹${order.deliveryCharge}`);
-            if (order.discountAmount > 0) summaryLines.push(`Discount: -₹${order.discountAmount}`);
+            const padLabel = (s) => s.padEnd(12, ' ');
+            const summaryLines = [`${padLabel('Subtotal')}₹${itemsTotal}`];
+            if (order.deliveryCharge > 0) summaryLines.push(`${padLabel('Delivery')}₹${order.deliveryCharge}`);
+            if (order.discountAmount > 0) summaryLines.push(`${padLabel('Discount')}−₹${order.discountAmount}`);
             summaryLines.push('─────────────────');
-            summaryLines.push(`Total: ₹${order.totalAmount}`);
+            summaryLines.push(`*Total*${' '.repeat(8)}₹${order.totalAmount}`);
 
             response = {
               screen: 'ORDER_DETAILS',
@@ -1543,7 +1543,8 @@ router.post('/', async (req, res) => {
                 status_image: statusImg || 'iVBORw0KGgo',
                 has_status_image: hasStatusImage,
                 order_heading: `Order #${order.orderId}`,
-                order_info: orderInfo,
+                status_line: statusLine,
+                meta_block: metaBlock,
                 has_cancel_info: hasCancelInfo,
                 cancel_info: cancelInfo || ' ',
                 has_delivery_info: !!hasDeliveryInfo,

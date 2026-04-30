@@ -1799,12 +1799,26 @@ const catalogService = {
     ];
 
     // ─── Screen 3b: Order Details (shown when user selects an order from MY_ORDERS) ───
+    // Layout (top → bottom):
+    //   Status icon (120×120, contain)
+    //   Heading: Order #ID
+    //   Subheading: status accent line (e.g. "⏳ Pending")
+    //   Body: 3-line meta block (service / payment / date)
+    //   [optional] cancel notice (caption)
+    //   [optional] Delivery Partner subheading + body
+    //   [optional] Order Timeline subheading + caption
+    //   Subheading: 🛒 Items
+    //   RadioButtonsGroup (label="Tap an item to view details" — Meta rejects
+    //   blank labels, so we use a real action hint; the "(optional)" suffix
+    //   appended by Flows reads naturally with this phrasing)
+    //   Body: totals block
+    //   Footer: Help
     const screenOrderDetailsChildren = [
       {
         type: 'Image',
         src: '${data.status_image}',
-        width: 200,
-        height: 200,
+        width: 120,
+        height: 120,
         'scale-type': 'contain',
         'alt-text': 'Order Status',
         visible: '${data.has_status_image}'
@@ -1814,8 +1828,12 @@ const catalogService = {
         text: '${data.order_heading}'
       },
       {
+        type: 'TextSubheading',
+        text: '${data.status_line}'
+      },
+      {
         type: 'TextBody',
-        text: '${data.order_info}'
+        text: '${data.meta_block}'
       },
       {
         type: 'TextCaption',
@@ -1824,7 +1842,7 @@ const catalogService = {
       },
       {
         type: 'TextSubheading',
-        text: '🚚 Delivery Partner',
+        text: '🚴 Delivery Partner',
         visible: '${data.has_delivery_info}'
       },
       {
@@ -1849,7 +1867,7 @@ const catalogService = {
       {
         type: 'RadioButtonsGroup',
         name: 'selected_item',
-        label: 'Order Items',
+        label: 'Tap an item to view details',
         required: false,
         'data-source': '${data.order_items}'
       },
@@ -2115,9 +2133,13 @@ const catalogService = {
               type: 'string',
               __example__: 'Order #JRB001'
             },
-            order_info: {
+            status_line: {
               type: 'string',
-              __example__: '📋 Status: ⏳ Pending\n🏷️ Service: 🚚 Delivery\n💳 Payment: Cash on Delivery (⏳ Pending)\n📅 Date: 6 Mar 2026, 10:30 am'
+              __example__: '⏳ Pending'
+            },
+            meta_block: {
+              type: 'string',
+              __example__: '🚚  Delivery\n💳  Cash on Delivery\n📅  6 Mar 2026 · 10:30 am'
             },
             has_cancel_info: {
               type: 'boolean',
@@ -2160,7 +2182,7 @@ const catalogService = {
             },
             order_summary: {
               type: 'string',
-              __example__: 'Items Total: ₹500\nDelivery: ₹30\nDiscount: -₹50\n─────────\nTotal: ₹480'
+              __example__: 'Subtotal       ₹500\nDelivery       ₹30\nDiscount     −₹50\n─────────────────\n*Total*         ₹480'
             },
             order_id: {
               type: 'string',
