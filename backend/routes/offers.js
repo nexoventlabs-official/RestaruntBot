@@ -811,6 +811,12 @@ router.post('/:id/send', auth, async (req, res) => {
         percentage: offer.percentage,
         appliedItems: offer.appliedItems || [],
         appliedCategories: offer.appliedCategories || [],
+        // Persist variant/quantity-level scope so cart pricing for this
+        // customer can restrict the discount to the exact variant/quantity
+        // selections — without these, the cart would either apply the offer
+        // to nothing or (with the legacy noScope fallback) to every line.
+        appliedVariants: offer.appliedVariants || [],
+        appliedQuantities: offer.appliedQuantities || [],
         validUntil: offer.validUntil
       };
     } else if (isTargeted) {
