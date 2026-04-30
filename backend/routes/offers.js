@@ -15,6 +15,61 @@ const multer = require('multer');
 // Apply admin rate limiting
 router.use(adminRateLimiter);
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Background catalog auto-sync trigger
+//
+// Fired automatically whenever an admin activates / deactivates / deletes an
+// offer (i.e. anything that changes Meta sale_price). Equivalent to the user
+// clicking the "Catalog Refresh" icon in the dashboard or app home screen, but
+// happens in the background so the API response is fast.
+//
+// A module-level lock prevents overlapping runs — if multiple admin actions
+// fire in quick succession, only one autoSync runs and any subsequent triggers
+// are coalesced into a single follow-up run.
+// ─────────────────────────────────────────────────────────────────────────────
+let _catalogSyncInFlight = false;
+let _catalogSyncPending = false;
+let _catalogSyncPendingReason = '';
+
+function triggerBackgroundCatalogSync(reason) {
+  if (_catalogSyncInFlight) {
+    // Coalesce: remember that a follow-up run is needed once the current finishes
+    _catalogSyncPending = true;
+    _catalogSyncPendingReason = reason;
+    logger.info('Background catalog sync already running — coalescing', { reason });
+    return;
+  }
+  _catalogSyncInFlight = true;
+  setImmediate(async () => {
+    try {
+      logger.info('Background catalog auto-sync triggered', { reason });
+      const result = await catalogService.autoSync(false);
+      logger.info('Background catalog auto-sync completed', {
+        reason,
+        metaPushed: result?.metaPushed,
+        metaFailed: result?.metaFailed,
+        collections: result?.collections
+      });
+      // Notify connected clients so the dashboard can refresh data
+      try {
+        const eventEmitter = require('../services/eventEmitter');
+        eventEmitter.emit('dataUpdate', { type: 'catalog-synced', reason });
+      } catch (_) { /* non-critical */ }
+    } catch (err) {
+      logger.error('Background catalog auto-sync failed', { reason, error: err.message });
+    } finally {
+      _catalogSyncInFlight = false;
+      // If another trigger came in while we were running, do one final pass
+      if (_catalogSyncPending) {
+        _catalogSyncPending = false;
+        const followUpReason = _catalogSyncPendingReason || 'follow-up';
+        _catalogSyncPendingReason = '';
+        triggerBackgroundCatalogSync(followUpReason);
+      }
+    }
+  });
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
@@ -1413,7 +1468,10 @@ router.delete('/:id', auth, async (req, res) => {
     eventEmitter.emit('dataUpdate', { type: 'offers' });
     // Emit specific offer-deleted event with offerId so frontend can remove items from cart/wishlist
     eventEmitter.emit('dataUpdate', { type: 'offer-deleted', offerId: req.params.id });
-    
+
+    // Trigger background catalog refresh (same as the dashboard Catalog Refresh icon)
+    triggerBackgroundCatalogSync(`offer-delete:${req.params.id}`);
+
     res.json({ message: 'Offer deleted and removed from all items' });
   } catch (err) {
 
@@ -1605,26 +1663,10 @@ router.patch('/:id/toggle', auth, async (req, res) => {
       eventEmitter.emit('dataUpdate', { type: 'offer-deleted', offerId: req.params.id });
     }
 
-    // Catalog sync after offer toggle is DISABLED to prevent catalog disruption.
-    // Offer prices are applied from MongoDB in chatbot messages and order flow.
-    // Catalog sale_price will update on next manual Catalog Sync or 2 AM scheduled sync.
-    // if (offer.offerType) {
-    //   const MenuItem = require('../models/MenuItem');
-    //   const itemsWithOffer = await MenuItem.find({ offerType: offer.offerType });
-    //   (async () => {
-    //     try {
-    //       for (const item of itemsWithOffer) {
-    //         const freshItem = await MenuItem.findById(item._id);
-    //         if (freshItem) await catalogService.syncProductToMeta(freshItem);
-    //       }
-    //       catalogService.clearCache();
-    //       logger.info('Catalog synced after offer toggle', { itemCount: itemsWithOffer.length, active: offer.isActive });
-    //     } catch (syncErr) {
-    //       logger.error('Catalog sync after offer toggle failed', { error: syncErr.message });
-    //     }
-    //   })();
-    // }
-    
+    // Trigger background catalog refresh (same as the dashboard Catalog Refresh
+    // icon) — covers Meta sale_price updates, collections, and stale cleanup.
+    triggerBackgroundCatalogSync(`offer-toggle:${req.params.id}:${offer.isActive ? 'activate' : 'deactivate'}`);
+
     res.json(offer);
   } catch (err) {
 
