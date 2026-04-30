@@ -1592,9 +1592,45 @@ router.post('/', async (req, res) => {
 
         try {
           const offer = await Offer.findById(selectedOffer)
-            .select('appliedItems title discountType discountValue percentage')
+            .select('appliedItems appliedCategories title offerType discountType discountValue percentage validUntil')
             .populate('appliedItems', 'name image variants price offerPrice available isPaused')
             .lean();
+
+          // Persist the chosen offer onto the customer so downstream pricing
+          // (cart, item details, catalog precursor message) can apply the
+          // discount automatically. Idempotent — won't add duplicates.
+          if (offer && token.startsWith('welcome_service_')) {
+            const phone = token.replace('welcome_service_', '');
+            try {
+              const customerDoc = await Customer.findOne({ phone });
+              if (customerDoc) {
+                const offerIdStr = offer._id.toString();
+                const alreadyApplied = (customerDoc.activeOffers || []).some(o => o.offerId?.toString() === offerIdStr);
+                if (!alreadyApplied) {
+                  customerDoc.activeOffers = customerDoc.activeOffers || [];
+                  customerDoc.activeOffers.push({
+                    offerId: offer._id,
+                    offerType: offer.offerType,
+                    title: offer.title,
+                    discountType: offer.discountType,
+                    discountValue: offer.discountValue,
+                    percentage: offer.percentage,
+                    appliedItems: (offer.appliedItems || []).map(it => it._id || it),
+                    appliedCategories: offer.appliedCategories || [],
+                    validUntil: offer.validUntil,
+                    appliedAt: new Date()
+                  });
+                }
+                customerDoc.conversationState = customerDoc.conversationState || {};
+                customerDoc.conversationState.context = customerDoc.conversationState.context || {};
+                customerDoc.conversationState.context.appliedOfferId = offerIdStr;
+                customerDoc.markModified('conversationState');
+                await customerDoc.save();
+              }
+            } catch (persistErr) {
+              logger.warn('[FlowEndpoint] Failed to persist selected offer to customer', { phone, error: persistErr.message });
+            }
+          }
 
           const images = await getFlowImages();
           const toBase64Thumb = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
