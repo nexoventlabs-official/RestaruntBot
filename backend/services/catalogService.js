@@ -2851,13 +2851,11 @@ const catalogService = {
                 { id: 'main_menu', title: 'Main Menu', description: 'Go to main menu', image: 'iVBORw0KGgo' }
               ]
             },
-            order_info: { type: 'string', __example__: '📦 Order #ORD001\n📋 Status: Pending' },
             flow_token: { type: 'string', __example__: 'order_actions_919999999999_ORD001' }
           },
           layout: {
             type: 'SingleColumnLayout',
             children: [
-              { type: 'TextBody', text: '${data.order_info}' },
               { type: 'TextSubheading', text: 'How can we help?' },
               {
                 type: 'RadioButtonsGroup',

@@ -1974,7 +1974,6 @@ router.post('/', async (req, res) => {
               screen: 'ORDER_ACTIONS',
               data: {
                 actions,
-                order_info: orderInfo,
                 flow_token: token
               }
             };
