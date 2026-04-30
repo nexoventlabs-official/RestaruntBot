@@ -944,19 +944,18 @@ router.post('/', async (req, res) => {
             }
 
             const displayPhone = phone.length > 10 ? phone.slice(-10) : phone;
-            const lines = [];
-            if (customer?.createdAt) {
-              const memberSince = new Date(customer.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-              lines.push(`Member since: ${memberSince}`);
-            }
-            lines.push(`Total Orders: ${orderCount}`);
-            lines.push(`Total Spent: ₹${spentTotal}`);
-            const accountInfo = lines.length > 0 ? lines.join('\n') : 'Fill in your details below';
+            const memberSinceText = customer?.createdAt
+              ? `Member since: ${new Date(customer.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+              : 'Member since: —';
 
             response = {
               screen: 'ACCOUNT_DETAILS',
               data: {
-                account_info: accountInfo,
+                // Three separate text fields — rendered as three TextBody nodes
+                // in the flow JSON so each one appears on its own line.
+                member_since: memberSinceText,
+                total_orders: `Total Orders: ${orderCount}`,
+                total_spent: `Total Spent: ₹${spentTotal}`,
                 init_name: customer?.name || '',
                 init_email: customer?.email || '',
                 init_phone: displayPhone,
@@ -968,7 +967,9 @@ router.post('/', async (req, res) => {
             response = {
               screen: 'ACCOUNT_DETAILS',
               data: {
-                account_info: 'Fill in your details below',
+                member_since: 'Fill in your details below',
+                total_orders: 'Total Orders: 0',
+                total_spent: 'Total Spent: ₹0',
                 init_name: '',
                 init_email: '',
                 init_phone: phone.length > 10 ? phone.slice(-10) : phone,

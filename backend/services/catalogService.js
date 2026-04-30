@@ -1939,6 +1939,9 @@ const catalogService = {
     ];
 
     // ─── Screen 5: Account Details (shown when Account Details is selected — pre-filled dynamically) ───
+    // Member since / Total Orders / Total Spent are split across THREE separate
+    // TextBody components — WhatsApp Flow's TextBody renders embedded `\n` as a
+    // single space, so the only reliable way to get three lines is three nodes.
     const screenAccountDetailsChildren = [
       {
         type: 'TextSubheading',
@@ -1946,7 +1949,15 @@ const catalogService = {
       },
       {
         type: 'TextBody',
-        text: '${data.account_info}'
+        text: '${data.member_since}'
+      },
+      {
+        type: 'TextBody',
+        text: '${data.total_orders}'
+      },
+      {
+        type: 'TextBody',
+        text: '${data.total_spent}'
       },
       {
         type: 'TextInput',
@@ -2252,9 +2263,17 @@ const catalogService = {
           terminal: true,
           success: true,
           data: {
-            account_info: {
+            member_since: {
               type: 'string',
-              __example__: 'Member since: 1 Jan 2025 • Orders: 5 • Spent: ₹1200'
+              __example__: 'Member since: 1 Jan 2025'
+            },
+            total_orders: {
+              type: 'string',
+              __example__: 'Total Orders: 5'
+            },
+            total_spent: {
+              type: 'string',
+              __example__: 'Total Spent: ₹1200'
             },
             init_name: {
               type: 'string',
