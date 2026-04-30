@@ -1800,7 +1800,6 @@ const catalogService = {
 
     // ─── Screen 3b: Order Details (shown when user selects an order from MY_ORDERS) ───
     // Layout (top → bottom):
-    //   Status icon (120×120, contain)
     //   Heading: Order #ID
     //   Subheading: status accent line (e.g. "⏳ Pending")
     //   Body: 3-line meta block (service / payment / date)
@@ -1814,15 +1813,6 @@ const catalogService = {
     //   Body: totals block
     //   Footer: Help
     const screenOrderDetailsChildren = [
-      {
-        type: 'Image',
-        src: '${data.status_image}',
-        width: 120,
-        height: 120,
-        'scale-type': 'contain',
-        'alt-text': 'Order Status',
-        visible: '${data.has_status_image}'
-      },
       {
         type: 'TextHeading',
         text: '${data.order_heading}'
@@ -2121,14 +2111,6 @@ const catalogService = {
           id: 'ORDER_DETAILS',
           title: 'Order Details',
           data: {
-            status_image: {
-              type: 'string',
-              __example__: 'iVBORw0KGgo'
-            },
-            has_status_image: {
-              type: 'boolean',
-              __example__: true
-            },
             order_heading: {
               type: 'string',
               __example__: 'Order #JRB001'

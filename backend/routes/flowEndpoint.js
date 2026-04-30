@@ -1463,10 +1463,6 @@ router.post('/', async (req, res) => {
             const dateStr = date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
             const timeStr = date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
-            // Status image
-            const statusImg = images.statusImages?.[order.status];
-            const hasStatusImage = !!statusImg;
-
             // Status accent line (subheading) + 3-line meta block
             const statusLine = statusLabel;
             const metaBlockLines = [
@@ -1540,8 +1536,6 @@ router.post('/', async (req, res) => {
             response = {
               screen: 'ORDER_DETAILS',
               data: {
-                status_image: statusImg || 'iVBORw0KGgo',
-                has_status_image: hasStatusImage,
                 order_heading: `Order #${order.orderId}`,
                 status_line: statusLine,
                 meta_block: metaBlock,
