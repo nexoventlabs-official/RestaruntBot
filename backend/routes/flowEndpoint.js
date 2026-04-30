@@ -409,13 +409,10 @@ router.post('/', async (req, res) => {
               });
             }
 
-            const summary = `Order #${order.orderId} • ₹${order.totalAmount}\nChoose how you would like to pay.`;
-
             response = {
               screen: 'RETRY_OPTIONS',
               data: {
                 retry_heading: '❌ Payment Failed',
-                retry_info: summary,
                 retry_options: retryOptions,
                 order_id: order.orderId,
                 flow_token
@@ -437,40 +434,9 @@ router.post('/', async (req, res) => {
         // flow_token format: payment_{phone}_{serviceType}
         const parts = flow_token.replace('payment_', '').split('_');
         const serviceType = parts.pop(); // 'delivery' or 'pickup'
-        const phone = parts.join('_'); // phone number
+        const phone = parts.join('_'); // phone number (for error logging)
         try {
           const images = await getFlowImages();
-          const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
-          const validItems = (freshCustomer?.cart || []).filter(ci => ci.menuItem);
-          let total = 0;
-
-          validItems.forEach(ci => {
-            const mi = ci.menuItem;
-            let price = mi.offerPrice || mi.price;
-            if (ci.variantIndex != null && mi.variants?.[ci.variantIndex]) {
-              const v = mi.variants[ci.variantIndex];
-              if (ci.quantityIndex != null && v.quantities?.[ci.quantityIndex]) {
-                const q = v.quantities[ci.quantityIndex];
-                price = (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : q.price;
-              } else {
-                price = (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : v.price;
-              }
-            }
-            total += price * ci.quantity;
-          });
-
-          // Build order summary text
-          let summaryText = `🛒 ${validItems.length} item${validItems.length > 1 ? 's' : ''} • Total: ₹${total}`;
-          if (serviceType === 'delivery') {
-            // Calculate delivery charge if available
-            const deliveryCharge = freshCustomer?.deliveryCharge || 0;
-            summaryText += `\n🚚 Delivery: ${deliveryCharge > 0 ? '₹' + deliveryCharge : 'FREE'}`;
-            if (deliveryCharge > 0) {
-              summaryText += `\n💰 Grand Total: ₹${total + deliveryCharge}`;
-            }
-          } else {
-            summaryText += '\n🏪 Self-Pickup from restaurant';
-          }
 
           // Build payment methods with images based on service type
           const buildPaymentOption = (id, title, description, imgB64) => {
@@ -491,7 +457,6 @@ router.post('/', async (req, res) => {
           response = {
             screen: 'PAYMENT_SELECT',
             data: {
-              order_summary_text: summaryText,
               payment_methods: paymentMethods,
               flow_token
             }

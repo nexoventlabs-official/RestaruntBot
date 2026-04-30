@@ -3093,10 +3093,6 @@ const catalogService = {
               type: 'string',
               __example__: '❌ Payment Failed'
             },
-            retry_info: {
-              type: 'string',
-              __example__: 'Order #ORD123 • ₹199\nChoose how you would like to pay.'
-            },
             retry_options: {
               type: 'array',
               items: {
@@ -3128,10 +3124,6 @@ const catalogService = {
               {
                 type: 'TextHeading',
                 text: '${data.retry_heading}'
-              },
-              {
-                type: 'TextBody',
-                text: '${data.retry_info}'
               },
               {
                 type: 'RadioButtonsGroup',
@@ -3746,10 +3738,6 @@ const catalogService = {
           terminal: true,
           success: true,
           data: {
-            order_summary_text: {
-              type: 'string',
-              __example__: '🛒 1 item • Total: ₹69\n📍 Delivery: FREE'
-            },
             payment_methods: {
               type: 'array',
               items: {
@@ -3777,10 +3765,6 @@ const catalogService = {
               {
                 type: 'TextHeading',
                 text: '💳 Select Payment Method'
-              },
-              {
-                type: 'TextBody',
-                text: '${data.order_summary_text}'
               },
               {
                 type: 'RadioButtonsGroup',
