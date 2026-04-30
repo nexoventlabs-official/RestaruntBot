@@ -3774,102 +3774,11 @@ const chatbot = {
         state.currentStep = 'select_title_order';
         logger.info('Flow order category selected', { titleItemId, foodPref });
 
-        // Meta's WhatsApp Catalog cards always show the static (server-side)
-        // catalog price — there is no per-user pricing API. So whenever the
-        // customer has an active offer that applies to this item (whether
-        // they came through View Offers or just have a targeted offer in
-        // their activeOffers list), send a clear precursor message listing
-        // each variant/quantity with the offer-discounted price BEFORE the
-        // catalog cards appear. The discount itself applies automatically at
-        // checkout via the existing activeOffers pricing pipeline.
-        try {
-          // Force-refresh cache if View Offers just persisted a new active
-          // offer onto the customer (so the freshly-added offer is visible).
-          const appliedOfferId = state.context?.appliedOfferId;
-          if (appliedOfferId) {
-            try { _activeOffersCache.delete(phone); } catch (_) {}
-          }
-
-          const activeOffers = await getCachedActiveOffers(phone);
-          const item = menuItems.find(m => m._id.toString() === titleItemId);
-
-          if (item && Array.isArray(activeOffers) && activeOffers.length > 0) {
-            // Find the first offer that applies to this menu item
-            const itemIdStr = item._id.toString();
-            const itemCategories = Array.isArray(item.category) ? item.category : (item.category ? [item.category] : []);
-            const now = new Date();
-            const applicableOffer = activeOffers.find(o => {
-              if (o._isInactive) return false;
-              if (o.validUntil && new Date(o.validUntil) < now) return false;
-              const byItem = (o.appliedItems || []).some(id => id?.toString() === itemIdStr);
-              const byCat = (o.appliedCategories || []).some(c => itemCategories.includes(c));
-              const noScope = (!o.appliedItems || o.appliedItems.length === 0) &&
-                              (!o.appliedCategories || o.appliedCategories.length === 0);
-              return byItem || byCat || noScope;
-            });
-
-            if (applicableOffer) {
-              const applyDiscount = (basePrice) => {
-                if (!basePrice || basePrice <= 0) return null;
-                let p = null;
-                if (applicableOffer.discountType === 'percentage' && applicableOffer.discountValue > 0) {
-                  p = Math.round(basePrice * (1 - applicableOffer.discountValue / 100));
-                } else if (applicableOffer.discountType === 'fixed' && applicableOffer.discountValue > 0) {
-                  p = Math.max(0, basePrice - applicableOffer.discountValue);
-                } else if (applicableOffer.percentage && applicableOffer.percentage > 0) {
-                  p = Math.round(basePrice * (1 - applicableOffer.percentage / 100));
-                }
-                return p !== null && p < basePrice ? p : null;
-              };
-
-              const lines = [];
-              if (item.variants && item.variants.length > 0) {
-                item.variants.forEach((v, vIdx) => {
-                  if (v.quantities && v.quantities.length > 0) {
-                    v.quantities.forEach((q) => {
-                      const base = (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : q.price;
-                      const disc = applyDiscount(base);
-                      const sizeLabel = `${v.label || `Variant ${vIdx + 1}`} • ${q.quantity || ''}${q.unit || ''}`.trim();
-                      lines.push(disc
-                        ? `• ${sizeLabel}: ~₹${base}~ ➜ *₹${disc}*`
-                        : `• ${sizeLabel}: ₹${base}`);
-                    });
-                  } else {
-                    const base = (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : v.price;
-                    const disc = applyDiscount(base);
-                    const sizeLabel = v.label || `Variant ${vIdx + 1}`;
-                    lines.push(disc
-                      ? `• ${sizeLabel}: ~₹${base}~ ➜ *₹${disc}*`
-                      : `• ${sizeLabel}: ₹${base}`);
-                  }
-                });
-              } else {
-                const base = (item.offerPrice && item.offerPrice < item.price) ? item.offerPrice : item.price;
-                const disc = applyDiscount(base);
-                lines.push(disc
-                  ? `• Price: ~₹${base}~ ➜ *₹${disc}*`
-                  : `• Price: ₹${base}`);
-              }
-
-              // Only send the precursor if at least one line shows a discount —
-              // otherwise it's noise (no real benefit to advertise).
-              const hasDiscount = lines.some(l => l.includes('➜'));
-              if (hasDiscount) {
-                const msg =
-                  `🎁 *${applicableOffer.title || 'Special Offer'} applied*\n\n` +
-                  `*${item.name}* — your prices with the offer:\n\n` +
-                  lines.join('\n') +
-                  `\n\n_The discount will be applied automatically at checkout._`;
-                await whatsapp.sendMessage(phone, msg);
-              }
-            }
-          }
-        } catch (offerErr) {
-          logger.warn('Offer precursor message failed', { phone, error: offerErr.message });
-        }
-
-        // Clear the View Offers marker so the cache-refresh path doesn't repeat
+        // If the user came via View Offers, the flow endpoint just persisted a
+        // new offer onto the customer — bust the cache so sendTitleVariantsForOrder
+        // sees it on the next read.
         if (state.context?.appliedOfferId) {
+          try { _activeOffersCache.delete(phone); } catch (_) {}
           state.context = state.context || {};
           delete state.context.appliedOfferId;
         }
@@ -5334,6 +5243,98 @@ const chatbot = {
       return;
     }
 
+    // ─── Offer-aware path ───────────────────────────────────────────────
+    // Meta WhatsApp Catalog cards only render the static (server-side)
+    // catalog price; there is no per-user pricing API. So when the customer
+    // has a targeted offer applicable to this item, bypass the catalog and
+    // send a regular interactive list instead — its row description supports
+    // strike-through markdown (`~₹149~ ➜ ₹119`) so the actual offer price is
+    // visible inline. Each row id stays compatible with the existing
+    // add_variant_/addqty_ handlers, so add-to-cart works exactly the same.
+    try {
+      const activeOffers = await getCachedActiveOffers(phone);
+      if (Array.isArray(activeOffers) && activeOffers.length > 0) {
+        const itemIdStr = menuItem._id.toString();
+        const itemCategories = Array.isArray(menuItem.category) ? menuItem.category : (menuItem.category ? [menuItem.category] : []);
+        const now = new Date();
+        const applicableOffer = activeOffers.find(o => {
+          if (o._isInactive) return false;
+          if (o.validUntil && new Date(o.validUntil) < now) return false;
+          const byItem = (o.appliedItems || []).some(id => id?.toString() === itemIdStr);
+          const byCat = (o.appliedCategories || []).some(c => itemCategories.includes(c));
+          const noScope = (!o.appliedItems || o.appliedItems.length === 0) &&
+                          (!o.appliedCategories || o.appliedCategories.length === 0);
+          return byItem || byCat || noScope;
+        });
+
+        if (applicableOffer) {
+          const applyDiscount = (basePrice) => {
+            if (!basePrice || basePrice <= 0) return null;
+            let p = null;
+            if (applicableOffer.discountType === 'percentage' && applicableOffer.discountValue > 0) {
+              p = Math.round(basePrice * (1 - applicableOffer.discountValue / 100));
+            } else if (applicableOffer.discountType === 'fixed' && applicableOffer.discountValue > 0) {
+              p = Math.max(0, basePrice - applicableOffer.discountValue);
+            } else if (applicableOffer.percentage && applicableOffer.percentage > 0) {
+              p = Math.round(basePrice * (1 - applicableOffer.percentage / 100));
+            }
+            return p !== null && p < basePrice ? p : null;
+          };
+
+          const rows = [];
+          let anyDiscount = false;
+          for (const v of matchingVariants) {
+            const vIdx = v.originalIndex;
+            const outOfStock = v.available === false;
+            if (v.quantities && v.quantities.length > 0) {
+              v.quantities.forEach((q, qIdx) => {
+                const base = (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : q.price;
+                const disc = applyDiscount(base);
+                if (disc) anyDiscount = true;
+                const qLabel = `${q.quantity || ''}${q.unit || ''}`.trim();
+                const rowTitle = `${v.label ? v.label + ' • ' : ''}${qLabel}`.substring(0, 24) || `Option ${vIdx + 1}.${qIdx + 1}`;
+                const priceText = disc ? `~₹${base}~ ➜ ₹${disc}` : `₹${base}`;
+                const desc = outOfStock ? `Out of stock • ${priceText}` : priceText;
+                rows.push({
+                  rowId: `addqty_${itemIdStr}_${vIdx}_${qIdx}`,
+                  title: rowTitle,
+                  description: desc.substring(0, 72)
+                });
+              });
+            } else {
+              const base = (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : v.price;
+              const disc = applyDiscount(base);
+              if (disc) anyDiscount = true;
+              const rowTitle = (v.label || `Variant ${vIdx + 1}`).substring(0, 24);
+              const priceText = disc ? `~₹${base}~ ➜ ₹${disc}` : `₹${base}`;
+              const desc = outOfStock ? `Out of stock • ${priceText}` : priceText;
+              rows.push({
+                rowId: `add_variant_${itemIdStr}_${vIdx}`,
+                title: rowTitle,
+                description: desc.substring(0, 72)
+              });
+            }
+          }
+
+          if (anyDiscount && rows.length > 0) {
+            const sectionTitle = (applicableOffer.title || 'Special Offer').substring(0, 24);
+            await whatsapp.sendList(
+              phone,
+              `📋 ${menuItem.name}`.substring(0, 60),
+              `🎁 *${applicableOffer.title || 'Special Offer'}* applied — tap an option to add to cart. Discount applies at checkout.`,
+              'View Items',
+              [{ title: sectionTitle, rows: rows.slice(0, 10) }],
+              'Perivi Hotel'
+            );
+            return;
+          }
+        }
+      }
+    } catch (offerErr) {
+      logger.warn('Offer-priced variant list failed, falling back to catalog', { phone, error: offerErr.message });
+    }
+
+    // ─── Default catalog path (no applicable offer) ─────────────────────
     // Try sending via catalog product_list (iOS gets variant picker via item_group_id)
     let catalogSent = false;
     try {
