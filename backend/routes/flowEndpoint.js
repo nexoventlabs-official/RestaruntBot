@@ -989,14 +989,29 @@ router.post('/', async (req, res) => {
           };
         } else if (selectedService === 'help') {
           // Help & Support → show HELP_SUPPORT screen. Tapping the in-flow
-          // "Call Us" link completes the flow with `help_call`; the webhook
-          // then sends a CTA-Phone message in WhatsApp chat which natively
-          // opens the dialer. (Flows can\'t open `tel:` URIs themselves.)
+          // "Call Us" link triggers a `data_exchange` (handled in `help_call`
+          // below) which closes the flow and lets the webhook send a real
+          // CTA-Phone message in WhatsApp chat (Flows can\'t open `tel:` URIs).
           const images = await getFlowImages();
           response = {
             screen: 'HELP_SUPPORT',
             data: {
               flow_token: token
+            }
+          };
+        } else if (selectedService === 'help_call') {
+          // EmbeddedLink "Call Us" tapped on HELP_SUPPORT — close the flow via
+          // SUCCESS / extension_message_response. The webhook then routes
+          // `service === 'help_call'` to send a CTA-Phone message in chat.
+          response = {
+            screen: 'SUCCESS',
+            data: {
+              extension_message_response: {
+                params: {
+                  flow_token: token,
+                  selected_service: 'help_call'
+                }
+              }
             }
           };
         } else if (selectedService === 'track_order') {

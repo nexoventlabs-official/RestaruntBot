@@ -2376,15 +2376,15 @@ const catalogService = {
                 text: 'Tap the link below — we\'ll send a Call button right here so you can dial our support team in one tap.'
               },
               {
-                // EmbeddedLink with `complete` action — Flow rejects `tel:` URIs
-                // on `open_url` (HTTPS only), and the dialer can\'t be launched
-                // from inside a Flow. So tapping "Call Us" completes the flow
-                // with `help_call`; the webhook then sends a real WhatsApp
-                // CTA-Phone message in chat which natively opens the dialer.
+                // EmbeddedLink only allows data_exchange | navigate | open_url
+                // (Flow rejects `tel:` on open_url and `complete` on EmbeddedLink).
+                // We use `data_exchange` so the endpoint can asynchronously send
+                // a real WhatsApp CTA-Phone message — which natively launches the
+                // dialer — and then close the flow via extension_message_response.
                 type: 'EmbeddedLink',
                 text: 'Call Us',
                 'on-click-action': {
-                  name: 'complete',
+                  name: 'data_exchange',
                   payload: {
                     selected_service: 'help_call',
                     flow_token: '${data.flow_token}'
