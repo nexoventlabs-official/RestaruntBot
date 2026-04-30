@@ -6125,69 +6125,112 @@ const chatbot = {
     let cartMsg = '🛒 *Your Cart*\n\n';
     let validItems = 0;
     let appliedOfferNames = new Set();
-    
-    // Get customer's active offers
-    const activeOffers = freshCustomer.activeOffers || [];
-    
+
+    // Get customer's active offers (filter inactive/expired ones up front)
+    const activeOffers = (freshCustomer.activeOffers || []).filter(o => {
+      if (o._isInactive) return false;
+      if (o.validUntil && new Date(o.validUntil) < new Date()) return false;
+      return true;
+    });
+
+    // Helper: pick the first activeOffer that applies to a given menu item.
+    // Match by appliedItems, by appliedCategories (handles array categories
+    // correctly — the legacy calculateOfferDiscount used `.includes` against
+    // a string which broke for array categories), or treat as global if the
+    // offer has no scope.
+    const findApplicableOffer = (menuItem) => {
+      if (!menuItem || activeOffers.length === 0) return null;
+      const itemIdStr = menuItem._id?.toString();
+      const cats = Array.isArray(menuItem.category) ? menuItem.category : (menuItem.category ? [menuItem.category] : []);
+      return activeOffers.find(o => {
+        const byItem = (o.appliedItems || []).some(id => id?.toString() === itemIdStr);
+        const byCat = (o.appliedCategories || []).some(c => cats.includes(c));
+        const noScope = (!o.appliedItems || o.appliedItems.length === 0) &&
+                        (!o.appliedCategories || o.appliedCategories.length === 0);
+        return byItem || byCat || noScope;
+      }) || null;
+    };
+
+    // Helper: compute the discounted price for a base price using a specific
+    // offer. Returns null when no discount applies (or discount goes to 0/neg).
+    const computeDiscountedPrice = (basePrice, offer) => {
+      if (!offer || !basePrice || basePrice <= 0) return null;
+      let p = null;
+      if (offer.discountType === 'percentage' && offer.discountValue > 0) {
+        p = Math.round(basePrice * (1 - offer.discountValue / 100));
+      } else if (offer.discountType === 'fixed' && offer.discountValue > 0) {
+        p = Math.max(0, basePrice - offer.discountValue);
+      } else if (offer.percentage && offer.percentage > 0) {
+        p = Math.round(basePrice * (1 - offer.percentage / 100));
+      }
+      return (p !== null && p < basePrice) ? p : null;
+    };
+
     freshCustomer.cart.forEach((item, i) => {
       if (item.menuItem) {
-        // First check if item has built-in offerPrice
-        let effectivePrice = item.menuItem.offerPrice || item.menuItem.price;
+        // Resolve the line's base (catalog) price and the variant/quantity-
+        // adjusted price WITHOUT any active-offer math. `originalPrice` is
+        // what we strike through; `effectivePrice` starts at the built-in
+        // offerPrice (if the menu item / variant has one) and is then
+        // potentially overwritten by a targeted active-offer discount below.
+        let originalPrice = item.menuItem.price;
+        let effectivePrice = (item.menuItem.offerPrice && item.menuItem.offerPrice < item.menuItem.price)
+          ? item.menuItem.offerPrice
+          : item.menuItem.price;
         let itemDiscount = 0;
         let offerApplied = null;
         let displayName = item.menuItem.name;
         let unitInfo = `${item.menuItem.quantity || 1} ${item.menuItem.unit || 'piece'}`;
 
-        // If variant was selected, use variant price & label
+        // If variant was selected, override price/label with variant-level info
         if (item.variantIndex !== null && item.variantIndex !== undefined && item.menuItem.variants && item.menuItem.variants.length > item.variantIndex) {
           const variant = item.menuItem.variants[item.variantIndex];
           if (variant) {
             if (item.quantityIndex !== null && item.quantityIndex !== undefined && variant.quantities && variant.quantities.length > item.quantityIndex) {
               const q = variant.quantities[item.quantityIndex];
               if (q) {
-                effectivePrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
-                displayName = variant.label;  // Just the variant label, no quantity
-                unitInfo = `${q.quantity} ${q.unit}`;  // Quantity in unitInfo only
+                originalPrice = q.price;
+                effectivePrice = (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : q.price;
+                displayName = variant.label;
+                unitInfo = `${q.quantity} ${q.unit}`;
               }
             } else {
-              effectivePrice = variant.offerPrice && variant.offerPrice < variant.price
-                ? variant.offerPrice : variant.price;
+              originalPrice = variant.price;
+              effectivePrice = (variant.offerPrice && variant.offerPrice < variant.price) ? variant.offerPrice : variant.price;
               displayName = variant.label;
               unitInfo = `${variant.quantity || 1} ${variant.unit || item.menuItem.unit || 'piece'}`;
             }
           }
         }
-        
-        // If no offerPrice, check customer's activeOffers for applicable discount
-        if (!item.menuItem.offerPrice && activeOffers.length > 0) {
-          const offerResult = calculateOfferDiscount(item.menuItem, activeOffers);
-          if (offerResult.discountedPrice !== null) {
-            effectivePrice = offerResult.discountedPrice;
-            itemDiscount = offerResult.discountAmount * item.quantity;
-            offerApplied = offerResult.appliedOffer;
-            if (offerApplied) {
-              appliedOfferNames.add(offerApplied.offerType || offerApplied.title || 'Special Offer');
+
+        // Apply targeted active-offer discount on top — but ONLY when there's
+        // no built-in offerPrice already (avoid stacking two discounts). Apply
+        // against the actual variant/quantity originalPrice, not menuItem.price.
+        if (effectivePrice === originalPrice) {
+          const applicableOffer = findApplicableOffer(item.menuItem);
+          if (applicableOffer) {
+            const discounted = computeDiscountedPrice(originalPrice, applicableOffer);
+            if (discounted !== null) {
+              effectivePrice = discounted;
+              itemDiscount = (originalPrice - discounted) * item.quantity;
+              offerApplied = applicableOffer;
+              appliedOfferNames.add(applicableOffer.title || applicableOffer.offerType || 'Special Offer');
             }
           }
         }
-        
+
         const subtotal = effectivePrice * item.quantity;
         total += subtotal;
         totalDiscount += itemDiscount;
         validItems++;
-        
-        // Show price with discount if applicable
-        let priceDisplay;
-        // Always use effectivePrice (which accounts for variant/quantity options)
-        if (offerApplied && itemDiscount > 0) {
-          const originalPrice = item.variantIndex !== null ? 
-            (item.menuItem.variants[item.variantIndex]?.price || item.menuItem.price) : 
-            item.menuItem.price;
-          priceDisplay = `~₹${originalPrice}~ ➜ *₹${effectivePrice}* 🎁`;
-        } else {
-          priceDisplay = `*₹${effectivePrice}*`;
-        }
-        
+
+        // Strike-through display when ANY discount applies (built-in offerPrice
+        // OR targeted active offer). Use the variant/quantity originalPrice so
+        // the math is visibly consistent.
+        const priceDisplay = (effectivePrice < originalPrice)
+          ? `~₹${originalPrice}~ ➜ *₹${effectivePrice}*${offerApplied ? ' 🎁' : ''}`
+          : `*₹${effectivePrice}*`;
+
         cartMsg += `${validItems}. *${displayName}* (${unitInfo})\n`;
         cartMsg += `   ${item.quantity} × ${priceDisplay} = ₹${subtotal}\n\n`;
       }
