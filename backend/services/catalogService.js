@@ -2351,10 +2351,6 @@ const catalogService = {
           terminal: true,
           success: true,
           data: {
-            support_phone_url: {
-              type: 'string',
-              __example__: 'tel:+919440203095'
-            },
             flow_token: {
               type: 'string',
               __example__: 'welcome_service_919999999999'
@@ -2377,14 +2373,22 @@ const catalogService = {
               },
               {
                 type: 'TextBody',
-                text: 'Tap the link below to call our support team directly.'
+                text: 'Tap the link below — we\'ll send a Call button right here so you can dial our support team in one tap.'
               },
               {
+                // EmbeddedLink with `complete` action — Flow rejects `tel:` URIs
+                // on `open_url` (HTTPS only), and the dialer can\'t be launched
+                // from inside a Flow. So tapping "Call Us" completes the flow
+                // with `help_call`; the webhook then sends a real WhatsApp
+                // CTA-Phone message in chat which natively opens the dialer.
                 type: 'EmbeddedLink',
                 text: 'Call Us',
                 'on-click-action': {
-                  name: 'open_url',
-                  url: '${data.support_phone_url}'
+                  name: 'complete',
+                  payload: {
+                    selected_service: 'help_call',
+                    flow_token: '${data.flow_token}'
+                  }
                 }
               },
               {

@@ -988,18 +988,14 @@ router.post('/', async (req, res) => {
             }
           };
         } else if (selectedService === 'help') {
-          // Help & Support → show HELP_SUPPORT screen with banner and contact info
+          // Help & Support → show HELP_SUPPORT screen. Tapping the in-flow
+          // "Call Us" link completes the flow with `help_call`; the webhook
+          // then sends a CTA-Phone message in WhatsApp chat which natively
+          // opens the dialer. (Flows can\'t open `tel:` URIs themselves.)
           const images = await getFlowImages();
-          // Build a `tel:` URL the EmbeddedLink can open to launch the dialer
-          // directly. Strip whitespace from the phone — `tel:` URIs require a
-          // continuous string of digits/symbols.
-          const supportPhone = (process.env.RESTAURANT_PHONE || process.env.SUPPORT_PHONE || '+919440203095')
-            .toString()
-            .replace(/\s+/g, '');
           response = {
             screen: 'HELP_SUPPORT',
             data: {
-              support_phone_url: `tel:${supportPhone}`,
               flow_token: token
             }
           };
