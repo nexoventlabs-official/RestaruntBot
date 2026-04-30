@@ -920,18 +920,38 @@ router.post('/', async (req, res) => {
 
           try {
             const customer = await Customer.findOne({ phone })
-              .select('name email totalOrders totalSpent createdAt')
+              .select('name email createdAt')
               .lean();
 
+            // Aggregate orders & spend live from the Order collection so the
+            // numbers always stay in sync with reality. Sum across ALL payment
+            // methods (COD + UPI/online + pay-at-hotel) and ALL service types
+            // (delivery + self-pickup + dine-in). Cancelled orders are excluded
+            // from both the count and the total.
+            let orderCount = 0;
+            let spentTotal = 0;
+            try {
+              const agg = await Order.aggregate([
+                { $match: { 'customer.phone': phone, status: { $ne: 'cancelled' } } },
+                { $group: { _id: null, count: { $sum: 1 }, total: { $sum: { $ifNull: ['$totalAmount', 0] } } } }
+              ]);
+              if (agg.length > 0) {
+                orderCount = agg[0].count || 0;
+                spentTotal = Math.round(agg[0].total || 0);
+              }
+            } catch (aggErr) {
+              logger.warn('[FlowEndpoint] Order aggregation failed for account info', { phone, error: aggErr.message });
+            }
+
             const displayPhone = phone.length > 10 ? phone.slice(-10) : phone;
-            let accountInfo = '';
+            const lines = [];
             if (customer?.createdAt) {
               const memberSince = new Date(customer.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-              accountInfo = `Member since: ${memberSince}`;
+              lines.push(`Member since: ${memberSince}`);
             }
-            if (customer?.totalOrders) accountInfo += ` • Orders: ${customer.totalOrders}`;
-            if (customer?.totalSpent) accountInfo += ` • Spent: ₹${customer.totalSpent}`;
-            if (!accountInfo) accountInfo = 'Fill in your details below';
+            lines.push(`Total Orders: ${orderCount}`);
+            lines.push(`Total Spent: ₹${spentTotal}`);
+            const accountInfo = lines.length > 0 ? lines.join('\n') : 'Fill in your details below';
 
             response = {
               screen: 'ACCOUNT_DETAILS',
