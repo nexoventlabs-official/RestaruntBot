@@ -2825,13 +2825,11 @@ const catalogService = {
             bill_text: {
               type: 'string',
               __example__:
-                '```\n' +
-                'Subtotal      ₹688\n' +
-                'Delivery        ₹0\n' +
-                'Discount      –₹40\n' +
-                '──────────────────\n' +
-                'Grand Total   ₹648\n' +
-                '```'
+                '    Subtotal      ₹688\n' +
+                '    Delivery        ₹0\n' +
+                '    Discount      –₹40\n' +
+                '    ──────────────────\n' +
+                '    Grand Total   ₹648'
             },
             flow_token: { type: 'string', __example__: 'order_actions_919999999999_ORD001' }
           },

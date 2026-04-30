@@ -607,10 +607,11 @@ router.post('/', async (req, res) => {
             const discountAmount = Number(order.discountAmount || 0);
             const grandTotal = order.totalAmount || (itemsTotal + deliveryCharge - discountAmount);
 
-            // Build a tabular monospace bill block. Wrapped in triple backticks
-            // so Flow renders it in a fixed-width font where padded spaces
-            // actually align — labels left-padded, amounts right-padded inside
-            // a fixed total width.
+            // Build a tabular monospace bill block. Each line is prefixed
+            // with 4 spaces — markdown\'s indented-code-block syntax — which
+            // renders in a fixed-width font where padded spaces actually
+            // align. Triple-backtick fences don\'t work because Flow\'s
+            // expression parser chokes on the leading ` characters.
             const TOTAL_WIDTH = 20;
             const fmt = (label, amount) => {
               const pad = Math.max(2, TOTAL_WIDTH - label.length - amount.length);
@@ -624,7 +625,8 @@ router.post('/', async (req, res) => {
             billLines.push('─'.repeat(TOTAL_WIDTH));
             billLines.push(fmt('Grand Total', `₹${grandTotal}`));
 
-            const billText = '```\n' + billLines.join('\n') + '\n```';
+            // 4-space indent on every line → markdown code block (monospace).
+            const billText = billLines.map(l => '    ' + l).join('\n');
 
             const serviceLabel = order.serviceType === 'pickup' ? 'Self-Pickup' : 'Delivery';
             const paymentLabel = order.paymentMethod === 'cod'
