@@ -561,51 +561,78 @@ router.post('/', async (req, res) => {
             response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'order_not_found' } } } };
           } else {
 
-            // Build per-item rows with variant/parent images
-            const toBase64Thumb = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
-            const orderItems = await Promise.all((order.items || []).map(async (item, idx) => {
-              const lineTotal = (item.price || 0) * (item.quantity || 0);
-              const titleParts = [item.name];
-              if (item.unitQty && item.unit) titleParts.push(`(${item.unitQty} ${item.unit})`);
-              const entry = {
-                id: `item_${idx}`,
-                title: `${titleParts.join(' ')} × ${item.quantity || 0}`.substring(0, 80),
-                description: `₹${item.price} each • ₹${lineTotal}`
-              };
-              if (item.image) {
-                try {
-                  const b64 = await toBase64Thumb(item.image);
-                  if (b64) entry.image = b64;
-                } catch { /* ignore image errors — still render text */ }
+            // Single RichText `text` array carries the whole screen as
+            // markdown blocks (header → items with thumbnails → bill table).
+            // Flow renders each array entry as its own block, separated
+            // visually like paragraphs.
+            const items = order.items || [];
+
+            // Cloudinary URL transformer to get a small square thumbnail.
+            // Falls back to the raw URL if not a Cloudinary asset.
+            const thumbUrl = (url) => {
+              if (!url || typeof url !== 'string') return '';
+              if (url.includes('/upload/') && url.includes('cloudinary.com')) {
+                return url.replace('/upload/', '/upload/w_120,h_120,c_fill,f_auto,q_auto/');
               }
-              return entry;
-            }));
+              return url;
+            };
 
-            // Build totals breakdown — always show delivery line (₹0 if none)
-            const itemsTotal = (order.items || []).reduce((s, it) => s + ((it.price || 0) * (it.quantity || 0)), 0);
-            const deliveryCharge = Number(order.deliveryCharge || 0);
-            const grandTotal = order.totalAmount || (itemsTotal + deliveryCharge);
-            const totalsLines = [
-              `Subtotal: ₹${itemsTotal}`,
-              `Delivery: ₹${deliveryCharge}`,
-              `*Grand Total: ₹${grandTotal}*`
-            ];
+            const fallbackImageUrl = await chatbotImagesService
+              .getImageUrl('flow_my_orders')
+              .catch(() => '');
 
-            // Header lines
             const serviceLabel = order.serviceType === 'pickup' ? 'Self-Pickup' : 'Delivery';
             const paymentLabel = order.paymentMethod === 'cod'
               ? (order.serviceType === 'pickup' ? 'Pay at Hotel' : 'Cash on Delivery')
-              : (order.paymentMethod || 'Online');
+              : (order.paymentMethod === 'upi' ? 'Online' : (order.paymentMethod || 'Online'));
+
+            // Bill numbers
+            const itemsTotal = items.reduce((s, it) => s + ((it.price || 0) * (it.quantity || 0)), 0);
+            const deliveryCharge = Number(order.deliveryCharge || 0);
+            const discountAmount = Number(order.discountAmount || 0);
+            const grandTotal = order.totalAmount || (itemsTotal + deliveryCharge - discountAmount);
+
+            // Header
+            const blocks = [
+              `# 📦 Order #${orderId}`,
+              `🏪 ${serviceLabel} • 💳 ${paymentLabel}`,
+              '',
+              `## 🛒 Items (${items.length})`,
+              ''
+            ];
+
+            // Items
+            if (items.length === 0) {
+              blocks.push('_No items_');
+            } else {
+              items.forEach((item, idx) => {
+                const lineTotal = (item.price || 0) * (item.quantity || 0);
+                const titleParts = [item.name];
+                if (item.unitQty && item.unit) titleParts.push(`(${item.unitQty} ${item.unit})`);
+                const title = titleParts.join(' ');
+                if (idx > 0) blocks.push('');
+                blocks.push(`**${title}**`);
+                const imgUrl = thumbUrl(item.image) || thumbUrl(fallbackImageUrl);
+                if (imgUrl) blocks.push(`![](${imgUrl})`);
+                blocks.push(`₹${item.price} × ${item.quantity || 0}  ·  ₹${lineTotal}`);
+              });
+            }
+
+            // Bill table — markdown table gives proper right-aligned amounts
+            blocks.push('');
+            blocks.push('## 💰 Bill Details');
+            blocks.push('');
+            blocks.push('| | |');
+            blocks.push('|---|---:|');
+            blocks.push(`| Subtotal | ₹${itemsTotal} |`);
+            blocks.push(`| Delivery | ₹${deliveryCharge} |`);
+            if (discountAmount > 0) blocks.push(`| Discount | – ₹${discountAmount} |`);
+            blocks.push(`| **Grand Total** | **₹${grandTotal}** |`);
 
             response = {
               screen: 'ORDER_DETAILS',
               data: {
-                order_heading: `📦 Order #${orderId}`,
-                order_meta: `🏪 ${serviceLabel} • 💳 ${paymentLabel}`,
-                order_items: orderItems.length > 0
-                  ? orderItems
-                  : [{ id: 'none', title: 'No items', description: '' }],
-                totals_text: totalsLines.join('\n'),
+                order_richtext: blocks,
                 flow_token
               }
             };

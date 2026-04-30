@@ -2794,49 +2794,52 @@ const catalogService = {
       },
       screens: [
         // ─── 1. ORDER_DETAILS (entry) ────────────────────────────────
-        // Shows the items the customer just ordered + totals breakdown.
-        // No long inline list in the WhatsApp message — that's now here.
+        // Single RichText component carries the entire screen: header, items
+        // (with markdown images), and a bill table. Flow constraints forced
+        // this design:
+        //   • NavigationList is rejected in Data-API flows
+        //   • Image cap is 3 per screen
+        //   • RichText must be paired exclusively with Footer (no other
+        //     components allowed alongside it)
+        // Markdown tables let us align the bill rows properly, which we
+        // couldn\'t do with stacked TextBody nodes.
         {
           id: 'ORDER_DETAILS',
           title: 'Order Details',
           data: {
-            order_heading: { type: 'string', __example__: '📦 Order #ORD001' },
-            order_meta: { type: 'string', __example__: '🏪 Self-Pickup • 💳 Pay at Hotel' },
-            order_items: {
+            order_richtext: {
               type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  title: { type: 'string' },
-                  description: { type: 'string' },
-                  image: { type: 'string' }
-                }
-              },
+              items: { type: 'string' },
               __example__: [
-                { id: 'item_0', title: 'Ice creams - gulabjamun (3 piece) × 1', description: '₹90 each • ₹90', image: 'iVBORw0KGgo' }
+                '# 📦 Order #ORD001',
+                '🏪 Self-Pickup • 💳 Pay at Hotel',
+                '',
+                '## 🛒 Items (2)',
+                '',
+                '**Chicken Biryani 1kg**',
+                '![](https://res.cloudinary.com/demo/image/upload/w_120,h_120,c_fill/v1/sample.jpg)',
+                '₹299 × 2  ·  ₹598',
+                '',
+                '**Ice creams – gulabjamun**',
+                '![](https://res.cloudinary.com/demo/image/upload/w_120,h_120,c_fill/v1/sample.jpg)',
+                '₹90 × 1  ·  ₹90',
+                '',
+                '## 💰 Bill Details',
+                '',
+                '| | |',
+                '|---|---:|',
+                '| Subtotal | ₹688 |',
+                '| Delivery | ₹0 |',
+                '| Discount | – ₹40 |',
+                '| **Grand Total** | **₹648** |'
               ]
-            },
-            totals_text: {
-              type: 'string',
-              __example__: 'Subtotal: ₹240\nDelivery: ₹0\n*Grand Total: ₹240*'
             },
             flow_token: { type: 'string', __example__: 'order_actions_919999999999_ORD001' }
           },
           layout: {
             type: 'SingleColumnLayout',
             children: [
-              { type: 'TextHeading', text: '${data.order_heading}' },
-              { type: 'TextBody', text: '${data.order_meta}' },
-              { type: 'TextSubheading', text: '🛒 Items' },
-              {
-                type: 'RadioButtonsGroup',
-                name: 'item_view',
-                label: 'Your Items',
-                required: false,
-                'data-source': '${data.order_items}'
-              },
-              { type: 'TextBody', text: '${data.totals_text}' },
+              { type: 'RichText', text: '${data.order_richtext}' },
               {
                 type: 'Footer',
                 label: 'Help',
