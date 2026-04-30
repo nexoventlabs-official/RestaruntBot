@@ -1857,7 +1857,7 @@ const catalogService = {
       {
         type: 'RadioButtonsGroup',
         name: 'selected_item',
-        label: 'Tap an item to view details',
+        label: '\u2800',
         required: false,
         'data-source': '${data.order_items}'
       },

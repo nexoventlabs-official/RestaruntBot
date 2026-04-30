@@ -1592,12 +1592,31 @@ router.post('/', async (req, res) => {
 
         try {
           const offer = await Offer.findById(selectedOffer)
-            .select('appliedItems title')
+            .select('appliedItems title discountType discountValue percentage')
             .populate('appliedItems', 'name image variants price offerPrice available isPaused')
             .lean();
 
           const images = await getFlowImages();
           const toBase64Thumb = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
+
+          // Compute the effective discounted price for a base price using the
+          // selected offer. Handles both fixed/percentage discountType (modern
+          // schema) and the legacy `percentage` field. Returns null when no
+          // discount applies. Used for targeted offers where the MenuItem
+          // doesn't carry offerPrice (discount is applied at order time only),
+          // and as a unified path for non-targeted offers too.
+          const applyOfferDiscount = (basePrice) => {
+            if (!offer || !basePrice || basePrice <= 0) return null;
+            let discountedPrice = null;
+            if (offer.discountType === 'percentage' && offer.discountValue > 0) {
+              discountedPrice = Math.round(basePrice * (1 - offer.discountValue / 100));
+            } else if (offer.discountType === 'fixed' && offer.discountValue > 0) {
+              discountedPrice = Math.max(0, basePrice - offer.discountValue);
+            } else if (offer.percentage && offer.percentage > 0) {
+              discountedPrice = Math.round(basePrice * (1 - offer.percentage / 100));
+            }
+            return discountedPrice && discountedPrice < basePrice ? discountedPrice : null;
+          };
 
           // Get items from the offer's appliedItems, filter to available ones
           let menuItems = (offer?.appliedItems || []).filter(item => item.available && !item.isPaused);
@@ -1612,9 +1631,29 @@ router.post('/', async (req, res) => {
           const categoryItems = await Promise.all(menuItems.slice(0, 10).map(async (item) => {
             let desc;
             if (item.variants && item.variants.length > 0) {
-              desc = `${item.variants.length} variant${item.variants.length > 1 ? 's' : ''} available`;
+              // Compute discounted starting price using the cheapest variant
+              const variantPrices = item.variants.map(v => v.offerPrice || v.price).filter(p => p > 0);
+              const minPrice = variantPrices.length ? Math.min(...variantPrices) : null;
+              const discounted = applyOfferDiscount(minPrice);
+              const variantSuffix = `${item.variants.length} variant${item.variants.length > 1 ? 's' : ''}`;
+              if (discounted && minPrice) {
+                desc = `From ₹${discounted} (was ₹${minPrice}) • ${variantSuffix}`;
+              } else if (minPrice) {
+                desc = `From ₹${minPrice} • ${variantSuffix}`;
+              } else {
+                desc = `${variantSuffix} available`;
+              }
             } else {
-              desc = item.offerPrice ? `₹${item.offerPrice} (was ₹${item.price})` : `₹${item.price}`;
+              // Single-price item: prefer the offer's discount; fall back to
+              // the static offerPrice field; finally just price.
+              const discounted = applyOfferDiscount(item.price);
+              if (discounted) {
+                desc = `₹${discounted} (was ₹${item.price})`;
+              } else if (item.offerPrice && item.offerPrice < item.price) {
+                desc = `₹${item.offerPrice} (was ₹${item.price})`;
+              } else {
+                desc = `₹${item.price}`;
+              }
             }
             const catItem = {
               id: item._id.toString(),
