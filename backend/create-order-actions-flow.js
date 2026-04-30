@@ -45,10 +45,6 @@ function buildOrderActionsFlowJSON() {
               { id: 'main_menu', title: 'Main Menu', description: 'Go to main menu', image: 'iVBORw0KGgo' }
             ]
           },
-          actions_banner: {
-            type: 'string',
-            __example__: 'iVBORw0KGgo'
-          },
           order_info: {
             type: 'string',
             __example__: '📦 Order #JRB001\n💰 Total: ₹350\n🍽️ Service: pickup'
@@ -61,14 +57,6 @@ function buildOrderActionsFlowJSON() {
         layout: {
           type: 'SingleColumnLayout',
           children: [
-            {
-              type: 'Image',
-              src: '${data.actions_banner}',
-              width: 1000,
-              height: 125,
-              'scale-type': 'cover',
-              'alt-text': 'Order Actions Banner'
-            },
             {
               type: 'TextBody',
               text: '${data.order_info}'
@@ -231,20 +219,11 @@ function buildOrderActionsFlowJSON() {
               { id: 'cat_0', title: 'Ice Creams', description: '2 variants', image: 'iVBORw0KGgo' }
             ]
           },
-          menu_banner: { type: 'string', __example__: 'iVBORw0KGgo' },
           flow_token: { type: 'string', __example__: 'order_actions_919999999999_ORD001' }
         },
         layout: {
           type: 'SingleColumnLayout',
           children: [
-            {
-              type: 'Image',
-              src: '${data.menu_banner}',
-              width: 1000,
-              height: 125,
-              'scale-type': 'cover',
-              'alt-text': 'Menu Banner'
-            },
             {
               type: 'TextSubheading',
               text: 'Select a Category'

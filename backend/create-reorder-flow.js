@@ -40,10 +40,6 @@ function buildReorderFlowJSON() {
               { id: 'cat_0', title: 'Ice Creams', description: '2 variants available', image: 'iVBORw0KGgo' }
             ]
           },
-          menu_banner: {
-            type: 'string',
-            __example__: 'iVBORw0KGgo'
-          },
           flow_token: {
             type: 'string',
             __example__: 'reorder_919999999999'
@@ -52,14 +48,6 @@ function buildReorderFlowJSON() {
         layout: {
           type: 'SingleColumnLayout',
           children: [
-            {
-              type: 'Image',
-              src: '${data.menu_banner}',
-              width: 1000,
-              height: 125,
-              'scale-type': 'cover',
-              'alt-text': 'Menu Banner'
-            },
             {
               type: 'TextSubheading',
               text: 'Select a Category'
