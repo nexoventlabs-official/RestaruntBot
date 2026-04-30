@@ -2351,6 +2351,10 @@ const catalogService = {
           terminal: true,
           success: true,
           data: {
+            support_phone_url: {
+              type: 'string',
+              __example__: 'tel:+919440203095'
+            },
             flow_token: {
               type: 'string',
               __example__: 'welcome_service_919999999999'
@@ -2369,19 +2373,27 @@ const catalogService = {
               },
               {
                 type: 'TextSubheading',
-                text: '📞 Need to talk?'
+                text: 'Need to talk?'
               },
               {
                 type: 'TextBody',
-                text: 'Tap the button below and we\'ll send you our support number so you can call us directly.'
+                text: 'Tap the link below to call our support team directly.'
+              },
+              {
+                type: 'EmbeddedLink',
+                text: 'Call Us',
+                'on-click-action': {
+                  name: 'open_url',
+                  url: '${data.support_phone_url}'
+                }
               },
               {
                 type: 'Footer',
-                label: '📞 Call Us',
+                label: 'Close',
                 'on-click-action': {
                   name: 'complete',
                   payload: {
-                    selected_service: 'help_call',
+                    selected_service: 'help_close',
                     flow_token: '${data.flow_token}'
                   }
                 }
