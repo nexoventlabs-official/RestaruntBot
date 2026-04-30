@@ -2822,11 +2822,17 @@ const catalogService = {
                 { id: 'item_1', title: 'Biryani - mutton biryani (750 ml) x1', description: '₹249 each • mutton biryani - 750 ml', image: 'iVBORw0KGgo' }
               ]
             },
-            bill_subtotal: { type: 'string', __example__: 'Subtotal           ₹688' },
-            bill_delivery: { type: 'string', __example__: 'Delivery            ₹0' },
-            bill_discount: { type: 'string', __example__: 'Discount         – ₹40' },
-            has_discount: { type: 'boolean', __example__: true },
-            grand_total_text: { type: 'string', __example__: '*Grand Total      ₹648*' },
+            bill_text: {
+              type: 'string',
+              __example__:
+                '```\n' +
+                'Subtotal      ₹688\n' +
+                'Delivery        ₹0\n' +
+                'Discount      –₹40\n' +
+                '──────────────────\n' +
+                'Grand Total   ₹648\n' +
+                '```'
+            },
             flow_token: { type: 'string', __example__: 'order_actions_919999999999_ORD001' }
           },
           layout: {
@@ -2843,10 +2849,10 @@ const catalogService = {
                 'data-source': '${data.order_items}'
               },
               { type: 'TextSubheading', text: '💰 Bill Details' },
-              { type: 'TextBody', text: '${data.bill_subtotal}' },
-              { type: 'TextBody', text: '${data.bill_delivery}' },
-              { type: 'TextBody', text: '${data.bill_discount}', visible: '${data.has_discount}' },
-              { type: 'TextBody', text: '${data.grand_total_text}' },
+              // Single TextBody with `markdown: true` carrying a monospace
+              // code block — the only way to get true tabular alignment in
+              // WhatsApp Flow (variable-width font otherwise breaks padding).
+              { type: 'TextBody', text: '${data.bill_text}', markdown: true },
               {
                 type: 'Footer',
                 label: 'Help',

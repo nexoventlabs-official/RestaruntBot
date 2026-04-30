@@ -601,12 +601,30 @@ router.post('/', async (req, res) => {
               return entry;
             }));
 
-            // Bill numbers + alignment helper
+            // Bill numbers
             const itemsTotal = items.reduce((s, it) => s + ((it.price || 0) * (it.quantity || 0)), 0);
             const deliveryCharge = Number(order.deliveryCharge || 0);
             const discountAmount = Number(order.discountAmount || 0);
             const grandTotal = order.totalAmount || (itemsTotal + deliveryCharge - discountAmount);
-            const padLine = (label, amount) => `${label}`.padEnd(18, ' ') + amount;
+
+            // Build a tabular monospace bill block. Wrapped in triple backticks
+            // so Flow renders it in a fixed-width font where padded spaces
+            // actually align — labels left-padded, amounts right-padded inside
+            // a fixed total width.
+            const TOTAL_WIDTH = 20;
+            const fmt = (label, amount) => {
+              const pad = Math.max(2, TOTAL_WIDTH - label.length - amount.length);
+              return label + ' '.repeat(pad) + amount;
+            };
+            const billLines = [
+              fmt('Subtotal',    `₹${itemsTotal}`),
+              fmt('Delivery',    `₹${deliveryCharge}`)
+            ];
+            if (discountAmount > 0) billLines.push(fmt('Discount', `–₹${discountAmount}`));
+            billLines.push('─'.repeat(TOTAL_WIDTH));
+            billLines.push(fmt('Grand Total', `₹${grandTotal}`));
+
+            const billText = '```\n' + billLines.join('\n') + '\n```';
 
             const serviceLabel = order.serviceType === 'pickup' ? 'Self-Pickup' : 'Delivery';
             const paymentLabel = order.paymentMethod === 'cod'
@@ -622,11 +640,7 @@ router.post('/', async (req, res) => {
                 order_items: orderItems.length > 0
                   ? orderItems
                   : [{ id: 'none', title: 'No items', description: '' }],
-                bill_subtotal: padLine('Subtotal', `₹${itemsTotal}`),
-                bill_delivery: padLine('Delivery', `₹${deliveryCharge}`),
-                bill_discount: padLine('Discount', `– ₹${discountAmount}`),
-                has_discount: discountAmount > 0,
-                grand_total_text: `*${padLine('Grand Total', `₹${grandTotal}`)}*`,
+                bill_text: billText,
                 flow_token
               }
             };
