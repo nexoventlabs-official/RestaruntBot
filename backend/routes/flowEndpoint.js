@@ -561,78 +561,72 @@ router.post('/', async (req, res) => {
             response = { screen: 'SUCCESS', data: { extension_message_response: { params: { flow_token, error: 'order_not_found' } } } };
           } else {
 
-            // Single RichText `text` array carries the whole screen as
-            // markdown blocks (header → items with thumbnails → bill table).
-            // Flow renders each array entry as its own block, separated
-            // visually like paragraphs.
+            // Build per-item rows for the RadioButtonsGroup. Same shape the
+            // welcome flow's ORDER_DETAILS uses: { id, title, description,
+            // image (base64) }. Each item shows its thumbnail, name × qty
+            // and the per-unit / line-total price.
+            const toBase64Thumb = (url) => catalogService._imageUrlToRawBase64(url, { width: 200, height: 200 });
+            const fallbackIcon = await chatbotImagesService
+              .getImageUrl('flow_my_orders')
+              .then(u => u ? toBase64Thumb(u) : null)
+              .catch(() => null);
+
             const items = order.items || [];
 
-            // Cloudinary URL transformer to get a small square thumbnail.
-            // Falls back to the raw URL if not a Cloudinary asset.
-            const thumbUrl = (url) => {
-              if (!url || typeof url !== 'string') return '';
-              if (url.includes('/upload/') && url.includes('cloudinary.com')) {
-                return url.replace('/upload/', '/upload/w_120,h_120,c_fill,f_auto,q_auto/');
-              }
-              return url;
-            };
+            const orderItems = await Promise.all(items.map(async (item, idx) => {
+              const lineTotal = (item.price || 0) * (item.quantity || 0);
+              const titleParts = [item.name];
+              if (item.unitQty && item.unit) titleParts.push(`(${item.unitQty} ${item.unit})`);
+              const title = `${titleParts.join(' ')} x${item.quantity || 0}`.substring(0, 80);
 
-            const fallbackImageUrl = await chatbotImagesService
-              .getImageUrl('flow_my_orders')
-              .catch(() => '');
+              // Description: "₹149 each • Egg Biryani - 750 ml" (or just price if no variant)
+              const descParts = [`₹${item.price} each`];
+              if (item.variantName) descParts.push(item.variantName);
+              else if (item.unitQty && item.unit) descParts.push(`${item.unitQty} ${item.unit}`);
+              const description = `${descParts.join(' • ')}  ·  ₹${lineTotal}`.substring(0, 120);
+
+              const entry = {
+                id: `item_${idx}`,
+                title,
+                description
+              };
+
+              let img = null;
+              if (item.image) {
+                try { img = await toBase64Thumb(item.image); } catch { img = null; }
+              }
+              if (!img) img = fallbackIcon;
+              if (img) entry.image = img;
+
+              return entry;
+            }));
+
+            // Bill numbers + alignment helper
+            const itemsTotal = items.reduce((s, it) => s + ((it.price || 0) * (it.quantity || 0)), 0);
+            const deliveryCharge = Number(order.deliveryCharge || 0);
+            const discountAmount = Number(order.discountAmount || 0);
+            const grandTotal = order.totalAmount || (itemsTotal + deliveryCharge - discountAmount);
+            const padLine = (label, amount) => `${label}`.padEnd(18, ' ') + amount;
 
             const serviceLabel = order.serviceType === 'pickup' ? 'Self-Pickup' : 'Delivery';
             const paymentLabel = order.paymentMethod === 'cod'
               ? (order.serviceType === 'pickup' ? 'Pay at Hotel' : 'Cash on Delivery')
               : (order.paymentMethod === 'upi' ? 'Online' : (order.paymentMethod || 'Online'));
 
-            // Bill numbers
-            const itemsTotal = items.reduce((s, it) => s + ((it.price || 0) * (it.quantity || 0)), 0);
-            const deliveryCharge = Number(order.deliveryCharge || 0);
-            const discountAmount = Number(order.discountAmount || 0);
-            const grandTotal = order.totalAmount || (itemsTotal + deliveryCharge - discountAmount);
-
-            // Header
-            const blocks = [
-              `# 📦 Order #${orderId}`,
-              `🏪 ${serviceLabel} • 💳 ${paymentLabel}`,
-              '',
-              `## 🛒 Items (${items.length})`,
-              ''
-            ];
-
-            // Items
-            if (items.length === 0) {
-              blocks.push('_No items_');
-            } else {
-              items.forEach((item, idx) => {
-                const lineTotal = (item.price || 0) * (item.quantity || 0);
-                const titleParts = [item.name];
-                if (item.unitQty && item.unit) titleParts.push(`(${item.unitQty} ${item.unit})`);
-                const title = titleParts.join(' ');
-                if (idx > 0) blocks.push('');
-                blocks.push(`**${title}**`);
-                const imgUrl = thumbUrl(item.image) || thumbUrl(fallbackImageUrl);
-                if (imgUrl) blocks.push(`![](${imgUrl})`);
-                blocks.push(`₹${item.price} × ${item.quantity || 0}  ·  ₹${lineTotal}`);
-              });
-            }
-
-            // Bill table — markdown table gives proper right-aligned amounts
-            blocks.push('');
-            blocks.push('## 💰 Bill Details');
-            blocks.push('');
-            blocks.push('| | |');
-            blocks.push('|---|---:|');
-            blocks.push(`| Subtotal | ₹${itemsTotal} |`);
-            blocks.push(`| Delivery | ₹${deliveryCharge} |`);
-            if (discountAmount > 0) blocks.push(`| Discount | – ₹${discountAmount} |`);
-            blocks.push(`| **Grand Total** | **₹${grandTotal}** |`);
-
             response = {
               screen: 'ORDER_DETAILS',
               data: {
-                order_richtext: blocks,
+                order_heading: `📦 Order #${orderId}`,
+                order_meta: `🏪 ${serviceLabel} • 💳 ${paymentLabel}`,
+                items_title: `🛒 Items (${items.length})`,
+                order_items: orderItems.length > 0
+                  ? orderItems
+                  : [{ id: 'none', title: 'No items', description: '' }],
+                bill_subtotal: padLine('Subtotal', `₹${itemsTotal}`),
+                bill_delivery: padLine('Delivery', `₹${deliveryCharge}`),
+                bill_discount: padLine('Discount', `– ₹${discountAmount}`),
+                has_discount: discountAmount > 0,
+                grand_total_text: `*${padLine('Grand Total', `₹${grandTotal}`)}*`,
                 flow_token
               }
             };

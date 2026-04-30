@@ -2794,52 +2794,59 @@ const catalogService = {
       },
       screens: [
         // ─── 1. ORDER_DETAILS (entry) ────────────────────────────────
-        // Single RichText component carries the entire screen: header, items
-        // (with markdown images), and a bill table. Flow constraints forced
-        // this design:
-        //   • NavigationList is rejected in Data-API flows
-        //   • Image cap is 3 per screen
-        //   • RichText must be paired exclusively with Footer (no other
-        //     components allowed alongside it)
-        // Markdown tables let us align the bill rows properly, which we
-        // couldn\'t do with stacked TextBody nodes.
+        // Mirrors the welcome flow's ORDER_DETAILS look: items are rendered
+        // by a RadioButtonsGroup with id/title/description/image so each row
+        // shows a thumbnail, name & price line. The label uses a braille
+        // blank (\u2800) so no "Your Items" label / "(optional)" suffix is
+        // visible. Heading / meta / bill / footer wrap around it.
         {
           id: 'ORDER_DETAILS',
           title: 'Order Details',
           data: {
-            order_richtext: {
+            order_heading: { type: 'string', __example__: '📦 Order #ORD001' },
+            order_meta: { type: 'string', __example__: '🏪 Self-Pickup • 💳 Pay at Hotel' },
+            items_title: { type: 'string', __example__: '🛒 Items (2)' },
+            order_items: {
               type: 'array',
-              items: { type: 'string' },
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  image: { type: 'string' }
+                }
+              },
               __example__: [
-                '# 📦 Order #ORD001',
-                '🏪 Self-Pickup • 💳 Pay at Hotel',
-                '',
-                '## 🛒 Items (2)',
-                '',
-                '**Chicken Biryani 1kg**',
-                '![](https://res.cloudinary.com/demo/image/upload/w_120,h_120,c_fill/v1/sample.jpg)',
-                '₹299 × 2  ·  ₹598',
-                '',
-                '**Ice creams – gulabjamun**',
-                '![](https://res.cloudinary.com/demo/image/upload/w_120,h_120,c_fill/v1/sample.jpg)',
-                '₹90 × 1  ·  ₹90',
-                '',
-                '## 💰 Bill Details',
-                '',
-                '| | |',
-                '|---|---:|',
-                '| Subtotal | ₹688 |',
-                '| Delivery | ₹0 |',
-                '| Discount | – ₹40 |',
-                '| **Grand Total** | **₹648** |'
+                { id: 'item_0', title: 'Biryani - Egg Biryani (750 ml) x1', description: '₹149 each • Egg Biryani - 750 ml', image: 'iVBORw0KGgo' },
+                { id: 'item_1', title: 'Biryani - mutton biryani (750 ml) x1', description: '₹249 each • mutton biryani - 750 ml', image: 'iVBORw0KGgo' }
               ]
             },
+            bill_subtotal: { type: 'string', __example__: 'Subtotal           ₹688' },
+            bill_delivery: { type: 'string', __example__: 'Delivery            ₹0' },
+            bill_discount: { type: 'string', __example__: 'Discount         – ₹40' },
+            has_discount: { type: 'boolean', __example__: true },
+            grand_total_text: { type: 'string', __example__: '*Grand Total      ₹648*' },
             flow_token: { type: 'string', __example__: 'order_actions_919999999999_ORD001' }
           },
           layout: {
             type: 'SingleColumnLayout',
             children: [
-              { type: 'RichText', text: '${data.order_richtext}' },
+              { type: 'TextHeading', text: '${data.order_heading}' },
+              { type: 'TextCaption', text: '${data.order_meta}' },
+              { type: 'TextSubheading', text: '${data.items_title}' },
+              {
+                type: 'RadioButtonsGroup',
+                name: 'order_item_view',
+                label: '\u2800',
+                required: false,
+                'data-source': '${data.order_items}'
+              },
+              { type: 'TextSubheading', text: '💰 Bill Details' },
+              { type: 'TextBody', text: '${data.bill_subtotal}' },
+              { type: 'TextBody', text: '${data.bill_delivery}' },
+              { type: 'TextBody', text: '${data.bill_discount}', visible: '${data.has_discount}' },
+              { type: 'TextBody', text: '${data.grand_total_text}' },
               {
                 type: 'Footer',
                 label: 'Help',
