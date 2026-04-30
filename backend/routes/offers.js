@@ -1270,17 +1270,24 @@ router.delete('/:id', auth, async (req, res) => {
         const offerTypes = Array.isArray(item.offerType) ? item.offerType : [item.offerType];
         const updatedOfferTypes = offerTypes.filter(ot => ot !== offer.offerType);
         
-        // If no more offers, remove offerPrice (including variant offerPrices)
+        // If no more offers, remove offerPrice (including variant + per-quantity offerPrices)
         if (updatedOfferTypes.length === 0) {
           const clearFields = {
             $unset: { offerPrice: 1 },
             offerType: []
           };
-          // Clear variant offerPrices too
+          // Clear variant offerPrices AND nested quantity offerPrices
           if (item.variants && item.variants.length > 0) {
             clearFields.variants = item.variants.map(v => {
               const vObj = v.toObject ? v.toObject() : { ...v };
               delete vObj.offerPrice;
+              if (vObj.quantities && vObj.quantities.length > 0) {
+                vObj.quantities = vObj.quantities.map(q => {
+                  const qObj = q.toObject ? q.toObject() : { ...q };
+                  delete qObj.offerPrice;
+                  return qObj;
+                });
+              }
               return vObj;
             });
           }
@@ -1303,15 +1310,23 @@ router.delete('/:id', auth, async (req, res) => {
           const updateFields = { offerType: updatedOfferTypes };
           if (bestDiscount > 0) {
             updateFields.offerPrice = Math.round(item.price * (1 - bestDiscount / 100));
-            // Recalculate variant offerPrices
+            // Recalculate variant + nested quantity offerPrices
             if (item.variants && item.variants.length > 0) {
-              updateFields.variants = item.variants.map(v => ({
-                ...v.toObject ? v.toObject() : v,
-                offerPrice: Math.round(v.price * (1 - bestDiscount / 100))
-              }));
+              updateFields.variants = item.variants.map(v => {
+                const vObj = v.toObject ? v.toObject() : { ...v };
+                vObj.offerPrice = Math.round(v.price * (1 - bestDiscount / 100));
+                if (vObj.quantities && vObj.quantities.length > 0) {
+                  vObj.quantities = vObj.quantities.map(q => ({
+                    ...(q.toObject ? q.toObject() : q),
+                    offerPrice: Math.round(q.price * (1 - bestDiscount / 100))
+                  }));
+                }
+                return vObj;
+              });
             }
           } else {
-            // No percentage-based offers remain, remove offerPrice
+            // No percentage-based offers remain, remove offerPrice (including
+            // variant + nested quantity offerPrices).
             const clearFields = {
               $unset: { offerPrice: 1 },
               offerType: updatedOfferTypes
@@ -1320,6 +1335,13 @@ router.delete('/:id', auth, async (req, res) => {
               clearFields.variants = item.variants.map(v => {
                 const vObj = v.toObject ? v.toObject() : { ...v };
                 delete vObj.offerPrice;
+                if (vObj.quantities && vObj.quantities.length > 0) {
+                  vObj.quantities = vObj.quantities.map(q => {
+                    const qObj = q.toObject ? q.toObject() : { ...q };
+                    delete qObj.offerPrice;
+                    return qObj;
+                  });
+                }
                 return vObj;
               });
             }
