@@ -482,45 +482,68 @@ export default function AdminOffersScreen({ navigation }) {
                 </View>
               ) : null}
 
-              {/* Applied Items with details */}
-              {hasItems && (!o.appliedVariants || o.appliedVariants.length === 0) ? (
-                <View style={{ marginTop: 4 }}>
-                  <Text style={styles.detailLabel}>Applied Items</Text>
-                  {o.appliedItems.map((item, idx) => {
-                    const name = typeof item === 'object' ? item.name : item;
-                    const img = typeof item === 'object' ? item.image : null;
-                    return (
-                      <View key={idx} style={styles.variantCard}>
-                        {img ? (
-                          <Image source={{ uri: img }} style={styles.variantImage} />
-                        ) : (
-                          <View style={[styles.variantImage, { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }]}>
-                            <Ionicons name="fast-food-outline" size={18} color="#9CA3AF" />
-                          </View>
-                        )}
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.variantName}>{name || 'Unknown Item'}</Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              ) : null}
-
-              {/* Applied Variants with details */}
-              {o.appliedVariants && o.appliedVariants.length > 0 ? (() => {
-                const variantDetails = o.appliedVariants.map(v => {
+              {/* Applied Items / Variants / Quantities — split by scope so a
+                  quantity-only offer (e.g. "Egg Biryani 750 ml only") still
+                  shows its target row instead of "No items selected". */}
+              {(() => {
+                const items = (o.appliedItems || []).filter(i => typeof i === 'object' && i.name);
+                const variantParentIds = new Set((o.appliedVariants || []).map(v => v.split('_')[0]));
+                const quantityParentIds = new Set((o.appliedQuantities || []).map(q => q.split('_')[0]));
+                const scopedParentIds = new Set([...variantParentIds, ...quantityParentIds]);
+                // Direct items: items that are not just parents of variant/quantity scope
+                const directItems = items.filter(i => {
+                  const id = (i._id || i).toString();
+                  return scopedParentIds.size === 0 || !scopedParentIds.has(id);
+                });
+                const variantDetails = (o.appliedVariants || []).map(v => {
                   const [itemId, vIdx] = v.split('_');
-                  const item = (o.appliedItems || []).find(i => ((i._id || i).toString()) === itemId);
+                  const item = items.find(i => ((i._id || i).toString()) === itemId);
                   if (!item || !item.variants) return null;
                   const variant = item.variants[parseInt(vIdx)];
                   if (!variant) return null;
                   return { ...variant, itemName: item.name, itemImage: item.image, key: v };
                 }).filter(Boolean);
-                if (variantDetails.length === 0) return null;
+                const quantityDetails = (o.appliedQuantities || []).map(q => {
+                  const [itemId, vIdx, qIdx] = q.split('_');
+                  const item = items.find(i => ((i._id || i).toString()) === itemId);
+                  if (!item || !item.variants) return null;
+                  const variant = item.variants[parseInt(vIdx)];
+                  if (!variant || !variant.quantities) return null;
+                  const qty = variant.quantities[parseInt(qIdx)];
+                  if (!qty) return null;
+                  return {
+                    itemName: item.name,
+                    itemImage: variant.image || item.image,
+                    variantLabel: variant.label,
+                    quantity: qty.quantity,
+                    unit: qty.unit,
+                    price: qty.price,
+                    offerPrice: qty.offerPrice,
+                    key: q,
+                  };
+                }).filter(Boolean);
+                if (directItems.length + variantDetails.length + quantityDetails.length === 0) return null;
                 return (
                   <View style={{ marginTop: 4 }}>
-                    <Text style={styles.detailLabel}>Applied Variants</Text>
+                    <Text style={styles.detailLabel}>Applied Items</Text>
+                    {directItems.map((item, idx) => {
+                      const name = item.name || 'Unknown Item';
+                      const img = item.image || null;
+                      return (
+                        <View key={`item-${idx}`} style={styles.variantCard}>
+                          {img ? (
+                            <Image source={{ uri: img }} style={styles.variantImage} />
+                          ) : (
+                            <View style={[styles.variantImage, { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }]}>
+                              <Ionicons name="fast-food-outline" size={18} color="#9CA3AF" />
+                            </View>
+                          )}
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.variantName}>{name}</Text>
+                          </View>
+                        </View>
+                      );
+                    })}
                     {variantDetails.map(vd => (
                       <View key={vd.key} style={styles.variantCard}>
                         {(vd.image || vd.itemImage) ? (
@@ -547,9 +570,32 @@ export default function AdminOffersScreen({ navigation }) {
                         </View>
                       </View>
                     ))}
+                    {quantityDetails.map(qd => (
+                      <View key={qd.key} style={styles.variantCard}>
+                        {qd.itemImage ? (
+                          <Image source={{ uri: qd.itemImage }} style={styles.variantImage} />
+                        ) : (
+                          <View style={[styles.variantImage, { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }]}>
+                            <Ionicons name="fast-food-outline" size={18} color="#9CA3AF" />
+                          </View>
+                        )}
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.variantName}>{qd.variantLabel}</Text>
+                          <Text style={styles.variantItemName}>{qd.itemName}</Text>
+                          <View style={styles.variantSizes}>
+                            <View style={styles.variantSizeChip}>
+                              <Text style={styles.variantSizeText}>
+                                {qd.quantity} {qd.unit} — ₹{qd.price}
+                                {qd.offerPrice && qd.offerPrice < qd.price ? `  →  ₹${qd.offerPrice}` : ''}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
                   </View>
                 );
-              })() : null}
+              })()}
 
               {/* Targeting */}
               {isTargeted ? (
