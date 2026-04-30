@@ -1725,10 +1725,6 @@ const catalogService = {
 
     screen1Children.push(
       {
-        type: 'TextBody',
-        text: 'Choose from one of the Hotel Services'
-      },
-      {
         type: 'RadioButtonsGroup',
         name: 'selected_service',
         label: 'Select Hotel Service',
@@ -1881,10 +1877,6 @@ const catalogService = {
     // those exist on the post-checkout Order Actions flow but make no sense
     // when reviewing an existing order. ───
     const screenOrderHelpChildren = [
-      {
-        type: 'TextBody',
-        text: '${data.order_info}'
-      },
       {
         type: 'TextSubheading',
         text: 'How can we help?'
@@ -2207,10 +2199,6 @@ const catalogService = {
                 { id: 'contact_us', title: 'Contact Us', description: 'Talk to the restaurant', image: 'iVBORw0KGgo' }
               ]
             },
-            order_info: {
-              type: 'string',
-              __example__: '📦 *Order #JRB001*\n📋 Status: confirmed\n🍽️ Service: pickup'
-            },
             order_id: {
               type: 'string',
               __example__: 'JRB001'
@@ -2416,10 +2404,6 @@ const catalogService = {
               {
                 type: 'TextSubheading',
                 text: 'Your Active Orders'
-              },
-              {
-                type: 'TextBody',
-                text: 'Pick an order — we\'ll send you the latest status with a tracking link.'
               },
               {
                 type: 'RadioButtonsGroup',

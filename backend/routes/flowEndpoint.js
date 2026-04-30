@@ -1955,16 +1955,11 @@ router.post('/', async (req, res) => {
           };
           actions.forEach(a => { if (iconMap[a.id]) a.image = iconMap[a.id]; });
 
-          const orderInfo = order
-            ? `📦 *Order #${orderIdD}*\n📋 Status: ${(order.status || '').replace('_', ' ')}\n🍽️ Service: ${order.serviceType || 'delivery'}`
-            : `📦 Order #${orderIdD}`;
-
           if (isWelcomeContext) {
             response = {
               screen: 'ORDER_HELP',
               data: {
                 actions,
-                order_info: orderInfo,
                 order_id: orderIdD,
                 flow_token: token
               }
