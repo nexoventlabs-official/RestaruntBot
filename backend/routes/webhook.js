@@ -829,22 +829,29 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           logger.info('Flow: Account Details selected', { phone });
                         }
                       }
-                      // For Help & Support — "Call Us" button tapped, send CTA phone message
+                      // For Help & Support — "Call Us" button tapped, send the
+                      // same banner-styled CTA-Phone card the My Orders → Help →
+                      // Contact path uses, but without any order id (this entry
+                      // point is generic help support, not order-specific).
                       else if (service === 'help_call') {
                         const userPhone = responseData.flow_token.replace('welcome_service_', '');
                         try {
-                          await whatsapp.sendCtaPhone(
-                            userPhone,
-                            '📞 *Help & Support*\n\nTap the button below to call our support team directly. We\'re happy to help!',
-                            'Call +91 94402 03095',
-                            '+919440203095',
-                            'Available during business hours'
-                          );
-                          logger.info('Flow: Help Call - sent CTA phone message', { phone: userPhone });
+                          const supportPhone = process.env.RESTAURANT_PHONE || process.env.SUPPORT_PHONE || '+919440203095';
+                          const helpImg = await chatbotImagesService.getImageUrl('help_support').catch(() => null);
+                          const body =
+                            `*Need a hand?*\n\n` +
+                            `Tap the button below to call our support team. We\'re happy to help with anything — orders, menu, delivery or any other queries.`;
+                          const buttonText = 'Call Restaurant';
+                          const footer = 'We typically answer within a minute';
+                          if (helpImg) {
+                            await whatsapp.sendImageWithCtaPhone(userPhone, helpImg, body, buttonText, supportPhone, footer);
+                          } else {
+                            await whatsapp.sendCtaPhone(userPhone, body, buttonText, supportPhone, footer);
+                          }
+                          logger.info('Flow: Help Call - sent CTA phone card', { phone: userPhone, supportPhone });
                         } catch (ctaErr) {
                           logger.error('Flow: Help Call - failed to send CTA phone', { error: ctaErr.message, phone: userPhone });
-                          // Fallback: send plain text with phone number
-                          await whatsapp.sendMessage(userPhone, '📞 *Help & Support*\n\nCall us at: +91 94402 03095\n\nOur support team is happy to help!');
+                          await whatsapp.sendMessage(userPhone, '*Need a hand?*\n\nCall us at: +91 94402 03095\nOur support team is happy to help!').catch(() => {});
                         }
                         // Skip further processing — we already sent the response
                         return res.sendStatus(200);
