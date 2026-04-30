@@ -872,11 +872,13 @@ router.post('/', async (req, res) => {
             const activeOffers = await Offer.find({
               isActive: true,
               $or: [{ validUntil: { $gte: now } }, { validUntil: null }]
-            }).select('_id title description code discountType discountValue imageWhatsApp image targetType targetedCustomers').lean();
+            }).select('_id title description offerType percentage code discountType discountValue imageWhatsApp image targetType targetedCustomers').lean();
 
-            // Filter offers eligible for this phone
+            // Filter offers eligible for this phone:
+            //  - targetType 'all'        → everyone
+            //  - any other targetType    → must appear in targetedCustomers
             const eligibleOffers = activeOffers.filter(offer => {
-              if (offer.targetType === 'all') return true;
+              if (!offer.targetType || offer.targetType === 'all') return true;
               if (!offer.targetedCustomers?.length) return false;
               return offer.targetedCustomers.some(tp => {
                 const nt = tp.replace(/[^0-9]/g, '');
@@ -888,17 +890,26 @@ router.post('/', async (req, res) => {
               const toBase64 = (url) => catalogService._imageUrlToRawBase64(url);
 
               const offerItems = await Promise.all(eligibleOffers.map(async (offer) => {
+                // Build a human-readable discount line, preferring the modern
+                // discountType + discountValue, then falling back to the legacy
+                // `percentage` field. Append the promo code when present.
                 let desc = '';
                 if (offer.discountType === 'percentage' && offer.discountValue)
                   desc = `${offer.discountValue}% OFF`;
                 else if (offer.discountType === 'fixed' && offer.discountValue)
                   desc = `₹${offer.discountValue} OFF`;
+                else if (offer.percentage && offer.percentage > 0)
+                  desc = `${offer.percentage}% OFF`;
                 if (offer.code) desc += desc ? ` • Code: ${offer.code}` : `Code: ${offer.code}`;
                 if (offer.description && !desc) desc = offer.description;
 
                 const item = {
                   id: offer._id.toString(),
-                  title: offer.title || 'Special Offer',
+                  // Prefer the admin-entered offerType (e.g. "FLAT 30% OFF"),
+                  // then offer.title, then a generic fallback.
+                  title: (offer.offerType && offer.offerType.trim())
+                    || (offer.title && offer.title.trim())
+                    || 'Special Offer',
                   description: desc || offer.description || 'Tap to view details'
                 };
 
@@ -1668,7 +1679,7 @@ router.post('/', async (req, res) => {
 
         try {
           const offer = await Offer.findById(selectedOffer)
-            .select('appliedItems appliedCategories title offerType discountType discountValue percentage validUntil')
+            .select('appliedItems appliedCategories appliedVariants appliedQuantities title offerType discountType discountValue percentage validUntil')
             .populate('appliedItems', 'name image variants price offerPrice available isPaused')
             .lean();
 
@@ -1733,11 +1744,31 @@ router.post('/', async (req, res) => {
           // Get items from the offer's appliedItems, filter to available ones
           let menuItems = (offer?.appliedItems || []).filter(item => item.available && !item.isPaused);
 
-          // If offer has no applied items, show all available items as fallback
+          // If `appliedItems` is empty, the offer may still apply via category
+          // or specific variant/quantity selections. Look those up explicitly
+          // — DO NOT fall back to all items, otherwise non-offered items would
+          // appear in the "Offer Applied" menu.
           if (menuItems.length === 0) {
-            menuItems = await MenuItem.find({ available: true, isPaused: { $ne: true } })
-              .select('name image variants price offerPrice')
-              .lean();
+            const orQueries = [];
+            if (offer?.appliedCategories?.length > 0) {
+              orQueries.push({ category: { $in: offer.appliedCategories } });
+            }
+            // appliedVariants/Quantities are encoded as "itemId_v0" or
+            // "itemId_v0_q0" — extract the parent item IDs.
+            const variantItemIds = [...new Set([
+              ...((offer?.appliedVariants || []).map(v => v.split('_')[0])),
+              ...((offer?.appliedQuantities || []).map(q => q.split('_')[0]))
+            ])].filter(Boolean);
+            if (variantItemIds.length > 0) {
+              orQueries.push({ _id: { $in: variantItemIds } });
+            }
+            if (orQueries.length > 0) {
+              menuItems = await MenuItem.find({
+                $or: orQueries,
+                available: true,
+                isPaused: { $ne: true }
+              }).select('name image variants price offerPrice').lean();
+            }
           }
 
           const categoryItems = await Promise.all(menuItems.slice(0, 10).map(async (item) => {
