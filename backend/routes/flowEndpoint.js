@@ -642,6 +642,7 @@ router.post('/', async (req, res) => {
                 order_items: orderItems.length > 0
                   ? orderItems
                   : [{ id: 'none', title: 'No items', description: '' }],
+                first_item_id: orderItems[0]?.id || 'none',
                 bill_text: billText,
                 flow_token
               }

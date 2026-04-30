@@ -2822,6 +2822,7 @@ const catalogService = {
                 { id: 'item_1', title: 'Biryani - mutton biryani (750 ml) x1', description: '₹249 each • mutton biryani - 750 ml', image: 'iVBORw0KGgo' }
               ]
             },
+            first_item_id: { type: 'string', __example__: 'item_0' },
             bill_text: {
               type: 'string',
               __example__:
@@ -2843,7 +2844,11 @@ const catalogService = {
                 type: 'RadioButtonsGroup',
                 name: 'order_item_view',
                 label: '\u2800',
-                required: false,
+                required: true,
+                // Pre-selecting the first item via init-value keeps the form
+                // valid without `required: false` — which would force Meta to
+                // append "(optional)" to the label.
+                'init-value': '${data.first_item_id}',
                 'data-source': '${data.order_items}'
               },
               { type: 'TextSubheading', text: '💰 Bill Details' },
