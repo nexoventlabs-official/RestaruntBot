@@ -2547,12 +2547,17 @@ const catalogService = {
       return item;
     };
 
+    // Note: "View Offers" was intentionally removed from this list. Targeted
+    // offers are now auto-applied to eligible customers via the broadcast step
+    // and the syncActiveOffers helper called on cart/hi interactions — the
+    // customer never needs to manually tap "View Offers" to enable their
+    // discount. Non-targeted offers are still visible via item-level offerPrice
+    // and the website's /offers page.
     const services = [
       buildItem('order_food', 'Order Food', 'Browse our menu and place an order', orderFoodB64),
       // "Track Order" replaces the old "My Cart" entry — shows live order status with a tracking link.
       buildItem('track_order', 'Track Order', 'See latest status of your active orders', trackOrderB64 || myOrdersB64),
       buildItem('my_orders', 'My Orders', 'View past orders & details', myOrdersB64),
-      buildItem('view_offers', 'View Offers', 'See current deals and discounts', viewOffersB64),
       buildItem('account_details', 'Account Details', 'View or update your profile info', accountDetailsB64),
       buildItem('open_website', 'Visit Website', 'View our full website', visitWebsiteB64),
       buildItem('help', 'Help & Support', 'Get assistance with your queries', helpSupportB64)

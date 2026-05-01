@@ -1,7 +1,12 @@
 import { Tag } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 export default function OffersFloat() {
+  const location = useLocation();
+  // Hide the floating "all offers" shortcut on the targeted claim-offer
+  // landing page — the customer is reviewing the specific offer they were
+  // sent and shouldn't be nudged toward other offers from there.
+  if (/^\/offer\/[^/]+/.test(location.pathname)) return null;
   return (
     <Link
       to="/offers"

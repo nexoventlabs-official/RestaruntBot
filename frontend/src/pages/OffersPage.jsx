@@ -212,28 +212,43 @@ export default function OffersPage() {
     return Math.round(((item.price - item.offerPrice) / item.price) * 100);
   };
 
-  // Calculate offer price for an item based on the specific offer (for targeted offers)
+  // Given a base price and an offer, compute the discounted price using the
+  // offer's discount config. Returns null if no valid discount applies.
+  // Handles all three shapes the admin panel produces:
+  //   - modern:  discountType='percentage' + discountValue > 0
+  //   - modern:  discountType='fixed'      + discountValue > 0
+  //   - legacy:  percentage > 0 (older offers)
+  const applyOfferDiscountToPrice = (basePrice, offer) => {
+    if (!offer || !basePrice || basePrice <= 0) return null;
+    let discounted = null;
+    if (offer.discountType === 'percentage' && offer.discountValue > 0) {
+      discounted = Math.round(basePrice * (1 - offer.discountValue / 100));
+    } else if (offer.discountType === 'fixed' && offer.discountValue > 0) {
+      discounted = Math.max(0, basePrice - offer.discountValue);
+    } else if (offer.percentage && offer.percentage > 0) {
+      discounted = Math.round(basePrice * (1 - offer.percentage / 100));
+    }
+    return (discounted !== null && discounted < basePrice && discounted >= 0) ? discounted : null;
+  };
+
+  // Calculate offer price for an item card on this page.
+  // The previous implementation only computed a discount for `isTargeted`
+  // offers, which meant that when a customer opened a claim link for a
+  // targeted offer whose offerPrice wasn't pre-applied on the menu item,
+  // the card showed the base price with no discount indicator. We now
+  // compute the discount whenever the loaded specificOffer has any valid
+  // discount config — this covers both targeted and legacy offers landing
+  // on /offer/:offerId via the claim link.
   const getOfferPriceFromOffer = (item) => {
-    // If item already has an offer price, use that
+    // If item already has an offer price, that wins (admin-prepopulated).
     if (item.offerPrice && item.offerPrice < item.price) {
       return item.offerPrice;
     }
-    
-    // If we have a specific targeted offer with discount, calculate the offer price
-    if (specificOffer && specificOffer.isTargeted) {
-      if (specificOffer.discountType === 'percentage' && specificOffer.discountValue > 0) {
-        const discount = (item.price * specificOffer.discountValue) / 100;
-        return Math.round(item.price - discount);
-      } else if (specificOffer.discountType === 'fixed' && specificOffer.discountValue > 0) {
-        return Math.max(0, item.price - specificOffer.discountValue);
-      } else if (specificOffer.percentage && specificOffer.percentage > 0) {
-        // Fallback to percentage field
-        const discount = (item.price * specificOffer.percentage) / 100;
-        return Math.round(item.price - discount);
-      }
+    if (specificOffer) {
+      const computed = applyOfferDiscountToPrice(item.price, specificOffer);
+      if (computed !== null) return computed;
     }
-    
-    return null; // No offer price available
+    return null;
   };
 
   // Get discount percentage for display (handles both offerPrice and offer-based discounts)
@@ -290,79 +305,124 @@ export default function OffersPage() {
     return true;
   });
 
-  // Flatten parent items into individual variant/quantity cards
-  // Each variant or quantity with offerPrice gets its own card
+  // Flatten parent items into individual variant/quantity cards.
+  //
+  // We expand into variant/quantity cards for any of these reasons:
+  //   1. A variant or quantity has its own pre-applied `offerPrice` (the
+  //      legacy non-targeted path admin uses for "all customers" offers).
+  //   2. The current `specificOffer` lists the variant/quantity in
+  //      `appliedVariants` / `appliedQuantities` (the targeted-offer path).
+  //
+  // Reason (2) is what makes a claim link like /offer/:offerId render the
+  // exact "Egg Biryani — 750 ml — ₹149 (was ₹199, 25% OFF)" card even when
+  // the menu item itself has no offerPrice (because targeted offers
+  // intentionally skip stamping offerPrice onto MenuItem). Without this,
+  // the customer just saw the parent item card with no discount indicator.
+  const offerVariantSet = new Set((specificOffer?.appliedVariants) || []);   // "<itemId>_<vIdx>"
+  const offerQuantitySet = new Set((specificOffer?.appliedQuantities) || []); // "<itemId>_<vIdx>_<qIdx>"
+
   const filteredItems = filteredParentItems.flatMap(item => {
     if (!item.variants || item.variants.length === 0) {
       // No variants — show as parent item card
       return [item];
     }
-    
-    // Check if any variant/quantity has an offerPrice
-    const hasAnyVariantOffer = item.variants.some(v => 
+
+    const itemIdStr = item._id?.toString() || '';
+
+    // Detect variant- or quantity-level scope contributions from either the
+    // pre-applied offerPrice path OR the specific targeted offer's scope.
+    const hasAnyVariantOffer = item.variants.some(v =>
       v.offerPrice || (v.quantities && v.quantities.some(q => q.offerPrice))
     );
-    
-    // If parent item has offerPrice and ALL variants have offerPrice, show as single parent card
-    if (item.offerPrice && !hasAnyVariantOffer) {
+    const hasOfferVariantScope = item.variants.some((_, vi) => {
+      if (offerVariantSet.has(`${itemIdStr}_${vi}`)) return true;
+      // Per-quantity scope counts too
+      return Array.from(offerQuantitySet).some(k => k.startsWith(`${itemIdStr}_${vi}_`));
+    });
+
+    // If parent item has offerPrice and there's no variant-level scope at all,
+    // show as single parent card (legacy "all variants discounted equally" case).
+    if (item.offerPrice && !hasAnyVariantOffer && !hasOfferVariantScope) {
       return [item];
     }
-    
-    // If no variant-level offers, show parent item card
-    if (!hasAnyVariantOffer && !item.offerPrice) {
+
+    // If no variant-level discount or scope, show parent item card.
+    if (!hasAnyVariantOffer && !hasOfferVariantScope && !item.offerPrice) {
       return [item];
     }
-    
+
     // Expand into variant-level cards
     const cards = [];
     item.variants.forEach((v, vi) => {
+      const variantKey = `${itemIdStr}_${vi}`;
       const hasQuantities = v.quantities && v.quantities.length > 0;
-      
+      const variantInOfferScope = offerVariantSet.has(variantKey);
+
       if (hasQuantities) {
-        // Check if any quantity has offerPrice
         const anyQtyOffer = v.quantities.some(q => q.offerPrice);
-        
-        if (v.offerPrice || anyQtyOffer) {
-          // Show each quantity as its own card
+        const anyQtyInOfferScope = v.quantities.some((_, qi) =>
+          offerQuantitySet.has(`${itemIdStr}_${vi}_${qi}`)
+        );
+
+        if (v.offerPrice || anyQtyOffer || variantInOfferScope || anyQtyInOfferScope) {
           v.quantities.forEach((q, qi) => {
-            if (q.offerPrice || v.offerPrice) {
-              cards.push({
-                ...item,
-                _id: item._id, // keep original ID for cart/wishlist
-                _variantKey: `${item._id}_v${vi}_q${qi}`, // unique key for rendering
-                _isVariantCard: true,
-                _variantIndex: vi,
-                _quantityIndex: qi,
-                name: `${item.name} - ${v.label}`,
-                image: v.image || item.image,
-                foodType: v.foodType || item.foodType,
-                price: q.price,
-                offerPrice: q.offerPrice || (v.offerPrice ? Math.round(q.price * (v.offerPrice / v.price)) : null),
-                quantity: q.quantity,
-                unit: q.unit,
-              });
+            const qInOfferScope = offerQuantitySet.has(`${itemIdStr}_${vi}_${qi}`);
+            // Include this quantity card if it has offerPrice OR the variant
+            // has offerPrice OR the variant/quantity is in the specific
+            // offer's scope.
+            const includeCard = q.offerPrice || v.offerPrice || variantInOfferScope || qInOfferScope;
+            if (!includeCard) return;
+
+            // Compute offerPrice: prefer existing offerPrice, then derive from
+            // variant's offerPrice ratio, then derive from specificOffer's
+            // discount config when this card is in scope.
+            let computedOfferPrice = q.offerPrice
+              || (v.offerPrice ? Math.round(q.price * (v.offerPrice / v.price)) : null);
+            if (computedOfferPrice == null && (variantInOfferScope || qInOfferScope) && specificOffer) {
+              computedOfferPrice = applyOfferDiscountToPrice(q.price, specificOffer);
             }
+
+            cards.push({
+              ...item,
+              _id: item._id,
+              _variantKey: `${itemIdStr}_v${vi}_q${qi}`,
+              _isVariantCard: true,
+              _variantIndex: vi,
+              _quantityIndex: qi,
+              name: `${item.name} - ${v.label}`,
+              image: v.image || item.image,
+              foodType: v.foodType || item.foodType,
+              price: q.price,
+              offerPrice: computedOfferPrice,
+              quantity: q.quantity,
+              unit: q.unit,
+            });
           });
         }
-      } else if (v.offerPrice) {
-        // Variant without quantities but has offerPrice
+      } else if (v.offerPrice || variantInOfferScope) {
+        // Variant without quantities — has offerPrice OR is in specific
+        // offer's variant scope.
+        let computedOfferPrice = v.offerPrice;
+        if (computedOfferPrice == null && variantInOfferScope && specificOffer) {
+          computedOfferPrice = applyOfferDiscountToPrice(v.price, specificOffer);
+        }
         cards.push({
           ...item,
           _id: item._id,
-          _variantKey: `${item._id}_v${vi}`,
+          _variantKey: `${itemIdStr}_v${vi}`,
           _isVariantCard: true,
           _variantIndex: vi,
           name: `${item.name} - ${v.label}`,
           image: v.image || item.image,
           foodType: v.foodType || item.foodType,
           price: v.price,
-          offerPrice: v.offerPrice,
+          offerPrice: computedOfferPrice,
           quantity: item.quantity,
           unit: item.unit,
         });
       }
     });
-    
+
     // If we generated variant cards, return them; otherwise fall back to parent
     return cards.length > 0 ? cards : [item];
   });

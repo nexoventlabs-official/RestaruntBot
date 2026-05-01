@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { X } from 'lucide-react';
 
@@ -8,6 +8,7 @@ const SSE_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.
 
 export default function OfferPopup() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [offers, setOffers] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
@@ -19,7 +20,24 @@ export default function OfferPopup() {
   // Minimum swipe distance (in px)
   const minSwipeDistance = 50;
 
+  // Suppress the global rotating offer banner whenever the customer arrived
+  // via a "Claim Offer" link (path /offer/:offerId). Showing other offers on
+  // top of a targeted-offer landing page is confusing and dilutes the call
+  // to action — the customer is already looking at the offer they were sent.
+  // We keep the popup on /offers (plural — the public listing page) and
+  // every other route as before.
+  const isClaimOfferRoute = /^\/offer\/[^/]+/.test(location.pathname);
+
   useEffect(() => {
+    if (isClaimOfferRoute) {
+      // On the claim landing page, force the popup off and skip data fetching
+      // entirely. This also avoids a flash if the user navigates here from a
+      // page where the popup was already open.
+      setIsVisible(false);
+      setOffers([]);
+      return;
+    }
+
     loadPopupOffers();
 
     // Listen for offer changes via SSE - refresh popup when admin creates/activates offers
@@ -36,7 +54,7 @@ export default function OfferPopup() {
       };
     } catch {}
     return () => { if (es) es.close(); };
-  }, []);
+  }, [isClaimOfferRoute]);
 
   // Auto-rotate offers every 3 seconds
   useEffect(() => {

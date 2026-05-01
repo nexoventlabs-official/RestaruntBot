@@ -470,6 +470,87 @@ const formatOfferTypes = (item) => {
   return '';
 };
 
+// Helper to proactively sync a customer's activeOffers with every currently
+// eligible targeted offer. Called on high-signal touch points (hi, cart view,
+// add-to-cart) so the discount kicks in automatically — no "View Offers" tap
+// required. Idempotent (won't duplicate), cheap (one indexed query), and only
+// writes when something actually changed.
+//
+// Eligibility for a given phone:
+//   - offer.isActive === true
+//   - not expired (validUntil >= now OR null)
+//   - offer.targetType is 'top_percentage' | 'min_spent' | 'min_orders'
+//   - customer's phone is in offer.targetedCustomers[]
+//
+// Returns the (possibly updated) customer document. Callers can continue
+// using the in-memory customer object — all fields are kept in sync.
+const syncActiveOffersForCustomer = async (customer) => {
+  if (!customer || !customer.phone) return customer;
+
+  const Offer = require('../models/Offer');
+  const now = new Date();
+  const normalizedPhone = customer.phone.replace(/[^0-9]/g, '');
+
+  // Fetch every active, non-expired TARGETED offer that lists this phone.
+  // We match phones using the last-10-digits trick so small formatting
+  // differences (country code / +91 / spaces) don't block eligibility.
+  const candidateOffers = await Offer.find({
+    isActive: true,
+    targetType: { $in: ['top_percentage', 'min_spent', 'min_orders'] },
+    $or: [{ validUntil: { $gte: now } }, { validUntil: null }]
+  })
+    .select('_id offerType title discountType discountValue percentage appliedItems appliedCategories appliedVariants appliedQuantities targetedCustomers targetType validUntil')
+    .lean();
+
+  const phoneMatches = (target) => {
+    if (!target) return false;
+    const nt = target.replace(/[^0-9]/g, '');
+    // Last-10 match handles "+91" vs "91" vs raw formats
+    const lastN = Math.min(10, Math.max(nt.length, normalizedPhone.length));
+    return nt.slice(-lastN) === normalizedPhone.slice(-lastN);
+  };
+
+  customer.activeOffers = customer.activeOffers || [];
+  const existingOfferIds = new Set(
+    customer.activeOffers
+      .filter(o => o.offerId)
+      .map(o => o.offerId.toString())
+  );
+
+  let changed = false;
+  for (const offer of candidateOffers) {
+    const eligible = (offer.targetedCustomers || []).some(phoneMatches);
+    if (!eligible) continue;
+    if (existingOfferIds.has(offer._id.toString())) continue;
+
+    customer.activeOffers.push({
+      offerId: offer._id,
+      offerType: offer.offerType,
+      title: offer.title,
+      discountType: offer.discountType,
+      discountValue: offer.discountValue,
+      percentage: offer.percentage,
+      appliedItems: offer.appliedItems || [],
+      appliedCategories: offer.appliedCategories || [],
+      appliedVariants: offer.appliedVariants || [],
+      appliedQuantities: offer.appliedQuantities || [],
+      validUntil: offer.validUntil,
+      appliedAt: new Date()
+    });
+    changed = true;
+    logger.info('[syncActiveOffers] Auto-applied eligible offer', {
+      phone: customer.phone, offerId: offer._id.toString(), title: offer.title
+    });
+  }
+
+  if (changed && typeof customer.save === 'function') {
+    try { await customer.save(); } catch (err) {
+      logger.warn('[syncActiveOffers] save failed (non-fatal)', { error: err.message });
+    }
+  }
+  return customer;
+};
+
 // Helper to filter customer's activeOffers by checking if the actual Offer document is still active
 // This ensures that when an admin toggles an offer OFF, targeted customers stop seeing the discount
 const filterActiveOffers = async (activeOffers) => {
@@ -4308,6 +4389,17 @@ const chatbot = {
 
   // ============ WELCOME & MAIN MENU ============
   async sendWelcome(phone) {
+    // Proactively stamp any currently-eligible targeted offers onto the
+    // customer's activeOffers BEFORE we show the service selector. This way
+    // the discount is live in their cart from the very first "hi" — the
+    // customer never has to tap "View Offers" (which we removed anyway).
+    try {
+      const cust = await Customer.findOne({ phone });
+      if (cust) await syncActiveOffersForCustomer(cust);
+    } catch (err) {
+      logger.warn('[sendWelcome] syncActiveOffers failed (non-fatal)', { phone, error: err.message });
+    }
+
     const welcomeImageUrl = await chatbotImagesService.getImageUrl('welcome');
     const welcomeMessage = `🏨 *Perivi Hotel*\n\n` +
       `Welcome! 🙏\n\n` +
@@ -6026,6 +6118,15 @@ const chatbot = {
       const cartEmptyImg = await chatbotImagesService.getImageUrl('cart_empty');
       await whatsapp.sendMessage(phone, '🛒 *Your Cart is Empty*\n\nTap the 🛒 cart icon at the top right to view your WhatsApp cart, or browse our menu to add items!');
       return;
+    }
+
+    // Auto-apply any currently-eligible targeted offers. This is what makes
+    // the discount "just work" after we removed the View Offers flow step —
+    // as long as the customer is in the offer's targetedCustomers[], the
+    // offer gets stamped onto their activeOffers the first time they view
+    // the cart after the offer was created.
+    try { await syncActiveOffersForCustomer(freshCustomer); } catch (err) {
+      logger.warn('[sendCart] syncActiveOffers failed (non-fatal)', { phone, error: err.message });
     }
 
     let total = 0;
