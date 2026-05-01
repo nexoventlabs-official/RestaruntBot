@@ -421,7 +421,19 @@ const catalogService = {
     // Step 0a: Clean up stale offerPrices (offer was deactivated but offerPrice wasn't cleared)
     try {
       const Offer = require('../models/Offer');
-      const itemsWithOfferPrice = await MenuItem.find({ offerPrice: { $exists: true } });
+      // CRITICAL: also include items whose stale offerPrice lives ONLY on a
+      // variant or variant.quantities entry (parent .offerPrice may already be
+      // unset — common when admin first creates a quantity-scoped offer or
+      // when a previous cleanup pass cleared the parent but not the inner
+      // arrays). Without this `$or`, those rows keep leaking sale_price to
+      // Meta even though no eligible non-targeted offer justifies it.
+      const itemsWithOfferPrice = await MenuItem.find({
+        $or: [
+          { offerPrice: { $exists: true } },
+          { 'variants.offerPrice': { $exists: true } },
+          { 'variants.quantities.offerPrice': { $exists: true } },
+        ]
+      });
       let offerPriceCleaned = 0;
       for (const item of itemsWithOfferPrice) {
         const offerTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
@@ -444,24 +456,45 @@ const catalogService = {
         }) : null;
 
         if (!activeOffer) {
-          // No active offer — clear stale offerPrice from item and variants/quantities
-          const clearUpdate = { $unset: { offerPrice: 1 } };
+          // No active NON-TARGETED offer — clear stale offerPrice everywhere
+          // it can hide: parent, every variant, and every variant.quantity.
+          // Detect whether anything actually changes so we don't write empty
+          // updates on already-clean items.
+          const clearUpdate = {};
+          let changed = false;
+          if (item.offerPrice !== undefined && item.offerPrice !== null) {
+            clearUpdate.$unset = { offerPrice: 1 };
+            changed = true;
+          }
           if (item.variants && item.variants.length > 0) {
-            clearUpdate.$set = { variants: item.variants.map(v => {
+            const newVariants = item.variants.map(v => {
               const vObj = v.toObject ? v.toObject() : { ...v };
-              delete vObj.offerPrice;
+              if (vObj.offerPrice !== undefined && vObj.offerPrice !== null) {
+                delete vObj.offerPrice;
+                changed = true;
+              }
               if (vObj.quantities && vObj.quantities.length > 0) {
                 vObj.quantities = vObj.quantities.map(q => {
                   const qObj = q.toObject ? q.toObject() : { ...q };
-                  delete qObj.offerPrice;
+                  if (qObj.offerPrice !== undefined && qObj.offerPrice !== null) {
+                    delete qObj.offerPrice;
+                    changed = true;
+                  }
                   return qObj;
                 });
               }
               return vObj;
-            })};
+            });
+            if (changed) clearUpdate.$set = { variants: newVariants };
           }
-          await MenuItem.findByIdAndUpdate(item._id, clearUpdate);
-          offerPriceCleaned++;
+          if (changed) {
+            await MenuItem.findByIdAndUpdate(item._id, clearUpdate);
+            offerPriceCleaned++;
+            logger.info('Cleaned stale offerPrice (parent/variant/quantity)', {
+              itemId: item._id.toString(),
+              name: item.name,
+            });
+          }
         }
       }
       if (offerPriceCleaned > 0) {
