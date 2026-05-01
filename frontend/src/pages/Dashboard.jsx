@@ -225,13 +225,9 @@ export default function Dashboard() {
             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
             <span className="text-xs font-medium text-green-700">Live</span>
           </div>
-          <button onClick={handleCatalogSync} disabled={syncing}
-            className="flex items-center gap-1.5 px-3 py-2 bg-dark-100 rounded-xl text-xs font-medium text-dark-600 hover:bg-dark-200 transition disabled:opacity-50">
-            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} /> {syncing ? 'Syncing…' : 'Catalog Sync'}
-          </button>
-          <button onClick={() => fetchStats()} className="p-2 bg-dark-100 rounded-xl hover:bg-dark-200 transition">
-            <RefreshCw className="w-4 h-4 text-dark-600" />
-          </button>
+          {/* Catalog Sync + dashboard refresh buttons hidden per admin UX cleanup.
+              handleCatalogSync and fetchStats are still invoked internally on
+              mount / via other actions, so the functionality is preserved. */}
         </div>
       </div>
 

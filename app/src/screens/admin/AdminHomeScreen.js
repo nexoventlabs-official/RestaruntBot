@@ -249,15 +249,8 @@ export default function AdminHomeScreen({ navigation }) {
                 </View>
               </View>
               <View style={styles.headerActions}>
-                <TouchableOpacity
-                  style={styles.headerButton}
-                  onPress={handleCatalogSync}
-                  disabled={syncing}
-                >
-                  <Animated.View style={{ transform: [{ rotate: syncSpinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] }}>
-                    <Ionicons name="sync-outline" size={22} color={syncing ? 'rgba(255,255,255,0.5)' : '#fff'} />
-                  </Animated.View>
-                </TouchableOpacity>
+                {/* Catalog Sync icon hidden per admin UX cleanup — handleCatalogSync
+                    remains available internally if needed. */}
                 <TouchableOpacity 
                   style={styles.headerButton}
                   onPress={() => navigation.navigate('Notifications')}
