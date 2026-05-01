@@ -377,7 +377,13 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
       minOrderAmount: parseFloat(minOrderAmount) || 0,
       validFrom: validFrom ? new Date(validFrom) : null,
       validUntil: validUntil ? new Date(validUntil) : null,
-      isActive: validFrom ? new Date(validFrom) <= new Date() : false,
+      // Honor the client-provided isActive flag when present (it encodes the
+      // "activate now vs. schedule for future" intent). Fall back to the
+      // legacy rule (active iff validFrom is now/past) only when the client
+      // doesn't send isActive, so older integrations keep working.
+      isActive: (typeof isActive !== 'undefined' && isActive !== null)
+        ? (isActive !== 'false' && isActive !== false)
+        : (validFrom ? new Date(validFrom) <= new Date() : true),
       showAsPopup: showAsPopup !== 'false',
       buttonText: buttonText || 'Order Now',
       buttonLink: buttonLink || '/menu',

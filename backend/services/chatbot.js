@@ -511,19 +511,22 @@ const syncActiveOffersForCustomer = async (customer) => {
   };
 
   customer.activeOffers = customer.activeOffers || [];
-  const existingOfferIds = new Set(
-    customer.activeOffers
-      .filter(o => o.offerId)
-      .map(o => o.offerId.toString())
-  );
+
+  // Helper: cheap JSON-based equality for scope arrays. Good enough since
+  // both sides store plain strings / ObjectIds in a stable order.
+  const scopeEqual = (a, b) => JSON.stringify((a || []).map(String)) === JSON.stringify((b || []).map(String));
 
   let changed = false;
   for (const offer of candidateOffers) {
     const eligible = (offer.targetedCustomers || []).some(phoneMatches);
     if (!eligible) continue;
-    if (existingOfferIds.has(offer._id.toString())) continue;
 
-    customer.activeOffers.push({
+    const offerIdStr = offer._id.toString();
+    const existingIdx = customer.activeOffers.findIndex(
+      o => o.offerId && o.offerId.toString() === offerIdStr
+    );
+
+    const nextStamp = {
       offerId: offer._id,
       offerType: offer.offerType,
       title: offer.title,
@@ -535,12 +538,44 @@ const syncActiveOffersForCustomer = async (customer) => {
       appliedVariants: offer.appliedVariants || [],
       appliedQuantities: offer.appliedQuantities || [],
       validUntil: offer.validUntil,
-      appliedAt: new Date()
-    });
-    changed = true;
-    logger.info('[syncActiveOffers] Auto-applied eligible offer', {
-      phone: customer.phone, offerId: offer._id.toString(), title: offer.title
-    });
+    };
+
+    if (existingIdx < 0) {
+      customer.activeOffers.push({ ...nextStamp, appliedAt: new Date() });
+      changed = true;
+      logger.info('[syncActiveOffers] Auto-applied eligible offer', {
+        phone: customer.phone, offerId: offerIdStr, title: offer.title
+      });
+      continue;
+    }
+
+    // Existing stamp found — refresh it when the offer's scope / discount
+    // config has drifted (e.g. admin narrowed the offer to a specific
+    // variant after the first broadcast). Without this, customers keep the
+    // OLD scope on their activeOffers forever and the cart either
+    // over-applies or misses the discount.
+    const existing = customer.activeOffers[existingIdx];
+    const drifted = (
+      existing.discountType !== nextStamp.discountType ||
+      existing.discountValue !== nextStamp.discountValue ||
+      existing.percentage !== nextStamp.percentage ||
+      !scopeEqual(existing.appliedItems, nextStamp.appliedItems) ||
+      !scopeEqual(existing.appliedCategories, nextStamp.appliedCategories) ||
+      !scopeEqual(existing.appliedVariants, nextStamp.appliedVariants) ||
+      !scopeEqual(existing.appliedQuantities, nextStamp.appliedQuantities)
+    );
+    if (drifted) {
+      customer.activeOffers[existingIdx] = {
+        ...existing,
+        ...nextStamp,
+        // Preserve the original appliedAt so analytics don't break.
+        appliedAt: existing.appliedAt || new Date(),
+      };
+      changed = true;
+      logger.info('[syncActiveOffers] Refreshed drifted offer stamp', {
+        phone: customer.phone, offerId: offerIdStr, title: offer.title
+      });
+    }
   }
 
   if (changed && typeof customer.save === 'function') {

@@ -189,7 +189,20 @@ export default function Offers() {
       setWhatsAppImage(offer.imageWhatsApp || null);
       setNewWhatsAppFile(null); setNewWhatsAppPreview('');
       setSelectedCategories(offer.appliedCategories || []);
-      setSelectedItems(Array.isArray(offer.appliedItems) ? offer.appliedItems.map(i => typeof i === 'string' ? i : i._id) : []);
+      // ⚠️ The GET /offers endpoint MERGES parent items of every appliedVariant
+      // and appliedQuantity into appliedItems for the Offer Details modal to
+      // resolve names/images. For the EDIT form we must NOT pre-select those
+      // merged-in parents — otherwise a variant-scoped offer like
+      // "Egg Biryani 750 ml only" opens up with the whole "Egg Biryani" item
+      // ticked, and re-saving would promote the offer to "all variants".
+      // Backend sets _directItemCount to the size of the truly-direct array
+      // (the merged items are always appended at the end).
+      const rawAppliedItems = Array.isArray(offer.appliedItems) ? offer.appliedItems : [];
+      const directCount = typeof offer._directItemCount === 'number'
+        ? offer._directItemCount
+        : rawAppliedItems.length;
+      const directItems = rawAppliedItems.slice(0, directCount);
+      setSelectedItems(directItems.map(i => typeof i === 'string' ? i : i._id));
       setSelectedVariants(offer.appliedVariants || []);
       setSelectedQuantities(offer.appliedQuantities || []);
       setValidFrom(offer.validFrom ? toLocalDT(new Date(offer.validFrom)) : '');
@@ -428,7 +441,27 @@ export default function Offers() {
     setSaving(true);
     try {
       const fd = new FormData();
-      fd.append('isActive', validFrom ? (new Date(validFrom) <= new Date() ? 'true' : 'false') : 'false');
+      // isActive logic:
+      //   1. If `validFrom` is explicitly set in the FUTURE → offer is scheduled,
+      //      so isActive starts at false and the scheduler will flip it on later.
+      //   2. Otherwise — either no validFrom, or validFrom is "now or past":
+      //        - For edits: preserve the offer's current isActive state (so a
+      //          simple field change doesn't accidentally deactivate the offer
+      //          the admin had just toggled on).
+      //        - For new offers: default to ACTIVE. Previously this defaulted
+      //          to false when validFrom was blank, which caused a confusing
+      //          "Offer Unavailable" screen when customers clicked the claim
+      //          link from a broadcast — because the backend's 410 branch is
+      //          triggered by isActive=false.
+      let effectiveIsActive;
+      if (validFrom && new Date(validFrom) > new Date()) {
+        effectiveIsActive = false;
+      } else if (editingOffer) {
+        effectiveIsActive = editingOffer.isActive !== false;
+      } else {
+        effectiveIsActive = true;
+      }
+      fd.append('isActive', effectiveIsActive ? 'true' : 'false');
       fd.append('offerType', offerType.trim());
       if (percentage) fd.append('percentage', percentage);
       if (validFrom) fd.append('validFrom', new Date(validFrom).toISOString());
