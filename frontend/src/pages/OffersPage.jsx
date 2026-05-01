@@ -240,7 +240,25 @@ export default function OffersPage() {
   // discount config — this covers both targeted and legacy offers landing
   // on /offer/:offerId via the claim link.
   const getOfferPriceFromOffer = (item) => {
-    // If item already has an offer price, that wins (admin-prepopulated).
+    // When we're rendering a targeted/specific offer landing page and the
+    // item is in that offer's scope, recompute from the offer's live config
+    // first — a leftover `item.offerPrice` from an older offer would
+    // otherwise show a wrong discount (see variant-quantity card comment
+    // for the full reasoning).
+    if (specificOffer) {
+      const itemIdStr = item._id?.toString();
+      const inAppliedItems = itemIdStr && (specificOffer.appliedItems || []).includes(itemIdStr);
+      const inAppliedCats  = item.category && (specificOffer.appliedCategories || []).includes(item.category);
+      const noScopeAtAll   = !(specificOffer.appliedItems?.length)
+                          && !(specificOffer.appliedCategories?.length)
+                          && !(specificOffer.appliedVariants?.length)
+                          && !(specificOffer.appliedQuantities?.length);
+      if (inAppliedItems || inAppliedCats || noScopeAtAll) {
+        const computed = applyOfferDiscountToPrice(item.price, specificOffer);
+        if (computed !== null) return computed;
+      }
+    }
+    // Admin-prepopulated stamp (legacy "all customers" path).
     if (item.offerPrice && item.offerPrice < item.price) {
       return item.offerPrice;
     }
@@ -373,13 +391,28 @@ export default function OffersPage() {
             const includeCard = q.offerPrice || v.offerPrice || variantInOfferScope || qInOfferScope;
             if (!includeCard) return;
 
-            // Compute offerPrice: prefer existing offerPrice, then derive from
-            // variant's offerPrice ratio, then derive from specificOffer's
-            // discount config when this card is in scope.
-            let computedOfferPrice = q.offerPrice
-              || (v.offerPrice ? Math.round(q.price * (v.offerPrice / v.price)) : null);
+            // Compute offerPrice. Priority order matters here:
+            //   1. q.offerPrice           — fresh stamp from a non-targeted
+            //                               offer on this exact quantity.
+            //   2. specificOffer config   — when this card is in the loaded
+            //                               offer's variant/quantity scope.
+            //                               MUST come before the v.offerPrice
+            //                               ratio fallback: targeted offers
+            //                               deliberately don't stamp q.*, but
+            //                               a stale v.offerPrice from an old
+            //                               offer can leak a wrong price
+            //                               (e.g. 1 kg quantity showing the
+            //                               750 ml variant's stale discount).
+            //   3. v.offerPrice ratio     — legacy "discount the whole variant
+            //                               proportionally" path for items
+            //                               that only ever had a variant-level
+            //                               stamp and no per-quantity stamp.
+            let computedOfferPrice = (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : null;
             if (computedOfferPrice == null && (variantInOfferScope || qInOfferScope) && specificOffer) {
               computedOfferPrice = applyOfferDiscountToPrice(q.price, specificOffer);
+            }
+            if (computedOfferPrice == null && v.offerPrice && v.price && v.offerPrice < v.price) {
+              computedOfferPrice = Math.round(q.price * (v.offerPrice / v.price));
             }
 
             cards.push({
