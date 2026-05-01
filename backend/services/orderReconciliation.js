@@ -17,6 +17,7 @@ const cron = require('node-cron');
 const Order = require('../models/Order');
 const Customer = require('../models/Customer');
 const whatsapp = require('./whatsapp');
+const metaCloud = require('./metaCloud');
 const chatbotImagesService = require('./chatbotImages');
 const logger = require('./logger');
 const { initContext, runWithContext } = require('./correlationContext');
@@ -50,35 +51,72 @@ async function reconcileOrders() {
     let reconciled = 0;
     for (const order of unnotifiedOrders) {
       try {
-        // Build confirmation message
+        // Build confirmation message — mirrors the real-time WhatsApp Pay
+        // confirmation in routes/webhook.js and the COD/Pay-at-Hotel
+        // confirmations in services/chatbot.js so the customer sees a
+        // consistent rich card with one "Order Details" CTA, regardless
+        // of payment method or whether the message is real-time or a
+        // delayed reconciliation re-send.
+        const isPickup = order.serviceType === 'pickup';
+        const serviceLabel = isPickup ? 'Self-Pickup' : 'Home Delivery';
+        const paymentLabel = order.paymentMethod === 'cod'
+          ? (isPickup ? 'Pay at Hotel' : 'Cash on Delivery')
+          : 'Paid';
         let msg = '✅ *Order Confirmed!*\n\n';
         msg += `📦 *Order ID:* ${order.orderId}\n`;
         msg += `💰 *Total:* ₹${order.totalAmount}\n`;
-        msg += `🍽️ *Service:* ${order.serviceType}\n`;
-        msg += `💳 *Payment:* ${order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'Paid'}\n\n`;
+        msg += `🍽️ *Service:* ${serviceLabel}\n`;
+        msg += `💳 *Payment:* ${paymentLabel}\n\n`;
         msg += `🙏 Your order is being prepared!\n`;
-        msg += `_(This is a delayed confirmation — apologies for the wait!)_`;
+        msg += `_(This is a delayed confirmation — apologies for the wait!)_\n\n`;
+        msg += `Tap *Order Details* below to view items,\ntrack your order or contact us.`;
 
         const imageUrl = await chatbotImagesService.getImageUrl('order_confirmed');
+        const orderActionsFlowId = process.env.WHATSAPP_ORDER_ACTIONS_FLOW_ID;
+        const cleanPhone = String(order.customer.phone || '').replace(/\D/g, '');
+        let sent = false;
 
-        try {
-          if (imageUrl) {
-            await whatsapp.sendImageWithButtons(order.customer.phone, imageUrl, msg, [
-              { id: 'track_order', text: 'Track Order' },
-              { id: 'help', text: 'Help' }
-            ]);
-          } else {
-            await whatsapp.sendButtons(order.customer.phone, msg, [
-              { id: 'track_order', text: 'Track Order' },
-              { id: 'help', text: 'Help' }
-            ]);
+        // Preferred path: rich card with single "Order Details" CTA that
+        // opens the Order Actions flow (same as the real-time confirms).
+        // The Track Order / Help quick-reply buttons that used to live
+        // here were removed per product request — both actions are
+        // available inside the flow.
+        if (orderActionsFlowId) {
+          try {
+            await metaCloud.sendFlowMessage(order.customer.phone, {
+              flowId: orderActionsFlowId,
+              flowCta: 'Order Details',
+              headerImageUrl: imageUrl || undefined,
+              headerText: imageUrl ? undefined : 'Order Confirmed',
+              bodyText: msg,
+              flowToken: `order_actions_${cleanPhone}_${order.orderId}`,
+              flowAction: 'data_exchange'
+            });
+            sent = true;
+          } catch (flowErr) {
+            logger.warn('[Reconciliation] Order actions flow failed, falling back', {
+              orderId: order.orderId,
+              error: flowErr.message
+            });
           }
-        } catch (whatsappErr) {
-          logger.error('[Reconciliation] WhatsApp re-send failed', {
-            orderId: order.orderId,
-            error: whatsappErr.message
-          });
-          continue; // Skip this order, will retry next cycle
+        }
+
+        // Fallback (no flow configured, or flow send failed): plain
+        // image+text message — still no Track Order / Help buttons.
+        if (!sent) {
+          try {
+            if (imageUrl) {
+              await whatsapp.sendImage(order.customer.phone, imageUrl, msg);
+            } else {
+              await whatsapp.sendMessage(order.customer.phone, msg);
+            }
+          } catch (whatsappErr) {
+            logger.error('[Reconciliation] WhatsApp re-send failed', {
+              orderId: order.orderId,
+              error: whatsappErr.message
+            });
+            continue; // Skip this order, will retry next cycle
+          }
         }
 
         // Mark as notified

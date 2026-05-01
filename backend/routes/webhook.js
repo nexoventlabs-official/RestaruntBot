@@ -272,13 +272,72 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           }
                           await order.save();
 
-                          // Send order_status confirmation to customer
-                          await metaCloud.sendOrderStatusUpdate(
-                            recipientPhone,
-                            referenceId,
-                            'completed',
-                            `✅ Payment of ₹${order.totalAmount} received!\nOrder #${referenceId} is confirmed.\nWe're preparing your order! 🍳`
-                          );
+                          // Send rich "Order Confirmed" card with single
+                          // "Order Details" CTA (same Order Actions flow used
+                          // by COD and Pay-at-Hotel confirmations). Replaces
+                          // the older `sendOrderStatusUpdate` mini-card so
+                          // the customer journey reads the same regardless
+                          // of payment method (WhatsApp UPI, COD, or Pay-at-
+                          // Hotel) and they have one CTA that opens the full
+                          // order details / track / help flow.
+                          try {
+                            const orderConfirmedImageUrl = await chatbotImagesService.getImageUrl('order_confirmed');
+                            const isPickup = order.serviceType === 'pickup';
+                            const serviceLabel = isPickup ? 'Self-Pickup' : 'Home Delivery';
+                            let confirmMsg = '✅ *Order Confirmed!*\n\n';
+                            confirmMsg += `📦 *Order ID:* ${order.orderId}\n`;
+                            confirmMsg += `💰 *Total:* ₹${order.totalAmount}\n`;
+                            confirmMsg += `🍽️ *Service:* ${serviceLabel}\n`;
+                            confirmMsg += `💳 *Payment:* Paid\n\n`;
+                            confirmMsg += `🙏 Your order is being prepared!\n\n`;
+                            confirmMsg += `Tap *Order Details* below to view items,\ntrack your order or contact us.`;
+
+                            const orderActionsFlowId = process.env.WHATSAPP_ORDER_ACTIONS_FLOW_ID;
+                            const cleanPhone = String(recipientPhone || '').replace(/\D/g, '');
+                            let confirmSent = false;
+                            if (orderActionsFlowId) {
+                              try {
+                                await metaCloud.sendFlowMessage(recipientPhone, {
+                                  flowId: orderActionsFlowId,
+                                  flowCta: 'Order Details',
+                                  headerImageUrl: orderConfirmedImageUrl || undefined,
+                                  headerText: orderConfirmedImageUrl ? undefined : 'Order Confirmed',
+                                  bodyText: confirmMsg,
+                                  flowToken: `order_actions_${cleanPhone}_${order.orderId}`,
+                                  flowAction: 'data_exchange'
+                                });
+                                confirmSent = true;
+                              } catch (flowErr) {
+                                logger.error('Order actions flow failed on payment confirm', {
+                                  orderId: referenceId,
+                                  error: flowErr.message
+                                });
+                              }
+                            }
+                            // Fallback when the Order Actions flow isn't
+                            // configured: send a plain image+text message so
+                            // the customer still gets the confirmation. No
+                            // Track Order / Help quick-reply buttons — those
+                            // were removed per product request; users access
+                            // the same actions via the Welcome flow.
+                            if (!confirmSent) {
+                              if (orderConfirmedImageUrl) {
+                                await whatsapp.sendImage(recipientPhone, orderConfirmedImageUrl, confirmMsg);
+                              } else {
+                                await whatsapp.sendMessage(recipientPhone, confirmMsg);
+                              }
+                            }
+
+                            // Mark so the reconciliation scheduler doesn't
+                            // double-notify the customer 5 minutes later.
+                            order.whatsappConfirmationSent = true;
+                            await order.save();
+                          } catch (confirmErr) {
+                            logger.error('Failed to send rich payment confirmation', {
+                              orderId: referenceId,
+                              error: confirmErr.message
+                            });
+                          }
 
                           // Send push notification to admin
                           try {
