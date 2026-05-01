@@ -425,11 +425,22 @@ const catalogService = {
       let offerPriceCleaned = 0;
       for (const item of itemsWithOfferPrice) {
         const offerTypes = Array.isArray(item.offerType) ? item.offerType : (item.offerType ? [item.offerType] : []);
-        // Check if any active percentage-based offer exists for this item
+        // Check if any active percentage-based offer exists for this item.
+        // IMPORTANT: targeted offers (top_percentage / min_spent / min_orders)
+        // must NOT justify keeping offerPrice on MenuItem — those discounts
+        // are personal to eligible customers and applied at cart-time only.
+        // If we treated them as "active offers" here, the catalog would keep
+        // showing their sale_price to every customer.
         const activeOffer = offerTypes.length > 0 ? await Offer.findOne({
           offerType: { $in: offerTypes },
           isActive: true,
-          percentage: { $gt: 0 }
+          percentage: { $gt: 0 },
+          $or: [
+            { targetType: { $exists: false } },
+            { targetType: null },
+            { targetType: '' },
+            { targetType: { $nin: ['top_percentage', 'min_spent', 'min_orders'] } },
+          ],
         }) : null;
 
         if (!activeOffer) {

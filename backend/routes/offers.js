@@ -70,6 +70,104 @@ function triggerBackgroundCatalogSync(reason) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Targeted-offer catalog isolation helper
+//
+// MenuItem.offerPrice / variant.offerPrice / quantity.offerPrice are the ONLY
+// fields catalogService consults to publish a Meta sale_price. They feed the
+// PUBLIC catalog — visible to every customer, eligible or not. Targeted offers
+// must therefore never leave their discount stamped onto these fields.
+//
+// This helper clears those fields on whatever scope the targeted offer is
+// addressing (full item, specific variants, specific variant+quantity combos),
+// so a stamp left over from a previous non-targeted offer (or from a previous
+// non-targeted version of THIS same offer) doesn't continue to leak to Meta.
+//
+// It uses a $set update built from the existing variant array (mongoose
+// doesn't support `$unset` on array element subfields). For the parent item
+// it does an explicit $unset of `offerPrice` only when the whole item is
+// scoped — preserves any other non-targeted offer's stamp on a sibling
+// variant we aren't touching.
+// ─────────────────────────────────────────────────────────────────────────────
+async function clearTargetedOfferPriceStamps(itemId, opts) {
+  const MenuItem = require('../models/MenuItem');
+  const {
+    parsedAppliedItems = [],
+    parsedAppliedCategories = [],
+    parsedAppliedVariants = [],
+    parsedAppliedQuantities = [],
+  } = opts || {};
+
+  const item = await MenuItem.findById(itemId);
+  if (!item) return;
+
+  const itemIdStr = item._id.toString();
+  const itemCats = Array.isArray(item.category) ? item.category : (item.category ? [item.category] : []);
+  const isFullItemSelected = parsedAppliedItems.map(String).includes(itemIdStr)
+    || parsedAppliedCategories.some(c => itemCats.includes(c));
+
+  const selectedVariantIndices = parsedAppliedVariants
+    .filter(v => v.startsWith(itemIdStr + '_'))
+    .map(v => parseInt(v.split('_')[1]));
+
+  const selectedQuantityMap = {};
+  parsedAppliedQuantities
+    .filter(q => q.startsWith(itemIdStr + '_'))
+    .forEach(q => {
+      const parts = q.split('_');
+      const vi = parseInt(parts[1]);
+      const qi = parseInt(parts[2]);
+      if (!selectedQuantityMap[vi]) selectedQuantityMap[vi] = [];
+      selectedQuantityMap[vi].push(qi);
+    });
+
+  const update = { $set: {}, $unset: {} };
+
+  if (item.variants && item.variants.length > 0) {
+    update.$set.variants = item.variants.map((v, idx) => {
+      const vObj = v.toObject ? v.toObject() : { ...v };
+      const fullVariantTouched = isFullItemSelected || selectedVariantIndices.includes(idx);
+      const qIndices = selectedQuantityMap[idx] || [];
+
+      if (fullVariantTouched) {
+        delete vObj.offerPrice;
+        if (vObj.quantities && vObj.quantities.length > 0) {
+          vObj.quantities = vObj.quantities.map(q => {
+            const qObj = q.toObject ? q.toObject() : { ...q };
+            delete qObj.offerPrice;
+            return qObj;
+          });
+        }
+      } else if (qIndices.length > 0 && vObj.quantities && vObj.quantities.length > 0) {
+        vObj.quantities = vObj.quantities.map((q, qIdx) => {
+          const qObj = q.toObject ? q.toObject() : { ...q };
+          if (qIndices.includes(qIdx)) delete qObj.offerPrice;
+          return qObj;
+        });
+      }
+      return vObj;
+    });
+  }
+
+  if (isFullItemSelected) {
+    update.$unset.offerPrice = 1;
+  }
+
+  // Clean up empty operators so mongoose doesn't reject the update
+  if (Object.keys(update.$set).length === 0) delete update.$set;
+  if (Object.keys(update.$unset).length === 0) delete update.$unset;
+  if (!update.$set && !update.$unset) return;
+
+  await MenuItem.findByIdAndUpdate(itemId, update);
+  logger.info('Targeted offer — cleared stale offerPrice from scoped portion', {
+    itemId: itemIdStr,
+    name: item.name,
+    fullItem: isFullItemSelected,
+    variants: selectedVariantIndices,
+    quantities: selectedQuantityMap,
+  });
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
@@ -580,6 +678,23 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
           
           // Update item
           await MenuItem.findByIdAndUpdate(itemId, updateFields);
+
+          // Targeted offer: actively clear any leftover offerPrice on the
+          // scoped portion of this item so the public Meta catalog can't keep
+          // showing the discount to non-eligible customers (e.g. a previous
+          // non-targeted offer once stamped these fields).
+          if (percentage && isTargetedOffer) {
+            try {
+              await clearTargetedOfferPriceStamps(itemId, {
+                parsedAppliedItems,
+                parsedAppliedCategories,
+                parsedAppliedVariants,
+                parsedAppliedQuantities,
+              });
+            } catch (clearErr) {
+              logger.error('Failed to clear targeted offerPrice stamps', { itemId, error: clearErr.message });
+            }
+          }
         }
       }
       
@@ -593,24 +708,15 @@ router.post('/', auth, uploadMultiple, async (req, res) => {
     eventEmitter.emit('dataUpdate', { type: 'offers' });
     eventEmitter.emit('dataUpdate', { type: 'menu' });
 
-    // Catalog sync after offer create is DISABLED to prevent catalog disruption.
-    // Offer prices are applied from MongoDB in chatbot messages and order flow.
-    // Catalog sale_price will update on next manual Catalog Sync or 2 AM scheduled sync.
-    // if (allItemIds && allItemIds.length > 0) {
-    //   const MenuItem = require('../models/MenuItem');
-    //   (async () => {
-    //     try {
-    //       for (const itemId of allItemIds) {
-    //         const freshItem = await MenuItem.findById(itemId);
-    //         if (freshItem) await catalogService.syncProductToMeta(freshItem);
-    //       }
-    //       catalogService.clearCache();
-    //       logger.info('Catalog synced after offer create', { itemCount: allItemIds.length });
-    //     } catch (syncErr) {
-    //       logger.error('Catalog sync after offer create failed', { error: syncErr.message });
-    //     }
-    //   })();
-    // }
+    // Targeted offers must take effect on the public Meta catalog immediately
+    // — i.e. any leftover sale_price from a previous non-targeted offer needs
+    // to be removed NOW, not at the next 2 AM scheduled sync. We trigger the
+    // background catalog sync so it picks up the cleared offerPrice fields
+    // (cleanup logic in catalogService excludes targeted offers from the
+    // "active offer justifies sale_price" check).
+    if (isTargetedOffer && percentage) {
+      triggerBackgroundCatalogSync(`offer-create-targeted:${offer._id}`);
+    }
     
     // ========== AUTO-SUBMIT TEMPLATE TO META FOR REVIEW ==========
     // Template is required to send offers to customers outside 24-hour window
@@ -1174,6 +1280,25 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
           }
           
           await MenuItem.findByIdAndUpdate(itemId, updateFields);
+
+          // Targeted offer: actively clear any leftover offerPrice stamps on
+          // the scoped portion of this item. Crucial for the edit flow when
+          // an offer was previously non-targeted (or when the same item had
+          // a stamp from another now-deleted offer) — without this, the old
+          // sale_price keeps leaking to Meta even though the new offer is
+          // marked as targeted.
+          if (percentage && isTargetedOffer) {
+            try {
+              await clearTargetedOfferPriceStamps(itemId, {
+                parsedAppliedItems,
+                parsedAppliedCategories,
+                parsedAppliedVariants,
+                parsedAppliedQuantities,
+              });
+            } catch (clearErr) {
+              logger.error('Failed to clear targeted offerPrice stamps (update)', { itemId, error: clearErr.message });
+            }
+          }
         }
       }
     } else {
@@ -1232,6 +1357,13 @@ router.put('/:id', auth, uploadMultiple, async (req, res) => {
     const eventEmitter = require('../services/eventEmitter');
     eventEmitter.emit('dataUpdate', { type: 'offers' });
     eventEmitter.emit('dataUpdate', { type: 'menu' });
+
+    // Targeted offer toggled / scoped on this update — push the cleared
+    // offerPrice state to Meta NOW so the catalog stops showing the
+    // discount to non-eligible customers immediately.
+    if (isTargetedOffer && percentage) {
+      triggerBackgroundCatalogSync(`offer-update-targeted:${offer._id}`);
+    }
 
     // Catalog sync after offer update is DISABLED to prevent catalog disruption.
     // Offer prices are applied from MongoDB in chatbot messages and order flow.
