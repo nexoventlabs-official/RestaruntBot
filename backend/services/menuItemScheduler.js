@@ -79,10 +79,55 @@ class MenuItemScheduler {
     return false;
   }
 
+  // A schedule is "malformed" when it can never evaluate to a valid
+  // availability window — i.e. a custom schedule with no enabled days, or a
+  // daily schedule with missing start/end times. Without this guard,
+  // isWithinSchedule() returns false forever and the cron loop keeps
+  // re-marking the item as sold out every tick (the bug that left the
+  // entire Biryani category showing "Off" with no schedule actually saved
+  // by the user).
+  isMalformedSchedule(schedule) {
+    if (!schedule) return true;
+    if (schedule.type === 'daily') {
+      return !schedule.dailyStartTime || !schedule.dailyEndTime;
+    }
+    if (schedule.type === 'custom') {
+      const days = Array.isArray(schedule.days) ? schedule.days : [];
+      if (days.length === 0) return true;
+      return !days.some(d => d && d.enabled && d.startTime && d.endTime);
+    }
+    return true;
+  }
+
   // Update a single menu item's availability based on its schedule
   async updateItemStatus(item) {
     try {
       if (!item.soldOutSchedule || !item.soldOutSchedule.enabled) return;
+
+      // Auto-heal malformed schedules so they can't strand the item in a
+      // permanent sold-out state. We disable the schedule, restore
+      // availability, and resync Meta — equivalent to the admin clicking
+      // "Cancel" on a bad schedule.
+      if (this.isMalformedSchedule(item.soldOutSchedule)) {
+        logger.warn('[MenuItem Scheduler] Auto-clearing malformed schedule', {
+          itemId: item._id,
+          name: item.name,
+          schedule: item.soldOutSchedule
+        });
+        item.soldOutSchedule.enabled = false;
+        if (item.variants && item.variants.length > 0) {
+          item.variants.forEach(v => { v.available = true; });
+        }
+        item.available = true;
+        await item.save();
+        catalogService.syncProductToMeta(item).catch(err => {
+          logger.info('[MenuItem Scheduler] Catalog sync error on auto-heal', {
+            itemId: item._id, error: err.message
+          });
+        });
+        dataEvents.emit('menu');
+        return;
+      }
 
       // Schedule defines the AVAILABILITY window
       // Within schedule = available, outside schedule = sold out

@@ -631,10 +631,28 @@ router.patch('/:id/schedule-soldout', authMiddleware, async (req, res) => {
     if (!item) return res.status(404).json({ error: 'Item not found' });
 
     if (schedule) {
+      // Reject malformed schedules — a custom schedule with no enabled
+      // days, or a daily schedule with missing times, is unsavable. If we
+      // accept it the cron loop will treat the item as "outside the
+      // availability window" forever and force it permanently sold out
+      // (the bug that wiped the entire Biryani category to "Off"). The
+      // mobile app already blocks this client-side; this is the
+      // server-side guard.
+      const sType = schedule.type || 'daily';
+      if (sType === 'daily' && (!schedule.dailyStartTime || !schedule.dailyEndTime)) {
+        return res.status(400).json({ error: 'Daily schedule requires both start and end time' });
+      }
+      if (sType === 'custom') {
+        const days = Array.isArray(schedule.days) ? schedule.days : [];
+        const hasUsableDay = days.some(d => d && d.enabled && d.startTime && d.endTime);
+        if (!hasUsableDay) {
+          return res.status(400).json({ error: 'Enable at least one weekday with start and end times before saving the custom schedule' });
+        }
+      }
       // New recurring schedule format
       item.soldOutSchedule = {
         enabled: true,
-        type: schedule.type || 'daily',
+        type: sType,
         dailyStartTime: schedule.dailyStartTime || null,
         dailyEndTime: schedule.dailyEndTime || null,
         days: schedule.days || [],
