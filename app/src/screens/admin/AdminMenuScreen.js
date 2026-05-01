@@ -508,6 +508,13 @@ export default function AdminMenuScreen({ navigation, route }) {
 
   const saveItemSoldOutSchedule = async () => {
     if (!soldOutItem || !scheduleType) return;
+    // Custom schedule must have at least one day enabled — otherwise the
+    // schedule effectively means "always sold out" which is never the
+    // intent. Block save and tell the user.
+    if (scheduleType === 'custom' && !customDays.some(d => d.enabled)) {
+      Alert.alert('Enable a day first', 'Toggle on at least one weekday before saving the custom schedule.');
+      return;
+    }
     const parentId = soldOutItem._id;
     try {
       setSavingCategory(true);
@@ -2236,17 +2243,29 @@ export default function AdminMenuScreen({ navigation, route }) {
                 >
                   <Text style={styles.soldOutCancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.soldOutSaveButton, savingCategory && styles.soldOutSaveButtonDisabled]} 
-                  onPress={saveItemSoldOutSchedule}
-                  disabled={savingCategory}
-                >
-                  {savingCategory ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text style={styles.soldOutSaveButtonText}>Save Schedule</Text>
-                  )}
-                </TouchableOpacity>
+                {(() => {
+                  // Lock Save Schedule until the schedule actually has a
+                  // day to be saved against. Daily mode is always valid (it
+                  // just needs the start/end time), Custom mode needs at
+                  // least one weekday toggled on.
+                  const customNeedsDay = scheduleType === 'custom' && !customDays.some(d => d.enabled);
+                  const saveDisabled = savingCategory || customNeedsDay;
+                  return (
+                    <TouchableOpacity 
+                      style={[styles.soldOutSaveButton, saveDisabled && styles.soldOutSaveButtonDisabled]} 
+                      onPress={saveItemSoldOutSchedule}
+                      disabled={saveDisabled}
+                    >
+                      {savingCategory ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.soldOutSaveButtonText}>
+                          {customNeedsDay ? 'Enable a day to save' : 'Save Schedule'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })()}
               </View>
             )}
           </View>

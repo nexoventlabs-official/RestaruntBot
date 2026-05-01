@@ -620,7 +620,10 @@ const catalogService = {
                   currency: 'INR',
                   imageUrl: v.image || item.image || null,
                   category: Array.isArray(item.category) ? item.category[0] : (item.category || 'Food'),
-                  availability: (v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
+                  // q.available is the per-quantity toggle (e.g. mutton biryani
+                  // 1 kg disabled while 750 ml stays on). Without it the
+                  // disabled quantity kept showing "in stock" on Meta.
+                  availability: (q.available !== false && v.available !== false && item.available && !item.isPaused) ? 'in stock' : 'out of stock',
                   salePrice: (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : null
                 });
               });
@@ -875,7 +878,10 @@ const catalogService = {
                 currency: 'INR',
                 imageUrl: v.image || menuItem.image || null,
                 category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
-                availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
+                // Honor q.available so a single disabled quantity (e.g.
+                // mutton biryani 1 kg) flips that one Meta SKU to out of
+                // stock without affecting its sibling 750 ml.
+                availability: (q.available !== false && v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
                 salePrice: (q.offerPrice && q.offerPrice < q.price) ? q.offerPrice : null
               };
               variantProducts.push(prod);
