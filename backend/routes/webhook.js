@@ -253,7 +253,18 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           const previousPaymentStatus = order.paymentStatus;
                           order.paymentStatus = 'paid';
                           logger.info('Payment status changed', { orderId: referenceId, from: previousPaymentStatus, to: 'paid', via: 'whatsapp-upi' });
-                          order.paymentMethod = 'whatsapp_upi';
+                          // NOTE: do NOT overwrite order.paymentMethod here.
+                          // The Order schema's `paymentMethod` enum only accepts
+                          // 'upi' or 'cod'. Setting it to 'whatsapp_upi' (as the
+                          // old code did) made order.save() throw a
+                          // ValidationError, which the outer catch swallowed —
+                          // so paymentStatus never actually persisted as 'paid'
+                          // and the admin dashboard kept showing "Unpaid" even
+                          // after the customer completed WhatsApp Pay. The
+                          // order was created with paymentMethod: 'upi' which
+                          // is the correct canonical value; WhatsApp Pay is
+                          // just a UPI method. The trackingUpdates entry
+                          // below records the WhatsApp UPI nuance for audit.
                           const txResult = transitionStatus(order, 'confirmed', `Payment received via WhatsApp UPI${paymentMethod ? ' (' + paymentMethod + ')' : ''}`);
                           if (!txResult.success) {
                             logger.warn('Status transition blocked for WhatsApp payment', { orderId: referenceId, reason: txResult.reason });
