@@ -753,17 +753,42 @@ export default function OffersPage() {
     if (window.lenis) window.lenis.start();
   };
 
+  // Helper: compute the offerPrice the dialog should display for a given
+  // base price + scope key. We try, in order:
+  //   1. The stamped offerPrice (legacy "all customers" path).
+  //   2. specificOffer's discount config when the scope key is in
+  //      appliedItems / appliedVariants / appliedQuantities — this is the
+  //      targeted-offer path where MenuItem deliberately has no offerPrice.
+  // scopeKeys: { itemId, variantKey, quantityKey } — pass whatever applies.
+  const computeDialogOfferPrice = (basePrice, stampedOfferPrice, scopeKeys = {}) => {
+    if (stampedOfferPrice && stampedOfferPrice < basePrice) return stampedOfferPrice;
+    if (!specificOffer || !basePrice) return null;
+    const { itemId, variantKey, quantityKey } = scopeKeys;
+    const inItemScope    = itemId && (specificOffer.appliedItems || []).includes(itemId);
+    const inVariantScope = variantKey && (specificOffer.appliedVariants || []).includes(variantKey);
+    const inQtyScope     = quantityKey && (specificOffer.appliedQuantities || []).includes(quantityKey);
+    const noScopeAtAll   = !(specificOffer.appliedItems?.length)
+                        && !(specificOffer.appliedCategories?.length)
+                        && !(specificOffer.appliedVariants?.length)
+                        && !(specificOffer.appliedQuantities?.length);
+    if (!inItemScope && !inVariantScope && !inQtyScope && !noScopeAtAll) return null;
+    return applyOfferDiscountToPrice(basePrice, specificOffer);
+  };
+
   // Helper: get effective price/image for selected variant or base item
   const getDialogItemDetails = () => {
     if (!selectedItem) return { price: 0, offerPrice: null, image: null };
+    const itemIdStr = selectedItem._id?.toString() || '';
     if (selectedVariantIndex !== null && selectedItem.variants?.[selectedVariantIndex]) {
       const v = selectedItem.variants[selectedVariantIndex];
+      const variantKey = `${itemIdStr}_${selectedVariantIndex}`;
       // If quantity option is selected, use its price
       if (selectedQuantityIndex !== null && v.quantities?.[selectedQuantityIndex]) {
         const q = v.quantities[selectedQuantityIndex];
+        const quantityKey = `${itemIdStr}_${selectedVariantIndex}_${selectedQuantityIndex}`;
         return {
           price: q.price,
-          offerPrice: q.offerPrice && q.offerPrice < q.price ? q.offerPrice : null,
+          offerPrice: computeDialogOfferPrice(q.price, q.offerPrice, { itemId: itemIdStr, variantKey, quantityKey }),
           image: v.image || selectedItem.image,
           label: `${v.label} (${q.quantity} ${q.unit})`,
           available: v.available !== false,
@@ -773,7 +798,7 @@ export default function OffersPage() {
       }
       return {
         price: v.price,
-        offerPrice: v.offerPrice && v.offerPrice < v.price ? v.offerPrice : null,
+        offerPrice: computeDialogOfferPrice(v.price, v.offerPrice, { itemId: itemIdStr, variantKey }),
         image: v.image || selectedItem.image,
         label: v.label,
         available: v.available !== false,
@@ -782,7 +807,7 @@ export default function OffersPage() {
     }
     return {
       price: selectedItem.price,
-      offerPrice: selectedItem.offerPrice && selectedItem.offerPrice < selectedItem.price ? selectedItem.offerPrice : null,
+      offerPrice: computeDialogOfferPrice(selectedItem.price, selectedItem.offerPrice, { itemId: itemIdStr }),
       image: selectedItem.image,
       label: null,
       available: true,
@@ -801,7 +826,11 @@ export default function OffersPage() {
       const q = variant.quantities[selectedQuantityIndex];
       cartVariantOpts.quantityLabel = `${q.quantity} ${q.unit}`;
       cartVariantOpts.price = q.price;
-      cartVariantOpts.offerPrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : null;
+      // Prefer the dialog's resolved offerPrice (which already considered
+      // a targeted specificOffer) over the raw stamped q.offerPrice; fall
+      // back to the stamped value for legacy non-targeted offers.
+      cartVariantOpts.offerPrice = details.offerPrice
+        || (q.offerPrice && q.offerPrice < q.price ? q.offerPrice : null);
     }
     
     // Include offer info for cart items
@@ -1441,11 +1470,24 @@ export default function OffersPage() {
                           }`}
                         >
                           {v.label}
-                          {isAvailable && !v.quantities?.length && (
-                            <span className="ml-1.5 text-xs text-gray-400">
-                              ₹{v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price}
-                            </span>
-                          )}
+                          {isAvailable && !v.quantities?.length && (() => {
+                            const itemIdStr = selectedItem._id?.toString() || '';
+                            const variantKey = `${itemIdStr}_${idx}`;
+                            const off = computeDialogOfferPrice(v.price, v.offerPrice, { itemId: itemIdStr, variantKey });
+                            const showStrike = off && off < v.price;
+                            return (
+                              <span className="ml-1.5 text-xs">
+                                {showStrike ? (
+                                  <>
+                                    <span className="text-gray-400 line-through mr-1">₹{v.price}</span>
+                                    <span className="text-orange-600 font-semibold">₹{off}</span>
+                                  </>
+                                ) : (
+                                  <span className="text-gray-400">₹{v.price}</span>
+                                )}
+                              </span>
+                            );
+                          })()}
                           {!isAvailable && (
                             <span className="ml-1.5 text-xs">Sold Out</span>
                           )}
@@ -1463,7 +1505,11 @@ export default function OffersPage() {
                   <div className="flex flex-wrap gap-2">
                     {selectedItem.variants[selectedVariantIndex].quantities.map((q, qIdx) => {
                       const isSelected = selectedQuantityIndex === qIdx;
-                      const qPrice = q.offerPrice && q.offerPrice < q.price ? q.offerPrice : q.price;
+                      const itemIdStr = selectedItem._id?.toString() || '';
+                      const variantKey = `${itemIdStr}_${selectedVariantIndex}`;
+                      const quantityKey = `${itemIdStr}_${selectedVariantIndex}_${qIdx}`;
+                      const off = computeDialogOfferPrice(q.price, q.offerPrice, { itemId: itemIdStr, variantKey, quantityKey });
+                      const showStrike = off && off < q.price;
                       return (
                         <button
                           key={qIdx}
@@ -1475,7 +1521,16 @@ export default function OffersPage() {
                           }`}
                         >
                           {q.quantity} {q.unit}
-                          <span className="ml-1.5 text-xs text-gray-400">₹{qPrice}</span>
+                          <span className="ml-1.5 text-xs">
+                            {showStrike ? (
+                              <>
+                                <span className="text-gray-400 line-through mr-1">₹{q.price}</span>
+                                <span className="text-orange-600 font-semibold">₹{off}</span>
+                              </>
+                            ) : (
+                              <span className="text-gray-400">₹{q.price}</span>
+                            )}
+                          </span>
                         </button>
                       );
                     })}
