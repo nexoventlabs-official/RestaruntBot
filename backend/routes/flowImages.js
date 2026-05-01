@@ -29,7 +29,8 @@ const upload = multer({
 const FLOW_IMAGE_KEYS = [
   'flow_order_food',
   'flow_my_orders',
-  'flow_view_offers',
+  // 'flow_view_offers' removed — View Offers no longer appears in the welcome
+  // Flow service list, so the admin panel should not surface an upload tile.
   'flow_visit_website',
   'flow_help_support',
   'flow_welcome_banner',

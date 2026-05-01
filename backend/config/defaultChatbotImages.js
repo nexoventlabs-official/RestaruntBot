@@ -49,7 +49,9 @@ const defaultImages = [
   { key: 'order_history', name: 'Order History', description: 'Shown when displaying customer order history list', imageUrl: '' },
   { key: 'flow_order_food', name: 'Flow: Order Food Icon', description: 'Icon shown in welcome Flow service list for Order Food option (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_my_orders', name: 'Flow: My Orders Icon', description: 'Icon shown in welcome Flow service list for My Orders option (square aspect ratio recommended)', imageUrl: '' },
-  { key: 'flow_view_offers', name: 'Flow: View Offers Icon', description: 'Icon shown in welcome Flow service list for View Offers option (square aspect ratio recommended)', imageUrl: '' },
+  // 'flow_view_offers' was removed — the View Offers entry no longer appears
+  // in the welcome Flow service list. Targeted offers auto-apply to eligible
+  // customers and the website's /offers page handles the public listing.
   { key: 'flow_visit_website', name: 'Flow: Visit Website Icon', description: 'Icon shown in welcome Flow service list for Visit Website option (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_help_support', name: 'Flow: Help & Support Icon', description: 'Icon shown in welcome Flow service list for Help & Support option (square aspect ratio recommended)', imageUrl: '' },
   { key: 'flow_welcome_banner', name: 'Flow: Welcome Banner', description: 'Banner image at top of welcome Flow (5:1 ratio, 1000x200px, rounded corners applied automatically)', imageUrl: '' },

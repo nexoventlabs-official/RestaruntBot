@@ -50,7 +50,9 @@ const chatbotImageSchema = new mongoose.Schema({
       'order_history',
       'flow_order_food',
       'flow_my_orders',
-      'flow_view_offers',
+      // 'flow_view_offers' removed — View Offers no longer appears in the
+      // welcome Flow. Kept out of the enum to prevent re-uploads from the
+      // admin panel after this cleanup.
       'flow_visit_website',
       'flow_help_support',
       'flow_welcome_banner',

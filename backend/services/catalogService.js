@@ -2511,11 +2511,12 @@ const catalogService = {
   async buildWelcomeFlowData(flowToken = 'welcome_service', phone = null) {
     const chatbotImagesService = require('./chatbotImages');
 
-    // Fetch all service icons + food type icons from admin-configured chatbot images
-    const [orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, visitWebsiteImg, helpSupportImg, trackOrderImg, vegImg, nonvegImg, eggImg] = await Promise.all([
+    // Fetch all service icons + food type icons from admin-configured chatbot
+    // images. 'flow_view_offers' was intentionally dropped along with the
+    // View Offers service entry — see comment near the services list below.
+    const [orderFoodImg, myOrdersImg, accountDetailsImg, visitWebsiteImg, helpSupportImg, trackOrderImg, vegImg, nonvegImg, eggImg] = await Promise.all([
       chatbotImagesService.getImageUrl('flow_order_food'),
       chatbotImagesService.getImageUrl('flow_my_orders'),
-      chatbotImagesService.getImageUrl('flow_view_offers'),
       chatbotImagesService.getImageUrl('flow_account_details'),
       chatbotImagesService.getImageUrl('flow_visit_website'),
       chatbotImagesService.getImageUrl('flow_help_support'),
@@ -2527,10 +2528,9 @@ const catalogService = {
 
     // Convert Cloudinary URLs to raw base64 (WhatsApp Flows require raw base64, not data URIs)
     const toBase64 = (url) => this._imageUrlToRawBase64(url);
-    const [orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, visitWebsiteB64, helpSupportB64, trackOrderB64, vegB64, nonvegB64, eggB64] = await Promise.all([
+    const [orderFoodB64, myOrdersB64, accountDetailsB64, visitWebsiteB64, helpSupportB64, trackOrderB64, vegB64, nonvegB64, eggB64] = await Promise.all([
       toBase64(orderFoodImg),
       toBase64(myOrdersImg),
-      toBase64(viewOffersImg),
       toBase64(accountDetailsImg),
       toBase64(visitWebsiteImg),
       toBase64(helpSupportImg),

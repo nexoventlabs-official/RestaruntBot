@@ -132,7 +132,7 @@ async function getFlowImages() {
   // Fetch all image URLs (services + order statuses + service-icons + payment icons).
   // All `_banner` images except the welcome banner have been removed.
   const [
-    orderFoodImg, myOrdersImg, viewOffersImg, accountDetailsImg, visitWebsiteImg, helpSupportImg,
+    orderFoodImg, myOrdersImg, accountDetailsImg, visitWebsiteImg, helpSupportImg,
     myCartImg, trackOrderImg, cartPlaceOrderImg, cartAddMoreImg, cartClearImg,
     pendingImg, confirmedImg, preparingImg, readyImg, outForDeliveryImg, deliveredImg, cancelledImg,
     deliveryOptionImgUrl,
@@ -145,7 +145,7 @@ async function getFlowImages() {
   ] = await Promise.all([
     chatbotImagesService.getImageUrl('flow_order_food'),
     chatbotImagesService.getImageUrl('flow_my_orders'),
-    chatbotImagesService.getImageUrl('flow_view_offers'),
+    // 'flow_view_offers' fetch removed — View Offers is no longer a service.
     chatbotImagesService.getImageUrl('flow_account_details'),
     chatbotImagesService.getImageUrl('flow_visit_website'),
     chatbotImagesService.getImageUrl('flow_help_support'),
@@ -172,7 +172,7 @@ async function getFlowImages() {
 
   // Convert to base64
   const [
-    orderFoodB64, myOrdersB64, viewOffersB64, accountDetailsB64, visitWebsiteB64, helpSupportB64,
+    orderFoodB64, myOrdersB64, accountDetailsB64, visitWebsiteB64, helpSupportB64,
     myCartB64, trackOrderB64, cartPlaceOrderB64, cartAddMoreB64, cartClearB64,
     pendingB64, confirmedB64, preparingB64, readyB64, outForDeliveryB64, deliveredB64, cancelledB64,
     deliveryOptionB64,
@@ -183,7 +183,7 @@ async function getFlowImages() {
     payPhonepeB64,
     payPaytmB64
   ] = await Promise.all([
-    toBase64(orderFoodImg), toBase64(myOrdersImg), toBase64(viewOffersImg),
+    toBase64(orderFoodImg), toBase64(myOrdersImg),
     toBase64(accountDetailsImg), toBase64(visitWebsiteImg),
     toBase64(helpSupportImg), toBase64(myCartImg), toBase64(trackOrderImg),
     toBase64(cartPlaceOrderImg), toBase64(cartAddMoreImg), toBase64(cartClearImg),
@@ -205,12 +205,16 @@ async function getFlowImages() {
   };
 
   imageCache = {
+    // "View Offers" service was intentionally removed from this list. Targeted
+    // offers now auto-apply to eligible customers via the broadcast step and
+    // syncActiveOffersForCustomer (called from sendWelcome / sendCart) — the
+    // customer never has to manually tap "View Offers" to enable their
+    // discount. Non-targeted offers are still visible via the website.
     services: [
       buildItem('order_food', 'Order Food', 'Browse our menu and place an order', orderFoodB64),
       // "Track Order" replaces the old "My Cart" entry — shows live order status with a tracking link.
       buildItem('track_order', 'Track Order', 'See latest status of your active orders', trackOrderB64 || myOrdersB64),
       buildItem('my_orders', 'My Orders', 'View past orders & details', myOrdersB64),
-      buildItem('view_offers', 'View Offers', 'See current deals and discounts', viewOffersB64),
       buildItem('account_details', 'Account Details', 'View or update your profile info', accountDetailsB64),
       buildItem('open_website', 'Visit Website', 'View our full website', visitWebsiteB64),
       buildItem('help', 'Help & Support', 'Get assistance with your queries', helpSupportB64)
