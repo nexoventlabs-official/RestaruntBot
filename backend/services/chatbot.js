@@ -6755,15 +6755,36 @@ const chatbot = {
 
           const orderDetailsImg = await chatbotImagesService.getImageUrl('order_details');
           try {
+            // IMPORTANT: do NOT pass `discount: totalDiscount` here.
+            // Per-line `saleAmount` (set in orderItems above) already
+            // encodes the activeOffer discount, and Meta computes
+            // subtotal from `saleAmount || priceAmount`. Passing
+            // discount again would double-subtract and make Meta's
+            // `total_amount == subtotal + tax + shipping - discount`
+            // check fail — Meta then silently rejects the payload, so
+            // the customer gets no "Review and pay" card and the catch
+            // below swallows the error. This is the bug where delivery
+            // orders with an activeOffer applied never received the
+            // native payment message. Shipping (delivery charge) is
+            // still an additive leg and is passed honestly.
             await whatsapp.sendOrderDetails(phone, orderId, orderItems, total, {
               tax: 0,
               shipping: deliveryCharge,
-              discount: totalDiscount,
+              discount: 0,
               headerImageUrl: orderDetailsImg || null
             });
           } catch (sendErr) {
-            // Meta API may have already delivered the message even if post-send tracking failed
-            logger.warn('sendOrderDetails post-processing error', { orderId, error: sendErr.message });
+            // Log the full Meta response — previously we said "post-
+            // processing error" which buried the real cause for the
+            // delivery-vs-pickup bug above. Re-throw so the outer
+            // fallback message actually fires instead of us returning
+            // success for a silently rejected payload.
+            logger.error('sendOrderDetails failed', {
+              orderId,
+              metaError: sendErr.response?.data,
+              error: sendErr.message
+            });
+            throw sendErr;
           }
 
           // Don't send admin push yet — wait for payment confirmation webhook
