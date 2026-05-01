@@ -1136,7 +1136,24 @@ export default function Offers() {
                           {item.variants.map((v, vi) => {
                             const vSelected = isVariantSelected(item._id, vi);
                             const ft = v.foodType || item.foodType;
-                            const pctNum = parseFloat(percentage);
+                            // Resolve the percentage to use for the discount preview from
+                            // the most reliable source available, in this order:
+                            //   1. The form's `percentage` input (live admin edits)
+                            //   2. The offer being edited (`editingOffer.percentage`) — this
+                            //      saves us when the form state somehow drifts out of sync
+                            //      (e.g. fast re-render after data refresh) so a saved
+                            //      offer's price preview never blanks out.
+                            // Fixed-amount or other discountType variants are handled by the
+                            // `pctFromOffer` fallback below using discountValue/Type.
+                            const pctFromForm = parseFloat(percentage);
+                            let pctNum = !isNaN(pctFromForm) && pctFromForm > 0 ? pctFromForm : NaN;
+                            if (isNaN(pctNum) && editingOffer) {
+                              if (editingOffer.percentage) {
+                                pctNum = parseFloat(editingOffer.percentage);
+                              } else if (editingOffer.discountType === 'percentage' && editingOffer.discountValue > 0) {
+                                pctNum = parseFloat(editingOffer.discountValue);
+                              }
+                            }
                             const hasDiscount = !isNaN(pctNum) && pctNum > 0;
                             const hasQuantities = v.quantities && v.quantities.length > 0;
                             // Check if variant has any quantity selected (even partially)
@@ -1174,7 +1191,18 @@ export default function Offers() {
                                   <div className="bg-dark-50/30">
                                     {v.quantities.map((q, qi) => {
                                       const origPrice = parseFloat(q.price);
-                                      const offerPrice = hasDiscount ? Math.round(origPrice * (1 - pctNum / 100)) : null;
+                                      // Determine the offer price for this quantity row.
+                                      // Priority:
+                                      //   1. Live `percentage`/`editingOffer` discount math
+                                      //   2. The pre-stamped `q.offerPrice` already saved on
+                                      //      the menu item (the path admin uses for non-
+                                      //      targeted "all customers" offers — without this
+                                      //      fallback, those rows render the base price even
+                                      //      though a discount IS active on the catalog).
+                                      let offerPrice = hasDiscount ? Math.round(origPrice * (1 - pctNum / 100)) : null;
+                                      if (offerPrice == null && q.offerPrice && q.offerPrice < origPrice) {
+                                        offerPrice = q.offerPrice;
+                                      }
                                       const qSelected = isQuantitySelected(item._id, vi, qi);
                                       return (
                                         <div key={qi} className="flex items-center gap-3 px-3 py-2 pl-16 border-b border-dark-50/50 last:border-0 hover:bg-dark-100/30 cursor-pointer"

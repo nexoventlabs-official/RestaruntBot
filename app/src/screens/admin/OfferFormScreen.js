@@ -44,11 +44,21 @@ export default function OfferFormScreen({ route, navigation }) {
   const [categories, setCategories] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
   const [selectedCategories, setSelectedCategories] = useState(existingOffer?.appliedCategories || []);
-  const [selectedItems, setSelectedItems] = useState(
-    Array.isArray(existingOffer?.appliedItems) 
-      ? existingOffer.appliedItems.map(item => typeof item === 'string' ? item : item._id)
-      : []
-  );
+  // ⚠️ The GET /offers endpoint MERGES variant/quantity parent items into
+  // appliedItems so the Offer Details screen can resolve names/images. For the
+  // EDIT form we must NOT pre-select those merged-in parents — otherwise a
+  // variant-scoped offer like "Egg Biryani 750 ml only" opens with the whole
+  // "Egg Biryani" item ticked, and re-saving promotes the offer to "all
+  // variants of Egg Biryani". The backend exposes _directItemCount = the count
+  // of truly-direct items (the merged ones are appended to the end), so we
+  // slice the array to that count.
+  const [selectedItems, setSelectedItems] = useState(() => {
+    const raw = Array.isArray(existingOffer?.appliedItems) ? existingOffer.appliedItems : [];
+    const directCount = typeof existingOffer?._directItemCount === 'number'
+      ? existingOffer._directItemCount
+      : raw.length;
+    return raw.slice(0, directCount).map(item => typeof item === 'string' ? item : item._id);
+  });
   const [selectedVariants, setSelectedVariants] = useState(existingOffer?.appliedVariants || []);
   const [selectedQuantities, setSelectedQuantities] = useState(existingOffer?.appliedQuantities || []);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -540,9 +550,24 @@ export default function OfferFormScreen({ route, navigation }) {
     setLoading(true);
     try {
       const formData = new FormData();
-      // Auto-activate if validFrom is now or in the past; otherwise stays inactive until scheduler activates it
-      const isScheduledNow = validFrom ? new Date(validFrom) <= new Date() : false;
-      formData.append('isActive', isScheduledNow ? 'true' : 'false');
+      // isActive logic — must match the web admin so admin behaviour is
+      // consistent across surfaces:
+      //   - validFrom is in the FUTURE → false (scheduler will flip it on)
+      //   - editing an existing offer → preserve its current isActive state
+      //   - new offer (no validFrom or validFrom <= now) → true
+      // Previously this defaulted to false whenever validFrom was blank, which
+      // caused freshly-created offers to come up inactive — and customers who
+      // tapped the WhatsApp "Claim Offer" link saw "Offer Unavailable" because
+      // the public endpoint returns 410 for inactive offers.
+      let effectiveIsActive;
+      if (validFrom && new Date(validFrom) > new Date()) {
+        effectiveIsActive = false;
+      } else if (existingOffer) {
+        effectiveIsActive = existingOffer.isActive !== false;
+      } else {
+        effectiveIsActive = true;
+      }
+      formData.append('isActive', effectiveIsActive ? 'true' : 'false');
       formData.append('offerType', offerType.trim());
       
       console.log('Submitting offer with:');
@@ -1370,7 +1395,19 @@ export default function OfferFormScreen({ route, navigation }) {
                     {filtered.map((item) => {
                       const hasVariants = item.variants && item.variants.length > 0;
                       const isExpanded = expandedCategory === item._id;
-                      const discountPercent = percentage && percentage.trim() ? parseFloat(percentage) : 0;
+                      // Resolve discount percent for the price preview from
+                      // the most reliable source available, falling back to
+                      // the offer being edited so saved offers always show
+                      // their preview even if the form's `percentage` state
+                      // hasn't been touched in this session.
+                      let discountPercent = percentage && percentage.trim() ? parseFloat(percentage) : 0;
+                      if ((!discountPercent || isNaN(discountPercent)) && existingOffer) {
+                        if (existingOffer.percentage) {
+                          discountPercent = parseFloat(existingOffer.percentage) || 0;
+                        } else if (existingOffer.discountType === 'percentage' && existingOffer.discountValue > 0) {
+                          discountPercent = parseFloat(existingOffer.discountValue) || 0;
+                        }
+                      }
 
                       return (
                         <View key={item._id} style={styles.categorySection}>
@@ -1420,8 +1457,17 @@ export default function OfferFormScreen({ route, navigation }) {
                             <View style={styles.variantsList}>
                               {item.variants.map((variant, vIdx) => {
                                 const vPrice = variant.price || (variant.quantities?.[0]?.price) || item.price;
-                                const vOfferPrice = discountPercent > 0 ? Math.round(vPrice * (1 - discountPercent / 100)) : vPrice;
+                                // Variant offer price preview: prefer the live discount
+                                // percent, then the variant's pre-stamped offerPrice
+                                // (set by non-targeted offers on the menu item).
+                                let vOfferPrice = vPrice;
+                                if (discountPercent > 0) {
+                                  vOfferPrice = Math.round(vPrice * (1 - discountPercent / 100));
+                                } else if (variant.offerPrice && variant.offerPrice < vPrice) {
+                                  vOfferPrice = variant.offerPrice;
+                                }
                                 const vDiscount = vPrice - vOfferPrice;
+                                const hasVariantDiscount = vOfferPrice < vPrice;
                                 const foodType = variant.foodType || item.foodType;
                                 const vSelected = isVariantSelected(item._id, vIdx);
                                 const hasAnyQtySelected = variant.quantities && variant.quantities.length > 0 && variant.quantities.some((_, qi) => isQuantitySelected(item._id, vIdx, qi));
@@ -1454,7 +1500,7 @@ export default function OfferFormScreen({ route, navigation }) {
                                         <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>{variant.quantities.length} sizes</Text>
                                       ) : (
                                         <View style={styles.priceContainer}>
-                                          {discountPercent > 0 ? (
+                                          {hasVariantDiscount ? (
                                             <View style={styles.priceRow}>
                                               <Text style={styles.originalPrice}>₹{vPrice}</Text>
                                               <Ionicons name="arrow-forward" size={10} color="#9CA3AF" style={{ marginHorizontal: 3 }} />
@@ -1479,7 +1525,18 @@ export default function OfferFormScreen({ route, navigation }) {
                                   {variant.quantities && variant.quantities.length > 0 && (
                                     <View style={{ backgroundColor: '#fafafa' }}>
                                       {variant.quantities.map((q, qIdx) => {
-                                        const qOfferPrice = discountPercent > 0 ? Math.round(q.price * (1 - discountPercent / 100)) : q.price;
+                                        // Compute preview price. Prefer the live discount
+                                        // percent; fall back to the pre-stamped q.offerPrice
+                                        // (set by non-targeted offers on the menu item) so
+                                        // an existing offer's prices stay visible even when
+                                        // the form percentage hasn't been entered yet.
+                                        let qOfferPrice = q.price;
+                                        if (discountPercent > 0) {
+                                          qOfferPrice = Math.round(q.price * (1 - discountPercent / 100));
+                                        } else if (q.offerPrice && q.offerPrice < q.price) {
+                                          qOfferPrice = q.offerPrice;
+                                        }
+                                        const hasQuantityDiscount = qOfferPrice < q.price;
                                         const qSelected = isQuantitySelected(item._id, vIdx, qIdx);
                                         return (
                                           <TouchableOpacity key={qIdx} activeOpacity={0.7} onPress={() => toggleQuantity(item._id, vIdx, qIdx)}
@@ -1489,7 +1546,7 @@ export default function OfferFormScreen({ route, navigation }) {
                                               {qSelected && <Ionicons name="checkmark" size={11} color="#fff" />}
                                             </View>
                                             <Text style={{ fontSize: 12, fontWeight: '500', color: '#4b5563', flex: 1 }}>{q.quantity} {q.unit}</Text>
-                                            {discountPercent > 0 && qSelected ? (
+                                            {hasQuantityDiscount && qSelected ? (
                                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                                 <Text style={{ fontSize: 10, color: '#9ca3af', textDecorationLine: 'line-through' }}>₹{q.price}</Text>
                                                 <Text style={{ fontSize: 11, fontWeight: '700', color: '#16a34a' }}>₹{qOfferPrice}</Text>
@@ -1509,28 +1566,39 @@ export default function OfferFormScreen({ route, navigation }) {
                           )}
 
                           {/* Non-variant item: show price directly */}
-                          {!hasVariants && isExpanded && (
-                            <View style={styles.variantsList}>
-                              <View style={styles.variantRow}>
-                                <View style={styles.variantInfo}>
-                                  <View style={styles.priceContainer}>
-                                    {discountPercent > 0 ? (
-                                      <View style={styles.priceRow}>
-                                        <Text style={styles.originalPrice}>₹{item.price}</Text>
-                                        <Ionicons name="arrow-forward" size={10} color="#9CA3AF" style={{ marginHorizontal: 3 }} />
-                                        <Text style={[styles.offerPrice, { fontSize: 13 }]}>₹{Math.round(item.price * (1 - discountPercent / 100))}</Text>
-                                        <View style={[styles.discountBadge, { marginLeft: 6 }]}>
-                                          <Text style={styles.discountText}>-₹{item.price - Math.round(item.price * (1 - discountPercent / 100))}</Text>
+                          {!hasVariants && isExpanded && (() => {
+                            // Same fallback chain used elsewhere: form percent first, then
+                            // the menu item's pre-stamped offerPrice (non-targeted offers).
+                            let itemOfferPrice = item.price;
+                            if (discountPercent > 0) {
+                              itemOfferPrice = Math.round(item.price * (1 - discountPercent / 100));
+                            } else if (item.offerPrice && item.offerPrice < item.price) {
+                              itemOfferPrice = item.offerPrice;
+                            }
+                            const hasItemDiscount = itemOfferPrice < item.price;
+                            return (
+                              <View style={styles.variantsList}>
+                                <View style={styles.variantRow}>
+                                  <View style={styles.variantInfo}>
+                                    <View style={styles.priceContainer}>
+                                      {hasItemDiscount ? (
+                                        <View style={styles.priceRow}>
+                                          <Text style={styles.originalPrice}>₹{item.price}</Text>
+                                          <Ionicons name="arrow-forward" size={10} color="#9CA3AF" style={{ marginHorizontal: 3 }} />
+                                          <Text style={[styles.offerPrice, { fontSize: 13 }]}>₹{itemOfferPrice}</Text>
+                                          <View style={[styles.discountBadge, { marginLeft: 6 }]}>
+                                            <Text style={styles.discountText}>-₹{item.price - itemOfferPrice}</Text>
+                                          </View>
                                         </View>
-                                      </View>
-                                    ) : (
-                                      <Text style={[styles.itemPrice, { fontSize: 12 }]}>₹{item.price}</Text>
-                                    )}
+                                      ) : (
+                                        <Text style={[styles.itemPrice, { fontSize: 12 }]}>₹{item.price}</Text>
+                                      )}
+                                    </View>
                                   </View>
                                 </View>
                               </View>
-                            </View>
-                          )}
+                            );
+                          })()}
                         </View>
                       );
                     })}
