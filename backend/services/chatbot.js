@@ -617,71 +617,148 @@ const filterActiveOffers = async (activeOffers) => {
 
 // Helper to calculate offer discounts from customer's activeOffers
 // Returns: { discountedPrice, discountAmount, appliedOffer } for an item
-const calculateOfferDiscount = (menuItem, activeOffers) => {
+//
+// Parameters:
+//   menuItem     — the (optionally populated) MenuItem document / plain doc
+//   activeOffers — the customer.activeOffers stamps
+//   cartItem     — OPTIONAL. When the caller is pricing a specific cart line
+//                  (not just the base menu item), pass the cart entry so we
+//                  can (a) scope match against appliedVariants /
+//                  appliedQuantities and (b) compute the discount off the
+//                  variant or quantity PRICE instead of the parent item's
+//                  base price. Shape: { variantIndex?, quantityIndex? }.
+//                  Without it we fall back to base-price + appliedItems
+//                  matching (the old behaviour).
+//
+// Targeted offers never stamp offerPrice onto the catalog — so for a
+// targeted customer this function IS the only place the discount gets
+// applied at cart / review / checkout time. That makes variant/quantity
+// scope support non-negotiable.
+const calculateOfferDiscount = (menuItem, activeOffers, cartItem = null) => {
   if (!activeOffers || activeOffers.length === 0) {
     return { discountedPrice: null, discountAmount: 0, appliedOffer: null };
   }
-  
+
   const now = new Date();
-  
-  // Find applicable offer for this item
+  const itemIdStr = menuItem?._id?.toString?.() || '';
+
+  // Resolve the price this offer should discount. With a cart item we
+  // use the selected variant / quantity's price; without one we use the
+  // menu item's base price (legacy non-variant path).
+  let basePrice = Number(menuItem?.price) || 0;
+  const vIdx = (cartItem?.variantIndex !== undefined && cartItem?.variantIndex !== null)
+    ? cartItem.variantIndex : null;
+  const qIdx = (cartItem?.quantityIndex !== undefined && cartItem?.quantityIndex !== null)
+    ? cartItem.quantityIndex : null;
+  if (vIdx !== null && menuItem?.variants?.[vIdx]) {
+    const variant = menuItem.variants[vIdx];
+    if (qIdx !== null && variant?.quantities?.[qIdx]) {
+      basePrice = Number(variant.quantities[qIdx].price) || basePrice;
+    } else if (variant?.price) {
+      basePrice = Number(variant.price) || basePrice;
+    }
+  }
+  if (basePrice <= 0) {
+    return { discountedPrice: null, discountAmount: 0, appliedOffer: null };
+  }
+
   for (const offer of activeOffers) {
     // Skip expired offers
-    if (offer.validUntil && new Date(offer.validUntil) < now) {
-      continue;
-    }
-    
-    // Skip inactive offers (isActive flag set by filterActiveOffers)
-    if (offer._isInactive) {
-      continue;
-    }
-    
-    // Check if item is applicable to this offer
+    if (offer.validUntil && new Date(offer.validUntil) < now) continue;
+    // Skip inactive offers (flag set by filterActiveOffers)
+    if (offer._isInactive) continue;
+
+    // Scope matching — try in order from most specific to least:
+    //   appliedQuantities > appliedVariants > appliedItems > appliedCategories > offerType
+    // The first matching scope wins so a narrowly-scoped targeted offer
+    // like "Egg Biryani 750 ml only" does not leak to the 1 kg row.
     let isApplicable = false;
-    
-    // Check by appliedItems
-    if (offer.appliedItems && offer.appliedItems.length > 0) {
-      isApplicable = offer.appliedItems.some(itemId => 
-        itemId.toString() === menuItem._id.toString()
-      );
+
+    const quantityScope = offer.appliedQuantities || [];
+    const variantScope = offer.appliedVariants || [];
+    const itemScope = offer.appliedItems || [];
+    const categoryScope = offer.appliedCategories || [];
+
+    // 1. Quantity-level scope — strongest match, requires a cart line with
+    //    both variant AND quantity index resolved.
+    if (!isApplicable && quantityScope.length > 0 && vIdx !== null && qIdx !== null) {
+      const key = `${itemIdStr}_${vIdx}_${qIdx}`;
+      isApplicable = quantityScope.some(k => k?.toString() === key);
     }
-    
-    // Check by appliedCategories
-    if (!isApplicable && offer.appliedCategories && offer.appliedCategories.length > 0) {
-      isApplicable = offer.appliedCategories.includes(menuItem.category);
+
+    // 2. Variant-level scope — requires the cart line to specify a variant.
+    if (!isApplicable && variantScope.length > 0 && vIdx !== null) {
+      const key = `${itemIdStr}_${vIdx}`;
+      isApplicable = variantScope.some(k => k?.toString() === key);
     }
-    
-    // Check by offerType matching item's offerType
-    if (!isApplicable && offer.offerType && menuItem.offerType) {
+
+    // 3. Parent-item scope — applies to any variant/quantity of the item.
+    //    We still honour this even when a cart item is passed; an offer
+    //    targeting the whole item is intentionally broad.
+    if (!isApplicable && itemScope.length > 0) {
+      isApplicable = itemScope.some(id => id?.toString() === itemIdStr);
+    }
+
+    // 4. Category scope.
+    if (!isApplicable && categoryScope.length > 0 && menuItem?.category) {
+      isApplicable = categoryScope.includes(menuItem.category);
+    }
+
+    // 5. OfferType fallback — legacy path.
+    if (!isApplicable && offer.offerType && menuItem?.offerType) {
       const itemOfferTypes = Array.isArray(menuItem.offerType) ? menuItem.offerType : [menuItem.offerType];
       isApplicable = itemOfferTypes.includes(offer.offerType);
     }
-    
-    if (isApplicable) {
-      const price = menuItem.price;
-      let discountedPrice = price;
-      let discountAmount = 0;
-      
-      // Calculate discount based on type
-      if (offer.discountType === 'percentage' && offer.discountValue > 0) {
-        discountAmount = Math.round((price * offer.discountValue) / 100);
-        discountedPrice = price - discountAmount;
-      } else if (offer.discountType === 'fixed' && offer.discountValue > 0) {
-        discountAmount = Math.min(offer.discountValue, price);
-        discountedPrice = price - discountAmount;
-      } else if (offer.percentage && offer.percentage > 0) {
-        // Fallback to percentage field
-        discountAmount = Math.round((price * offer.percentage) / 100);
-        discountedPrice = price - discountAmount;
-      }
-      
-      if (discountAmount > 0) {
-        return { discountedPrice, discountAmount, appliedOffer: offer };
-      }
+
+    // ⚠️ Variant/quantity-scoped offers MUST NOT match when the caller
+    // didn't supply the relevant index. Otherwise we'd silently apply a
+    // "750 ml only" offer to a base-price lookup that has no idea which
+    // size it is. The legacy parent-item & category paths are unchanged.
+    if (!isApplicable) continue;
+    // If the offer is strictly variant/quantity scoped and the cart line
+    // doesn't have those indexes, skip — applies_to isn't satisfiable.
+    const hasOnlyVariantQtyScope = (quantityScope.length > 0 || variantScope.length > 0)
+      && itemScope.length === 0 && categoryScope.length === 0;
+    if (hasOnlyVariantQtyScope && vIdx === null) continue;
+
+    let discountAmount = 0;
+    if (offer.discountType === 'percentage' && offer.discountValue > 0) {
+      discountAmount = Math.round((basePrice * offer.discountValue) / 100);
+    } else if (offer.discountType === 'fixed' && offer.discountValue > 0) {
+      discountAmount = Math.min(offer.discountValue, basePrice);
+    } else if (offer.percentage && offer.percentage > 0) {
+      discountAmount = Math.round((basePrice * offer.percentage) / 100);
+    }
+
+    if (discountAmount > 0) {
+      return {
+        discountedPrice: basePrice - discountAmount,
+        discountAmount,
+        appliedOffer: offer
+      };
     }
   }
-  
+
   return { discountedPrice: null, discountAmount: 0, appliedOffer: null };
+};
+
+// Resolve the final effective price for a single cart line, given the
+// currently-computed `currentPrice` (usually from variant/quantity
+// offerPrice stamps) and the customer's activeOffers. Returns an override
+// result when a targeted offer yields a LOWER price than whatever the
+// caller already calculated, otherwise null.
+//
+// Use this at every cart/order/review pricing site so variant- and
+// quantity-scoped TARGETED offers (which never stamp onto the catalog)
+// actually get applied when the eligible customer adds the item to cart.
+const resolveCartLineOffer = (cartItem, menuItem, activeOffers, currentPrice) => {
+  if (!activeOffers || activeOffers.length === 0) return null;
+  if (!menuItem) return null;
+  const offerResult = calculateOfferDiscount(menuItem, activeOffers, cartItem);
+  if (offerResult.discountedPrice !== null && offerResult.discountedPrice < currentPrice) {
+    return offerResult;
+  }
+  return null;
 };
 
 const chatbot = {
@@ -5597,11 +5674,25 @@ const chatbot = {
             effectivePrice = offerResult.discountedPrice;
           }
         }
+
+        // Targeted offers never stamp onto the catalog, so variant /
+        // quantity cart lines above may still owe a discount from the
+        // customer's activeOffers. Give it a chance to override.
+        const originalEffective = effectivePrice;
+        const override = resolveCartLineOffer(item, item.menuItem, activeOffers, effectivePrice);
+        if (override) effectivePrice = override.discountedPrice;
+
         const subtotal = effectivePrice * item.quantity;
         total += subtotal;
         validItems++;
         cartMsg += `${validItems}. *${displayName}* (${unitInfo})\n`;
-        cartMsg += `   Qty: ${item.quantity} × ₹${effectivePrice} = ₹${subtotal}\n\n`;
+        // When an activeOffer discount kicked in, show it struck-through so
+        // the eligible customer can see the discount is real.
+        if (override && originalEffective > effectivePrice) {
+          cartMsg += `   Qty: ${item.quantity} × ~₹${originalEffective}~ *₹${effectivePrice}* = ₹${subtotal} 🎁\n\n`;
+        } else {
+          cartMsg += `   Qty: ${item.quantity} × ₹${effectivePrice} = ₹${subtotal}\n\n`;
+        }
       }
     });
     
@@ -5708,11 +5799,22 @@ const chatbot = {
             effectivePrice = offerResult.discountedPrice;
           }
         }
+
+        // Apply targeted activeOffer discount on variant/quantity lines too
+        // (targeted offers never stamp onto the catalog).
+        const originalEffective = effectivePrice;
+        const override = resolveCartLineOffer(item, item.menuItem, activeOffers, effectivePrice);
+        if (override) effectivePrice = override.discountedPrice;
+
         const subtotal = effectivePrice * item.quantity;
         itemsTotal += subtotal;
         validItems++;
         cartMsg += `${validItems}. *${displayName}* (${unitInfo})\n`;
-        cartMsg += `   Qty: ${item.quantity} × ₹${effectivePrice} = ₹${subtotal}\n\n`;
+        if (override && originalEffective > effectivePrice) {
+          cartMsg += `   Qty: ${item.quantity} × ~₹${originalEffective}~ *₹${effectivePrice}* = ₹${subtotal} 🎁\n\n`;
+        } else {
+          cartMsg += `   Qty: ${item.quantity} × ₹${effectivePrice} = ₹${subtotal}\n\n`;
+        }
       }
     });
     
@@ -5842,7 +5944,21 @@ const chatbot = {
           }
         }
       }
-      
+
+      // Apply targeted activeOffer discount on variant/quantity lines too.
+      // Targeted offers don't stamp offerPrice onto the catalog so the above
+      // variant/quantity branches would otherwise miss the customer's
+      // personal discount.
+      const codOverride = resolveCartLineOffer(item, item.menuItem, activeOffers, effectivePrice);
+      if (codOverride) {
+        effectivePrice = codOverride.discountedPrice;
+        itemDiscount = codOverride.discountAmount * item.quantity;
+        if (codOverride.appliedOffer?.offerId) {
+          appliedOfferId = codOverride.appliedOffer.offerId;
+          appliedOfferIds.add(codOverride.appliedOffer.offerId.toString());
+        }
+      }
+
       const subtotal = Math.round(effectivePrice * item.quantity * 100) / 100;
       itemsTotal += subtotal;
       totalDiscount += itemDiscount;
@@ -6111,11 +6227,21 @@ const chatbot = {
             effectivePrice = offerResult.discountedPrice;
           }
         }
+
+        // Apply targeted activeOffer discount on variant/quantity lines too.
+        const originalEffective = effectivePrice;
+        const override = resolveCartLineOffer(item, item.menuItem, activeOffers, effectivePrice);
+        if (override) effectivePrice = override.discountedPrice;
+
         const subtotal = effectivePrice * item.quantity;
         total += subtotal;
         validItems++;
         reviewMsg += `${validItems}. *${itemName}*\n`;
-        reviewMsg += `   Qty: ${item.quantity} × ₹${effectivePrice} = ₹${subtotal}\n\n`;
+        if (override && originalEffective > effectivePrice) {
+          reviewMsg += `   Qty: ${item.quantity} × ~₹${originalEffective}~ *₹${effectivePrice}* = ₹${subtotal} 🎁\n\n`;
+        } else {
+          reviewMsg += `   Qty: ${item.quantity} × ₹${effectivePrice} = ₹${subtotal}\n\n`;
+        }
       }
     });
     
@@ -6416,7 +6542,18 @@ const chatbot = {
           }
         }
       }
-      
+
+      // Apply targeted activeOffer discount on variant/quantity lines too.
+      const upiOverride = resolveCartLineOffer(item, item.menuItem, activeOffers, effectivePrice);
+      if (upiOverride) {
+        effectivePrice = upiOverride.discountedPrice;
+        itemDiscount = upiOverride.discountAmount * item.quantity;
+        if (upiOverride.appliedOffer?.offerId) {
+          appliedOfferId = upiOverride.appliedOffer.offerId;
+          appliedOfferIds.add(upiOverride.appliedOffer.offerId.toString());
+        }
+      }
+
       const subtotal = Math.round(effectivePrice * item.quantity * 100) / 100;
       itemsTotal += subtotal;
       totalDiscount += itemDiscount;
@@ -7086,7 +7223,14 @@ const chatbot = {
           itemDiscount = offerResult.discountAmount * cartItem.quantity;
         }
       }
-      
+
+      // Apply targeted activeOffer discount on variant/quantity lines too.
+      const pickupSummaryOverride = resolveCartLineOffer(cartItem, item, activeOffers, effectivePrice);
+      if (pickupSummaryOverride) {
+        effectivePrice = pickupSummaryOverride.discountedPrice;
+        itemDiscount = pickupSummaryOverride.discountAmount * cartItem.quantity;
+      }
+
       const itemTotal = effectivePrice * cartItem.quantity;
       total += itemTotal;
       totalDiscount += itemDiscount;
@@ -7191,7 +7335,18 @@ const chatbot = {
             }
           }
         }
-        
+
+        // Apply targeted activeOffer discount on variant/quantity lines too.
+        const pickupOverride = resolveCartLineOffer(cartItem, item, activeOffers, effectivePrice);
+        if (pickupOverride) {
+          effectivePrice = pickupOverride.discountedPrice;
+          itemDiscount = pickupOverride.discountAmount * cartItem.quantity;
+          if (pickupOverride.appliedOffer?.offerId) {
+            appliedOfferId = pickupOverride.appliedOffer.offerId;
+            appliedOfferIds.add(pickupOverride.appliedOffer.offerId.toString());
+          }
+        }
+
         const itemTotal = Math.round(effectivePrice * cartItem.quantity * 100) / 100;
         itemsTotal += itemTotal;
         totalDiscount += itemDiscount;
