@@ -631,6 +631,29 @@ router.patch('/:id/schedule-soldout', authMiddleware, async (req, res) => {
     if (!item) return res.status(404).json({ error: 'Item not found' });
 
     if (schedule) {
+      // Explicit disable payload — admin toggled the schedule OFF in the
+      // app (daily master toggle off, or every custom day off). Clear the
+      // schedule, restore availability across variants + parent, and let
+      // the caller resync Meta below.
+      if (schedule.enabled === false) {
+        item.soldOutSchedule = {
+          enabled: false,
+          type: item.soldOutSchedule?.type || 'daily',
+          dailyStartTime: null,
+          dailyEndTime: null,
+          days: [],
+        };
+        if (item.variants && item.variants.length > 0) {
+          item.variants.forEach(v => { v.available = true; });
+        }
+        item.available = true;
+        await item.save();
+        catalogService.syncProductToMeta(item).catch(err => {
+          logger.info('Catalog sync skipped for schedule disable', { itemId: item._id, error: err.message });
+        });
+        dataEvents.emit('menu');
+        return res.json(item);
+      }
       // Reject malformed schedules — a custom schedule with no enabled
       // days, or a daily schedule with missing times, is unsavable. If we
       // accept it the cron loop will treat the item as "outside the

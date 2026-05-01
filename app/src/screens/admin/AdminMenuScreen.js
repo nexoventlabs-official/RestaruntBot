@@ -403,10 +403,18 @@ export default function AdminMenuScreen({ navigation, route }) {
   const [scheduleType, setScheduleType] = useState(null); // null = choice screen, 'daily', 'custom'
   const [dailyStartTime, setDailyStartTime] = useState('09:00');
   const [dailyEndTime, setDailyEndTime] = useState('17:00');
+  // Master on/off for the daily schedule (off = admin wants no daily
+  // schedule, item stays always available). Mirrors the per-day toggles
+  // that already exist in custom mode.
+  const [dailyEnabled, setDailyEnabled] = useState(true);
   const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const [customDays, setCustomDays] = useState(
     DAYS.map(d => ({ day: d, enabled: false, startTime: '09:00', endTime: '17:00' }))
   );
+  // Snapshot of the schedule at the moment the modal was opened — used to
+  // lock the Save button until the admin actually changes something, so
+  // reopening a saved schedule and hitting Cancel is the no-op default.
+  const [initialSchedule, setInitialSchedule] = useState(null);
 
   // Native time picker state
   const [nativeTimePicker, setNativeTimePicker] = useState({ visible: false, field: null, dayIdx: null });
@@ -482,16 +490,80 @@ export default function AdminMenuScreen({ navigation, route }) {
     setShowTimeDropdown(false);
   };
 
+  // Produce a stable, order-insensitive-ish snapshot of a schedule for
+  // change-detection. Empty/undefined fields normalize to the same shape
+  // so "no schedule" vs "disabled schedule" compare equal.
+  const normalizeScheduleSnapshot = (s) => {
+    if (!s || !s.enabled) return { enabled: false };
+    const days = Array.isArray(s.days) ? s.days : [];
+    return {
+      enabled: true,
+      type: s.type || 'daily',
+      dailyStartTime: s.dailyStartTime || null,
+      dailyEndTime: s.dailyEndTime || null,
+      days: DAYS.map(dn => {
+        const found = days.find(d => d && d.day === dn);
+        return {
+          day: dn,
+          enabled: !!(found && found.enabled),
+          startTime: (found && found.startTime) || '09:00',
+          endTime: (found && found.endTime) || '17:00',
+        };
+      }),
+    };
+  };
+
+  // Build the schedule the admin is currently looking at (pre-save). This
+  // is what will be POSTed if they hit Save, and it also drives the
+  // hasChanges computation that gates the Save button.
+  const getPendingSchedule = () => {
+    if (scheduleType === 'daily') {
+      if (!dailyEnabled) return { enabled: false };
+      return {
+        enabled: true,
+        type: 'daily',
+        dailyStartTime,
+        dailyEndTime,
+        days: [],
+      };
+    }
+    if (scheduleType === 'custom') {
+      const hasAnyEnabled = customDays.some(d => d.enabled);
+      if (!hasAnyEnabled) return { enabled: false };
+      return {
+        enabled: true,
+        type: 'custom',
+        dailyStartTime: null,
+        dailyEndTime: null,
+        days: customDays,
+      };
+    }
+    return null;
+  };
+
+  const scheduleHasChanges = () => {
+    const pending = getPendingSchedule();
+    if (!pending) return false;
+    return JSON.stringify(normalizeScheduleSnapshot(pending))
+        !== JSON.stringify(normalizeScheduleSnapshot(initialSchedule));
+  };
+
   const showItemScheduleModal = (parentItem) => {
     setSoldOutItem(parentItem);
     // Pre-fill from existing schedule if any
     const existing = parentItem.soldOutSchedule;
+    const baseCustomDays = DAYS.map(d => ({ day: d, enabled: false, startTime: '09:00', endTime: '17:00' }));
     if (existing && existing.enabled) {
       setScheduleType(existing.type || 'daily');
       if (existing.type === 'daily') {
         setDailyStartTime(existing.dailyStartTime || '09:00');
         setDailyEndTime(existing.dailyEndTime || '17:00');
+        setDailyEnabled(true);
+        setCustomDays(baseCustomDays);
       } else if (existing.type === 'custom' && existing.days) {
+        setDailyStartTime('09:00');
+        setDailyEndTime('17:00');
+        setDailyEnabled(true);
         setCustomDays(DAYS.map(d => {
           const found = existing.days.find(ed => ed.day === d);
           return found ? { ...found } : { day: d, enabled: false, startTime: '09:00', endTime: '17:00' };
@@ -501,28 +573,38 @@ export default function AdminMenuScreen({ navigation, route }) {
       setScheduleType(null);
       setDailyStartTime('09:00');
       setDailyEndTime('17:00');
-      setCustomDays(DAYS.map(d => ({ day: d, enabled: false, startTime: '09:00', endTime: '17:00' })));
+      setDailyEnabled(true);
+      setCustomDays(baseCustomDays);
     }
+    // Snapshot BEFORE opening so any edit the admin makes will diff
+    // against the persisted state — Save stays locked until something
+    // actually changes.
+    setInitialSchedule(existing && existing.enabled ? existing : null);
     setShowItemSoldOutModal(true);
   };
 
   const saveItemSoldOutSchedule = async () => {
     if (!soldOutItem || !scheduleType) return;
-    // Custom schedule must have at least one day enabled — otherwise the
-    // schedule effectively means "always sold out" which is never the
-    // intent. Block save and tell the user.
-    if (scheduleType === 'custom' && !customDays.some(d => d.enabled)) {
-      Alert.alert('Enable a day first', 'Toggle on at least one weekday before saving the custom schedule.');
-      return;
-    }
+    const pending = getPendingSchedule();
+    if (!pending) return;
     const parentId = soldOutItem._id;
     try {
       setSavingCategory(true);
+      if (!pending.enabled) {
+        // Admin turned the schedule off (daily master toggle off, or every
+        // custom day toggled off). Backend disables soldOutSchedule and
+        // restores availability.
+        await api.patch(`/menu/${parentId}/schedule-soldout`, { schedule: { enabled: false } });
+        setShowItemSoldOutModal(false);
+        fetchMenu();
+        Alert.alert('Schedule off', `"${soldOutItem.name}" will no longer follow a schedule.`);
+        return;
+      }
       const schedule = {
-        type: scheduleType,
-        dailyStartTime: scheduleType === 'daily' ? dailyStartTime : null,
-        dailyEndTime: scheduleType === 'daily' ? dailyEndTime : null,
-        days: scheduleType === 'custom' ? customDays : [],
+        type: pending.type,
+        dailyStartTime: pending.type === 'daily' ? pending.dailyStartTime : null,
+        dailyEndTime: pending.type === 'daily' ? pending.dailyEndTime : null,
+        days: pending.type === 'custom' ? pending.days : [],
       };
       await api.patch(`/menu/${parentId}/schedule-soldout`, { schedule });
       setShowItemSoldOutModal(false);
@@ -534,7 +616,7 @@ export default function AdminMenuScreen({ navigation, route }) {
         Alert.alert('Success', `Custom schedule saved for "${soldOutItem.name}"\nAvailable on: ${enabledDays || 'None'}\nSold out on other days/times`);
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to save schedule');
+      Alert.alert('Error', error?.response?.data?.error || 'Failed to save schedule');
       fetchMenu();
     } finally {
       setSavingCategory(false);
@@ -2060,34 +2142,9 @@ export default function AdminMenuScreen({ navigation, route }) {
                       <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
                     </TouchableOpacity>
 
-                    {/* Remove schedule option */}
-                    {soldOutItem?.soldOutSchedule?.enabled && (
-                      <TouchableOpacity
-                        activeOpacity={0.7}
-                        onPress={async () => {
-                          try {
-                            setSavingCategory(true);
-                            await api.patch(`/menu/${soldOutItem._id}/schedule-soldout`, {
-                              schedule: { type: 'daily', dailyStartTime: null, dailyEndTime: null, days: [] }
-                            });
-                            // Clear the enabled flag
-                            await api.put(`/menu/${soldOutItem._id}`, { ...soldOutItem, soldOutSchedule: { enabled: false } });
-                            setShowItemSoldOutModal(false);
-                            fetchMenu();
-                            Alert.alert('Success', 'Schedule removed');
-                          } catch { Alert.alert('Error', 'Failed to remove schedule'); }
-                          finally { setSavingCategory(false); }
-                        }}
-                        style={{
-                          flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-                          padding: 14, borderRadius: 12, backgroundColor: '#FEF2F2',
-                          borderWidth: 1, borderColor: '#FECACA', marginTop: 4,
-                        }}
-                      >
-                        <Ionicons name="trash-outline" size={18} color="#DC2626" style={{ marginRight: 8 }} />
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#DC2626' }}>Remove Schedule</Text>
-                      </TouchableOpacity>
-                    )}
+                    {/* "Remove Schedule" button removed — admins now disable
+                        schedules via the Daily master toggle or by turning
+                        off every custom day, then hitting Save. */}
                   </View>
                 )}
 
@@ -2098,44 +2155,89 @@ export default function AdminMenuScreen({ navigation, route }) {
                       Item will be available only during this time window. Outside this time, it will be sold out.
                     </Text>
 
-                    {/* Start Time */}
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151', marginBottom: 10 }}>
-                      Available from:
-                    </Text>
+                    {/* Master on/off toggle — mirrors the per-day toggles
+                        in the custom schedule. Off = no daily schedule at
+                        all; item stays always available regardless of the
+                        time pickers below. */}
                     <TouchableOpacity
-                      style={styles.nativeTimePickerButton}
-                      onPress={() => openNativeTimePicker('dailyStartTime')}
                       activeOpacity={0.7}
+                      onPress={() => setDailyEnabled(v => !v)}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                        paddingHorizontal: 16, paddingVertical: 14, borderRadius: 14,
+                        backgroundColor: dailyEnabled ? '#F0FDF4' : '#F9FAFB',
+                        borderWidth: 1.5, borderColor: dailyEnabled ? '#BBF7D0' : '#E5E7EB',
+                        marginBottom: 16,
+                      }}
                     >
-                      <Ionicons name="time-outline" size={20} color={ZOMATO_RED} />
-                      <Text style={styles.nativeTimePickerText}>{formatTime12(dailyStartTime)}</Text>
-                      <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
+                      <View style={{ flex: 1, paddingRight: 12 }}>
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: dailyEnabled ? '#16A34A' : '#6B7280' }}>
+                          {dailyEnabled ? 'Daily schedule is ON' : 'Daily schedule is OFF'}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 3 }}>
+                          {dailyEnabled
+                            ? 'Item follows the time window below.'
+                            : 'Item ignores the schedule — always available until you turn this on.'}
+                        </Text>
+                      </View>
+                      <View style={{
+                        width: 44, height: 26, borderRadius: 13,
+                        backgroundColor: dailyEnabled ? '#22C55E' : '#D1D5DB',
+                        justifyContent: 'center', paddingHorizontal: 2,
+                      }}>
+                        <View style={{
+                          width: 22, height: 22, borderRadius: 11,
+                          backgroundColor: '#fff',
+                          alignSelf: dailyEnabled ? 'flex-end' : 'flex-start',
+                          shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: 0.15, shadowRadius: 2, elevation: 2,
+                        }} />
+                      </View>
                     </TouchableOpacity>
 
-                    {/* End Time */}
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151', marginTop: 20, marginBottom: 10 }}>
-                      Available until:
-                    </Text>
-                    <TouchableOpacity
-                      style={styles.nativeTimePickerButton}
-                      onPress={() => openNativeTimePicker('dailyEndTime')}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="time-outline" size={20} color={ZOMATO_RED} />
-                      <Text style={styles.nativeTimePickerText}>{formatTime12(dailyEndTime)}</Text>
-                      <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
-                    </TouchableOpacity>
+                    {/* Time pickers + preview hidden when daily toggle is off. */}
+                    {dailyEnabled && (
+                      <>
+                        {/* Start Time */}
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151', marginBottom: 10 }}>
+                          Available from:
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.nativeTimePickerButton}
+                          onPress={() => openNativeTimePicker('dailyStartTime')}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="time-outline" size={20} color={ZOMATO_RED} />
+                          <Text style={styles.nativeTimePickerText}>{formatTime12(dailyStartTime)}</Text>
+                          <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
+                        </TouchableOpacity>
 
-                    {/* Preview */}
-                    <View style={{
-                      marginTop: 20, padding: 14, borderRadius: 12,
-                      backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#FED7AA',
-                    }}>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#92400E' }}>
-                        ✅ Available daily: {formatTime12(dailyStartTime)} – {formatTime12(dailyEndTime)}
-                        {"\n"}🚫 Sold out outside this window
-                      </Text>
-                    </View>
+                        {/* End Time */}
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151', marginTop: 20, marginBottom: 10 }}>
+                          Available until:
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.nativeTimePickerButton}
+                          onPress={() => openNativeTimePicker('dailyEndTime')}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="time-outline" size={20} color={ZOMATO_RED} />
+                          <Text style={styles.nativeTimePickerText}>{formatTime12(dailyEndTime)}</Text>
+                          <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
+                        </TouchableOpacity>
+
+                        {/* Preview */}
+                        <View style={{
+                          marginTop: 20, padding: 14, borderRadius: 12,
+                          backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#FED7AA',
+                        }}>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: '#92400E' }}>
+                            ✅ Available daily: {formatTime12(dailyStartTime)} – {formatTime12(dailyEndTime)}
+                            {"\n"}🚫 Sold out outside this window
+                          </Text>
+                        </View>
+                      </>
+                    )}
                   </View>
                 )}
 
@@ -2244,12 +2346,23 @@ export default function AdminMenuScreen({ navigation, route }) {
                   <Text style={styles.soldOutCancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
                 {(() => {
-                  // Lock Save Schedule until the schedule actually has a
-                  // day to be saved against. Daily mode is always valid (it
-                  // just needs the start/end time), Custom mode needs at
-                  // least one weekday toggled on.
-                  const customNeedsDay = scheduleType === 'custom' && !customDays.some(d => d.enabled);
-                  const saveDisabled = savingCategory || customNeedsDay;
+                  // Save is unlocked only when the admin actually edited
+                  // something vs the schedule they opened — reopening a
+                  // saved schedule and hitting Save with no change is a
+                  // no-op and stays disabled. Turning OFF an existing
+                  // schedule (daily master toggle off, or every custom
+                  // day off) still counts as a change, so admins can
+                  // disable a schedule from here without a separate
+                  // "Remove" button.
+                  const pending = getPendingSchedule();
+                  const changed = scheduleHasChanges();
+                  const saveDisabled = savingCategory || !changed;
+                  const label = (() => {
+                    if (savingCategory) return null;
+                    if (!changed) return 'No changes to save';
+                    if (pending && !pending.enabled) return 'Turn schedule OFF';
+                    return 'Save Schedule';
+                  })();
                   return (
                     <TouchableOpacity 
                       style={[styles.soldOutSaveButton, saveDisabled && styles.soldOutSaveButtonDisabled]} 
@@ -2259,9 +2372,7 @@ export default function AdminMenuScreen({ navigation, route }) {
                       {savingCategory ? (
                         <ActivityIndicator size="small" color="#fff" />
                       ) : (
-                        <Text style={styles.soldOutSaveButtonText}>
-                          {customNeedsDay ? 'Enable a day to save' : 'Save Schedule'}
-                        </Text>
+                        <Text style={styles.soldOutSaveButtonText}>{label}</Text>
                       )}
                     </TouchableOpacity>
                   );
