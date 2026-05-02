@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { Platform, AppState, Alert, Linking } from 'react-native';
+import { Platform, AppState } from 'react-native';
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import api from '../config/api';
@@ -64,7 +64,11 @@ const initializeNotificationChannels = async () => {
       // Version-gated channel migration: delete and recreate channels ONLY
       // when the channel config version changes. This preserves user's custom
       // notification preferences between app starts.
-      const CHANNEL_CONFIG_VERSION = '2'; // Bump to force channel recreation
+      // v3 — explicitly enforces lockscreenVisibility=PUBLIC + IMPORTANCE.MAX
+      //       so notifications are guaranteed to appear on the lock screen
+      //       (some installs created channels at lower importance before the
+      //       lock-screen visibility was added).
+      const CHANNEL_CONFIG_VERSION = '3'; // Bump to force channel recreation
       const channelIds = ['default', 'new-orders', 'order-updates', 'orders', 'delivery'];
       const storedVersion = await SecureStore.getItemAsync('notification_channel_version').catch(() => null);
       if (storedVersion !== CHANNEL_CONFIG_VERSION) {
@@ -159,67 +163,37 @@ export const pushNotifications = {
   },
 
   /**
-   * Show permission prompt with option to go to settings
-   * @returns {Promise<boolean>} - true if permission granted
+   * Request notification permission using the OS native dialog only.
+   *
+   * NOTE: Earlier versions of this method showed a custom in-app
+   * "🔔 Enable Notifications — Not Now / Enable" Alert *before* the
+   * native OS dialog. That custom prompt has been removed per product
+   * request — Android 13+ already ships its own runtime permission
+   * dialog (POST_NOTIFICATIONS) and iOS shows its system prompt, so
+   * adding our own modal on top was redundant and confusing.
+   *
+   * @returns {Promise<boolean>} true if permission was granted
    */
   async showPermissionPrompt() {
-    return new Promise((resolve) => {
-      Alert.alert(
-        '🔔 Enable Notifications',
-        'To receive order updates and important alerts in real-time (even when app is closed), please enable notifications.',
-        [
-          { 
-            text: 'Not Now', 
-            style: 'cancel',
-            onPress: () => resolve(false)
-          },
-          { 
-            text: 'Enable', 
-            onPress: async () => {
-              // First try to request permission
-              const { status } = await Notifications.requestPermissionsAsync({
-                ios: {
-                  allowAlert: true,
-                  allowBadge: true,
-                  allowSound: true,
-                  allowAnnouncements: true,
-                },
-                android: {
-                  allowAlert: true,
-                  allowBadge: true,
-                  allowSound: true,
-                },
-              });
-              
-              if (status === 'granted') {
-                resolve(true);
-              } else {
-                // Permission still not granted, offer to open settings
-                Alert.alert(
-                  'Permission Required',
-                  'Notifications are disabled. Please enable them in app settings to receive order updates.',
-                  [
-                    { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-                    { 
-                      text: 'Open Settings', 
-                      onPress: () => {
-                        if (Platform.OS === 'ios') {
-                          Linking.openURL('app-settings:');
-                        } else {
-                          Linking.openSettings();
-                        }
-                        resolve(false);
-                      }
-                    }
-                  ]
-                );
-              }
-            }
-          }
-        ],
-        { cancelable: false }
-      );
-    });
+    try {
+      const { status } = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+          allowAnnouncements: true,
+        },
+        android: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+        },
+      });
+      return status === 'granted';
+    } catch (e) {
+      console.warn('Permission request failed:', e.message);
+      return false;
+    }
   },
 
   /**
@@ -242,22 +216,22 @@ export const pushNotifications = {
     }
 
     // ---- permissions ----
+    // Always go straight to the OS native permission dialog. The custom
+    // in-app "Enable Notifications" Alert that used to wrap this has been
+    // removed — Android 13+ already shows its POST_NOTIFICATIONS runtime
+    // dialog and iOS shows its system prompt, so a custom modal on top
+    // was redundant. The `forcePrompt` flag is kept on the signature for
+    // backwards-compat with existing call-sites in AuthContext but no
+    // longer alters the flow.
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
     if (existingStatus !== 'granted') {
-      if (forcePrompt) {
-        const userAccepted = await this.showPermissionPrompt();
-        if (!userAccepted) return { token: null, permissionDenied: true };
-        const { status: newStatus } = await Notifications.getPermissionsAsync();
-        finalStatus = newStatus;
-      } else {
-        const { status } = await Notifications.requestPermissionsAsync({
-          ios: { allowAlert: true, allowBadge: true, allowSound: true, allowAnnouncements: true },
-          android: { allowAlert: true, allowBadge: true, allowSound: true },
-        });
-        finalStatus = status;
-      }
+      const { status } = await Notifications.requestPermissionsAsync({
+        ios: { allowAlert: true, allowBadge: true, allowSound: true, allowAnnouncements: true },
+        android: { allowAlert: true, allowBadge: true, allowSound: true },
+      });
+      finalStatus = status;
     }
 
     if (finalStatus !== 'granted') {

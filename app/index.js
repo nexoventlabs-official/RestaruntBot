@@ -89,7 +89,10 @@ if (Platform.OS === 'android') {
     // when the channel config version changes. This preserves user's custom
     // notification preferences (mute, custom sound, vibration) between app
     // starts, while still allowing us to fix channels when needed.
-    const CHANNEL_CONFIG_VERSION = '2'; // Bump to force channel recreation
+    // v3 — guarantees lockscreenVisibility=PUBLIC on every channel so
+    //       notifications show up on the lock screen even on devices
+    //       where the channel was created before that flag was added.
+    const CHANNEL_CONFIG_VERSION = '3'; // Bump to force channel recreation
     const channelIds = ['default', 'new-orders', 'order-updates', 'orders', 'delivery'];
 
     SecureStoreIdx.getItemAsync('notification_channel_version').then(async (storedVersion) => {
