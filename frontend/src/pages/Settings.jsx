@@ -16,7 +16,9 @@ import {
   KeyRound,
   Eye,
   EyeOff,
-  Lock
+  Lock,
+  Bell,
+  BellRing
 } from 'lucide-react';
 import api from '../api';
 
@@ -41,7 +43,11 @@ export default function Settings() {
   const [changingPassword, setChangingPassword] = useState(false);
   const [pwError, setPwError] = useState(null);
   const [pwSuccess, setPwSuccess] = useState(null);
-  
+
+  // Push notification diagnostic state
+  const [sendingTestPush, setSendingTestPush] = useState(false);
+  const [pushTestResult, setPushTestResult] = useState(null); // { ok: bool, message: string }
+
   // Settings state
   const [settings, setSettings] = useState({
     restaurantLocation: {
@@ -250,6 +256,44 @@ export default function Settings() {
     }
   };
 
+  // Send a test push notification to the currently-logged-in admin's
+  // registered mobile device. Uses POST /auth/test-notification which
+  // reads the admin user's stored pushToken (set by the FoodAdmin mobile
+  // app on login) and fires a one-off FCM message through firebase-admin.
+  //
+  // Expected outcomes, from most to least likely:
+  //   ✅ "Test notification sent" + phone buzzes → full pipeline works.
+  //   ❌ "No push token registered for this user" → the mobile app
+  //      never sent its token to the backend. Open the app, make sure
+  //      you're logged in with the same admin account, then retry.
+  //   ❌ "messaging/registration-token-not-registered" → stored token
+  //      is stale (old install). Reinstall the APK + log in again.
+  //   ❌ "Firebase not initialised" → backend env vars are missing.
+  const sendTestPush = async () => {
+    setSendingTestPush(true);
+    setPushTestResult(null);
+    try {
+      const response = await api.post('/auth/test-notification');
+      const r = response?.data?.result;
+      if (r && typeof r === 'object' && 'error' in r) {
+        setPushTestResult({
+          ok: false,
+          message: `FCM rejected — ${r.error}${r.code ? ' [' + r.code + ']' : ''}`
+        });
+      } else {
+        setPushTestResult({
+          ok: true,
+          message: 'Sent! Check your phone within a few seconds. If nothing arrives, see the troubleshooting tips below.'
+        });
+      }
+    } catch (err) {
+      const apiErr = err.response?.data?.error || err.message || 'Request failed';
+      setPushTestResult({ ok: false, message: apiErr });
+    } finally {
+      setSendingTestPush(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -413,6 +457,69 @@ export default function Settings() {
           </form>
         </div>
       )}
+
+      {/* Push Notification Diagnostic */}
+      <div className="bg-white rounded-2xl shadow-card p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+            <BellRing className="w-5 h-5 text-purple-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-dark-900">Test Mobile Push Notification</h2>
+            <p className="text-dark-500 text-sm">
+              Sends a test notification to the FoodAdmin mobile app logged in as this admin account.
+            </p>
+          </div>
+        </div>
+
+        {pushTestResult && (
+          <div
+            className={`mb-4 flex items-start gap-2 p-3 rounded-lg text-sm ${
+              pushTestResult.ok
+                ? 'bg-green-50 border border-green-200 text-green-700'
+                : 'bg-red-50 border border-red-200 text-red-700'
+            }`}
+          >
+            {pushTestResult.ok
+              ? <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              : <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />}
+            <p className="leading-relaxed">{pushTestResult.message}</p>
+          </div>
+        )}
+
+        <button
+          onClick={sendTestPush}
+          disabled={sendingTestPush}
+          className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50"
+        >
+          {sendingTestPush
+            ? <RefreshCw className="w-4 h-4 animate-spin" />
+            : <Bell className="w-4 h-4" />}
+          {sendingTestPush ? 'Sending...' : 'Send Test Notification'}
+        </button>
+
+        {/* Troubleshooting tips — shown always so the admin knows what
+            to do if the test lands as "sent" but the phone doesn't buzz. */}
+        <details className="mt-4 text-sm">
+          <summary className="cursor-pointer text-dark-500 hover:text-dark-700 select-none">
+            Not getting the notification on your phone? →
+          </summary>
+          <div className="mt-3 space-y-2 text-dark-600 pl-2 border-l-2 border-dark-100">
+            <p>
+              <strong>1. Token not registered.</strong> Open the FoodAdmin mobile app, log in with the <em>same</em> admin account used here, wait 2–3 seconds, then click the test button again.
+            </p>
+            <p>
+              <strong>2. Notifications blocked at OS level.</strong> On the phone: <em>Settings → Apps → FoodAdmin → Notifications</em>. Make sure the app is allowed and all channels (especially <em>Default</em>, <em>New Orders</em>, <em>Order Updates</em>) are toggled on.
+            </p>
+            <p>
+              <strong>3. Battery optimisation killing FCM.</strong> Very common on Xiaomi / Redmi / Realme / OPPO / Vivo. On those devices go to <em>Settings → Apps → FoodAdmin → Battery</em>, pick <em>Unrestricted / Don't optimise</em>. Also enable <em>Autostart</em> if the OEM has it.
+            </p>
+            <p>
+              <strong>4. Stale token.</strong> If you just reinstalled the APK, the old token in the backend is dead. Re-login on the mobile app to push the new FCM token.
+            </p>
+          </div>
+        </details>
+      </div>
 
       {/* Holiday Mode */}
       <div className="bg-white rounded-2xl shadow-card p-6">
