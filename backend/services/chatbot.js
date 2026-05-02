@@ -7540,25 +7540,30 @@ const chatbot = {
       // Update daily report in real-time
       googleSheets.syncTodayDailyReport().catch(err => logger.error('Daily report sync error', { error: err.message }));
 
-      // Send push notification to admin for new pickup order
+      // Send push notification to admin for new pickup order.
+      // NOTE: previous code referenced an undefined `total` variable here
+      // (the rest of this function uses `itemsTotal` / `order.totalAmount`),
+      // which threw ReferenceError inside the try-block and silently
+      // swallowed the push for every self-pickup order. Use the saved
+      // order document's totalAmount which is always correct.
       try {
         const User = require('../models/User');
         const pushNotification = require('./pushNotification');
-        
+
         const admins = await User.find({ pushToken: { $ne: null } });
         for (const admin of admins) {
           if (admin.pushToken) {
             await pushNotification.sendAdminNewOrderNotification(admin.pushToken, {
               orderId,
-              totalAmount: total,
+              totalAmount: order.totalAmount,
               customerName: freshCustomer.name || 'Customer',
               items
             });
           }
         }
-        if (admins.length > 0) logger.info('Admin push sent for pickup order', { orderId });
+        if (admins.length > 0) logger.info('Admin push sent for pickup order', { orderId, adminCount: admins.length });
       } catch (pushErr) {
-        logger.error('Admin push error', { error: pushErr.message });
+        logger.error('Admin push error (pickup)', { error: pushErr.message, orderId });
       }
 
       // Update customer order history
