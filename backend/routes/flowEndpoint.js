@@ -22,6 +22,7 @@ const Offer = require('../models/Offer');
 const MenuItem = require('../models/MenuItem');
 const Customer = require('../models/Customer');
 const whatsapp = require('../services/whatsapp');
+const metaCloud = require('../services/metaCloud');
 const { transitionStatus, canCancelOrder } = require('../services/orderStateMachine');
 
 const router = express.Router();
@@ -2198,17 +2199,27 @@ router.post('/', async (req, res) => {
             }
           };
         } else if (selectedAction === 'cancel_order') {
+          // We always close the flow back to the chat (`screen: 'SUCCESS'`).
+          // The user-facing confirmation lives in the chat:
+          //   • success → rich "Order Cancelled" card with a Browse Menu
+          //     Flow CTA (reorder flow), so they can immediately reorder.
+          //   • cannot cancel / not found / error → plain text message.
+          // The previous in-flow ORDER_CANCELLED screen was redundant
+          // (and per product feedback, confusing because the user had to
+          // tap Close to dismiss it before seeing the chat confirmation).
           try {
             const order = await Order.findOne({ orderId });
             if (!order) {
-              response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Not Found', cancel_info: `Order #${orderId} was not found.`, flow_token: token } };
+              if (phone) {
+                await whatsapp.sendMessage(phone, `❓ *Order not found*\n\nWe could not find order #${orderId}.`).catch(() => {});
+              }
             } else if (!canCancelOrder(order)) {
-              // Status no longer cancel-eligible (per service-type / payment
-              // rules in canCancelOrder). Tell the customer to contact us.
               const reason = ['delivered', 'cancelled'].includes(order.status)
-                ? `Order is already ${order.status}.`
-                : `Order is already being ${String(order.status).replace('_', ' ')}. Please contact support to cancel.`;
-              response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Cannot Cancel', cancel_info: reason, flow_token: token } };
+                ? `Order #${orderId} is already ${order.status}.`
+                : `Order #${orderId} is already being ${String(order.status).replace('_', ' ')}. Please contact support to cancel.`;
+              if (phone) {
+                await whatsapp.sendMessage(phone, `⚠️ *Cannot cancel*\n\n${reason}`).catch(() => {});
+              }
             } else {
               const result = transitionStatus(order, 'cancelled', 'Cancelled by customer via flow', 'customer');
               if (result.success) {
@@ -2220,15 +2231,15 @@ router.post('/', async (req, res) => {
                 dataEvents.emit('orders');
                 dataEvents.emit('dashboard');
 
-                // Send a WhatsApp chat confirmation so the customer sees the
-                // cancellation in their chat history (not just inside the
-                // closed flow). Mirrors the same message the My-Orders/Help
-                // path in routes/webhook.js sends after a flow cancel.
+                // Build the chat confirmation card. We prefer the reorder
+                // flow (Browse Menu CTA) over a plain image so the
+                // customer can place a new order in one tap.
                 if (phone) {
                   try {
-                    const cancelImg = await chatbotImagesService.getImageUrl('order_cancelled').catch(() => null);
                     const isPickup = order.serviceType === 'pickup';
                     const isCOD = order.paymentMethod === 'cod';
+                    const cancelImageKey = isPickup ? 'pickup_cancelled' : 'order_cancelled';
+                    const cancelImg = await chatbotImagesService.getImageUrl(cancelImageKey).catch(() => null);
                     const refundLine = (!isPickup && !isCOD)
                       ? '\n💸 *Refund:* Will be processed to your original\npayment method within 5–7 business days.\n'
                       : '';
@@ -2240,25 +2251,60 @@ router.post('/', async (req, res) => {
                       refundLine +
                       `\nYour order has been cancelled successfully.\n` +
                       `If you have any questions, please contact us.`;
-                    if (cancelImg) {
-                      await whatsapp.sendImage(phone, cancelImg, msg);
-                    } else {
-                      await whatsapp.sendMessage(phone, msg);
+
+                    const reorderFlowId = process.env.WHATSAPP_REORDER_FLOW_ID;
+                    let sentAsFlow = false;
+                    if (reorderFlowId) {
+                      try {
+                        const cleanPhone = String(phone).replace('@c.us', '').replace(/\D/g, '');
+                        await metaCloud.sendFlowMessage(phone, {
+                          flowId: reorderFlowId,
+                          flowCta: 'Browse Menu',
+                          headerImageUrl: cancelImg || undefined,
+                          headerText: cancelImg ? undefined : 'Order Cancelled',
+                          bodyText: msg,
+                          flowToken: `reorder_${cleanPhone}`,
+                          flowAction: 'data_exchange'
+                        });
+                        sentAsFlow = true;
+                      } catch (flowErr) {
+                        logger.warn('[FlowEndpoint] Reorder flow card failed, falling back to image/text', { orderId, error: flowErr.message });
+                      }
+                    }
+                    if (!sentAsFlow) {
+                      if (cancelImg) {
+                        await whatsapp.sendImage(phone, cancelImg, msg);
+                      } else {
+                        await whatsapp.sendMessage(phone, msg);
+                      }
                     }
                   } catch (sendErr) {
                     logger.warn('[FlowEndpoint] Cancel confirmation chat message failed', { orderId, error: sendErr.message });
                   }
                 }
-
-                response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '✅ Order Cancelled', cancel_info: `Order #${orderId} has been cancelled successfully.`, flow_token: token } };
-              } else {
-                response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Cannot Cancel', cancel_info: result.reason || 'Order cannot be cancelled at this stage.', flow_token: token } };
+              } else if (phone) {
+                await whatsapp.sendMessage(phone, `⚠️ *Cannot cancel*\n\n${result.reason || 'Order cannot be cancelled at this stage.'}`).catch(() => {});
               }
             }
           } catch (err) {
             logger.error('[FlowEndpoint] Order actions cancel error', { orderId, error: err.message });
-            response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Error', cancel_info: 'Could not cancel order. Please try again.', flow_token: token } };
+            if (phone) {
+              await whatsapp.sendMessage(phone, '⚠️ Could not cancel the order right now. Please try again or call us.').catch(() => {});
+            }
           }
+          // Close the flow regardless of outcome — chat carries the result.
+          response = {
+            screen: 'SUCCESS',
+            data: {
+              extension_message_response: {
+                params: {
+                  flow_token: token,
+                  action_result: 'order_cancelled',
+                  order_id: orderId
+                }
+              }
+            }
+          };
         } else if (selectedAction === 'order_food') {
           try {
             const images = await getFlowImages();

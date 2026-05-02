@@ -826,14 +826,17 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                                   await order.save();
                                   try { dataEvents.emit('orders'); dataEvents.emit('dashboard'); } catch (_) {}
 
-                                  // Rich cancellation chat card — same format
-                                  // as the Order Actions flow path so the
-                                  // customer sees a consistent message
-                                  // regardless of which entry point they used.
+                                  // Rich cancellation chat card with a
+                                  // Browse Menu Flow CTA (reorder flow)
+                                  // so the customer can place a new order
+                                  // in one tap. Falls back to a plain
+                                  // image / text card if the flow id is
+                                  // not configured or the API call fails.
                                   try {
-                                    const cancelImg = await chatbotImagesService.getImageUrl('order_cancelled').catch(() => null);
                                     const isPickup = order.serviceType === 'pickup';
                                     const isCOD = order.paymentMethod === 'cod';
+                                    const cancelImageKey = isPickup ? 'pickup_cancelled' : 'order_cancelled';
+                                    const cancelImg = await chatbotImagesService.getImageUrl(cancelImageKey).catch(() => null);
                                     const refundLine = (!isPickup && !isCOD)
                                       ? '\n💸 *Refund:* Will be processed to your original\npayment method within 5–7 business days.\n'
                                       : '';
@@ -845,10 +848,32 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                                       refundLine +
                                       `\nYour order has been cancelled successfully.\n` +
                                       `If you have any questions, please contact us.`;
-                                    if (cancelImg) {
-                                      await whatsapp.sendImage(phone, cancelImg, msg);
-                                    } else {
-                                      await whatsapp.sendMessage(phone, msg);
+
+                                    const reorderFlowId = process.env.WHATSAPP_REORDER_FLOW_ID;
+                                    let sentAsFlow = false;
+                                    if (reorderFlowId) {
+                                      try {
+                                        const cleanPhone = String(phone).replace('@c.us', '').replace(/\D/g, '');
+                                        await metaCloud.sendFlowMessage(phone, {
+                                          flowId: reorderFlowId,
+                                          flowCta: 'Browse Menu',
+                                          headerImageUrl: cancelImg || undefined,
+                                          headerText: cancelImg ? undefined : 'Order Cancelled',
+                                          bodyText: msg,
+                                          flowToken: `reorder_${cleanPhone}`,
+                                          flowAction: 'data_exchange'
+                                        });
+                                        sentAsFlow = true;
+                                      } catch (flowErr) {
+                                        logger.warn('Flow: My Orders - reorder flow card failed, falling back to image/text', { error: flowErr.message, orderId: helpOrderId });
+                                      }
+                                    }
+                                    if (!sentAsFlow) {
+                                      if (cancelImg) {
+                                        await whatsapp.sendImage(phone, cancelImg, msg);
+                                      } else {
+                                        await whatsapp.sendMessage(phone, msg);
+                                      }
                                     }
                                   } catch (sendErr) {
                                     logger.warn('Flow: My Orders - cancel chat card failed, falling back to text', { error: sendErr.message, orderId: helpOrderId });
