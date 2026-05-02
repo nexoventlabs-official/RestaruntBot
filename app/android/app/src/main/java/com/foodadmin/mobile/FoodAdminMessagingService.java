@@ -113,15 +113,23 @@ public class FoodAdminMessagingService extends ReactNativeFirebaseMessagingServi
                 ensureChannel(mgr, channelId);
             }
 
-            // 4. Build the Intent that opens the app on tap
-            Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
-            if (intent == null) {
-                intent = new Intent();
-            }
-            // Use NEW_TASK + SINGLE_TOP only. Do NOT use CLEAR_TOP — with singleTask
-            // launch mode it can cause the OS to destroy the task during cold start
-            // from killed state, resulting in the app opening and immediately closing.
-            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            // 4. Build the Intent that opens the app on tap.
+            //
+            // Target MainActivity DIRECTLY — do NOT use
+            // getLaunchIntentForPackage() which returns an ACTION_MAIN +
+            // CATEGORY_LAUNCHER intent. With launchMode="singleTask", a
+            // launcher-category intent can confuse Android during cold start
+            // from killed state: the OS treats it as a re-launch of an
+            // existing task and tears down the freshly-started activity,
+            // which manifests to the user as "app opens then immediately
+            // closes".
+            //
+            // By targeting MainActivity explicitly and using addFlags()
+            // (not setFlags, which would clobber defaults), singleTask
+            // handles everything deterministically — fresh start if killed,
+            // onNewIntent() if already running.
+            Intent intent = new Intent(this, MainActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 
             // Pass notification data as extras so the app can read them on tap
             for (Map.Entry<String, String> entry : data.entrySet()) {
@@ -129,11 +137,16 @@ public class FoodAdminMessagingService extends ReactNativeFirebaseMessagingServi
             }
             intent.putExtra("google.message_id", remoteMessage.getMessageId());
 
+            // FLAG_UPDATE_CURRENT (not FLAG_ONE_SHOT): FLAG_ONE_SHOT
+            // invalidates the PendingIntent after its first fire, which
+            // under Doze + singleTask can result in the OS routing the
+            // user to a dead PendingIntent on relaunch. UPDATE_CURRENT
+            // keeps the PendingIntent reusable and refreshes its extras.
             PendingIntent pendingIntent = PendingIntent.getActivity(
                     this,
                     (int) System.currentTimeMillis(),
                     intent,
-                    PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
             );
 
             // 5. Build & show the notification

@@ -54,10 +54,22 @@ function AppNavigator({ navigationRef }) {
 
     try {
       if (currentRole === 'delivery') {
-        nav.navigate('DeliveryMain', {
-          screen: 'Home',
-          params: { screen: 'Notifications' },
-        });
+        // Route based on notification type. A "new order assigned" push
+        // (data.type === 'new_order' or data.screen === 'MyOrders') should
+        // land the partner on MyOrders — tapping a new-order alert just to
+        // see Notifications is a useless UX. Fallback for any other push
+        // (generic updates, welcome, etc.) goes to Notifications.
+        if (data?.type === 'new_order' || data?.type === 'order_cancelled' || data?.screen === 'MyOrders') {
+          nav.navigate('DeliveryMain', {
+            screen: 'MyOrders',
+            params: { screen: 'MyOrdersList' },
+          });
+        } else {
+          nav.navigate('DeliveryMain', {
+            screen: 'Home',
+            params: { screen: 'Notifications' },
+          });
+        }
       } else if (currentRole === 'admin') {
         if (data?.type === 'offer_template_status') {
           nav.navigate('AdminMain', {
