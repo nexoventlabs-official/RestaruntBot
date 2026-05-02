@@ -2241,8 +2241,11 @@ router.post('/', async (req, res) => {
                 // the same visual.
                 const isPickup = order.serviceType === 'pickup';
                 const isCOD = order.paymentMethod === 'cod';
-                const cancelImageKey = isPickup ? 'pickup_cancelled' : 'order_cancelled';
-                const cancelImg = await chatbotImagesService.getImageUrl(cancelImageKey).catch(() => null);
+                // Use 'order_cancelled' for both pickup and delivery — the
+                // ChatbotImage model only has this single generic cancel key
+                // for customer-initiated cancellations. The message text
+                // already differentiates Self-Pickup vs Home Delivery.
+                const cancelImg = await chatbotImagesService.getImageUrl('order_cancelled').catch(() => null);
 
                 // Push notification to all admins — customer cancelled
                 // (parity with chatbot.js / orderHandler.js / orderScheduler

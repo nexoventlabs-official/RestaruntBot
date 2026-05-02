@@ -559,8 +559,9 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
             cancelledImageUrl = await chatbotImagesService.getImageUrl('order_cancelled_by_restaurant');
             cancelMsg = `❌ *Order Cancelled by Restaurant*\n\nOrder ID: *${order.orderId}*\n\nWe're sorry, but your order has been cancelled by the restaurant.\n\nIf you have any questions, please contact us.`;
           } else {
-            const cancelledImageKey = isPickupOrder ? 'pickup_cancelled' : 'order_cancelled';
-            cancelledImageUrl = await chatbotImagesService.getImageUrl(cancelledImageKey);
+            // 'pickup_cancelled' is not in the ChatbotImage enum — use the
+            // generic 'order_cancelled' for both pickup and delivery.
+            cancelledImageUrl = await chatbotImagesService.getImageUrl('order_cancelled');
             cancelMsg = msg;
           }
 

@@ -7048,8 +7048,9 @@ const chatbot = {
       const User = require('../models/User');
       const pushNotification = require('./pushNotification');
 
-      const cancelImageKey = isPickup ? 'pickup_cancelled' : 'order_cancelled';
-      const cancelPushImg = await chatbotImagesService.getImageUrl(cancelImageKey).catch(() => null);
+      // Use 'order_cancelled' for both pickup and delivery — only this
+      // single generic customer-cancel key exists in the ChatbotImage model.
+      const cancelPushImg = await chatbotImagesService.getImageUrl('order_cancelled').catch(() => null);
 
       const admins = await User.find({ pushToken: { $ne: null } });
       for (const admin of admins) {
@@ -7093,9 +7094,9 @@ const chatbot = {
     );
     logger.info('Customer cancelled order, syncing to Google Sheets', { order: order.orderId });
 
-    // Use pickup-specific cancelled image if it's a pickup order
-    const imageKey = isPickup ? 'pickup_cancelled' : 'order_cancelled';
-    const cancelledImageUrl = await chatbotImagesService.getImageUrl(imageKey);
+    // Use the generic 'order_cancelled' image (only valid customer-cancel
+    // key in the ChatbotImage enum) for both pickup and delivery orders.
+    const cancelledImageUrl = await chatbotImagesService.getImageUrl('order_cancelled');
     
     // Send as flow with "Browse Menu" CTA if reorder flow is available
     const reorderFlowId = process.env.WHATSAPP_REORDER_FLOW_ID;

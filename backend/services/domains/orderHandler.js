@@ -164,8 +164,9 @@ async function cancelOrder(customer, phone) {
   // admin sees the same visual that lands in the customer's chat.
   try {
     const isPickup = order.serviceType === 'pickup';
-    const cancelImageKey = isPickup ? 'pickup_cancelled' : 'order_cancelled';
-    const cancelPushImg = await chatbotImagesService.getImageUrl(cancelImageKey).catch(() => null);
+    // Use 'order_cancelled' for both pickup and delivery — only this single
+    // generic customer-cancel key exists in the ChatbotImage model enum.
+    const cancelPushImg = await chatbotImagesService.getImageUrl('order_cancelled').catch(() => null);
 
     const admins = await User.find({ pushToken: { $ne: null } });
     for (const admin of admins) {

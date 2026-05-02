@@ -837,8 +837,11 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                                   // push notification.
                                   const isPickup = order.serviceType === 'pickup';
                                   const isCOD = order.paymentMethod === 'cod';
-                                  const cancelImageKey = isPickup ? 'pickup_cancelled' : 'order_cancelled';
-                                  const cancelImg = await chatbotImagesService.getImageUrl(cancelImageKey).catch(() => null);
+                                  // Use 'order_cancelled' for both pickup and
+                                  // delivery — only this single generic
+                                  // customer-cancel key exists in the
+                                  // ChatbotImage model.
+                                  const cancelImg = await chatbotImagesService.getImageUrl('order_cancelled').catch(() => null);
 
                                   // Push notification to all admins —
                                   // customer cancelled via the My-Orders
