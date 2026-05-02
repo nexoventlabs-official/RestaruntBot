@@ -16,9 +16,8 @@ function buildOrderActionsFlowJSON() {
     version: '7.3',
     data_api_version: '3.0',
     routing_model: {
-      ORDER_ACTIONS: ['ORDER_STATUS', 'ORDER_CANCELLED', 'MENU_CATEGORIES'],
+      ORDER_ACTIONS: ['ORDER_STATUS', 'MENU_CATEGORIES'],
       ORDER_STATUS: [],
-      ORDER_CANCELLED: [],
       MENU_CATEGORIES: []
     },
     screens: [
@@ -167,37 +166,10 @@ function buildOrderActionsFlowJSON() {
           ]
         }
       },
-      // Screen 3: Order Cancelled
-      {
-        id: 'ORDER_CANCELLED',
-        title: 'Order Cancelled',
-        terminal: true,
-        success: true,
-        data: {
-          cancel_heading: { type: 'string', __example__: '✅ Order Cancelled' },
-          cancel_info: { type: 'string', __example__: 'Order #JRB001 has been cancelled.' },
-          flow_token: { type: 'string', __example__: 'order_actions_919999999999_ORD001' }
-        },
-        layout: {
-          type: 'SingleColumnLayout',
-          children: [
-            { type: 'TextHeading', text: '${data.cancel_heading}' },
-            { type: 'TextBody', text: '${data.cancel_info}' },
-            {
-              type: 'Footer',
-              label: 'Close',
-              'on-click-action': {
-                name: 'complete',
-                payload: {
-                  action_result: 'order_cancelled',
-                  flow_token: '${data.flow_token}'
-                }
-              }
-            }
-          ]
-        }
-      },
-      // Screen 4: Menu Categories (order food)
+      // Screen 3: Menu Categories (order food)
+      // (Cancel Order does NOT have a screen — the data_exchange endpoint
+      // returns screen: 'SUCCESS' and the chat carries the rich
+      // confirmation card with a Browse Menu reorder Flow CTA.)
       {
         id: 'MENU_CATEGORIES',
         title: 'Menu Items',

@@ -2835,7 +2835,10 @@ const catalogService = {
 
   /**
    * Build the Order Actions Flow JSON.
-   * Screens: ORDER_DETAILS → ORDER_ACTIONS → (ORDER_CANCELLED | MENU_CATEGORIES | terminal SUCCESS for track_order)
+   * Screens: ORDER_DETAILS → ORDER_ACTIONS → (MENU_CATEGORIES | terminal SUCCESS for track_order / cancel_order)
+   * Cancel is handled entirely in the chat (rich card with Browse Menu CTA)
+   * — the flow closes immediately on cancel via screen: 'SUCCESS' from the
+   * data_exchange endpoint, so no in-flow ORDER_CANCELLED screen exists.
    */
   buildOrderActionsFlowJSON() {
     return {
@@ -2843,8 +2846,7 @@ const catalogService = {
       data_api_version: '3.0',
       routing_model: {
         ORDER_DETAILS: ['ORDER_ACTIONS'],
-        ORDER_ACTIONS: ['ORDER_CANCELLED', 'MENU_CATEGORIES'],
-        ORDER_CANCELLED: [],
+        ORDER_ACTIONS: ['MENU_CATEGORIES'],
         MENU_CATEGORIES: []
       },
       screens: [
@@ -2970,37 +2972,7 @@ const catalogService = {
             ]
           }
         },
-        // ─── 3. ORDER_CANCELLED (terminal) ───
-        {
-          id: 'ORDER_CANCELLED',
-          title: 'Order Cancelled',
-          terminal: true,
-          success: true,
-          data: {
-            cancel_heading: { type: 'string', __example__: '✅ Order Cancelled' },
-            cancel_info: { type: 'string', __example__: 'Order #ORD001 has been cancelled.' },
-            flow_token: { type: 'string', __example__: 'order_actions_919999999999_ORD001' }
-          },
-          layout: {
-            type: 'SingleColumnLayout',
-            children: [
-              { type: 'TextHeading', text: '${data.cancel_heading}' },
-              { type: 'TextBody', text: '${data.cancel_info}' },
-              {
-                type: 'Footer',
-                label: 'Close',
-                'on-click-action': {
-                  name: 'complete',
-                  payload: {
-                    action_result: 'order_cancelled',
-                    flow_token: '${data.flow_token}'
-                  }
-                }
-              }
-            ]
-          }
-        },
-        // ─── 4. MENU_CATEGORIES (terminal) — order food path ───
+        // ─── 3. MENU_CATEGORIES (terminal) — order food path ───
         {
           id: 'MENU_CATEGORIES',
           title: 'Menu',
