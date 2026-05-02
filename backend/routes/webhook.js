@@ -823,8 +823,48 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                                   await whatsapp.sendMessage(phone, `⚠️ *Cannot cancel*\n\n${t.reason || 'Order is no longer cancellable.'}`);
                                 } else {
                                   order.cancellationReason = 'Cancelled by customer via flow';
+                                  // For COD / pay-at-hotel orders mark
+                                  // payment as cancelled too (parity with
+                                  // chatbot.js processCancellation).
+                                  if (order.paymentMethod === 'cod' && order.paymentStatus === 'pending') {
+                                    order.paymentStatus = 'cancelled';
+                                  }
                                   await order.save();
                                   try { dataEvents.emit('orders'); dataEvents.emit('dashboard'); } catch (_) {}
+
+                                  // Resolve the cancellation image once —
+                                  // shared by the chat card AND the admin
+                                  // push notification.
+                                  const isPickup = order.serviceType === 'pickup';
+                                  const isCOD = order.paymentMethod === 'cod';
+                                  const cancelImageKey = isPickup ? 'pickup_cancelled' : 'order_cancelled';
+                                  const cancelImg = await chatbotImagesService.getImageUrl(cancelImageKey).catch(() => null);
+
+                                  // Push notification to all admins —
+                                  // customer cancelled via the My-Orders
+                                  // Help flow. Includes the cancel image
+                                  // as a big-picture attachment.
+                                  try {
+                                    const User = require('../models/User');
+                                    const admins = await User.find({ pushToken: { $ne: null } });
+                                    for (const adm of admins) {
+                                      if (adm.pushToken) {
+                                        await pushNotification.sendAdminOrderCancelledNotification(adm.pushToken, {
+                                          orderId: order.orderId,
+                                          totalAmount: order.totalAmount,
+                                          customerName: order.customer?.name || 'Customer',
+                                          serviceType: order.serviceType,
+                                          imageUrl: cancelImg || null,
+                                          reason: 'cancelled via My Orders → Help'
+                                        });
+                                      }
+                                    }
+                                    if (admins.length > 0) {
+                                      logger.info('Flow: My Orders - admin cancel push sent', { orderId: order.orderId, adminCount: admins.length });
+                                    }
+                                  } catch (pushErr) {
+                                    logger.error('Flow: My Orders - admin cancel push failed', { orderId: order.orderId, error: pushErr.message });
+                                  }
 
                                   // Rich cancellation chat card with a
                                   // Browse Menu Flow CTA (reorder flow)
@@ -833,10 +873,6 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                                   // image / text card if the flow id is
                                   // not configured or the API call fails.
                                   try {
-                                    const isPickup = order.serviceType === 'pickup';
-                                    const isCOD = order.paymentMethod === 'cod';
-                                    const cancelImageKey = isPickup ? 'pickup_cancelled' : 'order_cancelled';
-                                    const cancelImg = await chatbotImagesService.getImageUrl(cancelImageKey).catch(() => null);
                                     const refundLine = (!isPickup && !isCOD)
                                       ? '\n💸 *Refund:* Will be processed to your original\npayment method within 5–7 business days.\n'
                                       : '';

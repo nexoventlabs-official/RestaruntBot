@@ -2224,22 +2224,58 @@ router.post('/', async (req, res) => {
               const result = transitionStatus(order, 'cancelled', 'Cancelled by customer via flow', 'customer');
               if (result.success) {
                 order.cancellationReason = 'Cancelled by customer';
+                // For COD / pay-at-hotel orders mark payment as cancelled too,
+                // so the admin dashboard does not keep them as "payment pending".
+                if (order.paymentMethod === 'cod' && order.paymentStatus === 'pending') {
+                  order.paymentStatus = 'cancelled';
+                }
                 await order.save();
                 const googleSheets = require('../services/googleSheets');
-                googleSheets.updateOrderStatus(orderId, 'cancelled', order.status).catch(() => {});
+                googleSheets.updateOrderStatus(orderId, 'cancelled', order.paymentStatus).catch(() => {});
                 const dataEvents = require('../services/eventEmitter');
                 dataEvents.emit('orders');
                 dataEvents.emit('dashboard');
+
+                // Resolve the cancellation image once — used by both the
+                // chat card AND the admin push notification so they share
+                // the same visual.
+                const isPickup = order.serviceType === 'pickup';
+                const isCOD = order.paymentMethod === 'cod';
+                const cancelImageKey = isPickup ? 'pickup_cancelled' : 'order_cancelled';
+                const cancelImg = await chatbotImagesService.getImageUrl(cancelImageKey).catch(() => null);
+
+                // Push notification to all admins — customer cancelled
+                // (parity with chatbot.js / orderHandler.js / orderScheduler
+                // cancel paths). Includes the cancel image as a big-picture
+                // attachment.
+                try {
+                  const User = require('../models/User');
+                  const pushNotification = require('../services/pushNotification');
+                  const admins = await User.find({ pushToken: { $ne: null } });
+                  for (const admin of admins) {
+                    if (admin.pushToken) {
+                      await pushNotification.sendAdminOrderCancelledNotification(admin.pushToken, {
+                        orderId: order.orderId,
+                        totalAmount: order.totalAmount,
+                        customerName: order.customer?.name || 'Customer',
+                        serviceType: order.serviceType,
+                        imageUrl: cancelImg || null,
+                        reason: 'cancelled via Order Actions flow'
+                      });
+                    }
+                  }
+                  if (admins.length > 0) {
+                    logger.info('[FlowEndpoint] Admin cancel push sent', { orderId, adminCount: admins.length });
+                  }
+                } catch (pushErr) {
+                  logger.error('[FlowEndpoint] Admin cancel push failed', { orderId, error: pushErr.message });
+                }
 
                 // Build the chat confirmation card. We prefer the reorder
                 // flow (Browse Menu CTA) over a plain image so the
                 // customer can place a new order in one tap.
                 if (phone) {
                   try {
-                    const isPickup = order.serviceType === 'pickup';
-                    const isCOD = order.paymentMethod === 'cod';
-                    const cancelImageKey = isPickup ? 'pickup_cancelled' : 'order_cancelled';
-                    const cancelImg = await chatbotImagesService.getImageUrl(cancelImageKey).catch(() => null);
                     const refundLine = (!isPickup && !isCOD)
                       ? '\n💸 *Refund:* Will be processed to your original\npayment method within 5–7 business days.\n'
                       : '';

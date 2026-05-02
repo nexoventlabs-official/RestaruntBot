@@ -7042,21 +7042,26 @@ const chatbot = {
     dataEvents.emit('dashboard');
 
     // Send push notification to admin — customer cancelled (pickup or delivery)
+    // Includes the cancel image (BigPictureStyle on Android) so the
+    // admin sees the same visual that lands in the customer's chat.
     try {
       const User = require('../models/User');
       const pushNotification = require('./pushNotification');
-      
-      const typeLabel = isPickup ? '🏪 Pickup' : '🚚 Delivery';
+
+      const cancelImageKey = isPickup ? 'pickup_cancelled' : 'order_cancelled';
+      const cancelPushImg = await chatbotImagesService.getImageUrl(cancelImageKey).catch(() => null);
+
       const admins = await User.find({ pushToken: { $ne: null } });
       for (const admin of admins) {
         if (admin.pushToken) {
-          await pushNotification.sendNotification(
-            admin.pushToken,
-            `❌ ${typeLabel} Order Cancelled`,
-            `Order #${order.orderId} - ₹${order.totalAmount}\n${order.customer?.name || 'Customer'} cancelled via WhatsApp`,
-            { type: 'order_cancelled', orderId: order.orderId, screen: 'Orders' },
-            'order-updates'
-          );
+          await pushNotification.sendAdminOrderCancelledNotification(admin.pushToken, {
+            orderId: order.orderId,
+            totalAmount: order.totalAmount,
+            customerName: order.customer?.name || 'Customer',
+            serviceType: order.serviceType,
+            imageUrl: cancelPushImg || null,
+            reason: 'cancelled via WhatsApp'
+          });
         }
       }
     } catch (pushErr) {

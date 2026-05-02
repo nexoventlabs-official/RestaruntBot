@@ -143,7 +143,7 @@ function toStringData(obj) {
 // ---------------------------------------------------------------------------
 // Expo Push - send a single notification via Expo's push service
 // ---------------------------------------------------------------------------
-async function sendExpoNotification(pushToken, title, body, data = {}, channelId = 'default', badge = 1) {
+async function sendExpoNotification(pushToken, title, body, data = {}, channelId = 'default', badge = 1, imageUrl = null) {
   if (!Expo.isExpoPushToken(pushToken)) {
     logger.error('[Expo] Invalid Expo push token:', pushToken);
     return false;
@@ -154,11 +154,15 @@ async function sendExpoNotification(pushToken, title, body, data = {}, channelId
     sound: 'default',
     title,
     body,
-    data: { ...data, channelId },
+    data: { ...data, channelId, ...(imageUrl ? { imageUrl } : {}) },
     badge,
     channelId,
     priority: 'high',
     _displayInForeground: true,
+    // Expo passes `richContent.image` to FCM `notification.image` on Android
+    // and to APNS `mutable-content` (handled by Expo's notification service
+    // extension on iOS) — same big-picture / attachment behaviour.
+    ...(imageUrl ? { richContent: { image: imageUrl } } : {}),
   };
 
   try {
@@ -254,7 +258,7 @@ async function sendExpoMultipleNotifications(pushTokens, title, body, data = {},
  * @param {number} opts.badge    Badge / notification count
  * @returns {object} Partial FCM message (without `token` / `tokens`)
  */
-function buildMessagePayload({ title, body, data = {}, channelId = 'default', badge = 1 }) {
+function buildMessagePayload({ title, body, data = {}, channelId = 'default', badge = 1, imageUrl = null }) {
   const stringData = toStringData(data);
   stringData.badgeCount = String(badge);
   stringData.channelId = channelId;
@@ -263,9 +267,15 @@ function buildMessagePayload({ title, body, data = {}, channelId = 'default', ba
   // when the notification payload is not available.
   stringData.title = title || '';
   stringData.body = body || '';
+  if (imageUrl) stringData.imageUrl = imageUrl;
 
+  // FCM accepts an HTTPS image url at three levels (top-level
+  // `notification.image`, `android.notification.image`, and
+  // `apns.fcm_options.image`). Setting all three gives us a
+  // BigPictureStyle on Android (image expands when notification is
+  // pulled down) and an attachment on iOS.
   return {
-    notification: { title, body },
+    notification: { title, body, ...(imageUrl ? { imageUrl } : {}) },
     data: stringData,
 
     android: {
@@ -281,6 +291,7 @@ function buildMessagePayload({ title, body, data = {}, channelId = 'default', ba
         defaultLightSettings: true,
         color: '#267E3E',
         tag: data.type ? `${data.type}_${data.orderId || Date.now()}` : undefined,
+        ...(imageUrl ? { imageUrl } : {}),
       },
     },
 
@@ -298,6 +309,7 @@ function buildMessagePayload({ title, body, data = {}, channelId = 'default', ba
           'content-available': 1,
         },
       },
+      ...(imageUrl ? { fcm_options: { image: imageUrl } } : {}),
     },
   };
 }
@@ -343,7 +355,7 @@ const pushNotification = {
    * @param {string}  channelId  Android notification channel id
    * @returns {Promise<object[]|false>}
    */
-  async sendNotification(pushToken, title, body, data = {}, channelId = 'default') {
+  async sendNotification(pushToken, title, body, data = {}, channelId = 'default', imageUrl = null) {
     const endTimer = startTimer('push.sendNotification');
     if (!pushToken || typeof pushToken !== 'string') {
       logger.error('Invalid push token provided');
@@ -360,7 +372,7 @@ const pushNotification = {
 
     // Route to Expo push service for Expo tokens
     if (tokenType === 'expo') {
-      return sendExpoNotification(pushToken, title, body, data, channelId, badge);
+      return sendExpoNotification(pushToken, title, body, data, channelId, badge, imageUrl);
     }
 
     // FCM path
@@ -371,7 +383,7 @@ const pushNotification = {
 
     const message = {
       token: pushToken,
-      ...buildMessagePayload({ title, body, data, channelId, badge }),
+      ...buildMessagePayload({ title, body, data, channelId, badge, imageUrl }),
     };
 
     // Retry loop
@@ -522,7 +534,35 @@ const pushNotification = {
       orderId: orderDetails.orderId,
       screen: 'Orders',
     };
-    return this.sendNotification(pushToken, title, body, data, 'new-orders');
+    return this.sendNotification(pushToken, title, body, data, 'new-orders', orderDetails.imageUrl || null);
+  },
+
+  /**
+   * Push to admin device(s) when a customer cancels their own order.
+   * Includes the cancellation image (BigPictureStyle on Android,
+   * attachment on iOS) so the admin sees the same visual that lands
+   * in the customer's WhatsApp chat.
+   *
+   * Expected `orderDetails` fields:
+   *   orderId, totalAmount, customerName, serviceType ('pickup'|'delivery'),
+   *   imageUrl (HTTPS Cloudinary URL of cancellation image — optional),
+   *   reason   ('Cancelled by customer' default)
+   */
+  async sendAdminOrderCancelledNotification(pushToken, orderDetails) {
+    const isPickup = orderDetails.serviceType === 'pickup';
+    const typeLabel = isPickup ? '🏪 Pickup' : '🚚 Delivery';
+    const title = `❌ ${typeLabel} Order Cancelled`;
+    const amount = (orderDetails.totalAmount !== undefined && orderDetails.totalAmount !== null)
+      ? ` - ₹${orderDetails.totalAmount}`
+      : '';
+    const reason = orderDetails.reason || 'cancelled via WhatsApp';
+    const body = `Order #${orderDetails.orderId}${amount}\n${orderDetails.customerName || 'Customer'} ${reason}`;
+    const data = {
+      type: 'order_cancelled',
+      orderId: orderDetails.orderId,
+      screen: 'Orders',
+    };
+    return this.sendNotification(pushToken, title, body, data, 'order-updates', orderDetails.imageUrl || null);
   },
 
   async sendTestNotification(pushToken) {
