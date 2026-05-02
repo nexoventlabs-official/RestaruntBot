@@ -21,6 +21,8 @@ const Order = require('../models/Order');
 const Offer = require('../models/Offer');
 const MenuItem = require('../models/MenuItem');
 const Customer = require('../models/Customer');
+const whatsapp = require('../services/whatsapp');
+const { transitionStatus, canCancelOrder } = require('../services/orderStateMachine');
 
 const router = express.Router();
 
@@ -2110,13 +2112,12 @@ router.post('/', async (req, res) => {
 
           const order = await Order.findOne({ orderId: orderIdD }).lean();
 
-          // Cancel Order is shown only for orders that are still cancel-eligible
-          // — COD / Pay-at-Hotel orders still in the initial `pending` state
-          // (i.e. the restaurant hasn't accepted them yet). Once confirmed
-          // (or anything beyond), the customer must call us instead.
-          const isCancellable = !!order
-            && order.paymentMethod === 'cod'
-            && order.status === 'pending';
+          // Cancel Order eligibility is delegated to canCancelOrder() in the
+          // order state machine — see services/orderStateMachine.js for the
+          // full rules. Summary: pickup → up to confirmed; delivery+COD →
+          // up to (but not including) ready; delivery + paid online →
+          // pending only.
+          const isCancellable = canCancelOrder(order);
 
           const actions = [
             { id: 'track_order', title: 'Track Order', description: 'View current order status' }
@@ -2201,13 +2202,15 @@ router.post('/', async (req, res) => {
             const order = await Order.findOne({ orderId });
             if (!order) {
               response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Not Found', cancel_info: `Order #${orderId} was not found.`, flow_token: token } };
-            } else if (['delivered', 'cancelled'].includes(order.status)) {
-              response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Cannot Cancel', cancel_info: `Order is already ${order.status}.`, flow_token: token } };
-            } else if (['out_for_delivery', 'preparing'].includes(order.status)) {
-              response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Cannot Cancel', cancel_info: `Order is already being ${order.status.replace('_', ' ')}. Please contact support.`, flow_token: token } };
+            } else if (!canCancelOrder(order)) {
+              // Status no longer cancel-eligible (per service-type / payment
+              // rules in canCancelOrder). Tell the customer to contact us.
+              const reason = ['delivered', 'cancelled'].includes(order.status)
+                ? `Order is already ${order.status}.`
+                : `Order is already being ${String(order.status).replace('_', ' ')}. Please contact support to cancel.`;
+              response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Cannot Cancel', cancel_info: reason, flow_token: token } };
             } else {
-              const { transitionStatus } = require('../services/orderStateMachine');
-              const result = transitionStatus(order, 'cancelled', 'Cancelled by customer via flow');
+              const result = transitionStatus(order, 'cancelled', 'Cancelled by customer via flow', 'customer');
               if (result.success) {
                 order.cancellationReason = 'Cancelled by customer';
                 await order.save();
@@ -2216,6 +2219,37 @@ router.post('/', async (req, res) => {
                 const dataEvents = require('../services/eventEmitter');
                 dataEvents.emit('orders');
                 dataEvents.emit('dashboard');
+
+                // Send a WhatsApp chat confirmation so the customer sees the
+                // cancellation in their chat history (not just inside the
+                // closed flow). Mirrors the same message the My-Orders/Help
+                // path in routes/webhook.js sends after a flow cancel.
+                if (phone) {
+                  try {
+                    const cancelImg = await chatbotImagesService.getImageUrl('order_cancelled').catch(() => null);
+                    const isPickup = order.serviceType === 'pickup';
+                    const isCOD = order.paymentMethod === 'cod';
+                    const refundLine = (!isPickup && !isCOD)
+                      ? '\n💸 *Refund:* Will be processed to your original\npayment method within 5–7 business days.\n'
+                      : '';
+                    const msg =
+                      `✅ *Order Cancelled*\n\n` +
+                      `📦 *Order ID:* ${order.orderId}\n` +
+                      `💰 *Amount:* ₹${order.totalAmount}\n` +
+                      `🍽️ *Service:* ${isPickup ? 'Self-Pickup' : 'Home Delivery'}\n` +
+                      refundLine +
+                      `\nYour order has been cancelled successfully.\n` +
+                      `If you have any questions, please contact us.`;
+                    if (cancelImg) {
+                      await whatsapp.sendImage(phone, cancelImg, msg);
+                    } else {
+                      await whatsapp.sendMessage(phone, msg);
+                    }
+                  } catch (sendErr) {
+                    logger.warn('[FlowEndpoint] Cancel confirmation chat message failed', { orderId, error: sendErr.message });
+                  }
+                }
+
                 response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '✅ Order Cancelled', cancel_info: `Order #${orderId} has been cancelled successfully.`, flow_token: token } };
               } else {
                 response = { screen: 'ORDER_CANCELLED', data: { cancel_heading: '❌ Cannot Cancel', cancel_info: result.reason || 'Order cannot be cancelled at this stage.', flow_token: token } };

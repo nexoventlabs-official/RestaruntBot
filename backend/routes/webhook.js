@@ -13,7 +13,7 @@ const authMiddleware = require('../middleware/auth');
 const { webhookRateLimiter } = require('../middleware/rateLimiter');
 const { verifyWebhookSignature } = require('../middleware/webhookVerification');
 const { validateMetaWebhook, sanitizeWebhookPayload } = require('../middleware/webhookValidation');
-const { transitionStatus } = require('../services/orderStateMachine');
+const { transitionStatus, canCancelOrder } = require('../services/orderStateMachine');
 const Customer = require('../models/Customer');
 const Offer = require('../models/Offer');
 const Order = require('../models/Order');
@@ -810,10 +810,13 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                               const order = await Order.findOne({ orderId: helpOrderId });
                               if (!order) {
                                 await whatsapp.sendMessage(phone, `❓ *Order not found*\n\nWe could not find order #${helpOrderId}.`);
-                              } else if (['delivered', 'cancelled'].includes(order.status)) {
-                                await whatsapp.sendMessage(phone, `⚠️ *Cannot cancel*\n\nOrder #${helpOrderId} is already ${order.status}.`);
-                              } else if (order.status !== 'pending' || order.paymentMethod !== 'cod') {
-                                await whatsapp.sendMessage(phone, `⚠️ *Cannot cancel*\n\nOrder #${helpOrderId} can no longer be cancelled from here. Please call us to cancel.`);
+                              } else if (!canCancelOrder(order)) {
+                                // Eligibility now follows the centralized
+                                // rules in orderStateMachine.canCancelOrder.
+                                const reason = ['delivered', 'cancelled'].includes(order.status)
+                                  ? `Order #${helpOrderId} is already ${order.status}.`
+                                  : `Order #${helpOrderId} can no longer be cancelled from here. Please call us to cancel.`;
+                                await whatsapp.sendMessage(phone, `⚠️ *Cannot cancel*\n\n${reason}`);
                               } else {
                                 const t = transitionStatus(order, 'cancelled', 'Cancelled by customer via flow', 'customer');
                                 if (!t.success) {
@@ -822,7 +825,35 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                                   order.cancellationReason = 'Cancelled by customer via flow';
                                   await order.save();
                                   try { dataEvents.emit('orders'); dataEvents.emit('dashboard'); } catch (_) {}
-                                  await whatsapp.sendMessage(phone, `✅ *Order Cancelled*\n\nYour order #${helpOrderId} has been cancelled.\n\nIf you have any questions, please contact us.`);
+
+                                  // Rich cancellation chat card — same format
+                                  // as the Order Actions flow path so the
+                                  // customer sees a consistent message
+                                  // regardless of which entry point they used.
+                                  try {
+                                    const cancelImg = await chatbotImagesService.getImageUrl('order_cancelled').catch(() => null);
+                                    const isPickup = order.serviceType === 'pickup';
+                                    const isCOD = order.paymentMethod === 'cod';
+                                    const refundLine = (!isPickup && !isCOD)
+                                      ? '\n💸 *Refund:* Will be processed to your original\npayment method within 5–7 business days.\n'
+                                      : '';
+                                    const msg =
+                                      `✅ *Order Cancelled*\n\n` +
+                                      `📦 *Order ID:* ${order.orderId}\n` +
+                                      `💰 *Amount:* ₹${order.totalAmount}\n` +
+                                      `🍽️ *Service:* ${isPickup ? 'Self-Pickup' : 'Home Delivery'}\n` +
+                                      refundLine +
+                                      `\nYour order has been cancelled successfully.\n` +
+                                      `If you have any questions, please contact us.`;
+                                    if (cancelImg) {
+                                      await whatsapp.sendImage(phone, cancelImg, msg);
+                                    } else {
+                                      await whatsapp.sendMessage(phone, msg);
+                                    }
+                                  } catch (sendErr) {
+                                    logger.warn('Flow: My Orders - cancel chat card failed, falling back to text', { error: sendErr.message, orderId: helpOrderId });
+                                    await whatsapp.sendMessage(phone, `✅ *Order Cancelled*\n\nYour order #${helpOrderId} has been cancelled.\n\nIf you have any questions, please contact us.`).catch(() => {});
+                                  }
                                   logger.info('Flow: My Orders - order cancelled via help', { orderId: helpOrderId, phone });
                                 }
                               }

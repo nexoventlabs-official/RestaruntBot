@@ -104,9 +104,52 @@ function transitionStatus(order, newStatus, trackingMessage, triggeredBy = 'syst
   return { success: true };
 }
 
+/**
+ * Decide whether the customer can still cancel an order from WhatsApp.
+ *
+ * Rules (per product):
+ *   • Self-pickup (any payment): cancel allowed up to & including
+ *     `confirmed`. Once the kitchen starts preparing it, cancel is hidden.
+ *   • Delivery + COD / Pay-at-Hotel: cancel allowed up to but NOT including
+ *     `ready`. Once the order is ready/out_for_delivery the customer must
+ *     contact us to cancel (food has already been packed for the rider).
+ *   • Delivery + paid online (UPI / WhatsApp Pay): only `pending` — once
+ *     the kitchen accepts (confirmed) we keep the customer on the
+ *     contact-us path because a refund needs to be initiated manually.
+ *   • Terminal states (`delivered`, `cancelled`) and `out_for_delivery`
+ *     are never cancellable from the flow.
+ *
+ * Centralised here so the WhatsApp flow endpoint, the webhook My-Orders
+ * handler, and any other call site stay in sync.
+ *
+ * @param {Object} order  Order document or lean object
+ * @returns {boolean}
+ */
+function canCancelOrder(order) {
+  if (!order) return false;
+  const status = order.status;
+  if (['delivered', 'cancelled', 'out_for_delivery'].includes(status)) return false;
+
+  const isPickup = order.serviceType === 'pickup';
+  const isCOD = order.paymentMethod === 'cod';
+
+  if (isPickup) {
+    // Pickup: pending or confirmed only.
+    return status === ORDER_STATUS.PENDING || status === ORDER_STATUS.CONFIRMED;
+  }
+  // Delivery
+  if (isCOD) {
+    // Delivery + COD: pending, confirmed or preparing. Hidden once ready.
+    return [ORDER_STATUS.PENDING, ORDER_STATUS.CONFIRMED, ORDER_STATUS.PREPARING].includes(status);
+  }
+  // Delivery + paid online: pending only (refund involved past that).
+  return status === ORDER_STATUS.PENDING;
+}
+
 module.exports = {
   ORDER_STATUS,
   ALLOWED_TRANSITIONS,
   validateTransition,
-  transitionStatus
+  transitionStatus,
+  canCancelOrder
 };
