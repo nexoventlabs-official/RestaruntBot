@@ -15,6 +15,9 @@ const logger = require('../services/logger');
 const { logRouteError } = require('../services/logger');
 const User = require('../models/User');
 const pushNotification = require('../services/pushNotification');
+const restaurantConfig = require('../config/restaurant.config');
+const ownerNotify = require('../services/ownerNotify');
+const crmBridge = require('../services/crmBridge');
 const dataEvents = require('../services/eventEmitter');
 const { isShuttingDown } = require('../services/shutdownState');
 const router = express.Router();
@@ -136,6 +139,11 @@ router.post('/verify-upi', publicRateLimiter, async (req, res) => {
     }
 
     logger.info('Payment status changed', { orderId, from: 'pending', to: 'paid', via: 'verify-upi' });
+
+    // Notify the business owner on WhatsApp (Loop 3 — non-blocking)
+    ownerNotify.notifyOwner(updatedOrder, restaurantConfig);
+    // Push completed outcome to CRM (Loop 5 — non-blocking)
+    crmBridge.pushToCRM(crmBridge.fromOrder(updatedOrder), restaurantConfig);
 
     // Emit event for real-time updates
     dataEvents.emit('orders');
@@ -350,6 +358,11 @@ router.post('/razorpay-webhook', webhookRateLimiter, express.raw({ type: 'applic
             }
           
             logger.info('Payment captured via webhook', { orderId: updatedOrder.orderId });
+
+            // Notify the business owner on WhatsApp (Loop 3 — non-blocking)
+            ownerNotify.notifyOwner(updatedOrder, restaurantConfig);
+            // Push completed outcome to CRM (Loop 5 — non-blocking)
+            crmBridge.pushToCRM(crmBridge.fromOrder(updatedOrder), restaurantConfig);
           
             // Emit event for real-time updates
             dataEvents.emit('orders');
@@ -473,6 +486,11 @@ router.get('/callback', publicRateLimiter, async (req, res) => {
         if (updatedOrder) {
           const previousPaymentStatus = 'pending';
           logger.info('Payment status changed', { orderId: updatedOrder.orderId, from: previousPaymentStatus, to: 'paid', via: 'callback' });
+
+          // Notify the business owner on WhatsApp (Loop 3 — non-blocking)
+          ownerNotify.notifyOwner(updatedOrder, restaurantConfig);
+          // Push completed outcome to CRM (Loop 5 — non-blocking)
+          crmBridge.pushToCRM(crmBridge.fromOrder(updatedOrder), restaurantConfig);
 
           // Emit event for real-time updates
           dataEvents.emit('orders');

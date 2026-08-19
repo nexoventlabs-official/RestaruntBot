@@ -14,6 +14,9 @@ const { webhookRateLimiter } = require('../middleware/rateLimiter');
 const { verifyWebhookSignature } = require('../middleware/webhookVerification');
 const { validateMetaWebhook, sanitizeWebhookPayload } = require('../middleware/webhookValidation');
 const { transitionStatus, canCancelOrder } = require('../services/orderStateMachine');
+const restaurantConfig = require('../config/restaurant.config');
+const ownerNotify = require('../services/ownerNotify');
+const crmBridge = require('../services/crmBridge');
 const Customer = require('../models/Customer');
 const Offer = require('../models/Offer');
 const Order = require('../models/Order');
@@ -364,6 +367,11 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           dataEvents.emit('orders');
                           dataEvents.emit('dashboard');
 
+                          // Notify the business owner on WhatsApp (Loop 3 — non-blocking)
+                          ownerNotify.notifyOwner(order, restaurantConfig);
+                          // Push completed outcome to CRM (Loop 5 — non-blocking)
+                          crmBridge.pushToCRM(crmBridge.fromOrder(order), restaurantConfig);
+
                           logger.info('WhatsApp payment confirmed, order updated', { orderId: referenceId });
                         } else if (paymentStatus === 'failed' || paymentStatus === 'canceled') {
                           const newPayStatus = paymentStatus === 'canceled' ? 'cancelled' : 'failed';
@@ -532,7 +540,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                         // Send a Call CTA card so they can dial the restaurant
                         // straight from WhatsApp.
                         try {
-                          const supportPhone = process.env.RESTAURANT_PHONE || process.env.SUPPORT_PHONE || '+919440203095';
+                          const supportPhone = restaurantConfig.supportPhone;
                           const tokenParts = responseData.flow_token.replace('order_actions_', '');
                           const lastUnderscoreC = tokenParts.lastIndexOf('_');
                           const orderIdContact = responseData.order_id || tokenParts.substring(lastUnderscoreC + 1);
@@ -783,7 +791,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           }
                           if (helpAction === 'contact_us') {
                             try {
-                              const supportPhone = process.env.RESTAURANT_PHONE || process.env.SUPPORT_PHONE || '+919440203095';
+                              const supportPhone = restaurantConfig.supportPhone;
                               const contactImg = await chatbotImagesService.getImageUrl('help_support').catch(() => null);
                               const body =
                                 `*Need a hand with your order?*\n\n` +
@@ -1001,7 +1009,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                       else if (service === 'help_call') {
                         const userPhone = responseData.flow_token.replace('welcome_service_', '');
                         try {
-                          const supportPhone = process.env.RESTAURANT_PHONE || process.env.SUPPORT_PHONE || '+919440203095';
+                          const supportPhone = restaurantConfig.supportPhone;
                           const helpImg = await chatbotImagesService.getImageUrl('help_support').catch(() => null);
                           const body =
                             `*Need a hand?*\n\n` +
@@ -1198,9 +1206,9 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                 const audioId = message.audio?.id;
                 logger.info('Voice message received', { phone, audioId });
                 
-                if (audioId) {
+                if (audioId && restaurantConfig.aiVoiceTranscription) {
                   try {
-                    // Download and transcribe the audio
+                    // Download and transcribe the audio (Rule #2: AI in-flow only when enabled in config)
                     const audioBuffer = await metaCloud.downloadMedia(audioId);
                     let transcription = await groqAi.transcribeAudio(audioBuffer, message.audio?.mime_type || 'audio/ogg');
                     

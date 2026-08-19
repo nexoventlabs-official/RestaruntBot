@@ -18,6 +18,9 @@ const axios = require('axios');
 const logger = require('./logger');
 const { startTimer } = require('./logger');
 const { setMetadata } = require('./correlationContext');
+const restaurantConfig = require('../config/restaurant.config');
+const ownerNotify = require('./ownerNotify');
+const crmBridge = require('./crmBridge');
 
 // Helper: Count items including variants for accurate WhatsApp display
 // If an item has variants, count each variant as a separate item (matches Meta catalog)
@@ -1743,7 +1746,8 @@ const chatbot = {
     
     // If search has non-English characters OR limited matches, use AI to find matching tags
     const hasNonEnglish = /[^\x00-\x7F]/.test(text);
-    if (hasNonEnglish && allAvailableTags.length > 0) {
+    // Rule #2: AI is only used inside the flow when explicitly enabled in config.
+    if (restaurantConfig.aiSearchMatching && hasNonEnglish && allAvailableTags.length > 0) {
       try {
         const aiMatchedTags = await groqAi.matchSearchToTags(text, allAvailableTags);
         if (aiMatchedTags && aiMatchedTags.length > 0) {
@@ -3752,7 +3756,7 @@ const chatbot = {
                   headerImageUrl: checkoutImg || undefined,
                   headerText: 'Order Confirmation',
                   bodyText: '📋 Review your order and choose delivery type',
-                  footerText: 'Perivi Hotel',
+                  footerText: restaurantConfig.businessName,
                   flowToken,
                   flowAction: 'data_exchange',
                   mode: 'published'
@@ -4513,7 +4517,7 @@ const chatbot = {
     }
 
     const welcomeImageUrl = await chatbotImagesService.getImageUrl('welcome');
-    const welcomeMessage = `🏨 *Perivi Hotel*\n\n` +
+    const welcomeMessage = `🏨 *${restaurantConfig.businessName}*\n\n` +
       `Welcome! 🙏\n\n` +
       `We're delighted to serve you delicious food. How can we help you today?`;
 
@@ -4527,9 +4531,9 @@ const chatbot = {
         flowId,
         flowCta: 'Choose Service',
         headerImageUrl: welcomeImageUrl || undefined,
-        headerText: 'Perivi Hotel',
+        headerText: restaurantConfig.businessName,
         bodyText: welcomeMessage,
-        footerText: 'Powered by JRB Gold',
+        footerText: restaurantConfig.tagline,
         screenName: 'SERVICE_SELECT',
         screenData: flowData,
         flowToken: `welcome_service_${phone}`,
@@ -4698,7 +4702,7 @@ const chatbot = {
             flowCta: 'Browse by Category',
             headerText: `${label}`,
             bodyText: `Browse our ${flowData.categories.length} categories to find your favorite dishes!\nTap the button below to select a category.`,
-            footerText: 'Powered by JRB Gold',
+            footerText: restaurantConfig.tagline,
             screenName: 'CATEGORY_SELECT',
             screenData: flowData,
             flowToken: `category_select_${phone}`,
@@ -4741,7 +4745,7 @@ const chatbot = {
           `📋 ${category}`,
           `${catalogResult.totalMapped} items • Add to cart directly!\nTap any item to view details, select size/variant & add to order`,
           catalogResult.sections,
-          'Perivi Hotel'
+          restaurantConfig.businessName
         );
         return;
       }
@@ -4773,7 +4777,7 @@ const chatbot = {
             await whatsapp.sendCatalogMessage(
               phone,
               `🍽️ Browse our full menu!\n${menuItems.length} items available\n\nTap "View catalog" to see all items with images & prices. Add items to your cart and place your order!`,
-              'Perivi Hotel',
+              restaurantConfig.businessName,
               thumbnailId
             );
             return;
@@ -4789,7 +4793,7 @@ const chatbot = {
               '📋 Our Menu',
               `${catalogResult.totalMapped} items available\nBrowse, tap & add to cart!`,
               catalogResult.sections,
-              'Perivi Hotel'
+              restaurantConfig.businessName
             );
             return;
           }
@@ -4872,7 +4876,7 @@ const chatbot = {
             `🏷️ ${tagKeyword}`.substring(0, 60),
             `Found ${retailerIds.length} items matching "${tagKeyword}"\nTap to view details & add to cart`,
             sections,
-            'Perivi Hotel'
+            restaurantConfig.businessName
           );
           return;
         }
@@ -4887,7 +4891,7 @@ const chatbot = {
           `🏷️ ${tagKeyword}`.substring(0, 60),
           `Found ${items.length} items matching "${tagKeyword}"\nTap to view details & add to cart`,
           catalogResult.sections,
-          'Perivi Hotel'
+          restaurantConfig.businessName
         );
         return;
       }
@@ -5020,7 +5024,7 @@ const chatbot = {
             `🔍 ${searchLabel}`.substring(0, 60),
             `Found ${retailerIds.length} items matching ${searchLabel}\nTap to view details & add to cart`,
             sections,
-            'Perivi Hotel'
+            restaurantConfig.businessName
           );
           return;
         }
@@ -5035,7 +5039,7 @@ const chatbot = {
           `🔍 ${searchLabel}`.substring(0, 60),
           `Found ${items.length} items matching ${searchLabel}\nTap to view details & add to cart`,
           catalogResult.sections,
-          'Perivi Hotel'
+          restaurantConfig.businessName
         );
         return;
       }
@@ -5179,7 +5183,7 @@ const chatbot = {
             bodyText = `🔖 *${item.variants[singleVi].label}*\n${bodyText}`;
           }
           bodyText += '\nTap to add to cart!';
-          await whatsapp.sendProduct(phone, catalogId, retailerId, bodyText, 'Perivi Hotel');
+          await whatsapp.sendProduct(phone, catalogId, retailerId, bodyText, restaurantConfig.businessName);
           return;
         }
       }
@@ -5229,7 +5233,7 @@ const chatbot = {
           const ratingStr = item.totalRatings > 0 ? `⭐${item.avgRating} (${item.totalRatings} reviews)` : '';
           const foodIcon = item.foodType === 'veg' ? '🌿 Veg' : item.foodType === 'nonveg' ? '🍗 Non-Veg' : item.foodType === 'egg' ? '🥚 Egg' : '';
           const bodyText = `${foodIcon} ${ratingStr}\n⏱️ ${item.preparationTime || 15} mins prep time\nTap to add to cart!`;
-          await whatsapp.sendProduct(phone, catalogId, retailerId, bodyText, 'Perivi Hotel');
+          await whatsapp.sendProduct(phone, catalogId, retailerId, bodyText, restaurantConfig.businessName);
           return;
         }
       }
@@ -5305,7 +5309,7 @@ const chatbot = {
             flowCta: 'Browse by Category',
             headerText: `${label}`,
             bodyText: `Browse our ${flowData.categories.length} categories to add items to your cart!\nTap the button below to select a category.`,
-            footerText: 'Powered by JRB Gold',
+            footerText: restaurantConfig.tagline,
             screenName: 'CATEGORY_SELECT',
             screenData: flowData,
             flowToken: `category_select_order_${phone}`,
@@ -5492,7 +5496,7 @@ const chatbot = {
           `📋 ${category}`,
           `${items.length} items • Add to cart directly!`,
           catalogResult.sections,
-          'Perivi Hotel'
+          restaurantConfig.businessName
         );
         return;
       }
@@ -5521,7 +5525,7 @@ const chatbot = {
             await whatsapp.sendCatalogMessage(
               phone,
               `🍽️ Browse all items!\n${menuItems.length} items available\n\nTap "View catalog" to browse, add to cart & order!`,
-              'Perivi Hotel',
+              restaurantConfig.businessName,
               thumbnailId
             );
             return;
@@ -5536,7 +5540,7 @@ const chatbot = {
               '📋 All Items',
               `${catalogResult.totalMapped} items • Add to cart directly!`,
               catalogResult.sections,
-              'Perivi Hotel'
+              restaurantConfig.businessName
             );
             return;
           }
@@ -5741,7 +5745,7 @@ const chatbot = {
           headerImageUrl: orderSummaryImg || undefined,
           headerText: 'Payment Method',
           bodyText: '💳 Choose your payment method',
-          footerText: 'Perivi Hotel',
+          footerText: restaurantConfig.businessName,
           flowToken,
           flowAction: 'data_exchange',
           mode: 'published'
@@ -6087,6 +6091,11 @@ const chatbot = {
     
     // Update daily report in real-time
     googleSheets.syncTodayDailyReport().catch(err => logger.error('Daily report sync error', { error: err.message }));
+
+    // Notify the business owner on WhatsApp (Loop 3 — non-blocking, config-driven)
+    ownerNotify.notifyOwner(order, restaurantConfig);
+    // Push completed outcome to CRM (Loop 5 — non-blocking, config-driven)
+    crmBridge.pushToCRM(crmBridge.fromOrder(order), restaurantConfig);
 
     // Send push notification to admin for new COD order
     try {
@@ -6455,9 +6464,9 @@ const chatbot = {
 
     try {
       if (viewCartImageUrl) {
-        await whatsapp.sendImageWithButtons(phone, viewCartImageUrl, bodyText, serviceButtons, 'Perivi Hotel');
+        await whatsapp.sendImageWithButtons(phone, viewCartImageUrl, bodyText, serviceButtons, restaurantConfig.businessName);
       } else {
-        await whatsapp.sendButtons(phone, bodyText, serviceButtons, 'Perivi Hotel');
+        await whatsapp.sendButtons(phone, bodyText, serviceButtons, restaurantConfig.businessName);
       }
       logger.info('Sent cart summary with delivery/pickup buttons', { phone, items: validItems, total });
     } catch (err) {
@@ -7138,7 +7147,7 @@ const chatbot = {
       `Our support team is ready to help you with any questions or concerns!`;
 
     const helpSupportImageUrl = await chatbotImagesService.getImageUrl('help_support');
-    const supportPhone = '+919440203095'; // Support phone number
+    const supportPhone = restaurantConfig.supportPhone; // Support phone number (from config)
     
     if (helpSupportImageUrl) {
       await whatsapp.sendImageWithCtaPhone(phone, helpSupportImageUrl, msg, '📞 Call Us Now', supportPhone, 'We\'re here to help! 🙂');
@@ -7545,6 +7554,11 @@ const chatbot = {
       
       // Update daily report in real-time
       googleSheets.syncTodayDailyReport().catch(err => logger.error('Daily report sync error', { error: err.message }));
+
+      // Notify the business owner on WhatsApp (Loop 3 — non-blocking, config-driven)
+      ownerNotify.notifyOwner(order, restaurantConfig);
+      // Push completed outcome to CRM (Loop 5 — non-blocking, config-driven)
+      crmBridge.pushToCRM(crmBridge.fromOrder(order), restaurantConfig);
 
       // Send push notification to admin for new pickup order.
       // NOTE: previous code referenced an undefined `total` variable here

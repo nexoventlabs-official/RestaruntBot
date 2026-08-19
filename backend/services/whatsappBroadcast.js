@@ -3,6 +3,7 @@ const Customer = require('../models/Customer');
 const whatsapp = require('./whatsapp');
 const googleSheets = require('./googleSheets');
 const logger = require('./logger');
+const restaurantConfig = require('../config/restaurant.config');
 
 // Template name for broadcast offers - must be created in WhatsApp Business Manager
 // If you don't have a custom template, we'll use 'hello_world' which is pre-approved for all accounts
@@ -258,7 +259,7 @@ const whatsappBroadcast = {
       message += `Order now and enjoy this amazing deal! 🍽️`;
 
       // Website URL - for targeted offers, use special claim page with offerId and phone for discount
-      const baseWebsiteUrl = 'https://restarunt-bot.vercel.app';
+      const baseWebsiteUrl = restaurantConfig.frontendUrl;
       // We'll add phone to URL in the loop per-customer for targeted offers
       const defaultWebsiteUrl = (isTargetedOffer && offerId) 
         ? `${baseWebsiteUrl}/offer/${offerId}` 
@@ -551,7 +552,7 @@ const whatsappBroadcast = {
       }
       message += `Order now and enjoy this amazing deal! 🍽️`;
 
-      const websiteUrl = 'https://restarunt-bot.vercel.app/offers';
+      const websiteUrl = `${restaurantConfig.frontendUrl}/offers`;
 
       logger.info('[WhatsApp Broadcast] Testing send', { phone });
 

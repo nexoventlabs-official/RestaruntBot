@@ -24,6 +24,7 @@ const Customer = require('../models/Customer');
 const whatsapp = require('../services/whatsapp');
 const metaCloud = require('../services/metaCloud');
 const { transitionStatus, canCancelOrder } = require('../services/orderStateMachine');
+const restaurantConfig = require('../config/restaurant.config');
 
 const router = express.Router();
 
@@ -1038,7 +1039,7 @@ router.post('/', async (req, res) => {
           response = {
             screen: 'VISIT_WEBSITE',
             data: {
-              website_url: 'https://restarunt-bot.vercel.app/',
+              website_url: restaurantConfig.websiteUrl,
               flow_token: token
             }
           };
