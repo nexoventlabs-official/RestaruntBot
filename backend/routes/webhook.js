@@ -563,7 +563,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           logger.error('Flow: Order actions - contact CTA failed', { error: contactErr.message, phone });
                           await whatsapp.sendMessage(
                             phone,
-                            'You can reach us on +91 94402 03095. We are happy to help!'
+                            `You can reach us on ${restaurantConfig.supportPhone}. We are happy to help!`
                           ).catch(() => {});
                         }
                         return res.sendStatus(200);
@@ -809,7 +809,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                               logger.info('Flow: My Orders - contact CTA sent', { phone, orderId: helpOrderId, supportPhone });
                             } catch (contactErr) {
                               logger.error('Flow: My Orders - contact CTA failed', { error: contactErr.message, phone });
-                              await whatsapp.sendMessage(phone, 'You can reach us on +91 94402 03095. We are happy to help!').catch(() => {});
+                              await whatsapp.sendMessage(phone, `You can reach us on ${restaurantConfig.supportPhone}. We are happy to help!`).catch(() => {});
                             }
                             return res.sendStatus(200);
                           }
@@ -856,7 +856,6 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                                   // Help flow. Includes the cancel image
                                   // as a big-picture attachment.
                                   try {
-                                    const User = require('../models/User');
                                     const admins = await User.find({ pushToken: { $ne: null } });
                                     for (const adm of admins) {
                                       if (adm.pushToken) {
@@ -1024,7 +1023,7 @@ router.post('/meta', webhookRateLimiter, verifyWebhookSignature, validateMetaWeb
                           logger.info('Flow: Help Call - sent CTA phone card', { phone: userPhone, supportPhone });
                         } catch (ctaErr) {
                           logger.error('Flow: Help Call - failed to send CTA phone', { error: ctaErr.message, phone: userPhone });
-                          await whatsapp.sendMessage(userPhone, '*Need a hand?*\n\nCall us at: +91 94402 03095\nOur support team is happy to help!').catch(() => {});
+                          await whatsapp.sendMessage(userPhone, `*Need a hand?*\n\nCall us at: ${restaurantConfig.supportPhone}\nOur support team is happy to help!`).catch(() => {});
                         }
                         // Skip further processing — we already sent the response
                         return res.sendStatus(200);

@@ -40,7 +40,7 @@ function normalizeOrigin(origin) {
 function getAllowedOrigins() {
   // Always allow known production frontends
   const productionOrigins = [
-    'https://restarunt-bot.vercel.app',
+    process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app',
     'https://restaurant-bot.vercel.app',
     process.env.FRONTEND_URL,
     process.env.WEBSITE_URL

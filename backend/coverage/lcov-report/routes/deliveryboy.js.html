@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/569</span>
+                <span class='fraction'>0/570</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/550</span>
+                <span class='fraction'>0/551</span>
             </div>
         
             
@@ -1528,7 +1528,9 @@
 <a name='L1463'></a><a href='#L1463'>1463</a>
 <a name='L1464'></a><a href='#L1464'>1464</a>
 <a name='L1465'></a><a href='#L1465'>1465</a>
-<a name='L1466'></a><a href='#L1466'>1466</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L1466'></a><a href='#L1466'>1466</a>
+<a name='L1467'></a><a href='#L1467'>1467</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -3009,6 +3011,7 @@ const whatsapp = <span class="cstat-no" title="statement not covered" >require('
 const chatbotImagesService = <span class="cstat-no" title="statement not covered" >require('../services/chatbotImages');</span>
 const dataEvents = <span class="cstat-no" title="statement not covered" >require('../services/eventEmitter');</span>
 const razorpayService = <span class="cstat-no" title="statement not covered" >require('../services/razorpay');</span>
+const restaurantConfig = <span class="cstat-no" title="statement not covered" >require('../config/restaurant.config');</span>
 const { validateTransition } = <span class="cstat-no" title="statement not covered" >require('../services/orderStateMachine');</span>
 const multer = <span class="cstat-no" title="statement not covered" >require('multer');</span>
 const router = <span class="cstat-no" title="statement not covered" >express.Router();</span>
@@ -3967,7 +3970,7 @@ const sendPasswordEmail = <span class="cstat-no" title="statement not covered" >
     // Send WhatsApp notification to customer
     const readyImageUrl = <span class="cstat-no" title="statement not covered" >await chatbotImagesService.getImageUrl('ready');</span>
     const phone = <span class="cstat-no" title="statement not covered" >order.customer.phone;</span>
-    const trackUrl = <span class="cstat-no" title="statement not covered" >`https://restarunt-bot.vercel.app/track/${orderId}`;</span>
+    const trackUrl = <span class="cstat-no" title="statement not covered" >`${restaurantConfig.frontendUrl}/track/${orderId}`;</span>
 <span class="cstat-no" title="statement not covered" >    if (readyImageUrl) {</span>
 <span class="cstat-no" title="statement not covered" >      await whatsapp.sendImageWithCtaUrl(phone, readyImageUrl,</span>
         `📦 *Order Ready!*\n\nYour order #${orderId} is ready!\n\n🚴 Delivery Partner: *${req.deliveryBoy.name}*\n\nYour order will be picked up shortly.`,
@@ -4036,7 +4039,7 @@ const sendPasswordEmail = <span class="cstat-no" title="statement not covered" >
     // Send WhatsApp notification to customer
     const readyImageUrl = <span class="cstat-no" title="statement not covered" >await chatbotImagesService.getImageUrl('ready');</span>
     const phone = <span class="cstat-no" title="statement not covered" >order.customer.phone;</span>
-    const trackUrl = <span class="cstat-no" title="statement not covered" >`https://restarunt-bot.vercel.app/track/${orderId}`;</span>
+    const trackUrl = <span class="cstat-no" title="statement not covered" >`${restaurantConfig.frontendUrl}/track/${orderId}`;</span>
 <span class="cstat-no" title="statement not covered" >    if (readyImageUrl) {</span>
 <span class="cstat-no" title="statement not covered" >      await whatsapp.sendImageWithCtaUrl(phone, readyImageUrl,</span>
         `📦 *Order Ready!*\n\nYour order #${orderId} is ready!\n\n🚴 Delivery Partner: *${req.deliveryBoy.name}*\n\nYour order will be picked up shortly.`,
@@ -4108,14 +4111,14 @@ const sendPasswordEmail = <span class="cstat-no" title="statement not covered" >
 <span class="cstat-no" title="statement not covered" >      await whatsapp.sendImageWithCtaUrl(phone, outForDeliveryImageUrl,</span>
         `🛵 *Your Order is On the Way!*\n\nYour order #${orderId} is on the way!\n\n🚴 ${req.deliveryBoy.name} is delivering your order.`,
         'Track Order',
-        `https://restarunt-bot.vercel.app/track/${orderId}`,
+        `${restaurantConfig.frontendUrl}/track/${orderId}`,
         'Tap to track'
       );
     } else {
 <span class="cstat-no" title="statement not covered" >      await whatsapp.sendCtaUrl(phone,</span>
         `🛵 *Your Order is On the Way!*\n\nYour order #${orderId} is on the way!\n\n🚴 ${req.deliveryBoy.name} is delivering your order.`,
         'Track Order',
-        `https://restarunt-bot.vercel.app/track/${orderId}`,
+        `${restaurantConfig.frontendUrl}/track/${orderId}`,
         'Tap to track'
       );
     }
@@ -4220,7 +4223,7 @@ const sendPasswordEmail = <span class="cstat-no" title="statement not covered" >
     const deliveredImageUrl = <span class="cstat-no" title="statement not covered" >await chatbotImagesService.getImageUrl('delivered');</span>
     const phone = <span class="cstat-no" title="statement not covered" >order.customer.phone;</span>
     const cleanPhone = <span class="cstat-no" title="statement not covered" >phone.replace(/\D/g, '').slice(-10);</span>
-    const reviewUrl = <span class="cstat-no" title="statement not covered" >`https://restarunt-bot.vercel.app/review/${cleanPhone}/${orderId}`;</span>
+    const reviewUrl = <span class="cstat-no" title="statement not covered" >`${restaurantConfig.frontendUrl}/review/${cleanPhone}/${orderId}`;</span>
     
 <span class="cstat-no" title="statement not covered" >    if (deliveredImageUrl) {</span>
 <span class="cstat-no" title="statement not covered" >      await whatsapp.sendImageWithCtaUrl(phone, deliveredImageUrl,</span>
@@ -4415,7 +4418,7 @@ const sendPasswordEmail = <span class="cstat-no" title="statement not covered" >
           const deliveredImageUrl = <span class="cstat-no" title="statement not covered" >await chatbotImagesService.getImageUrl('delivered');</span>
           const phone = <span class="cstat-no" title="statement not covered" >updatedOrder.customer.phone;</span>
           const cleanPhone = <span class="cstat-no" title="statement not covered" >phone.replace(/\D/g, '').slice(-10);</span>
-          const reviewUrl = <span class="cstat-no" title="statement not covered" >`https://restarunt-bot.vercel.app/review/${cleanPhone}/${orderId}`;</span>
+          const reviewUrl = <span class="cstat-no" title="statement not covered" >`${restaurantConfig.frontendUrl}/review/${cleanPhone}/${orderId}`;</span>
           
 <span class="cstat-no" title="statement not covered" >          if (deliveredImageUrl) {</span>
 <span class="cstat-no" title="statement not covered" >            await whatsapp.sendImageWithCtaUrl(phone, deliveredImageUrl,</span>
@@ -4465,7 +4468,7 @@ const sendPasswordEmail = <span class="cstat-no" title="statement not covered" >
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-21T10:10:14.953Z
+                at 2026-08-19T14:05:33.486Z
             </div>
         <script src="../prettify.js"></script>
         <script>

@@ -292,7 +292,7 @@ const brevoMail = {
             <p style="margin: 10px 0;"><strong>Password:</strong> <code style="background: #f0f0f0; padding: 5px 10px; border-radius: 5px; font-size: 18px;">${password}</code></p>
           </div>
           <p style="color: #e63946; font-weight: bold;">⚠️ Please change your password after first login!</p>
-          <p style="color: #61636b;">Login at: <a href="https://restarunt-bot.vercel.app/delivery/login" style="color: #e63946;">Delivery Portal</a></p>
+          <p style="color: #61636b;">Login at: <a href="${process.env.FRONTEND_URL || 'https://restarunt-bot.vercel.app'}/delivery/login" style="color: #e63946;">Delivery Portal</a></p>
         </div>
         <div style="padding: 20px; text-align: center; color: #61636b; font-size: 12px;">
           <p>This is an automated message from FoodAdmin.</p>

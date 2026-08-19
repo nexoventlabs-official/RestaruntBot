@@ -18,7 +18,7 @@ module.exports = {
 
   // ── CONTACT ──────────────────────────────────────────────────────────
   ownerPhone:          process.env.RESTAURANT_PHONE || '',   // owner notifications (Loop 3) go here
-  supportPhone:        process.env.RESTAURANT_PHONE || process.env.SUPPORT_PHONE || '+919440203095',
+  supportPhone:        process.env.SUPPORT_PHONE || process.env.RESTAURANT_PHONE || '',
   address:             process.env.RESTAURANT_ADDRESS || '',
 
   // ── WEB / LINKS ──────────────────────────────────────────────────────

@@ -200,8 +200,11 @@ describe('O4: Payment status transition logging', () => {
     const whLines = webhookSrc.split('\n');
     const whAssignments = whLines
       .map((line, i) => ({ line, num: i }))
-      .filter(({ line }) => /order\.paymentStatus\s*=/.test(line) && !line.includes('//'));
-    expect(whAssignments.length).toBe(2);
+      // Match real assignments only (`=` not followed by `=`), so `=== 'pending'`
+      // comparisons are excluded. Count is >= 2 (success + failed/canceled;
+      // COD cancellation adds another).
+      .filter(({ line }) => /order\.paymentStatus\s*=(?!=)/.test(line) && !line.includes('//'));
+    expect(whAssignments.length).toBeGreaterThanOrEqual(2);
   });
 });
 

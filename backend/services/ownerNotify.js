@@ -70,25 +70,55 @@ function buildOwnerMessage(order, config) {
  * @param {Object} config - restaurant.config
  */
 async function notifyOwner(order, config) {
-  try {
-    if (!order) return;
-    const ownerPhone = config && config.ownerPhone;
-    if (!ownerPhone) {
-      logger.info('Owner notification skipped — ownerPhone not configured', { orderId: order.orderId });
-      return;
-    }
-    const ref = order.orderId;
-    if (ref) {
-      if (_notified.has(ref)) return; // already notified this order
-      _notified.add(ref);
-    }
-    const message = buildOwnerMessage(order, config);
-    await metaCloud.sendMessage(ownerPhone, message);
-    logger.info('Owner notification sent', { orderId: ref, ownerPhone });
-  } catch (err) {
-    // Never throw — order completion must never be blocked by this.
-    logger.error('Owner notification failed', { error: err.message, orderId: order && order.orderId });
+  if (!order) return;
+  const ownerPhone = config && config.ownerPhone;
+  if (!ownerPhone) {
+    logger.info('Owner notification skipped — ownerPhone not configured', { orderId: order && order.orderId });
+    return;
   }
+
+  // In-process dedupe — one owner notification per order (kept as-is).
+  const ref = order.orderId;
+  if (ref) {
+    if (_notified.has(ref)) return; // already notified this order
+    _notified.add(ref);
+  }
+
+  // Build the message once, outside the retry loop.
+  const message = buildOwnerMessage(order, config);
+
+  // Retry with backoff on transient Meta API failures: immediate, +30s, +2m.
+  // Runs in the background (callers do not await) so order completion is
+  // never blocked. Never throws.
+  const delays = [0, 30000, 120000];
+  for (let attempt = 0; attempt < delays.length; attempt++) {
+    if (delays[attempt] > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+    }
+    try {
+      await metaCloud.sendMessage(ownerPhone, message);
+      if (attempt > 0) {
+        logger.info('Owner notification succeeded on retry', { orderId: ref, attemptNumber: attempt + 1 });
+      } else {
+        logger.info('Owner notification sent', { orderId: ref, ownerPhone });
+      }
+      return;
+    } catch (err) {
+      logger.error('Owner notification attempt failed', {
+        orderId: ref,
+        attemptNumber: attempt + 1,
+        delayMs: delays[attempt],
+        error: err.message,
+      });
+    }
+  }
+
+  logger.error('CRITICAL: Owner notification failed all attempts', {
+    orderId: ref,
+    ownerPhone,
+    hint: 'Check Meta API connectivity and owner phone number format',
+  });
+  // Do NOT throw — order completion must never be blocked by notification failure.
 }
 
 module.exports = { notifyOwner, buildOwnerMessage };

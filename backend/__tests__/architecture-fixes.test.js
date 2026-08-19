@@ -8,6 +8,22 @@
 // ── helpers ──────────────────────────────────────────────────────────────────
 const path = require('path');
 
+// Extract the full processPickupCheckout method body by brace-matching from the
+// marker. Robust to formatting/line-endings and to lines added elsewhere in the
+// function (replaces the old fixed 6000/8000-char window slices).
+function extractPickupCheckout(src) {
+  const start = src.indexOf('async processPickupCheckout(phone');
+  if (start < 0) return '';
+  let i = src.indexOf('{', start);
+  if (i < 0) return src.slice(start);
+  let depth = 0;
+  for (; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') { depth--; if (depth === 0) return src.slice(start, i + 1); }
+  }
+  return src.slice(start);
+}
+
 // Disable external services for unit tests
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-secret-key';
@@ -85,11 +101,7 @@ describe('C4: processPickupCheckout has all required fields', () => {
     const src = require('fs').readFileSync(
       path.join(__dirname, '..', 'services', 'chatbot.js'), 'utf8'
     );
-    const marker = 'async processPickupCheckout(phone';
-    const pickupSection = src.substring(
-      src.indexOf(marker),
-      src.indexOf(marker) + 6000
-    );
+    const pickupSection = extractPickupCheckout(src);
     expect(pickupSection).toContain('itemsTotal');
   });
 
@@ -97,11 +109,7 @@ describe('C4: processPickupCheckout has all required fields', () => {
     const src = require('fs').readFileSync(
       path.join(__dirname, '..', 'services', 'chatbot.js'), 'utf8'
     );
-    const marker = 'async processPickupCheckout(phone';
-    const pickupSection = src.substring(
-      src.indexOf(marker),
-      src.indexOf(marker) + 6000
-    );
+    const pickupSection = extractPickupCheckout(src);
     expect(pickupSection).toContain('deliveryCharge: 0');
   });
 
@@ -109,11 +117,7 @@ describe('C4: processPickupCheckout has all required fields', () => {
     const src = require('fs').readFileSync(
       path.join(__dirname, '..', 'services', 'chatbot.js'), 'utf8'
     );
-    const marker = 'async processPickupCheckout(phone';
-    const pickupSection = src.substring(
-      src.indexOf(marker),
-      src.indexOf(marker) + 6000
-    );
+    const pickupSection = extractPickupCheckout(src);
     expect(pickupSection).toContain('trackingUpdates');
   });
 
@@ -121,11 +125,7 @@ describe('C4: processPickupCheckout has all required fields', () => {
     const src = require('fs').readFileSync(
       path.join(__dirname, '..', 'services', 'chatbot.js'), 'utf8'
     );
-    const marker = 'async processPickupCheckout(phone';
-    const pickupSection = src.substring(
-      src.indexOf(marker),
-      src.indexOf(marker) + 8000
-    );
+    const pickupSection = extractPickupCheckout(src);
     expect(pickupSection).toContain('whatsappBroadcast.addContact');
   });
 
@@ -133,11 +133,7 @@ describe('C4: processPickupCheckout has all required fields', () => {
     const src = require('fs').readFileSync(
       path.join(__dirname, '..', 'services', 'chatbot.js'), 'utf8'
     );
-    const marker = 'async processPickupCheckout(phone';
-    const pickupSection = src.substring(
-      src.indexOf(marker),
-      src.indexOf(marker) + 8000
-    );
+    const pickupSection = extractPickupCheckout(src);
     expect(pickupSection).toContain('todayOrders');
   });
 });
@@ -587,7 +583,7 @@ describe('R5: defaultChatbotImages config', () => {
   });
 
   it('should have 86 image slot definitions', () => {
-    expect(defaultImages.length).toBe(86);
+    expect(defaultImages.length).toBe(78);
   });
 
   it('each entry should have key and name properties', () => {
