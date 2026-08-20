@@ -3,8 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { StarIcon, ArrowLeftIcon, CheckCircleIcon, XCircleIcon, TruckIcon } from '../components/Icons';
 
-const API_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api') + '/public';
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api').replace('/api', '');
+const API_URL = (import.meta.env.VITE_API_URL || 'https://tamilnadubjp.live/api') + '/public';
+const API_BASE_URL = (import.meta.env.VITE_API_URL || 'https://tamilnadubjp.live/api').replace('/api', '');
 
 export default function Review() {
   const { phone, orderId } = useParams();

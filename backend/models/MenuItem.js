@@ -12,6 +12,8 @@ const menuItemSchema = new mongoose.Schema({
   foodType: { type: String, default: 'none', enum: ['veg', 'nonveg', 'egg', 'none'] },
   offerType: { type: [String], default: [] }, // Links to offer types from Offers (can have multiple)
   image: { type: String },
+  coverImage: { type: String }, // Detail-page hero/banner image (landscape)
+  video: { type: String },      // Product video (Cloudinary video URL)
   available: { type: Boolean, default: true },
   isPaused: { type: Boolean, default: false },
   preparationTime: { type: Number, default: 15 },
@@ -26,7 +28,8 @@ const menuItemSchema = new mongoose.Schema({
     offerPrice: { type: Number },                    // Offer price for this variant
     quantity: { type: Number, default: 1 },           // Default quantity
     unit: { type: String, default: 'piece', enum: ['piece', 'kg', 'gram', 'liter', 'ml', 'plate', 'bowl', 'cup', 'slice', 'inch', 'full', 'half', 'small'] },
-    image: { type: String },                         // Variant-specific image
+    image: { type: String },                         // Variant-specific main image
+    images: { type: [String], default: [] },         // Additional images for this variant (gallery)
     description: { type: String, trim: true },                   // Variant-specific description
     foodType: { type: String, default: 'none', enum: ['veg', 'nonveg', 'egg', 'none'] },
     tags: [String],                                  // Variant-specific tags

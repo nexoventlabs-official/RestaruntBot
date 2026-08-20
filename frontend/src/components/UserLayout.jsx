@@ -15,9 +15,9 @@ import {
 } from './Icons';
 
 const WHATSAPP_NUMBER = '918328602215';
-const API_URL = 'https://restaruntbot.onrender.com/api/public';
-const SETTINGS_URL = 'https://restaruntbot.onrender.com/api/settings';
-const SSE_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api') + '/public/events';
+const API_URL = 'https://tamilnadubjp.live/api/public';
+const SETTINGS_URL = 'https://tamilnadubjp.live/api/settings';
+const SSE_URL = (import.meta.env.VITE_API_URL || 'https://tamilnadubjp.live/api') + '/public/events';
 
 const navLinks = [
   { path: '/', label: 'Home', icon: HomeIcon },

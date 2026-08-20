@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Orders from './pages/Orders';
 import Menu from './pages/Menu';
+import Categories from './pages/Categories';
 import Reports from './pages/Reports';
 import NotFound from './pages/NotFound';
 import Layout from './components/Layout';
@@ -46,7 +47,7 @@ function App() {
     }
   }, []);
 
-  if (loading || isPreloading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-[#f8f9fb]">
         <div className="flex flex-col items-center gap-4">
@@ -60,7 +61,7 @@ function App() {
             <p className="text-dark-400 text-sm mt-1">
               {isPreloading ? `Loading images... ${progress}%` : 'Loading...'}
             </p>
-            {isPreloading && (
+            {false && (
               <div className="w-48 h-1.5 bg-gray-200 rounded-full mt-3 overflow-hidden">
                 <div 
                   className="h-full bg-gradient-to-r from-red-500 to-red-600 rounded-full transition-all duration-300"
@@ -108,6 +109,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="orders" element={<Orders />} />
             <Route path="menu" element={<Menu />} />
+            <Route path="categories" element={<Categories />} />
             <Route path="offers" element={<Offers />} />
             <Route path="reports" element={<Reports />} />
             <Route path="chatbot-images" element={<ChatbotImages />} />
@@ -131,6 +133,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="orders" element={<Orders />} />
             <Route path="menu" element={<Menu />} />
+            <Route path="categories" element={<Categories />} />
             <Route path="offers" element={<Offers />} />
             <Route path="reports" element={<Reports />} />
             <Route path="delivery-persons" element={<DeliveryPersons />} />

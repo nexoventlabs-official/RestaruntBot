@@ -3,8 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { X } from 'lucide-react';
 
-const API_URL = 'https://restaruntbot.onrender.com/api/public';
-const SSE_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api') + '/public/events';
+const API_URL = 'https://tamilnadubjp.live/api/public';
+const SSE_URL = (import.meta.env.VITE_API_URL || 'https://tamilnadubjp.live/api') + '/public/events';
 
 export default function OfferPopup() {
   const navigate = useNavigate();

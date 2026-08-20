@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api': 'https://restaruntbot.onrender.com'
+      '/api': 'https://tamilnadubjp.live'
     }
   },
   build: {

@@ -9,7 +9,7 @@ import {
 import { Star, Heart, ShoppingCart, Plus, Minus, X, Clock, Package, Tag } from 'lucide-react';
 import { useCachedData } from '../hooks/useImagePreloader';
 
-const API_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api') + '/public';
+const API_URL = (import.meta.env.VITE_API_URL || 'https://tamilnadubjp.live/api') + '/public';
 
 // Category Card Component
 const CategoryCard = ({ cat, getCategoryItemCount }) => (

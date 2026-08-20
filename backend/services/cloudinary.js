@@ -83,6 +83,45 @@ const cloudinaryService = {
   },
 
   /**
+   * Upload a video from buffer to Cloudinary (product videos).
+   * @param {Buffer} buffer - Video buffer
+   * @param {string} folder - Folder name
+   * @returns {Promise<string>} - Cloudinary video URL
+   */
+  async uploadVideoFromBuffer(buffer, folder = 'restaurant-bot/menu-videos') {
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        { folder, resource_type: 'video' },
+        (error, result) => {
+          if (error) {
+            logger.error('❌ Cloudinary video upload error:', error.message);
+            reject(error);
+          } else {
+            logger.info('✅ Cloudinary video upload success:', result.secure_url);
+            resolve(result.secure_url);
+          }
+        }
+      );
+      uploadStream.end(buffer);
+    });
+  },
+
+  /**
+   * Delete a video from Cloudinary (resource_type video).
+   * @param {string} publicId - Public ID of the video
+   */
+  async deleteVideo(publicId) {
+    try {
+      const result = await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
+      logger.info('✅ Cloudinary video delete:', publicId, result);
+      return result;
+    } catch (error) {
+      logger.error('❌ Cloudinary video delete error:', error.message);
+      throw error;
+    }
+  },
+
+  /**
    * Upload image preserving original aspect ratio (for offer cards, banners, etc.)
    * @param {Buffer} buffer - Image buffer
    * @param {string} folder - Folder name

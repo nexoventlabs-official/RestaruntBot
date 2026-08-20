@@ -10,7 +10,7 @@ async function main() {
   const catalogService = require('./services/catalogService');
 
   const FLOW_NAME = 'JRB Payment Method v1';
-  const ENDPOINT_URI = 'https://restaruntbot.onrender.com/api/whatsapp-flow';
+  const ENDPOINT_URI = `${process.env.BACKEND_URL || 'https://tamilnadubjp.live'}/api/whatsapp-flow`;
   const TOKEN = process.env.META_ACCESS_TOKEN;
 
   // Step 1: Create

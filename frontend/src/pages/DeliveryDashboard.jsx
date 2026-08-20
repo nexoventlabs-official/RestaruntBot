@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Bike, LogOut, User, Eye, EyeOff, Check, X, Settings, Package, MapPin, Phone, Clock, RefreshCw, Banknote, QrCode } from 'lucide-react';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://tamilnadubjp.live/api';
 
 export default function DeliveryDashboard() {
   const [user, setUser] = useState(null);

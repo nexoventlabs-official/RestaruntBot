@@ -22,7 +22,7 @@ describe('API Configuration', () => {
 
   it('should have a base URL configured', async () => {
     // We can't easily import api.js due to import.meta, so test the pattern
-    const baseURL = import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api';
+    const baseURL = import.meta.env.VITE_API_URL || 'https://tamilnadubjp.live/api';
     expect(baseURL).toBeDefined();
     expect(baseURL).toContain('/api');
   });

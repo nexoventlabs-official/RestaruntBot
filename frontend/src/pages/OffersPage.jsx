@@ -3,7 +3,7 @@ import { useSearchParams, useParams, useOutletContext } from 'react-router-dom';
 import axios from 'axios';
 import { Tag, ShoppingCart, Plus, Minus, Heart, Star, X, Clock, Package, Search, Gift, AlertCircle } from 'lucide-react';
 
-const API_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api') + '/public';
+const API_URL = (import.meta.env.VITE_API_URL || 'https://tamilnadubjp.live/api') + '/public';
 const WHATSAPP_NUMBER = '918328602215';
 
 // WhatsApp Icon Component
@@ -138,7 +138,7 @@ export default function OffersPage() {
 
   const setupSSE = () => {
     try {
-      const SSE_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api') + '/public/events';
+      const SSE_URL = (import.meta.env.VITE_API_URL || 'https://tamilnadubjp.live/api') + '/public/events';
       eventSourceRef.current = new EventSource(SSE_URL);
       eventSourceRef.current.onmessage = (event) => {
         try {

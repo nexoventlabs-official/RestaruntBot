@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { ArrowRightIcon, ArrowLeftIcon } from './Icons';
 
-const API_URL = 'https://restaruntbot.onrender.com/api/public';
+const API_URL = 'https://tamilnadubjp.live/api/public';
 
 export default function HeroCarousel() {
   const [heroes, setHeroes] = useState([]);

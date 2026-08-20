@@ -4,8 +4,8 @@ import axios from 'axios';
 import { Star, Plus, Minus, Heart, ShoppingCart, X, Clock, Package, Search, Tag } from 'lucide-react';
 import { useCachedData } from '../hooks/useImagePreloader';
 
-const API_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api') + '/public';
-const SSE_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api') + '/public/events';
+const API_URL = (import.meta.env.VITE_API_URL || 'https://tamilnadubjp.live/api') + '/public';
+const SSE_URL = (import.meta.env.VITE_API_URL || 'https://tamilnadubjp.live/api') + '/public/events';
 const WHATSAPP_NUMBER = '918328602215';
 
 // WhatsApp Icon Component
@@ -55,6 +55,8 @@ export default function UserMenuPage() {
   const [selectedVariantIndex, setSelectedVariantIndex] = useState(null);
   const [selectedQuantityIndex, setSelectedQuantityIndex] = useState(null);
   const [showAllVariants, setShowAllVariants] = useState(false);
+  const [galleryIdx, setGalleryIdx] = useState(0);
+  const [hoverVideo, setHoverVideo] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const eventSourceRef = useRef(null);
 
@@ -79,6 +81,24 @@ export default function UserMenuPage() {
   }, []);
   
   useEffect(() => { loadItems(); }, [selectedCategory]);
+
+  // Reset media gallery when the item or selected variant changes
+  useEffect(() => { setGalleryIdx(0); setHoverVideo(false); }, [selectedItem, selectedVariantIndex]);
+
+  // Build the media gallery for the dialog: main image → video → extra images.
+  const buildDialogMedia = () => {
+    if (!selectedItem) return [];
+    const v = selectedVariantIndex !== null ? selectedItem.variants?.[selectedVariantIndex] : null;
+    const imgs = (v ? [v.image, ...(v.images || [])] : [selectedItem.image, ...(selectedItem.gallery || [])]).filter(Boolean);
+    if (!imgs.length && selectedItem.image) imgs.push(selectedItem.image);
+    const out = [];
+    const seen = new Set();
+    const pushImg = (u) => { if (u && !seen.has(u)) { seen.add(u); out.push({ type: 'image', url: u }); } };
+    pushImg(imgs[0]);
+    if (selectedItem.video) out.push({ type: 'video', url: selectedItem.video });
+    imgs.slice(1).forEach(pushImg);
+    return out;
+  };
 
   // Handle food type change with fade effect
   const handleFoodTypeChange = (type) => {
@@ -1275,24 +1295,67 @@ export default function UserMenuPage() {
               <X className="w-5 h-5" />
             </button>
 
-            {/* Left Side - Image (PC) / Top (Mobile) */}
-            <div className="relative h-40 sm:h-56 lg:h-auto lg:w-[45%] bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center flex-shrink-0">
-              {(getDialogItemDetails().image || selectedItem.image) ? (
-                <img 
-                  src={getDialogItemDetails().image || selectedItem.image} 
-                  alt={selectedItem.name}
-                  className="max-h-full max-w-full object-contain p-4 sm:p-6 lg:p-8"
-                />
-              ) : (
-                <span className="text-6xl sm:text-7xl lg:text-8xl">🍽️</span>
-              )}
-              
-              {/* Food Type Badge */}
-              {selectedItem.foodType && (
-                <div className="absolute top-3 left-3">
-                  <FoodTypeBadge type={selectedItem.foodType} size="lg" />
-                </div>
-              )}
+            {/* Left Side - Media Gallery (PC) / Top (Mobile) */}
+            <div className="relative lg:w-[45%] bg-gradient-to-br from-orange-50 to-orange-100 flex flex-col flex-shrink-0">
+              {(() => {
+                const media = buildDialogMedia();
+                const active = media[galleryIdx] || media[0];
+                const showVideo = selectedItem.video && (active?.type === 'video' || hoverVideo);
+                return (
+                  <>
+                    {/* Main media */}
+                    <div
+                      className="relative flex-1 h-40 sm:h-56 lg:h-auto flex items-center justify-center min-h-0"
+                      onMouseEnter={() => { if (selectedItem.video) setHoverVideo(true); }}
+                      onMouseLeave={() => setHoverVideo(false)}
+                    >
+                      {showVideo ? (
+                        <video
+                          key="dlg-video"
+                          src={selectedItem.video}
+                          autoPlay muted loop playsInline disablePictureInPicture
+                          controlsList="nodownload noplaybackrate nofullscreen"
+                          onContextMenu={(e) => e.preventDefault()}
+                          className="max-h-full max-w-full object-contain p-4 sm:p-6 lg:p-8 bg-black/5"
+                        />
+                      ) : active?.url ? (
+                        <img src={active.url} alt={selectedItem.name} className="max-h-full max-w-full object-contain p-4 sm:p-6 lg:p-8" />
+                      ) : (
+                        <span className="text-6xl sm:text-7xl lg:text-8xl">🍽️</span>
+                      )}
+
+                      {/* Food Type Badge */}
+                      {selectedItem.foodType && (
+                        <div className="absolute top-3 left-3">
+                          <FoodTypeBadge type={selectedItem.foodType} size="lg" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Thumbnails */}
+                    {media.length > 1 && (
+                      <div className="flex gap-2 p-3 overflow-x-auto scrollbar-hide flex-shrink-0">
+                        {media.map((m, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setGalleryIdx(i)}
+                            className={`relative w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all bg-white ${i === galleryIdx ? 'border-orange-500' : 'border-transparent hover:border-orange-300'}`}
+                          >
+                            {m.type === 'video' ? (
+                              <>
+                                <video src={m.url} muted className="w-full h-full object-cover" />
+                                <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-white text-xs">▶</span>
+                              </>
+                            ) : (
+                              <img src={m.url} alt="" className="w-full h-full object-cover" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             {/* Right Side - Details (PC) / Bottom (Mobile) - Scrollable */}

@@ -6,7 +6,7 @@ import {
   PackageIcon, ArrowLeftIcon, RefreshIcon, LocationIcon, PhoneIcon 
 } from '../components/Icons';
 
-const API_URL = (import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api') + '/public';
+const API_URL = (import.meta.env.VITE_API_URL || 'https://tamilnadubjp.live/api') + '/public';
 
 const statusConfig = {
   pending: { 

@@ -12,14 +12,16 @@ import {
   Bike,
   Tag,
   Settings,
-  Shield
+  Shield,
+  FolderTree
 } from 'lucide-react';
 
 // Nav items keyed by relative segment; built dynamically based on role
 const BASE_ITEMS = [
   { segment: '', icon: LayoutDashboard, label: 'Dashboard', description: 'Overview & stats' },
   { segment: 'orders', icon: ShoppingBag, label: 'Orders', description: 'Manage orders' },
-  { segment: 'menu', icon: UtensilsCrossed, label: 'Menu', description: 'Food items' },
+  { segment: 'menu', icon: UtensilsCrossed, label: 'Products', description: 'Food items & variants' },
+  { segment: 'categories', icon: FolderTree, label: 'Categories', description: 'Menu categories' },
   { segment: 'offers', icon: Tag, label: 'Offers', description: 'Promotions & deals' },
   { segment: 'delivery-persons', icon: Bike, label: 'Delivery', description: 'Delivery partners' },
   { segment: 'reports', icon: BarChart3, label: 'Reports', description: 'Analytics & reports' },

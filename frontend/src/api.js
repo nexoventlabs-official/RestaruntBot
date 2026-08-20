@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({ 
-  baseURL: import.meta.env.VITE_API_URL || 'https://restaruntbot.onrender.com/api',
+  baseURL: import.meta.env.VITE_API_URL || 'https://tamilnadubjp.live/api',
   timeout: 15000 // 15 second timeout to prevent infinite loading
 });
 

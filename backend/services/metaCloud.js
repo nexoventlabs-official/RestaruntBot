@@ -1370,16 +1370,14 @@ const metaCloud = {
             condition: 'new',
           };
 
-          // Set item_group_id to unique retailerId so each variant is its own "group" — no picker
-          // Also clear color/size to remove old variant picker attributes
-          if (product.itemGroupId) {
-            data.item_group_id = product.itemGroupId;
-          } else {
-            data.item_group_id = product.retailerId; // unique per variant = no grouping
-          }
-          // Clear color/size so picker doesn't appear from old cached values
+          // Group all variants of a product under one item_group_id (the parent
+          // product id) so Meta shows them as ONE catalog product with a size
+          // picker — like the FMCG reference. Falls back to retailerId (no group)
+          // when no groupId is supplied (single products).
+          data.item_group_id = product.groupId || product.itemGroupId || product.retailerId;
           data.color = product.colorLabel || '';
-          data.size = product.sizeLabel || '';
+          // The distinguishing variant attribute Meta uses to build the picker.
+          data.size = product.size || product.sizeLabel || '';
 
           if (product.salePrice && product.salePrice < product.price) {
             data.sale_price = `${product.salePrice.toFixed(2)} ${currency}`;
@@ -1390,6 +1388,12 @@ const metaCloud = {
 
           if (product.imageUrl) {
             data.image_link = product.imageUrl;
+          }
+
+          // Additional (gallery) images shown on the catalog product detail page.
+          // Meta accepts up to 10 extra URLs via comma-separated additional_image_link.
+          if (Array.isArray(product.additionalImages) && product.additionalImages.length > 0) {
+            data.additional_image_link = product.additionalImages.filter(Boolean).slice(0, 10).join(',');
           }
 
           endTimer({ success: true });

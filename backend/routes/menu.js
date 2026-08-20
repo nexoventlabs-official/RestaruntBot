@@ -15,24 +15,62 @@ const router = express.Router();
 // Rate limiting for public menu routes
 router.use(publicRateLimiter);
 
-// Configure multer for memory storage — supports main image + variant images
+// Configure multer for memory storage — supports images + product video
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  limits: { fileSize: 60 * 1024 * 1024 }, // 60MB limit (videos)
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed'), false);
+    // Videos are only allowed on the dedicated 'video' field; everything else must be an image
+    if (file.fieldname === 'video') {
+      if (file.mimetype.startsWith('video/')) return cb(null, true);
+      return cb(new Error('Only video files are allowed for the video field'), false);
     }
+    if (file.mimetype.startsWith('image/')) return cb(null, true);
+    return cb(new Error('Only image files are allowed'), false);
   }
 });
 
-// Multer fields: 'image' for main item image, 'variantImages' for variant-specific images
+// Multer fields:
+//  image          → main product image
+//  cover          → detail-page hero/banner image
+//  video          → product video
+//  variantImages  → main image per variant (mapped via variantImageIndices)
+//  variantGallery → additional images per variant (mapped via variantGalleryIndices)
 const menuUpload = upload.fields([
   { name: 'image', maxCount: 1 },
-  { name: 'variantImages', maxCount: 20 }
+  { name: 'cover', maxCount: 1 },
+  { name: 'video', maxCount: 1 },
+  { name: 'variantImages', maxCount: 20 },
+  { name: 'variantGallery', maxCount: 60 }
 ]);
+
+// Group variantGallery files by their target variant index (from variantGalleryIndices).
+function buildGalleryMap(req) {
+  const galleryFiles = req.files?.variantGallery || [];
+  const galleryIndices = req.body.variantGalleryIndices
+    ? JSON.parse(req.body.variantGalleryIndices)
+    : galleryFiles.map((_, i) => i);
+  const map = {};
+  galleryIndices.forEach((variantIdx, fileIdx) => {
+    if (galleryFiles[fileIdx]) {
+      if (!map[variantIdx]) map[variantIdx] = [];
+      map[variantIdx].push(galleryFiles[fileIdx]);
+    }
+  });
+  return map;
+}
+
+// Merge kept variant gallery URLs (from payload) with newly uploaded gallery files.
+async function attachVariantGalleries(builtVariants, parsedVariants, galleryMap) {
+  return Promise.all(builtVariants.map(async (vd, idx) => {
+    const kept = Array.isArray(parsedVariants[idx]?.images) ? parsedVariants[idx].images.filter(Boolean) : [];
+    const files = galleryMap[idx] || [];
+    const uploaded = await Promise.all(
+      files.map(f => cloudinaryService.uploadFromBuffer(f.buffer, 'restaurant-bot/menu-variants'))
+    );
+    return { ...vd, images: [...kept, ...uploaded] };
+  }));
+}
 
 router.get('/', async (req, res) => {
   try {
@@ -88,7 +126,21 @@ router.post('/', authMiddleware, menuUpload, async (req, res) => {
     if (req.files?.image?.[0]) {
       imageUrl = await cloudinaryService.uploadFromBuffer(req.files.image[0].buffer, 'restaurant-bot/menu-items');
     }
-    
+
+    // Cover (hero/banner) image — preserve aspect ratio
+    let coverUrl = req.body.coverImage || null;
+    if (req.files?.cover?.[0]) {
+      coverUrl = await cloudinaryService.uploadPreserveAspect(req.files.cover[0].buffer, 'restaurant-bot/menu-covers');
+    }
+
+    // Product video
+    let videoUrl = req.body.video || null;
+    if (req.files?.video?.[0]) {
+      videoUrl = await cloudinaryService.uploadVideoFromBuffer(req.files.video[0].buffer, 'restaurant-bot/menu-videos');
+    }
+
+    const galleryMap = buildGalleryMap(req);
+
     const parsedCategory = parseCategory(category);
     const parsedFoodType = foodType || 'none';
     const parsedUnit = unit || 'piece';
@@ -108,7 +160,9 @@ router.post('/', authMiddleware, menuUpload, async (req, res) => {
       available: available !== false && available !== 'false',
       preparationTime: parseInt(preparationTime) || 15,
       tags: allTags,
-      image: imageUrl
+      image: imageUrl,
+      coverImage: coverUrl,
+      video: videoUrl
     };
     
     // Add originalPrice if provided
@@ -164,6 +218,12 @@ router.post('/', authMiddleware, menuUpload, async (req, res) => {
           }
           return variantData;
         }));
+        itemData.variants = await attachVariantGalleries(itemData.variants, parsedVariants, galleryMap);
+        // Derive the product thumbnail from the first variant that has an image.
+        if (!itemData.image) {
+          const dv = itemData.variants.find(v => v.image) || itemData.variants.find(v => v.images && v.images.length);
+          if (dv) itemData.image = dv.image || dv.images[0];
+        }
       }
     }
     
@@ -243,7 +303,41 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
     else if (image && image !== existingItem?.image) {
       imageUrl = image;
     }
-    
+
+    // ── Cover (hero/banner) image ──
+    let coverUrl = existingItem?.coverImage || null;
+    if (req.body.removeCover === 'true' || req.body.removeCover === true) {
+      if (existingItem?.coverImage?.includes('cloudinary.com')) {
+        try { const pid = cloudinaryService.extractPublicId(existingItem.coverImage); if (pid) await cloudinaryService.deleteImage(pid); } catch (e) { logger.info('cover delete skip', e.message); }
+      }
+      coverUrl = null;
+    } else if (req.files?.cover?.[0]) {
+      if (existingItem?.coverImage?.includes('cloudinary.com')) {
+        try { const pid = cloudinaryService.extractPublicId(existingItem.coverImage); if (pid) await cloudinaryService.deleteImage(pid); } catch (e) { logger.info('cover delete skip', e.message); }
+      }
+      coverUrl = await cloudinaryService.uploadPreserveAspect(req.files.cover[0].buffer, 'restaurant-bot/menu-covers');
+    } else if (req.body.coverImage !== undefined && req.body.coverImage !== existingItem?.coverImage) {
+      coverUrl = req.body.coverImage || null;
+    }
+
+    // ── Product video ──
+    let videoUrl = existingItem?.video || null;
+    if (req.body.removeVideo === 'true' || req.body.removeVideo === true) {
+      if (existingItem?.video?.includes('cloudinary.com')) {
+        try { const pid = cloudinaryService.extractPublicId(existingItem.video); if (pid) await cloudinaryService.deleteVideo(pid); } catch (e) { logger.info('video delete skip', e.message); }
+      }
+      videoUrl = null;
+    } else if (req.files?.video?.[0]) {
+      if (existingItem?.video?.includes('cloudinary.com')) {
+        try { const pid = cloudinaryService.extractPublicId(existingItem.video); if (pid) await cloudinaryService.deleteVideo(pid); } catch (e) { logger.info('video delete skip', e.message); }
+      }
+      videoUrl = await cloudinaryService.uploadVideoFromBuffer(req.files.video[0].buffer, 'restaurant-bot/menu-videos');
+    } else if (req.body.video !== undefined && req.body.video !== existingItem?.video) {
+      videoUrl = req.body.video || null;
+    }
+
+    const galleryMap = buildGalleryMap(req);
+
     const parsedCategory = parseCategory(category);
     const finalName = trimmedName || existingItem?.name || '';
     const parsedFoodType = foodType || 'none';
@@ -264,7 +358,9 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
       available: available !== false && available !== 'false',
       preparationTime: parseInt(preparationTime) || 15,
       tags: allTags,
-      image: imageUrl
+      image: imageUrl,
+      coverImage: coverUrl,
+      video: videoUrl
     };
     
     // Add originalPrice if provided, otherwise remove it
@@ -354,6 +450,12 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
           }
           return variantData;
         }));
+        update.variants = await attachVariantGalleries(update.variants, parsedVariants, galleryMap);
+        // Derive the product thumbnail from the first variant image (main image field removed from admin UI).
+        if (!req.files?.image?.[0]) {
+          const dv = update.variants.find(v => v.image) || update.variants.find(v => v.images && v.images.length);
+          if (dv) update.image = dv.image || dv.images[0];
+        }
       }
     } else if (variants === '[]' || variants === '') {
       // All variants removed — delete all variant images from Cloudinary

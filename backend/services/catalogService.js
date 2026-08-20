@@ -868,15 +868,18 @@ const catalogService = {
           if (v.quantities && v.quantities.length > 0) {
             // Variant × quantity combos
             v.quantities.forEach((q, qIdx) => {
-              const sizeLabel = `${q.quantity} ${q.unit}`;
-              const variantTitle = `${v.label}, ${q.quantity} ${q.unit}`;
+              const sizeLabel = `${v.label} ${q.quantity} ${q.unit}`.trim();
+              const variantTitle = `${menuItem.name} - ${v.label} (${q.quantity} ${q.unit})`;
               const prod = {
                 retailerId: `${retailerId}_v${vIdx}_q${qIdx}`,
+                groupId: retailerId,   // shared across all variants → one grouped product
+                size: sizeLabel,       // distinguishing attribute for the picker
                 name: variantTitle,
                 description: this.buildProductDescription(menuItem, v, q),
                 price: q.price,
                 currency: 'INR',
                 imageUrl: v.image || menuItem.image || null,
+                additionalImages: Array.isArray(v.images) ? v.images : [],
                 category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
                 // Honor q.available so a single disabled quantity (e.g.
                 // mutton biryani 1 kg) flips that one Meta SKU to out of
@@ -888,15 +891,18 @@ const catalogService = {
             });
           } else {
             // Single quantity variant
-            const pillLabel = (v.quantity && v.unit) ? `${v.quantity} ${v.unit}` : 'Standard';
-            const variantTitle = (v.quantity && v.unit) ? `${v.label}, ${v.quantity} ${v.unit}` : v.label;
+            const sizeLabel = (v.label && v.label.trim()) || `${v.quantity || ''} ${v.unit || ''}`.trim() || 'Standard';
+            const variantTitle = `${menuItem.name} - ${sizeLabel}`;
             const prod = {
               retailerId: `${retailerId}_v${vIdx}`,
+              groupId: retailerId,   // shared across all variants → one grouped product
+              size: sizeLabel,       // distinguishing attribute for the picker
               name: variantTitle,
               description: this.buildProductDescription(menuItem, v),
               price: v.price,
               currency: 'INR',
               imageUrl: v.image || menuItem.image || null,
+              additionalImages: Array.isArray(v.images) ? v.images : [],
               category: Array.isArray(menuItem.category) ? menuItem.category[0] : (menuItem.category || 'Food'),
               availability: (v.available !== false && menuItem.available && !menuItem.isPaused) ? 'in stock' : 'out of stock',
               salePrice: (v.offerPrice && v.offerPrice < v.price) ? v.offerPrice : null
