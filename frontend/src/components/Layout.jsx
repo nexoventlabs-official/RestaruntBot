@@ -22,6 +22,7 @@ const BASE_ITEMS = [
   { segment: 'orders', icon: ShoppingBag, label: 'Orders', description: 'Manage orders' },
   { segment: 'menu', icon: UtensilsCrossed, label: 'Products', description: 'Food items & variants' },
   { segment: 'categories', icon: FolderTree, label: 'Categories', description: 'Menu categories' },
+  { segment: 'subcategories', icon: Tag, label: 'Sub Categories', description: 'Variant tags' },
   { segment: 'offers', icon: Tag, label: 'Offers', description: 'Promotions & deals' },
   { segment: 'delivery-persons', icon: Bike, label: 'Delivery', description: 'Delivery partners' },
   { segment: 'reports', icon: BarChart3, label: 'Reports', description: 'Analytics & reports' },

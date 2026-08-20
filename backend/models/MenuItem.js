@@ -33,6 +33,7 @@ const menuItemSchema = new mongoose.Schema({
     description: { type: String, trim: true },                   // Variant-specific description
     foodType: { type: String, default: 'none', enum: ['veg', 'nonveg', 'egg', 'none'] },
     tags: [String],                                  // Variant-specific tags
+    subCategories: { type: [String], default: [] },  // e.g. Spicy, Crispy (managed on Sub Categories page)
     available: { type: Boolean, default: true },
     sku: { type: String },                           // Auto-generated: itemId_variantIndex
     avgRating: { type: Number, default: 0 },         // Per-variant average rating

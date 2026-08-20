@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Orders from './pages/Orders';
 import Menu from './pages/Menu';
 import Categories from './pages/Categories';
+import SubCategories from './pages/SubCategories';
 import Reports from './pages/Reports';
 import NotFound from './pages/NotFound';
 import Layout from './components/Layout';
@@ -110,6 +111,7 @@ function App() {
             <Route path="orders" element={<Orders />} />
             <Route path="menu" element={<Menu />} />
             <Route path="categories" element={<Categories />} />
+            <Route path="subcategories" element={<SubCategories />} />
             <Route path="offers" element={<Offers />} />
             <Route path="reports" element={<Reports />} />
             <Route path="chatbot-images" element={<ChatbotImages />} />
@@ -134,6 +136,7 @@ function App() {
             <Route path="orders" element={<Orders />} />
             <Route path="menu" element={<Menu />} />
             <Route path="categories" element={<Categories />} />
+            <Route path="subcategories" element={<SubCategories />} />
             <Route path="offers" element={<Offers />} />
             <Route path="reports" element={<Reports />} />
             <Route path="delivery-persons" element={<DeliveryPersons />} />

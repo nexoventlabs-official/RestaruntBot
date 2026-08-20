@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Edit, Trash2, Sparkles, X, Image, FolderPlus, Search, Check, Pause, Play, Upload, Ban, CalendarClock, Package, Film } from 'lucide-react';
+import { Plus, Edit, Trash2, Sparkles, X, Image, FolderPlus, Search, Check, Pause, Play, Upload, Ban, CalendarClock, Package, Film, ChevronDown } from 'lucide-react';
 import api from '../api';
 
 /* ─── helpers ─── */
@@ -56,6 +56,44 @@ function CategoryPicker({ categories, selected, onToggle }) {
   );
 }
 
+/* ─── Multi-select sub-category dropdown for a variant ─── */
+function SubCategorySelect({ options, selected, onToggle }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1 px-2 py-1.5 bg-white border border-dark-200 rounded-lg text-xs text-dark-600 hover:border-dark-300 min-w-[120px] justify-between">
+        <span className="truncate">{selected.length ? `${selected.length} sub-cat${selected.length > 1 ? 's' : ''}` : 'Sub-category'}</span>
+        <ChevronDown className="w-3 h-3 flex-shrink-0" />
+      </button>
+      {open && (
+        <div className="absolute z-50 top-full mt-1 left-0 w-44 max-h-52 overflow-y-auto bg-white border border-dark-200 rounded-lg shadow-lg p-1">
+          {options.length === 0 && <p className="px-2 py-1.5 text-[11px] text-dark-400">No sub-categories. Add them on the Sub Categories page.</p>}
+          {options.map(o => {
+            const active = selected.includes(o.name);
+            return (
+              <button key={o._id} type="button" onClick={() => onToggle(o.name)}
+                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left ${active ? 'bg-primary-50 text-primary-700' : 'hover:bg-dark-50 text-dark-700'}`}>
+                <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 ${active ? 'bg-primary-500 border-primary-500' : 'border-dark-300'}`}>
+                  {active && <Check className="w-2.5 h-2.5 text-white" />}
+                </span>
+                <span className="truncate">{o.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Menu() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -64,6 +102,7 @@ export default function Menu() {
   /* ═══════════ STATE ═══════════ */
   const [items, setItems] = useState([]);
   const [categoryList, setCategoryList] = useState([]);
+  const [subCategoryList, setSubCategoryList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -129,10 +168,13 @@ export default function Menu() {
   const fetchCategories = useCallback(async () => {
     try { const r = await api.get('/categories'); setCategoryList(r.data || []); } catch { /* ignore */ }
   }, []);
+  const fetchSubCategories = useCallback(async () => {
+    try { const r = await api.get('/subcategories'); setSubCategoryList(r.data || []); } catch { /* ignore */ }
+  }, []);
 
   useEffect(() => {
-    Promise.all([fetchItems(), fetchCategories()]).finally(() => { setLoading(false); initialLoadDone.current = true; });
-  }, [fetchItems, fetchCategories]);
+    Promise.all([fetchItems(), fetchCategories(), fetchSubCategories()]).finally(() => { setLoading(false); initialLoadDone.current = true; });
+  }, [fetchItems, fetchCategories, fetchSubCategories]);
 
   /* ═══════════ MEMOIZED DATA ═══════════ */
   const unavailableCategoryNames = useMemo(() => {
@@ -393,6 +435,7 @@ export default function Menu() {
           available: v.available !== false,
           image: v.image || null,
           images: Array.isArray(v.images) ? [...v.images] : [], // kept additional images
+          subCategories: Array.isArray(v.subCategories) ? [...v.subCategories] : [],
         })),
       });
       setImagePreview(item.image || '');
@@ -426,7 +469,7 @@ export default function Menu() {
     const uid = `v_${form.variants.length}_${Date.now()}`;
     setForm(f => ({
       ...f,
-      variants: [...f.variants, { _uid: uid, label: '', quantity: '', unit: 'piece', price: '', offerPrice: '', available: true, image: null }],
+      variants: [...f.variants, { _uid: uid, label: '', quantity: '', unit: 'piece', price: '', offerPrice: '', available: true, image: null, subCategories: [] }],
     }));
   };
 
@@ -438,6 +481,15 @@ export default function Menu() {
     setForm(f => {
       const vs = [...f.variants];
       vs[idx] = { ...vs[idx], [field]: value };
+      return { ...f, variants: vs };
+    });
+  };
+
+  const toggleVariantSubCategory = (idx, name) => {
+    setForm(f => {
+      const vs = [...f.variants];
+      const cur = vs[idx].subCategories || [];
+      vs[idx] = { ...vs[idx], subCategories: cur.includes(name) ? cur.filter(n => n !== name) : [...cur, name] };
       return { ...f, variants: vs };
     });
   };
@@ -524,6 +576,7 @@ export default function Menu() {
         foodType: form.foodType || 'veg',
         image: v.image || null,
         images: Array.isArray(v.images) ? v.images : [], // kept additional images
+        subCategories: Array.isArray(v.subCategories) ? v.subCategories : [],
       };
     });
     fd.append('variants', JSON.stringify(cleanVariants));
@@ -889,7 +942,8 @@ export default function Menu() {
                           <button type="button" onClick={() => removeVariantImage(vi)} className="text-[10px] text-red-500">Remove</button>}
                       </div>
 
-                      {/* Fields — size label is auto-derived from qty + unit */}
+                      {/* Sub-category multi-select (size label auto-derives from qty + unit) */}
+                      <SubCategorySelect options={subCategoryList} selected={v.subCategories || []} onToggle={(name) => toggleVariantSubCategory(vi, name)} />
                       <input type="number" value={v.quantity} onChange={e => updateVariant(vi, 'quantity', e.target.value)}
                         className="w-16 px-2 py-1.5 bg-white border border-dark-200 rounded-lg text-xs" placeholder="Qty" />
                       <select value={v.unit} onChange={e => updateVariant(vi, 'unit', e.target.value)}

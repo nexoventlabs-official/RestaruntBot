@@ -835,6 +835,12 @@ const catalogService = {
       parts.push(tags.map(t => `#${t}`).join(' '));
     }
 
+    // ── Part 4b: Sub-categories (variant-level, e.g. Spicy / Crispy) ──
+    const subCats = (variant && Array.isArray(variant.subCategories)) ? variant.subCategories.filter(Boolean) : [];
+    if (subCats.length > 0) {
+      parts.push(subCats.map(s => `#${String(s).replace(/\s+/g, '')}`).join(' '));
+    }
+
     // ── Part 5: Description (prefer variant-level, fallback to item-level) ──
     const descText = (variant && variant.description) ? variant.description : (menuItem.description || menuItem.name);
     parts.push(descText);
@@ -891,12 +897,13 @@ const catalogService = {
             });
           } else {
             // Single quantity variant
-            const sizeLabel = (v.label && v.label.trim()) || `${v.quantity || ''} ${v.unit || ''}`.trim() || 'Standard';
-            const variantTitle = `${menuItem.name} - ${sizeLabel}`;
+            const nameLabel = (v.label && v.label.trim()) || `${v.quantity || ''} ${v.unit || ''}`.trim() || 'Standard';
+            const sizeAttr = `${v.quantity || ''} ${v.unit || ''}`.trim() || nameLabel;
+            const variantTitle = `${menuItem.name} - ${nameLabel}`;
             const prod = {
               retailerId: `${retailerId}_v${vIdx}`,
               groupId: retailerId,   // shared across all variants → one grouped product
-              size: sizeLabel,       // distinguishing attribute for the picker
+              size: sizeAttr,        // actual size (qty + unit) — distinguishing attribute for the picker
               name: variantTitle,
               description: this.buildProductDescription(menuItem, v),
               price: v.price,

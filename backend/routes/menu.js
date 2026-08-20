@@ -201,6 +201,7 @@ router.post('/', authMiddleware, menuUpload, async (req, res) => {
             description: v.description ? v.description.trim() : '',
             foodType: v.foodType || 'none',
             tags: Array.isArray(v.tags) ? v.tags : (typeof v.tags === 'string' ? v.tags.split(',').map(s => s.trim()).filter(Boolean) : []),
+            subCategories: Array.isArray(v.subCategories) ? v.subCategories.filter(Boolean) : [],
             available: v.available !== false && v.available !== 'false'
           };
           // Multiple quantity options per variant
@@ -433,6 +434,7 @@ router.put('/:id', authMiddleware, menuUpload, async (req, res) => {
             description: v.description ? v.description.trim() : '',
             foodType: v.foodType || 'none',
             tags: Array.isArray(v.tags) ? v.tags : (typeof v.tags === 'string' ? v.tags.split(',').map(s => s.trim()).filter(Boolean) : []),
+            subCategories: Array.isArray(v.subCategories) ? v.subCategories.filter(Boolean) : [],
             available: v.available !== false && v.available !== 'false'
           };
           // Multiple quantity options per variant

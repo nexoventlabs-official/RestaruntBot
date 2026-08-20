@@ -1520,15 +1520,21 @@ export default function UserMenuPage() {
                                 : 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed line-through'
                           }`}
                         >
-                          {v.label}
-                          {isAvailable && !v.quantities?.length && (
-                            <span className="ml-1.5 text-xs text-gray-400">
-                              ₹{v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price}
+                          <span className="flex flex-col items-start leading-tight">
+                            <span className="flex items-center gap-1.5">
+                              <span>{v.label}</span>
+                              {isAvailable && !v.quantities?.length && (
+                                <span className="text-xs text-gray-400">
+                                  ₹{v.offerPrice && v.offerPrice < v.price ? v.offerPrice : v.price}
+                                </span>
+                              )}
+                              {!isAvailable && <span className="text-xs">Sold Out</span>}
                             </span>
-                          )}
-                          {!isAvailable && (
-                            <span className="ml-1.5 text-xs">Sold Out</span>
-                          )}
+                            {(() => {
+                              const s = `${v.quantity || ''} ${v.unit || ''}`.trim();
+                              return s && s !== v.label ? <span className="text-[10px] text-gray-400 font-normal">{s}</span> : null;
+                            })()}
+                          </span>
                         </button>
                       );
                     })}
