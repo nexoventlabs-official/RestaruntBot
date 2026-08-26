@@ -21,6 +21,7 @@ const { setMetadata } = require('./correlationContext');
 const restaurantConfig = require('../config/restaurant.config');
 const ownerNotify = require('./ownerNotify');
 const crmBridge = require('./crmBridge');
+const loyaltyService = require('./loyaltyService');
 
 // Helper: Count items including variants for accurate WhatsApp display
 // If an item has variants, count each variant as a separate item (matches Meta catalog)
@@ -3629,6 +3630,47 @@ const chatbot = {
         await this.sendMyOrdersMenu(phone);
         state.currentStep = 'main_menu';
       }
+      // ========== REORDER SHORTCUT (Change 4) ==========
+      else if (selection === 'reorder_last') {
+        const result = await this.handleReorderIntent(phone, customer);
+        state.currentStep = result.success ? 'viewing_cart' : 'main_menu';
+      }
+      // browse_menu from reorder shortcut — same as "Hi" → show welcome
+      else if (selection === 'browse_menu') {
+        await this.sendWelcome(phone);
+        state.currentStep = 'main_menu';
+      }
+      // Change 5: "my points" / "points" / "rewards" intent
+      else if (!selectedId && (msg === 'points' || msg === 'my points' || msg === 'rewards' || msg === 'loyalty')) {
+        const balanceMsg = await loyaltyService.buildBalanceMessage(phone, restaurantConfig);
+        await whatsapp.sendMessage(phone, balanceMsg);
+        state.currentStep = 'main_menu';
+      }
+      // Change 5: redeem_points_N — customer chose to use loyalty points at checkout
+      else if (selection?.startsWith('redeem_points_')) {
+        const pointsToRedeem = parseInt(selection.replace('redeem_points_', ''), 10);
+        if (!isNaN(pointsToRedeem) && pointsToRedeem > 0) {
+          const pendingOrderId = state.pendingOrderId || `REDEEM-${Date.now()}`;
+          const result = await loyaltyService.redeemPoints(phone, pendingOrderId, pointsToRedeem, restaurantConfig);
+          if (result.success) {
+            state.loyaltyDiscount = result.discount;
+            state.loyaltyPointsUsed = pointsToRedeem;
+            await whatsapp.sendMessage(phone,
+              `✅ *${pointsToRedeem} points redeemed!*\n` +
+              `₹${result.discount} discount applied.\n` +
+              `Remaining balance: ${result.newBalance} points\n\n` +
+              `Your pickup order will be ₹${result.discount} less. Proceeding to confirm…`
+            );
+          } else {
+            await whatsapp.sendMessage(phone, `❌ ${result.reason || 'Could not redeem points.'}`);
+          }
+        }
+        // Continue to payment regardless
+        state.paymentMethod = 'cod';
+        state.serviceType = 'pickup';
+        const result2 = await this.processPickupCheckout(phone, customer, state);
+        if (result2.success) state.currentStep = 'order_placed';
+      }
       // ========== VIEW ORDER (from My Orders flow screen) ==========
       else if (selection?.startsWith('view_order_')) {
         const orderId = selection.replace('view_order_', '');
@@ -3789,11 +3831,18 @@ const chatbot = {
           updatedAt: new Date()
         };
         await customer.save();
-        const launched = await this.launchPaymentFlow(phone, 'pickup');
-        if (!launched) {
-          await this.sendPickupPaymentMethodOptions(phone, customer);
+
+        // Change 3: show time selector if enabled, else go straight to payment
+        if (restaurantConfig.pickupTimeSlots?.enabled) {
+          await this.sendPickupTimeSlotOptions(phone);
+          state.currentStep = 'select_pickup_time';
+        } else {
+          const launched = await this.launchPaymentFlow(phone, 'pickup');
+          if (!launched) {
+            await this.sendPickupPaymentMethodOptions(phone, customer);
+          }
+          state.currentStep = 'select_pickup_payment_method';
         }
-        state.currentStep = 'select_pickup_payment_method';
       }
       else if (selection === 'share_location') {
         // User tapped share location button - remind them to share
@@ -3904,6 +3953,21 @@ const chatbot = {
             const result = await this.processCheckout(phone, customer, state);
             if (result.success) state.currentStep = 'awaiting_payment';
           }
+        }
+      }
+      // Change 3: customer picked a scheduled pickup time slot
+      else if (selection?.startsWith('pickup_time_slot_')) {
+        const slotValue = selection.replace('pickup_time_slot_', ''); // 'asap' or ISO timestamp string
+        if (slotValue === 'asap') {
+          state.scheduledPickupTime = null;
+        } else {
+          const ts = parseInt(slotValue, 10);
+          state.scheduledPickupTime = !isNaN(ts) ? new Date(ts) : null;
+        }
+        state.currentStep = 'select_pickup_payment_method';
+        const launched = await this.launchPaymentFlow(phone, 'pickup');
+        if (!launched) {
+          await this.sendPickupPaymentMethodOptions(phone, customer);
         }
       }
       else if (selection === 'confirm_order' || selection === 'pay_now') {
@@ -4516,6 +4580,40 @@ const chatbot = {
       logger.warn('[sendWelcome] syncActiveOffers failed (non-fatal)', { phone, error: err.message });
     }
 
+    // Change 4: for returning customers within the reorder window, show
+    // "Your usual?" shortcut BEFORE the main welcome flow.
+    // Non-blocking — if anything fails, fall through to the normal welcome.
+    try {
+      const windowDays = restaurantConfig.reorderWindowDays || 30;
+      const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+      const lastOrder = await Order.findOne({
+        'customer.phone': phone,
+        status: { $in: ['delivered', 'confirmed', 'preparing', 'ready'] },
+        createdAt: { $gte: since }
+      }).sort({ createdAt: -1 });
+
+      if (lastOrder && lastOrder.items?.length) {
+        const itemLines = lastOrder.items
+          .slice(0, 3)
+          .map(i => `• ${i.name}${i.quantity > 1 ? ` ×${i.quantity}` : ''}`)
+          .join('\n');
+        const more = lastOrder.items.length > 3 ? `\n  +${lastOrder.items.length - 3} more` : '';
+        const reorderMsg =
+          `👋 Welcome back!\n\n` +
+          `Your last order:\n${itemLines}${more}\n` +
+          `*₹${lastOrder.totalAmount}*\n\n` +
+          `Order the same again?`;
+        await whatsapp.sendButtons(phone, reorderMsg, [
+          { id: 'reorder_last', text: '🔁 Order Same Again' },
+          { id: 'browse_menu',  text: '📋 Browse Menu' },
+          { id: 'my_orders',    text: '📦 My Orders' }
+        ]);
+        return; // shortcut shown — don't show the full welcome flow too
+      }
+    } catch (reorderErr) {
+      logger.warn('[sendWelcome] reorder check failed (non-fatal)', { phone, error: reorderErr.message });
+    }
+
     const welcomeImageUrl = await chatbotImagesService.getImageUrl('welcome');
     const welcomeMessage = `🏨 *${restaurantConfig.businessName}*\n\n` +
       `Welcome! 🙏\n\n` +
@@ -4551,6 +4649,90 @@ const chatbot = {
   async sendOrderFoodMenu(phone) {
     // Send only the browse menu options (same as sendFoodTypeSelection)
     await this.sendFoodTypeSelection(phone);
+  },
+
+  // ============ REORDER SHORTCUT (Change 4) ============
+  async handleReorderIntent(phone, customer) {
+    try {
+      const windowDays = restaurantConfig.reorderWindowDays || 30;
+      const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+      const lastOrder = await Order.findOne({
+        'customer.phone': phone,
+        status: { $in: ['delivered', 'confirmed', 'preparing', 'ready'] },
+        createdAt: { $gte: since }
+      }).sort({ createdAt: -1 }).populate('items.menuItem');
+
+      if (!lastOrder || !lastOrder.items?.length) {
+        await whatsapp.sendMessage(phone, '🛒 No recent orders found.\n\nSending you to the menu!');
+        await this.sendWelcome(phone);
+        return { success: false };
+      }
+
+      // Check item availability
+      const unavailableNames = [];
+      const cartItems = [];
+      for (const item of lastOrder.items) {
+        const mi = item.menuItem;
+        if (!mi || !mi.available || mi.isPaused || mi.isSoldOut) {
+          unavailableNames.push(item.name);
+          continue;
+        }
+        cartItems.push({
+          menuItem: mi._id,
+          quantity: item.quantity,
+          variantIndex: item.variantIndex ?? null,
+          quantityIndex: item.quantityIndex ?? null,
+          variantLabel: item.variantLabel || null,
+          addedAt: new Date()
+        });
+      }
+
+      if (!cartItems.length) {
+        await whatsapp.sendMessage(
+          phone,
+          `😔 Sorry, the items from your last order are no longer available.\n\n` +
+          unavailableNames.map(n => `• ${n}`).join('\n') +
+          `\n\nSending you to the menu!`
+        );
+        await this.sendWelcome(phone);
+        return { success: false };
+      }
+
+      // Load cart with available items
+      const update = { $set: { cart: cartItems } };
+      await Customer.findOneAndUpdate({ phone }, update);
+      customer.cart = cartItems; // update in-memory too
+
+      let msg = `✅ *Cart loaded!*\n\n`;
+      if (unavailableNames.length) {
+        msg += `⚠️ These items are no longer available and were skipped:\n`;
+        msg += unavailableNames.map(n => `• ${n}`).join('\n') + '\n\n';
+      }
+      msg += `Added to your cart:\n`;
+      msg += cartItems
+        .slice(0, 5)
+        .map(ci => {
+          const mi = ci.menuItem;
+          // menuItem may be an ObjectId after the update; use original item name
+          const name = lastOrder.items.find(i =>
+            String(i.menuItem?._id || i.menuItem) === String(mi)
+          )?.name || 'Item';
+          return `• ${name}${ci.quantity > 1 ? ` ×${ci.quantity}` : ''}`;
+        })
+        .join('\n');
+      msg += `\n\nTotal: ₹${lastOrder.totalAmount}`;
+
+      await whatsapp.sendButtons(phone, msg, [
+        { id: 'view_cart',    text: '🛒 View Cart' },
+        { id: 'browse_menu',  text: '📋 Add More' }
+      ], 'Tap View Cart to proceed to checkout');
+
+      return { success: true };
+    } catch (err) {
+      logger.error('[handleReorderIntent] error', { phone, error: err.message });
+      await this.sendWelcome(phone);
+      return { success: false };
+    }
   },
 
   // ============ MY ORDERS MENU ============
@@ -6096,6 +6278,8 @@ const chatbot = {
     ownerNotify.notifyOwner(order, restaurantConfig);
     // Push completed outcome to CRM (Loop 5 — non-blocking, config-driven)
     crmBridge.pushToCRM(crmBridge.fromOrder(order), restaurantConfig);
+    // Change 5: award loyalty points (idempotent, non-blocking)
+    loyaltyService.awardPoints(order.customer?.phone, order.orderId, order.totalAmount, restaurantConfig);
 
     // Send push notification to admin for new COD order
     try {
@@ -7204,6 +7388,36 @@ const chatbot = {
   },
 
   // ============ PICKUP PAYMENT METHOD ============
+  // Change 3: offer the customer scheduled pickup time slots
+  async sendPickupTimeSlotOptions(phone) {
+    const cfg = restaurantConfig.pickupTimeSlots || {};
+    const minMin  = cfg.advanceMinMinutes  || restaurantConfig.pickupPrepTime || 20;
+    const maxMin  = cfg.advanceMaxMinutes  || 120;
+    const stepMin = cfg.intervalMinutes    || 15;
+
+    const now  = Date.now();
+    const buttons = [];
+
+    // "As soon as possible" is always the first option
+    buttons.push({ id: 'pickup_time_slot_asap', text: `🚀 ASAP (~${minMin} min)` });
+
+    // Generate time slots from minMin to maxMin in stepMin intervals
+    for (let offset = minMin; offset <= maxMin; offset += stepMin) {
+      if (buttons.length >= 3) break; // WhatsApp max 3 reply buttons
+      const slotMs  = now + offset * 60 * 1000;
+      const slotDate = new Date(slotMs);
+      const label = slotDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+      buttons.push({ id: `pickup_time_slot_${slotMs}`, text: `🕐 ${label}` });
+    }
+
+    await whatsapp.sendButtons(
+      phone,
+      `🏪 *When would you like to pick up?*\n\nChoose a time and we'll have your food ready:`,
+      buttons,
+      'You\'ll be notified when your order is ready'
+    );
+  },
+
   async sendPickupPaymentMethodOptions(phone, customer) {
     // Refresh customer from database to ensure we have latest cart data
     const freshCustomer = await Customer.findOne({ phone }).populate('cart.menuItem');
@@ -7295,7 +7509,18 @@ const chatbot = {
 
     // Get pickup order summary image
     const pickupOrderSummaryImageUrl = await chatbotImagesService.getImageUrl('pickup_order_summary');
-    await whatsapp.sendMessage(phone, msg);
+
+    // Change 5: if customer has redeemable loyalty points, offer redemption
+    const redeemOffer = await loyaltyService.buildRedeemOffer(phone, total, restaurantConfig).catch(() => null);
+    if (redeemOffer) {
+      msg += `\n\n⭐ *You have ${redeemOffer.balance} points* (₹${Math.floor(redeemOffer.balance)} value)\nRedeem ${redeemOffer.maxRedeem} points for *₹${redeemOffer.discount} off* → pay ₹${redeemOffer.newTotal}?`;
+      await whatsapp.sendButtons(phone, msg, [
+        { id: `redeem_points_${redeemOffer.maxRedeem}`, text: `⭐ Use ${redeemOffer.maxRedeem} pts (-₹${redeemOffer.discount})` },
+        { id: 'pickup_pay_hotel', text: '🏪 Pay at Hotel' }
+      ]);
+    } else {
+      await whatsapp.sendMessage(phone, msg);
+    }
   },
 
   // ============ PROCESS PICKUP CHECKOUT ============
@@ -7435,6 +7660,10 @@ const chatbot = {
         paymentMethod: state.paymentMethod || 'cod',
         paymentStatus: 'pending',
         status: 'pending',
+        // Change 2: set estimated ready time from config prep time
+        estimatedReadyTime: new Date(Date.now() + (restaurantConfig.pickupPrepTime || 20) * 60 * 1000),
+        // Change 3: scheduled pickup time (null = ASAP)
+        scheduledPickupTime: state.scheduledPickupTime ? new Date(state.scheduledPickupTime) : null,
         trackingUpdates: [{ status: 'pending', message: 'Pickup order created, awaiting confirmation' }]
       });
 
@@ -7495,15 +7724,22 @@ const chatbot = {
       // "Order Details" CTA button below. Style mirrors the invoice card.
       let msg;
       if (state.paymentMethod === 'cod') {
+        // Change 2: include estimated ready time in COD pickup confirmation
+        const readyAt = order.estimatedReadyTime
+          ? order.estimatedReadyTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+          : null;
         msg  = `*Order Confirmation #${orderId}*\n\n`;
         msg += `We have received your order. Below is a summary\n`;
         msg += `for your reference.\n\n`;
         msg += `Service     : Self-Pickup\n`;
         msg += `Items Total : Rs.${itemsTotal}\n`;
-        msg += `Payment     : Pay at Hotel\n\n`;
+        msg += `Payment     : Pay at Hotel\n`;
+        if (readyAt) msg += `⏰ Ready by  : ${readyAt}\n`;
+        msg += `\n`;
         msg += `Tap *Order Details* below to view the items in\n`;
         msg += `this order.\n\n`;
-        msg += `Thank you for choosing us.`;
+        msg += `We'll send you a message the moment your food is ready. 🙌`;
+        msg += loyaltyService.earnSuffix(itemsTotal, restaurantConfig);
       } else {
         msg  = `*Order Pending — Awaiting Payment*\n\n`;
         msg += `We have received your order request, but the\n`;
@@ -7559,6 +7795,8 @@ const chatbot = {
       ownerNotify.notifyOwner(order, restaurantConfig);
       // Push completed outcome to CRM (Loop 5 — non-blocking, config-driven)
       crmBridge.pushToCRM(crmBridge.fromOrder(order), restaurantConfig);
+      // Change 5: award loyalty points (idempotent, non-blocking)
+      loyaltyService.awardPoints(order.customer?.phone, order.orderId, order.totalAmount, restaurantConfig);
 
       // Send push notification to admin for new pickup order.
       // NOTE: previous code referenced an undefined `total` variable here

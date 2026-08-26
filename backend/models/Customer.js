@@ -63,6 +63,19 @@ const customerSchema = new mongoose.Schema({
   orderHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Order' }],
   totalOrders: { type: Number, default: 0, min: 0 },
   totalSpent: { type: Number, default: 0, min: 0 },
+  // Change 5: loyalty points
+  loyaltyPoints: {
+    balance:          { type: Number, default: 0, min: 0 },
+    lifetimeEarned:   { type: Number, default: 0, min: 0 },
+    lifetimeRedeemed: { type: Number, default: 0, min: 0 },
+    history: [{
+      type:        { type: String, enum: ['earned', 'redeemed'] },
+      points:      Number,
+      orderId:     String,
+      description: String,
+      timestamp:   { type: Date, default: Date.now }
+    }]
+  },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 }, {

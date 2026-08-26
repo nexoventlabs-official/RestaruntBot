@@ -73,6 +73,39 @@ module.exports = {
     'Type: {type}\n' +
     'Time: {time}',
 
+  // ── PICKUP ───────────────────────────────────────────────────────────────
+  // Change 1: message sent to customer the moment kitchen marks order ready
+  readyNotificationTemplate:
+    '🍛 *Your order is ready!*\n\n' +
+    'Order *#{reference}*\n' +
+    '{items}\n\n' +
+    'Come to the counter now —\n' +
+    'your food is hot and waiting. 🙌',
+
+  // Change 2: how long (minutes) to prepare a typical order
+  pickupPrepTime: 20,
+
+  // Change 3: scheduled pickup time slot config
+  pickupTimeSlots: {
+    enabled:            true,
+    intervalMinutes:    15,   // generate slots every 15 min
+    advanceMaxMinutes:  120,  // customer can schedule up to 2 h ahead
+    advanceMinMinutes:  20,   // minimum ahead (= pickupPrepTime)
+  },
+
+  // Change 4: show "Your usual?" if last order was within this many days
+  reorderWindowDays: 30,
+
+  // Change 5: loyalty points rules
+  loyaltyPoints: {
+    enabled:          false,  // flip to true when ready to launch
+    earnRate:         1,      // points per ₹10 spent
+    redeemRate:       1,      // 1 point = ₹1 discount
+    minimumRedeem:    50,     // min points before redemption is offered
+    maximumRedeemPct: 20,     // max % of order value redeemable
+    expiryDays:       365,    // 0 = never expires
+  },
+
   // ── AI (Rule #2: deterministic flows only until v3 — keep OFF for v0/v1) ──
   aiSearchMatching:     false,   // groqAi tag-matching for non-English menu search
   aiVoiceTranscription: false,   // groqAi transcription of voice notes

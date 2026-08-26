@@ -88,6 +88,9 @@ export default function Orders() {
   // Cancel confirm
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
+  // Change 1: Mark Ready for pickup orders
+  const [markingReady, setMarkingReady] = useState(false);
+
   // History
   const [historyOrders, setHistoryOrders] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -326,6 +329,21 @@ export default function Orders() {
     if (!selectedOrder) return;
     confirmStatusUpdate(selectedOrder, 'preparing');
   }, [selectedOrder, confirmStatusUpdate]);
+
+  // Change 1: kitchen taps "Mark Ready" on a pickup order
+  const handleMarkReady = useCallback(async (order) => {
+    if (!order || markingReady) return;
+    setMarkingReady(true);
+    try {
+      const res = await api.post(`/orders/${order._id}/mark-ready`);
+      setSelectedOrder(res.data?.order || { ...order, status: 'ready' });
+      await fetchOrders();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to mark order as ready');
+    } finally {
+      setMarkingReady(false);
+    }
+  }, [markingReady, fetchOrders]);
 
   const handlePaymentMethodSelect = useCallback((method) => {
     if (!selectedOrder) return;
@@ -573,6 +591,18 @@ export default function Orders() {
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-sm text-dark-900">#{order.orderId}</span>
                         {isPickup && <span className="px-1.5 py-0.5 text-[9px] font-bold bg-blue-100 text-blue-700 rounded">PICKUP</span>}
+                        {/* Change 2: estimated ready time badge on list card */}
+                        {isPickup && order.estimatedReadyTime && !['delivered','cancelled'].includes(order.status) && (
+                          <span className="px-1.5 py-0.5 text-[9px] font-bold bg-orange-50 text-orange-600 rounded">
+                            ⏰ {new Date(order.estimatedReadyTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                          </span>
+                        )}
+                        {/* Change 3: scheduled pickup badge */}
+                        {isPickup && order.scheduledPickupTime && (
+                          <span className="px-1.5 py-0.5 text-[9px] font-bold bg-purple-50 text-purple-700 rounded">
+                            📅 {new Date(order.scheduledPickupTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                          </span>
+                        )}
                       </div>
                       <span className="px-2 py-1 rounded-lg text-[10px] font-bold" style={{ backgroundColor: sc.bg, color: sc.color }}>
                         {displayStatus}
@@ -654,6 +684,18 @@ export default function Orders() {
                     <div>
                       <p className="font-bold text-base" style={{ color: sc.color }}>{displayLabel}</p>
                       <p className="text-xs text-dark-500">{isPickup ? 'Pickup Order' : 'Delivery Order'}</p>
+                      {/* Change 2: show estimated ready time for active pickup orders */}
+                      {isPickup && selectedOrder.estimatedReadyTime && !['delivered','cancelled'].includes(selectedOrder.status) && (
+                        <p className="text-xs text-orange-600 font-medium mt-0.5">
+                          ⏰ Ready by {new Date(selectedOrder.estimatedReadyTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                        </p>
+                      )}
+                      {/* Change 3: show scheduled pickup time */}
+                      {isPickup && selectedOrder.scheduledPickupTime && (
+                        <p className="text-xs text-purple-700 font-medium mt-0.5">
+                          📅 Scheduled for {new Date(selectedOrder.scheduledPickupTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -794,7 +836,20 @@ export default function Orders() {
             {/* Action buttons */}
             {!selectedOrder._fromHistory && !['delivered','cancelled','refunded'].includes(selectedOrder.status) && (
               <div className="space-y-3 pt-2">
-                {(() => {
+                {/* Change 1: Mark Ready — pickup orders in confirmed or preparing */}
+                {selectedOrder.serviceType === 'pickup' &&
+                 ['confirmed','preparing'].includes(selectedOrder.status) && (
+                  <button
+                    onClick={() => handleMarkReady(selectedOrder)}
+                    disabled={markingReady || updatingStatus}
+                    className="w-full py-3.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-all disabled:opacity-50"
+                    style={{ backgroundColor: '#10b981' }}>
+                    {markingReady
+                      ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      : '🍛'}
+                    {markingReady ? 'Notifying customer…' : 'Mark Ready — Notify Customer'}
+                  </button>
+                )}
                   const next = getNextStatus(selectedOrder);
                   if (!next) return null;
                   const nsc = STATUS_CONFIG[next];

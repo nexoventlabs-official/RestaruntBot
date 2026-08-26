@@ -19,6 +19,7 @@ const User = require('../models/User');
 const pushNotification = require('../services/pushNotification');
 const metaCloud = require('../services/metaCloud');
 const dataEvents = require('../services/eventEmitter');
+const restaurantConfig = require('../config/restaurant.config');
 const router = express.Router();
 
 // Apply admin rate limiting to all order routes
@@ -757,6 +758,54 @@ router.put('/:id/delivery-time', authMiddleware, async (req, res) => {
   } catch (error) {
 
     return logRouteError(res, 'Internal server error', error);
+  }
+});
+
+// ─── POST /:id/mark-ready ────────────────────────────────────────────────────
+// Change 1: kitchen marks a pickup order as ready and notifies the customer.
+// Allowed from: confirmed | preparing  (both valid; skips out_for_delivery).
+router.post('/:id/mark-ready', authMiddleware, async (req, res) => {
+  try {
+
+    const order = await Order.findOne({
+      $or: [{ _id: req.params.id }, { orderId: req.params.id }]
+    });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (order.serviceType !== 'pickup') {
+      return res.status(400).json({ error: 'mark-ready is only for pickup orders' });
+    }
+
+    // Advance status to 'ready' using the state machine (validates transition)
+    const transition = transitionStatus(order, 'ready', 'Order ready for pickup');
+    if (!transition.success) {
+      return res.status(400).json({ error: transition.reason || 'Cannot mark this order as ready' });
+    }
+    order.statusUpdatedAt = new Date();
+    await order.save();
+
+    // Build customer-facing ready notification from config template
+    const itemsSummary = (order.items || [])
+      .map(i => `${i.name}${i.quantity > 1 ? ` ×${i.quantity}` : ''}`)
+      .join('\n');
+    const template = restaurantConfig.readyNotificationTemplate ||
+      '🍛 *Your order is ready!*\n\nOrder *#{reference}*\n{items}\n\nCome to the counter now — your food is hot and waiting. 🙌';
+    const message = template
+      .replace(/{reference}/g, order.orderId)
+      .replace(/{items}/g, itemsSummary);
+
+    // Send WhatsApp notification to customer — non-blocking (never block the admin response)
+    whatsapp.sendMessage(order.customer.phone, message).catch(err =>
+      logger.error('mark-ready: customer notification failed', { orderId: order.orderId, error: err.message })
+    );
+
+    // SSE push so all admin tabs see the updated card instantly
+    dataEvents.emit('orders');
+    dataEvents.emit('dashboard');
+
+    logger.info('Order marked ready by kitchen', { orderId: order.orderId, customerPhone: order.customer.phone });
+    res.json({ success: true, order });
+  } catch (error) {
+    return logRouteError(res, 'mark-ready error', error);
   }
 });
 

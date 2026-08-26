@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">38.09% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/21</span>
+                <span class='fraction'>8/21</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">38.09% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/21</span>
+                <span class='fraction'>8/21</span>
             </div>
         
             
@@ -107,53 +107,53 @@
 <a name='L42'></a><a href='#L42'>42</a>
 <a name='L43'></a><a href='#L43'>43</a>
 <a name='L44'></a><a href='#L44'>44</a>
-<a name='L45'></a><a href='#L45'>45</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L45'></a><a href='#L45'>45</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const mongoose = <span class="cstat-no" title="statement not covered" >require('mongoose');</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const mongoose = require('mongoose');
 &nbsp;
-const settingsSchema = <span class="cstat-no" title="statement not covered" >new mongoose.Schema({</span>
+const settingsSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true },
   value: { type: mongoose.Schema.Types.Mixed, required: true },
   updatedAt: { type: Date, default: Date.now },
@@ -161,17 +161,17 @@ const settingsSchema = <span class="cstat-no" title="statement not covered" >new
 });
 &nbsp;
 // Pre-save middleware to update timestamp
-<span class="cstat-no" title="statement not covered" >settingsSchema.pre('save', <span class="fstat-no" title="function not covered" >fu</span>nction(next) {</span>
+settingsSchema.pre('save', <span class="fstat-no" title="function not covered" >fu</span>nction(next) {
 <span class="cstat-no" title="statement not covered" >  this.updatedAt = Date.now();</span>
 <span class="cstat-no" title="statement not covered" >  next();</span>
 });
 &nbsp;
 // In-memory cache for frequently accessed settings (TTL-based)
-const _settingsCache = <span class="cstat-no" title="statement not covered" >new Map();</span>
-const SETTINGS_CACHE_TTL = <span class="cstat-no" title="statement not covered" >30 * 1000;</span> // 30 seconds — balances freshness vs speed
+const _settingsCache = new Map();
+const SETTINGS_CACHE_TTL = 30 * 1000; // 30 seconds — balances freshness vs speed
 &nbsp;
 // Static method to get a setting value (cached)
-<span class="cstat-no" title="statement not covered" >settingsSchema.statics.getValue = <span class="fstat-no" title="function not covered" >as</span>ync function(key, defaultValue = <span class="branch-0 cbranch-no" title="branch not covered" >null)</span> {</span>
+settingsSchema.statics.getValue = <span class="fstat-no" title="function not covered" >as</span>ync function(key, defaultValue = <span class="branch-0 cbranch-no" title="branch not covered" >null)</span> {
   const now = <span class="cstat-no" title="statement not covered" >Date.now();</span>
   const cached = <span class="cstat-no" title="statement not covered" >_settingsCache.get(key);</span>
 <span class="cstat-no" title="statement not covered" >  if (cached &amp;&amp; (now - cached.ts) &lt; SETTINGS_CACHE_TTL) {</span>
@@ -184,7 +184,7 @@ const SETTINGS_CACHE_TTL = <span class="cstat-no" title="statement not covered" 
 };
 &nbsp;
 // Static method to set a setting value (invalidates cache)
-<span class="cstat-no" title="statement not covered" >settingsSchema.statics.setValue = <span class="fstat-no" title="function not covered" >as</span>ync function(key, value, updatedBy = <span class="branch-0 cbranch-no" title="branch not covered" >null)</span> {</span>
+settingsSchema.statics.setValue = <span class="fstat-no" title="function not covered" >as</span>ync function(key, value, updatedBy = <span class="branch-0 cbranch-no" title="branch not covered" >null)</span> {
 <span class="cstat-no" title="statement not covered" >  _settingsCache.delete(key); </span>// Invalidate cache on write
   const setting = <span class="cstat-no" title="statement not covered" >await this.findOneAndUpdate(</span>
     { key },
@@ -194,7 +194,7 @@ const SETTINGS_CACHE_TTL = <span class="cstat-no" title="statement not covered" 
 <span class="cstat-no" title="statement not covered" >  return setting;</span>
 };
 &nbsp;
-<span class="cstat-no" title="statement not covered" >module.exports = mongoose.model('Settings', settingsSchema);</span>
+module.exports = mongoose.model('Settings', settingsSchema);
 &nbsp;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
@@ -202,7 +202,7 @@ const SETTINGS_CACHE_TTL = <span class="cstat-no" title="statement not covered" 
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-08-19T14:05:33.486Z
+                at 2026-08-26T08:32:17.216Z
             </div>
         <script src="../prettify.js"></script>
         <script>

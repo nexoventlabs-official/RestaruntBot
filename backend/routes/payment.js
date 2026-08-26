@@ -18,6 +18,7 @@ const pushNotification = require('../services/pushNotification');
 const restaurantConfig = require('../config/restaurant.config');
 const ownerNotify = require('../services/ownerNotify');
 const crmBridge = require('../services/crmBridge');
+const loyaltyService = require('../services/loyaltyService');
 const dataEvents = require('../services/eventEmitter');
 const { isShuttingDown } = require('../services/shutdownState');
 const router = express.Router();
@@ -144,6 +145,8 @@ router.post('/verify-upi', publicRateLimiter, async (req, res) => {
     ownerNotify.notifyOwner(updatedOrder, restaurantConfig);
     // Push completed outcome to CRM (Loop 5 — non-blocking)
     crmBridge.pushToCRM(crmBridge.fromOrder(updatedOrder), restaurantConfig);
+    // Change 5: award loyalty points (idempotent, non-blocking)
+    loyaltyService.awardPoints(updatedOrder.customer?.phone, updatedOrder.orderId, updatedOrder.totalAmount, restaurantConfig);
 
     // Emit event for real-time updates
     dataEvents.emit('orders');
@@ -363,6 +366,8 @@ router.post('/razorpay-webhook', webhookRateLimiter, express.raw({ type: 'applic
             ownerNotify.notifyOwner(updatedOrder, restaurantConfig);
             // Push completed outcome to CRM (Loop 5 — non-blocking)
             crmBridge.pushToCRM(crmBridge.fromOrder(updatedOrder), restaurantConfig);
+            // Change 5: award loyalty points (idempotent, non-blocking)
+            loyaltyService.awardPoints(updatedOrder.customer?.phone, updatedOrder.orderId, updatedOrder.totalAmount, restaurantConfig);
           
             // Emit event for real-time updates
             dataEvents.emit('orders');
@@ -491,6 +496,8 @@ router.get('/callback', publicRateLimiter, async (req, res) => {
           ownerNotify.notifyOwner(updatedOrder, restaurantConfig);
           // Push completed outcome to CRM (Loop 5 — non-blocking)
           crmBridge.pushToCRM(crmBridge.fromOrder(updatedOrder), restaurantConfig);
+          // Change 5: award loyalty points (idempotent, non-blocking)
+          loyaltyService.awardPoints(updatedOrder.customer?.phone, updatedOrder.orderId, updatedOrder.totalAmount, restaurantConfig);
 
           // Emit event for real-time updates
           dataEvents.emit('orders');

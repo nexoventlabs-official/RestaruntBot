@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/273</span>
+                <span class='fraction'>0/277</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/272</span>
+                <span class='fraction'>0/276</span>
             </div>
         
             
@@ -674,7 +674,14 @@
 <a name='L609'></a><a href='#L609'>609</a>
 <a name='L610'></a><a href='#L610'>610</a>
 <a name='L611'></a><a href='#L611'>611</a>
-<a name='L612'></a><a href='#L612'>612</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L612'></a><a href='#L612'>612</a>
+<a name='L613'></a><a href='#L613'>613</a>
+<a name='L614'></a><a href='#L614'>614</a>
+<a name='L615'></a><a href='#L615'>615</a>
+<a name='L616'></a><a href='#L616'>616</a>
+<a name='L617'></a><a href='#L617'>617</a>
+<a name='L618'></a><a href='#L618'>618</a>
+<a name='L619'></a><a href='#L619'>619</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -697,6 +704,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -816,6 +824,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1040,6 +1050,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1163,6 +1175,8 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1305,6 +1319,7 @@ const pushNotification = <span class="cstat-no" title="statement not covered" >r
 const restaurantConfig = <span class="cstat-no" title="statement not covered" >require('../config/restaurant.config');</span>
 const ownerNotify = <span class="cstat-no" title="statement not covered" >require('../services/ownerNotify');</span>
 const crmBridge = <span class="cstat-no" title="statement not covered" >require('../services/crmBridge');</span>
+const loyaltyService = <span class="cstat-no" title="statement not covered" >require('../services/loyaltyService');</span>
 const dataEvents = <span class="cstat-no" title="statement not covered" >require('../services/eventEmitter');</span>
 const { isShuttingDown } = <span class="cstat-no" title="statement not covered" >require('../services/shutdownState');</span>
 const router = <span class="cstat-no" title="statement not covered" >express.Router();</span>
@@ -1431,6 +1446,8 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 <span class="cstat-no" title="statement not covered" >    ownerNotify.notifyOwner(updatedOrder, restaurantConfig);</span>
     // Push completed outcome to CRM (Loop 5 — non-blocking)
 <span class="cstat-no" title="statement not covered" >    crmBridge.pushToCRM(crmBridge.fromOrder(updatedOrder), restaurantConfig);</span>
+    // Change 5: award loyalty points (idempotent, non-blocking)
+<span class="cstat-no" title="statement not covered" >    loyaltyService.awardPoints(updatedOrder.customer?.phone, updatedOrder.orderId, updatedOrder.totalAmount, restaurantConfig);</span>
 &nbsp;
     // Emit event for real-time updates
 <span class="cstat-no" title="statement not covered" >    dataEvents.emit('orders');</span>
@@ -1650,6 +1667,8 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 <span class="cstat-no" title="statement not covered" >            ownerNotify.notifyOwner(updatedOrder, restaurantConfig);</span>
             // Push completed outcome to CRM (Loop 5 — non-blocking)
 <span class="cstat-no" title="statement not covered" >            crmBridge.pushToCRM(crmBridge.fromOrder(updatedOrder), restaurantConfig);</span>
+            // Change 5: award loyalty points (idempotent, non-blocking)
+<span class="cstat-no" title="statement not covered" >            loyaltyService.awardPoints(updatedOrder.customer?.phone, updatedOrder.orderId, updatedOrder.totalAmount, restaurantConfig);</span>
           
             // Emit event for real-time updates
 <span class="cstat-no" title="statement not covered" >            dataEvents.emit('orders');</span>
@@ -1778,6 +1797,8 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
 <span class="cstat-no" title="statement not covered" >          ownerNotify.notifyOwner(updatedOrder, restaurantConfig);</span>
           // Push completed outcome to CRM (Loop 5 — non-blocking)
 <span class="cstat-no" title="statement not covered" >          crmBridge.pushToCRM(crmBridge.fromOrder(updatedOrder), restaurantConfig);</span>
+          // Change 5: award loyalty points (idempotent, non-blocking)
+<span class="cstat-no" title="statement not covered" >          loyaltyService.awardPoints(updatedOrder.customer?.phone, updatedOrder.orderId, updatedOrder.totalAmount, restaurantConfig);</span>
 &nbsp;
           // Emit event for real-time updates
 <span class="cstat-no" title="statement not covered" >          dataEvents.emit('orders');</span>
@@ -1903,7 +1924,7 @@ const router = <span class="cstat-no" title="statement not covered" >express.Rou
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-08-19T14:05:33.486Z
+                at 2026-08-26T08:32:17.216Z
             </div>
         <script src="../prettify.js"></script>
         <script>

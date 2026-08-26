@@ -61,6 +61,8 @@ const orderSchema = new mongoose.Schema({
     message: String
   }],
   estimatedDeliveryTime: { type: Date },
+  estimatedReadyTime: { type: Date },   // Change 2: when kitchen expects the pickup to be ready
+  scheduledPickupTime: { type: Date, default: null }, // Change 3: customer's chosen pickup time (null = ASAP)
   deliveredAt: { type: Date },
   whatsappConfirmationSent: { type: Boolean, default: false }, // Track if customer was notified
   createdAt: { type: Date, default: Date.now },
