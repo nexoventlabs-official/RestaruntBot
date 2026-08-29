@@ -1449,6 +1449,23 @@ export default function UserMenuPage() {
                 </div>
               )}
 
+              {/* Sub-category chips (e.g. Spicy, Crispy) — shown for the selected variant */}
+              {(() => {
+                const v = selectedVariantIndex !== null ? selectedItem.variants?.[selectedVariantIndex] : null;
+                const subs = Array.isArray(v?.subCategories) ? v.subCategories.filter(Boolean)
+                  : (selectedItem.variants || []).flatMap(vv => Array.isArray(vv.subCategories) ? vv.subCategories : []).filter((s, i, a) => a.indexOf(s) === i);
+                if (!subs.length) return null;
+                return (
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {subs.map((s, i) => (
+                      <span key={i} className="px-2.5 py-1 bg-orange-50 border border-orange-200 text-orange-700 rounded-full text-xs font-semibold">
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                );
+              })()}
+
               {/* Rating - show variant-specific rating when a variant is selected */}
               {(() => {
                 const ratingSource = (selectedVariantIndex !== null && selectedItem.variants?.[selectedVariantIndex])
